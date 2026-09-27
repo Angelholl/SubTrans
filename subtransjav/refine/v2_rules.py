@@ -141,11 +141,24 @@ def _filter_language(cfg: RefineConfig, entries: list, stage_idx: int) -> list:
     kept_entries, dropped = filter_stage_output_srt(srt, stage_idx, "zh")
     # build_srt 会重排序号：按时间轴（条目的真实身份标识）映射回原条目——
     # 有效条目恢复原 index；无效条目加 [未翻译] 前缀后并回产物（不丢行）。
-    by_timing = {e["timing"]: e for e in normal}
-    kept_timings = set()
+    # timing→list 多重映射：同 timing 重复条目逐条消费（优先按文本配对），
+    # 防止同键覆盖 + kept_timings 集合把无效条跳过回填而静默丢行。
+    by_timing: dict = {}
+    for e in normal:
+        by_timing.setdefault(e["timing"], []).append(e)
+    matched: dict = {}               # id(原条目) → 承载它的 kept 条目
+    pseudo: list = []
     for e in kept_entries:
-        if e["timing"] in by_timing:
-            e["index"] = by_timing[e["timing"]]["index"]
+        bucket = by_timing.get(e["timing"]) or []
+        free = [o for o in bucket if id(o) not in matched]
+        match = next((o for o in free
+                      if (o.get("text") or "") == (e.get("text") or "")),
+                     None)
+        if match is None and free:
+            match = free[0]
+        if match is not None:
+            matched[id(match)] = e
+            e["index"] = match["index"]
         else:
             # LLM 把「序号+时间码」写进条目正文时，_SRT_BLOCK 的前瞻会把
             # 它拆成独立伪条目（Errors/dropped_entries.log 实证
@@ -156,18 +169,25 @@ def _filter_language(cfg: RefineConfig, entries: list, stage_idx: int) -> list:
             # 升级为整文件失败。产物排序按时间轴（_timing_span），不受
             # 临时编号影响。
             e["index"] = e.get("index", 0)
+            pseudo.append(e)
             logger.warning(
                 "语言过滤：timing %r 不在原条目中（疑似 LLM 正文内嵌"
                 "「序号+时间码」伪条目），保留临时编号 %s",
                 e["timing"], e["index"])
-        kept_timings.add(e["timing"])
+    # 按原条目顺序重建：有效条目由 kept 对应条目承载（index 已回填），
+    # 无效条目回填 [未翻译]，同 timing 的多条互不吞并、相对顺序不变
+    kept_out = []
     for e in normal:
-        if e["timing"] not in kept_timings:
-            kept_entries.append({"index": e["index"], "timing": e["timing"],
-                                 "text": UNTRANSLATED_PREFIX + (e["text"] or "")})
-    kept_entries.extend(marked)
-    kept_entries.sort(key=lambda e: _timing_span(e["timing"])[0])
+        kept_e = matched.get(id(e))
+        if kept_e is not None:
+            kept_out.append(kept_e)
+        else:
+            kept_out.append({"index": e["index"], "timing": e["timing"],
+                             "text": UNTRANSLATED_PREFIX + (e["text"] or "")})
+    kept_out.extend(pseudo)
+    kept_out.extend(marked)
+    kept_out.sort(key=lambda e: _timing_span(e["timing"])[0])
     if dropped:
         print(f"   🧹 乱码/幻觉残留：{dropped} 条加 [未翻译] 标记保留"
               f"（不删除，明细 -> Errors/dropped_entries.log）")
-    return kept_entries
+    return kept_out

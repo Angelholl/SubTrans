@@ -41,6 +41,74 @@ class TestPremerge:
         assert v2_premerge._normalize_untranslated_marker(
             "[未翻译]", "x") == "[未翻译]"
 
+    def test_reindex_misaligned_timing_keeps_file_index(self):
+        """_reindex_entries_by_timing 防御分支：out_a 被外部改动（条目
+        timing 与 orig 时间轴对不上）时，对不齐条目保留文件序号、不抛错、
+        不丢行；对得上的条目仍重编号为 orig 编号空间。"""
+        t1 = "00:00:01,000 --> 00:00:02,000"
+        t2 = "00:00:03,000 --> 00:00:04,000"
+        t3 = "00:00:05,000 --> 00:00:06,000"
+        # orig（闸门0 删行/预合并后带跳号的源侧编号空间）
+        orig = [
+            {"index": 3, "timing": t1, "text": "一"},
+            {"index": 7, "timing": t2, "text": "二"},
+            {"index": 9, "timing": t3, "text": "三"},
+        ]
+        # 落盘产物序号是 build_srt 重排的 1..N；首条 timing 被外部改动
+        entries = [
+            {"index": 1, "timing": "00:00:01,500 --> 00:00:02,000",
+             "text": "一"},
+            {"index": 2, "timing": t2, "text": "二"},
+            {"index": 3, "timing": t3, "text": "三"},
+        ]
+        out = v2_premerge._reindex_entries_by_timing(entries, orig)
+        assert len(out) == 3                # 不丢行
+        assert out[0]["index"] == 1         # 对不齐 → 保留文件序号
+        assert out[1]["index"] == 7         # 对齐 → 重编号为 orig 编号
+        assert out[2]["index"] == 9
+
+    def test_reindex_misaligned_all_keeps_file_index(self):
+        """防御分支极例：out_a 时间轴整体对不上（如外部整体改时轴）时
+        全部条目保留文件序号，不抛错、不丢行、不拒复用。"""
+        orig = [
+            {"index": 3, "timing": "00:00:01,000 --> 00:00:02,000",
+             "text": "一"},
+            {"index": 7, "timing": "00:00:03,000 --> 00:00:04,000",
+             "text": "二"},
+        ]
+        entries = [
+            {"index": 1, "timing": "01:00:01,000 --> 01:00:02,000",
+             "text": "一"},
+            {"index": 2, "timing": "01:00:03,000 --> 01:00:04,000",
+             "text": "二"},
+        ]
+        out = v2_premerge._reindex_entries_by_timing(entries, orig)
+        assert len(out) == 2
+        assert [e["index"] for e in out] == [1, 2]
+
+    def test_reindex_out_of_order_out_a_no_crash(self):
+        """防御分支：乱序 out_a（条目顺序非升序）不会让双指针崩溃；
+        对不齐条目按"保号防御"语义保留自身编号，不丢行。"""
+        t1 = "00:00:01,000 --> 00:00:02,000"
+        t2 = "00:00:03,000 --> 00:00:04,000"
+        t3 = "00:00:05,000 --> 00:00:06,000"
+        orig = [
+            {"index": 3, "timing": t1, "text": "一"},
+            {"index": 7, "timing": t2, "text": "二"},
+            {"index": 9, "timing": t3, "text": "三"},
+        ]
+        # out_a 条目顺序被打乱（t2 在 t1 前）：双指针扫过 t1 后无法回头
+        entries = [
+            {"index": 1, "timing": t2, "text": "二"},
+            {"index": 2, "timing": t1, "text": "一"},
+            {"index": 3, "timing": t3, "text": "三"},
+        ]
+        out = v2_premerge._reindex_entries_by_timing(entries, orig)
+        assert len(out) == 3                # 不崩溃、不丢行
+        assert out[0]["index"] == 7         # 首条仍按起点对上 t2
+        assert out[1]["index"] == 2         # 指针已越过 → 对不齐 → 保号
+        assert out[2]["index"] == 9
+
 
 # ---------------------------------------------------------------------------
 # v2_context_blocks：注入块组装

@@ -5,6 +5,7 @@ LLM 客户端以假实现注入（不联网）。
 
 import io
 import json
+import threading
 import types
 from pathlib import Path
 
@@ -207,6 +208,26 @@ def test_retry_chain_both_fail_keeps_original(tmp_path, monkeypatch):
     final = pv._run_stage_b(cfg, a, entries, str(tmp_path), [])
     texts = {e["index"]: e["text"] for e in final}
     assert texts[1] == pv.UNTRANSLATED_PREFIX + "こんにちは"    # D1: 回退日文原文并加 [未翻译] 标记
+
+
+def test_stage_b_both_fail_without_orig_keeps_a_text(tmp_path, monkeypatch):
+    """A/B 双失败且时间轴对齐不到原文（orig=None）→ 保留阶段A 的
+    "[未翻译] 日文" 原文，残译规范化不得把日文剥成裸标记。"""
+    cfg = _make_cfg(tmp_path)
+    entries = _entries("こんにちは")
+    monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: FakeClient())
+    a = pv._run_stage_a(cfg, entries, None, str(tmp_path), [])
+    a.entries = [{**a.entries[0],
+                  "text": pv.UNTRANSLATED_PREFIX + "こんにちは"}]
+    a.failed = {1}
+    monkeypatch.setattr(pv, "_make_client",
+                        lambda cfg, tag: FakeClient(fail_b={1}))
+    # 原文时间轴与阶段A 产物错开 → _align_orig_by_timing 对齐失败（orig=None）
+    shifted_orig = [{"index": 1, "timing": "00:00:09,000 --> 00:00:09,500",
+                     "text": "こんにちは"}]
+    final = pv._run_stage_b(cfg, a, shifted_orig, str(tmp_path), [])
+    assert len(final) == 1
+    assert final[0]["text"] == pv.UNTRANSLATED_PREFIX + "こんにちは"
 
 
 # ---- A2：[未翻译] 残译清洗（前缀后跟非空残译文的污染形态）----
@@ -2040,6 +2061,47 @@ def test_f_all_fail_marks_untranslated_majority(tmp_path, monkeypatch):
     assert "こんにちは" in content and "さようなら" in content
 
 
+def test_parallel_files_degraded_not_cross_counted(tmp_path, monkeypatch):
+    """多文件并行：共享风险收集器中他文件窗口内追加的事件，不得计入
+    本文件的降级判定（events[before:] 切片须按 file 归属过滤）。"""
+    a_srt = tmp_path / "pa.srt"
+    b_srt = tmp_path / "pb.srt"
+    a_srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nあ\n",
+                     encoding="utf-8")
+    b_srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nい\n",
+                     encoding="utf-8")
+    cfg = _make_cfg(tmp_path)
+    cfg.inputs = [str(a_srt), str(b_srt)]
+
+    pa_started = threading.Event()
+    b_event_added = threading.Event()
+
+    def _fake_run_single(cfg, path, collector=None, emitter=None,
+                         learn_threads=None):
+        fname = Path(path).name
+        if fname == "pa.srt":
+            pa_started.set()
+            # 等 pb 的事件落进共享列表后再收工（复现并行穿插窗口）；
+            # pa 自身无任何降级事件
+            assert b_event_added.wait(timeout=10)
+        else:
+            assert pa_started.wait(timeout=10)
+            collector.add(stage="B", file=fname, reason="阶段B无译文",
+                          action="回退A译文", affected_count=1,
+                          severity=pv.SEVERITY_WARNING)
+            b_event_added.set()
+        return str(tmp_path / (Path(path).stem + "_final_cn.srt"))
+
+    monkeypatch.setattr(pv, "_run_single_v2", _fake_run_single)
+    monkeypatch.setattr(pv, "_file_parallel_enabled", lambda cfg: True)
+    summary = {}
+    pv.run_v2(cfg, summary_sink=summary)
+    assert summary["files_ok"] == 2
+    assert summary["risk_count"] == 1
+    # 只有 pb 有降级事件：pb 计 degraded，pa 不得因 pb 的事件被误计
+    assert summary["files_degraded"] == 1
+
+
 def test_g_ndjson_events_parseable_and_progress_mapped(tmp_path, monkeypatch):
     """场景g：ndjson 模式事件流每行可解析，批次进度映射为 phase_progress。"""
     cfg = _make_cfg(tmp_path)
@@ -2231,6 +2293,102 @@ def test_resume_rerun_reports_real_gate0_counts(tmp_path, monkeypatch):
     report = (tmp_path / "demo_质量报告.txt").read_text(encoding="utf-8")
     assert "送翻前检测（闸门0）删除 1 条" in report
     assert "[纯标点行]" in report
+
+
+def _setup_gate0_gap_input(tmp_path, t2="こんにちは", t3="さようなら"):
+    """构造闸门0 删行后 orig 带跳号的输入：#1 纯标点被删 → orig 编号 [2,3]，
+    而阶段A 落盘产物序号被 build_srt 重排为 1..N。"""
+    in_srt = tmp_path / "demo.srt"
+    in_srt.write_text(
+        f"1\n00:00:01,000 --> 00:00:02,000\n。。。\n\n"
+        f"2\n00:00:10,000 --> 00:00:11,000\n{t2}\n\n"
+        f"3\n00:00:20,000 --> 00:00:21,000\n{t3}\n",
+        encoding="utf-8")
+
+    def _fake_tmp(p, s):
+        d = tmp_path / "work"
+        d.mkdir(exist_ok=True)
+        return str(d)
+    return in_srt, _fake_tmp
+
+
+def test_resume_reuses_out_a_in_orig_index_space(tmp_path, monkeypatch, capsys):
+    """HIGH-1 回归（lenient）：--resume 复用 out_a 时必须按时间轴把条目
+    编号重建回 orig 空间（#2,#3），不得沿用落盘文件序号 1..N——否则
+    阶段B 及下游按 index 配对的环节整体错位。"""
+    cfg = _make_cfg(tmp_path)     # cloud/lenient：无兜底规则层的重排干扰
+    in_srt, _fake_tmp = _setup_gate0_gap_input(tmp_path)
+    monkeypatch.setattr(pv, "refine_tmp_dir", _fake_tmp)
+    monkeypatch.setattr(pv, "_init_tm", lambda c: None)
+    monkeypatch.setattr(pv, "_make_client",
+                        lambda cfg, tag: InterruptingBClient())
+    cfg.inputs = [str(in_srt)]
+    with pytest.raises(KeyboardInterrupt):
+        pv.run_v2(cfg)
+
+    fake2 = FakeClient()
+    monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: fake2)
+    cfg.resume = True
+    pv.run_v2(cfg)
+    assert "阶段A产物复用" in capsys.readouterr().out
+    assert len(fake2.calls) == 1            # 仅阶段B（A 确为复用，非重跑）
+    assert [e["index"] for e in fake2.entry_log[0]] == [2, 3]
+
+
+def test_resume_realign_post_validate_and_tm_gate(tmp_path, monkeypatch, capsys):
+    """HIGH-1 回归（strict）：resume 复用 out_a 后 post_validate 按 index
+    配对必须与 orig 同空间——跳号错位时 dewei 修正不得落到他行译文上，
+    flagged 归因不得错行（TM 学习门槛随之对齐）。"""
+    import subtransjav.refine.cleaner_rules as cr
+
+    def _passthrough_clean(srt, config_dir=None, source_map=None):
+        return srt, {"merged": 0, "deleted": 0, "deleted_by_rule": {},
+                     "kept_by_source_evidence": 0}
+    monkeypatch.setattr(cr, "clean_srt", _passthrough_clean)
+
+    cfg = _make_cfg(tmp_path, profile="local")
+    in_srt, _fake_tmp = _setup_gate0_gap_input(tmp_path, t2="部長で",
+                                               t3="こんにちは")
+    # 阶段A 脚本化译文：#2→不含触发词、#3→含「作为」但源文无「で」
+    # （错位配对时 #3 的译文会被 #2 的源文误触发 dewei 改写）
+
+    class ScriptedAInterrupt(FakeClient):
+        def __init__(self, a_texts):
+            super().__init__()
+            self.a_texts = a_texts
+
+        def translate_entries(self, entries, **kw):
+            if any("|||" in e["text"] for e in entries):
+                raise KeyboardInterrupt()
+            result = super().translate_entries(entries, **kw)
+            for e in entries:
+                if e["index"] in self.a_texts:
+                    result.translations[e["index"]] = self.a_texts[e["index"]]
+            return result
+
+    tm = FakeTM()
+    monkeypatch.setattr(pv, "_init_tm", lambda c: tm)
+    monkeypatch.setattr(pv, "refine_tmp_dir", _fake_tmp)
+    monkeypatch.setattr(pv, "_make_client",
+                        lambda cfg, tag: ScriptedAInterrupt(
+                            {2: "你好部长", 3: "作为问候"}))
+    cfg.inputs = [str(in_srt)]
+    with pytest.raises(KeyboardInterrupt):
+        pv.run_v2(cfg)
+
+    fake2 = FakeClient()
+    monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: fake2)
+    cfg.resume = True
+    pv.run_v2(cfg)
+    assert "阶段A产物复用" in capsys.readouterr().out
+    assert len(fake2.calls) == 1
+    # dewei 修正只允许命中源文含「で」的行：#3（こんにちは）的译文不得被改写
+    b_texts = {e["index"]: e["text"] for e in fake2.entry_log[0]}
+    assert sorted(b_texts) == [2, 3]
+    assert "部長で ||| 你好部长" in b_texts[2]
+    assert "こんにちは ||| 作为问候" in b_texts[3]
+    # flagged 归因正确 → TM 门槛不错行：两对均按时间轴对齐入库
+    assert tm.stored == [("部長で", "审2", 1), ("こんにちは", "审3", 1)]
 
 
 def test_suspect_upstream_tightens_gate0_and_annotates_report(
@@ -2544,6 +2702,28 @@ def test_filter_language_backfills_original_index_when_all_timings_hit():
     assert texts[5] == pv.UNTRANSLATED_PREFIX + "こんにちは"   # D1 不丢行
     assert texts[6] == "中文没有问题"
     assert texts[7] == "第三条"
+
+
+def test_filter_language_same_timing_duplicate_no_row_loss():
+    """同 timing 重复条目其一被语言白名单判无效：无效条回填 [未翻译] 保留
+    （不丢行、index 集合守恒），有效条 index 照常回填。"""
+    t_dup = "00:00:02,000 --> 00:00:02,500"
+    entries = [
+        {"index": 1, "timing": "00:00:01,000 --> 00:00:01,500",
+         "text": "中文第一句"},
+        {"index": 2, "timing": t_dup, "text": "こんにちは"},   # 同 timing，无效
+        {"index": 3, "timing": t_dup, "text": "中文第三句"},   # 同 timing，有效
+        {"index": 4, "timing": "00:00:03,000 --> 00:00:03,500",
+         "text": "中文第四句"},
+    ]
+    kept = pv._filter_language(None, entries, 3)
+    assert len(kept) == 4                                # 不丢行
+    assert {e["index"] for e in kept} == {1, 2, 3, 4}    # index 集合守恒
+    texts = {e["index"]: e["text"] for e in kept}
+    assert texts[1] == "中文第一句"
+    assert texts[2] == pv.UNTRANSLATED_PREFIX + "こんにちは"   # 无效条回填不丢
+    assert texts[3] == "中文第三句"                            # 有效条照常回填
+    assert texts[4] == "中文第四句"
 
 
 def test_stage_b_missing_line_keeps_a_translation(tmp_path, monkeypatch):

@@ -211,3 +211,23 @@ def _align_orig_by_timing(entries: list, orig_entries: list) -> list:
         else:
             aligned.append(None)
     return aligned
+
+
+def _reindex_entries_by_timing(entries: list, orig_entries: list) -> list:
+    """按时间轴把 entries 的 index 重建为 orig_entries 的条目编号空间。
+
+    落盘产物（build_srt）的序号是重排后的 1..N，与源侧条目编号（闸门0
+    删行/预合并合并后带跳号）不在同一 index 空间；复用落盘产物（如
+    --resume 复用阶段A 产物）时若直接沿用文件序号，下游按 index 配对
+    的环节（post_validate、TM 学习门槛、隔离区回捞）会整体错位。
+
+    双指针对齐（同起点多条按序消费，与 _align_orig_by_timing 同口径）；
+    对不齐的条目保留自身编号（产物被外部改动场景的防御语义：不拒绝
+    复用、不丢条目）。就地修改并返回 entries（parse_srt 产物为本次
+    独占，无需拷贝）。
+    """
+    aligned = _align_orig_by_timing(entries, orig_entries)
+    for e, o in zip(entries, aligned, strict=False):
+        if o is not None and e["index"] != o["index"]:
+            e["index"] = o["index"]
+    return entries

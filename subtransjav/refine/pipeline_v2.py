@@ -131,6 +131,7 @@ from .v2_premerge import (  # noqa: F401
     _align_orig_by_timing,
     _normalize_untranslated_marker,
     _premerge_entries,
+    _reindex_entries_by_timing,
     _strip_trailing_pause,
     _timing_span,
 )
@@ -779,6 +780,7 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
     for ae, orig in zip(a_result.entries, aligned_orig, strict=False):
         i = ae["index"]
         keep_flag = False
+        keep_a_marker_text = False
         if i in result.translations:
             text = clean_grammar_hint_residue(result.translations[i])
         elif not is_untranslated_text(ae["text"]):
@@ -792,6 +794,7 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
             text = (orig["text"] or "").strip() if orig else ""
             if not text:
                 text = ae["text"]        # 无原文可退：保留阶段A 原文+标记
+                keep_a_marker_text = True
             elif not is_untranslated_text(text):
                 text = UNTRANSLATED_PREFIX + text   # 统一标记（防二次加标）
             keep_flag = True
@@ -799,8 +802,11 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
         # A2 残译清洗：无论残译从哪条路径进来（B 回显已带标记的
         # "[未翻译] Chicks。" 等），终稿落盘前统一规范化（只改 text，
         # 条目数不变；详见 _normalize_untranslated_marker）。
-        text = _normalize_untranslated_marker(
-            text, (orig["text"] or "") if orig else "")
+        # 无原文可退的分支除外：阶段A 的 "[未翻译] 日文" 即最终形态，
+        # 规范化会把日文剥掉只留裸标记，与保留原文的回退语义相悖。
+        if not keep_a_marker_text:
+            text = _normalize_untranslated_marker(
+                text, (orig["text"] or "") if orig else "")
         if not text:
             continue                     # 空正文不进终稿（D1 下仅防御性保留）
         entry = {"index": i, "timing": ae["timing"], "text": text}
@@ -936,29 +942,34 @@ def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
     def _process_file(path):
         """单文件处理；异常隔离进记录，不拖垮其他文件。"""
         before = len(collector.events)
-        was_untrans = collector.untranslated_majority
         try:
             out = _run_single_v2(cfg, path, collector=collector,
                                  emitter=emitter, learn_threads=learn_threads)
-            return (path, out, None, before, was_untrans)
+            return (path, out, None, before)
         except Exception as e:      # noqa: BLE001 单文件隔离
-            return (path, None, e, before, was_untrans)
+            return (path, None, e, before)
 
     def _absorb(record, idx: int) -> None:
         """聚合单文件记录到任务计数（主线程串行执行，无竞态）。"""
         nonlocal files_ok, files_degraded, files_failed
-        path, out, err, before, was_untrans = record
+        path, out, err, before = record
         fname = Path(path).name
         if err is None:
             results.append(out)
             files_ok += 1
             # 本文件是否发生内容降级（口径与 RiskCollector.content_degraded
-            # 一致：非 info 且有动作且有影响条数，或整段未翻译置位）
+            # 一致：非 info 且有动作且有影响条数，或整段未翻译置位）。
+            # 多文件并行时各 worker 共享同一收集器，events[before:] 会
+            # 混入他文件窗口内追加的事件——先按 file 归属过滤再判定。
+            own = [e for e in collector.events[before:] if e.file == fname]
             new_risk = any(e.severity != SEVERITY_INFO and e.action
-                           and e.affected_count > 0
-                           for e in collector.events[before:])
-            if new_risk or (collector.untranslated_majority
-                            and not was_untrans):
+                           and e.affected_count > 0 for e in own)
+            # 整段未翻译是 run 级单一布尔（并行下可能被他文件置位），
+            # 归属判定以本文件自己的 critical 事件为准
+            # （mark_untranslated_majority 落的 critical 事件带 file 归属）
+            new_majority = any(e.severity == SEVERITY_CRITICAL and e.action
+                               for e in own)
+            if new_risk or new_majority:
                 files_degraded += 1
             print(f"[refine-v2] 文件成功 ({idx}/{total})：{fname}")
         else:
@@ -1292,6 +1303,12 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                 and manifest.stages["final"].status != "done"):
             a_entries = parse_srt(Path(out_a_path).read_text(encoding="utf-8"))
             if a_entries:
+                # 落盘序号是 build_srt 重排的 1..N，与本轮 orig_entries
+                # （闸门0 删行/预合并合并后带跳号）不在同一 index 空间；
+                # 按时间轴重建编号，防止 post_validate 配对、TM 学习门槛、
+                # 隔离区回捞按 index 错位。对不齐的条目（out_a 被外部改动）
+                # 保留文件序号——沿用既有"不拒绝复用"的防御语义。
+                _reindex_entries_by_timing(a_entries, orig_entries)
                 print(f"🔹 [v2] 阶段A产物复用（--resume）："
                       f"{Path(out_a_path).name}")
                 a_result = StageAResult(
