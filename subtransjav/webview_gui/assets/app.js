@@ -520,6 +520,15 @@ const FileListManager = {
             }
         });
 
+        const pathToIndex = new Map();
+        AppState.selectedFiles.forEach((file, index) => {
+            if (!pathToIndex.has(file)) pathToIndex.set(file, index);
+        });
+        fileList.querySelectorAll('.file-item').forEach(item => {
+            const index = pathToIndex.get(item.dataset.path);
+            if (index !== undefined) item.dataset.index = String(index);
+        });
+
         this.updateButtons();
     },
 
@@ -962,10 +971,15 @@ const TranslatorManager = {
 
     async cancelTranslation() {
         try {
-            await pywebview.api.cancel_translation();
-            ConsoleManager.log(MSG.cancelledLog, 'warning');
-            // 状态轮询会检测到进程退出并收尾；此处立即恢复按钮避免竞态窗口
-            this._finish(MSG.cancelled);
+            const result = await pywebview.api.cancel_translation();
+            if (result && result.success) {
+                ConsoleManager.log(MSG.cancelledLog, 'warning');
+                // 状态轮询会检测到进程退出并收尾；此处立即恢复按钮避免竞态窗口
+                this._finish(MSG.cancelled);
+            } else {
+                ConsoleManager.log((result && result.error) || MSG.unknownError,
+                    'warning');
+            }
         } catch (error) {
             console.error('Error cancelling translation:', error);
         }
@@ -1820,10 +1834,16 @@ function closeAbout() {
 
   function guidePath() {
     const opts = buildRefineOptions();
-    const outDir = (opts.output_dir || '').trim();
     const first = (opts.inputs || [])[0] || '';
-    if (!outDir || !first) return '';
-    const stem = String(first).replace(/\.[^./\\]+$/, '');
+    if (!first) return '';
+    const norm = String(first).replace(/\\/g, '/');
+    const outDirRaw = (opts.output_dir || '').trim();
+    const outDir = (!outDirRaw || outDirRaw === 'source')
+      ? norm.slice(0, norm.lastIndexOf('/')) || '.'
+      : outDirRaw;
+    const stem = norm.slice(norm.lastIndexOf('/') + 1)
+      .replace(/\.[^./]+$/, '')
+      .replace(/\.(japanese|chinese|translated)$/, '');
     return outDir.replace(/[\\/]+$/, '') + '/' + stem + GUIDE_SUFFIX;
   }
 
@@ -2092,6 +2112,7 @@ const FeatureStatus = {
     updateGrammarHintBadge(info) {
         const badge = document.getElementById('grammarHintBadge');
         if (!badge) return;
+        badge.style.display = '';
 
         if (info.available) {
             badge.className = 'feature-badge active';

@@ -608,3 +608,174 @@ def test_refine_stage_settings_model_incremental_merge(gui_api_obj, tmp_path,
     entry = next(s for s in got["stages"] if s.get("stage") == 1)
     assert entry["model"] == "glm-4"
     assert entry["endpoint"] == "https://z"
+
+
+# ---------------------------------------------------------------------------
+# cancel_translation 运行态契约（M3）：
+# - 哨兵期（Popen 未完成）取消返回 success=False，由前端保持运行态；
+# - 击杀成功后 cancelled 状态才置位；击杀抛异常时状态/句柄原样保留
+#   （进程实际仍在运行，轮询继续收尾）。
+# ---------------------------------------------------------------------------
+
+def _manual_state_api(gui_api_obj):
+    import threading
+    gui_api_obj._translate_lock = threading.Lock()
+    gui_api_obj._init_translation_state()
+    return gui_api_obj
+
+
+def test_cancel_translation_sentinel_period_returns_failure(gui_api_obj):
+    """启动哨兵期取消：返回失败且状态/句柄原样保留。
+
+    契约钉：前端 cancelTranslation 依赖此 success=False 保持运行态
+    继续轮询，不得视作已取消。
+    """
+    api = _manual_state_api(gui_api_obj)
+    api._translate_process = True
+    result = api.cancel_translation()
+    assert result["success"] is False
+    assert api._translate_process is True
+    assert api._translate_status != "cancelled"
+
+
+def test_cancel_translation_success_sets_cancelled_after_kill(
+        gui_api_obj, monkeypatch):
+    """击杀成功路径：cancelled 状态在击杀完成之后置位，句柄清空。"""
+    import subtransjav.webview_gui.api as api_mod
+    api = _manual_state_api(gui_api_obj)
+
+    class _FakeProc:
+        pid = 424242
+
+        def wait(self, timeout=None):
+            return 0
+
+    proc = _FakeProc()
+    api._translate_process = proc
+    api._translate_status = "running"
+    monkeypatch.setattr(api_mod, "PSUTIL_AVAILABLE", True)
+    monkeypatch.setattr(api_mod, "terminate_process_tree",
+                        lambda pid: {"success": True})
+
+    result = api.cancel_translation()
+    assert result["success"] is True
+    assert api._translate_status == "cancelled"
+    assert api._translate_process is None
+
+
+def test_cancel_translation_kill_failure_keeps_running_state(
+        gui_api_obj, monkeypatch):
+    """击杀抛异常：不得置 cancelled，进程句柄保留（进程仍在运行）。"""
+    import subtransjav.webview_gui.api as api_mod
+    api = _manual_state_api(gui_api_obj)
+
+    class _UnkillableProc:
+        pid = 424242
+
+    proc = _UnkillableProc()
+    api._translate_process = proc
+    api._translate_status = "running"
+
+    def _boom(pid):
+        raise RuntimeError("terminate failed")
+
+    monkeypatch.setattr(api_mod, "PSUTIL_AVAILABLE", True)
+    monkeypatch.setattr(api_mod, "terminate_process_tree", _boom)
+
+    result = api.cancel_translation()
+    assert result["success"] is False
+    assert api._translate_status != "cancelled"
+    assert api._translate_process is proc
+
+
+# ---------------------------------------------------------------------------
+# TM db_path 锚点校验（M4）：四个 TM 接口的 db_path 与同函数导出/导入
+# path 同过 _resolve_safe_path，且拒绝必须发生在 TranslationMemory
+# 构造（makedirs + sqlite 建库）之前。
+# ---------------------------------------------------------------------------
+
+_OUTSIDE_DB = os.path.join(os.path.expanduser("~"), os.pardir, os.pardir,
+                           "beyond_anchor_tm.db")
+
+
+def _install_fake_tm(monkeypatch):
+    """替身 TranslationMemory：记录构造参数，杜绝测试触碰真实 sqlite。"""
+    import subtransjav.refine.tm as tm_mod
+    constructed: list = []
+
+    class _FakeTM:
+        def __init__(self, db_path=None):
+            constructed.append(db_path)
+
+        def stats(self):
+            return {"entries": 1}
+
+        def clear(self, stage):
+            return None
+
+        def export_csv(self, path, stage):
+            return None
+
+        def import_csv(self, path):
+            return 0
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tm_mod, "TranslationMemory", _FakeTM)
+    return constructed
+
+
+@pytest.mark.parametrize("method", ["tm_get_stats", "tm_clear",
+                                    "tm_export_csv", "tm_import_csv"])
+def test_tm_db_path_outside_anchor_rejected(gui_api_obj, monkeypatch,
+                                            tmp_path, method):
+    """越锚 db_path 必须被拒，且不触碰 TranslationMemory。"""
+    constructed = _install_fake_tm(monkeypatch)
+    kwargs = {"db_path": _OUTSIDE_DB}
+    if method == "tm_export_csv":
+        kwargs["path"] = str(tmp_path / "export.csv")
+    elif method == "tm_import_csv":
+        kwargs["path"] = str(tmp_path / "import.csv")
+    result = getattr(gui_api_obj, method)(**kwargs)
+    assert result["success"] is False
+    assert "路径不在允许的目录下" in result["error"]
+    assert constructed == [], "拒绝必须发生在建库之前"
+
+
+@pytest.mark.parametrize("method", ["tm_get_stats", "tm_clear",
+                                    "tm_export_csv", "tm_import_csv"])
+def test_tm_db_path_within_anchor_passthrough(gui_api_obj, monkeypatch,
+                                              tmp_path, method):
+    """锚内 db_path 照常透传（守卫不误伤正常路径）。"""
+    constructed = _install_fake_tm(monkeypatch)
+    db = tmp_path / "ok.db"
+    kwargs = {"db_path": str(db)}
+    if method == "tm_export_csv":
+        kwargs["path"] = str(tmp_path / "export.csv")
+    elif method == "tm_import_csv":
+        kwargs["path"] = str(tmp_path / "import.csv")
+    result = getattr(gui_api_obj, method)(**kwargs)
+    assert result["success"] is True
+    assert constructed == [str(db)]
+
+
+# ---------------------------------------------------------------------------
+# start_translation 日志队列（L2）：启动必须清空上轮残留，
+# 否则上一轮未排干的日志（含 [CANCELLED]）混入新一轮。
+# ---------------------------------------------------------------------------
+
+def test_start_translation_drains_stale_log_queue(gui_api_obj, monkeypatch):
+    """连续两轮启动：上轮残留日志（含 [CANCELLED]）不得混入新一轮。"""
+    captured = {}
+    _capture_popen(monkeypatch, captured, gui_api_obj)
+    gui_api_obj._init_translation_state()
+    for round_no in (1, 2):
+        gui_api_obj._translate_log_queue.put(f"leftover-{round_no}\n")
+        gui_api_obj._translate_log_queue.put(
+            f"\n[CANCELLED] stale-round-{round_no}\n")
+        gui_api_obj.start_translation({"inputs": ["a.srt"], "force": True})
+        residue = []
+        while not gui_api_obj._translate_log_queue.empty():
+            residue.append(gui_api_obj._translate_log_queue.get_nowait())
+        assert residue == [], f"第 {round_no} 轮启动后残留上轮日志: {residue}"

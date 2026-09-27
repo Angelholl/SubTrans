@@ -593,6 +593,12 @@ class TranslateAPI:
             #（True 哨兵仅作占位，消费侧均先判 `is True`；cast 仅为类型清零）
             self._translate_process = cast(subprocess.Popen, True)
 
+        while True:
+            try:
+                self._translate_log_queue.get_nowait()
+            except queue.Empty:
+                break
+
         self._translate_files_total = 0
         self._translate_files_completed = 0
         self._translate_current_file = None
@@ -737,8 +743,6 @@ class TranslateAPI:
                 return {"success": False, "error": msg("translation_still_starting")}
 
         try:
-            self._translate_status = "cancelled"
-
             if PSUTIL_AVAILABLE:
                 result = terminate_process_tree(proc.pid)
                 ok = bool(result["success"])
@@ -754,6 +758,7 @@ class TranslateAPI:
             except subprocess.TimeoutExpired:
                 proc.kill()
 
+            self._translate_status = "cancelled"
             self._translate_log_queue.put(
                 f"\n[CANCELLED] {msg('log_cancelled')}\n")
             with self._translate_lock:
@@ -1320,6 +1325,8 @@ class TranslateAPI:
         """获取翻译记忆库统计信息"""
         try:
             from subtransjav.refine.tm import TranslationMemory
+            if db_path:
+                db_path = str(_resolve_safe_path(db_path))
             tm = TranslationMemory(db_path) if db_path else TranslationMemory()
             try:
                 stats = tm.stats()
@@ -1339,6 +1346,8 @@ class TranslateAPI:
         """
         try:
             from subtransjav.refine.tm import TranslationMemory
+            if db_path:
+                db_path = str(_resolve_safe_path(db_path))
             tm = TranslationMemory(db_path) if db_path else TranslationMemory()
             try:
                 tm.clear(stage)
@@ -1357,6 +1366,8 @@ class TranslateAPI:
             if not path:
                 return {"success": False, "error": msg("tm_export_path_missing")}
             path = str(_resolve_safe_path(path))
+            if db_path:
+                db_path = str(_resolve_safe_path(db_path))
             tm = TranslationMemory(db_path) if db_path else TranslationMemory()
             try:
                 tm.export_csv(path, stage)
@@ -1375,6 +1386,8 @@ class TranslateAPI:
             if not path:
                 return {"success": False, "error": msg("tm_import_path_missing")}
             path = str(_resolve_safe_path(path))
+            if db_path:
+                db_path = str(_resolve_safe_path(db_path))
             tm = TranslationMemory(db_path) if db_path else TranslationMemory()
             try:
                 added = tm.import_csv(path)
