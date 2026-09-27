@@ -80,7 +80,7 @@ def build_parser():
     # ---- 翻译记忆库 ----
     grp_tm = p.add_argument_group("翻译记忆库 (TM)")
     grp_tm.add_argument("--tm-db", default="",
-                        help="翻译记忆库路径（默认 Temp/tm.db）")
+                        help="翻译记忆库路径（默认 Temp/translation_memory/tm.db）")
     grp_tm.add_argument("--tm", action="store_true", default=True,
                         help="启用翻译记忆库（默认启用）")
     grp_tm.add_argument("--no-tm", action="store_true",
