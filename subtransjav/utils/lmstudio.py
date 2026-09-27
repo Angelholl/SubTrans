@@ -21,6 +21,8 @@ import subprocess
 
 import requests
 
+from subtransjav.utils.process_manager import run_with_timeout_tree
+
 _PS_TIMEOUT_S = 30  # lms ps 探测专用短超时，避免 ps 挂死拖满 load 超时
 
 _LMS_CANDIDATES = (
@@ -94,6 +96,9 @@ def _loaded_parallel(lms: str, model: str, log=None) -> int:
         return 0
     try:
         proc = _run_lms(lms, ["ps", "--json"], _PS_TIMEOUT_S)
+        if getattr(proc, "timed_out", False):
+            warn("   ⚠️ 并发检测跳过: lms ps 超时，无法核对")
+            return 0
         if proc.returncode != 0:
             warn(f"   ⚠️ 并发检测跳过: lms ps 退出码非零 (exit {proc.returncode})")
             return 0
@@ -116,8 +121,6 @@ def _loaded_parallel(lms: str, model: str, log=None) -> int:
                 return 0
             return v
         warn("   ⚠️ 并发检测跳过: lms ps 未找到该模型的在载条目，无法核对")
-    except subprocess.TimeoutExpired:
-        warn("   ⚠️ 并发检测跳过: lms ps 超时，无法核对")
     except Exception as e:
         warn(f"   ⚠️ 并发检测跳过: lms ps 输出无法解析 ({e})")
     return 0
@@ -128,9 +131,12 @@ def _run_lms(lms: str, args: list, timeout: float) -> subprocess.CompletedProces
     # 子进程输出，模型名/输出含非 GBK 字符会条件性 UnicodeDecodeError，
     # 且不被上层 except 捕获；lms 输出为 UTF-8，errors="replace" 兜底
     # 保证任何字节序列都可解码（钉死见 tests/test_lmstudio_encoding.py）。
-    return subprocess.run([lms, *args], capture_output=True, text=True,
-                          encoding="utf-8", errors="replace",
-                          timeout=timeout)
+    # v1.3.2 task4：改走 run_with_timeout_tree 统一入口——超时不再抛
+    # TimeoutExpired，而是整树击杀（含孙进程）后返回 timed_out=True 的结果。
+    return run_with_timeout_tree(
+        [lms, *args], timeout,
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace")
 
 
 def ensure_lmstudio_model(endpoint: str, model: str,
@@ -193,7 +199,10 @@ def ensure_lmstudio_model(endpoint: str, model: str,
                         f"或开启 Just-in-Time 自动加载")
     try:
         if evict_others and loaded:
-            _run_lms(lms, ["unload", "--all"], load_timeout)
+            unloaded = _run_lms(lms, ["unload", "--all"], load_timeout)
+            if getattr(unloaded, "timed_out", False):
+                # v1.3.2 task4：卸载超时按失败处理（原实现无捕获直接上抛）
+                return False, "自动卸载超时，请手动检查 LM Studio"
             log(f"   ♻️ 已卸载在载模型（清场换载）: {', '.join(sorted(x for x in loaded if x))}")
         load_args = ["load", model, "-y", "--gpu", gpu]
         if ctx_tokens:
@@ -206,11 +215,10 @@ def ensure_lmstudio_model(endpoint: str, model: str,
         log(f"   ⏳ LM Studio 引擎对齐: 加载 {model} "
             f"(ctx={ctx_tokens}, parallel={parallel}, gpu={gpu}) {reload_reason}...")
         proc = _run_lms(lms, load_args, load_timeout)
-    except subprocess.TimeoutExpired:
-        return False, f"自动加载 {model} 超时（>{load_timeout:.0f}s），请手动加载"
     except OSError as e:
         return False, f"lms CLI 调用失败: {e}"
-
+    if getattr(proc, "timed_out", False):
+        return False, f"自动加载 {model} 超时（>{load_timeout:.0f}s），请手动加载"
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip()[-200:]
         return False, f"自动加载 {model} 失败: {tail or f'exit {proc.returncode}'}"

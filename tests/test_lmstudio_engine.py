@@ -32,41 +32,54 @@ class _FakeRequests:
 
 
 class _FakeRun:
+    """伪装 run_with_timeout_tree（v1.3.2 task4 后 _run_lms 的统一底层）。
+
+    契约对齐原语一：不抛 TimeoutExpired，超时以 timed_out=True 的结果对象返回。
+    timeout_cmd 指定哪个子命令（ps/unload/load）模拟超时；ps_timeout 保留
+    兼容旧用例入参（等价 timeout_cmd="ps"）。
+    """
+
     def __init__(self, req, ps_payload='{"data": []}', fail_load=False,
-                 ps_timeout=False, ps_returncode=0):
+                 ps_timeout=False, ps_returncode=0, timeout_cmd=None):
         self.req = req
         self.calls = []
         self.ps_payload = ps_payload
         self.fail_load = fail_load
         self.ps_timeout = ps_timeout
         self.ps_returncode = ps_returncode
+        self.timeout_cmd = timeout_cmd
 
-    def __call__(self, args, capture_output, text, timeout,
+    def __call__(self, args, timeout, capture_output=True, text=True,
                  encoding=None, errors=None):
         self.calls.append(list(args))
         sub = args[1:2]
+        hit = (self.ps_timeout and sub == ["ps"]) or \
+              (self.timeout_cmd is not None and sub == [self.timeout_cmd])
+        if hit:
+            return types.SimpleNamespace(returncode=None, stdout="",
+                                         stderr="", timed_out=True)
         if sub == ["ps"]:
-            if self.ps_timeout:
-                raise lm.subprocess.TimeoutExpired(cmd="lms ps", timeout=timeout)
             return types.SimpleNamespace(returncode=self.ps_returncode,
-                                         stdout=self.ps_payload, stderr="")
+                                         stdout=self.ps_payload, stderr="",
+                                         timed_out=False)
         if sub == ["unload"]:
             self.req.v1_ids.clear()
         if sub == ["load"] and not self.fail_load:
             self.req.v1_ids.add(args[2])
         rc = 1 if (self.fail_load and sub == ["load"]) else 0
-        return types.SimpleNamespace(returncode=rc, stdout="out", stderr="err")
+        return types.SimpleNamespace(returncode=rc, stdout="out", stderr="err",
+                                     timed_out=False)
 
 
 @pytest.fixture
 def env(monkeypatch):
-    """装好 fake requests/subprocess/_find_lms 的沙箱，返回安装器。"""
+    """装好 fake requests/原语/_find_lms 的沙箱，返回安装器。"""
 
     def _install(v1_ids=(), v0=None, **fake_run_kw):
         fr = _FakeRequests(v1_ids, v0 if v0 is not None else {"data": []})
         run = _FakeRun(fr, **fake_run_kw)
         monkeypatch.setattr(lm, "requests", fr)
-        monkeypatch.setattr(lm.subprocess, "run", run)
+        monkeypatch.setattr(lm, "run_with_timeout_tree", run)
         monkeypatch.setattr(lm, "_find_lms", lambda: "lms-fake")
         return fr, run
 
@@ -299,4 +312,38 @@ def test_ctx_skip_path_logs_warning(env):
     assert ok
     assert any("ctx 检测跳过" in m for m in logs)
     assert _no_reload(run)
+
+
+# ---- v1.3.2 task4：三处调用点改走原语一，超时不再上抛 TimeoutExpired ----
+
+def test_ps_timeout_flag_warns_and_returns_zero(env):
+    """lms ps 超时（原语一 timed_out 标记而非异常）：告警文案语义保留，
+    并发检测拿 0（fail-open），不触发重载。"""
+    ps = _ps([_m1_entry(4)])    # 即便 ps 本会报失配，超时也只跳过判定
+    fr, run = env(v1_ids=["m1"], v0=V0_M1, ps_timeout=True, ps_payload=ps)
+    logs = []
+    ok, msg = lm.ensure_lmstudio_model(EP, "m1", ctx_tokens=16384, parallel=2,
+                                       log=logs.append)
+    assert ok and msg == "模型已加载"
+    assert _no_reload(run)
+    assert any("lms ps 超时" in m for m in logs)
+
+
+def test_unload_timeout_fails_without_raising(env):
+    """unload 超时：按失败处理返回可读告警（原实现无捕获直接上抛），
+    且不再继续 load。"""
+    fr, run = env(v1_ids=["other-model"], v0=V0_M1, timeout_cmd="unload")
+    ok, msg = lm.ensure_lmstudio_model(EP, "m1", ctx_tokens=16384)
+    assert not ok
+    assert "自动卸载超时" in msg and "手动检查" in msg
+    assert [c[1:2] for c in run.calls] == [["unload"]]
+
+
+def test_load_timeout_returns_false_without_raising(env):
+    """load 超时：维持现有 False + 手动加载文案，不上抛 TimeoutExpired。"""
+    fr, run = env(v1_ids=[], v0=V0_M1, timeout_cmd="load")
+    ok, msg = lm.ensure_lmstudio_model(EP, "m1", ctx_tokens=16384)
+    assert not ok
+    assert "自动加载 m1 超时" in msg and "请手动加载" in msg
+    assert [c[1:2] for c in run.calls] == [["load"]]
 

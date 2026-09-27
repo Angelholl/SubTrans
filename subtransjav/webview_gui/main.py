@@ -75,6 +75,9 @@ def _auto_setup():
                 # 依赖已完整，直接重启
                 print(msg("setup_env_ready"))
                 os.execv(str(venv_python), [str(venv_python), "-m", "subtransjav.webview_gui.main"])
+            except subprocess.TimeoutExpired:
+                # v1.3.2 task4：从泛 except 中单独捞出，行为不变仅补可读日志
+                print("   ⚠️ venv 探测超时(10s)，将走依赖安装/引导分支")
             except Exception:
                 pass  # 依赖不完整，继续安装
 

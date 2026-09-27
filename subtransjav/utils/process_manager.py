@@ -6,10 +6,15 @@ child processes (including GPU workers) are properly cleaned up
 when the user cancels an operation.
 
 v1.7.4+: Fixes orphaned GPU worker processes on cancellation.
+v1.3.2 task4: 项目级进程治理两原语——run_with_timeout_tree（带超时子进程
+统一入口，超时整树击杀且不抛 TimeoutExpired）与 terminate_process_tree_robust
+（用户取消/退出场景的跨环境树杀）。
 """
 
 import logging
 import os
+import signal
+import subprocess
 from typing import Any
 
 try:
@@ -288,6 +293,157 @@ def kill_process_tree(pid: int, include_parent: bool = True) -> dict[str, Any]:
         psutil.wait_procs(processes_to_kill, timeout=2.0)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# v1.3.2 task4：项目级进程治理两原语
+# ---------------------------------------------------------------------------
+
+_TASKKILL_TIMEOUT_S = 10.0  # taskkill 自身限时，防止其挂死拖垮调用方
+
+
+class _TreeRunResult(subprocess.CompletedProcess):
+    """run_with_timeout_tree 的返回类型：CompletedProcess 附加 timed_out 标记。"""
+
+    def __init__(self, args, returncode, stdout, stderr, timed_out: bool):
+        super().__init__(args, returncode, stdout, stderr)
+        self.timed_out = timed_out
+
+
+def _taskkill_tree(pid: int) -> tuple[bool, str]:
+    """Windows 无 psutil 回退：taskkill /T /F 整树强杀。
+
+    返回 (是否成功, 失败原因)。taskkill 自身限时 _TASKKILL_TIMEOUT_S。
+    """
+    try:
+        cp = subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True, timeout=_TASKKILL_TIMEOUT_S, check=False,
+        )
+    except Exception as e:  # 含 TimeoutExpired / FileNotFoundError
+        return False, f"taskkill 执行失败: {e}"
+    if cp.returncode == 0:
+        return True, ""
+    return False, f"taskkill 退出码 {cp.returncode}"
+
+
+def _single_kill(proc: subprocess.Popen) -> None:
+    """终态兜底：直接子进程单杀（目标已死则无害）。"""
+    try:
+        proc.kill()
+    except Exception as e:
+        logger.warning(f"兜底单杀失败（pid={proc.pid}）: {e}")
+
+
+def run_with_timeout_tree(
+    cmd: list[str],
+    timeout: float,
+    *,
+    capture_output: bool = True,
+    text: bool = True,
+    encoding: str | None = None,
+    errors: str | None = None,
+    env: dict[str, str] | None = None,
+    cwd: str | None = None,
+) -> subprocess.CompletedProcess:
+    """带超时的子进程调用统一入口：超时即整树击杀，永不抛 TimeoutExpired。
+
+    签名对齐 subprocess.run 风格（cmd 列表 + 必填 timeout + 常用透传参数），
+    内部用 Popen + communicate(timeout) 自管。超时清理顺序：
+      ① psutil 可用 → terminate_process_tree 树杀（含孙进程）；
+      ② 无 psutil 且 Windows → taskkill /PID <pid> /T /F；
+      ③ POSIX → 子进程以 start_new_session=True 创建，超时 os.killpg 整组杀。
+    任何树杀路径之后无条件执行 proc.kill() 单杀兜底（重复杀已死进程无害），
+    保证调用方在任何分支下都不会无限阻塞。
+
+    返回 _TreeRunResult（CompletedProcess 子类）：正常完成 timed_out=False；
+    超时 timed_out=True，returncode 为击杀后的实际退出码（极端场景可为 None）。
+    """
+    popen_kwargs: dict[str, Any] = {}
+    if os.name != "nt":
+        # POSIX：让子进程自成进程组，超时时可 killpg 整树击杀
+        popen_kwargs["start_new_session"] = True
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE if capture_output else None,
+        stderr=subprocess.PIPE if capture_output else None,
+        text=text,
+        encoding=encoding,
+        errors=errors,
+        env=env,
+        cwd=cwd,
+        **popen_kwargs,
+    )
+    timed_out = False
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        logger.warning(f"命令超时（>{timeout:g}s），整树击杀: {list(cmd)[:3]}")
+        if PSUTIL_AVAILABLE:
+            result = terminate_process_tree(proc.pid)
+            if not result["success"]:
+                logger.warning(
+                    f"psutil 树杀未完全成功（pid={proc.pid}）: {result['errors']}")
+        elif os.name == "nt":
+            ok, detail = _taskkill_tree(proc.pid)
+            if not ok:
+                logger.warning(f"taskkill 树杀未完全成功（pid={proc.pid}）: {detail}")
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # type: ignore[attr-defined]  # start_new_session → 自成进程组
+            except Exception as e:
+                logger.warning(f"killpg 树杀失败（pid={proc.pid}）: {e}")
+        _single_kill(proc)  # 终态兜底：任何路径都不允许调用方无限阻塞
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except Exception:
+            # 残留孙进程仍握着管道等极端场景：放弃回收输出，绝不阻塞
+            blank = "" if (text or encoding) else b""
+            stdout, stderr = blank, blank
+    return _TreeRunResult(cmd, proc.returncode, stdout, stderr, timed_out)
+
+
+def terminate_process_tree_robust(pid: int) -> bool:
+    """用户显式取消/退出场景的进程树终止（无超时语义），返回是否全清。
+
+    优先级：psutil 可用 → 现有 terminate_process_tree 两阶段树杀原样走；
+    无 psutil 且 Windows → taskkill /PID <pid> /T /F 整树强杀（升级自单杀）；
+    POSIX → 仅当目标自成进程组（getpgid(pid)==pid）才 killpg 整组杀，
+    否则降级单杀并告警（防止误杀同组内 GUI 自身等无辜进程）。
+    """
+    if PSUTIL_AVAILABLE:
+        return bool(terminate_process_tree(pid)["success"])
+
+    if os.name == "nt":
+        ok, detail = _taskkill_tree(pid)
+        if not ok:
+            logger.warning(f"taskkill 树杀未完全成功（pid={pid}）: {detail}")
+        return ok
+
+    # POSIX：确认目标自成进程组才可整组杀（pgid==pid），否则误伤同组进程
+    try:
+        pgid = os.getpgid(pid)  # type: ignore[attr-defined]
+    except OSError:
+        pgid = None
+    if pgid == pid:
+        try:
+            os.killpg(pgid, signal.SIGKILL)  # type: ignore[attr-defined]
+            return True
+        except ProcessLookupError:
+            return True  # 组内进程均已消亡，视为全清
+        except OSError as e:
+            logger.warning(f"killpg 树杀失败（pid={pid}）: {e}")
+            return False
+    logger.warning(f"进程 {pid} 不自成进程组，降级为单杀")
+    try:
+        os.kill(pid, signal.SIGKILL)  # type: ignore[attr-defined]
+        return True
+    except ProcessLookupError:
+        return True  # 已死即全清
+    except OSError as e:
+        logger.warning(f"单杀降级失败（pid={pid}）: {e}")
+        return False
 
 
 def is_process_alive(pid: int) -> bool:

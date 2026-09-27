@@ -3,7 +3,8 @@
 _run_lms 捕获 lms 子进程输出必须显式 encoding="utf-8" + errors="replace"：
 缺省时 Windows 按 locale（cp936）解码，模型名/输出含非 GBK 字符会条件性
 UnicodeDecodeError，且 UnicodeDecodeError 不被上层 except 捕获。本文件
-mock subprocess.run 捕获 kwargs 钉死编码参数，防回退。
+mock run_with_timeout_tree（v1.3.2 task4 起 _run_lms 的统一底层）捕获
+kwargs 钉死编码参数，防回退。
 """
 import inspect
 import sys
@@ -16,17 +17,22 @@ from subtransjav.utils import lmstudio as lm  # noqa: E402
 
 
 def test_run_lms_forces_utf8_replace(monkeypatch):
-    """防回退钉：_run_lms 必须以 encoding="utf-8" + errors="replace"
-    调 subprocess.run（输出捕获 + 文本模式为前提一并钉住）。"""
+    """防回退钉：_run_lms 必须以 encoding="utf-8" + errors="replace" 走
+    run_with_timeout_tree（输出捕获 + 文本模式为前提一并钉住）。"""
     captured = {}
 
-    def _fake_run(args, **kwargs):
+    def _fake_run(args, timeout, **kwargs):
+        captured["args"] = list(args)
+        captured["timeout"] = timeout
         captured.update(kwargs)
-        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="",
+                                     timed_out=False)
 
-    monkeypatch.setattr(lm.subprocess, "run", _fake_run)
+    monkeypatch.setattr(lm, "run_with_timeout_tree", _fake_run)
     proc = lm._run_lms("lms-fake", ["ps", "--json"], 5.0)
     assert proc.returncode == 0
+    assert captured.get("args") == ["lms-fake", "ps", "--json"]
+    assert captured.get("timeout") == 5.0
     assert captured.get("encoding") == "utf-8"
     assert captured.get("errors") == "replace"
     assert captured.get("capture_output") is True
