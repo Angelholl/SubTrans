@@ -360,6 +360,9 @@ def test_run_with_timeout_tree_kills_tree_on_timeout():
     _kill_by_pids(_t4_marker_pids())  # 清扫已死未消失的标记进程（幂等）
 
 
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="run_with_timeout_tree 的 taskkill 回退仅 Windows "
+                           "分支可达（os.name=='nt'），POSIX 走 killpg 不实跑")
 def test_run_with_timeout_tree_taskkill_fallback_args(monkeypatch):
     """无 psutil + Windows：超时回退 taskkill，参数形态恰为
     [taskkill, /PID, <pid>, /T, /F]。"""
@@ -389,6 +392,9 @@ def test_run_with_timeout_tree_taskkill_fallback_args(monkeypatch):
     assert calls == [["taskkill", "/PID", str(recorded.get("pid")), "/T", "/F"]]
 
 
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="run_with_timeout_tree 的 taskkill 回退仅 Windows "
+                           "分支可达（os.name=='nt'），POSIX 走 killpg 不实跑")
 def test_run_with_timeout_tree_taskkill_failure_falls_back_single_kill(
         monkeypatch, caplog):
     """终态兜底（硬要求）：taskkill 自身抛错 → 兜底单杀 + warning 记录，
@@ -439,6 +445,9 @@ def test_terminate_process_tree_robust_psutil_clears_tree():
         _ensure_dead(parent)
 
 
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="terminate_process_tree_robust 的 taskkill 回退仅 "
+                           "Windows 可达（os.name=='nt'），POSIX 走 killpg/单杀")
 def test_terminate_process_tree_robust_taskkill_fallback_args(monkeypatch):
     """无 psutil + Windows：taskkill 参数形态恰为 [taskkill, /PID, <pid>, /T, /F]。"""
     monkeypatch.setattr(pm, "PSUTIL_AVAILABLE", False)
@@ -459,6 +468,9 @@ def test_terminate_process_tree_robust_taskkill_fallback_args(monkeypatch):
         _ensure_dead(proc)
 
 
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="terminate_process_tree_robust 的 taskkill 回退仅 "
+                           "Windows 可达（os.name=='nt'），POSIX 走 killpg/单杀")
 def test_terminate_process_tree_robust_taskkill_failure_returns_false(
         monkeypatch, caplog):
     """无 psutil + Windows：taskkill 抛错 → warning + 返回 False（全清失败），
@@ -513,8 +525,12 @@ def test_terminate_process_tree_robust_posix_group_leader_killpg():
 
 @pytest.mark.skipif(os.name == "nt",
                     reason="POSIX 专属分支（单杀降级），Windows 本机不实跑")
-def test_terminate_process_tree_robust_posix_non_leader_degrades_single_kill(caplog):
+def test_terminate_process_tree_robust_posix_non_leader_degrades_single_kill(
+        monkeypatch, caplog):
     """POSIX：目标不自成进程组 → 降级单杀 + warning，不误伤同组进程。"""
+    # “降级单杀”仅存在于无 psutil 回退分支；CI 装有 psutil，不强制关闭会走
+    # psutil 树杀路径（返回 True 但无“进程组/单杀”告警，日志断言落空）。
+    monkeypatch.setattr(pm, "PSUTIL_AVAILABLE", False)
     proc = _sleep_proc()  # 未设 start_new_session，与 pytest 同组
     try:
         _wait_alive(proc)
