@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "subtransjav"
-version = "1.2.3"
+version = "1.3.2"
 description = "Standalone two-stage (v2) SRT subtitle translation (net-speech refine pipeline) extracted from SubTransJAV"
 readme = "README.md"
 license = {text = "MIT"}
@@ -30,6 +30,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 
 # 翻译引擎核心依赖（refine v2 两阶段流水线 + PySubtrans 云端服务商通道）
