@@ -165,7 +165,7 @@ const MSG = {
     batch_local_label: '批量·本地',
     batch_cloud_label: '批量·云端',
     concurrency_label: '并行',
-    concurrency_title: '批间并发数（1-5），默认 2',
+    concurrency_title: '批间并发数（1-5），默认 1',
     gl1_label: '词库→阶段A',
     gl2_label: '词库→阶段B',
     resume_label: '断点恢复（复用已完成阶段）',
@@ -189,6 +189,13 @@ const MSG = {
     fallback_local_title: '云端阶段遭遇限流/宕机/持续解析失败时，自动切换本地模型完成剩余批次',
     fallback_model_label: '接管模型',
     refresh_local_title: '刷新本地模型列表',
+
+    // ---- 高级设置折叠区（v1.3.2 任务2：纯 DOM 收纳，仅小标题文案键，无 JS 行为逻辑）----
+    advanced_settings_summary: '高级设置',
+    adv_group_translation_glossary: '翻译与词库',
+    adv_group_tm_learn_gate: 'TM 与学习闸',
+    adv_group_resume_logging: '断点与日志',
+    adv_group_fallback_concurrency: '兜底与并发',
 
     // ---- 接口地址 / 启动 ----
     endpoints_summary: '接口地址（对应阶段A/B，切换服务商自动填充）',
@@ -1317,10 +1324,10 @@ function closeAbout() {
     st.textContent = text;
   }
 
-  // ---- 并行度读取（1-5，非法/缺省回退2）----
+  // ---- 并行度读取（1-5，非法/缺省回退1）----
   function readRefineConcurrency() {
     let n = parseInt(($('refineConcurrency') || {}).value, 10);
-    if (!Number.isFinite(n)) n = 2;
+    if (!Number.isFinite(n)) n = 1;
     return Math.max(1, Math.min(5, n));
   }
 
@@ -1755,7 +1762,7 @@ function closeAbout() {
     try {
       const r = await pywebview.api.refine_get_stage_settings();
       if (!r.success) return;
-      // 回填并行度（1-5，越界忽略；缺省时保持控件默认值2）
+      // 回填并行度（1-5，越界忽略；缺省时保持控件默认值1）
       if (r.settings && r.settings.v2_concurrency != null) {
         const n = parseInt(r.settings.v2_concurrency, 10);
         const sel = $('refineConcurrency');

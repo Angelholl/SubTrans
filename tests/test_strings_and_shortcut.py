@@ -189,6 +189,43 @@ def test_guide_viewer_has_items_container():
         "#guideItems 应位于 #guideSections 之后"
 
 
+# ---------------------------------------------------------------------------
+# v1.3.2 任务2：高级设置折叠收纳防回归钉（纯 DOM 收纳，控件 id 不得丢失）
+# ---------------------------------------------------------------------------
+
+_ADVANCED_CONTROL_IDS = (
+    # 翻译与词库
+    "refineGl1", "refineGl2", "refineSourceFilter", "refineAutoSynopsis",
+    "refineAdaptiveThresholds",
+    # TM 与学习闸
+    "refineTmEnable", "refineTmDb", "refineTmThreshold",
+    "refineGlossaryLearn", "refineGlossaryConflictBlock",
+    # 断点与日志
+    "resumeToggle", "refineForceResume", "refineDryRun", "debugLogging",
+    # 兜底与并发（含 ⟳ 刷新按钮）
+    "refineFallbackModel", "refreshFallbackModels", "refineFallbackLocal",
+    "refineBatchLocal", "refineBatchCloud", "refineConcurrency",
+)
+
+
+def test_advanced_settings_panel_keeps_all_control_ids():
+    """折叠收纳后 19 控件+1 按钮的 id 必须仍存在于 index.html（各恰好一次）。"""
+    html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
+    missing = [i for i in _ADVANCED_CONTROL_IDS if f'id="{i}"' not in html]
+    assert not missing, f"index.html 丢失高级设置控件 id: {missing}"
+    duplicated = [i for i in _ADVANCED_CONTROL_IDS
+                  if html.count(f'id="{i}"') > 1]
+    assert not duplicated, f"index.html 高级设置控件 id 重复: {duplicated}"
+
+
+def test_advanced_settings_details_collapsed_by_default():
+    """高级设置折叠区默认收起：bare <details>（无 open 属性）+ summary i18n 锚。"""
+    html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
+    m = re.search(
+        r'<details>\s*<summary[^>]*data-i18n="advanced_settings_summary"', html)
+    assert m, "index.html 缺少默认收起的高级设置 <details>（summary 锚 advanced_settings_summary）"
+
+
 def test_html_has_no_unmarked_user_visible_chinese():
     """防回归：index.html 用户可见内容不再出现未收编的中文文案。
 

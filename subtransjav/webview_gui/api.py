@@ -23,6 +23,7 @@ from webview import FileDialog
 from subtransjav.utils.process_manager import (
     PSUTIL_AVAILABLE,
     terminate_process_tree,
+    terminate_process_tree_robust,
 )
 
 from .event_stream import (  # noqa: E402  webview-free 可测模块
@@ -210,11 +211,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
     if bc:
         args.extend(["--batch-cloud", str(bc)])
 
-    # 批间并发数（缺省2；钳制上限经 config 单一来源，CLI 端 __post_init__ 会再钳制一次）
+    # 批间并发数（缺省1；钳制上限经 config 单一来源，CLI 端 __post_init__ 会再钳制一次）
     try:
-        n_conc = int(options.get("v2_concurrency") or 2)
+        n_conc = int(options.get("v2_concurrency") or 1)
     except (TypeError, ValueError):
-        n_conc = 2
+        n_conc = 1
     from subtransjav.refine.config import resolve_tunable
     n_max = int(resolve_tunable("v2_concurrency_max"))
     args.extend(["--v2-concurrency", str(max(1, min(n_max, n_conc)))])
@@ -740,9 +741,11 @@ class TranslateAPI:
 
             if PSUTIL_AVAILABLE:
                 result = terminate_process_tree(proc.pid)
-                if not result["success"]:
-                    proc.terminate()
+                ok = bool(result["success"])
             else:
+                # v1.3.2 task4：无 psutil 回退升级为整树击杀（原为单杀）
+                ok = terminate_process_tree_robust(proc.pid)
+            if not ok:
                 proc.terminate()
 
             # Always wait for process to exit to avoid zombie processes
@@ -1432,7 +1435,9 @@ class TranslateAPI:
                 try:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    proc.kill()
+                    # v1.3.2 task4：先给 3 秒优雅退出，仍存活则整树击杀（原为单杀）
+                    if not terminate_process_tree_robust(proc.pid):
+                        proc.kill()
         except Exception:
             pass
         with self._translate_lock:

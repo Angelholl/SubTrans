@@ -60,6 +60,22 @@ def test_build_refine_args_no_ctx_by_default():
     assert "--v2-ctx" not in args
 
 
+def test_build_refine_args_concurrency_default_1():
+    """GUI 桥接并发缺省=1（v1.3.2 X 方案，与管线 v2_concurrency=1 对齐）。
+
+    options 不含 v2_concurrency（GUI 未传/持久化无值）时，传给 CLI 的
+    --v2-concurrency 必须为 1；显式值（含存量持久化 2）照常透传。
+    """
+    args = _build_refine_args({"inputs": ["a.srt"]})
+    assert args[args.index("--v2-concurrency") + 1] == "1"
+
+
+def test_build_refine_args_concurrency_explicit_2_passthrough():
+    """显式并发值 2（如本机 refine_stage_settings.json 已持久化值）照常生效。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "v2_concurrency": 2})
+    assert args[args.index("--v2-concurrency") + 1] == "2"
+
+
 def test_build_refine_args_always_ndjson_event_format():
     """GUI 子进程恒以 ndjson 事件流输出（GUI 侧解析依赖）。"""
     for options in ({"inputs": ["a.srt"]},
