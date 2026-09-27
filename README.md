@@ -195,6 +195,9 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 
 - 本项目仅供成年人学习研究字幕翻译技术使用，请遵守所在地区法律法规。
 - 上游转写工具：[WhisperJAV](https://github.com/meizhong986/WhisperJAV)——分工：转写归上游，翻译+精修归本仓库（项目名由此而来）。上游 v1.9.2+ 的运行清单（`whisperjav_run.json`）可通过 `--asr-meta` 接入本仓库双幻觉防护（转写可信度信号驱动精修侧自适应过滤）；旧版上游产物同样支持。
+- **设计参考**：GUI 信息架构参考了 [buxuku/SmartSub](https://github.com/buxuku/SmartSub)（MIT 许可）的分层收纳思路（引擎/模型集中管理 + 主界面任务流化），仅借鉴交互理念与信息架构，未复制其代码与图形资产。
+- **非商业声明**：本项目基于个人使用设计，在 GitHub 公开仅为开源分享，未商业化、未收取任何费用。
+- **联系与整改**：如权利人认为本项目中的商标、图形、文案等内容侵犯其权益，可通过 Issue 联系，我将及时核实并整改。
 
 ## 许可证
 
