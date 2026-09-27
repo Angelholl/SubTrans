@@ -238,6 +238,39 @@ class TestScanConflicts:
         r = scan_glossary_conflicts(final, orig, glossary)
         assert r["conflicts"] == []
 
+    def test_duplicate_src_rows_merged_not_doubled(self):
+        """同 src 两行不同 dst（load_glossary_merged 保留用户词库内同词
+        异译）：按 term 去重建表——hits 不倍增、冲突单条、期望译法
+        合并两条而非取末条。"""
+        orig = _entries(["IKU する。", "今日はいい天気だ。"])
+        final = _entries(["好想去。", "今天天气真好。"])
+        glossary = [("IKU", "去了", ()), ("IKU", "イく", ())]
+        r = scan_glossary_conflicts(final, orig, glossary)
+        assert len(r["term_stats"]) == 1
+        st = r["term_stats"][0]
+        assert (st["hits"], st["with_main"], st["with_alias"],
+                st["with_neither"]) == (1, 0, 0, 1)
+        assert len(r["conflicts"]) == 1
+        assert r["conflicts"][0]["expected_targets"] == "去了|イく"
+
+    def test_duplicate_src_rows_second_target_exempt_as_alias(self):
+        """同 src 多译法合并进别名后参与豁免：译文命中第二条译法不记冲突。"""
+        orig = _entries(["IKU する。", "今日はいい天気だ。"])
+        final = _entries(["这是イく的场面。", "今天天气真好。"])
+        glossary = [("IKU", "去了", ()), ("IKU", "イく", ())]
+        r = scan_glossary_conflicts(final, orig, glossary)
+        assert r["conflicts"] == []
+        assert r["term_stats"][0]["with_alias"] == 1
+
+    def test_duplicate_src_rows_merges_aliases_without_repeat(self):
+        """同 src 合并时原别名与后行别名共存且不重复。"""
+        orig = _entries(["IKU する。", "今日はいい天気だ。"])
+        final = _entries(["好想去。", "今天天气真好。"])
+        glossary = [("IKU", "去了", ("要走",)), ("IKU", "イく", ("要走",))]
+        r = scan_glossary_conflicts(final, orig, glossary)
+        assert r["term_stats"][0]["aliases"] == ("要走", "イく")
+        assert r["conflicts"][0]["expected_targets"] == "去了|要走|イく"
+
 
 class TestConflictCsv:
 

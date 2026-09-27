@@ -8,6 +8,7 @@ write_divergence_review_csv / build_quality_report 的 TM 行与噪声闸门行�
 
 import re
 
+from subtransjav.refine.post_validate import is_untranslated_text
 from subtransjav.refine.quality_report import (
     _final_text_for_span,
     _is_untranslated,
@@ -37,7 +38,42 @@ def test_is_untranslated_not_flagged():
     assert not _is_untranslated("谢谢")
     assert not _is_untranslated("")
     assert not _is_untranslated(None)
-    assert not _is_untranslated(" [未翻译]缩进空格不算前缀")  # 前导空格
+    assert _is_untranslated(" [未翻译]缩进空格")              # 前导空白仍算未译
+
+
+def test_is_untranslated_same_contract_as_tm_gate():
+    """口径统一：报告侧判定与 post_validate（TM 学习闸）逐样本一致。"""
+    samples = ["[未翻译] こんにちは", "[未翻译]こんにちは",
+               "  [未翻译] 前导空白", "\t[未翻译]",
+               "他说[未翻译]是什么意思", "谢谢", "", None]
+    for s in samples:
+        assert _is_untranslated(s) == is_untranslated_text(s)
+    assert _is_untranslated("  [未翻译] 前导空白")
+
+
+def test_untranslated_leading_whitespace_counted_consistently():
+    """前导空白占位行：报告同样判未译（进【未翻译】小节并计入漏覆盖
+    口径2"条目在但未译"），与 TM 闸拦截口径一致。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    orig = [{"index": 1, "timing": t, "text": "元気ですか"}]
+    final = [{"index": 1, "timing": t, "text": "  [未翻译] 元気"}]
+    report = build_quality_report(orig, final, "demo")
+    assert "【未翻译】共 1 条" in report
+    assert "条目在但未译 1" in report
+
+
+def test_warning_location_duplicate_index_takes_first_block():
+    """告警定位与 resolve_final_block（D11 契约）同口径：index 重号
+    取列表顺序首个终稿块。"""
+    t1 = "00:00:01,000 --> 00:00:02,000"
+    t2 = "00:00:03,000 --> 00:00:04,000"
+    final = [{"index": 2, "timing": t1, "text": "第一块"},
+             {"index": 2, "timing": t2, "text": "第二块"}]
+    report = build_quality_report(
+        [{"index": 1, "timing": t1, "text": "源文"}], final, "demo",
+        validator_warnings=["⚠️ #2 某规则告警"])
+    assert "[校验告警] #2 00:00:01,000 --> 00:00:02,000" in report
+    assert "[校验告警] #2 00:00:03,000" not in report
 
 
 # ----------------------------------------------------------------------
@@ -217,6 +253,29 @@ def test_build_quality_report_noise_gate_line_branches():
                   "00:00:03,000 --> 00:00:04,000"]}
     shown = build_quality_report(exp, final, "demo", merge_stats=stats)
     assert "纯假名实义保留: 2（其中 [未翻译] 标记 1）" in shown
+
+
+def test_noise_gate_m_leading_whitespace_matches_tm_gate():
+    """闸门 M 与 TM 学习闸同口径：前导空白的 [未翻译] 条目同样计入 M
+    （strip 后前缀匹配）；正常译文不计入（防误判）。"""
+    exp = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+            "text": "テスト"}]
+    stats = {"clean_kept_by_noise_gate": 1,
+             "clean_kept_by_noise_gate_timings":
+                 ["00:00:01,000 --> 00:00:02,000"]}
+    # 前导空白占位形态：TM 闸（post_validate.is_untranslated_text）
+    # 会拦截，报告侧闸门 M 也必须计入
+    assert is_untranslated_text("  [未翻译] テスト")
+    final_ws = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+                 "text": "  [未翻译] テスト"}]
+    shown = build_quality_report(exp, final_ws, "demo", merge_stats=stats)
+    assert "纯假名实义保留: 1（其中 [未翻译] 标记 1）" in shown
+
+    # 正常译文：不误判为未译
+    final_ok = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+                 "text": "元気です"}]
+    shown_ok = build_quality_report(exp, final_ok, "demo", merge_stats=stats)
+    assert "纯假名实义保留: 1（其中 [未翻译] 标记 0）" in shown_ok
 
 
 # ----------------------------------------------------------------------

@@ -281,6 +281,74 @@ def test_ledger_appends_across_runs_with_full_fields(tmp_path, install_client):
 
 
 # ---------------------------------------------------------------------------
+# 写序契约：台账先于终稿落盘（台账 old_text 是唯一回滚依据）
+# ---------------------------------------------------------------------------
+
+def test_ledger_precedes_final_write(tmp_path, install_client, monkeypatch):
+    """台账先于终稿落盘：终稿写盘失败时台账已在，old_text 仍可回滚。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [_item(3, T3, "前辈真厉害")])
+    install_client(responses=["重翻的第三块。"])
+    calls = []
+    real_append = action_retranslate._append_ledger
+
+    def _atomic_write(path, text):
+        calls.append("final")
+        raise OSError("终稿写盘失败")
+
+    def _append(ledger_path, records):
+        calls.append("ledger")
+        return real_append(ledger_path, records)
+
+    monkeypatch.setattr(action_retranslate, "_atomic_write_text", _atomic_write)
+    monkeypatch.setattr(action_retranslate, "_append_ledger", _append)
+    with pytest.raises(OSError):
+        run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
+    assert calls == ["ledger", "final"]              # 台账先于终稿落盘
+    assert _read_ledger(tmp_path)[0]["old_text"] == "前辈真厉害"
+    assert _read_final(tmp_path)[2]["text"] == "前辈真厉害"   # 终稿未被改动
+
+
+def test_guide_refresh_failure_keeps_ledger_for_rollback(
+        tmp_path, install_client, monkeypatch):
+    """导读刷新抛错：台账已含 old_text 记录，终稿改动可回滚（不留
+    "终稿已改而台账无记录" 的窗口）。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [_item(3, T3, "前辈真厉害")])
+    install_client(responses=["重翻的第三块。"])
+
+    def _boom(*a, **k):
+        raise RuntimeError("导读写盘失败")
+
+    monkeypatch.setattr(action_retranslate, "write_guide_json", _boom)
+    with pytest.raises(RuntimeError):
+        run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
+    records = _read_ledger(tmp_path)
+    assert len(records) == 1 and records[0]["outcome"] == "applied"
+    assert records[0]["old_text"] == "前辈真厉害"     # 回滚依据在台账
+    assert records[0]["new_text"] == "重翻的第三块。"
+    assert _read_final(tmp_path)[2]["text"] == "重翻的第三块。"
+
+
+def test_invariant_assertion_failure_writes_nothing(
+        tmp_path, install_client, monkeypatch):
+    """恒等式断言失败仍零落盘（写序调整不放宽 D11 契约④不落盘要求）。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [_item(3, T3, "前辈真厉害")])
+    install_client(responses=["重翻的第三块。"])
+
+    def _boom(*a, **k):
+        raise AssertionError("恒等式断言失败（测试注入）")
+
+    monkeypatch.setattr(action_retranslate, "_assert_apply_invariants", _boom)
+    before = (tmp_path / "ep01_final_cn.srt").read_bytes()
+    with pytest.raises(AssertionError):
+        run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
+    assert not (tmp_path / "ep01_重翻记录.json").exists()   # 台账未落盘
+    assert (tmp_path / "ep01_final_cn.srt").read_bytes() == before
+
+
+# ---------------------------------------------------------------------------
 # 导读快照刷新
 # ---------------------------------------------------------------------------
 

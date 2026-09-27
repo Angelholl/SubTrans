@@ -1,8 +1,10 @@
 """refine.glossary_learn 单元测试（P0 #5：原子写；P1 #3：词库写锁）"""
+import logging
 import os
 
 import pytest
 
+from subtransjav.refine import glossary_learn as gl
 from subtransjav.refine.glossary_learn import (
     _acquire_glossary_lock,
     _ensure_http_url,
@@ -61,6 +63,53 @@ def test_lock_stale_cleared(tmp_path):
     lock2 = _acquire_glossary_lock(p, timeout=1.0)
     assert lock2 is not None
     _release_glossary_lock(lock2)
+
+
+# ---------------------------------------------------------------------------
+# 学习保存防丢：损坏词库中止保存（M）；锁超时不做无锁写入（L）
+# ---------------------------------------------------------------------------
+
+def _s2_files(tmp_path, src="新词", dst="新译"):
+    """构造 S2 输入/输出文本对（通过防污染校验：词对须真实出现）。"""
+    in_f = tmp_path / "s2_in.txt"
+    in_f.write_text(src, encoding="utf-8")
+    out_f = tmp_path / "s2_out.txt"
+    out_f.write_text(dst, encoding="utf-8")
+    return str(in_f), str(out_f)
+
+
+def test_corrupt_learned_file_aborts_save(tmp_path, monkeypatch, caplog):
+    """learned 词库存在但读取/解析失败：中止本次学习保存并告警，
+    绝不把旧库当空库做全量写回（否则既有学习条目被清空）。"""
+    p = tmp_path / "learned.csv"
+    p.write_bytes(b"\xff\xfe\x00bad-bytes")      # 非 UTF-8，解析必失败
+    before = p.read_bytes()
+    in_f, out_f = _s2_files(tmp_path, src="新しい", dst="術語")
+    monkeypatch.setattr(gl, "extract_glossary_from_pair",
+                        lambda *a, **k: [("新しい", "術語")])
+    with caplog.at_level(logging.WARNING, logger="subtransjav.refine.glossary_learn"):
+        n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
+    assert n == 0
+    assert p.read_bytes() == before              # 既有文件未被清空覆盖
+    assert "learned" in caplog.text              # 有告警，非静默
+
+
+def test_lock_timeout_skips_save(tmp_path, monkeypatch, caplog):
+    """锁获取超时（返回 None）：跳过本次写入并告警，不做无锁
+    load-merge-save（否则并发下仍会互相覆盖）。"""
+    p = tmp_path / "learned.csv"
+    p.write_text("旧词,旧译\n", encoding="utf-8-sig")
+    before = p.read_bytes()
+    in_f, out_f = _s2_files(tmp_path)
+    monkeypatch.setattr(gl, "_acquire_glossary_lock", lambda *a, **k: None)
+    monkeypatch.setattr(gl, "extract_glossary_from_pair",
+                        lambda *a, **k: [("新词", "新译")])
+    with caplog.at_level(logging.WARNING, logger="subtransjav.refine.glossary_learn"):
+        n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
+    assert n == 0
+    assert p.read_bytes() == before              # 无锁不写
+    assert not (tmp_path / "learned.csv.lock").exists()
+    assert "锁" in caplog.text
 
 
 # ---------------------------------------------------------------------------

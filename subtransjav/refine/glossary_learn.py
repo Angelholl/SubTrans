@@ -134,18 +134,39 @@ def _parse_csv_pairs(text: str) -> list:
     return pairs[:20]  # 最多 20 条
 
 
+def _read_learned_rows(path: str) -> "list | None":
+    """读取 learned 词库行：文件缺省返回 []；存在但读取/解析失败时
+    告警并返回 None（区别于"空库"）。"""
+    if not (path and os.path.isfile(path)):
+        return []
+    try:
+        entries = []
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            for row in csv.reader(f):
+                if len(row) >= 2 and row[0].strip() and row[1].strip():
+                    entries.append((row[0].strip(), row[1].strip()))
+        return entries
+    except Exception as e:
+        logger.warning(f"learned 词库读取/解析失败: {path}: {e}")
+        return None
+
+
 def load_learned_glossary(path: str) -> list:
-    """加载已学习的词库。"""
-    entries = []
-    if path and os.path.isfile(path):
-        try:
-            with open(path, encoding="utf-8-sig", newline="") as f:
-                for row in csv.reader(f):
-                    if len(row) >= 2 and row[0].strip() and row[1].strip():
-                        entries.append((row[0].strip(), row[1].strip()))
-        except Exception:
-            pass
-    return entries
+    """加载已学习的词库（宽松口径：损坏视同空库，仅告警）。
+
+    供只读/重置类消费者使用；覆盖式写回方须用
+    load_learned_glossary_strict，否则损坏会被当空库全量写回。
+    """
+    return _read_learned_rows(path) or []
+
+
+def load_learned_glossary_strict(path: str) -> "list | None":
+    """加载已学习的词库（严格口径）：损坏返回 None 以区别于空库。
+
+    learn_from_s2_output 等覆盖式写回方据此中止本次保存，防止旧学习
+    条目在写回时被静默清空。
+    """
+    return _read_learned_rows(path)
 
 
 def save_learned_glossary(path: str, entries: list):
@@ -250,10 +271,19 @@ def learn_from_s2_output(s2_input_path: str, s2_output_path: str,
     if not new_pairs:
         return 0
 
-    # 锁内完成 load → merge → save，消除并发丢更新竞态
+    # 锁内完成 load → merge → save，消除并发丢更新竞态；
+    # 锁拿不到或旧库损坏一律不写，绝不无锁/带病全量写回
     lock = _acquire_glossary_lock(learned_path)
+    if lock is None:
+        logger.warning(f"词库写锁获取超时，跳过本次学习保存: {learned_path}")
+        return 0
     try:
-        existing = load_learned_glossary(learned_path)
+        existing = load_learned_glossary_strict(learned_path)
+        if existing is None:
+            logger.warning(
+                f"learned 词库损坏，中止本次学习保存以防清空既有条目: "
+                f"{learned_path}")
+            return 0
         existing_set = {(s.lower() if s.isascii() else s) for s, _ in existing}
 
         truly_new = [(s, d) for s, d in new_pairs

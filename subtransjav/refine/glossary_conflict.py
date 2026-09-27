@@ -110,10 +110,21 @@ def scan_glossary_conflicts(final_entries: list, orig_entries: list,
     term_stats: list[dict] = []
     if not glossary:
         return {"conflicts": conflicts, "term_stats": term_stats}
-    stats_by_term = {}
+    stats_by_term: dict = {}
     for entry in glossary:
         term, target = entry[0], entry[1]
         aliases = tuple(entry[2]) if len(entry) >= 3 else ()
+        st = stats_by_term.get(term)
+        if st is not None:
+            # load_glossary_merged 刻意保留同 src 异 dst 词条：按 term
+            # 去重建表，后行译法/别名并入别名集（命中/豁免口径与单条
+            # 别名一致），避免 hits/冲突计数按重复倍增
+            merged = [st["target"], *st["aliases"]]
+            for extra in (target, *aliases):
+                if extra and extra not in merged:
+                    merged.append(extra)
+            st["aliases"] = tuple(merged[1:])
+            continue
         st = {"term": term, "target": target, "aliases": aliases,
               "hits": 0, "with_main": 0, "with_alias": 0, "with_neither": 0,
               "samples": []}

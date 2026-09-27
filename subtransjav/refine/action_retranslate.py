@@ -8,7 +8,8 @@
 - 串行逐条调用（并发 1），永不写翻译记忆库；
 - 恒等式硬断言：apply 只改选中块 text，其余条目逐字节不变，断言失败视为
   程序 bug 抛异常退出且不落盘；
-- apply 不另做备份文件：{stem}_重翻记录.json 台账中的 old_text 即回滚依据；
+- apply 不另做备份文件：{stem}_重翻记录.json 台账中的 old_text 即回滚依据
+  （写序：台账先于终稿落盘，台账更新后才开始改终稿）；
 - 可离线重建与标陈旧的逐件边界见 docs/行动层可离线重建与标陈旧清单.md。
 """
 
@@ -381,6 +382,15 @@ def run_action_retranslate(cfg, args) -> int:
     if applied_positions:
         new_srt = build_srt(new_entries)
         _assert_apply_invariants(old_entries, new_entries, applied_positions)
+
+    # 写序：台账 → 终稿 → 导读。台账 old_text 是唯一回滚依据，必须先于
+    # 终稿落盘，否则终稿写盘/导读刷新中途失败会留下"改动已落盘而台账
+    # 无记录"的不可回滚窗口；恒等式断言纯内存，失败时依旧零落盘。
+    if records:
+        total = _append_ledger(ledger_path, records)
+        print(f"📒 [行动层] 重翻台账已更新: {ledger_path.name}（累计 {total} 条）")
+
+    if applied_positions:
         _atomic_write_text(str(final_path), new_srt)
         _refresh_guide(guide, out_dir, stem, new_entries)
         print(f"📖 [行动层] 导读快照已刷新: {stem}_质量报告导读.json")
@@ -388,10 +398,6 @@ def run_action_retranslate(cfg, args) -> int:
         for suffix in _STALE_AFTER_RETRANSLATE:
             print(f"   - {stem}{suffix}")
         print("   详见 docs/行动层可离线重建与标陈旧清单.md")
-
-    if records:
-        total = _append_ledger(ledger_path, records)
-        print(f"📒 [行动层] 重翻台账已更新: {ledger_path.name}（累计 {total} 条）")
 
     print(f"🏁 [行动层] 完成: 应用 {n_applied} / 失败 {n_failed}"
           f" / 选中 {len(selected)}")

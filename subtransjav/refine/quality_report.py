@@ -32,6 +32,7 @@ from .pass_disagreement import (
 from .pass_disagreement import (
     _timing_span as _disagree_span,
 )
+from .post_validate import is_untranslated_text
 
 _KANA_RE = re.compile(r"[ぁ-ゖァ-ヺー]")
 _KANJI_RE = re.compile(r"[一-鿿々]")
@@ -87,12 +88,12 @@ def _clip(text: str, limit: int = 60) -> str:
 def _is_untranslated(text: str) -> bool:
     """判定文本是否为 [未翻译] 残留（实义漏覆盖"条目在但未译"口径专用）。
 
-    同时容忍两种前缀形态："[未翻译] "（带尾空格，pipeline_v2 的
-    UNTRANSLATED_PREFIX 现值）与 "[未翻译]"（无空格，提示词教出的形态，
-    与本文件既有硬编码一致）；前缀后的残译文（如 "[未翻译] Chicks。"）
-    不影响判定——仍是未译。
+    判定统一收口 post_validate.is_untranslated_text（与 TM 学习闸同一
+    口径）：strip 后开头匹配，"[未翻译] "（带尾空格）、"[未翻译]"（无
+    空格）与前导空白占位行均算未译；前缀后的残译文（如
+    "[未翻译] Chicks。"）不影响判定——仍是未译。
     """
-    return (text or "").startswith("[未翻译]")
+    return is_untranslated_text(text)
 
 
 # 分歧"可选"区展示上限（超出部分注明见分歧复核 CSV）
@@ -669,7 +670,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
     kana_total = 0
     for e in final_entries:
         text = (e["text"] or "").strip()
-        if not text or text.startswith("[未翻译]"):
+        if not text or _is_untranslated(text):
             continue
         seqs = _KANA_SEQ_RE.findall(text)
         if not seqs:
@@ -702,13 +703,14 @@ def build_quality_report(orig_entries: list, final_entries: list,
 
     # 2) [未翻译] 条目（D1：不再删除，带前缀保留在终稿）——单列小节，
     #    不进入需复核清单（与假名残留章互不重复计数）
-    untranslated = [e for e in final_entries
-                    if (e["text"] or "").startswith("[未翻译]")]
+    untranslated = [e for e in final_entries if _is_untranslated(e["text"])]
     untranslated_lines = []
     for e in untranslated:
         span = _timing_span(e["timing"])
         src = _expected_src(span)
-        raw = (e["text"] or "")[len("[未翻译]"):].strip()
+        raw = (e["text"] or "").strip()
+        raw = raw[len("[未翻译]"):].strip() if raw.startswith("[未翻译]") \
+            else raw
         src_show = src if src else (raw or "（无对应期望条目）")
         untranslated_lines.append(
             f"  #{e['index']} {_fmt_timing(e['timing'])} 原文: {src_show[:60]}")
@@ -752,7 +754,10 @@ def build_quality_report(orig_entries: list, final_entries: list,
     # 4) 校验告警（post_validate；含"主语误判"的单独归类）
     subject_warns = [w for w in validator_warnings if "主语误判" in w]
     other_warns = [w for w in validator_warnings if "主语误判" not in w]
-    final_idx = {e["index"]: e for e in final_entries}
+    # 告警定位与 resolve_final_block 同契约：index 重号取列表顺序首个
+    final_idx: dict = {}
+    for e in final_entries:
+        final_idx.setdefault(e["index"], e)
     for w in validator_warnings:
         m = _IDX_IN_WARNING_RE.search(w)
         loc = ""
@@ -866,7 +871,9 @@ def build_quality_report(orig_entries: list, final_entries: list,
         m_marked = 0
         for t in merge_stats.get("clean_kept_by_noise_gate_timings") or []:
             hits = final_by_span.get(_timing_span(t)) or []
-            if hits and (hits[0].get("text") or "").startswith("[未翻译]"):
+            # 未译判定与 TM 学习闸/漏覆盖口径2 同源（_is_untranslated，
+            # strip 后前缀匹配——前导空白占位形态同样计入）
+            if hits and _is_untranslated(hits[0].get("text") or ""):
                 m_marked += 1
         noise_line = (f"纯假名实义保留: {n_noise_kept}"
                       f"（其中 [未翻译] 标记 {m_marked}）")
