@@ -934,9 +934,9 @@ class TranslateAPI:
             if provider not in ("lmstudio", "ollama") and not key:
                 return {"success": False, "error": msg("api_key_missing")}
 
-            client = OpenAI(base_url=base, api_key=key or "none",
-                            timeout=DEFAULT_TIMEOUT_HTTP)
-            models = sorted(m.id for m in client.models.list())
+            with OpenAI(base_url=base, api_key=key or "none",
+                        timeout=DEFAULT_TIMEOUT_HTTP) as client:
+                models = sorted(m.id for m in client.models.list())
             if provider == "zen":
                 models.sort(key=lambda x: (not x.endswith("-free"), x))
             return {"success": True, "models": models}
@@ -1015,19 +1015,19 @@ class TranslateAPI:
             if not is_safe_url_scheme(base):
                 return {"success": False, "error": msg("endpoint_scheme_unsupported")}
 
-            client = OpenAI(base_url=base, api_key=key or "none",
-                            timeout=DEFAULT_TIMEOUT_HTTP)
-            r = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": msg("stage_test_ping")}],
-                max_tokens=512, temperature=0, stream=False)
-            resp = r.choices[0].message
-            txt = (resp.content or "").strip()[:40]
-            if not txt:
-                rc = (getattr(resp, "reasoning_content", None) or "").strip()
-                txt = (msg("stage_test_reasoning", tail=rc[-28:])
-                       if rc else msg("stage_test_empty"))
-            return {"success": True, "message": txt}
+            with OpenAI(base_url=base, api_key=key or "none",
+                        timeout=DEFAULT_TIMEOUT_HTTP) as client:
+                r = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": msg("stage_test_ping")}],
+                    max_tokens=512, temperature=0, stream=False)
+                resp = r.choices[0].message
+                txt = (resp.content or "").strip()[:40]
+                if not txt:
+                    rc = (getattr(resp, "reasoning_content", None) or "").strip()
+                    txt = (msg("stage_test_reasoning", tail=rc[-28:])
+                           if rc else msg("stage_test_empty"))
+                return {"success": True, "message": txt}
         except Exception as e:
             _log_exc("refine_test_stage")
             return {"success": False,

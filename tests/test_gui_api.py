@@ -10,7 +10,9 @@ import os
 import shutil
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
+import openai
 import pytest
 
 pytestmark = [pytest.mark.gui]
@@ -304,6 +306,95 @@ def test_refine_test_stage_rejects_non_http_endpoint(gui_api_obj):
                                            endpoint="javascript:alert(1)")
     assert result["success"] is False
     assert "http/https" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# OpenAI 客户端生命周期：两处按钮入口均为"创建→单次调用→丢弃"，
+# GUI 常驻进程下客户端必须随调用结束关闭（含异常路径），防连接池累积。
+# ---------------------------------------------------------------------------
+
+def _install_fake_openai(monkeypatch, list_error=None, create_error=None):
+    """替换 openai.OpenAI 为记录型替身（零网络请求），返回创建的客户端列表。"""
+    created: list = []
+
+    class FakeModels:
+        def list(self):
+            if list_error is not None:
+                raise list_error
+            return [SimpleNamespace(id="model-b"), SimpleNamespace(id="model-a")]
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            if create_error is not None:
+                raise create_error
+            message = SimpleNamespace(content="pong", reasoning_content=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+    class FakeChat:
+        def __init__(self):
+            self.completions = FakeCompletions()
+
+    class FakeClient:
+        def __init__(self, base_url=None, api_key=None, timeout=None):
+            self.base_url = base_url
+            self.api_key = api_key
+            self.timeout = timeout
+            self.closed = False
+            self.models = FakeModels()
+            self.chat = FakeChat()
+            created.append(self)
+
+        def close(self):
+            self.closed = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.close()
+            return False
+
+    monkeypatch.setattr(openai, "OpenAI", FakeClient)
+    return created
+
+
+def test_refine_list_models_closes_client(gui_api_obj, monkeypatch):
+    """刷新模型列表用完即关：重复点击不累积未关闭客户端。"""
+    created = _install_fake_openai(monkeypatch)
+    for _ in range(2):
+        result = gui_api_obj.refine_list_models(
+            "lmstudio", endpoint="http://localhost:1234/v1")
+        assert result["success"] is True
+        assert result["models"] == ["model-a", "model-b"]
+    assert [c.closed for c in created] == [True, True]
+
+
+def test_refine_list_models_closes_client_on_list_error(gui_api_obj, monkeypatch):
+    """models.list 抛错时客户端同样被关闭（异常路径不泄漏）。"""
+    created = _install_fake_openai(monkeypatch, list_error=RuntimeError("boom"))
+    result = gui_api_obj.refine_list_models(
+        "lmstudio", endpoint="http://localhost:1234/v1")
+    assert result["success"] is False
+    assert created and created[0].closed is True
+
+
+def test_refine_test_stage_closes_client(gui_api_obj, monkeypatch):
+    """连通性测试用完即关：客户端在成功返回前已关闭。"""
+    created = _install_fake_openai(monkeypatch)
+    result = gui_api_obj.refine_test_stage(
+        "lmstudio", "model-a", endpoint="http://localhost:1234/v1")
+    assert result["success"] is True
+    assert result["message"] == "pong"
+    assert created and created[0].closed is True
+
+
+def test_refine_test_stage_closes_client_on_create_error(gui_api_obj, monkeypatch):
+    """chat.completions.create 抛错时客户端同样被关闭。"""
+    created = _install_fake_openai(monkeypatch, create_error=RuntimeError("boom"))
+    result = gui_api_obj.refine_test_stage(
+        "lmstudio", "model-a", endpoint="http://localhost:1234/v1")
+    assert result["success"] is False
+    assert created and created[0].closed is True
 
 
 # ---------------------------------------------------------------------------
