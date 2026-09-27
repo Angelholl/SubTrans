@@ -1293,3 +1293,34 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - **条件是否已闭环**：决策层面闭环；执行面未闭环（A3-A7 待执行 + HRO-1 两条件入用例勾验 + 拆分动工前置三件套为闭环路径；A1/A2 已随本批执行）。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：见上文风险跟踪 1-6。
+
+### v1.3.1 发布追记（2026-09-26）
+
+- **批三补丁落库**：1cdf524（cli.main() stdio 加固+回归钉+三节追记，3 文件）——run #46 = **completed success** 六腿全绿（run #45/a8c67a6 的红为修复前旧跑，已被取代；用户曾误贴 #45 日志，经 run_number 对照澄清）。
+- **发布三件复核**：①push 后 ls-remote main=1cdf524c0a47… 与本地一致；②annotated tag v1.3.1 由用户终端创建推送（主模型侧 tag+push 被 Mimosa gate 整体拦截——gate 拦截面含 tag 组合命令，确认 tag 操作也在用户终端通道），refs/tags/v1.3.1=f9601a2fee1f…（tag 对象）在远程；③CI run #46 绿后打 tag（红 CI 不发布）。
+- **GitHub Release**：REST API（push 凭据 Bearer，经代理 10808）创建 id **397256220**，name"v1.3.1 — 重翻行动层与体验修复"，url https://github.com/Angelholl/SubTransJAV/releases/tag/v1.3.1 ；回读复核=tag_name/draft=False/prerelease=False/target main 一致，正文含执行器/自适应/台账三要素，**违禁词自查零命中**（未来/下一步/下版本/计划中/H4b/内部）。
+- **发布内容**：重翻执行器（--action-retranslate/--entries/--action-source/--action-model/--action-sample，dry-run 缺省+恒等式断言+台账）、导读 json v2+查看器行动条目、条目级阈值自适应（--adaptive-thresholds，Balanced opt-in 子集口径，仅收紧永不放宽）、GUI 三开关（强制恢复/learned 词库/冲突禁入 TM）、CLI 学习闸两参与退出码传播、七项修复（导读自删/轮询悬空键/双处窄码页/mypy 假绿与平台口径/产物锁三态与时序与大小写/lmstudio 编码）。
+- **结转**：golden origin=real 真实子集降观测项待用户追认（D2026-0926-01 已呈报）；B2 门②基线 92 条待复核接受（截止 2026-10-16）；批二执行追记已随批三 docs 段（a8c67a6）闭环。
+
+## [2026-09-27] [D2026-0926-01 追认] golden origin=real 真实子集降为观测项 [追认降级/有条件满足]
+
+**用户实核对通过，无新增阻断**（六点逐项与基线文本一致）：B2 补采逻辑记录 92/物理行 95，五片 7/7/47/12/19 与 watch 2026-09-26 组 conflicts_sum 逐片一致，物理差 3=jur-550 一条记录含引号内换行占 4 物理行；93 vs 92 唯一差额=hsoda-114 ちんぽ 1→0，其余六词两轮一致，按"不造数"如实保留；B2 92 条为翻译层术语冲突行级样本，非 gate0 层 suspect/empty 删除案例，不折算黄金集条目；gate0_golden_stats 已支持 origin=real 分项、0 条如实输出；H4b 按分支 b 发布、--adaptive-thresholds 默认关闭；全量 92 条掩码自查 PASS，原始 CSV 树外归档，公开仓库仅 31 条掩码样本。
+
+**追认记录口径**（critic R1-HRO3 契约变更追认就此闭环）：
+- H4b 门②记**"有条件满足"**，不记"已满足"。
+- golden origin:"real" 真实子集由门②门槛组成部分**降为观测项**；当前 0/30 如实保留。
+- B2 补采 92 条**不折入**该真实子集（口径不同：翻译层术语冲突行级样本 ≠ gate0 层 suspect/empty 删除案例）。
+- H4b 保持**分支 b 发布**（Balanced opt-in 子集口径），--adaptive-thresholds 默认关闭不变。
+- **验证债务硬化条件**：未来若改默认开启 adaptive thresholds，必须先补 ≥30 条 origin:"real"（含 suspect/empty 案例与防循环验证记录 generated_by/标注人），并用 gate0_golden_stats 按真实子集单算 precision/recall；**未达标不得开启**。
+
+## [2026-09-27] [B2 门②基线-20260926] 92 条复核接受 [接受/附复现性表述微调]
+
+**用户实核对通过**：逻辑记录 92 ≫ 30，满足 D2026-0925-03 定案一门槛；物理 95 行及 jur-550 多行字段（entry_id=1342 引号内 2 处换行占 4 物理行）已注明；五片 7/7/47/12/19 与 watch 2026-09-26 组 conflicts_sum 逐片一致。
+
+**接受记录口径**：
+- 门②按**"基线移交复核"结案**（2026-10-16 截止前）。
+- 93 vs 92 差额唯一来源=hsoda-114 ちんぽ 1→0，按自然波动如实呈现。
+- 复现性表述微调（已回写 docs/B2-门②语料基线-20260926.md）：**"重跑复现性良好"改为"六词逐片复现一致，ちんぽ 单条自然波动（1→0）；整体口径稳定，不构成造数或缺口"**。
+- 不要求补跑 ちんぽ 一轮：单条观察闸波动不能通过补跑消除，不影响 92≫30 结案。
+- 掩码与归档口径维持：全量 92 条掩码自查 PASS；原始 CSV 树外归档（D:\SubTransJAV-internal-archive\B2-corpus-20260926\，10 文件），公开仓库仅保留 31 条掩码样本。
+- 92 条不折算 golden origin:"real" 黄金集条目（口径不同，与 D2026-0926-01 追认条目呼应）。
