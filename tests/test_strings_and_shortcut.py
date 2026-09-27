@@ -258,6 +258,78 @@ def test_html_has_no_unmarked_user_visible_chinese():
 
 
 # ---------------------------------------------------------------------------
+# v1.3.2 tag 前 A′ 文案批：高级设置两级句式 tooltip + 进阶横幅（纯文案零行为）
+# ---------------------------------------------------------------------------
+
+# 本批改写的 tooltip 键（app.js MSG 值 ↔ index.html 内联 title 双侧同步钉）
+_ADVANCED_REWRITE_TITLE_KEYS = (
+    "sf_title", "adaptive_thresholds_title", "tm_enable_title",
+    "tm_threshold_title", "resume_title", "force_resume_title",
+)
+_ADVANCED_NOTICE_KEY = "advanced_settings_notice"
+_ADVANCED_NOTICE_TEXT = "以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。"
+
+
+def _js_msg_value(key: str) -> str:
+    """正则解析 app.js MSG 键表中 key 的单引号字符串值（含 JS 转义还原）。"""
+    src = _APP_JS_PATH.read_text(encoding="utf-8")
+    m = re.search(r"const MSG = \{(.*?)\n\};", src, re.S)
+    assert m, "app.js 未找到 const MSG = {...} 键表"
+    vm = re.search(
+        r"^\s*" + key + r": '((?:[^'\\]|\\.)*)',\s*$", m.group(1), re.M)
+    assert vm, f"app.js MSG 缺少单引号字符串值键: {key}"
+    # 还原 JS 字符串简单转义（本表仅用 \n 等，不支持 \u 形态）
+    return re.sub(
+        r"\\(.)",
+        lambda e: {"n": "\n", "t": "\t", "r": "\r"}.get(e.group(1), e.group(1)),
+        vm.group(1),
+    )
+
+
+def _html_inline_title(key: str) -> str:
+    """解析 index.html 中 data-i18n-title="key" 同标签的 title 属性内联值。
+
+    title 值可含字面换行（两级句式第二行顶格，避免缩进进 tooltip）；
+    ``[^"]`` 否定字符类天然跨行，``[^>]`` 保证不越出当前标签。
+    """
+    html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
+    m = re.search(
+        r'data-i18n-title="' + key + r'"[^>]*? title="([^"]*)"', html)
+    assert m, f"index.html 缺少 data-i18n-title=\"{key}\" 同标签内联 title"
+    return m.group(1)
+
+
+def _html_inline_text(key: str) -> str:
+    """解析 index.html 中 data-i18n="key" 元素开标签之后的内联文本。"""
+    html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
+    m = re.search(r'data-i18n="' + key + r'"[^>]*>([^<]*)', html)
+    assert m, f"index.html 缺少 data-i18n=\"{key}\" 元素内联文本"
+    return m.group(1)
+
+
+@pytest.mark.parametrize("key", _ADVANCED_REWRITE_TITLE_KEYS)
+def test_advanced_tooltip_two_tier_values_sync_between_html_and_js(key):
+    """改写的 tooltip：index.html 内联 title 与 app.js MSG 值逐字节一致。"""
+    js_value = _js_msg_value(key)
+    html_value = _html_inline_title(key)
+    assert html_value == js_value, \
+        f"{key}: index.html 内联 title 与 app.js MSG 值不一致"
+    # 两级句式结构钉：恰一个换行，第二行以「技术细节：」顶格起（原技术表述保留段）
+    assert js_value.count("\n") == 1
+    assert js_value.split("\n")[1].startswith("技术细节：")
+
+
+def test_advanced_settings_notice_value_sync_between_html_and_js():
+    """横幅键值级双侧一致钉（app.js MSG ↔ index.html 内联文本，含固定文案）。
+
+    键存在性无需另钉：index.html 以 data-i18n 引用 advanced_settings_notice，
+    已被既有 test_html_i18n_keys_exist_in_js_msg[data-i18n] 自动覆盖。
+    """
+    assert _js_msg_value(_ADVANCED_NOTICE_KEY) == _ADVANCED_NOTICE_TEXT
+    assert _html_inline_text(_ADVANCED_NOTICE_KEY) == _ADVANCED_NOTICE_TEXT
+
+
+# ---------------------------------------------------------------------------
 # EventStreamParser：心跳阈值参数化
 # ---------------------------------------------------------------------------
 

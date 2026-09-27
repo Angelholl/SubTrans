@@ -267,6 +267,7 @@
     <!-- v1.3.2 任务2：高级设置折叠收纳（纯 DOM 层级调整：控件 id / 缺省态 / 行为零变更） -->
     <details>
       <summary style="cursor:pointer; font-weight:600;" data-i18n="advanced_settings_summary">高级设置</summary>
+      <div style="font-size:12px; color:#888;" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
       <div style="display:flex; flex-direction:column; gap:6px; padding:6px 0;">
         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_translation_glossary">翻译与词库</div>
         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
@@ -276,7 +277,8 @@
           <label style="display:flex; align-items:center; gap:4px;">
             <input type="checkbox" id="refineGl2" checked> <span data-i18n="gl2_label">词库→阶段B</span>
           </label>
-          <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="sf_title" title="闸门0 送翻前源侧幻觉检测档位：严格=叠加启发式删除 | 标准=仅明确幻觉删除 | 关闭=关闭检测">
+          <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="sf_title" title="控制翻译开始前对原文可疑内容的清理力度，档位越严删得越多，通常保持默认档位即可。
+技术细节：闸门0 送翻前源侧幻觉检测档位：严格=叠加启发式删除 | 标准=仅明确幻觉删除 | 关闭=关闭检测">
             <span data-i18n="source_filter_label">源侧检测</span>
             <select id="refineSourceFilter" class="form-select compact" style="width:70px;">
               <option value="strict" data-i18n="sf_strict">严格</option>
@@ -287,7 +289,8 @@
           <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="synopsis_title" title="剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容">
             <input type="checkbox" id="refineAutoSynopsis" checked> <span data-i18n="synopsis_label">剧情自摘要</span>
           </label>
-          <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="adaptive_thresholds_title" title="条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注">
+          <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="adaptive_thresholds_title" title="按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。
+技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注">
             <input type="checkbox" id="refineAdaptiveThresholds"> <span data-i18n="adaptive_thresholds_label">阈值自适应</span>
           </label>
         </div>
@@ -295,7 +298,8 @@
         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_tm_learn_gate">TM 与学习闸</div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <label style="display:flex; align-items:center; gap:4px;"
-                 data-i18n-title="tm_enable_title" title="取消勾选时向管线传递 --no-tm（不读取也不写入翻译记忆库）">
+                 data-i18n-title="tm_enable_title" title="开启后翻译时可复用以往积累的译文记忆，取消后本次完全不读写记忆库，一般保持勾选。
+技术细节：取消勾选时向管线传递 --no-tm（不读取也不写入翻译记忆库）">
             <input type="checkbox" id="refineTmEnable" checked> <span data-i18n="tm_enable_label">翻译记忆库</span>
           </label>
           <label style="display:flex; align-items:center; gap:4px; flex:1;">
@@ -304,7 +308,8 @@
                    data-i18n-placeholder="tm_db_placeholder" placeholder="留空=使用默认 TM 库">
           </label>
           <label style="display:flex; align-items:center; gap:4px;"
-                 data-i18n-title="tm_threshold_title" title="模糊匹配阈值 0-1（步进 0.05），越低越宽松；留空=使用管线默认">
+                 data-i18n-title="tm_threshold_title" title="控制复用记忆库译文的匹配严格程度，调低会更宽松、也更容易套用不贴切的旧译文，留空即用默认值，一般无需填写。
+技术细节：模糊匹配阈值 0-1（步进 0.05），越低越宽松；留空=使用管线默认">
             <span data-i18n="tm_threshold_label">TM 阈值</span>
             <input type="number" id="refineTmThreshold" class="form-input compact" style="width:80px;"
                    min="0" max="1" step="0.05" data-i18n-placeholder="tm_threshold_placeholder" placeholder="默认">
@@ -320,11 +325,13 @@
         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_resume_logging">断点与日志</div>
         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
           <label style="display:flex; align-items:center; gap:4px;"
-                 data-i18n-title="resume_title" title="中断后重跑时，检测到 *_manifest.json 即复用已完成阶段，仅续跑剩余阶段">
+                 data-i18n-title="resume_title" title="上次中断后重跑时，自动接着上次的进度继续，只处理没做完的部分，一般保持勾选。
+技术细节：中断后重跑时，检测到 *_manifest.json 即复用已完成阶段，仅续跑剩余阶段">
             <input type="checkbox" id="resumeToggle" data-testid="resume-toggle"> <span data-i18n="resume_label">断点恢复（复用已完成阶段）</span>
           </label>
           <label style="display:flex; align-items:center; gap:4px;"
-                 data-i18n-title="force_resume_title" title="覆盖清单指纹校验；会复用可能过期的阶段A产物">
+                 data-i18n-title="force_resume_title" title="上次中断后重跑时，即使检测到改动也接着上次的进度继续，可能用到过期的中间结果。
+技术细节：覆盖清单指纹校验；会复用可能过期的阶段A产物">
             <input type="checkbox" id="refineForceResume" data-testid="force-resume-toggle"> <span data-i18n="force_resume_label">强制断点恢复（指纹不匹配仍复用）</span>
           </label>
           <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="dry_run_title" title="试运行：仅生成执行计划，不调用模型、不产出字幕">
