@@ -48,11 +48,11 @@ A dual-engine subtitle translation & refinement pipeline built for Chinese-speak
 
 | 场景 | 搭配 | 依据 |
 |---|---|---|
-| **质量优先（默认）** | **joyfox27b → heretic35b** | 盲评并列第一；语境读法唯一；术语误译可被审校席位纠正；约 70 分钟/1162 条 |
-| 均衡 / 快速 | heretic35b → heretic35b 或 heretic35b → hauhau35b | 盲评 40/39；真台词零丢失；约 12~13 分钟 |
+| **质量优先（默认）** | **joyfox27b → heretic35b** | 盲评并列第一；语境读法唯一；术语误译可被审校席位纠正；矩阵口径约 70 分钟/1162 条 |
+| 均衡 / 快速 | heretic35b → heretic35b 或 heretic35b → hauhau35b | 盲评 40/39；真台词零丢失；矩阵口径约 12~13 分钟 |
 | 不推荐 | sakura14b 做 A；joyfox27b / sakura14b 做 B | 草稿缺陷 / 吞台词 / 整行缺失 |
 
-> **速度提示**：质量档与快速档差距约 5.5 倍，主因是 27B 稠密模型解码速度。TM 精确命中可整句跳过（哈希匹配），但新内容命中率趋近于零，暖库不会明显提速。
+> **速度提示**：表中耗时为矩阵测试口径（批间并发未启用）。质量档与快速档差距约 5.5 倍，主因是 27B 稠密模型解码速度；2026-09 性能定版（引擎 GPU 全载 + 批间并发 2）后，质量档生产实测约 16~21 分钟/部——该值为当时调优配置的实测，批间并发缺省自 v1.3.2 起为 1，可经 `--v2-concurrency` 调整。TM 精确命中可整句跳过（哈希匹配），但新内容命中率趋近于零，暖库不会明显提速。表中「默认」为生产定版推荐搭配，不是程序内置缺省：本地服务（lmstudio / ollama / siliconflow / custom）模型均需经 `--s1-model` / `--s3-model` 显式指定；云端 deepseek / zen 有内置默认模型，可被显式指定覆盖。`--profile` 与模型搭配无关（v2 兜底档位 local/cloud）。
 
 ## 上游转写配置实测推荐（WhisperJAV）
 
@@ -80,7 +80,7 @@ SRT 输入
    │  预合并（短句按时间间隙合并，减少批次数）
    ▼
 阶段A：净语+翻译（角色卡①，词库/TM 上下文注入）
-   │  产出中间稿 *.subtransjav.srt
+   │  产出中间稿 *_refine_A.srt（断点产物）
    ▼
 阶段B：审校+抛光（角色卡②，幻觉检测/加固短语/质量审校）
    │  兜底规则（解析失败/超时降级：保留原文并记录风险事件）
@@ -132,7 +132,7 @@ subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --excl
 
 常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）。
 
-每部影片产出：`*.subtransjav.srt`（中间稿）、`*_final_cn.srt`（终稿）、`*_质量报告.txt`、`*_分歧复核.csv`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）。
+每部影片产出：`*_final_cn.srt`（终稿）、`*_质量报告.txt`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）、`*_分歧复核.csv`（pass1/pass2 分歧行级明细，无双引擎字幕时仅表头）；中间稿 `*_refine_A.srt` 与断点清单 `*_manifest.json` 在任务成功后自动清理，中断时保留供 `--resume` 续跑。
 
 ## 配置分层速查
 
@@ -167,7 +167,7 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 
 ## 事件协议与退出码（供集成/二次开发）
 
-`--event-format ndjson` 后管线向 stdout 输出结构化事件（每行一个 JSON 对象），人类可读文本转往 stderr。事件类型 9 种：`task_started` / `phase_started` / `phase_progress` / `phase_finished` / `warning` / `degraded` / `error` / `heartbeat` / `task_finished`。
+`--event-format ndjson` 后管线向 stdout 输出结构化事件（每行一个 JSON 对象），人类可读文本转往 stderr。事件类型 10 种：`task_started` / `phase_started` / `phase_progress` / `phase_finished` / `warning` / `degraded` / `error` / `heartbeat` / `task_finished` / `gate0_summary`（闸门0 处置摘要）。
 
 退出码：`0` 成功、`1` 执行失败、`2` dry-run 配置错误、`3` 部分降级（需复核风险清单）、`130` 用户中断。完整字段与心跳机制见手册第 4 节。
 
@@ -183,7 +183,7 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 
 ## 词库与模板（自配）
 
-`config/glossary.csv`、`config/templates/`、`subtransjav/*/defaults/` 均为空模板或通用默认。
+`config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target）与 TM 库不入版本库，克隆后按需自建。
 
 本项目只提供翻译工程框架，不分发任何语料/词库数据，按需自行配置。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
 

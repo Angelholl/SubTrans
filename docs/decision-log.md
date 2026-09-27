@@ -1284,6 +1284,7 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - **7b③ 探针结果（run 36157469106，#1，completed/success）**：windows-latest+3.12 装 `.[dev,gui]` 成功（pywebview/pythonnet 无头安装无 RuntimeError）；**collected=1058 与主口径（1057+1）一致**——两 kill-criterion 均通过；tests/test_gui_api **35 passed**。**探针判定=成功，按定案二成功不自动纳入 required（gui-probe.yml 保持 workflow_dispatch 手动），纳入与否待二次评审。**"collected 断言基线按 HEAD 实测"精度修正的必要性获得验证（1058≠历史 1046，固定值假触发如期发生）。
 - **剩余移交**：行动层实施（前置修复+三地基+执行器，D11 契约）与 B2 门②语料收集（截止 2026-10-16，责任人暂定主模型）交新会话按 D2026-0925-03 定案推进。
 - **B2 门②语料基线首期（2026-09-26）**：docs/B2-门②语料基线-20260926.md 落档——聚合权威口径复核一致（7 词 93 条，Temp/translation_memory/glossary_conflict_watch.json 五记录）；行级挖掘实证 **口径内真实样本 0 条**（Logs/*.txt 97 文件 11824 行全行扫描零命中：行级明细落盘在工作区"术语冲突观察.csv"产物、仓库外，.txt 日志仅存聚合行——Logs/9-24-1631.txt 五条 CSV 生成通知与 watch JSON 逐一吻合）；关联变体层 7 条去重（イク族 5+まんこ/ちんこ 各 1，○ 掩码）明确标注非口径不折算；缺口如实（0/30，含关联仍差 23），补采路径=后续运行按片归档术语冲突观察 CSV/工单收集/构造集补位前先经用户确认；不造数凑 30，滚动更新至 2026-10-16 门②截止。一次性提取脚本 Temp/extract_b2_corpus.py（只读，Temp 不入库）。同批：甄别表新增 2026-09-26 复扫 seal（79eae27d…，24 findings 零新增）与旧 seal 历史锚并列，计数改双基线并列表述（净减 2=tm_promote SQL 字面量化+create_shortcut 换 subprocess 兑现），26 条 findingId 甄别结论行原样未动。
+- **7b③ 二次评审实施（v1.3.2 任务5 方案 B，2026-09-27）**：gui-probe.yml 落真实断言两枚——①GUI 依赖安装（`pip install -e ".[dev,gui]"`）失败即红；②`pytest tests/test_gui_api.py --collect-only -q` 输出 grep "<N> tests collected" 计数断言 ≥1，异常/空收集经 `::error::`+exit 1 标红（不钉死具体数字，防基线漂移假红，承 1058≠1055 先例）；触发转月级 schedule（cron `0 3 1 * *`，UTC 每月 1 日 03:00）并保留 workflow_dispatch，维持不进 required checks（月级 schedule 不阻塞 PR/Release）；顶部注释块留痕性质（开发者探针非用户功能）、失败处置（月级失败先手动复跑确认，确认环境漂移再修 workflow 或临时提频）、升格条件（外部 PR 增多/发布稳定期需更强 CI 保障/GUI 依赖或收集面频繁变动致月级滞后）；kill-criterion 基线注释刷新为全量口径 1185 passed+4 skipped（2026-09-27），GUI 收集面以 tests/test_gui_api 用例数为准。工具链对齐主 CI（windows-latest、3.12、`pip install -e`、`python -m pytest`）；单 workflow 文件改动，无新运行时依赖，未新增 GUI E2E。
 
 ### 决策日志字段
 
@@ -1352,3 +1353,21 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - **条件是否已闭环**：决策层面闭环；执行面待闭环——README 声明落字随下一 docs 提交入库；SmartSub 参照纳入 1.4 轨道 A 立项评审 UX 议题。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：①参照实现阶段不得复制 SmartSub 代码/图形/文案（含变量命名、样式、图标、交互文案逐字雷同），设计评审时比对留痕；②声明③范围已按注记落字（限定商标/图形/文案）。
+
+## [2026-09-27] [D2026-0927-04] v1.3.2 收尾批七任务执行定案与完成归档（并发统一/折叠收纳/分歧复核修复/进程治理两原语/gui-probe 月级/L1 声明/持久化归 1.4） [已拍板并执行完毕]
+
+- **原决策**：用户对 v1.3.2 五个待拍板点的意见（含 TimeoutExpired 普适化、L1 定性、gui-probe 转化、并发统一）+ 新功能需求（GUI 设置永久保存/首启初始化），经 decision-critic 两轮评议（无 [HIGH_RISK_OBJECTION]，两项普通级风险要求列席：存量持久化值遮蔽、gui-probe 无断言空转）后，用户以七任务执行指令终选拍板。
+- **用户终选**：①并发统一到 1 + **X 方案**（仅改代码默认，本机持久化值 2 原样保留，不迁出不摘除）；②折叠收纳按既定方案（原则同意，要求美观方便）；③**分歧复核命名漂移修复纳入 v1.3.2 交付面 +1**（定性=修复非特性，不破冻结）；④TimeoutExpired 两原语=项目级进程治理基建（非 lmstudio 专用）；⑤gui-probe **B-月级**（cron `0 3 1 * *` UTC，先补真实断言再启用，失败只告警，保留手动触发）；⑥L1 保留去重+声明收口进 v1.3.2+回归钉 1.4；⑦持久化泛化+首启初始化**归 1.4 轨道 A，仅归档不实现，v1.3.2 不破例**（封口：后续 UX 需求一律归 1.4 轨道 A）。
+- **我的异议**（decision-critic，均被采纳落 execution）：存量值遮蔽（X/Y/Z 三选项呈报）；gui-probe 补断言+基线注释刷新为转 B 前置；两原语拆分（超时语义 vs 取消语义，禁止 GUI 取消硬塞超时；taskkill 终态兜底）；L1 取保留去重并声明"两层策略不一致=有意设计"（用户层原样保留/learned 层去重）；破例触发 [DEPENDENCY-IMPACT] 防守。
+- **执行留痕（2026-09-27，按序七任务全 PASS）**：
+  - 任务 1 并发统一（X）：api.py `or 2`→`or 1`+异常回退 1、index.html selected→1+文案、app.js 回退 1+MSG 文案双侧同步；持久化值 2 读路径零缺省参与+显式 2 透传钉测试；定向 test_gui_api 47 passed。
+  - 任务 2 折叠收纳：index.html 参数带 19 控件+1 按钮整体入"高级设置" details（默认收起），四组=翻译与词库/TM 与学习闸/断点与日志/兜底与并发；20/20 控件 id 保留；新增 5 个 i18n 键双侧同步+2 例防回归钉（id 完整性/默认收起）；零行为变更。
+  - 任务 3 分歧复核命名漂移修复：根因=_MARKER_RE 不认上游 v1.9.3 真实命名 `.ja.merged.whisperjav.srt`（测试全钉旧命名 `.merged.subtransjav`），兄弟 pass 文件实际存在但解析失败静默返 None→CSV 恒空表头；修复=正则支持 `.merged.(subtransjav|whisperjav)` 可选后缀（四种命名兼容核对逐字节一致）+诊断区分（解析失败 WARNING/文件缺失静默，probe 返回值契约不动）+6 例回归（真实命名端到端 CSV 数据行≥1/旧命名回归/caplog 诊断）；**真实数据验证**：_批次E验收 5 片 CSV 从全空表→237~437 数据行/片（输出到 Temp/，用户目录零写入）。范围增补已由用户拍板，不破冻结。
+  - 任务 4 进程治理两原语：`run_with_timeout_tree`（Popen+communicate 自管，永不抛 TimeoutExpired，返回携带 timed_out 标记；超时→psutil 树杀→Windows taskkill /T /F（10s 限）→POSIX killpg→终态无条件单杀+warning，任何路径不阻塞）与 `terminate_process_tree_robust`（取消/退出语义，psutil 原样/Windows taskkill 树杀/POSIX 进组条件 killpg）；迁移 5 点=lmstudio 三处（ps 30s 语义保留/unload 补捕获不再上抛/load 600s 文案不变）+GUI cancel/exit 无 psutil 回退升级；console.py 不入、main.py venv 探测仅补可读超时日志；测试三层（psutil 假进程树实跑 2.06s 零残留/taskkill mock 参数形态/POSIX skipif）+13 新用例既有零删除。
+  - 任务 5 gui-probe 月级：cron `0 3 1 * *`+workflow_dispatch 保留；三重断言（安装失败即红/import webview 探针/收集面 ≥1 不钉死数字防基线漂移假红）+实跑保留；过时基线注释（1055）清除；升格条件留痕（外部 PR 增多/发布稳定期/GUI 面频繁变动）；pyyaml 语法校验过、与 ci.yml 触发器零重叠。
+  - 任务 6 L1 声明：手册 11.5 新增"词库合并去重行为声明"（三级链/两层策略有意设计/读取层防御性/当前零影响/变更历史），48h 审计 L1 项就此勾销；回归钉登记 1.4 轨道 A。
+- **验证基线**：全量 1185 passed+4 skipped 零失败（L4 后 1164+1 → 净增测试 21：任务 1 +2/任务 2 +2/任务 3 +6/任务 4 +13 中 3 条 POSIX 在 Windows skip）；ruff 全程零告警；node --check 过；GUI 黑盒验证未跑（提交注明"GUI 未验证"，建议用户首启冒烟：高级设置默认收起/四组展开正常/并发显示持久化值 2）。
+- **条件是否已闭环**：七任务全部执行并验收完毕；待办=提交推送（16 文件分五语义段，README 外部改动另议）、gui-probe 首次月跳核对、1.4 轨道 A 立项（材料补落盘）。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：①X 方案下"统一到 1"仅对首启/重置用户生效，1.4 泛化持久化时验证一致性；②gui-probe 首次月跳（下次 UTC 1 日 03:00）核对 Actions 结果可见性；③L1 回归钉随 1.4 轨道 A 实施（本条为 Refs 回链锚）；④折叠区结构变更须同步 tests 新钉的 20 控件 id 清单；⑤防重复杀/语义衔接已由测试钉锁定。
+- **1.4 轨道 A 登记更新**（仅归档）：持久化泛化（勾选即永久保存）、首启初始化设置、统一持久化层设计（前端 localStorage 承勾选态/后端 json 承管线参数，ThemeManager 先例 app.js:1149/1158）、L1 回归钉；既有项=模型缺省通用化（缺省重绑定三件实证：ctx 22272 档案值留文档层/并发已由本批统一/gemma 兜底重绑定）、画像预设、SmartSub 参照 UX 议题。
