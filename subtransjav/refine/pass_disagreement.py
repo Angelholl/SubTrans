@@ -9,18 +9,22 @@
     {基名}.{语言码}.pass1.srt
     {基名}.{语言码}.pass2.srt
     {基名}.{语言码}.merged.subtransjav.srt
+    {基名}.{语言码}.merged.whisperjav.srt   （上游 WhisperJAV 原生命名）
 """
 
+import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
 from .filters import parse_srt
 
+logger = logging.getLogger(__name__)
+
 # 语言后缀（剥掉后用于重建兄弟文件名）
 _LANG_RE = re.compile(r"\.(ja|japanese|zh|chinese|translated)$")
-# 阶段/产物标记后缀（merged 可带可选 .subtransjav 后缀）
-_MARKER_RE = re.compile(r"\.(pass1|pass2|merged(?:\.subtransjav)?)$")
+# 阶段/产物标记后缀（merged 可带可选 .subtransjav / .whisperjav 尾缀）
+_MARKER_RE = re.compile(r"\.(pass1|pass2|merged(?:\.(?:subtransjav|whisperjav))?)$")
 
 # 归一化时剔除的空白与常见标点
 _NORMALIZE_RE = re.compile(
@@ -59,19 +63,24 @@ _INTERJECTION_WHITELIST = frozenset({
 def _sibling_paths(in_path: str) -> tuple[Path, Path, Path]:
     """按命名约定算出 in_path 的 base/lang 与 pass1/pass2 兄弟路径。
 
-    对文件名 stem 剥掉标记后缀（pass1/pass2/merged[.subtransjav]）与语言
-    后缀，得到公共基名 base；语言码缺省 ``ja``；拼出
-    ``{base}.{lang}.pass1.srt`` 与 ``{base}.{lang}.pass2.srt``。
-    只拼路径不检查存在性。解析失败抛异常，由调用方兜底。
+    对文件名 stem 剥掉标记后缀（pass1/pass2/merged[.subtransjav 或
+    .whisperjav]）与语言后缀，得到公共基名 base；语言码缺省 ``ja``；
+    拼出 ``{base}.{lang}.pass1.srt`` 与 ``{base}.{lang}.pass2.srt``。
+    只拼路径不检查存在性。命名解析失败（无产物阶段标记）抛
+    ``ValueError``，由调用方兜底。
     """
     p = Path(in_path)
     stem = p.stem
     lang = None
 
-    # 先剥标记后缀（merged.subtransjav / pass1 / pass2 位于语言码右侧）
+    # 先剥标记后缀（merged[.subtransjav/.whisperjav] / pass1 / pass2
+    # 位于语言码右侧）；无任何标记 → 命名解析失败（正则不匹配）
     m = _MARKER_RE.search(stem)
-    if m:
-        stem = stem[:m.start()]
+    if not m:
+        raise ValueError(
+            "命名解析失败：文件名不含产物阶段标记"
+            " pass1/pass2/merged[.subtransjav][.whisperjav]")
+    stem = stem[:m.start()]
 
     # 再剥语言后缀，记录语言码
     m = _LANG_RE.search(stem)
@@ -91,15 +100,23 @@ def find_pass_siblings(in_path: str) -> tuple[Path | None, Path | None]:
     """在 in_path 同目录下查找 pass1 / pass2 兄弟文件。
 
     两者都存在才返回，否则返回 ``(None, None)``。
-    任何异常都静默吞掉，绝不抛出。
+    任何异常都不向外抛出；其中命名解析失败（``_sibling_paths`` 抛异常）
+    以 WARNING 级记日志，与"兄弟文件确实不存在"（DEBUG 级，正常业务场景）
+    区分开，便于排查命名漂移类问题。
     """
     try:
         _, p1, p2 = _sibling_paths(in_path)
+    except Exception as e:
+        logger.warning("分歧复核兄弟文件命名解析失败: %s (%s)", in_path, e)
+        return (None, None)
+    try:
         if p1.is_file() and p2.is_file():
             return (p1, p2)
-        return (None, None)
     except Exception:
-        return (None, None)
+        pass  # 存在性探测失败按缺失处理（维持修复前静默契约）
+    logger.debug("分歧复核无兄弟 pass 文件（命名解析成功，同目录需 %s 与 %s 齐全）",
+                 p1.name, p2.name)
+    return (None, None)
 
 
 def probe_disagreement_mode(in_path: str) -> str:
@@ -109,7 +126,7 @@ def probe_disagreement_mode(in_path: str) -> str:
         "dual"           pass1/pass2 齐全，可对照；
         "missing_pass1"  仅缺 pass1；
         "missing_pass2"  仅缺 pass2；
-        "none"           两个兄弟文件都缺失（或路径解析失败）。
+        "none"           两个兄弟文件都缺失（或命名解析失败）。
     """
     try:
         _, p1, p2 = _sibling_paths(in_path)
@@ -120,6 +137,11 @@ def probe_disagreement_mode(in_path: str) -> str:
             return "missing_pass1"
         if has1:
             return "missing_pass2"
+        logger.debug("分歧复核无兄弟 pass 文件（命名解析成功，%s / %s 均缺失）",
+                     p1.name, p2.name)
+        return "none"
+    except ValueError as e:
+        logger.warning("分歧复核兄弟文件命名解析失败: %s (%s)", in_path, e)
         return "none"
     except Exception:
         return "none"

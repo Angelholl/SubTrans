@@ -2,6 +2,11 @@
 双引擎分歧采集单元测试：find_pass_siblings / probe_disagreement_mode /
 judge_artifact / 内部辅助函数 / collect_disagreement。
 """
+import csv
+import logging
+
+import pytest
+
 from subtransjav.refine.pass_disagreement import (
     REVIEW_STRICT_THRESHOLD,
     _best_overlap,
@@ -14,6 +19,7 @@ from subtransjav.refine.pass_disagreement import (
     judge_artifact,
     probe_disagreement_mode,
 )
+from subtransjav.refine.quality_report import write_divergence_review_csv
 
 
 def _srt(entries):
@@ -244,3 +250,146 @@ def test_collect_disagreement_no_timeline_overlap(tmp_path):
     assert result["total"] == 1
     assert result["matched"] == 0
     assert result["rows"] == []
+
+
+# ======================================================================
+# v1.3.2 Task-3：上游真实命名（.merged.whisperjav）回归 + 诊断区分
+# ======================================================================
+
+def test_find_pass_siblings_whisperjav_naming(tmp_path):
+    """真实命名 X.ja.merged.whisperjav.srt + pass1/pass2 同目录 → 返回两路径。"""
+    (tmp_path / "4k2.me@ftkd-030.ja.pass1.srt").write_text("", encoding="utf-8")
+    (tmp_path / "4k2.me@ftkd-030.ja.pass2.srt").write_text("", encoding="utf-8")
+    merged = tmp_path / "4k2.me@ftkd-030.ja.merged.whisperjav.srt"
+    merged.write_text("", encoding="utf-8")
+
+    p1, p2 = find_pass_siblings(str(merged))
+    assert p1 is not None and p2 is not None
+    assert p1.name == "4k2.me@ftkd-030.ja.pass1.srt"
+    assert p2.name == "4k2.me@ftkd-030.ja.pass2.srt"
+
+
+def test_probe_disagreement_mode_dual_whisperjav_naming(tmp_path):
+    """真实命名下 probe 契约不变：pass1/pass2 齐全 → dual（不再恒为 none）。"""
+    (tmp_path / "W.ja.pass1.srt").write_text("", encoding="utf-8")
+    (tmp_path / "W.ja.pass2.srt").write_text("", encoding="utf-8")
+    mp = tmp_path / "W.ja.merged.whisperjav.srt"
+    mp.write_text("", encoding="utf-8")
+    assert probe_disagreement_mode(str(mp)) == "dual"
+
+
+def test_collect_disagreement_whisperjav_naming_end_to_end(tmp_path):
+    """真实命名端到端：collect_disagreement → write_divergence_review_csv
+    落盘后 CSV 数据行 ≥1（不是只有表头）。"""
+    merged = _srt([
+        (1, "00:00:01,000 --> 00:00:03,000", "同じ文本です"),
+        (2, "00:00:04,000 --> 00:00:06,000", "完全不同的文本甲"),
+    ])
+    pass1 = _srt([
+        (1, "00:00:01,000 --> 00:00:03,000", "同じ文本です"),
+        (2, "00:00:04,000 --> 00:00:06,000", "完全不同的文本甲"),
+    ])
+    pass2 = _srt([
+        (1, "00:00:01,000 --> 00:00:03,000", "同じ文本です"),
+        (2, "00:00:04,000 --> 00:00:06,000", "まったく違う内容乙"),
+    ])
+    (tmp_path / "W.ja.pass1.srt").write_text(pass1, encoding="utf-8")
+    (tmp_path / "W.ja.pass2.srt").write_text(pass2, encoding="utf-8")
+    mp = tmp_path / "W.ja.merged.whisperjav.srt"
+    mp.write_text(merged, encoding="utf-8")
+
+    result = collect_disagreement(str(mp))
+    assert result is not None
+    assert result["matched"] >= 1
+
+    out_csv = tmp_path / "W_分歧复核.csv"
+    write_divergence_review_csv(str(out_csv), result["rows"], mp.name)
+    with open(out_csv, encoding="utf-8-sig", newline="") as f:
+        data = list(csv.reader(f))
+    assert len(data) >= 2  # 表头 + 至少一行数据行
+
+
+def test_sibling_paths_legacy_naming_backward_compat():
+    """旧命名回归：.merged.subtransjav / 裸 .merged / 裸 pass1/pass2 的
+    base/lang 剥离结果与修复前逐项一致。"""
+    # 旧命名一：.merged.subtransjav.srt
+    own, p1, p2 = _sibling_paths("/tmp/X.ja.merged.subtransjav.srt")
+    assert own.name == "X.ja.merged.subtransjav.srt"
+    assert own.parent == p1.parent == p2.parent
+    assert p1.name == "X.ja.pass1.srt"
+    assert p2.name == "X.ja.pass2.srt"
+    # 旧命名二：裸 .merged.srt（无尾缀）
+    _, p1, p2 = _sibling_paths("/tmp/X.ja.merged.srt")
+    assert p1.name == "X.ja.pass1.srt"
+    assert p2.name == "X.ja.pass2.srt"
+    # 旧命名三：裸 .pass1.srt / .pass2.srt 本身 → 兄弟路径与其同基名
+    _, p1, p2 = _sibling_paths("/tmp/X.ja.pass1.srt")
+    assert p1.name == "X.ja.pass1.srt"
+    assert p2.name == "X.ja.pass2.srt"
+    _, p1, p2 = _sibling_paths("/tmp/X.ja.pass2.srt")
+    assert p1.name == "X.ja.pass1.srt"
+    assert p2.name == "X.ja.pass2.srt"
+
+
+def test_find_pass_siblings_parse_failure_logs_warning(caplog):
+    """命名解析失败 → (None, None) 且模块 logger 发出 WARNING（与缺失区分）。"""
+    logger_name = "subtransjav.refine.pass_disagreement"
+    with caplog.at_level(logging.WARNING, logger=logger_name):
+        a, b = find_pass_siblings(None)  # type: ignore[arg-type]
+    assert (a, b) == (None, None)
+    warns = [r for r in caplog.records
+             if r.name == logger_name and r.levelno == logging.WARNING]
+    assert len(warns) == 1
+    assert "分歧复核兄弟文件命名解析失败" in warns[0].getMessage()
+
+
+def test_find_pass_siblings_missing_files_no_warning(tmp_path, caplog):
+    """命名正常但兄弟文件缺失 → (None, None) 且无 WARNING（正常业务场景）。"""
+    logger_name = "subtransjav.refine.pass_disagreement"
+    mp = tmp_path / "D.ja.merged.whisperjav.srt"
+    mp.write_text("", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger=logger_name):
+        a, b = find_pass_siblings(str(mp))
+    assert (a, b) == (None, None)
+    warns = [r for r in caplog.records
+             if r.name == logger_name and r.levelno == logging.WARNING]
+    assert warns == []
+
+
+def test_diagnosis_marker_mismatch_vs_missing_siblings(tmp_path, caplog):
+    """"命名解析失败（正则不匹配）"与"无兄弟 pass 文件"两种失败文案可区分。
+
+    前者是 v1.3.2 命名漂移的真实形态（上游 v1.9.3 起尾缀带 .whisperjav，
+    旧正则失配）→ WARNING 含"命名解析失败"；后者是命名解析成功但同目录
+    无 pass1/pass2（单引擎正常场景）→ DEBUG 含"无兄弟 pass 文件（命名
+    解析成功…）"且无 WARNING。
+    """
+    logger_name = "subtransjav.refine.pass_disagreement"
+
+    # 场景一：正则不匹配（文件名无任何阶段标记）
+    # _sibling_paths 按文档契约抛 ValueError，异常信息含"命名解析失败"
+    bad = tmp_path / "NOMARKER.srt"
+    bad.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="命名解析失败"):
+        _sibling_paths(str(bad))
+    # 经两个公共入口 → WARNING 文案含"命名解析失败"，且不含"无兄弟 pass 文件"
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger=logger_name):
+        assert find_pass_siblings(str(bad)) == (None, None)
+        assert probe_disagreement_mode(str(bad)) == "none"
+    warns = [r for r in caplog.records
+             if r.name == logger_name and r.levelno == logging.WARNING]
+    assert len(warns) == 2  # find_pass_siblings / probe_disagreement_mode 各一条
+    assert all("命名解析失败" in r.getMessage() for r in warns)
+    assert all("无兄弟 pass 文件" not in r.getMessage() for r in warns)
+
+    # 场景二：命名解析成功但同目录无兄弟 pass 文件 → 文案含"无兄弟 pass 文件"
+    good = tmp_path / "M.ja.merged.whisperjav.srt"
+    good.write_text("", encoding="utf-8")
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger=logger_name):
+        assert find_pass_siblings(str(good)) == (None, None)
+        assert probe_disagreement_mode(str(good)) == "none"
+    assert "无兄弟 pass 文件" in caplog.text
+    assert "命名解析成功" in caplog.text
+    assert "命名解析失败" not in caplog.text
