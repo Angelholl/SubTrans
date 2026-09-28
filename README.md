@@ -4,6 +4,13 @@
 
 A dual-engine subtitle translation & refinement pipeline built for Chinese-speaking users, translating Japanese video subtitles into Chinese: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review. Works with Whisper-based transcription toolchains.
 
+## 下载与安装
+
+- **EXE 安装包**（推荐普通用户）：随 2.0.0 正式发布提供，请到 [Releases](../../releases) 页下载；系统要求与安装步骤见下方[安装](#安装)。
+- **源码 / pip 方式**：见下方[安装](#安装)（`首次安装.bat` 一键脚本或 `pip install -e ".[gui]"`）。
+
+本文档以中文为主体；英文用户可直接跳转 [English Quickstart](#english-quickstart)。
+
 ## 它解决什么问题
 
 直译工具翻此类字幕的三大痛点：
@@ -25,6 +32,88 @@ A dual-engine subtitle translation & refinement pipeline built for Chinese-speak
 - 质量报告 + 双引擎分歧分析
 - Webview GUI + CLI 双入口
 - 词库治理：全角/半角（NFKC）归一与拉丁词界匹配、单批注入上限 100 条、结构化 JSON 防注入包装、三级词库链冲突可见化
+
+## 2.0 新特性（beta）
+
+### 视听对比（疑似漏听检测）
+
+- 以媒体文件音轨为参照，比对字幕覆盖率，输出疑似漏听条目清单进质量报告导读。
+- 音频探测优先使用 ffmpeg；未安装 ffmpeg 时自动降级为 wave 级 VAD（RMS 能量粗筛），检测精度相应下降；GUI 中未装 ffmpeg 时相关入口灰显。
+- **仅报告，不自动重翻**：疑似漏听条目需人工确认后经导读条目定点重翻处理。
+- 配套**快速试听**：质量报告导读条目可直接试听对应片段；媒体来源遵循契约内选择（本期收窄为从已授权的媒体来源中选取，**非任意文件浏览**）；mkv 容器经 ffmpeg 抽取片段。
+- CLI 侧经 `--media-path` 指定媒体文件，供试听/音频检测使用。
+
+### EXE 分发（Windows 安装包）
+
+- onedir 打包 + Inno Setup 安装器，数据根位于 `%LOCALAPPDATA%\SubTransJAV`；**卸载不删除用户数据**（词库/TM/配置/产物均保留）。
+- 安装器内置 WebView2 检测与引导（GUI 运行时依赖）。
+- 首发版本**未做代码签名**：首次运行可能触发 SmartScreen 提示（点「更多信息 → 仍要运行」），建议下载后核对发布页提供的 SHA256 校验值自行验证安装包完整性。
+
+### 路径与数据根
+
+- 环境变量 `SUBTRANSJAV_DATA_ROOT` 优先级最高，可整体重定位数据根（词库/TM/配置/产物锚点）。
+- `subtransjav-refine --where` 一次性诊断当前全部路径锚点（只读零副作用），排障首选。
+- **pip / 源码用户零感知**：数据位置不变（仍在仓库根），行为与 1.4 完全一致。
+- EXE 首发迁移三段式：旧数据自动迁入新数据根 → 迁移前自动备份至数据根 `backups/` → 迁移失败自动回退旧路径，详见[从 1.4 升级到 2.0](#从-14-升级到-20)。
+
+## 安装
+
+三种方式并列，按你的身份选择其一：
+
+### ① EXE 安装包（推荐普通用户）
+
+到 [Releases](../../releases) 下载安装包（随 2.0.0 正式发布提供）。系统要求：Windows 10/11；WebView2 由安装器自动检测并引导安装。安装即用，无需 Python 环境。
+
+### ② 首次安装.bat（源码用户）
+
+克隆仓库后双击运行 `首次安装.bat`，需要 Python 3.10+。脚本完成依赖安装与入口注册。
+
+### ③ pip 安装（开发者）
+
+要求 Python 3.10–3.13。
+
+```bat
+:: 安装（核心翻译引擎 + CLI）
+pip install -e .
+
+:: 安装（含桌面 GUI）
+pip install -e ".[gui]"
+```
+
+## LM Studio 配置指引（本地模型，普通用户视角）
+
+EXE 安装包只解决**程序本体**的安装；翻译所用的本地模型需要**自备**。以 LM Studio 为例：
+
+1. 下载并安装 [LM Studio](https://lmstudio.ai/)，在其内置模型搜索中下载模型（推荐搭配见「本地模型实测推荐」一节）。
+2. 在 LM Studio 的 Local Server 页启动本地服务（默认端点 `http://localhost:1234/v1`）。
+3. 在本程序 GUI 的**引擎与模型**页选择服务商（lmstudio）与模型名、确认端点；CLI 用户经 `--s1-model` / `--s3-model` 显式指定。
+
+全本地方案（LM Studio / Ollama）不需要任何 API 密钥。
+
+## 快速开始
+
+配置 LLM 端点（DeepSeek / 兼容 OpenAI 协议的自定义端点，或 LM Studio 等本地服务）：
+
+- 云端服务商密钥经环境变量提供：`DEEPSEEK_API_KEY` / `SILICONFLOW_API_KEY` / `CUSTOM_API_KEY`，也可在 GUI 中保存。
+
+命令行示例：
+
+```bat
+:: GUI
+subtransjav-gui
+
+:: CLI 全流程（单文件）
+subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-model <模型名> --s3-provider lmstudio --s3-model <模型名>
+
+:: CLI 批量（目录递归）
+subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
+```
+
+GUI 为左侧五 TAB 外壳：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**引擎与模型**、**词库与模板**、**质量与建议**（含 AI 质量分析）、**高级参数**。初始安装即默认参数，全部高级定制在对应 TAB 内调整。
+
+常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）、`--v2-ctx`（本地上下文窗口）、`--ai-analyze`（质量报告 AI 分析）、`--action-retranslate --entries`（导读条目定点重翻）、`--media-path`（指定媒体文件，供后续试听/音频检测）。
+
+每部影片产出：`*_final_cn.srt`（终稿）、`*_质量报告.txt`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）、`*_分歧复核.csv`（pass1/pass2 分歧行级明细，无双引擎字幕时仅表头）、`*_质量报告导读.json`（可行动条目，供定点重翻）、`*_风险清单.md`/`*_风险清单.json`、`*_术语冲突观察.csv`（启用词库时）、`*_AI质量建议.json`（AI 分析后生成）；中间稿 `*_refine_A.srt` 与断点清单 `*_manifest.json` 在任务成功后自动清理，中断时保留供 `--resume` 续跑。
 
 ## 本地模型实测推荐（两轮矩阵测试）
 
@@ -104,42 +193,6 @@ SRT 输入
 - 修改 `config/templates/` 下的角色卡模板（当前硬性要求"只输出中文译文"）
 - 调整 refine 规则（`config/rules/translation_rules.yaml` 等）中的语言相关条目
 
-## 快速开始
-
-要求 Python 3.10–3.13。
-
-```bat
-:: 安装（核心翻译引擎 + CLI）
-pip install -e .
-
-:: 安装（含桌面 GUI）
-pip install -e ".[gui]"
-```
-
-配置 LLM 端点（DeepSeek / 兼容 OpenAI 协议的自定义端点，或 LM Studio 等本地服务）：
-
-- 全本地（LM Studio / Ollama）不需要任何密钥；
-- 云端服务商密钥经环境变量提供：`DEEPSEEK_API_KEY` / `SILICONFLOW_API_KEY` / `CUSTOM_API_KEY`，也可在 GUI 中保存。
-
-命令行示例：
-
-```bat
-:: GUI
-subtransjav-gui
-
-:: CLI 全流程（单文件）
-subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-model <模型名> --s3-provider lmstudio --s3-model <模型名>
-
-:: CLI 批量（目录递归）
-subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
-```
-
-GUI 为左侧五 TAB 外壳：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**引擎与模型**、**词库与模板**、**质量与建议**（含 AI 质量分析）、**高级参数**。初始安装即默认参数，全部高级定制在对应 TAB 内调整。
-
-常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）、`--v2-ctx`（本地上下文窗口）、`--ai-analyze`（质量报告 AI 分析）、`--action-retranslate --entries`（导读条目定点重翻）、`--media-path`（指定媒体文件，供后续试听/音频检测）。
-
-每部影片产出：`*_final_cn.srt`（终稿）、`*_质量报告.txt`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）、`*_分歧复核.csv`（pass1/pass2 分歧行级明细，无双引擎字幕时仅表头）、`*_质量报告导读.json`（可行动条目，供定点重翻）、`*_风险清单.md`/`*_风险清单.json`、`*_术语冲突观察.csv`（启用词库时）、`*_AI质量建议.json`（AI 分析后生成）；中间稿 `*_refine_A.srt` 与断点清单 `*_manifest.json` 在任务成功后自动清理，中断时保留供 `--resume` 续跑。
-
 ## 配置分层速查
 
 优先级从低到高：内置默认 < `config/user_settings.json` < `SUBTRANSJAV_*` 环境变量 < CLI/GUI 显式赋值。
@@ -179,6 +232,20 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 
 退出码：`0` 成功、`1` 执行失败、`2` dry-run 配置错误、`3` 部分降级（需复核风险清单）、`130` 用户中断。完整字段与心跳机制见手册第 4 节。
 
+## 从 1.4 升级到 2.0
+
+按你的使用方式对号入座：
+
+- **EXE 安装版**：迁移自动完成，无需手动操作。
+- **pip 用户**：数据位置不变（仓库根），可选经 `SUBTRANSJAV_DATA_ROOT` 自定义数据根。
+- **CLI / API / 自动化脚本**：见「路径与数据根」说明（`SUBTRANSJAV_DATA_ROOT` 优先级、`refine --where` 诊断）。
+
+安全机制与建议：
+
+- 旧数据自动备份至数据根 `backups/`；
+- 迁移失败自动回退旧路径，不影响原有数据；
+- 回退到 1.4.1 前建议先 `--tm-export` 导出翻译记忆库。
+
 ## FAQ（精选）
 
 - **GBK 控制台乱码？** 程序内部已强制 UTF-8 输出；必要时 CMD 先执行 `chcp 65001`。
@@ -186,6 +253,10 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 - **提示模型未指定？** `lmstudio` / `ollama` / `siliconflow` / `custom` 需经 `--s1-model` / `--s3-model` 指定模型名。
 - **云端密钥放哪？** 三级解析：CLI/GUI 传参 > 环境变量 > GUI 保存（DPAPI 加密存储）；本地服务无需密钥。
 - **只想看执行计划、不实际调用？** 加 `--dry-run`。
+- **我的数据（词库/TM/配置）在哪？** 运行 `subtransjav-refine --where` 一次报全当前全部路径锚点；EXE 版默认在 `%LOCALAPPDATA%\SubTransJAV`，pip 版在仓库根。
+- **升级到 2.0 后配置还在吗？** EXE 版：首次启动自动迁移旧配置与词库/TM（迁移前自动备份，失败自动回退），无需手动操作；pip 版：数据位置不变，配置原样保留。
+- **杀毒软件报毒怎么办？** 首发安装包未做代码签名，部分杀软可能误报。请从官方 Releases 下载并核对发布页提供的 SHA256 校验值；确认一致后可将安装包/安装目录加入杀软白名单。
+- **想回退到旧版本要注意什么？** 先执行 `--tm-export` 导出翻译记忆库（2.0 的 TM/数据结构升级后，旧版本可能无法直接读取新库），再卸载/回装旧版。
 
 更多问题见 [docs/使用与维护手册.md](docs/使用与维护手册.md)。
 
@@ -194,6 +265,41 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 `config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target，可选第三列 target_aliases 别名，`|` 分隔）与 TM 库不入版本库，克隆后按需自建。
 
 本项目只提供翻译工程框架，不分发任何语料/词库数据，按需自行配置。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
+
+## English Quickstart
+
+### Install
+
+- **EXE installer** (recommended for most users): download from [Releases](../../releases) (provided with the 2.0.0 stable release). Requires Windows 10/11; WebView2 is detected and guided by the installer. See the Chinese 安装 section for details.
+- **Source install**: run `首次安装.bat` (needs Python 3.10+), or for developers:
+
+```bat
+pip install -e ".[gui]"
+```
+
+### Quick Start
+
+1. Install [LM Studio](https://lmstudio.ai/), download a model, and start its local server (default `http://localhost:1234/v1`). Local models are **not** bundled — you must provide your own.
+2. Launch the GUI (`subtransjav-gui`) and pick the provider/model in the 引擎与模型 (Engine & Model) tab, or use the CLI:
+
+```bat
+subtransjav-refine -i subs.srt --profile local --s1-provider lmstudio --s1-model <model> --s3-provider lmstudio --s3-model <model>
+```
+
+The GUI is Chinese-oriented; the refine pipeline and templates are designed for Japanese → Chinese and not yet adapted for other target languages (see 受众定位).
+
+### Data Location
+
+- EXE install: `%LOCALAPPDATA%\SubTransJAV`; pip/source: repository root (unchanged since 1.4).
+- Override everything with the `SUBTRANSJAV_DATA_ROOT` environment variable; run `subtransjav-refine --where` to print all resolved path anchors (read-only diagnostics).
+
+### Migration (1.4 → 2.0)
+
+- EXE install: migration runs automatically (old data backed up to `backups/` under the data root; automatic rollback on failure).
+- pip users: data location unchanged, nothing to do.
+- Before rolling back to 1.4.1, export your translation memory first with `--tm-export`.
+
+See the Chinese sections above for full details.
 
 ## 更新日志
 
