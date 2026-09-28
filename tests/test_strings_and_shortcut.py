@@ -218,12 +218,25 @@ def test_advanced_settings_panel_keeps_all_control_ids():
     assert not duplicated, f"index.html 高级设置控件 id 重复: {duplicated}"
 
 
-def test_advanced_settings_details_collapsed_by_default():
-    """高级设置折叠区默认收起：bare <details>（无 open 属性）+ summary i18n 锚。"""
+def test_sidebar_tabs_replace_details_shell():
+    """v1.5 外壳重构钉：高级设置 details / 接口地址 details 平铺删除，
+    改为左侧 TAB 结构——五个 TAB 按钮 id 存在且默认选中 translate；
+    各 TAB 页面容器 id 存在。"""
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
-    m = re.search(
-        r'<details>\s*<summary[^>]*data-i18n="advanced_settings_summary"', html)
-    assert m, "index.html 缺少默认收起的高级设置 <details>（summary 锚 advanced_settings_summary）"
+    for btn in ("tabBtnTranslate", "tabBtnEngine", "tabBtnGlossary",
+                "tabBtnGuide", "tabBtnAdvanced"):
+        assert f'id="{btn}"' in html, f"index.html 缺少左侧 TAB 按钮: {btn}"
+    assert re.search(
+        r'<button[^>]*id="tabBtnTranslate"[^>]*class="side-tab-btn active"',
+        html) or re.search(
+        r'<button[^>]*class="side-tab-btn active"[^>]*id="tabBtnTranslate"',
+        html), "默认选中的 TAB 必须是 tabBtnTranslate"
+    for page in ("tab-translate", "tab-engine", "tab-glossary",
+                 "tab-guide", "tab-advanced"):
+        assert f'id="{page}"' in html, f"index.html 缺少 TAB 页面: {page}"
+    # details 折叠壳已平铺：高级设置 summary 锚不再引用
+    assert 'data-i18n="advanced_settings_summary"' not in html, \
+        "高级设置 details 已随 v1.5 平铺进 tab-advanced，summary 锚应删除"
 
 
 def test_html_has_no_unmarked_user_visible_chinese():

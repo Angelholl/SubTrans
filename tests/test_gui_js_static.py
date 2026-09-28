@@ -179,33 +179,67 @@ def test_pywebviewready_applies_backend_theme():
 
 
 # ---------------------------------------------------------------------------
-# A4：画像预设（novice=小白 / standard=标准 / developer=开发者）+ 首启初始化
+# v1.5 GUI 外壳重构：用户模式选择器 / persona-novice / 三步引导卡删除钉
 # ---------------------------------------------------------------------------
 
-def test_apply_user_mode_toggles_persona_class_and_persists_profile():
-    """applyUserMode 用 CSS 类切换 novice 视图（不删 DOM，保控件 id 钉）；
-    画像持久化到 settings KV 键 ui_profile；切换即存。"""
-    source = _app_js_source()
-    body = _extract_function(source, "applyUserMode")
-    assert "persona-novice" in body, \
-        "novice 必须切换 persona-novice 类（CSS 隐藏，不删 DOM）"
-    assert "classList.toggle" in body
-    assert "ui_profile" in source, "画像必须持久化到 settings KV 键 ui_profile"
-    assert "first_run" in source, "回填路径必须消费 first_run 标志"
-    assert "'novice'" in source, "首启（first_run 且无 ui_profile）默认 novice 分支"
-    save_body = _extract_function(source, "saveUserMode")
-    assert "refine_save_stage_settings" in save_body, "切换即存必须走后端"
-    assert "ui_profile" in save_body, "切换即存键必须为 ui_profile"
-
-
-def test_index_html_has_user_mode_select_and_novice_css():
-    """index.html 必须含用户模式三选项下拉与 novice 隐藏 CSS 规则。"""
+def test_user_mode_and_novice_panel_removed():
+    """v1.5 删除钉：用户模式下拉、persona-novice CSS、小白引导面板与
+    三步引导卡必须从 index.html / app.js 中整体移除（引导卡与 Source 区
+    「导入文件」功能重复，随 TAB 重构一并取消）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    assert 'id="refineUserMode"' in html, "缺少用户模式下拉"
-    for value in ("novice", "standard", "developer"):
-        assert f'value="{value}"' in html
-    assert "persona-novice" in html, "index.html 需含 .persona-novice CSS 规则"
-    assert "refine-novice-hide" in html, "index.html 需含 novice 隐藏标记类"
+    js = _app_js_source()
+    for anchor in ("refineUserMode", "persona-novice", "refine-novice-hide",
+                   "refineNovicePanel", "refineNoviceProvider",
+                   "refineFullPanel", "novice-guide-card",
+                   "refineNoviceStartBtn", "refineNoviceStopBtn",
+                   "refineNoviceAddFilesBtn", "refineNoviceFileError"):
+        assert anchor not in html, f"index.html 仍残留已删除项: {anchor}"
+    for sym in ("applyUserMode", "saveUserMode", "currentUserMode",
+                "REFINE_USER_MODES", "ui_profile", "noviceStartTranslation",
+                "applyNoviceProvider", "saveNoviceKey", "refreshNoviceKeyRow",
+                "novice_provider"):
+        assert sym not in js, f"app.js 仍残留已删除项: {sym}"
+
+
+# ---------------------------------------------------------------------------
+# v1.5 左侧 TAB 栏（SmartSub 式）：五个功能页 + 默认选中 translate
+# ---------------------------------------------------------------------------
+
+_TAB_IDS = ["tab-translate", "tab-engine", "tab-glossary", "tab-guide",
+            "tab-advanced"]
+
+
+def test_index_html_sidebar_tabs_structure():
+    """左侧竖排 TAB 栏结构钉：五个 TAB 按钮（data-tab ↔ 页面 id 一一对应，
+    translate 默认选中）+ 五个 .tab-page 页面容器。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for tid in _TAB_IDS:
+        assert f'id="{tid}"' in html, f"缺少 TAB 页面容器: {tid}"
+        assert f'data-tab="{tid}"' in html, f"缺少 TAB 按钮: {tid}"
+    # 默认选中：tab-translate 页面与按钮带 active，其余不带
+    m = re.search(r'<div class="tab-page active" id="tab-translate"', html)
+    assert m, "默认选中页必须是 tab-translate"
+    for tid in _TAB_IDS[1:]:
+        btn = re.search(
+            rf'<button[^>]*data-tab="{tid}"[^>]*>', html)
+        assert btn and "active" not in btn.group(0), \
+            f"{tid} 的 TAB 按钮不应默认选中"
+    assert 'class="side-tab-btn active"' in html, "TAB 栏缺少选中态样式锚"
+
+
+def test_app_js_switch_tab_toggles_buttons_and_pages():
+    """switchTab 必须按 data-tab 同步 TAB 按钮与 .tab-page 的 active 类，
+    并在 bindDom 中为全部 .side-tab-btn 绑定 click。"""
+    source = _app_js_source()
+    body = _extract_function(source, "switchTab")
+    assert "querySelectorAll('.side-tab-btn')" in body, \
+        "必须遍历 TAB 按钮切换选中态"
+    assert "querySelectorAll('.tab-page')" in body, \
+        "必须遍历页面容器切换显隐"
+    assert "classList.toggle" in body
+    assert "dataset.tab" in body, "必须按 data-tab 匹配"
+    bind = _extract_function(source, "bindDom")
+    assert "switchTab" in bind, "TAB 按钮必须在 bindDom 中绑定 click"
 
 
 # ---------------------------------------------------------------------------
@@ -226,59 +260,54 @@ def test_batch_values_use_positive_int_guard():
 
 
 # ---------------------------------------------------------------------------
-# v1.4 小白模式增补批：顶部翻译服务下拉栏 + 中央三步引导卡（面板级显隐）
+# v1.5 翻译服务快捷下拉（原小白模式顶栏迁入 tab-translate，逻辑保留）
 # ---------------------------------------------------------------------------
 
-_NOVICE_PROVIDER_VALUES = ["lmstudio", "ollama", "deepseek", "siliconflow",
-                           "custom"]
+_SERVICE_QUICK_PROVIDER_VALUES = ["lmstudio", "ollama", "deepseek",
+                                  "siliconflow", "custom"]
 
 
-def test_index_html_novice_panel_with_provider_options():
-    """小白视图容器存在：翻译服务下拉含既定 5 个 provider 值（lmstudio 默认），
-    并具备 key 行 / 本地提示行 / 开始按钮 / 完整面板根容器等锚点。"""
+def test_index_html_service_quick_with_provider_options():
+    """tab-translate 页含翻译服务快捷下拉：既定 5 个 provider 值
+    （lmstudio 默认），并具备 key 行 / 保存按钮 / 状态 / 本地提示行锚点。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    assert 'id="refineNovicePanel"' in html, "缺少小白视图容器 refineNovicePanel"
-    assert 'id="refineNoviceProvider"' in html, "缺少小白翻译服务下拉"
-    m = re.search(r'<select[^>]*id="refineNoviceProvider".*?</select>',
+    assert 'id="refineServiceQuick"' in html, "缺少翻译服务快捷下拉"
+    m = re.search(r'<select[^>]*id="refineServiceQuick".*?</select>',
                   html, re.S)
-    assert m, "refineNoviceProvider 下拉解析失败"
+    assert m, "refineServiceQuick 下拉解析失败"
     values = re.findall(r'<option value="([^"]+)"', m.group(0))
-    assert values == _NOVICE_PROVIDER_VALUES, \
-        f"novice 服务下拉选项值不符: {values}"
+    assert values == _SERVICE_QUICK_PROVIDER_VALUES, \
+        f"服务快捷下拉选项值不符: {values}"
     assert 'value="lmstudio" selected' in m.group(0), \
         "默认项必须为本地 LM Studio（lmstudio）"
-    for anchor in ("refineNoviceKeyRow", "refineNoviceKey",
-                   "refineNoviceLocalHint", "refineNoviceStartBtn",
-                   "refineFullPanel"):
-        assert f'id="{anchor}"' in html, f"缺少小白面板锚点: {anchor}"
+    for anchor in ("refineServiceQuickKeyRow", "refineServiceQuickKey",
+                   "refineServiceQuickSaveKeyBtn",
+                   "refineServiceQuickKeyStatus",
+                   "refineServiceQuickLocalHint"):
+        assert f'id="{anchor}"' in html, f"缺少快捷下拉锚点: {anchor}"
+    # 快捷下拉必须位于 tab-translate 页内（引导卡删除后仍属翻译主页）
+    assert html.index('id="refineServiceQuick"') \
+        > html.index('id="tab-translate"')
+    assert html.index('id="refineServiceQuick"') \
+        < html.index('id="tab-engine"')
 
 
-def test_apply_user_mode_toggles_panel_level_visibility():
-    """applyUserMode 必须做面板级显隐：novice 显示 refineNovicePanel 并隐藏
-    refineFullPanel（standard/developer 恢复完整面板）。"""
-    body = _extract_function(_app_js_source(), "applyUserMode")
-    assert "refineFullPanel" in body, "缺少完整面板根容器显隐"
-    assert "refineNovicePanel" in body, "缺少小白面板显隐"
-    assert "'none'" in body and "'flex'" in body, \
-        "面板级显隐必须以 display none/flex 切换"
-
-
-def test_novice_key_row_toggles_on_cloud_providers():
+def test_service_quick_key_row_toggles_on_cloud_providers():
     """key 行联动：deepseek/siliconflow/custom（云服务）显示 key 行；
     本地服务隐藏 key 行并显示本地启动提示行。"""
-    body = _extract_function(_app_js_source(), "refreshNoviceKeyRow")
+    body = _extract_function(_app_js_source(), "refreshServiceQuickRow")
     for prov in ("deepseek", "siliconflow", "custom"):
         assert prov in body, f"key 行联动缺少云服务分支: {prov}"
-    assert "refineNoviceKeyRow" in body, "必须联动 key 行显隐"
-    assert "refineNoviceLocalHint" in body, "本地服务必须显示提示行"
+    assert "refineServiceQuickKeyRow" in body, "必须联动 key 行显隐"
+    assert "refineServiceQuickLocalHint" in body, "本地服务必须显示提示行"
 
 
-def test_novice_provider_change_syncs_stages_and_persists():
-    """novice 下拉选择即同步阶段A/B provider（endpoint 缺省沿用既有映射），
-    并持久化：stages 复用 saveStageEndpoints 通道 + settings KV 键
-    novice_provider。"""
+def test_service_quick_change_syncs_stages_and_persists():
+    """服务快捷下拉选择即同步引擎页阶段A/B provider（endpoint 缺省沿用既有
+    映射），并持久化：stages 复用 saveStageEndpoints 通道 + settings KV 键
+    service_quick（v1.5 由 novice_provider 改名）。"""
     source = _app_js_source()
-    body = _extract_function(source, "applyNoviceProvider")
+    body = _extract_function(source, "applyServiceQuickProvider")
     # 与既有 saveStageEndpoints 同款动态 id 写法（'refineS' + n + 'Provider'，
     # n∈[1,3] 覆盖阶段A/阶段B）
     assert "'refineS' + n + 'Provider'" in body, \
@@ -289,28 +318,150 @@ def test_novice_provider_change_syncs_stages_and_persists():
         "endpoint 缺省必须沿用既有 provider 切换填充逻辑"
     assert "saveStageEndpoints" in body, \
         "stages 持久化必须复用既有保存通道"
-    assert "novice_provider" in body, \
-        "必须持久化 settings KV 键 novice_provider"
+    assert "service_quick" in body, \
+        "必须持久化 settings KV 键 service_quick"
+    # 回填路径同步读写新键
+    backfill = _extract_function(source, "applySavedStageSettings")
+    assert "service_quick" in backfill, \
+        "applySavedStageSettings 必须回填 service_quick"
 
 
-def test_novice_key_save_uses_stage_a_key_channel():
-    """novice 密钥保存必须复用 refine_save_stage_settings 的 keys 数组通道
+def test_service_quick_key_save_uses_stage_a_key_channel():
+    """快捷下拉密钥保存必须复用 refine_save_stage_settings 的 keys 数组通道
     （即单阶段密钥保存通道）并落 stage A（阶段A）。"""
-    body = _extract_function(_app_js_source(), "saveNoviceKey")
+    body = _extract_function(_app_js_source(), "saveServiceQuickKey")
     assert "refine_save_stage_settings" in body, \
         "必须复用既有密钥保存通道"
     assert "stage: 1" in body, "密钥必须落 stage A（阶段A）"
-    assert "provider: prov" in body, "密钥必须随当前 novice 服务商隔离存储"
+    assert "provider: prov" in body, "密钥必须随当前服务商隔离存储"
 
 
-def test_novice_start_btn_reuses_start_flow():
-    """novice 开始按钮：无文件→行内错误提示；有文件→复用与 #refineStartBtn
-    完全相同的启动流程（TranslatorManager.startTranslation），并已绑定 click。"""
+def test_translate_page_has_start_stop_and_no_guide_card():
+    """tab-translate 页保留唯一开始/停止入口（复用 refineStartBtn 通道），
+    三步引导卡不复存在；开始/停止按钮已绑定 click。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for anchor in ("refineStartBtn", "refineCancelBtn",
+                   "progressBar", "statusLabel"):
+        assert f'id="{anchor}"' in html, f"tab-translate 缺少锚点: {anchor}"
     source = _app_js_source()
-    body = _extract_function(source, "noviceStartTranslation")
-    assert "AppState.selectedFiles.length === 0" in body, \
-        "无文件分支必须先行校验"
-    assert "TranslatorManager.startTranslation()" in body, \
-        "必须复用既有 start 流程（不复制粘贴启动逻辑）"
     bind = _extract_function(source, "bindDom")
-    assert "refineNoviceStartBtn" in bind, "novice 开始按钮必须绑定 click"
+    assert "refineStartBtn" in bind, "开始按钮必须绑定 click"
+    assert "refineCancelBtn" in bind, "停止按钮必须绑定 click"
+
+# ---------------------------------------------------------------------------
+# AI 质量分析（D2026-0929：--ai-analyze 前后端接入）静态钉
+# ---------------------------------------------------------------------------
+
+def test_tab_guide_label_is_quality_and_suggestions():
+    """TAB 名 i18n：tabGuide 键值改为「质量与建议」（键名不动）。"""
+    m = re.search(r"tabGuide:\s*'([^']+)'", _app_js_source())
+    assert m, "MSG 中未找到 tabGuide 键"
+    assert m.group(1) == "质量与建议"
+
+
+def test_ai_analyze_button_bound_and_flow_pins():
+    """AI 分析按钮绑定 + 主流程契约。
+
+    - 需先有已加载导读（lastLoadedGuidePath）否则行内提示 aiNeedGuide；
+    - 分析中禁用按钮并提示 aiAnalyzing；
+    - 经 pywebview.api.refine_ai_analyze 携 (报告路径, model) 两参调用。
+    """
+    source = _app_js_source()
+    body = _extract_function(source, "refineAiAnalyze")
+    assert "lastLoadedGuidePath" in body, "必须以已加载导读为前置"
+    assert "aiNeedGuide" in body, "无导读时必须行内提示"
+    assert "aiAnalyzing" in body, "分析中必须给进度提示"
+    assert "disabled = true" in body, "分析期间按钮必须禁用"
+    assert "refine_ai_analyze" in body, "必须调 refine_ai_analyze 端点"
+    assert "aiReportPath()" in body, "报告路径须经 aiReportPath 从导读 stem 推导"
+    bind = _extract_function(source, "bindDom")
+    assert "refineAiAnalyzeBtn" in bind, "AI 分析按钮必须绑定 click"
+
+
+def test_ai_report_path_derives_from_guide_stem():
+    """aiReportPath 必须把导读后缀替换为 _质量报告.txt（同 stem 同目录）。"""
+    body = _extract_function(_app_js_source(), "aiReportPath")
+    assert "replace(/_质量报告导读\\.json$/" in body, \
+        "导读路径必须按后缀替换为质量报告 txt"
+
+
+def test_ai_render_result_three_sections_and_parse_ok_degrade():
+    """结果面板三段结构 + parse_ok=False 降级为纯文本（无任何可执行按钮）。
+
+    - 三段：aiSectionGlossary 表 / aiSectionTm 表（含黄标）/ aiSectionObs 列表；
+    - parse_ok=False 早退分支只渲染 aiParseFailed + observations 纯文本；
+    - 按钮统一带 data-ai-kind（仅 parse_ok=True 路径可达）。
+    """
+    source = _app_js_source()
+    body = _extract_function(source, "aiRenderResult")
+    for key in ("aiSectionGlossary", "aiSectionTm", "aiSectionObs",
+                "aiApplyGlossary", "aiApplyTm", "aiKind"):
+        assert key in body, f"渲染函数缺少 {key}"
+    assert body.index("parse_ok") < body.index("aiApplyGlossary"), \
+        "parse_ok=False 必须在渲染可执行按钮之前早退"
+    assert "aiParseFailed" in body, "降级分支必须给解析失败提示"
+    # 降级分支位于按钮构建之前，且必须 return 早退
+    early = body[:body.index("aiApplyGlossary")]
+    assert "return;" in early, "降级分支必须 return 早退"
+
+
+def test_ai_tm_conflict_warn_badge_pin():
+    """TM 建议行：conflict_warn 时渲染 aiConflictWarn 提示徽标。"""
+    body = _extract_function(_app_js_source(), "aiConflictBadge")
+    assert "aiConflictWarn" in body, "黄标必须带 aiConflictWarn 提示文案"
+    assert "title=" in body, "提示必须挂 title（tooltip）"
+    render = _extract_function(_app_js_source(), "aiRenderResult")
+    assert "conflict_warn" in render and "aiConflictBadge()" in render, \
+        "TM 行必须按 conflict_warn 条件渲染黄标"
+
+
+def test_ai_privacy_bar_provider_branch():
+    """隐私提示条：云端 provider（deepseek/siliconflow/custom/zen）显示
+    aiPrivacyCloud；本地显示 aiPrivacyLocal。"""
+    source = _app_js_source()
+    _extract_function(source, "isAiCloudProvider")
+    m = re.search(r"AI_CLOUD_PROVIDERS\s*=\s*\[([^\]]+)\]", source)
+    assert m, "app.js 未找到 AI_CLOUD_PROVIDERS 常量"
+    cloud_list = m.group(1)
+    for prov in ("deepseek", "siliconflow", "custom", "zen"):
+        assert f"'{prov}'" in cloud_list, f"云服务商清单缺 {prov}"
+    bar = _extract_function(source, "aiSetPrivacy")
+    assert "aiPrivacyCloud" in bar and "aiPrivacyLocal" in bar, \
+        "隐私条必须双分支文案"
+
+
+def test_ai_apply_single_entry_calls_endpoints():
+    """逐条落库：单条 JSON 调 refine_ai_apply_glossary / refine_ai_apply_tm，
+    并按返回 status 回写按钮状态文案。"""
+    source = _app_js_source()
+    gl = _extract_function(source, "aiApplyGlossary")
+    assert "refine_ai_apply_glossary" in gl
+    assert "JSON.stringify" in gl, "必须单条 JSON 序列化提交"
+    assert "aiApplied" in gl, "added 状态必须回写按钮文案"
+    tm = _extract_function(source, "aiApplyTm")
+    assert "refine_ai_apply_tm" in tm
+    assert "aiTmStored" in tm and "aiExists" in tm
+
+
+def test_ai_apply_failure_feedback():
+    """F3：落库失败（异常或 success=False）不得静默恢复——catch 分支与
+    success=False 分支均须转「重试」态并经 aiStatus 展示错误摘要。"""
+    source = _app_js_source()
+    fail = _extract_function(source, "aiApplyFail")
+    assert "aiApplyRetry" in fail, "失败态必须转「重试」按钮"
+    assert "aiStatus" in fail and "aiApplyFailed" in fail, \
+        "失败必须经 aiStatus 行内展示错误摘要"
+    for fn_name in ("aiApplyGlossary", "aiApplyTm"):
+        body = _extract_function(source, fn_name)
+        assert "aiApplyFail(btn, e)" in body, \
+            f"{fn_name} catch 分支必须走 aiApplyFail 错误展示"
+        assert "aiApplyFail(btn, r.error" in body, \
+            f"{fn_name} success=False 分支必须走 aiApplyFail 错误展示"
+        assert "aiBtnState(btn, '')" not in body, \
+            f"{fn_name} 不得静默恢复按钮"
+
+
+def test_guide_load_records_last_loaded_path():
+    """guideLoad 成功后必须记录 lastLoadedGuidePath（AI 分析的前置依据）。"""
+    body = _extract_function(_app_js_source(), "guideLoad")
+    assert "lastLoadedGuidePath = r.path || p" in body
