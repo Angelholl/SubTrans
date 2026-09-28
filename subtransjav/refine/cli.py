@@ -442,6 +442,14 @@ def main(argv=None):
         print(_print_where())
         return 0
 
+    # ---- EXE 首发数据迁移插桩（D2026-0929-05/07/08）：位于 --where 只读
+    #      早退之后、config_from_args 之前；全容错，任何异常不阻塞 CLI ----
+    try:
+        from subtransjav.data_migration import ensure_migrated
+        ensure_migrated(verbose=True)
+    except Exception as e:  # noqa: BLE001 - 全容错桩：迁移失败不阻塞启动
+        print(f"⚠️ [迁移] 数据迁移检查失败（忽略，继续启动）: {e}")
+
     # TM 管理命令（独立于翻译流程）
     if _handle_tm_commands(args):
         return

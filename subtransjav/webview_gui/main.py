@@ -355,6 +355,15 @@ def main():
         print(_print_version())
         return
 
+    # ---- EXE 首发数据迁移插桩（D2026-0929-05/07/08）：freeze_support 之后、
+    #      _auto_setup 之前；--help/--version 只读早退在其前不受影响；
+    #      全容错，任何异常不阻塞 GUI 启动 ----
+    try:
+        from subtransjav.data_migration import ensure_migrated
+        ensure_migrated(verbose=True)
+    except Exception as e:  # noqa: BLE001 - 全容错桩：迁移失败不阻塞启动
+        print(f"⚠️ [迁移] 数据迁移检查失败（忽略，继续启动）: {e}")
+
     _auto_setup()
     _check_gui_dependencies()
 
