@@ -477,6 +477,23 @@ def test_cli_where_prints_key_fields(capsys):
         assert key in out, f"--where 输出缺字段: {key}"
 
 
+def test_cli_where_migration_note_by_mode(monkeypatch, capsys):
+    """--where 迁移状态行按运行形态分支：frozen 报自动迁移与当前状态，源码保留旧文案。"""
+    from subtransjav import paths
+    from subtransjav.refine import cli as cli_mod
+
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    assert cli_mod.main(["--where"]) == 0
+    frozen_out = capsys.readouterr().out
+    assert "迁移在 EXE 首次启动时自动执行" in frozen_out
+    assert "未迁移" in frozen_out or "已迁移" in frozen_out
+
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    assert cli_mod.main(["--where"]) == 0
+    source_out = capsys.readouterr().out
+    assert "完整迁移随 EXE 首发，当前版本不迁移" in source_out
+
+
 def test_cli_where_exits_before_config_from_args(monkeypatch):
     """--where 必须早退于 config_from_args（纯诊断不建配置）。"""
     from subtransjav.refine import cli as cli_mod

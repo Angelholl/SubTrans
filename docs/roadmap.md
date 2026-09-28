@@ -12,15 +12,15 @@
 - ⬜ 内部 onedir 构建验证（CI artifact 门禁，不对外发布）：子进程翻译/AI 分析 smoke + 双语言对拍 + 迁移 dry-run（验 EXE 迁移路径，非 pip 落点）；产出可下载 onedir zip+Inno 包+sha256，2.0.0 正式前**真人安装反馈一轮（≥2 环境：正常 Win10/11 + 无 WebView2/缺 .NET8 干净 VM）**（D2026-0929-07 点 6）——**本地首建已成功 267MB（sudachidict 208MB 为大头，裁切评估中；e85e001），待 frozen 入口改造后运行时 smoke+CI 首跑**
 - ✅ 视听对比技术选型定案（**beta 动工排期门**：探测系统 ffmpeg/ffprobe（whisperjav 用户大概率已装）vs 捆绑 essentials（LGPL+体积评估）vs wave 级 VAD 降级/特性灰显；禁 torch 级默认）——未定案视听对比不动工（D2026-0929-09 定案：探测系统 ffmpeg+纯标准库 RMS 能量代理+HTML5 播放/mkv 抽片+威胁模型五条；C-5 收窄显式化；schema 冻结 suspected_missed_speech；排期门判开）
 - ✅ 视觉批（D2026-0929-03 已拍板：A token 化+暗色自选 / B 导航双轨 / C 表单组件；试听 UI 硬前置）（执行 1813307：42 处 width 收编+361 死规则清理+style.dark.css+SVG 双轨导航+三列网格/pill/按钮三级/focus-visible/空态；web-gui-tester 黑盒 15 截图五页×亮暗双主题 PASS+1 暗色低对比当场修复；钉红线全绿）
-- ⬜ 视听对比：~~疑似漏听检测~~ ✅ 检测层已落（2c02130：ffmpeg 探测+RMS 能量粗筛+gap 对照+报告节/导读类别 suspected_missed_speech 仅报告+4 参数 TUNABLE+未装灰显，D2026-0929-09 契约全遵循；试跑定阈 10~20 片真实媒体待 owner 侧语料）+ ⬜ 快速试听 UI（逐条字幕+音频播放+媒体路径选择，消费 v1.5 音频链路 media_path 契约与视觉批基线）
+- ⬜ 视听对比：~~疑似漏听检测~~ ✅ 检测层已落（2c02130）+ ~~快速试听 UI~~ ✅ 已落（c4f342a：导读条目▶试听+direct/clip 双路播放+媒体源契约内选择收窄+15 MSG 键+暗色 token；动态播放链真机验收归 owner）——视听对比两件齐，10~20 片真实媒体试跑定阈待 owner 语料
 
 **2.0.0-beta DoD（D2026-0929-06/07）**：① frozen onedir 内部构建通过+子进程翻译/AI 分析 smoke 通过（spawn 收敛全链 api×2+venv 引导+双语言对拍）② data_root_resolver+迁移 dry-run+备份/校验/回退测试通过（双源夹具+故障注入：迁移后用户写入场景+写事务中迁移场景）③ WebView2/ffmpeg 依赖检测明确+选型定案记录 ④ pip 2.0.0b0 旧数据根零感知升级验证（--where 指旧位、写入旧位增长、全量基线不降）⑤ Release notes 分层措辞定稿（**EXE 安装版：迁移自动完成，无需手动操作**；pip 用户数据位置不变归 CLI·脚本层说明；旧配置自动迁移失败自动回退）⑥ README 中文主+英文简介落地
 
 ### 2.0.0 正式（在 beta 上追加）
 
-- ⬜ EXE 封装：pyinstaller onedir + Inno Setup + GitHub Actions 触发构建附 Release（**workflow_dispatch 手动跑通全链「构建→Inno→安装→smoke→卸载」后才开 tag 触发**，D2026-0929-07 点 7；frozen CLI 冒烟必过：--version / --subtrans-cli --help / 数据根创建+TM SQLite 读写+DPAPI 往返 / GUI 启动连子进程；产物 SHA256+依赖锁必做、SBOM 可选，SHA256 清单随 Release 发布；不用 UPX）；用户数据根=`%LOCALAPPDATA%\SubTransJAV`（**数据根迁移只随 EXE 首发**：三段式迁移落成可测试条件——磁盘预检+backups/pre-2.0.0-YYYYMMDD.zip 保留 N 份且**旧位保留 ≥ 1.4.1 EOL 声明时点**（R4）+**迁移 manifest（清单+sha256+迁移前计数）、哨兵最后写、恢复校验对 manifest**+SQLite integrity_check/JSON/DPAPI 自检+原子切换失败清理**仅限 manifest 匹配迁移残留**续旧根+半迁移自愈（启动检测备份存在+新根不完整→清残留回退）+WAL checkpoint 失败=本轮中止下次重试+幂等多实例锁；tm.db+glossary_conflict_watch.json 双文件携带即 D2026-0924-04 欠账实质清偿；双形态共存防写竞争+卸载器永不删用户数据）；Inno 检测 WebView2 引导 Evergreen Bootstrapper（与 main.py 运行时探测共用 winreg GUID）；首发不签名+SmartScreen/杀软 FAQ（含 SHA256 自证核对指引），Trusted Signing 后续评估
-- ⬜ 收口同步：README 结构大修贴合当前项目（双语策略已定缺省=中文主+英文简介段，改判条件=英文 issue 占比上升/上架 winget 或 Store/国际用户增长；README 顶部中英一句话+下载入口、英文 Quickstart 段；CHANGELOG/使用与维护手册同批对齐）（原 D2026-0929-02 收口项）
-- ⬜ 2.0.0 tag + Release（附 setup.exe；**Release notes 分层措辞**：EXE 安装版迁移自动完成无需手动操作 / pip 用户数据位置不变、CLI·API·自动化脚本见「路径与数据根迁移」/ 旧配置自动迁移失败自动回退+回退前先导出指引——2.0 定位为功能里程碑；可选 2.0.0rc0 预发布；发布前 owner 真机 GUI 人工验收一次（含无 .NET 8 的 Win10 场景，与 beta 真装一轮合并执行）；更新链路=Inno 覆盖安装+版本检测写入发布文档）
+- ✅ EXE 封装：pyinstaller onedir + Inno Setup + GitHub Actions 触发构建附 Release（workflow_dispatch 手动跑通全链后才开 tag 触发，D2026-0929-07 点 7；不用 UPX）。**工程与迁移代码侧全落**：spec 首建成功 267MB（e85e001）+frozen 运行时 smoke 四项过（f1b1abe）+迁移机制 14 用例故障注入全绿（d9b2f85：三段式+manifest 哨兵最后写+半迁移自愈+白名单清理+多实例锁+EOL 常量占位，D2026-0924-04 双文件欠账清偿）；setup.iss+release.yml 就绪（iscc 未本机试编译）；**遗留**=CI workflow_dispatch 首跑+真人安装一轮（≥2 环境）+旧根发现策略补强（pip 老用户升级 EXE 需首启导入向导或安装器指路，现仅 env+exe 同目录）+owner 真机 GUI 验收
+- ✅ 收口同步：README 结构大修落地（f518a7e：双语缺省=中文主+英文 Quickstart 段/安装三方式并列/LM Studio 指引/2.0 特性节/从 1.4 升级分层说明/FAQ 增补 4 条；质量轴结论与实测数字零改动；手册 §2.4 数据根与迁移+§7.7 疑似漏听与试听；CHANGELOG [2.0.0b0] 定版）（原 D2026-0929-02 收口项；双语改判条件=英文 issue 占比上升/上架 winget 或 Store/国际用户增长）
+- ⬜ 2.0.0 正式 tag + Release（附 setup.exe；**Release notes 分层措辞**：EXE 安装版迁移自动完成无需手动操作 / pip 用户数据位置不变、CLI·API·自动化脚本见「路径与数据根迁移」/ 旧配置自动迁移失败自动回退+回退前先导出指引——2.0 定位为功能里程碑；可选 2.0.0rc0 预发布；发布前 owner 真机 GUI 人工验收一次（含无 .NET 8 的 Win10 场景，与 beta 真装一轮合并执行）；更新链路=Inno 覆盖安装+版本检测写入发布文档）。**前置达成：✅ tag v2.0.0b0（pip 预发布，2026-09-30）+DoD④ pip 零感知（源码形态路径逐字节一致+--where 指旧位，测试口径）；全量基线 1423+4**
 
 ### 2.0.1（独立项，无前置依赖）
 

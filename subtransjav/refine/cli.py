@@ -405,6 +405,13 @@ def _print_where() -> str:
         old_label = "旧数据根（仓库根）"
     old_exists = "存在" if old_tm_db.exists() else "不存在"
 
+    if paths.is_frozen():
+        migration_note = (
+            f"迁移在 EXE 首次启动时自动执行；当前状态：{state_map[state]}"
+        )
+    else:
+        migration_note = "完整迁移随 EXE 首发，当前版本不迁移"
+
     lines = [
         f"程序版本: {__version_display__}",
         f"运行形态: {run_mode}",
@@ -414,7 +421,7 @@ def _print_where() -> str:
         f"术语冲突观察路径: {glossary_conflict.default_watch_path()}",
         f"DPAPI 密钥位置: {secrets.get_store_path()}",
         f"{old_label} TM 库: {old_tm_db}（{old_exists}）",
-        f"迁移状态: {state_map[state]}（完整迁移随 EXE 首发，当前版本不迁移）",
+        f"迁移状态: {state_map[state]}（{migration_note}）",
     ]
     return "\n".join(lines)
 
