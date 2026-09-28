@@ -23,10 +23,11 @@ import os
 import sqlite3
 import time
 
-_DEFAULT_TM_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "Temp", "translation_memory"
-)
+from subtransjav import paths
+
+# 数据路径统一收口（frozen 下解析到数据根；源码形态与旧
+# __file__ 三层 dirname 写法逐字节一致）
+_DEFAULT_TM_DIR = paths.data_subdir("Temp", "translation_memory")
 
 # exact_map 单批 IN 查询的哈希个数上限（sqlite 变量上限默认 999，留安全余量）
 _EXACT_MAP_CHUNK = 500

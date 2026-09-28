@@ -4,7 +4,6 @@ Provider configurations for translation services.
 
 PROVIDER_CONFIGS = {
     'deepseek': {
-        'pysubtrans_name': 'DeepSeek',
         # v1.8.14 (#325): DeepSeek announced new model names 2026-05-06.
         # 'deepseek-chat' / 'deepseek-reasoner' deprecate 2026-07-24, replaced
         # by 'deepseek-v4-flash' (non-thinking, was deepseek-chat) and
@@ -16,7 +15,7 @@ PROVIDER_CONFIGS = {
         'api_base': 'https://api.deepseek.com'
     },
     'ollama': {
-        'pysubtrans_name': 'Custom Server',  # Uses OpenAI-compatible /v1/chat/completions
+        # Uses OpenAI-compatible /v1/chat/completions
         # D6：gemma3:12b 已否决，缺省显式置空——运行时模型一律走
         # 显式配置或自动推荐链（refine.config.PROVIDER_MODEL_DEFAULTS），
         # 空值由 pipeline_v2/_make_client 与 RefineConfig.validate 的
@@ -30,7 +29,7 @@ PROVIDER_CONFIGS = {
         'supports_streaming': True,
     },
     'custom': {
-        'pysubtrans_name': 'Custom Server',  # Custom Server avoids Responses API misrouting (#178)
+        # Custom Server avoids Responses API misrouting (#178)
         'model': '',                   # User provides via --translate-model
         'env_var': None,               # API key optional, provided via --translate-api-key
         'supports_streaming': True,    # Enable live progress for long cloud batches

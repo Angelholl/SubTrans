@@ -10,9 +10,10 @@ legacy 管线（已删除）的编排器（run 流程与单文件执行及其阶
 """
 
 import hashlib
-import os
 import threading
 from pathlib import Path
+
+from subtransjav import paths
 
 # 本次进程创建过的临时目录（供退出时清理）
 CREATED_TMP_DIRS: list[str] = []
@@ -72,11 +73,8 @@ def refine_tmp_dir(in_path: str, stem: str) -> str:
 
 
 def learned_glossary_path() -> str:
-    """自动学习词库路径（项目根/config/glossary_learned.csv）。"""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__)))),
-        "config", "glossary_learned.csv")
+    """自动学习词库路径（数据根/config/glossary_learned.csv）。"""
+    return paths.data_subdir("config", "glossary_learned.csv")
 
 
 def load_glossary_override(cfg: RefineConfig) -> list:

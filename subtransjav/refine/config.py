@@ -6,6 +6,8 @@ import json
 import os
 from dataclasses import dataclass, field
 
+from subtransjav import paths
+
 # ---- 批量默认值（需求定稿：本地 30 / 云端 30）----
 DEFAULT_BATCH_LOCAL = 30
 DEFAULT_BATCH_CLOUD = 30
@@ -110,14 +112,16 @@ ZEN_FREE_MODELS = [
 STAGE_NAMES = ["阶段A 净语+翻译(s1槽位)", "（v2 未用）", "阶段B 审校+抛光(s3槽位)", "（v2 未用）"]
 
 # 旧工作目录（角色卡与词库的历史所在地），作为 GUI 默认值
-CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config")
+# 数据路径统一收口到 subtransjav.paths（frozen 下解析到用户数据根；
+# 源码形态解析结果与旧 __file__ 三层 dirname 写法逐字节一致）
+CONFIG_DIR = paths.data_subdir("config")
 LEGACY_WORKDIR = CONFIG_DIR
 
-# 运行日志目录（项目根目录/Logs）
-LOGS_DIR = os.path.abspath(os.path.join(CONFIG_DIR, "..", "Logs"))
+# 运行日志目录（数据根/Logs）
+LOGS_DIR = paths.data_subdir("Logs")
 
-# 流水线临时工作区（项目根目录/Temp）：各输入文件的工作文件统一收束于此
-TEMP_DIR = os.path.abspath(os.path.join(CONFIG_DIR, "..", "Temp"))
+# 流水线临时工作区（数据根/Temp）：各输入文件的工作文件统一收束于此
+TEMP_DIR = paths.data_subdir("Temp")
 
 
 def default_templates_dir() -> str:

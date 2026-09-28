@@ -9,8 +9,11 @@ import os
 from pathlib import Path, PureWindowsPath
 from urllib.parse import urlparse
 
+from subtransjav import paths
+
 # Project root (subtransjav/webview_gui/security.py -> project root)
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# 源码=仓库根不变；frozen=用户数据根，白名单自动覆盖
+REPO_ROOT = paths.app_root()
 
 
 def _resolve_safe_path(path: str) -> Path:

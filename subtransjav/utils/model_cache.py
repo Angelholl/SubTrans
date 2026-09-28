@@ -8,14 +8,16 @@
 """
 
 import os
-import sys
 from pathlib import Path
+
+from subtransjav import paths
 
 
 def project_models_root() -> Path:
-    """模型缓存根目录：仓库根/models（源码运行）或可执行目录/models（打包）"""
-    # frozen 打包 → 可执行目录；源码运行：subtransjav/utils/model_cache.py → 仓库根
-    root = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]
+    """模型缓存根目录：仓库根/models（源码运行）或数据根/models（打包）"""
+    # frozen 打包 → 数据根（不碰安装目录，D2026-0929-08）；
+    # 源码运行：subtransjav/utils/model_cache.py → 仓库根
+    root = paths.data_root() / "models" if paths.is_frozen() else Path(__file__).resolve().parents[2]
     return root / "models"
 
 

@@ -20,7 +20,7 @@ readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "MeiZhong"}]
 requires-python = ">=3.10,<3.14"
-keywords = ["subtitle", "srt", "translation", "llm", "pysubtrans"]
+keywords = ["subtitle", "srt", "translation", "llm"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Win32 (MS Windows)",
@@ -33,9 +33,8 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-# 翻译引擎核心依赖（refine v2 两阶段流水线 + PySubtrans 云端服务商通道）
+# 翻译引擎核心依赖（refine v2 两阶段流水线 + OpenAI 兼容通道）
 dependencies = [
-    "pysubtrans>=1.5.0",      # AI 字幕翻译引擎
     "openai>=1.35.0",         # OpenAI 兼容接口（deepseek/zen/lmstudio/siliconflow/custom）
     "requests",
     "srt",

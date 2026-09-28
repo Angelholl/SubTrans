@@ -461,3 +461,35 @@ def test_cli_ai_analyze_params_not_in_config_fingerprint():
     with_ai.ai_analyze = "r.txt"          # 模拟误挂字段
     with_ai.ai_model = "m"
     assert compute_config_hash(with_ai) == compute_config_hash(base)
+
+
+# ---------------------------------------------------------------------------
+# --where 数据路径诊断（D2026-0929-07 点 3：一次报全、零副作用早退）
+# ---------------------------------------------------------------------------
+def test_cli_where_prints_key_fields(capsys):
+    from subtransjav.refine.cli import main
+    rc = main(["--where"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    for key in ("程序版本", "运行形态", "数据根", "配置目录",
+                "翻译记忆库路径", "术语冲突观察路径", "DPAPI 密钥位置",
+                "迁移状态", "完整迁移随 EXE 首发"):
+        assert key in out, f"--where 输出缺字段: {key}"
+
+
+def test_cli_where_exits_before_config_from_args(monkeypatch):
+    """--where 必须早退于 config_from_args（纯诊断不建配置）。"""
+    from subtransjav.refine import cli as cli_mod
+    calls = []
+    monkeypatch.setattr(cli_mod, "config_from_args",
+                        lambda args: calls.append(args))
+    assert cli_mod.main(["--where"]) == 0
+    assert calls == []
+
+
+def test_cli_where_zero_side_effects(tmp_path, monkeypatch):
+    """--where 全程只读：数据根指向 tmp 后，不得在 tmp 创建任何目录。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    from subtransjav.refine.cli import main
+    assert main(["--where"]) == 0
+    assert list(tmp_path.rglob("*")) == []

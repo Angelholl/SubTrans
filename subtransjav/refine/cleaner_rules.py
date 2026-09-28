@@ -6,6 +6,8 @@ from pathlib import Path
 
 import yaml
 
+from subtransjav import paths
+
 from .source_hallucination import is_source_counting_noise
 
 # Pre-compiled: sentence-fragment connector words (used in _merge_fragments)
@@ -50,10 +52,8 @@ def resolve_data_file(
                 r = Path.cwd() / r
             candidates.append(r / name)
 
-    # 3. 仓库根 config/templates（editable 安装）
-    #    __file__ = .../subtransjav/refine/cleaner_rules.py
-    #    parents[2] = 仓库根
-    repo_root = Path(__file__).resolve().parents[2]
+    # 3. 仓库根 config/templates（editable 安装；frozen 下解析到数据根）
+    repo_root = paths.app_root()
     candidates.append(repo_root / "config" / "templates" / name)
     # 部分规则文件位于仓库根 config/ 而非 config/templates/
     candidates.append(repo_root / "config" / name)

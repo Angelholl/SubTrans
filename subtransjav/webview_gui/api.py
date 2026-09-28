@@ -20,6 +20,7 @@ from typing import Any, cast
 import webview
 from webview import FileDialog
 
+from subtransjav import paths
 from subtransjav.utils.process_manager import (
     PSUTIL_AVAILABLE,
     terminate_process_tree,
@@ -35,7 +36,8 @@ from .event_stream import (  # noqa: E402  webview-free 可测模块
 from .strings import msg  # noqa: E402  用户可见文案唯一中文来源
 
 # Project root (subtransjav/webview_gui/api.py -> project root)
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# 数据路径统一收口到 subtransjav.paths：源码=仓库根；frozen=用户数据根
+REPO_ROOT = paths.app_root()
 
 # ---------------------------------------------------------------------------
 # 会话内用户选择的路径登记（信任边界：scan_resume_states 只处理这些路径）

@@ -111,6 +111,13 @@ def build_parser():
     grp_tm.add_argument("--tm-clear", action="store_true",
                         help="清空翻译记忆库后退出")
 
+    # ---- 诊断 ----
+    grp_diag = p.add_argument_group("诊断")
+    grp_diag.add_argument("--where", action="store_true",
+                          help="数据路径诊断：打印版本/运行形态/数据根及来源/"
+                               "配置与翻译记忆库/密钥/旧数据根/迁移状态后退出"
+                               "（纯只读，不创建任何目录）")
+
     p.add_argument("--deepseek-key", default="",
                    help="DeepSeek API Key（命令行传密钥会暴露在进程列表，建议改用环境变量 DEEPSEEK_API_KEY）")
     p.add_argument("--zen-key", default="",
@@ -365,6 +372,53 @@ def _handle_tm_commands(args):
     return False
 
 
+def _print_where() -> str:
+    """--where 数据路径诊断（D2026-0929-07 点 3）：一次报全，全程只读零副作用。
+
+    所有路径均做不落盘的拼接展示（不走 _default_tm_path 等带 makedirs
+    副作用的函数），绝不创建任何目录。
+    """
+    import os as _os
+
+    from subtransjav import paths
+    from subtransjav.__version__ import __version_display__
+
+    from . import glossary_conflict, secrets, tm
+    from .config import CONFIG_DIR
+
+    run_mode = "frozen 打包" if paths.is_frozen() else "pip 源码"
+    source_map = {
+        "env": "环境变量显式指定",
+        "frozen-default": "frozen 默认（%LOCALAPPDATA%）",
+        "legacy": "仓库根（传统）",
+    }
+    state_map = {"migrated": "已迁移", "not-migrated": "未迁移"}
+    source = paths.data_root_source()
+    state = paths.migration_state()
+    data_root = paths.data_root()
+
+    if paths.is_frozen():
+        old_tm_db = data_root / "Temp" / "translation_memory" / "tm.db"
+        old_label = "旧数据根"
+    else:
+        old_tm_db = paths.app_root() / "Temp" / "translation_memory" / "tm.db"
+        old_label = "旧数据根（仓库根）"
+    old_exists = "存在" if old_tm_db.exists() else "不存在"
+
+    lines = [
+        f"程序版本: {__version_display__}",
+        f"运行形态: {run_mode}",
+        f"数据根: {data_root}（来源: {source_map[source]}）",
+        f"配置目录: {CONFIG_DIR}",
+        f"翻译记忆库路径: {_os.path.join(tm._DEFAULT_TM_DIR, 'tm.db')}",
+        f"术语冲突观察路径: {glossary_conflict.default_watch_path()}",
+        f"DPAPI 密钥位置: {secrets.get_store_path()}",
+        f"{old_label} TM 库: {old_tm_db}（{old_exists}）",
+        f"迁移状态: {state_map[state]}（完整迁移随 EXE 首发，当前版本不迁移）",
+    ]
+    return "\n".join(lines)
+
+
 def main(argv=None):
     # stdio 加固（同 tools/guard_banned_paths.py）：argparse 在 parse 时才打印
     # 中文 help，stdout 为管道且 locale 码页过窄（CI windows cp1252 实测回归）
@@ -382,6 +436,11 @@ def main(argv=None):
     apply_model_cache_env()
 
     args = build_parser().parse_args(argv)
+
+    # 数据路径诊断（独立早退：先于 config_from_args，纯诊断不建配置不建目录）
+    if getattr(args, "where", False):
+        print(_print_where())
+        return 0
 
     # TM 管理命令（独立于翻译流程）
     if _handle_tm_commands(args):

@@ -15,12 +15,14 @@ import logging
 import os
 import tempfile
 
+from subtransjav import paths
+
 logger = logging.getLogger(__name__)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-# 标准位置：项目根/config/（程序与数据分离，包目录保持纯代码）
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(_HERE))
-_CONFIG_STORE = os.path.join(_PROJECT_ROOT, "config", "api_keys.bin")
+# 标准位置：数据根/config/（程序与数据分离，包目录保持纯代码；
+# frozen 下随 paths 解析到用户数据根）
+_CONFIG_STORE = paths.data_subdir("config", "api_keys.bin")
 _PACKAGE_STORE = os.path.join(_HERE, "api_keys.bin")
 
 

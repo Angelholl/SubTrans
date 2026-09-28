@@ -41,6 +41,8 @@ import re
 
 import yaml
 
+from subtransjav import paths
+
 from .post_validate import is_untranslated_text
 
 # YAML 必须包含的键路径（点号表示层级），缺失即视为损坏。
@@ -398,9 +400,8 @@ def _resolve_valve_pct(cfg) -> int:
 
 def _default_errors_dir() -> str:
     """Errors 目录（与 language_validator.filter_stage_output 同口径：
-    项目根/Errors，dropped_entries.log 所在地）。"""
-    return os.path.join(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__)))), "Errors")
+    数据根/Errors，dropped_entries.log 所在地）。"""
+    return paths.data_subdir("Errors")
 
 
 def _archive_dropped(entries, delete_positions, cat_by_pos, errors_dir,

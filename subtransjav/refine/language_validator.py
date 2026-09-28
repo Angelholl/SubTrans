@@ -20,6 +20,8 @@ import os
 import re
 from datetime import datetime
 
+from subtransjav import paths
+
 # CJK 覆盖：汉字＋假名＋CJK标点＋全角字符
 # （\uff00-\uffef 含半角片假名 \uff66-\uff9f：半角片假名明确计入
 #   日文（CJK）侧，与 _LATIN_WITH_CJK_PUNCT_RE 的排除口径一致）
@@ -256,9 +258,7 @@ def filter_stage_output(srt_path: str, stage_index: int,
             f"过高，疑似校验失效，本次全部放行以免误杀")
         return len(entries), 0
 
-    dropped_log = DroppedEntryLog(
-        os.path.join(os.path.dirname(os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__)))), "Errors"))
+    dropped_log = DroppedEntryLog(paths.data_subdir("Errors"))
 
     for e in entries:
         if is_valid_stage_text(e["text"], target):

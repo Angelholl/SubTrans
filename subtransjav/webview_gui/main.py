@@ -25,6 +25,7 @@ setup_console()
 
 import platform  # noqa: E402
 
+from subtransjav import paths  # noqa: E402  frozen 判定单一来源
 from subtransjav.webview_gui.strings import msg  # noqa: E402  文案表零依赖
 
 
@@ -42,7 +43,7 @@ def _deps_ok():
 def _auto_setup():
     """首次运行自动创建 venv 并安装依赖，然后重启到 venv 环境"""
     # PyInstaller 打包版不应走自动安装流程
-    if getattr(sys, "frozen", False):
+    if paths.is_frozen():
         return
     # 已在 venv 中且依赖完整 → 正常继续
     if sys.prefix != sys.base_prefix and _deps_ok():
@@ -227,7 +228,7 @@ def bind_dom_events(window):
 
 def get_asset_path(relative_path: str) -> Path:
     """Get absolute path to an asset file (dev mode or PyInstaller bundle)."""
-    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    if paths.is_frozen() and hasattr(sys, '_MEIPASS'):
         base_path = Path(sys._MEIPASS)
         asset_path = base_path / "webview_gui_assets" / relative_path
     else:
