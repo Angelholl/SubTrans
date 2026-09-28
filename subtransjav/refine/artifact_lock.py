@@ -20,6 +20,7 @@ import contextlib
 import errno
 import hashlib
 import os
+import uuid
 from pathlib import Path
 
 try:                                    # Windows 首选
@@ -48,12 +49,32 @@ _CONFLICT_ERRNOS = {getattr(errno, n, None)
 
 class ArtifactLockHandle:
     """锁句柄：持有打开的锁文件描述符，close() 释放锁并关闭、
-    尽力删除锁文件（被他人接管时删除失败忽略）。"""
+    尽力删除锁文件（锁文件内容经持有者标识比对非己方时放弃删除并
+    告警，宁残留勿误删）。"""
 
-    def __init__(self, path: str, fd):
+    def __init__(self, path: str, fd, token: str = ""):
         self.path = path
         self._fd = fd
+        self._token = token
         self._released = False
+
+    def _is_our_lock_file(self) -> bool:
+        """锁文件内容身份校验：仍含本句柄 token 才视为己方锁文件。
+
+        Windows 解锁→关闭→删除序存在三方竞态：关闭之后、删除之前，
+        第三方可在同一路径接管锁文件（新建/覆写并写入自己的持有者
+        标识）。盲目 os.remove 会把他方锁文件从脚下删掉，第三个进程
+        再建新文件加锁 → 两进程各持不同 inode 的"同键"锁。删除前读
+        内容比对持有者标识：非己方（含内容不可读）一律判非己方，
+        宁可残留也不误删（残留锁文件无活锁，后续获取者照常加锁覆盖）。
+        """
+        try:
+            with open(self.path, "rb") as f:
+                content = f.read()
+        except OSError:
+            return False
+        return bool(self._token) \
+            and self._token.encode("utf-8") in content
 
     def release(self) -> None:
         """释放锁并尽力删除锁文件（幂等；OSError 全程吞掉，OS 兜底随进程回收）。
@@ -68,7 +89,9 @@ class ArtifactLockHandle:
           inode，与我们不再相干；
         - Windows（msvcrt 分支）：文件区域被本进程锁定期间无法删除，
           必须先解锁并关闭句柄才能删，故维持 解锁→关闭→删除 原序；
-          同路径竞态由"open 成功后加锁冲突"的语义兜住。
+          关闭后的删除窗口存在第三方接管同路径锁文件的三方竞态，删除
+          前按文件内容持有者标识比对（_is_our_lock_file），非己方放弃
+          删除并告警；同路径加锁竞态由"open 成功后加锁冲突"语义兜住。
         """
         if self._released:
             return
@@ -81,8 +104,12 @@ class ArtifactLockHandle:
                 pass                        # 释放失败不阻断：OS 兜底随进程回收
             with contextlib.suppress(OSError):
                 os.close(self._fd)
-            with contextlib.suppress(OSError):
-                os.remove(self.path)
+            if os.path.exists(self.path) and not self._is_our_lock_file():
+                print(f"⚠️ [lock] 锁文件内容非本句柄标识（疑似已被他方接管），"
+                      f"放弃删除: {self.path}")
+            else:
+                with contextlib.suppress(OSError):
+                    os.remove(self.path)
         elif fcntl is not None:
             # 持锁状态下先删锁文件（消除 close→remove 窗口竞态，见 docstring）。
             # Windows 存根无 fcntl 符号，仅 POSIX 运行时走到（下行忽略 attr-defined）
@@ -182,7 +209,17 @@ def acquire_artifact_lock(input_path: str, output_dir: str):
             _warned_no_lock_impl = True
             print("⚠️ [lock] 当前平台无 msvcrt/fcntl，产物锁降级为不锁")
         return None
-    return ArtifactLockHandle(lock_path, fd)
+    # 持锁成功后写入持有者标识（pid+随机 token）：release 删除锁文件前
+    # 按内容比对（Windows 分支），防三方竞态误删他方接管的锁文件。
+    # 首字节在本进程区域锁内，写自身持锁文件合法；写失败不阻断持锁。
+    token = uuid.uuid4().hex
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.write(fd, f"subtransjav-lock pid={os.getpid()} token={token}\n"
+                     .encode())
+    except OSError:
+        pass
+    return ArtifactLockHandle(lock_path, fd, token=token)
 
 
 def release_artifact_lock(handle) -> None:

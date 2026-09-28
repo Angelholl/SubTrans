@@ -11,6 +11,10 @@ M2 三态语义区分：冲突=抛 ArtifactLockConflict，机制故障=降级返
 6. 48h 审计收口钉：release 两平台删除时序（POSIX 持锁先删后关 /
    Windows 解锁→关→删）源码钉 + 真实路径行为钉；锁键 normcase 源码钉
    + Windows 大小写变体同键行为钉。
+7. 1.4 前置批：Windows 解锁→关闭→删除序的三方竞态防护——锁文件写入
+   持有者标识（pid+token），删除前内容比对，非己方（他方接管/内容
+   不可读）放弃删除并告警（宁残留勿误删）；POSIX unlink-under-lock
+   无此竞态，行为不变。
 """
 import errno
 import inspect
@@ -188,3 +192,49 @@ def test_windows_case_variant_same_key_conflict(tmp_path):
             al.acquire_artifact_lock(str(tmp_path / "EP01.SRT"), str(out_dir))
     finally:
         al.release_artifact_lock(h1)
+
+
+# ---- 1.4 前置批：Windows 三方竞态防护（删除前持有者身份校验）----
+
+def test_acquire_writes_holder_identity_source_pin():
+    """源码钉：acquire 成功后向锁文件写入持有者标识（pid+token），
+    无标识内容则 release 的身份校验无从比对（恒判非己方 → 永不删）。"""
+    src = inspect.getsource(al.acquire_artifact_lock)
+    assert "token" in src, "acquire 未写入持有者标识（token）"
+    assert "os.write" in src, "acquire 未把持有者标识写入锁文件"
+
+
+@pytest.mark.skipif(os.name != "nt",
+                    reason="身份校验防误删仅针对 Windows 解锁→关闭→删除序"
+                           "（POSIX unlink-under-lock 无此竞态，行为不变）")
+def test_release_never_deletes_third_party_replaced_lock(tmp_path):
+    """三方竞态回归：本方解锁并关闭句柄后的删除窗口内，第三方在同一
+    路径写入自有持有者标识（接管锁文件），本方 release 读取内容比对
+    非己方 → 放弃删除并告警，他方锁文件原样保留。"""
+    inp = _touch(tmp_path / "ep01.srt")
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    h = al.acquire_artifact_lock(inp, str(out_dir))
+    assert h is not None
+    lock_file = Path(h.path)
+    assert lock_file.exists()
+    # 模拟竞态窗口：本方 release 的前两步（解锁+关闭）已发生——手动
+    # 关闭句柄（msvcrt 区域锁随句柄关闭自动失效），第三方随即接管路径
+    os.close(h._fd)                              # 白盒：只关句柄不删文件
+    third_content = "subtransjav-lock pid=999999 token=thirdparty0001\n"
+    lock_file.write_text(third_content, encoding="utf-8")
+    al.release_artifact_lock(h)
+    assert lock_file.exists(), "他方接管的锁文件被误删（须宁残留勿误删）"
+    assert lock_file.read_text(encoding="utf-8") == third_content
+
+
+def test_release_windows_checks_holder_identity_before_remove_source_pin():
+    """源码钉：Windows 分支删除锁文件前先做持有者标识内容比对，
+    内容非本句柄 token 即放弃删除并告警（校验必须先于 os.remove）。"""
+    src = inspect.getsource(al.ArtifactLockHandle.release)
+    msvcrt_part = src[src.index("if msvcrt is not None"):
+                      src.index("elif fcntl is not None")]
+    assert "_is_our_lock_file" in msvcrt_part, \
+        "Windows 分支缺持有者标识内容校验（删除前必须比对 token）"
+    assert msvcrt_part.index("_is_our_lock_file") \
+        < msvcrt_part.index("os.remove")

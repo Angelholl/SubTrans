@@ -25,10 +25,18 @@ import contextlib
 import csv
 import json
 import os
+import shutil
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
+from .artifact_lock import (  # noqa: E402  # 复用产物级 lockfile 先例
+    ArtifactLockConflict,
+    ArtifactLockHandle,
+    acquire_artifact_lock,
+    release_artifact_lock,
+)
 from .config import TEMP_DIR  # noqa: E402  # 延迟导入规避循环依赖
 from .pass_disagreement import (  # noqa: E402  # 与 pipeline_v2 同源实现
     _timing_span,
@@ -41,6 +49,15 @@ CONFLICT_CSV_COLUMNS = ["entry_id", "timing", "source_term",
                         "expected_targets", "actual_text", "created_at"]
 # 跨运行观察闸 JSON 文件名（位于 Temp/translation_memory/）
 WATCH_JSON_NAME = "glossary_conflict_watch.json"
+# 写入前把上一版复制为 .bak（恒定名，仅保留最近一份）——即使旧文件已
+# 损坏（读取按 [] 处理）或新写内容有损，旧字节仍可在 .bak 寻回。
+WATCH_JSON_BAK_SUFFIX = ".bak"
+# 跨进程读改写锁（复用 artifact_lock 产物级 lockfile，锁键=本 JSON
+# 路径、锁文件落同目录）：冲突按有限次重试等他方写完，耗尽降级无锁
+# 追加并告警——观察闸是旁路数据，绝不因锁问题阻断翻译主流程（与
+# artifact_lock「降级不罢工」同哲学）。
+WATCH_LOCK_RETRIES = 40
+WATCH_LOCK_RETRY_INTERVAL_S = 0.025
 
 # 转阻断评估阈值（只评估不自动切换；报告输出建议行）
 WATCH_MIN_RUNS = 3          # 连续 3 次运行
@@ -206,11 +223,47 @@ def load_watch_records(path: str) -> list:
     return data if isinstance(data, list) else []
 
 
+def _acquire_watch_lock(p: Path) -> "ArtifactLockHandle | None":
+    """取观察闸 JSON 跨进程锁：冲突有限重试，耗尽降级无锁（返回 None）。
+
+    acquire_artifact_lock 对机制不可用（平台无实现/IO 故障）本就返回
+    None（模块内已打印降级告警），直接采纳；仅对他方持锁冲突重试。
+    """
+    for _ in range(WATCH_LOCK_RETRIES):
+        try:
+            return acquire_artifact_lock(str(p), str(p.parent))
+        except ArtifactLockConflict:
+            time.sleep(WATCH_LOCK_RETRY_INTERVAL_S)
+    print(f"⚠️ [watch] 观察闸 JSON 锁重试耗尽（降级无锁追加，"
+          f"极端并发下可能与他方互覆）: {p}")
+    return None
+
+
+def _backup_watch_json(p: Path) -> None:
+    """写入前把上一版完整复制为 .bak（仅保留最近一份）；无旧文件跳过。
+
+    备份失败只告警不阻断（观察闸旁路数据），主流程照常写入。
+    """
+    if not p.exists():
+        return
+    try:
+        shutil.copyfile(p, p.with_name(p.name + WATCH_JSON_BAK_SUFFIX))
+    except OSError as e:
+        print(f"⚠️ [watch] 上一版备份 .bak 失败（继续写入）: {p} ({e})")
+
+
 def append_watch_record(path: str, source: str, per_term: dict) -> dict:
     """追加一次运行的观察记录并落盘；返回写入的记录。
 
     per_term: {源词: {"candidates": 命中行数, "conflicts": 冲突行数}}；
     manual_false_positive 预留空对象，供人工回填误伤标注（见模块 docstring）。
+
+    并发与损坏防护：
+    - 读改写全程持产物级锁（artifact_lock，锁键=本 JSON 路径）：并发
+      追加串行化，不再互相覆盖丢记录；他方持锁冲突有限重试后降级无锁，
+      锁机制不可用同样降级——观察闸数据绝不阻断翻译主流程；
+    - os.replace 前把上一版复制为 .bak（仅保留最近一份）：即使旧文件
+      已损坏（读取按 [] 处理），旧字节仍可在 .bak 寻回，不被静默销毁。
     """
     record = {
         "date": datetime.now().isoformat(timespec="seconds"),
@@ -220,21 +273,26 @@ def append_watch_record(path: str, source: str, per_term: dict) -> dict:
                      for k, v in (per_term or {}).items()},
         "manual_false_positive": {},
     }
-    records = load_watch_records(path)
-    records.append(record)
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    # 原子写（同目录 .tmp + os.replace，防中断留半截 JSON）
-    fd, tmp_path = tempfile.mkstemp(dir=str(p.parent),
-                                    prefix=".watch", suffix=".tmp")
+    lock = _acquire_watch_lock(p)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(records, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, p)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.remove(tmp_path)
-        raise
+        records = load_watch_records(path)
+        records.append(record)
+        _backup_watch_json(p)
+        # 原子写（同目录 .tmp + os.replace，防中断留半截 JSON）
+        fd, tmp_path = tempfile.mkstemp(dir=str(p.parent),
+                                        prefix=".watch", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(records, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, p)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.remove(tmp_path)
+            raise
+    finally:
+        release_artifact_lock(lock)
     return record
 
 

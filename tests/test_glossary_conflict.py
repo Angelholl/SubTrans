@@ -11,6 +11,8 @@
 全部使用中性合成文本与临时文件；绝不触碰真实 glossary.csv 与真实 TM 库。
 """
 import sys
+import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -311,6 +313,55 @@ class TestWatchJson:
         assert records[1]["per_term"]["IKU"] == {"candidates": 7,
                                                  "conflicts": 1}
         assert records[0]["manual_false_positive"] == {}   # 预留字段
+
+    def test_append_concurrent_two_threads_no_loss(self, tmp_path,
+                                                   monkeypatch):
+        """并发追加不丢记录（1.4 前置批）：两线程交错读改写。读改写
+        窗口经 slow_load 放大使交错确定性发生——无锁实现下双方都在
+        对方写入前读到空旧版，后写覆盖前写丢 1 条；加锁后串行化，
+        两条记录都在。"""
+        from subtransjav.refine import glossary_conflict as gconf
+        p = str(tmp_path / "watch.json")
+        real_load = gconf.load_watch_records
+
+        def slow_load(path):
+            time.sleep(0.01)          # 放大读改写窗口（锁内为临界区耗时）
+            return real_load(path)
+
+        monkeypatch.setattr(gconf, "load_watch_records", slow_load)
+        barrier = threading.Barrier(2)
+
+        def worker(source: str) -> None:
+            barrier.wait()
+            append_watch_record(p, source,
+                                {"IKU": {"candidates": 3, "conflicts": 1}})
+
+        threads = [threading.Thread(target=worker, args=(s,))
+                   for s in ("甲线程", "乙线程")]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        records = load_watch_records(p)
+        sources = [r["source"] for r in records]
+        assert len(records) == 2, f"并发追加丢记录: {sources}"
+        assert set(sources) == {"甲线程", "乙线程"}
+
+    def test_append_after_corruption_keeps_previous_in_bak(self, tmp_path):
+        """损坏文件后追加不静默销毁旧内容（1.4 前置批）：损坏内容按
+        [] 处理照常追加，但写入前旧字节完整复制到 .bak（仅保留最近
+        一份），历史可寻不被覆盖。"""
+        p = tmp_path / "watch.json"
+        corrupted = '{"records": [  # 模拟半截/损坏 JSON'
+        p.write_text(corrupted, encoding="utf-8")
+        append_watch_record(str(p), "b.srt",
+                            {"IKU": {"candidates": 1, "conflicts": 0}})
+        records = load_watch_records(str(p))
+        assert len(records) == 1
+        assert records[0]["source"] == "b.srt"
+        bak = p.with_name(p.name + ".bak")
+        assert bak.exists(), "写入前未留 .bak，损坏旧内容被静默覆盖销毁"
+        assert bak.read_text(encoding="utf-8") == corrupted
 
     def test_evaluate_three_states(self):
         def runs(cands):
