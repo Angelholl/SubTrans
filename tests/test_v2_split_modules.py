@@ -255,22 +255,35 @@ class TestOutputs:
         js = tmp_path / "movie_风险清单.json"
         stale_guide = tmp_path / "movie_质量报告导读.json"   # 上一轮陈旧件
         stale_ledger = tmp_path / "movie_重翻记录.json"      # 上一轮台账（D11）
+        stale_ai = tmp_path / "movie_AI质量建议.json"        # 上一轮 AI 建议件
         keep = tmp_path / "movie_final_cn.srt"
-        for p in (md, js, stale_guide, stale_ledger, keep):
+        for p in (md, js, stale_guide, stale_ledger, stale_ai, keep):
             p.write_text("x", encoding="utf-8")
         removed = v2_outputs._remove_stale_risk_reports(str(tmp_path),
                                                         "movie")
-        assert sorted(removed) == ["movie_质量报告导读.json",
+        assert sorted(removed) == ["movie_AI质量建议.json",
+                                   "movie_质量报告导读.json",
                                    "movie_重翻记录.json",
                                    "movie_风险清单.json",
                                    "movie_风险清单.md"]
         assert not md.exists() and not js.exists()
         assert not stale_guide.exists()   # 陈旧导读 json 已清（写前）
         assert not stale_ledger.exists()  # 陈旧重翻台账已清（写前）
+        assert not stale_ai.exists()      # 陈旧 AI 建议件已清（写前）
         assert keep.exists()        # 成品不碰
         # 幂等：再清一次返回空名单
         assert v2_outputs._remove_stale_risk_reports(str(tmp_path),
                                                      "movie") == []
+
+    def test_ai_suggestions_in_cleanup_table(self, tmp_path):
+        """D2026-0929 契约钉：{stem}_AI质量建议.json 收编进写前陈旧清理
+        表（跟随导读 json 生命周期：写前清陈旧）。"""
+        ai = tmp_path / "movie_AI质量建议.json"
+        ai.write_text("x", encoding="utf-8")
+        removed = v2_outputs._remove_stale_risk_reports(str(tmp_path),
+                                                        "movie")
+        assert removed == ["movie_AI质量建议.json"]
+        assert not ai.exists()
 
     def test_atomic_write_text_roundtrip(self, tmp_path):
         """_atomic_write_text：写后内容一致，且不残留临时文件。"""

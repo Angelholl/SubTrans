@@ -161,6 +161,10 @@ def _remove_stale_risk_reports(out_dir: str, stem: str) -> list:
     台账属成品伴生件，写前清旧（新一轮管线产物另起快照，旧台账随
     上一轮成品一并让位；执行器自身的累积追加语义不受影响）。
 
+    D2026-0929：清理表扩第五件 {stem}_AI质量建议.json——AI 质量分析
+    建议件跟随导读 json 生命周期（基于质量报告快照生成，新一轮管线
+    产物另起快照，旧建议件随上一轮成品一并写前清陈旧）。
+
     主理由（职责边界，D2026-0925-01 A5 用户验收裁定）：风险清单、
     重翻台账与 final_cn.srt/质量报告.txt 同属最终交付物，而
     delete_resume_artifacts 的契约是清理可重建的恢复现场——成品不进
@@ -184,7 +188,7 @@ def _remove_stale_risk_reports(out_dir: str, stem: str) -> list:
     """
     removed = []
     for suffix in ("_风险清单.md", "_风险清单.json", "_质量报告导读.json",
-                   "_重翻记录.json"):
+                   "_重翻记录.json", "_AI质量建议.json"):
         p = Path(out_dir) / f"{stem}{suffix}"
         if p.is_file():
             try:
@@ -203,7 +207,9 @@ def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
     ``{stem}_分歧复核.csv``、``{stem}_术语冲突观察.csv``、
     ``{stem}_风险清单.md``、``{stem}_风险清单.json``、
     ``{stem}_质量报告导读.json``、``{stem}_重翻记录.json``（D11 契约④：
-    行动层执行器台账属成品伴生件）的文件，复制为同目录
+    行动层执行器台账属成品伴生件）、``{stem}_AI质量建议.json``
+    （D2026-0929：AI 质量分析建议件，跟随导读 json 生命周期）的文件，
+    复制为同目录
     ``{原名去扩展}_bak_YYYYMMDD_HHMMSS.{原扩展}``；同一次运行共用同一时间戳。
     精确匹配保证旧的 ``*_bak_*`` 文件不会被再次备份。
     """
@@ -213,7 +219,8 @@ def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     for suffix in ("_final_cn.srt", "_质量报告.txt", "_分歧复核.csv",
                    "_术语冲突观察.csv", "_风险清单.md", "_风险清单.json",
-                   "_质量报告导读.json", "_重翻记录.json"):
+                   "_质量报告导读.json", "_重翻记录.json",
+                   "_AI质量建议.json"):
         p = Path(out_dir) / f"{stem}{suffix}"
         if not p.is_file():
             continue

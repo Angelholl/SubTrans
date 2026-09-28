@@ -568,9 +568,9 @@ def test_config_hash_tracks_v2_stage_prompts(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_backup_existing_outputs_covers_risk_reports(tmp_path):
-    """--force 备份表必须覆盖全部 8 个产物（含风险清单 md/json、导读
-    json 与 D11 契约④的重翻台账），且同一次调用共用同一时间戳（防漂移
-    契约）。"""
+    """--force 备份表必须覆盖全部 9 个产物（含风险清单 md/json、导读
+    json、D11 契约④的重翻台账与 D2026-0929 的 AI 质量建议件），且同一
+    次调用共用同一时间戳（防漂移契约）。"""
     from subtransjav.refine import pipeline_v2 as pv
 
     names = [
@@ -582,12 +582,13 @@ def test_backup_existing_outputs_covers_risk_reports(tmp_path):
         "ep01_风险清单.json",
         "ep01_质量报告导读.json",
         "ep01_重翻记录.json",
+        "ep01_AI质量建议.json",
     ]
     for n in names:
         (tmp_path / n).write_text("x", encoding="utf-8")
     pv._backup_existing_outputs(str(tmp_path), "ep01")
     baks = sorted(p.name for p in tmp_path.iterdir() if "_bak_" in p.name)
-    assert len(baks) == 8
+    assert len(baks) == 9
     for n in names:
         assert (tmp_path / n).is_file()          # 原文件仍在
         stem, ext = n.rsplit(".", 1)

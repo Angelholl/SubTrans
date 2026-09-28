@@ -1,6 +1,7 @@
 """refine.glossary_learn 单元测试（P0 #5：原子写；P1 #3：词库写锁）"""
 import logging
 import os
+from pathlib import Path
 
 import pytest
 
@@ -146,3 +147,76 @@ def test_ensure_http_url_allows_local_http():
     assert _ensure_http_url("http://127.0.0.1:11434/v1")
     assert _ensure_http_url("https://api.example.com/v1")
     assert _ensure_http_url("HTTPS://api.example.com/v1")
+
+
+# ---------------------------------------------------------------------------
+# D2026-0929：glossary.append_glossary_entries（锁定追加，AI 质量建议落库）
+# ---------------------------------------------------------------------------
+
+def _hold_artifact_lock(path):
+    from subtransjav.refine.artifact_lock import acquire_artifact_lock
+    return acquire_artifact_lock(path, os.path.dirname(os.path.abspath(path)))
+
+
+def test_append_glossary_entries_added(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    p = str(tmp_path / "glossary.csv")
+    statuses = append_glossary_entries(
+        [{"src": "先生", "target": "老师"}], glossary_path=p)
+    assert statuses == [{"src": "先生", "target": "老师", "status": "added"}]
+    rows = load_glossary_ex(p)
+    assert rows == [("先生", "老师", ())]
+
+
+def test_append_glossary_entries_existing_not_overwritten(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    p = str(tmp_path / "glossary.csv")
+    save_learned_glossary(p, [("先生", "老师")])
+    statuses = append_glossary_entries(
+        [{"src": "先生", "target": "老师"},
+         {"src": "先生", "target": "另一个译法"}],
+        glossary_path=p)
+    assert [s["status"] for s in statuses] == ["exists", "exists_diff"]
+    # 同 src 不覆盖：原译法保持
+    assert load_glossary_ex(p) == [("先生", "老师", ())]
+
+
+def test_append_glossary_entries_ascii_case_insensitive(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries
+    p = str(tmp_path / "glossary.csv")
+    save_learned_glossary(p, [("IKU", "去了")])
+    statuses = append_glossary_entries(
+        [{"src": "iku", "target": "去了"}], glossary_path=p)
+    assert statuses[0]["status"] == "exists"
+
+
+def test_append_glossary_entries_aliases_third_column(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    p = str(tmp_path / "glossary.csv")
+    append_glossary_entries(
+        [{"src": "先生", "target": "老师", "aliases": ["师傅", "讲师"]}],
+        glossary_path=p)
+    rows = load_glossary_ex(p)
+    assert rows == [("先生", "老师", ("师傅", "讲师"))]
+
+
+def test_append_glossary_entries_locked_no_write(tmp_path):
+    """并发锁语义：他方持锁时追加返回全部 locked，文件内容不变。"""
+    from subtransjav.refine.glossary import append_glossary_entries
+    p = str(tmp_path / "glossary.csv")
+    save_learned_glossary(p, [("既有", "词条")])
+    before = Path(p).read_bytes()
+    handle = _hold_artifact_lock(p)
+    assert handle is not None
+    try:
+        statuses = append_glossary_entries(
+            [{"src": "新", "target": "条目"}], glossary_path=p)
+        assert statuses == [{"src": "新", "target": "条目",
+                             "status": "locked"}]
+        assert Path(p).read_bytes() == before
+    finally:
+        handle.release()
+    # 释放锁后可正常追加
+    statuses = append_glossary_entries(
+        [{"src": "新", "target": "条目"}], glossary_path=p)
+    assert statuses[0]["status"] == "added"

@@ -1,4 +1,6 @@
 """cli v2 接线测试（--s1-* 落槽0、--s3-* 落槽2，槽1/3 禁用）"""
+import json
+
 import pytest
 
 import subtransjav.refine.config as refine_config
@@ -384,3 +386,78 @@ def test_main_module_entry_forwards_exit_code():
         capture_output=True, cwd=str(repo_root),
         env={**os.environ, "PYTHONIOENCODING": "cp1252"})
     assert r.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# D2026-0929：--ai-analyze / --ai-model（行动层风格，CLI 直连不进指纹）
+# ---------------------------------------------------------------------------
+
+def test_cli_ai_analyze_args_parse():
+    args = build_parser().parse_args([
+        "--ai-analyze", "out/ep01_质量报告.txt",
+        "--ai-model", "qwen-a",
+    ])
+    assert args.ai_analyze == "out/ep01_质量报告.txt"
+    assert args.ai_model == "qwen-a"
+
+
+def test_cli_ai_analyze_args_default_empty():
+    args = build_parser().parse_args([])
+    assert args.ai_analyze == "" and args.ai_model == ""
+
+
+def _ai_materials(tmp_path):
+    guide = {"version": 2, "stem": "ep01", "items": [],
+             "conclusions": [], "sections": [], "extras": {},
+             "source": "ep01.srt", "generated_at": "t",
+             "basis": "基于本次运行"}
+    (tmp_path / "ep01_质量报告.txt").write_text("报告\n", encoding="utf-8")
+    (tmp_path / "ep01_质量报告导读.json").write_text(
+        json.dumps(guide, ensure_ascii=False), encoding="utf-8")
+
+
+def test_cli_ai_analyze_early_exit_calls_advisor(tmp_path, monkeypatch,
+                                                 capsys):
+    """给定 --ai-analyze 后早退分流（不跑 run_v2），advisor 收到 cfg/args。"""
+    import json as _json
+
+    import subtransjav.refine.quality_advisor as qa_mod
+    _ai_materials(tmp_path)
+    calls = []
+
+    def _fake(cfg, args):
+        calls.append((cfg, args))
+        (tmp_path / "ep01_AI质量建议.json").write_text(
+            _json.dumps({"fake": True}, ensure_ascii=False),
+            encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(qa_mod, "run_ai_analyze", _fake)
+    rc = main(["--ai-analyze", str(tmp_path / "ep01_质量报告.txt"),
+               "--ai-model", "qwen-a"])
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0][1].ai_analyze == str(tmp_path / "ep01_质量报告.txt")
+    assert calls[0][1].ai_model == "qwen-a"
+
+
+def test_cli_ai_analyze_exit_code_propagated(tmp_path, monkeypatch):
+    import subtransjav.refine.quality_advisor as qa_mod
+    _ai_materials(tmp_path)
+    monkeypatch.setattr(qa_mod, "run_ai_analyze", lambda cfg, args: 1)
+    assert main(["--ai-analyze",
+                 str(tmp_path / "ep01_质量报告.txt")]) == 1
+
+
+def test_cli_ai_analyze_params_not_in_config_fingerprint():
+    """负向钉（手法同行动层参数）：--ai-analyze/--ai-model 走 CLI 直连，
+    不进 RefineConfig → 天然不进 manifest 指纹。"""
+    from subtransjav.refine.config import RefineConfig
+    from subtransjav.refine.manifest import _CONFIG_FIELDS, compute_config_hash
+    assert "ai_analyze" not in _CONFIG_FIELDS
+    assert "ai_model" not in _CONFIG_FIELDS
+    base = RefineConfig(inputs=["a.srt"])
+    with_ai = RefineConfig(inputs=["a.srt"])
+    with_ai.ai_analyze = "r.txt"          # 模拟误挂字段
+    with_ai.ai_model = "m"
+    assert compute_config_hash(with_ai) == compute_config_hash(base)

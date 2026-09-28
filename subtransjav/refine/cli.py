@@ -167,6 +167,13 @@ def build_parser():
     grp_action.add_argument("--apply", action="store_true",
                             help="真正落盘改写终稿（缺省 dry-run：只打印计划，零写入）")
 
+    grp_action.add_argument("--ai-analyze", default="",
+                            help="AI 质量分析：质量报告 txt 路径"
+                                 "（给定后进入分析模式并早退，不跑 run_v2；"
+                                 "导读 json/术语冲突观察 CSV 同目录自动发现）")
+    grp_action.add_argument("--ai-model", default="",
+                            help="AI 分析模型名（缺省用阶段A/槽 A 模型）")
+
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--clean-tmp-on-exit", action="store_true",
                    help="进程退出时自动清理 .refine_tmp 临时目录")
@@ -383,6 +390,12 @@ def main(argv=None):
     if args.action_retranslate:
         from .action_retranslate import run_action_retranslate
         return run_action_retranslate(cfg, args)
+
+    # ---- AI 质量分析（D2026-0929）：早退分流，同行动层形态——不进
+    #      run_v2；退出码 0=建议件已落盘 / 1=前置失败或执行异常 ----
+    if getattr(args, "ai_analyze", ""):
+        from .quality_advisor import run_ai_analyze
+        return run_ai_analyze(cfg, args)
 
     # ------------------------------------------------------------------
     # 运行日志：全量落盘（Logs/M-D.txt，同日追加时间）+ 7 天自动清理

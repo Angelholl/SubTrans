@@ -147,3 +147,75 @@ def format_glossary_block(hits):
         "```",
     ]
     return "\n".join(lines)
+
+
+def append_glossary_entries(entries: list[dict],
+                            glossary_path: str = "") -> list[dict]:
+    """锁定追加词条到词库 CSV（D2026-0929 AI 质量建议落库）。
+
+    entries 形如 [{"src", "target", "aliases"?(list/str)}]；流程：
+    acquire_artifact_lock(glossary.csv)（复用产物锁，锁文件落词库同目录）
+    → 锁内重新加载现有词库（防覆盖并发修改）→ 逐条按 src（ascii 小写
+    归一）查重：已存在同 src → "exists"（target 不同 → "exists_diff"，
+    一律不覆盖）；新 → 加入并 save_glossary 全量写回 → "added"。
+
+    返回逐条状态列表 [{"src", "target", "status"}]（顺序与入参一致）。
+    锁失败（他方持锁/锁机制不可用）→ 全部 "locked"，文件零写入。
+    glossary_path 缺省为仓库 learned 词库缺省路径之外的用户词库路径，
+    必须显式传入（本函数不猜测路径）。
+    """
+    if not glossary_path:
+        raise ValueError("append_glossary_entries 需显式传入 glossary_path")
+
+    def _norm(s: str) -> str:
+        return s.lower() if s.isascii() else s
+
+    statuses: list[dict] = []
+    handle = None
+    try:
+        from .artifact_lock import ArtifactLockConflict, acquire_artifact_lock
+        try:
+            handle = acquire_artifact_lock(
+                glossary_path,
+                os.path.dirname(os.path.abspath(glossary_path)) or ".")
+        except ArtifactLockConflict:
+            handle = None
+    except Exception:   # noqa: BLE001 锁机制异常按锁失败降级
+        handle = None
+
+    if handle is None:
+        for e in entries:
+            statuses.append({"src": e.get("src", ""),
+                             "target": e.get("target", ""),
+                             "status": "locked"})
+        return statuses
+
+    try:
+        existing = load_glossary_ex(glossary_path)
+        existing_by_src = {_norm(src): (src, dst, aliases)
+                           for src, dst, aliases in existing}
+        new_rows: list[tuple] = []
+        for e in entries:
+            src, target = str(e.get("src", "")), str(e.get("target", ""))
+            status: str
+            hit = existing_by_src.get(_norm(src))
+            if hit is not None:
+                status = "exists" if hit[1] == target else "exists_diff"
+            else:
+                aliases = e.get("aliases") or ()
+                if isinstance(aliases, str):
+                    aliases = [a.strip() for a in aliases.split("|")
+                               if a.strip()]
+                row = (src, target, tuple(a.strip() for a in aliases
+                                          if a.strip()))
+                existing_by_src[_norm(src)] = row
+                new_rows.append(row)
+                status = "added"
+            statuses.append({"src": src, "target": target,
+                             "status": status})
+        if new_rows:
+            save_glossary(glossary_path, existing
+                          + [(r[0], r[1], r[2]) for r in new_rows])
+        return statuses
+    finally:
+        handle.release()
