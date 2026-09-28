@@ -1,0 +1,100 @@
+# SubTransJAV 发布构建草稿（D2026-0929-05 P2/07 定案）
+#
+# 运行时验证依赖：pythonnet 需要宿主机 .NET runtime（hostfxr.dll），
+# CI 只能证明"能打包"，真机核验（GUI 启动、WebView2 加载、翻译链路）
+# 必须在 Windows 10/11 目标机上完成后方可发布。
+#
+# D2026-0929-07 点 7：本工作流当前仅 workflow_dispatch 手动触发，
+# 全链验证（真机 smoke 通过）后方可启用 tag 触发（见文末注释块）。
+
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号（如 1.0.0），将写入 Inno 产物文件名"
+        required: true
+        type: string
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project + build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui]"
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: >
+          python -m PyInstaller packaging/SubTransJAV.spec
+          --noconfirm --distpath Temp/pyinstaller_dist --workpath Temp/pyinstaller_work
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile installer
+        shell: cmd
+        run: '"%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=${{ inputs.version }} packaging\setup.iss'
+
+      - name: Smoke check key artifacts
+        shell: pwsh
+        run: |
+          $root = "Temp/pyinstaller_dist/SubTransJAV"
+          $paths = @(
+            "$root/SubTransJAV.exe",
+            "$root/_internal/webview_gui_assets/index.html",
+            "$root/_internal/subtransjav/refine/defaults/translation_rules.yaml",
+            "$root/_internal/sudachidict_core/resources/system.dic",
+            "$root/_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll",
+            "$root/_internal/pythonnet/runtime/Python.Runtime.dll"
+          )
+          foreach ($p in $paths) {
+            if (-not (Test-Path $p)) { Write-Error "MISSING artifact: $p"; exit 1 }
+          }
+          # 体积下限断言：防静默空包（system.dic ~208MB，onedir 总量应 >250MB）
+          $dic = (Get-Item "$root/_internal/sudachidict_core/resources/system.dic").Length
+          if ($dic -lt 100MB) { Write-Error "system.dic too small: $dic bytes"; exit 1 }
+          $total = (Get-ChildItem $root -Recurse -File | Measure-Object Length -Sum).Sum
+          Write-Host "onedir total = $([math]::Round($total/1MB,1)) MB"
+          if ($total -lt 250MB) { Write-Error "onedir too small: $total bytes"; exit 1 }
+
+      - name: Generate SHA256 manifest
+        shell: pwsh
+        run: |
+          $out = "Temp/innoinstall"
+          Get-ChildItem $out | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            "$h  $($_.Name)"
+          } | Set-Content "$out/SHA256SUMS.txt"
+          Get-Content "$out/SHA256SUMS.txt"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SubTransJAV-${{ inputs.version }}
+          path: |
+            Temp/pyinstaller_dist/SubTransJAV/**
+            Temp/innoinstall/*.exe
+            Temp/innoinstall/SHA256SUMS.txt
+          if-no-files-found: error
+
+# ---------------------------------------------------------------------------
+# D2026-0929-07 点 7：workflow_dispatch 全链验证后方可启用。
+# 启用时替换/合并上方 on: 段，并补 upload 到 GitHub Release 的步骤。
+#
+# on:
+#   push:
+#     tags:
+#       - "v*"
+# ---------------------------------------------------------------------------
