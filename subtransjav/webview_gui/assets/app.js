@@ -344,6 +344,10 @@ const MSG = {
     aiFailed: m => `AI 分析失败：${m}`,
     gui_initialized: '净语翻译 GUI 已初始化',
     gui_usage_hint: '在上方 Source 区添加 .srt 字幕后点击「▶ 开始净语翻译」',
+
+    // 控制台折叠
+    console_collapse: '折叠控制台',
+    console_expand: '展开控制台',
 };
 
 // i18n 注入：DOMContentLoaded 时把 MSG 写回带 data-i18n* 标记的元素
@@ -760,6 +764,21 @@ const FileListManager = {
 const ConsoleManager = {
     init() {
         document.getElementById('clearConsoleBtn').addEventListener('click', () => this.clear());
+
+        // Console 折叠开关（默认展开；折叠后隐藏输出区且外层不再占 flex:1）
+        const collapseBtn = document.getElementById('consoleCollapseBtn');
+        if (collapseBtn) {
+            collapseBtn.setAttribute('aria-label', MSG.console_collapse);
+            collapseBtn.addEventListener('click', () => {
+                const section = collapseBtn.closest('.console-section');
+                if (!section) return;
+                const collapsed = section.classList.toggle('collapsed');
+                collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                const key = collapsed ? 'console_expand' : 'console_collapse';
+                collapseBtn.setAttribute('title', MSG[key]);
+                collapseBtn.setAttribute('aria-label', MSG[key]);
+            });
+        }
     },
 
     log(message, type = 'info') {

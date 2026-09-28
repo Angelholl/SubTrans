@@ -61,6 +61,11 @@
     --font-size-sm: 10px;     /* Reduced from 11px */
     --font-size-lg: 12px;     /* Reduced from 15px */
     --line-height: 1.4;       /* Slightly reduced from 1.5 */
+
+    /* Control sizing - unified control heights (buttons + inputs) */
+    --control-height: 28px;
+    --control-height-sm: 24px;
+    --control-height-lg: 32px;
 }
 
 .mode-select {
@@ -229,6 +234,8 @@ body {
     overflow-y: auto;
     padding: 8px 12px;  /* AGGRESSIVE: Reduced from 10px 14px */
     background: var(--content-area-bg);
+    display: flex;  /* flex column：tab 页可撑满，footer 移出滚动流后钉底 */
+    flex-direction: column;
 }
 
 .app-footer {
@@ -538,6 +545,7 @@ body {
     color: var(--text-primary);
     font-family: var(--font-family);
     font-size: 12px;  /* AGGRESSIVE: Reduced from 13px */
+    min-height: var(--control-height);  /* 统一控件高度（28px） */
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -766,7 +774,7 @@ body {
     justify-content: center;
     gap: 5px;  /* AGGRESSIVE: Reduced from 6px */
     white-space: nowrap;
-    min-height: 26px;  /* Maintain clickability */
+    min-height: var(--control-height);  /* 统一控件高度（28px） */
 }
 
 .btn:focus {
@@ -823,13 +831,13 @@ body {
 .btn-sm {
     padding: 4px 8px;  /* AGGRESSIVE: Reduced from 5px 10px */
     font-size: var(--font-size-sm);  /* Now 10px */
-    min-height: 22px;
+    min-height: var(--control-height-sm);  /* 24px */
 }
 
 .btn-lg {
     padding: 8px 16px;  /* AGGRESSIVE: Reduced from 10px 20px */
     font-size: var(--font-size-lg);  /* Now 12px */
-    min-height: 30px;
+    min-height: var(--control-height-lg);  /* 32px */
 }
 
 /* Button group */
@@ -925,7 +933,7 @@ body {
     white-space: pre-wrap;
     word-wrap: break-word;
     line-height: 1.45;  /* AGGRESSIVE: Slightly reduced from 1.5 */
-    min-height: 280px;  /* AGGRESSIVE: INCREASED from 250px (more console space!) */
+    min-height: 200px;  /* Reduced from 280px (collapsible console) */
     max-height: 400px;  /* Fixed height for dedicated scrollbar and auto-scroll */
     scroll-behavior: smooth;  /* Smooth auto-scroll animation */
 }
@@ -1541,8 +1549,12 @@ button:focus-visible,
 .form-select.compact {
     padding: 4px 6px;
     font-size: 11px;
-    width: 100%;
-    max-width: none;
+    max-width: 100%;
+    min-height: var(--control-height-sm);  /* 24px，与 btn-compact 对齐 */
+}
+
+.form-input.compact {
+    min-height: var(--control-height-sm);  /* 24px，与 form-select.compact 对齐 */
 }
 
 /* Specific column width constraints */
@@ -1572,6 +1584,7 @@ button:focus-visible,
     padding: 4px 8px;
     font-size: 10px;
     white-space: nowrap;
+    min-height: var(--control-height-sm);  /* 24px，补齐高度统一 */
 }
 
 /* Help icon button (parameter guide) */
@@ -3761,4 +3774,18 @@ details.translation-advanced-section[open] .collapse-icon {
 .gl-tab.active {
     border-bottom: 2px solid #1a73e8;
     font-weight: 600;
+}
+
+/* ============================================================
+   Form Card - 统一分组卡片（引擎页阶段A/B/兜底行）
+   ============================================================ */
+.form-card {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: var(--section-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: 8px 10px;
 }

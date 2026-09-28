@@ -25,7 +25,16 @@
         border-color: var(--primary-color, #1a73e8);
         background: var(--content-area-bg, rgba(26,115,232,0.10)); }
       .tab-page { display: none; flex-direction: column; gap: 10px; }
-      .tab-page.active { display: flex; }
+      .tab-page.active { display: flex; flex: 1 0 auto; }
+      /* Console fill/collapse scoped to the collapsible translate-page console
+         (.console-collapsible); quality page reuses .console-section untouched */
+      .tab-page .console-collapsible:not(.collapsed) { flex: 1 1 auto; }
+      .console-collapsible.collapsed { flex: 0 0 auto; }
+      .console-collapsible.collapsed .console-output { display: none; }
+      .console-collapse-btn .console-collapse-icon { display: inline-block;
+        transition: transform 0.2s ease; font-size: 10px; }
+      .console-collapsible.collapsed .console-collapse-btn .console-collapse-icon {
+        transform: rotate(-90deg); }
 
       /* ---- service quick bar (moved from old topbar, theme vars only) ---- */
       .service-quick-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -167,7 +176,7 @@
                     <!-- 翻译服务快捷下拉（原小白模式顶栏迁入，逻辑保留） -->
                     <div class="service-quick-bar">
                         <label for="refineServiceQuick" class="service-quick-label" data-i18n="serviceQuickLabel">翻译服务</label>
-                        <select id="refineServiceQuick" class="form-select compact" style="min-width:170px;">
+                        <select id="refineServiceQuick" class="form-select compact" style="min-width:150px;">
                             <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
                             <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
                             <option value="deepseek">DeepSeek API</option>
@@ -203,12 +212,18 @@
                     </div>
 
                     <!-- Console Section -->
-                    <section class="section console-section">
+                    <section class="section console-section console-collapsible">
                         <div class="section-header">
                             <h2 data-i18n="console_header">Console</h2>
-                            <button type="button" class="btn btn-text btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
-                                Clear
-                            </button>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <button type="button" class="btn btn-text btn-sm console-collapse-btn" id="consoleCollapseBtn"
+                                        aria-expanded="true" data-i18n-title="console_collapse" title="折叠控制台">
+                                    <span class="console-collapse-icon">▾</span>
+                                </button>
+                                <button type="button" class="btn btn-text btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
+                                    Clear
+                                </button>
+                            </div>
                         </div>
                         <div class="section-content">
                             <div class="console-output" id="consoleOutput" data-testid="console">
@@ -225,8 +240,8 @@
                     <div style="font-weight:600;" data-i18n="refine_panel_title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
 
                     <!-- 阶段A 完整行 -->
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; border:1px solid #ddd; border-radius:8px; padding:6px 8px;">
-                        <div style="flex:1.5; min-width:430px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <div class="form-card">
+                        <div style="flex:1.2; min-width:340px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px; min-width:148px;">
                                 <input type="checkbox" id="refineS1Enabled" checked> <span data-i18n="stage_a_label">阶段A 净语+翻译（日译中）</span>
                             </label>
@@ -256,8 +271,8 @@
                     </div>
 
                     <!-- 阶段B 完整行 -->
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; border:1px solid #ddd; border-radius:8px; padding:6px 8px;">
-                        <div style="flex:1.5; min-width:430px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <div class="form-card">
+                        <div style="flex:1.2; min-width:340px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px; min-width:148px;">
                                 <input type="checkbox" id="refineS3Enabled" checked> <span data-i18n="stage_b_label">阶段B 审校+抛光（中文）</span>
                             </label>
@@ -287,8 +302,8 @@
                     </div>
 
                     <!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; border:1px solid #ddd; border-radius:8px; padding:6px 8px; background:#f9f9f9;">
-                        <label style="display:flex; align-items:center; gap:4px; font-size:12px;"
+                    <div class="form-card">
+                        <label style="display:flex; align-items:center; gap:4px; font-size:12px; white-space:nowrap;"
                                data-i18n-title="profile_title" title="local=兜底规则全开(cleaner_rules+误译拦截，适合本地模型)；cloud=lenient(仅零维护通用校验，适合强模型)">
                             <span data-i18n="profile_label">兜底档位</span>
                             <select id="refineProfile" class="form-select compact" style="min-width:110px;">
@@ -314,7 +329,7 @@
                     </div>
 
                     <!-- 接口地址（原 details 平铺） -->
-                    <div style="display:flex; flex-direction:column; gap:6px; padding-top:2px;">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="cursor:default; font-weight:600;" data-i18n="endpoints_summary">接口地址（对应阶段A/B，切换服务商自动填充）</div>
                         <div style="display:flex; gap:6px; align-items:center;">
                             <label style="min-width:70px; font-size:12px; color:#666;" data-i18n="s1_endpoint_label">阶段A 地址</label>
@@ -333,7 +348,7 @@
                     </div>
 
                     <!-- 兜底与并发（原高级设置第四组迁入） -->
-                    <div style="display:flex; flex-direction:column; gap:6px; padding-top:2px;">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
                         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;"><span data-i18n="fallback_model_label">接管模型</span>
@@ -382,7 +397,7 @@
                     </div>
 
                     <!-- 角色卡模板编辑（原 details 平铺） -->
-                    <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="cursor:default; font-weight:600;" data-i18n="tpl_editor_summary">角色卡模板编辑</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <select id="refineTemplateStage" class="form-select compact" style="min-width:190px;">
@@ -399,7 +414,7 @@
                     </div>
 
                     <!-- 全局词库编辑（原 details 平铺） -->
-                    <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="cursor:default; font-weight:600;" data-i18n="gl_summary">全局词库编辑</div>
                         <div style="padding:6px 0; display:flex; flex-direction:column; gap:6px;">
                             <!-- 标签页切换（legacy 性暗示替换 Tab 已随 legacy 管线删除） -->
@@ -478,7 +493,8 @@
                 <div class="tab-page" id="tab-advanced" data-testid="tab-advanced">
                     <div style="font-size:12px; color:#888;" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
 
-                    <div style="display:flex; flex-direction:column; gap:6px; padding:6px 0;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:10px 18px; align-content:start; padding:6px 0;">
+                        <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_translation_glossary">翻译与词库</div>
                         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;">
@@ -505,6 +521,9 @@
                             </label>
                         </div>
 
+                        </div>
+
+                        <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_tm_learn_gate">TM 与学习闸</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;"
@@ -532,6 +551,9 @@
                             </label>
                         </div>
 
+                        </div>
+
+                        <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_resume_logging">断点与日志</div>
                         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;"
@@ -551,19 +573,20 @@
                                 <input type="checkbox" id="debugLogging"> <span data-i18n="verbose_label">详细日志</span>
                             </label>
                         </div>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Footer（保留在主区底部） -->
-                <footer class="app-footer">
-                    <p><span data-i18n="footer_brand">净语翻译 · SubTransJAV Translate |</span>
-                       <a href="#" onclick="showAbout(); return false;" style="color: var(--primary-color); text-decoration: none;" data-i18n="about_link">关于</a>
-                    </p>
-                </footer>
 
             </main>
         </div>
         <!-- /app-shell -->
+
+        <!-- Footer（钉底：移出滚动流，始终贴窗口底部） -->
+        <footer class="app-footer">
+            <p><span data-i18n="footer_brand">净语翻译 · SubTransJAV Translate |</span>
+               <a href="#" onclick="showAbout(); return false;" style="color: var(--primary-color); text-decoration: none;" data-i18n="about_link">关于</a>
+            </p>
+        </footer>
 
     </div>
 
