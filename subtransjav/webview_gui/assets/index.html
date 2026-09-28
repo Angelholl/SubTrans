@@ -13,17 +13,27 @@
     <style>
       /* ---- sidebar TAB bar + two-column shell (neutral + accent vars) ---- */
       .app-shell { display: flex; flex: 1; min-height: 0; align-items: stretch; }
-      .side-tabs { flex: none; width: 64px; display: flex; flex-direction: column;
+      .side-tabs { flex: none; width: var(--sidebar-width, 76px); display: flex; flex-direction: column;
         align-items: center; gap: 6px; padding: 12px 6px;
         border-right: 1px solid var(--border-color, #ddd);
         background: var(--section-bg, rgba(128,128,128,0.06)); }
-      .side-tab-btn { width: 48px; height: 48px; border: 1px solid transparent;
-        border-radius: 10px; background: transparent; font-size: 20px; line-height: 1;
-        cursor: pointer; color: var(--text-color, #333); }
-      .side-tab-btn:hover { background: var(--content-area-bg, rgba(128,128,128,0.12)); }
+      .side-tab-btn { width: 100%; height: auto; min-height: var(--sidebar-btn, 48px); position: relative;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+        padding: 6px 2px; border: 1px solid transparent;
+        border-radius: var(--radius-lg, 10px); background: transparent; line-height: 1;
+        cursor: pointer; color: var(--text-secondary, #333); }
+      .side-tab-btn .side-tab-icon { display: block; width: 22px; height: 22px; }
+      .side-tab-btn .side-tab-text { display: block; font-size: 10px; line-height: 1.2;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      .side-tab-btn:hover { background: var(--hover-tab-bg, rgba(128,128,128,0.12));
+        color: var(--text-primary, #333); }
       .side-tab-btn.active { color: var(--primary-color, #1a73e8);
         border-color: var(--primary-color, #1a73e8);
-        background: var(--content-area-bg, rgba(26,115,232,0.10)); }
+        background: var(--hover-tab-bg, rgba(26,115,232,0.10)); }
+      /* selected indicator: 3px accent bar on the rail's left edge */
+      .side-tab-btn.active::before { content: ""; position: absolute; left: -7px;
+        top: 50%; transform: translateY(-50%); width: 3px; height: 26px;
+        border-radius: var(--radius-sm, 2px); background: var(--primary-color, #1a73e8); }
       .tab-page { display: none; flex-direction: column; gap: 10px; }
       .tab-page.active { display: flex; flex: 1 0 auto; }
       /* Console fill/collapse scoped to the collapsible translate-page console
@@ -38,9 +48,9 @@
 
       /* ---- service quick bar (moved from old topbar, theme vars only) ---- */
       .service-quick-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-        border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 8px 10px; }
+        border: 1px solid var(--border-color, #ddd); border-radius: var(--border-radius-lg, 8px); padding: 8px 10px; }
       .service-quick-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
-      .service-quick-badge { font-size: 11px; padding: 2px 10px; border-radius: 999px;
+      .service-quick-badge { font-size: 11px; padding: 2px 10px; border-radius: var(--radius-pill, 999px);
         white-space: nowrap; color: var(--primary-color, #1a73e8);
         border: 1px solid var(--primary-color, #1a73e8); background: transparent; }
       .service-quick-key-row { display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -74,6 +84,7 @@
                     <button class="theme-option" data-theme="google" role="menuitem" data-i18n="theme_google">Google Theme</button>
                     <button class="theme-option" data-theme="carbon" role="menuitem" data-i18n="theme_carbon">IBM Carbon Theme</button>
                     <button class="theme-option" data-theme="primer" role="menuitem" data-i18n="theme_primer">GitHub Primer Theme</button>
+                    <button class="theme-option" data-theme="dark" role="menuitem" data-i18n="theme_dark">暗色主题</button>
                 </div>
             </div>
         </header>
@@ -85,19 +96,19 @@
             <nav class="side-tabs" role="tablist" aria-label="Function tabs">
                 <button type="button" class="side-tab-btn active" id="tabBtnTranslate"
                         data-tab="tab-translate" role="tab" aria-selected="true"
-                        data-i18n-title="tabTranslate" title="字幕翻译">🎬</button>
+                        data-i18n-title="tabTranslate" title="字幕翻译"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="side-tab-text" data-i18n="tabTranslate">字幕翻译</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnEngine"
                         data-tab="tab-engine" role="tab" aria-selected="false"
-                        data-i18n-title="tabEngine" title="引擎与模型">⚙️</button>
+                        data-i18n-title="tabEngine" title="引擎与模型"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabEngine">引擎与模型</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnGlossary"
                         data-tab="tab-glossary" role="tab" aria-selected="false"
-                        data-i18n-title="tabGlossary" title="词库与模板">📚</button>
+                        data-i18n-title="tabGlossary" title="词库与模板"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="side-tab-text" data-i18n="tabGlossary">词库与模板</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnGuide"
                         data-tab="tab-guide" role="tab" aria-selected="false"
-                        data-i18n-title="tabGuide" title="质量导读">📊</button>
+                        data-i18n-title="tabGuide" title="质量导读"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span class="side-tab-text" data-i18n="tabGuide">质量导读</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnAdvanced"
                         data-tab="tab-advanced" role="tab" aria-selected="false"
-                        data-i18n-title="tabAdvanced" title="高级参数">🔧</button>
+                        data-i18n-title="tabAdvanced" title="高级参数"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg></span><span class="side-tab-text" data-i18n="tabAdvanced">高级参数</span></button>
             </nav>
 
             <!-- Main Content Area -->
@@ -176,7 +187,7 @@
                     <!-- 翻译服务快捷下拉（原小白模式顶栏迁入，逻辑保留） -->
                     <div class="service-quick-bar">
                         <label for="refineServiceQuick" class="service-quick-label" data-i18n="serviceQuickLabel">翻译服务</label>
-                        <select id="refineServiceQuick" class="form-select compact" style="min-width:150px;">
+                        <select id="refineServiceQuick" class="form-select compact" style="min-width:var(--w-quick-service);">
                             <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
                             <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
                             <option value="deepseek">DeepSeek API</option>
@@ -187,7 +198,7 @@
                     </div>
                     <div id="refineServiceQuickKeyRow" class="service-quick-key-row">
                         <label for="refineServiceQuickKey" class="service-quick-key-label" data-i18n="serviceQuickKeyLabel">API Key</label>
-                        <input type="password" id="refineServiceQuickKey" class="form-input compact" style="flex:1; min-width:150px;"
+                        <input type="password" id="refineServiceQuickKey" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
                                data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                         <button type="button" id="refineServiceQuickSaveKeyBtn" class="btn btn-secondary btn-compact" data-i18n="serviceQuickKeySaveBtn">保存</button>
                         <span id="refineServiceQuickKeyStatus" style="font-size:12px; color:#888;"></span>
@@ -241,11 +252,11 @@
 
                     <!-- 阶段A 完整行 -->
                     <div class="form-card">
-                        <div style="flex:1.2; min-width:340px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                            <label style="display:flex; align-items:center; gap:4px; min-width:148px;">
+                        <div style="flex:1.2; min-width:var(--w-stage-row); display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            <label style="display:flex; align-items:center; gap:4px; min-width:var(--w-stage-label);">
                                 <input type="checkbox" id="refineS1Enabled" checked> <span data-i18n="stage_a_label">阶段A 净语+翻译（日译中）</span>
                             </label>
-                            <select id="refineS1Provider" class="form-select compact" style="min-width:138px;">
+                            <select id="refineS1Provider" class="form-select compact" style="min-width:var(--w-provider);">
                                 <option value="deepseek">DeepSeek API</option>
                                 <option value="zen" data-i18n="provider_zen">Zen 免费</option>
                                 <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
@@ -253,17 +264,17 @@
                                 <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
                                 <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                             </select>
-                            <select id="refineS1Model" class="form-select compact" style="flex:1; min-width:160px;">
+                            <select id="refineS1Model" class="form-select compact" style="flex:1; min-width:var(--w-model);">
                                 <option value="custom-model-1" selected data-i18n="model_default_1">custom-model-1（默认）</option>
                                 <option value="" data-i18n="model_refresh_hint">（点 ⟳ 刷新模型列表）</option>
                             </select>
                             <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表">⟳</button>
                             <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
-                            <span id="refineTestS1Status" style="font-size:12px; color:#888; max-width:200px;"></span>
+                            <span id="refineTestS1Status" style="font-size:12px; color:#888; max-width:var(--w-test-status);"></span>
                         </div>
-                        <div style="flex:1; min-width:250px; display:flex; gap:6px; align-items:center;">
+                        <div style="flex:1; min-width:var(--w-alt-row); display:flex; gap:6px; align-items:center;">
                             <label style="white-space:nowrap; font-size:12px; color:#666;">API Key</label>
-                            <input type="password" id="refineS1Key" class="form-input compact" style="flex:1; min-width:150px;"
+                            <input type="password" id="refineS1Key" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
                                    data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                             <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
                                     data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）">💾</button>
@@ -272,11 +283,11 @@
 
                     <!-- 阶段B 完整行 -->
                     <div class="form-card">
-                        <div style="flex:1.2; min-width:340px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                            <label style="display:flex; align-items:center; gap:4px; min-width:148px;">
+                        <div style="flex:1.2; min-width:var(--w-stage-row); display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                            <label style="display:flex; align-items:center; gap:4px; min-width:var(--w-stage-label);">
                                 <input type="checkbox" id="refineS3Enabled" checked> <span data-i18n="stage_b_label">阶段B 审校+抛光（中文）</span>
                             </label>
-                            <select id="refineS3Provider" class="form-select compact" style="min-width:138px;">
+                            <select id="refineS3Provider" class="form-select compact" style="min-width:var(--w-provider);">
                                 <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
                                 <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
                                 <option value="deepseek">DeepSeek API</option>
@@ -284,17 +295,17 @@
                                 <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
                                 <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                             </select>
-                            <select id="refineS3Model" class="form-select compact" style="flex:1; min-width:160px;">
+                            <select id="refineS3Model" class="form-select compact" style="flex:1; min-width:var(--w-model);">
                                 <option value="custom-model-2" selected data-i18n="model_default_2">custom-model-2（默认）</option>
                                 <option value="" data-i18n="model_refresh_hint">（点 ⟳ 刷新模型列表）</option>
                             </select>
                             <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表">⟳</button>
                             <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
-                            <span id="refineTestS3Status" style="font-size:12px; color:#888; max-width:200px;"></span>
+                            <span id="refineTestS3Status" style="font-size:12px; color:#888; max-width:var(--w-test-status);"></span>
                         </div>
-                        <div style="flex:1; min-width:250px; display:flex; gap:6px; align-items:center;">
+                        <div style="flex:1; min-width:var(--w-alt-row); display:flex; gap:6px; align-items:center;">
                             <label style="white-space:nowrap; font-size:12px; color:#666;">API Key</label>
-                            <input type="password" id="refineS3Key" class="form-input compact" style="flex:1; min-width:150px;"
+                            <input type="password" id="refineS3Key" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
                                    data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                             <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
                                     data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）">💾</button>
@@ -306,7 +317,7 @@
                         <label style="display:flex; align-items:center; gap:4px; font-size:12px; white-space:nowrap;"
                                data-i18n-title="profile_title" title="local=兜底规则全开(cleaner_rules+误译拦截，适合本地模型)；cloud=lenient(仅零维护通用校验，适合强模型)">
                             <span data-i18n="profile_label">兜底档位</span>
-                            <select id="refineProfile" class="form-select compact" style="min-width:110px;">
+                            <select id="refineProfile" class="form-select compact" style="min-width:var(--w-profile);">
                                 <option value="local" selected data-i18n="profile_local">本地·严格</option>
                                 <option value="cloud" data-i18n="profile_cloud">云端·宽松</option>
                             </select>
@@ -314,7 +325,7 @@
                         <label style="display:flex; align-items:center; gap:4px; font-size:12px;"
                                data-i18n-title="ctx_title" title="本地模型上下文窗口：留空=用缺省 16384（通用保守值，可经 config/user_settings.json 或环境变量 SUBTRANSJAV_V2_CTX_LOCAL 调整）；显式填写时启动后管线自动按此值对齐引擎（覆盖 LM Studio 手工设置），并据此收紧批大小。16GB 显存建议 16384~22272；22272 为作者 16GB 单卡档案值（示例），非缺省">
                             <span data-i18n="ctx_label">上下文窗口</span>
-                            <input type="number" id="refineV2Ctx" class="form-input compact" style="width:92px;"
+                            <input type="number" id="refineV2Ctx" class="form-input compact" style="width:var(--w-ctx);"
                                    value="" min="4096" step="1024"
                                    data-i18n-placeholder="ctx_placeholder" placeholder="缺省 16384">
                         </label>
@@ -322,9 +333,9 @@
                             <span data-i18n="cleaner_dir_label">净语配置目录</span>
                             <input type="hidden" id="refineCleanerConfig">
                             <input id="refineCleanerConfigShow" class="form-input compact" readonly
-                                   style="flex:1; min-width:160px;" data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=使用内置默认">
-                            <button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
-                            <button type="button" id="refineOpenCleanerDir" class="btn btn-secondary btn-compact" data-i18n="open_btn">打开</button>
+                                   style="flex:1; min-width:var(--w-model);" data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=使用内置默认">
+                            <span class="field-btn-row"><button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
+                            <button type="button" id="refineOpenCleanerDir" class="btn btn-secondary btn-compact" data-i18n="open_btn">打开</button></span>
                         </label>
                     </div>
 
@@ -332,12 +343,12 @@
                     <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="cursor:default; font-weight:600;" data-i18n="endpoints_summary">接口地址（对应阶段A/B，切换服务商自动填充）</div>
                         <div style="display:flex; gap:6px; align-items:center;">
-                            <label style="min-width:70px; font-size:12px; color:#666;" data-i18n="s1_endpoint_label">阶段A 地址</label>
+                            <label style="min-width:var(--w-endpoint-label); font-size:12px; color:#666;" data-i18n="s1_endpoint_label">阶段A 地址</label>
                             <input id="refineS1Endpoint" class="form-input compact" style="flex:1;"
                                    data-i18n-placeholder="s1_endpoint_placeholder" placeholder="阶段A 服务商的接口地址">
                         </div>
                         <div style="display:flex; gap:6px; align-items:center;">
-                            <label style="min-width:70px; font-size:12px; color:#666;" data-i18n="s3_endpoint_label">阶段B 地址</label>
+                            <label style="min-width:var(--w-endpoint-label); font-size:12px; color:#666;" data-i18n="s3_endpoint_label">阶段B 地址</label>
                             <input id="refineS3Endpoint" class="form-input compact" style="flex:1;"
                                    data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
                         </div>
@@ -352,7 +363,7 @@
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
                         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;"><span data-i18n="fallback_model_label">接管模型</span>
-                                <select id="refineFallbackModel" class="form-input compact" style="width:170px;">
+                                <select id="refineFallbackModel" class="form-input compact" style="width:var(--w-fallback);">
                                     <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
                                 </select>
                                 <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
@@ -363,12 +374,12 @@
                                 <input type="checkbox" id="refineFallbackLocal"> <span data-i18n="fallback_local_label">云端故障时本地接管</span>
                             </label>
                             <label><span data-i18n="batch_local_label">批量·本地</span> <input id="refineBatchLocal" class="form-input compact" type="number"
-                                    min="1" max="50" value="30" style="width:70px;"></label>
+                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
                             <label><span data-i18n="batch_cloud_label">批量·云端</span> <input id="refineBatchCloud" class="form-input compact" type="number"
-                                    min="1" max="50" value="30" style="width:70px;"></label>
+                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
                             <label style="display:flex; align-items:center; gap:4px;"
                                    data-i18n-title="concurrency_title" title="批间并发数（1-5），默认 1"><span data-i18n="concurrency_label">并行</span>
-                                <select id="refineConcurrency" class="form-select compact" style="width:60px;">
+                                <select id="refineConcurrency" class="form-select compact" style="width:var(--w-concurrency);">
                                     <option value="1" selected>1</option>
                                     <option value="2">2</option>
                                     <option value="3">3</option>
@@ -389,9 +400,9 @@
 
                     <!-- 角色卡目录 -->
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <label style="min-width:80px;" data-i18n="templates_dir_label">角色卡目录</label>
+                        <label style="min-width:var(--w-templates-label);" data-i18n="templates_dir_label">角色卡目录</label>
                         <input id="refineTemplatesDirShow" class="form-input compact" readonly
-                               style="flex:1; min-width:240px;" data-i18n-placeholder="templates_dir_placeholder" placeholder="（未设置，使用默认）">
+                               style="flex:1; min-width:var(--w-templates);" data-i18n-placeholder="templates_dir_placeholder" placeholder="（未设置，使用默认）">
                         <button type="button" id="refinePickDirBtn" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
                         <button type="button" id="refineOpenDirBtn" class="btn btn-secondary btn-compact" data-i18n="open_btn">打开</button>
                     </div>
@@ -400,7 +411,7 @@
                     <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="cursor:default; font-weight:600;" data-i18n="tpl_editor_summary">角色卡模板编辑</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <select id="refineTemplateStage" class="form-select compact" style="min-width:190px;">
+                            <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);">
                                 <option value="A" data-i18n="tpl_stage_a">阶段A · 角色-净语翻译.txt</option>
                                 <option value="B" data-i18n="tpl_stage_b">阶段B · 角色-审校抛光.txt</option>
                             </select>
@@ -409,7 +420,7 @@
                             <span id="refineTemplateStatus" style="font-size:12px; color:#888;"></span>
                         </div>
                         <textarea id="refineTemplateText" class="form-input" rows="9"
-                            style="width:100%; font-family:Consolas,monospace; font-size:12px;"
+                            style="width:var(--w-full); font-family:Consolas,monospace; font-size:12px;"
                             data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
                     </div>
 
@@ -424,11 +435,11 @@
                             </div>
                             <!-- 翻译术语 Tab -->
                             <div id="glTabGlossary">
-                                <table id="refineGlossTable" style="width:100%; border-collapse:collapse;">
+                                <table id="refineGlossTable" style="width:var(--w-full); border-collapse:collapse;">
                                     <thead><tr>
-                                        <th style="text-align:left; width:36%;" data-i18n="th_source">原文词条</th>
+                                        <th style="text-align:left; width:var(--w-gl-source);" data-i18n="th_source">原文词条</th>
                                         <th style="text-align:left;" data-i18n="th_target">期望译文</th>
-                                        <th style="width:56px;"></th>
+                                        <th style="width:var(--w-th-action);"></th>
                                     </tr></thead>
                                     <tbody></tbody>
                                 </table>
@@ -440,6 +451,7 @@
                                     <button type="button" id="refineGlSave" class="btn btn-primary btn-compact" data-i18n="gl_save">💾 保存词库</button>
                                     <span id="refineGlStatus" style="font-size:12px; color:#888;"></span>
                                 </div>
+                                <div class="empty-guide" id="glEmptyHint" data-i18n="gl_empty_hint">词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。</div>
                                 <div style="font-size:12px; color:#888; margin-top:4px;">
                                     <span data-i18n="gl_scope_note">生效范围用下方"词库→阶段A/阶段B"勾选控制；绑定文件：</span><span id="refineGlPath" data-i18n="gl_path_empty">（未加载）</span>
                                 </div>
@@ -460,6 +472,7 @@
                                 <button type="button" class="btn btn-text btn-sm" id="refineGuideLoadBtn" data-i18n="guide_load_btn">加载导读</button>
                             </summary>
                             <div class="section-content" style="padding-top:8px;">
+                                <div class="empty-guide" id="guideEmptyHint" data-i18n="guide_empty_hint">暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「🤖 AI 分析本报告」前先加载导读。</div>
                                 <div><span id="guideStatus"></span></div>
                                 <h4 data-i18n="guide_conclusions">结论</h4>
                                 <ul id="guideConclusions"></ul>
@@ -493,8 +506,8 @@
                 <div class="tab-page" id="tab-advanced" data-testid="tab-advanced">
                     <div style="font-size:12px; color:#888;" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
 
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:10px 18px; align-content:start; padding:6px 0;">
-                        <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+                    <div class="adv-grid">
+                        <div style="display:flex; flex-direction:column; gap:6px; min-width:var(--w-min);">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_translation_glossary">翻译与词库</div>
                         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;">
@@ -506,7 +519,7 @@
                             <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="sf_title" title="控制翻译开始前对原文可疑内容的清理力度，档位越严删得越多，通常保持默认档位即可。
 技术细节：闸门0 送翻前源侧幻觉检测档位：严格=叠加启发式删除 | 标准=仅明确幻觉删除 | 关闭=关闭检测">
                                 <span data-i18n="source_filter_label">源侧检测</span>
-                                <select id="refineSourceFilter" class="form-select compact" style="width:70px;">
+                                <select id="refineSourceFilter" class="form-select compact" style="width:var(--w-batch);">
                                     <option value="strict" data-i18n="sf_strict">严格</option>
                                     <option value="default" selected data-i18n="sf_default">标准</option>
                                     <option value="off" data-i18n="sf_off">关闭</option>
@@ -523,7 +536,7 @@
 
                         </div>
 
-                        <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+                        <div style="display:flex; flex-direction:column; gap:6px; min-width:var(--w-min);">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_tm_learn_gate">TM 与学习闸</div>
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;"
@@ -533,14 +546,14 @@
                             </label>
                             <label style="display:flex; align-items:center; gap:4px; flex:1;">
                                 <span data-i18n="tm_db_label">TM 库路径</span>
-                                <input id="refineTmDb" class="form-input compact" style="flex:1; min-width:200px;"
+                                <input id="refineTmDb" class="form-input compact" style="flex:1; min-width:var(--w-tm-db);"
                                        data-i18n-placeholder="tm_db_placeholder" placeholder="留空=使用默认 TM 库">
                             </label>
                             <label style="display:flex; align-items:center; gap:4px;"
                                    data-i18n-title="tm_threshold_title" title="控制复用记忆库译文的匹配严格程度，调低会更宽松、也更容易套用不贴切的旧译文，留空即用默认值，一般无需填写。
 技术细节：模糊匹配阈值 0-1（步进 0.05），越低越宽松；留空=使用管线默认">
                                 <span data-i18n="tm_threshold_label">TM 阈值</span>
-                                <input type="number" id="refineTmThreshold" class="form-input compact" style="width:80px;"
+                                <input type="number" id="refineTmThreshold" class="form-input compact" style="width:var(--w-tm-threshold);"
                                        min="0" max="1" step="0.05" data-i18n-placeholder="tm_threshold_placeholder" placeholder="默认">
                             </label>
                             <label style="display:flex; align-items:center; gap:4px;">
@@ -553,7 +566,7 @@
 
                         </div>
 
-                        <div style="display:flex; flex-direction:column; gap:6px; min-width:0;">
+                        <div style="display:flex; flex-direction:column; gap:6px; min-width:var(--w-min);">
                         <div style="font-weight:600; font-size:12px; color:#666;" data-i18n="adv_group_resume_logging">断点与日志</div>
                         <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:4px;"

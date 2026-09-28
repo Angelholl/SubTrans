@@ -1,0 +1,146 @@
+/*
+ * SubTransJAV Web GUI - Dark Theme (SmartSub-inspired near-black)
+ * ---------------------------------------------------------------
+ * Imports the base stylesheet for layout/components and overrides
+ * only the CSS variable layer (plus a few hard-coded rgba accents
+ * in the base sheet that need explicit dark counterparts).
+ *
+ * Usage:
+ * - Select "Dark" from the theme menu, or set ThemeManager to 'dark'.
+ * - Default theme stays the fixed light theme; dark is opt-in.
+ */
+
+@import url("style.css");
+
+/* ============================================================
+   CSS Variables (dark palette overrides)
+   ============================================================ */
+:root {
+    /* Tabs and surfaces */
+    --tab-bar-bg: #1F2328;
+    --content-area-bg: #17191C;    /* app background: near-black */
+    --active-tab-bg: #1F2328;
+    --inactive-tab-bg: #1F2328;
+    --hover-tab-bg: #262B31;
+    --active-tab-text: #58A6FF;
+    --inactive-tab-text: #9CA3AF;
+    --border-color: #30363D;
+
+    /* Brand / semantic colors (brightened for dark bg) */
+    --primary-color: #4493F8;
+    --primary-hover: #58A6FF;
+    --secondary-color: #8B949E;
+    --secondary-hover: #A3ACB5;
+    --danger-color: #F85149;
+    --success-color: #3FB950;
+    --warning-color: #D29922;
+    --info-color: #58A6FF;
+
+    /* Backgrounds */
+    --body-bg: #17191C;
+    --section-bg: #1F2328;         /* panels */
+    --input-bg: #17191C;
+    --disabled-bg: #262B31;
+
+    /* Text colors (light-on-dark, three tiers) */
+    --text-primary: #E6EDF3;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6E7681;
+    --text-disabled: #484F58;
+
+    /* Focus affordance */
+    --focus-ring: 0 0 0 3px rgba(68, 147, 248, 0.35);
+}
+
+/* ============================================================
+   Dark-specific component adjustments (variable-layer gaps only)
+   ============================================================ */
+
+/* Header: light-weight fusion bar instead of solid blue */
+.app-header {
+    background: var(--section-bg);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.theme-button {
+    color: var(--text-primary);
+}
+
+.theme-button:hover {
+    background: var(--hover-tab-bg);
+}
+
+.feature-badge {
+    background: var(--hover-tab-bg);
+    color: var(--text-secondary);
+}
+
+.feature-badge.active {
+    background: rgba(63, 185, 80, 0.25);
+    border: 1px solid rgba(63, 185, 80, 0.5);
+    color: var(--text-primary);
+}
+
+.feature-badge.inactive {
+    background: var(--hover-tab-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Buttons that hard-code light-theme colors in the base sheet */
+.btn-secondary {
+    background: var(--secondary-color);
+    color: #17191C;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--secondary-hover);
+}
+
+.btn-text {
+    color: var(--primary-color);
+}
+
+.btn-text:hover:not(:disabled) {
+    background: rgba(68, 147, 248, 0.15);
+}
+
+.btn:focus {
+    box-shadow: var(--focus-ring);
+}
+
+.file-list:focus-within {
+    box-shadow: var(--focus-ring);
+}
+
+.file-item.selected {
+    background: var(--primary-color);
+    color: #17191C;
+    border-color: var(--primary-color);
+}
+
+/* Console: keep dark console identity on dark theme */
+.console-output {
+    background: #0D1117;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar-thumb {
+    background: #30363D;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3D444D;
+}
+
+/* Glossary sub-tab (.gl-tab): base rule sets no color, so it falls
+   back to the UA button default (pure black) which is unreadable on
+   the near-black page background */
+.gl-tab {
+    color: var(--text-secondary);
+}
+
+.gl-tab.active {
+    color: var(--primary-color);
+}

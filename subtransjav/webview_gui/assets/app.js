@@ -81,6 +81,7 @@ const MSG = {
     theme_google: 'Google Theme',
     theme_carbon: 'IBM Carbon Theme',
     theme_primer: 'GitHub Primer Theme',
+    theme_dark: '暗色主题',
 
     // ---- Source 区 / 文件按钮 ----
     source_header: 'Source（.srt 字幕）',
@@ -161,6 +162,7 @@ const MSG = {
     gl_save: '💾 保存词库',
     gl_scope_note: '生效范围用下方"词库→阶段A/阶段B"勾选控制；绑定文件：',
     gl_path_empty: '（未加载）',
+    gl_empty_hint: '词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。',
 
     // ---- 批量 / 开关 ----
     batch_local_label: '批量·本地',
@@ -228,6 +230,7 @@ const MSG = {
 
     // ---- 质量报告导读 ----
     guide_summary: '质量报告导读',
+    guide_empty_hint: '暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「🤖 AI 分析本报告」前先加载导读。',
     guide_load_btn: '加载导读',
     guide_conclusions: '结论',
     guide_sections: '章节导读',
@@ -1178,7 +1181,8 @@ const ThemeManager = {
         'default': 'style.css',
         'google': 'style.google.css',
         'carbon': 'style.carbon.css',
-        'primer': 'style.primer.css'
+        'primer': 'style.primer.css',
+        'dark': 'style.dark.css'
     },
 
     init() {
@@ -1690,6 +1694,8 @@ function switchTab(tabId) {
       '</tr>').join('');
     const cnt = $('refineGlCount');
     if (cnt) cnt.textContent = rows.length;
+    const eh = $('glEmptyHint');
+    if (eh) eh.style.display = rows.length ? 'none' : '';
   }
 
   async function glLoad() {
@@ -2113,6 +2119,8 @@ function switchTab(tabId) {
         lastLoadedGuidePath = r.path || p;
         guideRender(r.data || {});
         guideStatus(MSG.guide_loaded(r.path || p));
+        const geh = $('guideEmptyHint');
+        if (geh) geh.style.display = 'none';
       } else {
         guideStatus(MSG.guide_load_failed((r && r.error) || MSG.unknownError));
       }
@@ -2166,9 +2174,8 @@ function switchTab(tabId) {
   }
 
   function aiConflictBadge() {
-    return ' <span title="' + esc(MSG.aiConflictWarn)
-      + '" style="background:#f0ad4e;color:#fff;border-radius:3px;'
-      + 'padding:0 4px;cursor:help;">⚠️</span>';
+    return ' <span class="pill pill-warning" title="' + esc(MSG.aiConflictWarn)
+      + '" style="cursor:help;">⚠️</span>';
   }
 
   function aiRenderResult(r) {
