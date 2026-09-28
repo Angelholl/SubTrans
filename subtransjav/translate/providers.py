@@ -17,7 +17,11 @@ PROVIDER_CONFIGS = {
     },
     'ollama': {
         'pysubtrans_name': 'Custom Server',  # Uses OpenAI-compatible /v1/chat/completions
-        'model': 'gemma3:12b',         # Default; OllamaManager.recommend_model() overrides at runtime
+        # D6：gemma3:12b 已否决，缺省显式置空——运行时模型一律走
+        # 显式配置或自动推荐链（refine.config.PROVIDER_MODEL_DEFAULTS），
+        # 空值由 pipeline_v2/_make_client 与 RefineConfig.validate 的
+        # 非空校验兜底报错，绝不以空模型名发请求。
+        'model': '',                   # User provides via --s1/s3-model or auto-recommend
         'env_var': None,               # No API key needed
         'server_address': 'http://localhost:11434',
         'endpoint': '/v1/chat/completions',
