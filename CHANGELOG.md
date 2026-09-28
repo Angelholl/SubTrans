@@ -2,6 +2,12 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [未发布]
+
+### 新增
+
+- **媒体路径链路打通（v1.5 前置）**：refine 经上游 WhisperJAV 运行 manifest（`whisperjav_run.json`）自动配对媒体文件——`files[].output` 与输入 SRT 归一化匹配后取对应 `files[].path`；`--media-path` 可显式覆盖（用户明示即采信，覆盖值以规范化 sha1 参与断点指纹）。媒体路径与来源（自动发现/显式指定）写入质量报告头部与质量报告导读 json（`media_path` / `media_path_source`），供 v1.6 音频级检测/试听消费；配对失败不阻断翻译管线，仅告警。
+
 ## [1.4.0] - 2026-09-28
 
 ### 新增

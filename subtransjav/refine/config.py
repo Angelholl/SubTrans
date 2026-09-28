@@ -306,6 +306,12 @@ class RefineConfig:
     # manifest._CONFIG_FIELDS（路径变化不应误失效；沿 asr_meta 字段不进指纹
     # 的同一先例——自适应与否由 adaptive_thresholds 开关入指纹承载）
     asr_telemetry: str = ""
+    # v1.5 媒体路径链路（D2026-0929-04 P2）：显式指定媒体文件路径；缺省
+    # 经上游 whisperjav_run.json 自动配对（asr_meta.resolve_media_path，
+    # files[].output ↔ 输入 SRT）。validate() 不做硬校验。指纹口径见
+    # manifest.compute_config_hash：显式覆盖值以规范化 sha1 参与，自动
+    # 发现值不参与指纹。
+    media_path: str = ""
     # H4b 分支 b 子集口径：条目级阈值自适应开关——需上游 Balanced 模式产出
     # 的 asr_telemetry.jsonl；缺失/超龄时按默认阈值执行（风险清单标注）。
     # 仅收紧删五类参数，计数类永不解锁（见 asr_meta.scene_low_trust 铁律）。

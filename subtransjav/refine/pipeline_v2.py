@@ -37,9 +37,11 @@ from .artifact_lock import (
     release_artifact_lock,
 )
 from .asr_meta import (
+    RUN_META_NAME,
     SUSPECT_STATUSES,
     load_asr_meta,
     load_asr_telemetry,
+    resolve_media_path,
     scene_low_trust,
 )
 from .config import (
@@ -1133,6 +1135,28 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
     # run 状态可疑时收紧闸门0（tighten），覆盖率过低仅告警。
     # asr_meta 模块只出信号不 import risk：风险接线由本层完成，全程容错。
     asr_meta = load_asr_meta(cfg, in_path)
+    # v1.5 音频链路（D2026-0929-04 P2）：媒体路径解析——显式 --media-path
+    # 覆盖 > 上游 whisperjav_run.json files[].output 配对 > 空。身份元数据
+    # 非信任信号：stale 不阻塞；警告由 resolve_media_path 并入
+    # asr_meta["warnings"]（随 upstream_block 透传），并在告警通道可见化
+    # （配对失败/override 不存在不阻断）。
+    _media_warn_n0 = len(asr_meta.get("warnings") or [])
+    # 显式 --asr-meta 指向他处时，把 load_asr_meta 已定位的 manifest 全路径
+    # 传给配对（file 为报告口径 basename，解析顺序见 resolve_media_path）
+    _explicit_meta = str(getattr(cfg, "asr_meta", "") or "").strip()
+    _manifest_loc = ""
+    if _explicit_meta:
+        _p = _explicit_meta
+        if os.path.isdir(_p):
+            _p = os.path.join(_p, RUN_META_NAME)
+        _manifest_loc = _p
+    media_path, media_source = resolve_media_path(
+        in_path, asr_meta, str(getattr(cfg, "media_path", "") or ""),
+        manifest_path=_manifest_loc)
+    for _mw in (asr_meta.get("warnings") or [])[_media_warn_n0:]:
+        collector.add(stage="gate0", file=fname, reason=_mw,
+                      action="媒体路径自动发现降级（不阻断）",
+                      severity=SEVERITY_WARNING)
     upstream_block = {
         "present": bool(asr_meta.get("present")),
         "status": asr_meta.get("status"),
@@ -1638,7 +1662,9 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     conflict_watch_advice=watch_advice,
                     tm_exact_hits=tm_exact_hits,
                     tm_learned_count=learned_count,
-                    guide_sink=guide)
+                    guide_sink=guide,
+                    media_path=media_path,
+                    media_path_source=media_source)
                 rp = write_quality_report(out_dir, stem, report)
                 write_guide_json(out_dir, stem, guide)
                 print(f"\n📋 质量报告已生成: {Path(rp).name}")

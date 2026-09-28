@@ -699,7 +699,9 @@ def build_quality_report(orig_entries: list, final_entries: list,
                          tm_exact_hits: int | None = None,
                          tm_learned_count: int | None = None,
                          guide_sink: dict | None = None,
-                         structured_warnings: list[dict] | None = None) -> str:
+                         structured_warnings: list[dict] | None = None,
+                         media_path: str = "",
+                         media_path_source: str = "") -> str:
     """对比 期望条目（预合并后） 与 终稿条目，返回复核工单式报告文本。
 
     Parameters
@@ -760,6 +762,11 @@ def build_quality_report(orig_entries: list, final_entries: list,
     tm_learned_count : int | None
         本次 _learn_to_tm 实际入库条数（TM 摘要行 L）；None 取不到时
         该侧显示"无样本"。
+    media_path : str
+        v1.5 媒体路径链路（D2026-0929-04 P2）：媒体文件路径；空串时
+        头部"媒体文件"行与导读 json media_path/media_path_source 键缺席。
+    media_path_source : str
+        媒体路径来源："override"（显式指定）| "manifest"（自动发现）。
 
     条数核对恒等式（统计段"条数核对"行）各项定义：
       原文 N —— 闸门0 前原始条目总数（orig_total，缺省按上述推算）；
@@ -1081,6 +1088,11 @@ def build_quality_report(orig_entries: list, final_entries: list,
         f"来源: {source_name} | 时间: {now_str} | ",
         "=" * 60,
     ]
+    # v1.5 媒体路径链路（D2026-0929-04 P2）：头部元数据区媒体文件行，
+    # 无媒体路径时整行缺席（只加不减契约）。
+    if media_path:
+        src_label = "显式指定" if media_path_source == "override" else "自动发现"
+        lines.append(f"媒体文件: {media_path}（来源: {src_label}）")
     if items:
         lines.append(f"【结论】⚠️ 需人工复核 {len(items)} 处：{' · '.join(concl)}")
     else:
@@ -1287,6 +1299,11 @@ def build_quality_report(orig_entries: list, final_entries: list,
             },
             "items": guide_items,
         })
+        # v1.5 媒体路径链路（D2026-0929-04 P2）：媒体路径与来源，与
+        # media_path 同现同缺——解析失败时两键整体缺席（非空串占位）。
+        if media_path:
+            guide_sink["media_path"] = media_path
+            guide_sink["media_path_source"] = media_path_source or "manifest"
     return "\n".join(lines)
 
 

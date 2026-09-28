@@ -383,6 +383,12 @@ _CONFIG_FIELDS = (
     "synopsis_max_chars",
     "fallback_local",
     "fallback_model",
+    # v1.5 媒体路径链路（D2026-0929-04 P2）：路径类字段默认不进指纹；用户
+    # 显式覆盖值（--media-path）例外，作为语义配置字段以
+    # os.path.normcase(os.path.abspath(...)) 归一化 sha1 参与（取值特判见
+    # compute_config_hash）；空串贡献 ""，即不设覆盖时指纹与该字段缺席
+    # 完全一致。自动发现的 manifest 媒体路径不进指纹（R1 原口径不动）。
+    "media_path",
 )
 
 # 每个阶段参与指纹的字段
@@ -405,6 +411,15 @@ def compute_config_hash(cfg) -> str:
       或重跑一次即可），不做迁移。
     """
     payload = {name: getattr(cfg, name, None) for name in _CONFIG_FIELDS}
+    # media_path 特判（D2026-0929-04）：显式覆盖值以规范化 sha1 参与指纹
+    # （大小写/斜杠方向差异不误失效）；空串/缺失归一为 ""——不设覆盖时
+    # 指纹与该字段不存在的口径完全一致（字段缺失 None 与 "" 同归一）。
+    _raw_media = payload.get("media_path")
+    payload["media_path"] = (
+        hashlib.sha1(
+            os.path.normcase(os.path.abspath(str(_raw_media)))
+            .encode("utf-8")).hexdigest()
+        if _raw_media else "")
     files = instruction_source_files(cfg)
     payload["instruction_files_sha1"] = (
         hashlib.sha1(

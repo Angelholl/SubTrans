@@ -236,6 +236,99 @@ def fingerprint(meta) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# v1.5 音频链路（D2026-0929-04 P2）：媒体路径配对（转写侧 sidecar → refine）
+# ---------------------------------------------------------------------------
+
+def resolve_media_path(in_path: str, asr_meta_result: dict,
+                       explicit_media_path: str = "",
+                       manifest_path: str = "") -> tuple[str, str]:
+    """解析当前输入 SRT 对应的媒体文件路径（v1.5 音频链路，全容错）。
+
+    优先级：显式 override > manifest 配对 > 空；返回 (media_path 或 "",
+    source)，source ∈ {"override", "manifest", ""}。
+
+    - 显式 override：用户明示即采信（沿显式 asr_meta 先例），不做存在性
+      强制——文件不存在仅警告、仍记录；
+    - manifest 配对：读 asr_meta_result 已定位的上游 whisperjav_run.json
+      的 files[]，将各条目 output 与输入 SRT 做双侧
+      os.path.normcase(os.path.abspath(...)) 归一化后比较（output 空/缺失
+      跳过该条目）；恰好 1 命中取该条目 path，0 命中返回空，>1 命中取
+      第一个；媒体路径属身份元数据而非信任信号（沿本模块遥测字段先例），
+      manifest 新鲜度（stale）不阻塞配对；
+    - manifest 路径取 asr_meta_result["file"]（load_asr_meta 已定位：显式
+      --asr-meta 时为用户指定路径，自动发现时为 SRT 同目录
+      whisperjav_run.json）。守卫②：load_asr_meta 的 file 为报告口径
+      basename（既有钉测试），故解析顺序为：调用方显式传入的已定位全路径
+      （manifest_path，--asr-meta 指向他处时由 pipeline 传 cfg.asr_meta
+      解析结果）> file 自身可定位（绝对/相对 cwd 存在的全路径形式）>
+      join(SRT 同目录, file)（自动发现 basename 形态）；
+    - 警告通过回传结构带给调用方：追加进 asr_meta_result["warnings"]
+      （非 dict / 无该键时静默丢弃）；任何异常一律降级为空 + 警告，
+      绝不抛出、绝不阻断管线（R6 容错同款）。
+    """
+    warnings = None
+    if isinstance(asr_meta_result, dict) \
+            and isinstance(asr_meta_result.get("warnings"), list):
+        warnings = asr_meta_result["warnings"]
+
+    def _warn(msg: str) -> None:
+        if warnings is not None:
+            warnings.append(msg)
+
+    explicit = str(explicit_media_path or "").strip()
+    if explicit:
+        if not os.path.isfile(explicit):
+            _warn(f"显式指定媒体文件不存在（按用户明示采信，仍记录）: "
+                  f"{explicit}")
+        return explicit, "override"
+    if not in_path or not isinstance(asr_meta_result, dict):
+        return "", ""
+    file_ref = str(asr_meta_result.get("file") or "").strip()
+    if not file_ref:
+        return "", ""                    # 无 manifest 定位：常态无配对
+    loc = str(manifest_path or "").strip()
+    meta_path = (loc if os.path.isfile(loc)
+                 else file_ref if os.path.isfile(file_ref)
+                 else os.path.join(os.path.dirname(os.path.abspath(in_path)),
+                                   file_ref))
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        _warn(f"媒体路径配对跳过（manifest 读取失败，忽略）: {e}")
+        return "", ""
+    if not isinstance(data, dict):
+        _warn("媒体路径配对跳过（manifest 顶层不是 JSON 对象，忽略）")
+        return "", ""
+    files = data.get("files")
+    if not isinstance(files, list):
+        _warn("媒体路径配对跳过（manifest 无 files 列表，忽略）")
+        return "", ""
+    target = os.path.normcase(os.path.abspath(in_path))
+    hits: list = []
+    for entry in files:
+        if not isinstance(entry, dict):
+            continue
+        out = entry.get("output")
+        if not out:                     # output 空/缺失：跳过该条目
+            continue
+        if os.path.normcase(os.path.abspath(str(out))) == target:
+            hits.append(entry)
+    if not hits:
+        _warn(f"未在 {RUN_META_NAME} 中配对到当前 SRT 的媒体文件"
+              f"（files[].output 无命中）")
+        return "", ""
+    media = str(hits[0].get("path") or "").strip()
+    if not media:
+        _warn(f"{RUN_META_NAME} 命中条目缺 path 字段，媒体路径不可得")
+        return "", ""
+    if len(hits) > 1:
+        _warn(f"{RUN_META_NAME} 有 {len(hits)} 个条目命中同一 SRT，"
+              f"取第一个: {os.path.basename(media)}")
+    return media, "manifest"
+
+
+# ---------------------------------------------------------------------------
 # H4b：场景级转写遥测（load_asr_telemetry / scene_low_trust）
 # ---------------------------------------------------------------------------
 
