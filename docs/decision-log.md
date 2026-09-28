@@ -1517,3 +1517,46 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - embeddable python 降级预案备而不启，仅当 PyInstaller 致命失败（如 pythonnet hostfxr 真机不可解析）时启用。
 - EXE 版本间升级路径（Inno 覆盖安装+版本检测）随发布文档固化，防修复到不了普通用户。
 - 观察项：打包版首轮用户反馈中"杀软拦截/WebView2 缺失/模型环境门槛"三类问题计数，作为 2.0.1 排期输入。
+
+## [2026-09-29] [D2026-0929-06] 2.0 定案修订：owner 复核 11 条逐点裁决 + TM 落点口径变更 + ffmpeg 前置 + spawn 全覆盖 [已拍板]
+
+**决策对象**：D2026-0929-05（2.0 版本重编与 EXE 封装双定案，归档 5a424d3）之 owner 复核修订。
+
+**评议轮次**：第二轮（续评）；引用 D2026-0929-05/:1449-1519 与首轮评议、D2026-0924-04/:998-1020（TM 迁出欠账源链）、D2026-0929-02/:1409、D2026-0929-03/:1418、D2026-0929-04/:1427。本轮新增第三处 frozen 必断点取证（console.py:30-71 relaunch_for_utf8 + main.py:63 venv 引导）。产出 [MATERIAL_CONFLICT] 1 条（owner 点7"pip 保持旧路径" vs 主模型"pip TM 新默认+读回退"）、[HIGH_RISK_OBJECTION] 1 条（API-1：pip 版 TM 默认落点不得变更）、[DEPENDENCY-IMPACT] 1 条（点1/点4b 视听对比入 beta 与 ffmpeg 决策后置的排期互斥）；主模型回应：**API-1 采纳，ffmpeg 前置件采纳，TM 裁定修正采纳**。
+
+**立场摘要**：owner 11 条方向性全部成立。顺序修订（frozen 入口+resolver+内部 onedir 门禁前移 beta）同意并强化；单 exe argv 分派主案同意，改造范围扩至三处 spawn 点；回退数据轻量案同意但边界写死（旧位保留+导出指引+明示损失窗口）；**pip 版 TM 默认落点反对变更**（读旧写新分裂脑，改由 resolver 锚定+EXE 迁移承载欠账）；ffmpeg 决策升为 beta 入口前置件；环境变量名裁定 SUBTRANSJAV_DATA_ROOT。
+
+**采纳结论**（逐条修订 D2026-0929-05）：
+- 修订①（beta 范围）：2.0.0-beta 扩为：打包地基（路径收敛+resolver，pip 默认解析结果不变）+ frozen 入口改造（三处 spawn 全覆盖）+ 内部 onedir 构建验证（CI artifact 门禁，不对外发布）+ 视觉批 + 视听对比。Inno/发布 job 仍随 2.0.0 正式。原「pip beta=TM 迁出欠账结清」由修订②替换。
+- 修订②（TM 落点，API-1）：pip 2.0.0 TM 默认解析路径保持旧位 Temp/translation_memory 不变，仅改锚挂 resolver（tm.py:26 与 glossary_conflict.py:213 双文件）；「TM 迁出 Temp」欠账随 EXE 首发迁移一次清偿（tm.db+glossary_conflict_watch.json 双文件携带），沿用 D2026-0929-05 迁移三段式与双源夹具。D2026-0924-04 欠账以"锚点+断言测试+EXE 迁移承载"口径结清。
+- 修订③（spawn 全覆盖）：frozen 改造清单=api.py:173/1409 + console.py:30-71 relaunch_for_utf8 + main.py:63 venv 引导；统一收敛进 process_manager 单一 helper（pip=`sys.executable -m` / frozen=`exe --subtrans-cli`）；freeze_support() 无条件加；分派态与 pip 态双语言冒烟逐项对拍（UTF-8 relaunch 在 frozen 态走原进程不再 spawn）。
+- 修订④（版本号）：PyPI 预发布号 2.0.0b0（PEP 440），不用 2.0.0-beta；2.0.0 正式前可选 rc0。
+- 修订⑤（Release notes 措辞）：废除「无 breaking 声明」，改分层：GUI 无需手动迁移 / CLI·API·自动化脚本见「路径与数据根迁移」/ 旧配置自动迁移失败自动回退；回退前先导出 + 迁移后新数据损失窗口明示。
+- 修订⑥（1.4.1 通道）：仅收安全/致命修复，写明 EOL 支持窗口；不读新数据根（轻量案），回退边界=旧位保留一版本周期+backups zip 不归零。
+- 修订⑦（ffmpeg 前置件）：视听对比入 beta DoD ⇒ ffmpeg/ffprobe 检测与捆绑决策为 beta 动工前置件（排期门）；优先「探测系统 ffmpeg + wave 级 VAD 降级或特性灰显」，避免 torch 级依赖；捆绑 essentials 评估（LGPL+体积）随选型轮定案，不在本决策锁死。
+- 修订⑧（resolver）：优先级 SUBTRANSJAV_DATA_ROOT > %LOCALAPPDATA%\SubTransJAV > 旧仓库根/旧路径；新增 subtransjav-refine --where 诊断；pip 默认旧路径、仅支持新根，EXE 首发默认新根并迁移。
+- 修订⑨（beta DoD）：owner 六条采纳并入 roadmap；⑥双语 README 落地为 beta 收口项。
+- 修订⑩（口径接替）：D2026-0929-05 原条目状态「已拍板」不变；本修订条目为唯一执行口径，原守卫条款中与修订②⑤冲突的文字（行为等价零数据根变更/TM 迁出欠账结清于 pip beta）不再为验收依据。
+
+**守卫条款**：
+- pip 2.0.0 任何子进程不得写新根（零感知硬约束）；TM/glossary 双文件锚点变更必须路径断言测试跟随（承 D2026-0924-04）。
+- 双落点禁止「读旧写新/空翻转」任一形态；如需双路径一律走显式迁移+备份+回退（迁移三段式），禁止隐式分割。
+- frozen argv 分派须在 pywebview 初始化前完成；产物只写数据根/只读 _MEIPASS，不碰安装目录。
+- ffmpeg 选型未定案前，视听对比任务不动工（排期门）；不允许「临时 torch VAD」替位默认。
+- WebView2 安装器检测与运行时探测共用同一组 winreg GUID，防口径漂移。
+- 1.4.1 只收安全/致命修复；EOL 声明随通道启用即写入 release notes。
+
+**验收抓手**：
+- beta DoD ①：frozen onedir 内部构建+子进程翻译/AI 分析 smoke（三处 spawn 全链冒烟、双语言对拍）。
+- beta DoD ②：resolver+迁移 dry-run+备份/校验/回退测试（双源夹具+故障注入；dry-run 验证 EXE 迁移路径，非 pip 落点）。
+- beta DoD ③：WebView2/ffmpeg 依赖检测明确 + ffmpeg 选型定案记录（beta 动工前置）。
+- beta DoD ④：pip 2.0.0b0 在含旧 TM 的仓库根上零感知升级验证（--where 指旧位、写入后旧位行数增长、全量测试基线不降）。
+- beta DoD ⑤⑥：Release notes 分层措辞逐句勾对；README 中文主+英文简介落地。
+- 环境变量名：SUBTRANSJAV_DATA_ROOT（沿 config.py:207/410 模式），不启用 SUBTRANS_DATA_ROOT。
+
+**后续风险跟踪**：
+- ffmpeg 选型轮输出（探测/降级/捆绑）纳入 2.0.0-beta 里程碑截止日检查点；超期即触发范围重议。
+- API-1 结论留档：若未来出现「双落点」提案，须先过故障注入+分裂脑边界测试方可再议。
+- R3（spawn 全覆盖）待 frozen onedir 冒烟实测反馈；R4（回退导出依赖 2.0 可用）待迁移自检 smoke 实测。
+- 杀软/签名/WebView2 三类计数观察项沿用 D2026-0929-05 原跟踪，不新增。
+- 本条目对原条目修订①②③④⑤⑥⑦⑧⑨⑩的落地执行，由执行层按 roadmap 勾对，验收=主模型。
