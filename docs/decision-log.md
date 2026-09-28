@@ -1579,3 +1579,13 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - **条件是否已闭环**：未启动（开工前实施指引，闭环时点=各细则落地验收）；三项关键条件=钉测试-收敛同批、钉测试语义三层限定、新根清理仅限迁移残留，失验即回退重议。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：R1（删除与钉测试同批→中间态常红）R2（钉测试语义误伤→假红退役）R3（清理越界/WAL 活写三件齐拷）R4（旧位清理 vs 1.4.1 EOL 撞车）R5（旧文案"三 spawn 含 console.py"残留）并入 06 后续跟踪表；console.py 引导层整层死代码审计列为 beta 批低优先清理项（ensure_utf8_console/safe_print/suppress_dependency_warnings 仅 webview_gui 激活）。
+
+## [2026-09-29] [D2026-0929-08] 2.0 打包地基批开工放行 + owner 三条实施细节采纳 [已拍板]
+
+- **性质**：开工放行记录+实施细节采纳；不改 05/06/07 定案。owner 认可第三轮收口，撤回点 1"最可能咬人"警告（前提被 F1 证伪），确认未来控制台入口按独立 exe 优先指引。
+- **三条实施细节（全采纳）**：
+  1. **helper 增 purpose 语义位**（`"subprocess" | "venv_bootstrap"`）：api.py 两处=同构替换；main.py:63 venv 引导为三 spawn 中唯一形态敏感点——frozen 下无 venv 可建、无 pip 可调，正确行为=**整段 no-op 直接进主流程**（现有 main.py:44-46 frozen 短路 guard 保留，收敛时显式化为 purpose 位，防"替换成功但跑了无意义子进程"的隐性故障）。frozen 子进程显式传 env（含 SUBTRANSJAV_DATA_ROOT）、UTF-8、CREATE_NO_WINDOW、取消杀树（沿 07 点 1）。
+  2. **console.py 引导层删除加静态确认**：删除动作前 grep（`ensure_utf8_console`/`console.` import，排除 tests）为空+无 getattr/importlib 软引用；webview_gui 激活路径干净的结论由**钉测试固化**（防未来从 `__all__` 恢复导出静默复活），不靠人工通读。
+  3. **两条硬边界执行细节**：R4 字面量=「**EOL 声明时点**」非「保留 N 版」——2.0.1/2.1.0 先于 EOL 发布时清理提示继续挂起，EOL 日期做成构建期常量/发布文档字段供清理逻辑读取；迁移哨兵补边界——**哨兵存在但 manifest 校验失败=无效哨兵走旧根**（非"部分迁移已提交"：哨兵晚于 manifest 写，其信息量依赖 manifest 可信，顺序不可反推）。
+- **放行**：owner 2026-09-29 放行打包地基批（resolver + TM 双锚点 + pysubtrans 摘除 + --where），依赖清晰无外部阻塞。**出口信号两条**：① resolver 单测钉 canonical helper（非内联判定残留）；② TM 双锚点挂接后 --where 一次报全且 pip/frozen 下默认源正确。frozen 入口改造+内部 onedir 门禁紧随其后。
+- **流程状态**：开工前评议员常设轮次（owner 指示）随放行结束，此后恢复 AGENTS.md 常规（重大决策才评议）。
