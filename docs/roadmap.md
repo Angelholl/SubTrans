@@ -7,20 +7,20 @@
 
 ### 2.0.0-beta（pip 形态 2.0.0b0 先行，PEP 440 预发布号；范围按 D2026-0929-06 修订）
 
-- ⬜ 打包地基：`app_root()`/data_root_resolver 路径收敛（优先级 `SUBTRANSJAV_DATA_ROOT` > `%LOCALAPPDATA%\SubTransJAV` > 旧仓库根/旧路径；**pip 默认解析结果=旧位零感知**）+ pysubtrans 死依赖摘除 + TM 锚点挂 resolver（tm.py:26 + glossary_conflict.py:213 双文件、路径断言测试跟随；**迁出 Temp 实质清偿随 EXE 首发迁移承载**，D2026-0924-04 欠账结清口径按修订②）+ `subtransjav-refine --where` 诊断
-- ⬜ frozen 入口改造：三处 spawn 点（api.py:173/1409、console.py:30-71 relaunch、main.py:63 venv 引导 fail-loud）收敛 process_manager 单一 helper（pip=`-m` / frozen=`--subtrans-cli` 主入口分派，pywebview 初始化前完成）+ `freeze_support()` + CREATE_NO_WINDOW/UTF-8/明确 cwd/杀进程树
-- ⬜ 内部 onedir 构建验证（CI artifact 门禁，不对外发布）：子进程翻译/AI 分析 smoke + 双语言对拍 + 迁移 dry-run（验 EXE 迁移路径，非 pip 落点）
+- ⬜ 打包地基：`app_root()`/data_root_resolver 路径收敛（优先级 `SUBTRANSJAV_DATA_ROOT` > `%LOCALAPPDATA%\SubTransJAV` > 旧仓库根/旧路径；env 两形态均生效，**默认值按 sys.frozen 判定不按版本号**——frozen 判定归口单一 canonical helper，现 3 处内联收拢；**pip 默认解析结果=旧位零感知**）+ pysubtrans 死依赖摘除（CI 门=import 级钉测试+pyproject dependencies/keywords 断言，不设全仓 grep 门，D2026-0929-07 点 5）+ TM 锚点挂 resolver（tm.py:26 + glossary_conflict.py:213 双文件、路径断言测试跟随；**迁出 Temp 实质清偿随 EXE 首发迁移承载**，D2026-0924-04 欠账结清口径按修订②）+ `subtransjav-refine --where` 诊断（全字段一次报全：运行形态/数据根及来源/配置/TM/conflict_watch/DPAPI 密钥位置/旧根检测+迁移状态）
+- ⬜ frozen 入口改造：spawn 收敛 process_manager 单一 helper——活写入点=**api.py:173/1409、main.py:63 venv 引导 fail-loud**（pip=`-m` / frozen=`--subtrans-cli` 主入口分派，pywebview 初始化前完成）+ `freeze_support()` + CREATE_NO_WINDOW/UTF-8（子进程 env 注入，删除 relaunch 不取消保证）/显式 env 透传（含 SUBTRANSJAV_DATA_ROOT）/明确 cwd/杀进程树；**console.py relaunch_for_utf8=零调用死代码，同批删除**（D2026-0929-07 点 1，windowed/黑框顾虑随前提消解）；钉测试（生产包 sys.executable spawn 仅准出现在 helper，AST 级、排除 tests/tools）随收敛批落地
+- ⬜ 内部 onedir 构建验证（CI artifact 门禁，不对外发布）：子进程翻译/AI 分析 smoke + 双语言对拍 + 迁移 dry-run（验 EXE 迁移路径，非 pip 落点）；产出可下载 onedir zip+Inno 包+sha256，2.0.0 正式前**真人安装反馈一轮（≥2 环境：正常 Win10/11 + 无 WebView2/缺 .NET8 干净 VM）**（D2026-0929-07 点 6）
 - ⬜ 视听对比技术选型定案（**beta 动工排期门**：探测系统 ffmpeg/ffprobe（whisperjav 用户大概率已装）vs 捆绑 essentials（LGPL+体积评估）vs wave 级 VAD 降级/特性灰显；禁 torch 级默认）——未定案视听对比不动工
 - ⬜ 视觉批（D2026-0929-03 已拍板：A token 化+暗色自选 / B 导航双轨 / C 表单组件；试听 UI 硬前置）
 - ⬜ 视听对比：疑似漏听检测（音频能量+VAD 间隙分析，媒体访问威胁模型前置）+ 快速试听 UI（逐条字幕+音频播放+媒体路径选择，消费 v1.5 音频链路 media_path 契约）
 
-**2.0.0-beta DoD（D2026-0929-06）**：① frozen onedir 内部构建通过+子进程翻译/AI 分析 smoke 通过（三 spawn 全链+双语言对拍）② data_root_resolver+迁移 dry-run+备份/校验/回退测试通过（双源夹具+故障注入）③ WebView2/ffmpeg 依赖检测明确+选型定案记录 ④ pip 2.0.0b0 旧数据根零感知升级验证（--where 指旧位、写入旧位增长、全量基线不降）⑤ Release notes 分层措辞定稿（GUI 无需手动迁移 / CLI·API·脚本见「路径与数据根迁移」/ 旧配置自动迁移失败自动回退）⑥ README 中文主+英文简介落地
+**2.0.0-beta DoD（D2026-0929-06/07）**：① frozen onedir 内部构建通过+子进程翻译/AI 分析 smoke 通过（spawn 收敛全链 api×2+venv 引导+双语言对拍）② data_root_resolver+迁移 dry-run+备份/校验/回退测试通过（双源夹具+故障注入：迁移后用户写入场景+写事务中迁移场景）③ WebView2/ffmpeg 依赖检测明确+选型定案记录 ④ pip 2.0.0b0 旧数据根零感知升级验证（--where 指旧位、写入旧位增长、全量基线不降）⑤ Release notes 分层措辞定稿（**EXE 安装版：迁移自动完成，无需手动操作**；pip 用户数据位置不变归 CLI·脚本层说明；旧配置自动迁移失败自动回退）⑥ README 中文主+英文简介落地
 
 ### 2.0.0 正式（在 beta 上追加）
 
-- ⬜ EXE 封装：pyinstaller onedir + Inno Setup + GitHub Actions tag 触发构建附 Release（frozen CLI 冒烟必过：--version / --subtrans-cli --help / 数据根创建+TM SQLite 读写+DPAPI 往返 / GUI 启动连子进程；产物 SHA256+依赖锁必做、SBOM 可选，SHA256 清单随 Release 发布；Inno 安装/卸载/覆盖升级测试；不用 UPX）；用户数据根=`%LOCALAPPDATA%\SubTransJAV`（**数据根迁移只随 EXE 首发**：三段式迁移落成可测试条件——磁盘预检+backups/pre-2.0.0-YYYYMMDD.zip 保留 N 份+清单/哈希/integrity_check/JSON/DPAPI 自检+原子切换失败删新根续旧根+幂等多实例锁；tm.db+glossary_conflict_watch.json 双文件携带即 D2026-0924-04 欠账实质清偿；双形态共存防写竞争+卸载器永不删用户数据）；Inno 检测 WebView2 引导 Evergreen Bootstrapper（与 main.py 运行时探测共用 winreg GUID）；首发不签名+SmartScreen/杀软 FAQ（含 SHA256 自证核对指引），Trusted Signing 后续评估
+- ⬜ EXE 封装：pyinstaller onedir + Inno Setup + GitHub Actions 触发构建附 Release（**workflow_dispatch 手动跑通全链「构建→Inno→安装→smoke→卸载」后才开 tag 触发**，D2026-0929-07 点 7；frozen CLI 冒烟必过：--version / --subtrans-cli --help / 数据根创建+TM SQLite 读写+DPAPI 往返 / GUI 启动连子进程；产物 SHA256+依赖锁必做、SBOM 可选，SHA256 清单随 Release 发布；不用 UPX）；用户数据根=`%LOCALAPPDATA%\SubTransJAV`（**数据根迁移只随 EXE 首发**：三段式迁移落成可测试条件——磁盘预检+backups/pre-2.0.0-YYYYMMDD.zip 保留 N 份且**旧位保留 ≥ 1.4.1 EOL 声明时点**（R4）+**迁移 manifest（清单+sha256+迁移前计数）、哨兵最后写、恢复校验对 manifest**+SQLite integrity_check/JSON/DPAPI 自检+原子切换失败清理**仅限 manifest 匹配迁移残留**续旧根+半迁移自愈（启动检测备份存在+新根不完整→清残留回退）+WAL checkpoint 失败=本轮中止下次重试+幂等多实例锁；tm.db+glossary_conflict_watch.json 双文件携带即 D2026-0924-04 欠账实质清偿；双形态共存防写竞争+卸载器永不删用户数据）；Inno 检测 WebView2 引导 Evergreen Bootstrapper（与 main.py 运行时探测共用 winreg GUID）；首发不签名+SmartScreen/杀软 FAQ（含 SHA256 自证核对指引），Trusted Signing 后续评估
 - ⬜ 收口同步：README 结构大修贴合当前项目（双语策略已定缺省=中文主+英文简介段，改判条件=英文 issue 占比上升/上架 winget 或 Store/国际用户增长；README 顶部中英一句话+下载入口、英文 Quickstart 段；CHANGELOG/使用与维护手册同批对齐）（原 D2026-0929-02 收口项）
-- ⬜ 2.0.0 tag + Release（附 setup.exe；**Release notes 分层措辞**：GUI 用户无需手动迁移 / CLI·API·自动化脚本见「路径与数据根迁移」/ 旧配置自动迁移失败自动回退+回退前先导出指引——2.0 定位为功能里程碑；可选 2.0.0rc0 预发布；发布前 owner 真机 GUI 人工验收一次（含无 .NET 8 的 Win10 场景）；更新链路=Inno 覆盖安装+版本检测写入发布文档）
+- ⬜ 2.0.0 tag + Release（附 setup.exe；**Release notes 分层措辞**：EXE 安装版迁移自动完成无需手动操作 / pip 用户数据位置不变、CLI·API·自动化脚本见「路径与数据根迁移」/ 旧配置自动迁移失败自动回退+回退前先导出指引——2.0 定位为功能里程碑；可选 2.0.0rc0 预发布；发布前 owner 真机 GUI 人工验收一次（含无 .NET 8 的 Win10 场景，与 beta 真装一轮合并执行）；更新链路=Inno 覆盖安装+版本检测写入发布文档）
 
 ### 2.0.1（独立项，无前置依赖）
 

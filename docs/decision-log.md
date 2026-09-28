@@ -1560,3 +1560,22 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - R3（spawn 全覆盖）待 frozen onedir 冒烟实测反馈；R4（回退导出依赖 2.0 可用）待迁移自检 smoke 实测。
 - 杀软/签名/WebView2 三类计数观察项沿用 D2026-0929-05 原跟踪，不新增。
 - 本条目对原条目修订①②③④⑤⑥⑦⑧⑨⑩的落地执行，由执行层按 roadmap 勾对，验收=主模型。
+
+## [2026-09-29] [D2026-0929-07] 2.0 实施风险 8 条裁决补充（owner 标注 × 主模型全采纳+2 修正，critic 第三轮确认）[已拍板]
+
+- **性质**：实施裁决补充；不改 D2026-0929-05/06 状态，沿 06 修订⑩"唯一执行口径"模式追加执行细则。
+- **评议轮次**：第三轮（续评）；引用 05/:1449-1519、06/:1521-1561 与上一轮评议；对 06 修订③⑧作口径修订，其余修订意向不变。
+- **实证复核**：F1 relaunch_for_utf8 全库零调用方（console.py:30/363 + docs，py/bat/ps1/tests 全空）——死代码；F2 tm.py:93 WAL 复证；F3 providers.py:7/19/33 字符串键、全库无 PySubtrans import。新取证：console.py 引导层整层 CLI 零外部引用（仅 webview_gui/main.py:20-24 经 setup_console 激活）；sys.frozen 内联判定 3 处（model_cache.py:18、main.py:45/230-231）。
+- **逐条裁决**（列 06 对应补充分支）：
+  - 点 1（修订③ spawn 清单）→ **采纳修正**：console.py relaunch_for_utf8 由"收敛"改"同批删除"（owner 活路径前提被 F1 证伪，windowed/黑框/独立 console-exe 顾虑随前提失效整体消解；未来真实控制台 relaunch 需求沿用 owner 独立 exe 优先设计，记未来指引不落接口）。收敛清单修订为 **api.py:173、api.py:1409、main.py:63** 三写入点；钉测试（生产包 subtransjav/ 内 sys.executable spawn 仅准出现在 process_manager helper；spawn 语义 AST/调用点级，非裸文本 grep；排除 tests/tools 与 model_cache.py:18 非 spawn 用法）**与收敛批同批落地，不与删除同批**；helper 接口 mode 仅落 cli/gui，"console" mode 留注释预留。UTF-8 保证落点：helper 子进程 env 注入（PYTHONUTF8=1 等）+ EXE manifest/activeCodePage，删除不取消保证。同步修订 roadmap 三处"含 console.py relaunch"文字（R5）。
+  - 点 2（TM 双文件原子性）→ **采纳 + 边界写死**：备份 zip 含双文件 + 迁移 manifest（文件清单+sha256+迁移前 tm.db 行数/glossary 长度）；"迁移已完成"哨兵最后写，且仅在双文件拷贝+按 manifest 恢复校验通过后写；恢复校验对 manifest 而非自证（防同源双坏）。半迁移自愈：启动检测"备份存在+新根不完整"→自动清理**仅限 manifest 匹配的迁移残留**（防误删用户数据）→回退旧根；迁移先于一切新根写路径（首启顺序硬约束）。WAL：checkpoint(TRUNCATE) 失败=本轮迁移中止、下次启动重试；三件齐拷仅限源确证静默时，恢复后 integrity_check 为兜底闸。故障注入测试双场景（迁移后用户写入/写事务中迁移）进 beta DoD ②。
+  - 点 3（修订⑧ --where）→ **采纳修正**：2.0 --where 全字段采纳（运行形态/数据根及来源/配置/TM/conflict_watch/DPAPI 密钥位置/旧根检测+迁移状态）；1.4.1 **不加** --where（近空集论证成立：迁移仅随 EXE 首发+EXE 无 1.4.1 基线+pip 永不迁移+1.4.1 只读旧位，穷举无生成路径）；回退诊断靠文档+导出指引（已定案）。约束：**旧位保留时长 ≥ 1.4.1 EOL 声明时点**（R4，入发布文档硬约束）。
+  - 点 4（resolver 判定依据）→ 采纳：默认值按 **sys.frozen** 而非版本号（同版本双形态行为分叉仅由 frozen 承载）；SUBTRANSJAV_DATA_ROOT env 两形态均生效（显式覆盖优先）；frozen 判定消费**单一 canonical helper**（现 3 处内联归口，_MEIPASS 路径逻辑独立不动）；单测双分支 monkeypatch+真 frozen onedir 冒烟。
+  - 点 5（pysubtrans 摘除 CI 门）→ 采纳 + 三层化：门=(1) import 级钉测试（无 `import PySubtrans`/`from PySubtrans`）+(2) pyproject dependencies/keywords 断言；providers 字典键改名随批但不设门；**不设全仓 grep 门**（历史 docstring 提及会永久打红）。
+  - 点 6（onedir artifact 真装）→ 采纳：CI 产出可下载 onedir zip+Inno 包+sha256（run-artifact 暂不进 Releases）；不阻塞 pip beta；2.0.0 正式前真人安装反馈一轮，**环境 ≥2**（正常 Win10/11 + 故意无 WebView2/缺 .NET8 干净 VM——缺一即没验到对应风险）。
+  - 点 7（tag 前手动验证）→ 采纳：Release 工作流先 workflow_dispatch 跑通"构建→Inno→安装→smoke→卸载"全链再开 tag 触发；tag 保护+版本经 workflow input 参数化（iscc /VERYSILENT /NORESTART 静默链）。
+  - 点 8（措辞限定）→ 采纳："GUI 用户无需迁移"限定为"**EXE 安装版：迁移自动完成，无需手动操作**"；pip 用户数据位置不变，归 CLI·脚本层说明；同步修 Release notes 模板与 beta DoD ⑤ 文案。
+- **主模型最终决定**：owner 8 条全采纳 + 主模型修正 2 处（点 1 死代码删除、点 3 1.4.1 纯净）+ critic 细则（钉测试顺序/语义、manifest 与哨兵、清理边界、canonical frozen helper、三层 CI 门）全数认领入库。
+- **条件是否已闭环**：未启动（开工前实施指引，闭环时点=各细则落地验收）；三项关键条件=钉测试-收敛同批、钉测试语义三层限定、新根清理仅限迁移残留，失验即回退重议。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：R1（删除与钉测试同批→中间态常红）R2（钉测试语义误伤→假红退役）R3（清理越界/WAL 活写三件齐拷）R4（旧位清理 vs 1.4.1 EOL 撞车）R5（旧文案"三 spawn 含 console.py"残留）并入 06 后续跟踪表；console.py 引导层整层死代码审计列为 beta 批低优先清理项（ensure_utf8_console/safe_print/suppress_dependency_warnings 仅 webview_gui 激活）。
