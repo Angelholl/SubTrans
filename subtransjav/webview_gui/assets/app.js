@@ -101,11 +101,6 @@ const MSG = {
 
     // ---- 净语翻译面板 ----
     refine_panel_title: '净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）',
-    // A4 画像预设（novice=小白 / standard=标准 / developer=开发者）
-    userModeLabel: '用户模式',
-    userModeNovice: '小白模式',
-    userModeStandard: '标准',
-    userModeDeveloper: '开发者',
     stage_a_label: '阶段A 净语+翻译（日译中）',
     stage_b_label: '阶段B 审校+抛光（中文）',
     provider_zen: 'Zen 免费',
@@ -199,7 +194,6 @@ const MSG = {
     refresh_local_title: '刷新本地模型列表',
 
     // ---- 高级设置折叠区（v1.3.2 任务2：纯 DOM 收纳，仅小标题文案键，无 JS 行为逻辑）----
-    advanced_settings_summary: '高级设置',
     advanced_settings_notice: '以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。',
     adv_group_translation_glossary: '翻译与词库',
     adv_group_tm_learn_gate: 'TM 与学习闸',
@@ -218,21 +212,19 @@ const MSG = {
     artifact_note: '产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过',
     status_idle: 'Idle',
 
-    // ---- v1.4 小白模式引导面板（顶部服务下拉栏 + 三步引导卡）----
-    novicePanelServiceLabel: '翻译服务',
-    noviceBadgeLLM: 'AI 大模型',
-    noviceHintLocal: '需本机安装并启动 LM Studio（或 Ollama）并加载模型',
-    noviceStep1Title: '导入文件',
-    noviceStep1Desc: '把 .srt 字幕拖入上方 Source 区，或点右侧「添加文件」按钮选择字幕',
-    noviceStep2Title: '核对配置',
-    noviceStep2Desc: '在上方选择翻译服务；选用 DeepSeek / 硅基流动 / 自定义接口时填入 API Key',
-    noviceStep3Title: '开始任务',
-    noviceStep3Desc: '点击下方开始按钮，批量处理并实时查看进度',
-    noviceStartBtn: '▶ 开始翻译',
-    noviceNeedFile: '请先导入 .srt 字幕',
-    noviceKeyLabel: 'API Key',
-    noviceKeySaveBtn: '保存',
-    noviceAddFiles: '＋ 添加文件',
+    // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
+    tabTranslate: '字幕翻译',
+    tabEngine: '引擎与模型',
+    tabGlossary: '词库与模板',
+    tabGuide: '质量与建议',
+    tabAdvanced: '高级参数',
+
+    // ---- v1.5 翻译服务快捷下拉（原小白模式顶栏迁入 translate TAB）----
+    serviceQuickLabel: '翻译服务',
+    serviceQuickBadge: 'AI 大模型',
+    serviceQuickHintLocal: '需本机安装并启动 LM Studio（或 Ollama）并加载模型',
+    serviceQuickKeyLabel: 'API Key',
+    serviceQuickKeySaveBtn: '保存',
 
     // ---- 质量报告导读 ----
     guide_summary: '质量报告导读',
@@ -326,6 +318,30 @@ const MSG = {
     guide_item_current_label: '现译: ',
     guide_item_unresolvable: '不可自动重翻',
     guide_items_more: n => `…其余 ${n} 条见 json`,
+
+    // ---- AI 质量分析（D2026-0929 前后端接入）----
+    aiAnalyzeBtn: '🤖 AI 分析本报告',
+    aiAnalyzing: '分析中（可能需要 1-3 分钟）…',
+    aiNeedGuide: '请先加载质量报告导读',
+    aiPrivacyCloud: p => `⚠️ 分析内容（含字幕译文）将发送至 ${p}`,
+    aiPrivacyLocal: '本地模型分析，内容不出本机',
+    aiSectionGlossary: '术语建议',
+    aiSectionTm: 'TM 建议',
+    aiSectionObs: '一般观察',
+    aiThReason: '理由',
+    aiApplyGlossary: '加入词库',
+    aiApplyTm: '存入 TM',
+    aiApplied: '已加入 ✓',
+    aiTmStored: '已存入 ✓',
+    aiExists: '已存在',
+    aiExistsDiff: '译法不一致',
+    aiLocked: '锁定（他方持锁）',
+    aiApplyRetry: '重试',
+    aiApplyFailed: m => `落库失败：${m}`,
+    aiConflictWarn: '该词存在未裁决术语冲突，请确认',
+    aiParseFailed: '⚠️ AI 输出解析失败，以下为原始观察文本',
+    aiDone: 'AI 分析完成，建议仅供人工裁决',
+    aiFailed: m => `AI 分析失败：${m}`,
     gui_initialized: '净语翻译 GUI 已初始化',
     gui_usage_hint: '在上方 Source 区添加 .srt 字幕后点击「▶ 开始净语翻译」',
 };
@@ -922,9 +938,6 @@ const TranslatorManager = {
         const cancelBtn = document.getElementById('refineCancelBtn');
         if (startBtn) startBtn.disabled = !hasFiles || isRunning;
         if (cancelBtn) cancelBtn.disabled = !isRunning;
-        // v1.4 小白模式停止键同步（novice 隐藏完整面板后保留唯一停止入口）
-        const novStop = document.getElementById('refineNoviceStopBtn');
-        if (novStop) novStop.disabled = !isRunning;
     },
 
     async startTranslation() {
@@ -1314,6 +1327,21 @@ async function showAbout() {
 function closeAbout() {
     const modal = document.getElementById('aboutModal');
     modal.classList.remove('active');
+}
+
+// ============================================================
+// v1.5 左侧 TAB 导航（SmartSub 式）：按 data-tab 切换主内容区页面，
+// 选中态同步到 TAB 按钮（accent 高亮）与对应页面（.tab-page.active）
+// ============================================================
+function switchTab(tabId) {
+    document.querySelectorAll('.side-tab-btn').forEach(btn => {
+        const on = btn.dataset.tab === tabId;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.tab-page').forEach(page => {
+        page.classList.toggle('active', page.id === tabId);
+    });
 }
 
 // ===== Refine UI：模型刷新/测试 + 词库表格编辑器 + 角色卡编辑器 =====
@@ -1843,18 +1871,8 @@ function closeAbout() {
     try {
       const r = await pywebview.api.refine_get_stage_settings();
       if (!r.success) return;
-      // A4 画像回填：ui_profile 存档优先；首启（first_run=true 且无
-      // ui_profile）默认小白模式 novice（D2026-0927-05 补充①口径）
-      if (r.settings && r.settings.ui_profile) {
-        applyUserMode(String(r.settings.ui_profile));
-      } else if (r.first_run) {
-        applyUserMode('novice');
-        // 首启默认立即落盘：否则用户先改其他设置（触发建档）后，
-        // 下次启动 first_run=false 且无 ui_profile，会回落 standard
-        saveUserMode('novice');
-      } else {
-        applyUserMode('standard');
-      }
+      // v1.5 用户模式选择器已取消：画像回填（模式记忆/首启默认）随之删除，
+      // 初始安装即默认参数（全部自定义收进左侧 TAB 页）
       // 回填并行度（1-5，越界忽略；缺省时保持控件默认值1）
       if (r.settings && r.settings.v2_concurrency != null) {
         const n = parseInt(r.settings.v2_concurrency, 10);
@@ -1897,77 +1915,41 @@ function closeAbout() {
             inp.placeholder = MSG.key_saved_placeholder;
         }
       }
-      // v1.4 小白模式下拉回填（settings KV 键 novice_provider）+ key 行联动
-      if (r.settings && r.settings.novice_provider && $('refineNoviceProvider')) {
-        $('refineNoviceProvider').value = String(r.settings.novice_provider);
+      // v1.5 翻译服务快捷下拉回填（settings KV 键 service_quick）+ key 行联动
+      if (r.settings && r.settings.service_quick && $('refineServiceQuick')) {
+        $('refineServiceQuick').value = String(r.settings.service_quick);
       }
-      refreshNoviceKeyRow();
+      refreshServiceQuickRow();
     } catch (e) { console.warn('[refine] 读取已保存接口配置失败', e); }
   }
 
   // ---- 兜底档位（v2：local=strict / cloud=lenient，无 UI 联动需求）----
 
-  // ---- 画像预设（A4：novice=小白 / standard=标准 / developer=开发者）----
-  // novice 经 persona-novice CSS 类隐藏进阶配置块（不删 DOM，保控件 id 钉）
-  const REFINE_USER_MODES = ['novice', 'standard', 'developer'];
-
-  function applyUserMode(mode) {
-    const m = REFINE_USER_MODES.indexOf(mode) !== -1 ? mode : 'standard';
-    const root = $('refinePanel');
-    if (root) root.classList.toggle('persona-novice', m === 'novice');
-    // v1.4 面板级显隐：novice 显示小白引导面板并隐藏完整面板根容器
-    //（standard/developer 恢复完整面板；refine-novice-hide CSS 保留为冗余兜底）
-    const full = $('refineFullPanel');
-    if (full) full.style.display = (m === 'novice') ? 'none' : 'flex';
-    const nov = $('refineNovicePanel');
-    if (nov) nov.style.display = (m === 'novice') ? 'flex' : 'none';
-    refreshNoviceKeyRow();
-    const sel = $('refineUserMode');
-    if (sel && sel.value !== m) sel.value = m;
-    return m;
-  }
-
-  function currentUserMode() {
-    const sel = $('refineUserMode');
-    const v = sel ? sel.value : '';
-    return REFINE_USER_MODES.indexOf(v) !== -1 ? v : 'standard';
-  }
-
-  // 切换即存（settings KV 键 ui_profile；桥不可用静默降级）
-  function saveUserMode(mode) {
-    try {
-      const p = window.pywebview && pywebview.api
-        ? pywebview.api.refine_save_stage_settings(null, null,
-            { ui_profile: mode })
-        : null;
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    } catch (e) { /* 静默降级 */ }
-  }
-
-  // ---- v1.4 小白模式引导面板（refineNovicePanel）----
+  // ---- v1.5 翻译服务快捷下拉（tab-translate 页；原小白模式顶栏迁入）----
   // key 行联动：deepseek/siliconflow/custom 为云服务需密钥（显示 key 行），
   // 本地 lmstudio/ollama 免钥（隐藏 key 行、显示本地启动提示行）
-  function refreshNoviceKeyRow() {
-    const prov = ($('refineNoviceProvider') || {}).value || '';
+  function refreshServiceQuickRow() {
+    const prov = ($('refineServiceQuick') || {}).value || '';
     const cloud = (prov === 'deepseek' || prov === 'siliconflow'
       || prov === 'custom');
-    const row = $('refineNoviceKeyRow');
+    const row = $('refineServiceQuickKeyRow');
     if (row) row.style.display = cloud ? 'flex' : 'none';
-    const hint = $('refineNoviceLocalHint');
+    const hint = $('refineServiceQuickLocalHint');
     if (hint) hint.style.display = cloud ? 'none' : '';
     return cloud;
   }
 
-  // novice 服务下拉联动：同步完整面板阶段A/B provider（写 stage A 并同步
+  // 服务快捷下拉联动：同步引擎页阶段A/B provider（写 stage A 并同步
   // stage B），endpoint 缺省沿用 applyProviderEndpoint 既有映射（不新造）；
   // 持久化复用 saveStageEndpoints 的 stages 数组通道 + settings KV 键
-  // novice_provider（回填在 applySavedStageSettings / pywebviewready 链路）
-  function applyNoviceProvider(persist) {
-    const prov = ($('refineNoviceProvider') || {}).value || 'lmstudio';
+  // service_quick（v1.5 由旧小白模式持久化键改名；回填在
+  // applySavedStageSettings / pywebviewready 链路）
+  function applyServiceQuickProvider(persist) {
+    const prov = ($('refineServiceQuick') || {}).value || 'lmstudio';
     for (const n of [1, 3]) {
       const pv = $('refineS' + n + 'Provider');
       if (pv) pv.value = prov;
-      // 与完整面板 provider change 行为一致：重置模型下拉并填充缺省地址
+      // 与引擎页 provider change 行为一致：重置模型下拉并填充缺省地址
       const sel = $('refineS' + n + 'Model');
       if (sel) {
         sel.innerHTML = '<option value="">' + MSG.model_refresh_hint
@@ -1975,13 +1957,13 @@ function closeAbout() {
       }
       applyProviderEndpoint(n);
     }
-    refreshNoviceKeyRow();
+    refreshServiceQuickRow();
     if (persist && window.__pywebviewReady) {
       saveStageEndpoints();
       try {
         const p = window.pywebview && pywebview.api
           ? pywebview.api.refine_save_stage_settings(null, null,
-              { novice_provider: prov })
+              { service_quick: prov })
           : null;
         if (p && typeof p.catch === 'function') p.catch(() => {});
       } catch (e) { /* 静默降级 */ }
@@ -1990,13 +1972,14 @@ function closeAbout() {
     }
   }
 
-  // novice API Key 保存：复用既有单阶段密钥保存通道（refine_save_stage_settings
-  // 的 keys 数组，落 stage A=阶段A；DPAPI 密钥库按服务商隔离存储）
-  async function saveNoviceKey() {
-    const prov = ($('refineNoviceProvider') || {}).value || '';
-    const inp = $('refineNoviceKey');
+  // 快捷下拉 API Key 保存：复用既有单阶段密钥保存通道
+  // （refine_save_stage_settings 的 keys 数组，落 stage A=阶段A；
+  // DPAPI 密钥库按服务商隔离存储）
+  async function saveServiceQuickKey() {
+    const prov = ($('refineServiceQuick') || {}).value || '';
+    const inp = $('refineServiceQuickKey');
     const key = inp && inp.value.trim() ? inp.value.trim() : '';
-    const st = $('refineNoviceKeyStatus');
+    const st = $('refineServiceQuickKeyStatus');
     if (!prov || prov === 'lmstudio' || prov === 'ollama') return;
     try {
       const r = await pywebview.api.refine_save_stage_settings(null,
@@ -2015,21 +1998,12 @@ function closeAbout() {
     }
   }
 
-  // novice 开始按钮：无文件→行内错误提示（不弹窗）；有文件→复用与
-  // #refineStartBtn 完全相同的启动流程（TranslatorManager.startTranslation，
-  // 不复制粘贴启动逻辑）
-  function noviceStartTranslation() {
-    const err = $('refineNoviceFileError');
-    if (AppState.selectedFiles.length === 0) {
-      if (err) err.style.display = '';
-      return;
-    }
-    if (err) err.style.display = 'none';
-    TranslatorManager.startTranslation();
-  }
-
   // ---- 质量报告导读查看器（W1b：仅读 *_质量报告导读.json，不读 txt/全量 json）----
   const GUIDE_SUFFIX = '_质量报告导读.json';
+  // 最近一次成功加载的导读路径（AI 分析按其 stem 推导质量报告 txt 路径）
+  let lastLoadedGuidePath = '';
+  // 最近一次 AI 分析的建议载荷（逐条落库时按下标取条目）
+  let lastAiSuggestions = null;
 
   function guideStatus(text) {
     const st = $('guideStatus');
@@ -2117,6 +2091,7 @@ function closeAbout() {
       if (r && r.success) {
         const dv = $('refineGuideViewer');
         if (dv) dv.open = true;
+        lastLoadedGuidePath = r.path || p;
         guideRender(r.data || {});
         guideStatus(MSG.guide_loaded(r.path || p));
       } else {
@@ -2130,6 +2105,203 @@ function closeAbout() {
   // 完成翻译后的静默自动探测：成功才展开面板，失败不打扰用户
   function guideAutoDetect() {
     guideLoad(true);
+  }
+
+  // ============================================================
+  // AI 质量分析（D2026-0929：--ai-analyze 前后端接入）
+  // ============================================================
+
+  // 与 refreshServiceQuickRow / saveStageEndpoints 同源的云服务商口径
+  const AI_CLOUD_PROVIDERS = ['deepseek', 'siliconflow', 'custom', 'zen'];
+
+  function isAiCloudProvider(prov) {
+    return AI_CLOUD_PROVIDERS.includes(String(prov || '').toLowerCase());
+  }
+
+  function aiStatus(text) {
+    const st = $('refineAiAnalyzeStatus');
+    if (st) st.textContent = text || '';
+  }
+
+  function aiReportPath() {
+    const gp = lastLoadedGuidePath || guidePath();
+    if (!gp) return '';
+    return gp.replace(/_质量报告导读\.json$/, '_质量报告.txt');
+  }
+
+  function aiSetPrivacy(providerName) {
+    const bar = $('refineAiPrivacy');
+    if (!bar) return;
+    if (isAiCloudProvider(providerName)) {
+      bar.textContent = MSG.aiPrivacyCloud(providerName || MSG.unknown);
+    } else {
+      bar.textContent = MSG.aiPrivacyLocal;
+    }
+    bar.style.display = '';
+  }
+
+  function aiActionBtn(kind, idx, label) {
+    return '<button type="button" class="btn btn-secondary btn-compact btn-sm"'
+      + ' data-ai-kind="' + kind + '" data-ai-idx="' + idx + '">'
+      + esc(label) + '</button>';
+  }
+
+  function aiConflictBadge() {
+    return ' <span title="' + esc(MSG.aiConflictWarn)
+      + '" style="background:#f0ad4e;color:#fff;border-radius:3px;'
+      + 'padding:0 4px;cursor:help;">⚠️</span>';
+  }
+
+  function aiRenderResult(r) {
+    const box = $('refineAiResult');
+    if (!box) return;
+    const sug = (r && r.suggestions) || {};
+    // parse_ok=False → 整体降级为纯文本观察，不渲染任何可执行按钮
+    if (!r.parse_ok) {
+      box.innerHTML = '<h4>' + esc(MSG.aiParseFailed) + '</h4><ul>'
+        + (sug.observations || []).map(o => '<li>' + esc(o) + '</li>').join('')
+        + '</ul>';
+      return;
+    }
+    const parts = [];
+    // 一段：术语建议
+    parts.push('<h4>' + esc(MSG.aiSectionGlossary) + '</h4>');
+    parts.push('<table style="width:100%;border-collapse:collapse;">'
+      + '<thead><tr><th style="text-align:left;">' + esc(MSG.th_source)
+      + '</th><th style="text-align:left;">' + esc(MSG.th_target)
+      + '</th><th style="text-align:left;">' + esc(MSG.aiThReason)
+      + '</th><th></th></tr></thead><tbody>');
+    (sug.glossary || []).forEach((g, i) => {
+      parts.push('<tr><td>' + esc(g.src) + '</td><td>' + esc(g.target)
+        + '</td><td>' + esc(g.reason || '') + '</td><td>'
+        + aiActionBtn('glossary', i, MSG.aiApplyGlossary) + '</td></tr>');
+    });
+    parts.push('</tbody></table>');
+    // 二段：TM 建议（conflict_warn 行加黄色 ⚠️ 徽标）
+    parts.push('<h4>' + esc(MSG.aiSectionTm) + '</h4>');
+    parts.push('<table style="width:100%;border-collapse:collapse;">'
+      + '<thead><tr><th style="text-align:left;">' + esc(MSG.th_source)
+      + '</th><th style="text-align:left;">' + esc(MSG.th_target)
+      + '</th><th style="text-align:left;">' + esc(MSG.aiThReason)
+      + '</th><th></th></tr></thead><tbody>');
+    (sug.tm || []).forEach((t, i) => {
+      parts.push('<tr><td>' + esc(t.source) + (t.conflict_warn
+        ? aiConflictBadge() : '') + '</td><td>' + esc(t.target)
+        + '</td><td>' + esc(t.reason || '') + '</td><td>'
+        + aiActionBtn('tm', i, MSG.aiApplyTm) + '</td></tr>');
+    });
+    parts.push('</tbody></table>');
+    // 三段：一般观察（纯文本，不可执行）
+    parts.push('<h4>' + esc(MSG.aiSectionObs) + '</h4><ul>'
+      + (sug.observations || []).map(o => '<li>' + esc(o) + '</li>').join('')
+      + '</ul>');
+    box.innerHTML = parts.join('');
+    box.querySelectorAll('button[data-ai-kind]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.aiIdx) || 0;
+        if (btn.dataset.aiKind === 'glossary') aiApplyGlossary(i, btn);
+        else aiApplyTm(i, btn);
+      });
+    });
+  }
+
+  async function refineAiAnalyze() {
+    if (!lastLoadedGuidePath) {
+      aiStatus(MSG.aiNeedGuide);
+      return;
+    }
+    if (!window.pywebview || !window.pywebview.api) {
+      aiStatus(MSG.api_not_ready);
+      return;
+    }
+    const rp = aiReportPath();
+    if (!rp || !rp.endsWith('_质量报告.txt')) {
+      aiStatus(MSG.aiNeedGuide);
+      return;
+    }
+    const btn = $('refineAiAnalyzeBtn');
+    if (btn) btn.disabled = true;
+    aiStatus(MSG.aiAnalyzing);
+    try {
+      const model = (($('refineS1Model') || {}).value || '').trim();
+      const r = await window.pywebview.api.refine_ai_analyze(rp, model);
+      if (r && r.success) {
+        lastAiSuggestions = r;
+        aiSetPrivacy(r.provider_name);
+        aiRenderResult(r);
+        aiStatus(MSG.aiDone);
+      } else {
+        aiStatus(MSG.aiFailed((r && r.error) || MSG.unknown));
+      }
+    } catch (e) {
+      aiStatus(MSG.aiFailed(e && e.message ? e.message : String(e)));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function aiBtnState(btn, statusText) {
+    if (statusText) {
+      btn.textContent = statusText;
+      btn.disabled = true;
+    } else {
+      btn.disabled = false;
+    }
+  }
+
+  // 落库失败反馈：按钮转「重试」态 + 行内（aiStatus）显示错误摘要，
+  // 不再静默恢复；成功路径不受影响。
+  function aiApplyFail(btn, err) {
+    const m = (err && err.message) ? err.message : String(err || MSG.unknown);
+    btn.textContent = MSG.aiApplyRetry;
+    btn.disabled = false;
+    aiStatus(MSG.aiApplyFailed(m));
+  }
+
+  async function aiApplyGlossary(idx, btn) {
+    const entry = (((lastAiSuggestions || {}).suggestions || {}).glossary
+      || [])[idx];
+    if (!entry || !window.pywebview || !window.pywebview.api) return;
+    btn.disabled = true;
+    try {
+      const r = await window.pywebview.api.refine_ai_apply_glossary(
+        JSON.stringify([{ src: entry.src, target: entry.target,
+                          aliases: entry.aliases || [] }]));
+      if (r && r.success === false) {
+        aiApplyFail(btn, r.error || MSG.unknown);
+        return;
+      }
+      const st = ((r && r.results && r.results[0]) || {}).status || '';
+      aiBtnState(btn,
+        st === 'added' ? MSG.aiApplied
+          : st === 'exists' ? MSG.aiExists
+            : st === 'exists_diff' ? MSG.aiExistsDiff
+              : st === 'locked' ? MSG.aiLocked : '');
+      if (st === 'added' && typeof glLoad === 'function') glLoad();
+    } catch (e) {
+      aiApplyFail(btn, e);
+    }
+  }
+
+  async function aiApplyTm(idx, btn) {
+    const entry = (((lastAiSuggestions || {}).suggestions || {}).tm
+      || [])[idx];
+    if (!entry || !window.pywebview || !window.pywebview.api) return;
+    btn.disabled = true;
+    try {
+      const r = await window.pywebview.api.refine_ai_apply_tm(
+        JSON.stringify([{ source: entry.source, target: entry.target }]));
+      if (r && r.success === false) {
+        aiApplyFail(btn, r.error || MSG.unknown);
+        return;
+      }
+      const st = ((r && r.results && r.results[0]) || {}).status || '';
+      aiBtnState(btn,
+        st === 'added' ? MSG.aiTmStored
+          : st === 'exists' ? MSG.aiExists : '');
+    } catch (e) {
+      aiApplyFail(btn, e);
+    }
   }
 
   // ---- 性暗示词替换（legacy 功能，已随 legacy 管线删除）----
@@ -2166,34 +2338,17 @@ function closeAbout() {
     const epSaveBtn = $('refineSaveEndpointsBtn');
     if (epSaveBtn) epSaveBtn.addEventListener('click', saveStageEndpoints);
 
-    // A4 用户模式切换：应用 + 即存
-    const userModeSel = $('refineUserMode');
-    if (userModeSel) userModeSel.addEventListener('change', () => {
-      const m = currentUserMode();
-      applyUserMode(m);
-      saveUserMode(m);
-    });
+    // v1.5 翻译服务快捷下拉绑定（tab-translate 页）
+    const quickProv = $('refineServiceQuick');
+    if (quickProv) quickProv.addEventListener('change',
+      () => applyServiceQuickProvider(true));
+    const quickKeyBtn = $('refineServiceQuickSaveKeyBtn');
+    if (quickKeyBtn) quickKeyBtn.addEventListener('click', saveServiceQuickKey);
 
-    // v1.4 小白模式引导面板绑定
-    const novProv = $('refineNoviceProvider');
-    if (novProv) novProv.addEventListener('change',
-      () => applyNoviceProvider(true));
-    const novKeyBtn = $('refineNoviceSaveKeyBtn');
-    if (novKeyBtn) novKeyBtn.addEventListener('click', saveNoviceKey);
-    const novStartBtn = $('refineNoviceStartBtn');
-    if (novStartBtn) {
-      novStartBtn.addEventListener('click', noviceStartTranslation);
-    }
-    const novStopBtn = $('refineNoviceStopBtn');
-    if (novStopBtn) {
-      novStopBtn.addEventListener('click',
-        () => TranslatorManager.cancelTranslation());
-    }
-    // 第 1 步「添加文件」快捷按钮：复用 Source 区既有 addFiles 流程
-    const novAddBtn = $('refineNoviceAddFilesBtn');
-    if (novAddBtn) {
-      novAddBtn.addEventListener('click', () => FileListManager.addFiles());
-    }
+    // v1.5 左侧 TAB 栏绑定（SmartSub 式功能选择）
+    document.querySelectorAll('.side-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
 
     const glAddBtn = $('refineGlAdd');
     if (glAddBtn) glAddBtn.addEventListener('click', glAdd);
@@ -2252,6 +2407,9 @@ function closeAbout() {
     // 质量报告导读查看器（W1b）
     const guideBtn = $('refineGuideLoadBtn');
     if (guideBtn) guideBtn.addEventListener('click', () => guideLoad(false));
+    // AI 质量分析（D2026-0929）
+    const aiBtn = $('refineAiAnalyzeBtn');
+    if (aiBtn) aiBtn.addEventListener('click', () => refineAiAnalyze());
   }
 
   // ---- 远程数据加载（pywebview 就绪后调用一次）----
