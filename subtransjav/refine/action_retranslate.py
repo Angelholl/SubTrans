@@ -45,6 +45,20 @@ _ACTION_SYSTEM_PROMPT = (
     "硬性要求：只输出重翻后的中文正文一行——不要解释、不要引号、"
     "不要编号、不要输出日文或英文原文。")
 
+# 告警类别→处理要点提示（v1.4 C1）：命中的类别在 user 提示词"告警说明"
+# 行后插入固定格式"处理要点：{hint}"行；未登记类别不插入（行为与旧版
+# 一致）。只登记确有定向处理动作的类别。
+_CATEGORY_HINTS: dict[str, str] = {
+    "single_line_too_long":
+        "在不丢失原意的前提下精简译文，缩短单行长度，使译文适合快速阅读；"
+        "可拆分为多行，不得删除条目",
+    "dewei":
+        "上下文复核「で」：先判断其功能（手段/场所/原因/时间/状态/范围）；"
+        "仅当误译为「作为/当成」且语境不符时才做最小修正；原译正确或可"
+        "接受则保留；不确定则保留原译。禁止机械替换，保持格式、术语与"
+        "语气，可精简但不丢信息。",
+}
+
 # 成对引号表（响应清洗只剥一层：模型偶发给译文套引号）
 _QPAIRS = {"\"": "\"", "'": "'",
            "\u201c": "\u201d", "\u2018": "\u2019",
@@ -353,8 +367,11 @@ def run_action_retranslate(cfg, args) -> int:
         user_text = (f"日文原文：{source_text}\n"
                      f"现有中文译文：{old_text}\n"
                      f"告警类别：{category}\n"
-                     f"告警说明：{it.get('message') or ''}\n"
-                     "请只输出重翻后的中文正文一行。")
+                     f"告警说明：{it.get('message') or ''}\n")
+        hint = _CATEGORY_HINTS.get(category)
+        if hint:
+            user_text += f"处理要点：{hint}\n"
+        user_text += "请只输出重翻后的中文正文一行。"
         try:
             raw = client._chat(_ACTION_SYSTEM_PROMPT, user_text)
         except Exception as e:   # noqa: BLE001 单条调用失败不中断整批

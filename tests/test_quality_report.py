@@ -508,3 +508,191 @@ def test_guide_items_v2_structured_none_only_untranslated():
     assert [it["category"] for it in items] == ["untranslated"]
     assert items[0]["index"] == 2
     assert items[0]["current_text"] == "[未翻译]テスト"
+
+
+# ----------------------------------------------------------------------
+# v1.4 批次 1b C2：单行超长检测（进导读行动条目，可自动重翻）
+# ----------------------------------------------------------------------
+
+def test_single_line_too_long_report_section_and_items():
+    """C2：超长行条目 → 文本报告含新章节、items 含 single_line_too_long
+    且 current_text/message/source_excerpt 正确；items 字段闭集不破。"""
+    t = "00:00:01,000 --> 00:00:04,000"
+    long_line = "这" * 45                       # 单行 45 字符（>30）
+    final = [{"index": 1, "timing": t, "text": long_line}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert "【语速与间隙观测】" in report
+    # 观测行统一"时间轴在前、条目号在后"（刻意区分 "#N <timing>" 形态，
+    # 防撞既有计数断言）；行长与阈值同现
+    assert f"{t} #1 行长 45（阈值 30）" in report
+    items = [it for it in sink["items"]
+             if it["category"] == "single_line_too_long"]
+    assert len(items) == 1
+    it = items[0]
+    assert it["index"] == 1 and it["timing"] == t
+    assert "45" in it["message"] and "30" in it["message"]
+    assert it["current_text"] == long_line       # 终稿全文（可重翻）
+    assert it["source_excerpt"] == long_line[:60]
+    assert it["status"] == "open" and it["severity"] is None
+    fields = {"index", "timing", "category", "message",
+              "current_text", "source_excerpt", "status", "severity"}
+    assert set(it) == fields
+
+
+def test_single_line_within_threshold_no_item_no_section():
+    """C2 负向：不超长（=阈值）不产 item、无观测章节；空白不计行长。"""
+    t = "00:00:01,000 --> 00:00:05,000"
+    final = [{"index": 1, "timing": t, "text": "这" * 30 + "  "}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert "【语速与间隙观测】" not in report
+    assert all(it["category"] != "single_line_too_long"
+               for it in sink["items"])
+
+
+def test_single_line_whitespace_excluded_multi_line_worst_line():
+    """C2 口径：行长按去除全部空白后的字符数；多行取最长违规行。"""
+    t = "00:00:01,000 --> 00:00:09,000"
+    text = "这" * 20 + " " * 15 + "\n" + "好" * 33
+    final = [{"index": 1, "timing": t, "text": text}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    build_quality_report(exp, final, "demo", guide_sink=sink)
+    it = next(it for it in sink["items"]
+              if it["category"] == "single_line_too_long")
+    assert "33" in it["message"]                 # 最长违规行 33（20 行不超）
+    assert it["source_excerpt"] == "好" * 33
+
+
+def test_single_line_duplicate_index_current_text_takes_first_block():
+    """C2 重号 index：new items 的 current_text 也走 resolve_final_block
+    取列表顺序首个终稿块（D11 契约同口径）。"""
+    t1 = "00:00:01,000 --> 00:00:05,000"
+    t2 = "00:00:06,000 --> 00:00:10,000"
+    final = [{"index": 0, "timing": t1, "text": "首块"},
+             {"index": 0, "timing": t2, "text": "这" * 35}]
+    exp = [{"index": 0, "timing": t1, "text": "ソ"}]
+    sink: dict = {}
+    build_quality_report(exp, final, "demo", guide_sink=sink)
+    it = next(it for it in sink["items"]
+              if it["category"] == "single_line_too_long")
+    assert it["index"] == 0 and it["timing"] == t2
+    assert it["current_text"] == "首块"          # 首块口径，非违规块全文
+
+
+def test_guide_items_mixed_sources_ascending():
+    """C2 补钉：single_line_too_long 与 untranslated 混合（index 交错）
+    时 items 仍整体按 index 升序（:1087 升序钉的混合来源形态）。"""
+    final = [{"index": 3, "timing": "00:00:05,000 --> 00:00:06,000",
+              "text": "[未翻译]テスト"},
+             {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+              "text": "长" * 35},
+             {"index": 2, "timing": "00:00:03,000 --> 00:00:04,000",
+              "text": "正常"}]
+    exp = [{"index": 3, "timing": "00:00:05,000 --> 00:00:06,000",
+            "text": "ソ"}]
+    sink: dict = {}
+    build_quality_report(exp, final, "demo", guide_sink=sink)
+    items = sink["items"]
+    assert [it["index"] for it in items] == [1, 3]
+    assert [it["category"] for it in items] == [
+        "single_line_too_long", "untranslated"]
+
+
+# ----------------------------------------------------------------------
+# v1.4 批次 1b C3：语速 CPS 与时间轴间隙观测（只观测，绝不进 items）
+# ----------------------------------------------------------------------
+
+def test_cps_observations_reported_not_in_items():
+    """C3①：超 CPS 条目进观测行与汇总，绝不进 items（钉死"观测不行动"）。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    final = [{"index": 1, "timing": t, "text": "超" * 12}]   # 12 字/1s=12 CPS
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert "【语速与间隙观测】" in report
+    assert f"{t} #1 CPS 12.00" in report
+    assert "汇总: 超 CPS 1 条" in report
+    assert "本节为观测数据，供日文语速定标调研，不触发自动重翻" in report
+    assert sink["items"] == []
+
+
+def test_gap_observations_reported_with_summary():
+    """C3②③：相邻条目间隙 >5.0s 记观测行；汇总含超 CPS 条数、间隙数、
+    最大 gap；items 仍零污染。"""
+    t1 = "00:00:01,000 --> 00:00:02,000"
+    t2 = "00:00:10,000 --> 00:00:11,000"
+    final = [{"index": 1, "timing": t1, "text": "你好"},
+             {"index": 2, "timing": t2, "text": "再见"}]
+    exp = [{"index": 1, "timing": t1, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert "间隙观测" in report
+    assert f"{t2} #2 间隙 8.00s" in report
+    assert "汇总: 超 CPS 0 条 | 间隙 >5.0s 1 处 | 最大 gap 8.00s" in report
+    assert sink["items"] == []                   # 观测绝不产 items
+
+
+def test_cps_threshold_cjk_vs_other_and_skip_rules():
+    """C3① 口径：CJK 为主（ord>0x2E80 占比≥50%）基准 8、其他 20；
+    span 无效/时长 ≤0/空文本跳过不产观测。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    # CJK 为主：9 字/1s=9.0 ≤ 9.2（8×1.15）→ 无观测；ascii 9 字同理
+    report = build_quality_report(
+        exp, [{"index": 1, "timing": t, "text": "超" * 9}], "demo")
+    assert "【语速与间隙观测】" not in report
+    report_ascii = build_quality_report(
+        exp, [{"index": 1, "timing": t, "text": "abcdefghi"}], "demo")
+    assert "【语速与间隙观测】" not in report_ascii
+    # span 无效 / 时长 0 / 空文本：跳过（12 字短文本不撞单行超长）
+    report_skip = build_quality_report(exp, [
+        {"index": 1, "timing": "非法时间轴", "text": "超" * 12},
+        {"index": 2, "timing": "00:00:05,000 --> 00:00:05,000",
+         "text": "好" * 12},
+        {"index": 3, "timing": t, "text": ""},
+    ], "demo")
+    assert "【语速与间隙观测】" not in report_skip
+
+
+def test_cps_min_duration_gate_skips_ultra_short():
+    """D5c：时长 <0.5s 的超短条目即使 CPS 爆表也不产观测行（防观测带
+    被超短条目污染）；0.5s 恰达门槛（dur<0.5 才跳）、正常时长仍观测。"""
+    exp = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+            "text": "ソ"}]
+    # 0.4s/12 字 → CPS 30 爆表，但时长低于门槛：跳过
+    t04 = "00:00:01,000 --> 00:00:01,400"
+    r04 = build_quality_report(
+        exp, [{"index": 1, "timing": t04, "text": "超" * 12}], "demo")
+    assert "【语速与间隙观测】" not in r04
+    # 0.5s 恰达门槛：24 字 → CPS 48 爆表 → 仍产观测
+    t05 = "00:00:01,000 --> 00:00:01,500"
+    r05 = build_quality_report(
+        exp, [{"index": 1, "timing": t05, "text": "超" * 24}], "demo")
+    assert "【语速与间隙观测】" in r05
+    # 常量与 cps_distribution 侧等值（双钉防漂移；tools 非包，走 sys.path）
+    import sys as _sys
+    from pathlib import Path as _Path
+    _tools_dir = str(_Path(__file__).resolve().parents[1] / "tools")
+    if _tools_dir not in _sys.path:
+        _sys.path.insert(0, _tools_dir)
+    from cps_distribution import CPS_MIN_DURATION_S
+
+    from subtransjav.refine import quality_report as qr
+    assert qr._CPS_MIN_DURATION_S == CPS_MIN_DURATION_S == 0.5
+
+
+def test_normal_entries_zero_observation_rows():
+    """C3 负向：正常条目零观测行、无观测章节。"""
+    t1 = "00:00:01,000 --> 00:00:02,000"
+    t2 = "00:00:03,000 --> 00:00:04,000"
+    final = [{"index": 1, "timing": t1, "text": "你好"},
+             {"index": 2, "timing": t2, "text": "再见"}]
+    exp = [{"index": 1, "timing": t1, "text": "ソ"}]
+    report = build_quality_report(exp, final, "demo")
+    assert "【语速与间隙观测】" not in report
+    assert "CPS" not in report
+    assert "间隙" not in report

@@ -14,6 +14,8 @@
 - 实义漏覆盖逐条列出（无门槛，上限 20 条；拆"整条缺失/条目在但未译"
   两口径，总数 = 之和）；
 - post_validate 告警逐条进入复核清单，warn_only=false 的硬性告警一并呈现；
+- 单行超长（v1.4 C2）进导读行动条目可自动重翻；语速 CPS 与时间轴
+  间隙（v1.4 C3）只观测不行动，绝不进 items；
 - 统计段含条数核对恒等式（原文 = 闸门0删除 + 预合并合并 + 规则清洗
   合并 + 规则清洗删除 + 隔离区移出 + 终稿），不平则以 ⚠️ 显式呈现，
   绝不静默。
@@ -65,6 +67,20 @@ _CONFLICT_TERM_DIST_LIMIT = 10
 # 术语一致性章节逐条样本上限：每术语 3 条 / 全章 20 条
 _CONSISTENCY_TERM_SAMPLE_LIMIT = 3
 _CONSISTENCY_SAMPLE_LIMIT = 20
+# 单行超长阈值（v1.4 C2）：每行去除全部空白后的字符数上限，超过即记
+# 违规——进导读行动条目（category=single_line_too_long，可自动重翻）
+_SINGLE_LINE_MAX_CHARS = 30
+# 语速观测阈值（v1.4 C3）：CPS=条目去空白字符数/时长秒；CJK 为主
+# （ord>0x2E80 字符占比≥50%）基准 8、否则 20，容差 ×1.15。只观测不行动
+_CPS_CJK_BASE = 8.0
+_CPS_OTHER_BASE = 20.0
+_CPS_TOLERANCE = 1.15
+# D5c：CPS 最小时长门槛——时长 <0.5s 的超短条目即使爆表也不产观测
+# （防超短条目 CPS 爆表污染观测带；与 tools/cps_distribution 的
+# CPS_MIN_DURATION_S 等值，test_cps_distribution 钉等值）
+_CPS_MIN_DURATION_S = 0.5
+# 相邻条目时间轴间隙观测阈值（秒；只观测不行动）
+_GAP_MAX_SECONDS = 5.0
 
 
 def _weight(text: str) -> float:
@@ -391,6 +407,147 @@ def render_term_consistency_section(term_stats: list | None) -> str:
     return "\n".join(lines)
 
 
+def _cjk_dominant(compact_text: str) -> bool:
+    """CJK 为主判定（_weight 同款口径）：ord>0x2E80 字符占比 ≥50%。"""
+    if not compact_text:
+        return False
+    n = sum(1 for c in compact_text if ord(c) > 0x2E80)
+    return n / len(compact_text) >= 0.5
+
+
+def _scan_single_line_violations(final_entries: list) -> list[dict]:
+    """C2：终稿单行超长扫描（每行去除全部空白后 > _SINGLE_LINE_MAX_CHARS）。
+
+    每个违规条目一条记录：index/timing/message/excerpt/max_len；message
+    恒含最长违规行行长与阈值；excerpt 取最长违规行（并列取首行）截断
+    60 字符内。纯函数。
+    """
+    violations: list[dict] = []
+    for e in final_entries:
+        best_len = 0
+        best_line = ""
+        for line in (e.get("text") or "").split("\n"):
+            compact = "".join(line.split())
+            n = len(compact)
+            if n > _SINGLE_LINE_MAX_CHARS and n > best_len:
+                best_len = n
+                best_line = line.strip()
+        if best_len:
+            violations.append({
+                "index": e.get("index"),
+                "timing": e.get("timing") or "",
+                "max_len": best_len,
+                "message": (f"单行超长 {best_len} 字符"
+                            f"（阈值 {_SINGLE_LINE_MAX_CHARS}，不含空白）"),
+                "excerpt": best_line[:60],
+            })
+    return violations
+
+
+def _scan_cps_observations(final_entries: list) -> list[dict]:
+    """C3①：超 CPS 观测扫描（只观测，绝不进 items/重翻）。
+
+    CPS=条目去空白字符数/时长秒（时长经叶子模块 v2_premerge._timing_span，
+    函数级导入手法与 build_quality_report 同款）；span 无效、时长 ≤0、
+    时长 < _CPS_MIN_DURATION_S（D5c 最小时长门槛）或空文本跳过。判定：
+    CJK 为主基准 8 / 其他 20，容差 ×1.15，严格大于。
+    """
+    from .v2_premerge import _timing_span
+    obs: list[dict] = []
+    for e in final_entries:
+        compact = "".join((e.get("text") or "").split())
+        if not compact:
+            continue
+        s0, e0 = _timing_span(e.get("timing") or "")
+        dur = e0 - s0
+        if s0 < 0 or dur < _CPS_MIN_DURATION_S:
+            continue
+        base = _CPS_CJK_BASE if _cjk_dominant(compact) else _CPS_OTHER_BASE
+        limit = base * _CPS_TOLERANCE
+        cps = len(compact) / dur
+        if cps > limit:
+            obs.append({"index": e.get("index"),
+                        "timing": e.get("timing") or "",
+                        "cps": cps, "base": base, "limit": limit})
+    return obs
+
+
+def _scan_gap_observations(final_entries: list) -> tuple[list[dict],
+                                                         float | None]:
+    """C3②③：相邻条目时间轴间隙观测（按起点排序后逐对检查）。
+
+    gap = 后条起点 - 前条终点，严格大于 _GAP_MAX_SECONDS 记观测行；同时
+    返回全部相邻对的最大 gap（无有效相邻对为 None）。无法解析起点的条目
+    跳过；零时长条目（起点=终点）保留参与配对——其自身不产生间隙，仅作为
+    邻接边界，与 CPS 扫描的 dur>0 口径不对称属有意取舍。纯函数。
+    """
+    from .v2_premerge import _timing_span
+    spans: list[tuple[float, float, object, str]] = []
+    for e in final_entries:
+        s0, e0 = _timing_span(e.get("timing") or "")
+        if s0 < 0:
+            continue
+        spans.append((s0, e0, e.get("index"), e.get("timing") or ""))
+    spans.sort(key=lambda x: (x[0], x[1]))
+    obs: list[dict] = []
+    max_gap: float | None = None
+    # 相邻对配对：n 与 n-1 截断 zip（strict=False 为语义所需，非疏漏）
+    for prev, cur in zip(spans, spans[1:], strict=False):
+        gap = cur[0] - prev[1]
+        if max_gap is None or gap > max_gap:
+            max_gap = gap
+        if gap > _GAP_MAX_SECONDS:
+            obs.append({"index": cur[2], "timing": cur[3], "gap": gap,
+                        "prev_index": prev[2], "prev_end": prev[1]})
+    return obs, max_gap
+
+
+def render_observation_section(single_line: list | None,
+                               cps_obs: list | None,
+                               gap_obs: list | None,
+                               max_gap: float | None = None) -> str:
+    """渲染「语速与间隙观测」章节（v1.4 C2/C3）为文本（纯函数）。
+
+    三部分：单行超长（C2，只检测与建议，处理走导读行动条目）、语速
+    CPS（C3①，纯观测）、时间轴间隙（C3②，纯观测）；节尾汇总行（超
+    CPS 条数、间隙数、最大 gap）与观测免责声明恒有。三组全空时整节
+    省略（返回空串）。观测行统一"时间轴在前、条目号在后"排版（与复核
+    清单 "#N <timing>" 形态刻意区分）。
+    """
+    single_line = single_line or []
+    cps_obs = cps_obs or []
+    gap_obs = gap_obs or []
+    if not (single_line or cps_obs or gap_obs):
+        return ""
+    lines = ["【语速与间隙观测】"]
+    if single_line:
+        lines.append(f"单行超长（阈值 {_SINGLE_LINE_MAX_CHARS} 字符，不含空白；"
+                     "只检测与建议，处理走导读行动条目）:")
+        for v in single_line:
+            lines.append(f"  {_fmt_timing(v['timing'])} #{v['index']} "
+                         f"行长 {v['max_len']}"
+                         f"（阈值 {_SINGLE_LINE_MAX_CHARS}）: {v['excerpt']}")
+    if cps_obs:
+        lines.append(f"语速观测（CPS 阈值：CJK 基准 {_CPS_CJK_BASE:g} / "
+                     f"其他基准 {_CPS_OTHER_BASE:g}，容差 ×{_CPS_TOLERANCE:g}）:")
+        for o in cps_obs:
+            lines.append(f"  {_fmt_timing(o['timing'])} #{o['index']} "
+                         f"CPS {o['cps']:.2f}（阈值 {o['limit']:.2f}）")
+    if gap_obs:
+        lines.append(f"间隙观测（相邻条目间隙 > "
+                     f"{_GAP_MAX_SECONDS:.1f}s）:")
+        for g in gap_obs:
+            lines.append(f"  {_fmt_timing(g['timing'])} #{g['index']} "
+                         f"间隙 {g['gap']:.2f}s（上一条 #{g['prev_index']}"
+                         f" 结束于 {g['prev_end']:.3f}s）")
+    gap_show = f"{max_gap:.2f}s" if max_gap is not None else "无"
+    lines.append(f"汇总: 超 CPS {len(cps_obs)} 条 | "
+                 f"间隙 >{_GAP_MAX_SECONDS:.1f}s {len(gap_obs)} 处 | "
+                 f"最大 gap {gap_show}")
+    lines.append("本节为观测数据，供日文语速定标调研，不触发自动重翻。")
+    return "\n".join(lines)
+
+
 def write_divergence_review_csv(out_path: str, rows: list, file_label: str,
                                 final_entries: list | None = None) -> None:
     """分歧复核 CSV 落盘（独立可调用，输出路径由调用方指定）。
@@ -443,6 +600,9 @@ _SECTION_NOTES: tuple[tuple[str, str], ...] = (
      "　（译文与词表规定译法不一致的观察记录，供术语口径统一时裁定）"),
     ("【术语一致性】",
      "　（各源词在译文中的覆盖情况统计）"),
+    ("【语速与间隙观测】",
+     "　（单行超长为检测与建议，处理走导读行动条目；语速与间隙为观测"
+     "数据，供日文语速定标调研，不触发自动重翻）"),
     ("【双引擎分歧】",
      "　（两遍引擎译法不同的行，可选抽查；引擎降级时此处仅显示模式）"),
     ("【统计】",
@@ -622,7 +782,8 @@ def build_quality_report(orig_entries: list, final_entries: list,
         post_validate 的结构化告警（check_and_fix_translation_errors
         第四返回值，与 validator_warnings 同序等长的 dict 列表）。
         提供时进入导读 json 的 items[]（version 2）；None（旧调用方）
-        时 items 仅含 untranslated 条目。items 的 current_text 经
+        时 items 含 untranslated 与单行超长（single_line_too_long，
+        v1.4 C2）条目。items 的 current_text 经
         resolve_final_block 按精确 index 映射终稿块，映射不到（被并/
         被删/被隔离移出）即为 null——语义即"不可自动重翻"，不另设
         字段。
@@ -988,6 +1149,18 @@ def build_quality_report(orig_entries: list, final_entries: list,
     if consistency_text:
         lines.extend(consistency_text.splitlines())
         lines.append("-" * 60)
+    # 语速与间隙观测章节（v1.4 C2/C3）：单行超长（进导读行动条目）+
+    # 语速 CPS 与时间轴间隙（纯观测，绝不进 items）。内联检测在组装区
+    # 一次完成，渲染提为纯函数 render_observation_section；三组全空时
+    # 整节省略。置于【术语一致性】之后、【双引擎分歧】之前。
+    single_line_violations = _scan_single_line_violations(final_entries)
+    cps_obs = _scan_cps_observations(final_entries)
+    gap_obs, max_gap = _scan_gap_observations(final_entries)
+    observation_text = render_observation_section(
+        single_line_violations, cps_obs, gap_obs, max_gap)
+    if observation_text:
+        lines.extend(observation_text.splitlines())
+        lines.append("-" * 60)
     # 双引擎分歧章节：无条件输出（pass_mode 决定完整/降级展示），
     # 渲染逻辑提为纯函数 render_disagreement_section（离线重算脚本复用）
     lines.extend(render_disagreement_section(pass_disagreement,
@@ -1080,6 +1253,21 @@ def build_quality_report(orig_entries: list, final_entries: list,
                 "message": "整段未翻译",
                 "current_text": e.get("text") or "",   # 终稿块全文（含前缀）
                 "source_excerpt": ((se or {}).get("text") or "")[:40],
+                "status": "open",
+                "severity": None,
+            })
+        # 来源 C：单行超长条目（v1.4 C2，唯一新增立即行动类）。
+        # current_text 走 resolve_final_block（重号 index 取列表顺序
+        # 首块，D11 同口径）；source_excerpt 为最长违规行截断 60 字符内。
+        for v in single_line_violations:
+            fe = resolve_final_block(final_entries, v["index"])
+            guide_items.append({
+                "index": v["index"],
+                "timing": v["timing"],
+                "category": "single_line_too_long",
+                "message": v["message"],
+                "current_text": (fe or {}).get("text"),
+                "source_excerpt": v["excerpt"],
                 "status": "open",
                 "severity": None,
             })

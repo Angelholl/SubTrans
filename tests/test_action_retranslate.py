@@ -476,3 +476,46 @@ def test_action_params_not_in_config_fingerprint():
     assert compute_config_hash(with_action) == compute_config_hash(base)
     assert compute_config_hash(base) == compute_config_hash(RefineConfig(
         inputs=["a.srt"]))
+
+
+# ---------------------------------------------------------------------------
+# C1（v1.4 批次 1b）：重翻提示词类别条件化（_CATEGORY_HINTS）
+# ---------------------------------------------------------------------------
+
+def test_category_hint_line_for_known_categories(tmp_path, install_client):
+    """已登记类别：user 提示词在"告警说明"行后插入固定格式
+    "处理要点：{hint}"行。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [
+        _item(3, T3, "前辈真厉害", category="single_line_too_long"),
+        _item(4, T4, "四", category="dewei"),
+    ])
+    fake = install_client(responses=["精简后的短句。", "指代已复核。"])
+    assert run_action_retranslate(_cfg(), _args(tmp_path, apply=True)) == 0
+    assert len(fake.calls) == 2
+    u1, u2 = fake.calls[0][1], fake.calls[1][1]
+    assert "处理要点：在不丢失原意的前提下精简译文" in u1
+    assert "处理要点：上下文复核「で」：先判断其功能" in u2
+    assert "不确定则保留原译" in u2
+    # 固定格式钉：处理要点行紧跟告警说明行之后
+    for u in (u1, u2):
+        ls = u.splitlines()
+        i = next(k for k, x in enumerate(ls) if x.startswith("告警说明："))
+        assert ls[i + 1].startswith("处理要点：")
+
+
+def test_unknown_category_prompt_has_no_hint_line(tmp_path, install_client):
+    """未登记类别：无处理要点行，其余五行与旧版逐行一致。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [_item(3, T3, "前辈真厉害")])  # 默认 mistranslation
+    fake = install_client(responses=["重翻后的中文。"])
+    assert run_action_retranslate(_cfg(), _args(tmp_path, apply=True)) == 0
+    u = fake.calls[0][1]
+    assert "处理要点" not in u
+    assert u.splitlines() == [
+        "日文原文：せんぱい",
+        "现有中文译文：前辈真厉害",
+        "告警类别：mistranslation",
+        "告警说明：疑似误译",
+        "请只输出重翻后的中文正文一行。",
+    ]
