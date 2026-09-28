@@ -7,7 +7,9 @@
 4. 名单契约：BANNED_PATTERNS 每一项均被 .gitignore 对应规则覆盖
    或属 docs/decision-log.md :139 收尾清单（防名单与 .gitignore 漂移）；
 5. cp1252 窄码页（PYTHONIOENCODING=cp1252）下干净仓 → 退出码 0
-   （Windows CI 中文输出不崩溃回归）。
+   （Windows CI 中文输出不崩溃回归）；
+6. 反向契约：.gitignore「TM 备份」敏感段每条规则在 BANNED_PATTERNS
+   有可命中对应（防敏感规则新增而名单漏收，白名单豁免行除外）。
 """
 import os
 import subprocess
@@ -23,8 +25,12 @@ GUARD = ROOT / "tools" / "guard_banned_paths.py"
 
 
 def _git(cwd: Path, *args: str) -> None:
+    # encoding 显式钉 utf-8 + errors=replace：全局 git 钩子（如提交通知）
+    # 向 stderr 写 GBK 等非 UTF-8 字节时，Windows locale 默认解码会抛
+    # UnicodeDecodeError 且被静默吞掉，显式宽解码保住退出码与输出。
     subprocess.run(["git", *args], cwd=cwd, check=True,
-                   capture_output=True, text=True)
+                   capture_output=True, text=True,
+                   encoding="utf-8", errors="replace")
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -38,9 +44,11 @@ def _init_repo(tmp_path: Path) -> Path:
 
 def _run_guard(repo: Path, *extra: str, env=None):
     # env=None 时 subprocess.run 继承当前环境，行为与旧签名完全一致。
+    # encoding/errors 同 _git：显式 utf-8 + replace 防 locale 解码崩溃。
     return subprocess.run(
         [sys.executable, str(GUARD), *extra],
-        cwd=repo, capture_output=True, text=True, env=env)
+        cwd=repo, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", env=env)
 
 
 def test_tracked_violation_exits_1(tmp_path):
@@ -117,3 +125,29 @@ def test_match_any_semantics():
     assert match_any("Temp/build_blind_pack.py")
     assert not match_any("subtransjav/refine/cli.py")
     assert not match_any("tools/guard_banned_paths.py")
+
+
+def test_gitignore_tm_rules_have_guard_counterpart():
+    """反向契约（防 .gitignore 敏感规则漏收）：.gitignore「TM 备份」
+    敏感段（tm/翻译记忆相关规则）每条规则构造具体探测路径走 match_any
+    真实语义，断言 BANNED_PATTERNS 有可命中对应。注释/空行跳过，
+    `!` 白名单豁免行不要求收名单（与既有名单-契约测试豁免口径对齐）。
+    """
+    rules = []
+    in_tm_section = False
+    for raw in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("#"):
+            in_tm_section = "TM 备份" in line    # 段头开闸，其余段头关闸
+            continue
+        if not in_tm_section or not line:
+            continue
+        if line.startswith("!"):                 # 白名单豁免行除外
+            continue
+        rules.append(line)
+    assert rules, "锚点失配：.gitignore 未解析出 TM 备份敏感段规则"
+    for rule in rules:
+        probe = rule.replace("*", "20260927")    # 通配符换具体名走真实匹配
+        hits = match_any(probe)
+        assert hits, (f".gitignore TM 备份敏感段规则 {rule} 在 BANNED_PATTERNS "
+                      f"无对应（probe={probe} 未命中守卫名单）")

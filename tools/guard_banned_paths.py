@@ -12,9 +12,10 @@
     python tools/guard_banned_paths.py            # 全量 tracked 文件
     python tools/guard_banned_paths.py --staged   # 只查 staged（git diff --cached --name-only）
 
-名单来源：.gitignore 敏感段现值 + docs/decision-log.md 第 139 行
-（1.2 收尾清单："internal_docs/、api_keys.bin、sexual_terms.csv、
-真实 glossary、敏感 Temp 脚本移至仓库树外"）。逐条对照见 BANNED_PATTERNS。
+名单来源：.gitignore 敏感段现值（敏感数据段 + TM 备份段）+ docs/
+decision-log.md 第 139 行（1.2 收尾清单："internal_docs/、api_keys.bin、
+sexual_terms.csv、真实 glossary、敏感 Temp 脚本移至仓库树外"）。
+逐条对照见 BANNED_PATTERNS。
 """
 
 import argparse
@@ -33,6 +34,10 @@ BANNED_PATTERNS = [
     ("config/glossary_learned.csv", ".gitignore: 敏感数据（严禁入库）"),
     ("create_shortcut.py", ".gitignore: 敏感数据（严禁入库）"),
     ("Temp/*", ".gitignore: 运行数据 Temp/"),
+    # ---- 来源 1b：.gitignore「TM 备份」敏感段（私有译文备份，存量达
+    # 2.4 万行级真实译文，decision-log:575 全量清空留痕为证）----
+    ("tm.db.bak-*", ".gitignore: TM 备份敏感段（私有翻译数据，严禁入库）"),
+    ("tm_full_backup_*.csv", ".gitignore: TM 备份敏感段（私有翻译数据，严禁入库）"),
     # ---- 来源 2：decision-log :139 收尾清单（树外同级目录契约）----
     ("internal_docs/*", "decision-log:139 internal_docs/ 移至树外"),
     ("sexual_terms.csv", "decision-log:139 sexual_terms.csv 移至树外"),
