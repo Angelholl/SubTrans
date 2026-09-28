@@ -1,8 +1,8 @@
 # SubTransJAV
 
-面向中文用户的日文影片字幕双引擎翻译与精修工具链：LLM 提示词工程 + 术语自学习 + 幻觉检测 + 质量审校，配套 Whisper 转写工具链使用。
+面向中文用户的日文影片字幕双引擎翻译与精修工具链：LLM 提示词工程 + 术语自学习（自动学习默认关闭）+ 幻觉检测 + 质量审校，配套 Whisper 转写工具链使用。
 
-A dual-engine subtitle translation & refinement pipeline built for Chinese-speaking users, translating Japanese video subtitles into Chinese: LLM prompt engineering, self-learning glossary/TM, hallucination detection and quality review. Works with Whisper-based transcription toolchains.
+A dual-engine subtitle translation & refinement pipeline built for Chinese-speaking users, translating Japanese video subtitles into Chinese: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review. Works with Whisper-based transcription toolchains.
 
 ## 它解决什么问题
 
@@ -17,14 +17,18 @@ A dual-engine subtitle translation & refinement pipeline built for Chinese-speak
 - 双引擎翻译 + 风格指令（tone）机制
 - refine 精修管线：净语翻译 / 审校抛光两段角色卡（模板可编辑）
 - TM 术语自学习（准入门槛：低质翻译不进词库）
+- AI 质量分析（质量与建议页）：模型读取质量报告、导读条目与术语冲突汇总，输出术语/TM/一般观察三类建议，逐条人工确认后才写库，永不自动落库
+- 文本层质量巡检：单行超长进质量报告导读行动条目、可条目级定点重翻；语速（CPS）与时间轴间隙为纯观测，不触发自动重翻
+- 本地上下文窗口缺省 16384：可经 `config/user_settings.json`（`v2_ctx_local`）、环境变量或 `--v2-ctx` 分层覆盖
 - 幻觉检测 + 加固短语规则（YAML，可自行维护）
 - 双语字幕上下文预审（跨行上下文，防误翻）
 - 质量报告 + 双引擎分歧分析
 - Webview GUI + CLI 双入口
+- 词库治理：全角/半角（NFKC）归一与拉丁词界匹配、单批注入上限 100 条、结构化 JSON 防注入包装、三级词库链冲突可见化
 
 ## 本地模型实测推荐（两轮矩阵测试）
 
-> 以下结论来自 2026-09 的两轮全有序矩阵实测：第一轮 5 款本地模型 × A/B 席位全搭配 = 25 组合 × 2 部影片（TM 零学习）；其中 trans8b 因不读取输入（疑 GGUF 聊天模板损坏）确认不可用，被剔除后第二轮以其余 4 款继续 = 16 组合 × 1 部影片 1162 条台词（TM 启用并逐组合清零，模拟全新安装首用）。两轮共 66 个测试单元全部零失败。评测口径：终稿条目保全（逐条对源）＋ 未翻译占位成因分层 ＋ 考点锚定对照（51 锚点 × 16 组合共识聚类）＋ 主观盲评，多口径交叉验证。
+> 以下结论来自 2026-09 的两轮全有序矩阵实测：第一轮 5 款本地模型 × A/B 席位全搭配 = 25 组合 × 2 部影片（TM 零学习）；其中 trans8b 因不读取输入（疑 GGUF 聊天模板损坏）确认不可用，被剔除后第二轮以其余 4 款继续 = 16 组合 × 1 部影片 1162 条台词（TM 启用并逐组合清零，模拟全新安装首用）。两轮共 66 个测试单元全部零失败。评测口径：终稿条目保全（逐条对源）＋ 未翻译占位成因分层 ＋ 考点锚定对照（51 锚点 × 16 组合共识聚类）＋ 主观盲评，多口径交叉验证。测试时点为 2026-09-21，早于 2026-09-23 发现并修复的引擎 GPU 部分卸载问题；本节耗时与速度读数均为该时点实测口径，修复后的生产速度见下文「速度提示」。
 
 ### 参测模型（LM Studio 本地加载）
 
@@ -52,7 +56,7 @@ A dual-engine subtitle translation & refinement pipeline built for Chinese-speak
 | 均衡 / 快速 | heretic35b → heretic35b 或 heretic35b → hauhau35b | 盲评 40/39；真台词零丢失；矩阵口径约 12~13 分钟 |
 | 不推荐 | sakura14b 做 A；joyfox27b / sakura14b 做 B | 草稿缺陷 / 吞台词 / 整行缺失 |
 
-> **速度提示**：表中耗时为矩阵测试口径（批间并发未启用）。质量档与快速档差距约 5.5 倍，主因是 27B 稠密模型解码速度；2026-09 性能定版（引擎 GPU 全载 + 批间并发 2）后，质量档生产实测约 16~21 分钟/部——该值为当时调优配置的实测，批间并发缺省自 v1.3.2 起为 1，可经 `--v2-concurrency` 调整。TM 精确命中可整句跳过（哈希匹配），但新内容命中率趋近于零，暖库不会明显提速。表中「默认」为生产定版推荐搭配，不是程序内置缺省：本地服务（lmstudio / ollama / siliconflow / custom）模型均需经 `--s1-model` / `--s3-model` 显式指定；云端 deepseek / zen 有内置默认模型，可被显式指定覆盖。`--profile` 与模型搭配无关（v2 兜底档位 local/cloud）。
+> **速度提示**：表中耗时为矩阵测试口径（批间并发未启用）。质量档与快速档差距约 5.5 倍，主因是 27B 稠密模型解码速度；2026-09 性能定版（引擎 GPU 全载 + 批间并发 2）后，质量档生产实测约 16~21 分钟/部——该值为 2026-09-23/24 定版锁定配置的实测（引擎 64 层全载、ctx 22272、批间并发 2、批 1024、KV 双 Q8_0、无 draft；与现行缺省 ctx 16384/批间并发 1 不同，见「配置分层速查」），批间并发缺省自 v1.3.2 起为 1，可经 `--v2-concurrency` 调整。TM 精确命中可整句跳过（哈希匹配），但新内容命中率趋近于零，暖库不会明显提速。表中「默认」为生产定版推荐搭配，不是程序内置缺省：本地服务（lmstudio / ollama / siliconflow / custom）模型均需经 `--s1-model` / `--s3-model` 显式指定；云端 deepseek / zen 有内置默认模型，可被显式指定覆盖。`--profile` 与模型搭配无关（v2 兜底档位 local/cloud）。
 
 ## 上游转写配置实测推荐（WhisperJAV）
 
@@ -130,11 +134,11 @@ subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-mod
 subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
 ```
 
-GUI 首次启动默认进入**小白模式**（仅保留选文件、选输出、开始与「翻译服务」下拉，按三步引导操作）；在面板顶部「用户模式」下拉随时切换**标准 / 开发者**模式查看全部高级参数（词库、TM 学习闸、断点、并发等），切换即持久化。
+GUI 为左侧五 TAB 外壳：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**引擎与模型**、**词库与模板**、**质量与建议**（含 AI 质量分析）、**高级参数**。初始安装即默认参数，全部高级定制在对应 TAB 内调整。
 
-常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）。
+常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）、`--v2-ctx`（本地上下文窗口）、`--ai-analyze`（质量报告 AI 分析）、`--action-retranslate --entries`（导读条目定点重翻）。
 
-每部影片产出：`*_final_cn.srt`（终稿）、`*_质量报告.txt`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）、`*_分歧复核.csv`（pass1/pass2 分歧行级明细，无双引擎字幕时仅表头）；中间稿 `*_refine_A.srt` 与断点清单 `*_manifest.json` 在任务成功后自动清理，中断时保留供 `--resume` 续跑。
+每部影片产出：`*_final_cn.srt`（终稿）、`*_质量报告.txt`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）、`*_分歧复核.csv`（pass1/pass2 分歧行级明细，无双引擎字幕时仅表头）、`*_质量报告导读.json`（可行动条目，供定点重翻）、`*_风险清单.md`/`*_风险清单.json`、`*_术语冲突观察.csv`（启用词库时）、`*_AI质量建议.json`（AI 分析后生成）；中间稿 `*_refine_A.srt` 与断点清单 `*_manifest.json` 在任务成功后自动清理，中断时保留供 `--resume` 续跑。
 
 ## 配置分层速查
 
@@ -144,12 +148,14 @@ GUI 首次启动默认进入**小白模式**（仅保留选文件、选输出、
 |---|---|---|
 | `temperature_cloud` | 0.5 | 云端采样温度 |
 | `temperature_local` | 0.1 | 本地采样温度 |
-| `premerge_max_gap_s` | 8.0 | 预合并时长上限（秒） |
+| `premerge_max_gap_s` | 8.0 | 预合并 gap 阈值占位（已不参与合并判定，时长上限见 `premerge_max_span_ms`） |
 | `premerge_max_items` | 3 | 预合并条数上限 |
 | `v2_concurrency_max` | 5 | 批间并发钳制上限 |
 | `timeout_llm` | 900 | LLM 单批超时（秒） |
 | `timeout_http` | 60 | HTTP 客户端超时（秒） |
 | `timeout_probe` | 5 | 本地服务探测超时（秒） |
+| `v2_ctx_local` | 16384 | 本地上下文窗口（22272 为作者档案参考值） |
+| `v2_concurrency` | 1 | 批间并发数（钳制上限见 `v2_concurrency_max`） |
 
 环境变量命名：`SUBTRANSJAV_` + 大写字段名（如 `SUBTRANSJAV_TIMEOUT_LLM=600`）。完整语义见 `docs/使用与维护手册.md` 第 2 节。
 
@@ -185,7 +191,7 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 
 ## 词库与模板（自配）
 
-`config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target）与 TM 库不入版本库，克隆后按需自建。
+`config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target，可选第三列 target_aliases 别名，`|` 分隔）与 TM 库不入版本库，克隆后按需自建。
 
 本项目只提供翻译工程框架，不分发任何语料/词库数据，按需自行配置。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
 
