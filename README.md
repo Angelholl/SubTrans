@@ -130,6 +130,8 @@ subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-mod
 subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
 ```
 
+GUI 首次启动默认进入**小白模式**（仅保留选文件、选输出、开始与「翻译服务」下拉，按三步引导操作）；在面板顶部「用户模式」下拉随时切换**标准 / 开发者**模式查看全部高级参数（词库、TM 学习闸、断点、并发等），切换即持久化。
+
 常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）。
 
 每部影片产出：`*_final_cn.srt`（终稿）、`*_质量报告.txt`（若存在 pass1/pass2 双引擎字幕则含「双引擎分歧」章节）、`*_分歧复核.csv`（pass1/pass2 分歧行级明细，无双引擎字幕时仅表头）；中间稿 `*_refine_A.srt` 与断点清单 `*_manifest.json` 在任务成功后自动清理，中断时保留供 `--resume` 续跑。

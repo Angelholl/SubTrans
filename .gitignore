@@ -24,6 +24,7 @@ config/api_keys.bin
 config/glossary_learned.csv
 config/glossary.csv
 config/glossary.csv.bak-*
+config/refine_stage_settings.json
 create_shortcut.py
 
 # TM 备份（私有翻译数据，严禁入库）
