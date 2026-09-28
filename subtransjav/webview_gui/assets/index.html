@@ -464,6 +464,19 @@
                      TAB 4: 质量导读
                      ====================================================== -->
                 <div class="tab-page" id="tab-guide" data-testid="tab-guide">
+                    <!-- 媒体来源条（D2026-0929-09：契约内选择，无文件对话框） -->
+                    <div class="media-source-bar" id="mediaSourceBar" style="display:none;">
+                        <span class="media-source-label" data-i18n="media_source_label">媒体来源</span>
+                        <span class="media-source-tag" id="mediaSourceTag"></span>
+                        <span class="media-source-path" id="mediaSourcePath"></span>
+                        <button type="button" id="mediaSourceToggleBtn" class="btn btn-text btn-sm" data-i18n="media_source_change_btn">更换</button>
+                    </div>
+                    <div class="media-source-edit-row" id="mediaSourceEditRow" style="display:none;">
+                        <input type="text" id="mediaOverrideInput" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
+                               data-i18n-placeholder="media_override_placeholder" placeholder="输入媒体文件完整路径（等价 --media-path，仅本报告会话内生效）" autocomplete="off">
+                        <button type="button" id="mediaOverrideApplyBtn" class="btn btn-secondary btn-compact" data-i18n="media_override_apply">应用</button>
+                        <span id="mediaOverrideStatus" style="font-size:12px; color:#888;"></span>
+                    </div>
                     <!-- 质量报告导读查看器（W1b：仅读 *_质量报告导读.json） -->
                     <section class="section console-section">
                         <details id="refineGuideViewer">
@@ -601,6 +614,16 @@
             </p>
         </footer>
 
+    </div>
+
+    <!-- 快速试听浮层（D2026-0929-09：底部固定条，关闭/错误提示内联） -->
+    <div class="audio-preview-bar" id="audioPreviewBar" style="display:none;">
+        <div class="audio-preview-error" id="audioPreviewError" style="display:none;"></div>
+        <div class="audio-preview-main">
+            <span class="audio-preview-timing" id="audioPreviewTiming"></span>
+            <audio id="audioPreviewPlayer" controls></audio>
+            <button type="button" id="audioPreviewCloseBtn" class="btn btn-text btn-sm" data-i18n="audio_preview_close">关闭</button>
+        </div>
     </div>
 
     <!-- About Dialog Modal -->

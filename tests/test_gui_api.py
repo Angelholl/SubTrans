@@ -1139,3 +1139,153 @@ def test_refine_ai_apply_tm_bad_json(gui_api_obj):
     """entries_json 非 JSON → success=False。"""
     r = gui_api_obj.refine_ai_apply_tm("{{{bad")
     assert r["success"] is False
+
+# ---------------------------------------------------------------------------
+# 快速试听 refine_audio_preview（D2026-0929-09 视听对比第二阶段）
+# 五态：direct / clip / 无 ffmpeg / override 越界拒绝 / 导读缺 media_path
+# mock 口径参照本文件既有模式：subprocess.run 捕获参数、audio_detect
+# 探测函数与 GUI 侧抽片函数 monkeypatch，零真实子进程。
+# ---------------------------------------------------------------------------
+
+_GUIDE_SUFFIX = "_质量报告导读.json"
+
+
+def _make_guide(tmp_path: Path, media_path=None, stem="ep01") -> Path:
+    """落一份导读 json（media_path 非空时写入 v1.5 契约键）。"""
+    data = {"version": "1.5", "source": f"{stem}.srt", "stem": stem,
+            "conclusions": [], "sections": [], "items": [],
+            "companions": {}}
+    if media_path:
+        data["media_path"] = media_path
+        data["media_path_source"] = "manifest"
+    p = tmp_path / f"{stem}{_GUIDE_SUFFIX}"
+    p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def _install_fake_ffprobe(monkeypatch, video="", audio=""):
+    """替身 ffprobe 链路：shutil.which 命中 + subprocess.run 返回 codec JSON。"""
+    import subtransjav.webview_gui.api as api_mod
+    captured: dict = {}
+
+    def _fake_run(args, **kwargs):
+        captured["args"] = args
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({"streams": [
+                {"codec_type": "video", "codec_name": video},
+                {"codec_type": "audio", "codec_name": audio},
+            ]}).encode("utf-8"),
+            stderr=b"")
+
+    monkeypatch.setattr(api_mod.shutil, "which",
+                        lambda name: "/fake/ffprobe" if name == "ffprobe" else None)
+    monkeypatch.setattr(api_mod.subprocess, "run", _fake_run)
+    return captured
+
+
+def test_refine_audio_preview_direct_playable(gui_api_obj, monkeypatch,
+                                              tmp_path):
+    """direct 态：mp4 + h264/aac（ffprobe 真实 codec）→ 浏览器原生可播。"""
+    media = tmp_path / "ep01.mp4"
+    media.write_bytes(b"fake-mp4")
+    guide = _make_guide(tmp_path, media_path=str(media))
+    captured = _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True
+    assert r["mode"] == "direct"
+    assert r["media_path"] == str(media)
+    assert r["codec_probe"] is True
+    # ffprobe 走 list-args（禁 shell）且输入为导读 media_path
+    assert captured["args"][-1] == str(media)
+    assert all(isinstance(a, str) for a in captured["args"])
+
+
+def test_refine_audio_preview_clip_fallback(gui_api_obj, monkeypatch,
+                                            tmp_path):
+    """clip 态：mkv + hevc 边界编码 → ffmpeg 抽 [start-0.5, end+0.5] wav；
+    timing 起点为负时钳制到 0。"""
+    import subtransjav.refine.audio_detect as ad
+    import subtransjav.refine.config as cfg_mod
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep02.mkv"
+    media.write_bytes(b"fake-mkv")
+    guide = _make_guide(tmp_path, media_path=str(media), stem="ep02")
+    _install_fake_ffprobe(monkeypatch, video="hevc", audio="aac")
+    monkeypatch.setattr(ad, "_find_ffmpeg", lambda: "/fake/ffmpeg")
+    monkeypatch.setattr(cfg_mod, "TEMP_DIR", str(tmp_path / "temp"))
+
+    captured: dict = {}
+
+    def _fake_extract(ffmpeg_path, media_path, out_path, start_s, duration_s):
+        captured.update(ff=ffmpeg_path, media=media_path, out=out_path,
+                        start=start_s, dur=duration_s)
+        Path(out_path).write_bytes(b"RIFF....WAVEfmt ")
+
+    monkeypatch.setattr(api_mod.TranslateAPI, "_extract_preview_wav",
+                        staticmethod(_fake_extract))
+
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True
+    assert r["mode"] == "clip"
+    assert r["data_url"].startswith("data:audio/wav;base64,")
+    assert r["duration_s"] == 3.0
+    assert captured["start"] == 9.5 and captured["dur"] == 3.0
+    assert captured["media"] == str(media)
+    # 片段落 TEMP_DIR/audio_detect/preview/，命名带哈希
+    out = Path(captured["out"])
+    assert out.parent == tmp_path / "temp" / "audio_detect" / "preview"
+    assert out.name.startswith("pv_") and out.name.endswith(".wav")
+
+    # timing 越界钳制：start=-5 → clip_start 钳 0，duration = 3+0.5
+    r2 = gui_api_obj.refine_audio_preview(str(guide), -5.0, 3.0)
+    assert r2["ok"] is True
+    assert captured["start"] == 0.0 and captured["dur"] == 3.5
+
+
+def test_refine_audio_preview_no_ffmpeg(gui_api_obj, monkeypatch, tmp_path):
+    """无 ffmpeg：mp4/m4a（aac 语义）尝试 direct；其余容器报错灰显。"""
+    import subtransjav.refine.audio_detect as ad
+    import subtransjav.webview_gui.api as api_mod
+
+    monkeypatch.setattr(api_mod.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ad, "_find_ffmpeg", lambda: None)
+
+    mp4 = tmp_path / "ep03.mp4"
+    mp4.write_bytes(b"fake")
+    guide_mp4 = _make_guide(tmp_path, media_path=str(mp4), stem="ep03")
+    r1 = gui_api_obj.refine_audio_preview(str(guide_mp4), 0.0, 2.0)
+    assert r1["ok"] is True and r1["mode"] == "direct"
+    assert r1["codec_probe"] is False
+
+    mkv = tmp_path / "ep04.mkv"
+    mkv.write_bytes(b"fake")
+    guide_mkv = _make_guide(tmp_path, media_path=str(mkv), stem="ep04")
+    r2 = gui_api_obj.refine_audio_preview(str(guide_mkv), 0.0, 2.0)
+    assert r2["ok"] is False
+    assert "未检测到 ffmpeg" in r2["error"]
+
+
+def test_refine_audio_preview_override_outside_anchor_rejected(
+        gui_api_obj, monkeypatch, tmp_path):
+    """override 越界路径（越出 home/仓库根锚点）必须拒绝，不触 ffprobe。"""
+    guide = _make_guide(tmp_path)
+    captured = _install_fake_ffprobe(monkeypatch)
+    outside = os.path.join(os.path.expanduser("~"), os.pardir, os.pardir,
+                           "beyond_anchor_media.mp4")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0,
+                                         media_override=outside)
+    assert r["ok"] is False
+    assert "路径不在允许的目录下" in r["error"]
+    assert captured == {}, "拒绝必须发生在 ffprobe 之前"
+
+
+def test_refine_audio_preview_guide_missing_media_path(gui_api_obj,
+                                                       tmp_path):
+    """导读缺 media_path 且未显式指定 → 结构化失败（前端提示显式指定）。"""
+    guide = _make_guide(tmp_path)
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False
+    assert "媒体路径" in r["error"]

@@ -2352,3 +2352,103 @@ button:focus {
 .form-card .field-btn-row .btn {
     flex: 1;
 }
+
+/* ============================================================
+   Quick audio preview (D2026-0929-09 A/V comparison phase 2)
+   Media source bar + guide item preview button + bottom-fixed
+   preview overlay. All colors come from existing theme tokens so
+   the dark theme (style.dark.css) adapts automatically.
+   ============================================================ */
+
+.media-source-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--section-bg);
+}
+
+.media-source-label {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-secondary);
+}
+
+.media-source-tag {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    background: transparent;
+}
+
+.media-source-path {
+    font-size: 12px;
+    color: var(--text-secondary);
+    word-break: break-all;
+    flex: 1;
+    min-width: 0;
+}
+
+.media-source-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 10px;
+}
+
+/* suspected_missed_speech guide entries: warning-tinted highlight */
+.guide-item-missed {
+    border-left: 3px solid var(--warning-color);
+    padding-left: 6px;
+    background: var(--hover-tab-bg, rgba(128, 128, 128, 0.06));
+}
+
+.btn-audio-preview {
+    white-space: nowrap;
+}
+
+/* Bottom-fixed preview overlay bar */
+.audio-preview-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    padding: 8px 14px;
+    background: var(--section-bg);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.audio-preview-error {
+    font-size: 12px;
+    color: var(--danger-color);
+    margin-bottom: 4px;
+}
+
+.audio-preview-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.audio-preview-timing {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.audio-preview-main audio {
+    flex: 1;
+    min-width: 200px;
+    height: 32px;
+}

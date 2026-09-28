@@ -348,6 +348,22 @@ const MSG = {
     gui_initialized: '净语翻译 GUI 已初始化',
     gui_usage_hint: '在上方 Source 区添加 .srt 字幕后点击「▶ 开始净语翻译」',
 
+    // ---- 快速试听 / 媒体来源（D2026-0929-09 视听对比第二阶段）----
+    preview_play_btn: '▶ 试听',
+    media_source_label: '媒体来源',
+    media_source_auto: '自动发现',
+    media_source_explicit: '显式指定',
+    media_source_none: '（导读未包含媒体路径）',
+    media_source_change_btn: '更换',
+    media_override_apply: '应用',
+    media_override_placeholder: '输入媒体文件完整路径（等价 --media-path，仅本报告会话内生效）',
+    media_override_applied: '已设为本报告会话内媒体来源（显式指定）',
+    media_override_cleared: '已清除覆盖，恢复导读自动发现来源',
+    audio_preview_close: '关闭',
+    audio_preview_failed: m => `试听失败：${m}`,
+    audio_preview_no_timing: '该条目缺少可解析时间轴，无法试听',
+    audio_preview_no_guide: '请先加载质量报告导读',
+
     // 控制台折叠
     console_collapse: '折叠控制台',
     console_expand: '展开控制台',
@@ -2029,6 +2045,10 @@ function switchTab(tabId) {
   let lastLoadedGuidePath = '';
   // 最近一次 AI 分析的建议载荷（逐条落库时按下标取条目）
   let lastAiSuggestions = null;
+  // 最近一次成功加载的导读数据（媒体来源条渲染依据）
+  let lastGuideData = null;
+  // 会话内媒体路径覆盖（等价 --media-path；仅显式输入，非空即优先生效）
+  let mediaOverridePath = '';
 
   function guideStatus(text) {
     const st = $('guideStatus');
@@ -2076,9 +2096,21 @@ function switchTab(tabId) {
           const cur = (o.current_text == null)
             ? MSG.guide_item_unresolvable
             : esc(String(o.current_text).slice(0, 80));
-          return '<div>' + esc('#' + o.index) + ' [' + esc(o.category) + '] '
+          // 快速试听（D2026-0929-09）：所有带 timing 的条目显示试听按钮；
+          // suspected_missed_speech 条目默认高亮样式
+          const isMissed = String(o.category || '')
+            === 'suspected_missed_speech';
+          const hasTiming = !!o.timing;
+          return '<div class="guide-item'
+            + (isMissed ? ' guide-item-missed' : '') + '">'
+            + esc('#' + o.index) + ' [' + esc(o.category) + '] '
             + esc(o.timing) + '｜' + esc(o.message) + '｜'
             + MSG.guide_item_current_label + cur + '｜' + esc(o.status)
+            + (hasTiming
+              ? ' <button type="button" class="btn btn-text btn-sm'
+                + ' btn-audio-preview" data-timing="' + esc(o.timing)
+                + '">' + esc(MSG.preview_play_btn) + '</button>'
+              : '')
             + '</div>';
         }).join('')
           + (items.length > MAX_ITEMS
@@ -2117,6 +2149,8 @@ function switchTab(tabId) {
         const dv = $('refineGuideViewer');
         if (dv) dv.open = true;
         lastLoadedGuidePath = r.path || p;
+        lastGuideData = r.data || {};
+        updateMediaSourceBar(lastGuideData);
         guideRender(r.data || {});
         guideStatus(MSG.guide_loaded(r.path || p));
         const geh = $('guideEmptyHint');
@@ -2132,6 +2166,120 @@ function switchTab(tabId) {
   // 完成翻译后的静默自动探测：成功才展开面板，失败不打扰用户
   function guideAutoDetect() {
     guideLoad(true);
+  }
+
+  // ============================================================
+  // 媒体来源条 + 快速试听（D2026-0929-09 视听对比第二阶段）
+  // 媒体路径来源收窄（C-5 契约内选择）：导读 media_path（自动发现）
+  // 或用户显式输入（等价 --media-path，会话内覆盖）；无文件对话框。
+  // ============================================================
+
+  function updateMediaSourceBar(data) {
+    const bar = $('mediaSourceBar');
+    if (!bar) return;
+    const pathEl = $('mediaSourcePath');
+    const tagEl = $('mediaSourceTag');
+    if (!pathEl || !tagEl) return;
+    const autoPath = String((data && data.media_path) || '');
+    const autoIsOverride = String((data && data.media_path_source) || '')
+      === 'override';
+    const path = mediaOverridePath || autoPath;
+    if (mediaOverridePath) {
+      tagEl.textContent = MSG.media_source_explicit;
+      pathEl.textContent = mediaOverridePath;
+    } else if (autoPath) {
+      tagEl.textContent = autoIsOverride
+        ? MSG.media_source_explicit : MSG.media_source_auto;
+      pathEl.textContent = autoPath;
+    } else {
+      tagEl.textContent = MSG.media_source_none;
+      pathEl.textContent = '';
+    }
+    bar.style.display = '';
+  }
+
+  // "HH:MM:SS,mmm --> HH:MM:SS,mmm" → [start_s, end_s]；解析失败 null
+  function timingToSeconds(timing) {
+    const m = String(timing || '').match(
+      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+    if (!m) return null;
+    const s = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+    const e = (+m[5]) * 3600 + (+m[6]) * 60 + (+m[7]) + (+m[8]) / 1000;
+    return [s, e];
+  }
+
+  // 本地媒体文件 → file:// URL（逐段 encodeURIComponent，兼容空格/中文）
+  function fileUrlOf(p) {
+    return 'file:///' + String(p).replace(/\\/g, '/').split('/')
+      .map(encodeURIComponent).join('/');
+  }
+
+  function showPreviewError(text) {
+    const errEl = $('audioPreviewError');
+    const player = $('audioPreviewPlayer');
+    if (player) { player.src = ''; }
+    if (errEl) {
+      errEl.textContent = text;
+      errEl.style.display = '';
+    }
+  }
+
+  function closeAudioPreview() {
+    const bar = $('audioPreviewBar');
+    const player = $('audioPreviewPlayer');
+    const errEl = $('audioPreviewError');
+    if (player) { player.pause(); player.src = ''; }
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    if (bar) bar.style.display = 'none';
+    lastPreviewToken++;   // 在途请求返回后作废
+  }
+
+  // 请求序号：连续点击/关闭后旧响应不得覆盖新状态
+  let lastPreviewToken = 0;
+
+  async function openAudioPreview(timing) {
+    const bar = $('audioPreviewBar');
+    const player = $('audioPreviewPlayer');
+    const timingEl = $('audioPreviewTiming');
+    const errEl = $('audioPreviewError');
+    if (!bar || !player || !timingEl || !errEl) return;
+    if (!lastLoadedGuidePath) {
+      bar.style.display = '';
+      showPreviewError(MSG.audio_preview_no_guide);
+      return;
+    }
+    const span = timingToSeconds(timing);
+    if (!span) {
+      bar.style.display = '';
+      showPreviewError(MSG.audio_preview_no_timing);
+      return;
+    }
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+    timingEl.textContent = String(timing || '');
+    player.src = '';
+    bar.style.display = '';
+    const token = ++lastPreviewToken;
+    try {
+      const r = await window.pywebview.api.refine_audio_preview(
+        lastLoadedGuidePath, span[0], span[1], mediaOverridePath);
+      if (token !== lastPreviewToken) return;
+      if (r && r.ok && r.mode === 'direct' && r.media_path) {
+        player.src = fileUrlOf(r.media_path);
+        player.play().catch(() => {});
+      } else if (r && r.ok && r.mode === 'clip' && r.data_url) {
+        player.src = r.data_url;
+        player.play().catch(() => {});
+      } else {
+        showPreviewError(MSG.audio_preview_failed(
+          (r && r.error) || MSG.unknownError));
+      }
+    } catch (e) {
+      if (token === lastPreviewToken) {
+        showPreviewError(MSG.audio_preview_failed(
+          e && e.message ? e.message : String(e)));
+      }
+    }
   }
 
   // ============================================================
@@ -2436,6 +2584,33 @@ function switchTab(tabId) {
     // AI 质量分析（D2026-0929）
     const aiBtn = $('refineAiAnalyzeBtn');
     if (aiBtn) aiBtn.addEventListener('click', () => refineAiAnalyze());
+
+    // 快速试听（D2026-0929-09）：条目试听按钮事件委托 + 浮层关闭 +
+    // 媒体来源条「更换」展开 + 覆盖路径应用
+    const guideItemsEl = $('guideItems');
+    if (guideItemsEl) guideItemsEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-audio-preview');
+      if (btn) openAudioPreview(btn.dataset.timing);
+    });
+    const pvCloseBtn = $('audioPreviewCloseBtn');
+    if (pvCloseBtn) pvCloseBtn.addEventListener('click', closeAudioPreview);
+    const msToggleBtn = $('mediaSourceToggleBtn');
+    if (msToggleBtn) msToggleBtn.addEventListener('click', () => {
+      const row = $('mediaSourceEditRow');
+      if (row) row.style.display =
+        row.style.display === 'none' ? '' : 'none';
+    });
+    const msApplyBtn = $('mediaOverrideApplyBtn');
+    if (msApplyBtn) msApplyBtn.addEventListener('click', () => {
+      const inp = $('mediaOverrideInput');
+      const st = $('mediaOverrideStatus');
+      mediaOverridePath = inp && inp.value.trim() ? inp.value.trim() : '';
+      if (st) {
+        st.textContent = mediaOverridePath
+          ? MSG.media_override_applied : MSG.media_override_cleared;
+      }
+      updateMediaSourceBar(lastGuideData);
+    });
   }
 
   // ---- 远程数据加载（pywebview 就绪后调用一次）----

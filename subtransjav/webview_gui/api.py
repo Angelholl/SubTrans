@@ -6,14 +6,18 @@ Maintains the thin wrapper pattern - delegates work to the
 ``subtransjav.refine.cli`` subprocess and streams its output.
 """
 
+import base64
 import contextlib
+import hashlib
 import json
 import logging
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -1565,6 +1569,229 @@ class TranslateAPI:
         except Exception as e:
             _log_exc("refine_ai_apply_tm")
             return {"success": False, "error": str(e)}
+
+    # ================================================================
+    # 快速试听（2.0.0-beta 视听对比第二阶段，D2026-0929-09）
+    # 注意：本段错误文案为内联中文（未进 strings.py），系任务边界限定
+    # 改动面（api.py/assets/测试）所致，与上方 AI 分析段同口径。
+    #
+    # 媒体路径来源收窄（C-5 契约内选择）：
+    #   ① 导读 json 的 media_path（v1.5 契约键，管线 resolve_media_path
+    #      结果或 cfg.media_path 显式覆盖值）；
+    #   ② 用户显式经 UI 输入框填写的 media_override（语义等价
+    #      --media-path，经 _resolve_safe_path 校验）。
+    # 无文件浏览对话框；无任意路径读取 API。
+    #
+    # direct/clip 判定矩阵（ffprobe 真实 codec）：
+    #   容器 ∈ {mp4, m4a, webm, mov} 且 video ∈ {"", h264, vp8, vp9}
+    #   且 audio ∈ {"", aac} → mode=direct（浏览器原生可播）；
+    #   hevc/h265/opus 等边界编码 → 一律 ffmpeg 抽 [start-0.5s, end+0.5s]
+    #   wav 片段兜底（mode=clip，list-args 禁 shell）；抽不了才失败。
+    #   ffprobe 缺失：mp4/m4a（aac 语义）尝试 direct，其余报错。
+    # ================================================================
+
+    _AUDIO_PREVIEW_GUIDE_SUFFIX = "_质量报告导读.json"
+    _AUDIO_PREVIEW_PAD_S = 0.5
+    _AUDIO_PREVIEW_FFPROBE_TIMEOUT_S = 15
+    _AUDIO_PREVIEW_EXTRACT_TIMEOUT_S = 120
+    _AUDIO_PREVIEW_DIRECT_EXTS = {".mp4", ".m4a", ".webm", ".mov"}
+    _AUDIO_PREVIEW_DIRECT_VIDEO = {"", "h264", "vp8", "vp9"}
+    _AUDIO_PREVIEW_DIRECT_AUDIO = {"", "aac"}
+
+    def _ffprobe_stream_codecs(self, media_path: str) -> dict | None:
+        """ffprobe 取首路 video/audio 真实 codec（list-args 禁 shell）。
+
+        ffprobe 缺失/失败一律返回 None（调用方按"不可判"分支处理）。"""
+        ffprobe = shutil.which("ffprobe")
+        if not ffprobe:
+            return None
+        try:
+            r = subprocess.run(
+                [ffprobe, "-v", "error", "-show_entries",
+                 "stream=codec_type,codec_name", "-of", "json", media_path],
+                capture_output=True,
+                timeout=self._AUDIO_PREVIEW_FFPROBE_TIMEOUT_S)
+            if r.returncode != 0:
+                return None
+            data = json.loads(r.stdout.decode("utf-8", "replace"))
+            codecs = {"video": "", "audio": ""}
+            for st in data.get("streams") or []:
+                if not isinstance(st, dict):
+                    continue
+                ct = str(st.get("codec_type") or "")
+                name = str(st.get("codec_name") or "")
+                if ct == "video" and not codecs["video"]:
+                    codecs["video"] = name
+                elif ct == "audio" and not codecs["audio"]:
+                    codecs["audio"] = name
+            return codecs
+        except Exception:
+            return None
+
+    @staticmethod
+    def _sweep_stale_preview_clips(preview_dir: str) -> int:
+        """preview 片段受 audio_detect 既有 stale 时限管辖（同阈值清扫）。
+
+        播放后片段保留（供复播），仅清理超龄文件；目录不存在静默返回。"""
+        try:
+            from subtransjav.refine.audio_detect import STALE_MAX_AGE_HOURS
+            cutoff = datetime.now().timestamp() - STALE_MAX_AGE_HOURS * 3600
+            removed = 0
+            for name in os.listdir(preview_dir):
+                p = Path(preview_dir) / name
+                try:
+                    if p.is_file() and p.stat().st_mtime < cutoff:
+                        p.unlink()
+                        removed += 1
+                except OSError:
+                    continue
+            return removed
+        except Exception:
+            return 0
+
+    @staticmethod
+    def _extract_preview_wav(ffmpeg_path: str, media_path: str, out_path: str,
+                             start_s: float, duration_s: float) -> None:
+        """抽取 [start_s, start_s+duration_s] 的 16kHz 单声道 PCM WAV。
+
+        audio_detect._extract_wav 仅整片抽取、不支持时段，故在 GUI 侧
+        独立实现（同样 list-args 禁 shell，media_path 必须为契约路径）。
+        失败时清理半截文件后抛 RuntimeError。"""
+        try:
+            r = subprocess.run(
+                [ffmpeg_path, "-y", "-ss", f"{start_s:.3f}", "-i",
+                 media_path, "-t", f"{duration_s:.3f}", "-vn", "-ac", "1",
+                 "-ar", "16000", out_path],
+                capture_output=True,
+                timeout=TranslateAPI._AUDIO_PREVIEW_EXTRACT_TIMEOUT_S)
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.unlink(out_path)
+            raise
+        if r.returncode != 0 or not os.path.isfile(out_path):
+            with contextlib.suppress(OSError):
+                os.unlink(out_path)
+            raise RuntimeError(
+                f"ffmpeg 抽取试听片段失败 (rc={r.returncode}): "
+                f"{(r.stderr or b'')[-200:]!r}")
+
+    def refine_audio_preview(self, report_key_or_path: str,
+                             timing_start_s: float, timing_end_s: float,
+                             media_override: str = "") -> dict[str, Any]:
+        """质量导读条目快速试听（全容错不抛，前端显示错误条）。
+
+        返回 {ok, mode:"direct", media_path} 或
+        {ok, mode:"clip", data_url, duration_s}，失败 {ok:false, error}。
+        """
+        try:
+            return self._refine_audio_preview_impl(
+                report_key_or_path, timing_start_s, timing_end_s,
+                media_override)
+        except Exception as e:
+            _log_exc("refine_audio_preview")
+            return {"ok": False, "error": str(e)}
+
+    def _refine_audio_preview_impl(self, report_key_or_path: str,
+                                   timing_start_s: float,
+                                   timing_end_s: float,
+                                   media_override: str) -> dict[str, Any]:
+        p = str(report_key_or_path or "").strip()
+        if not p:
+            return {"ok": False, "error": "缺少导读文件路径"}
+        suffix = self._AUDIO_PREVIEW_GUIDE_SUFFIX
+        if not p.endswith(suffix):
+            return {"ok": False,
+                    "error": f"仅支持 {suffix} 导读文件: "
+                             f"{os.path.basename(p)}"}
+        # 复用既有导读读取链的路径解析与安全锚（_validate_user_directory
+        # + 后缀白名单 + JSON 解析）
+        got = self.read_output_artifact(p)
+        if not got.get("success"):
+            return {"ok": False,
+                    "error": str(got.get("error") or "导读读取失败")}
+        data = got.get("data")
+        media = ""
+        if str(media_override or "").strip():
+            try:
+                media = str(_resolve_safe_path(str(media_override).strip()))
+            except ValueError as ve:
+                return {"ok": False,
+                        "error": f"媒体路径不在允许的目录下: {ve}"}
+            if not os.path.isfile(media):
+                return {"ok": False, "error": f"媒体文件不存在: {media}"}
+        else:
+            media = str((data or {}).get("media_path") or "")
+        if not media:
+            return {"ok": False,
+                    "error": "导读未包含媒体路径，请在媒体来源中显式指定",
+                    "error_key": "no_media"}
+
+        # timing 越界钳制：start ≥ 0；end ≥ start；零长时段拒绝
+        try:
+            start = max(0.0, float(timing_start_s))
+        except (TypeError, ValueError):
+            start = 0.0
+        try:
+            end = max(start, float(timing_end_s))
+        except (TypeError, ValueError):
+            end = start
+        if end - start <= 0:
+            return {"ok": False, "error": "试听时段无效（起止时间）"}
+
+        ext = os.path.splitext(media)[1].lower()
+        codecs = self._ffprobe_stream_codecs(media)
+        if codecs is not None:
+            direct = (ext in self._AUDIO_PREVIEW_DIRECT_EXTS
+                      and codecs["video"] in self._AUDIO_PREVIEW_DIRECT_VIDEO
+                      and codecs["audio"] in self._AUDIO_PREVIEW_DIRECT_AUDIO)
+            if direct:
+                return {"ok": True, "mode": "direct", "media_path": media,
+                        "codec_probe": True}
+        else:
+            # ffprobe 缺失/失败：mp4/m4a（aac 语义）尝试 direct；
+            # 其余容器无法解码判定 → 无 ffmpeg 即报错
+            if ext in (".mp4", ".m4a"):
+                return {"ok": True, "mode": "direct", "media_path": media,
+                        "codec_probe": False}
+            if shutil.which("ffmpeg") is None:
+                return {"ok": False,
+                        "error": "未检测到 ffmpeg，无法解码该容器",
+                        "error_key": "no_ffmpeg"}
+
+        # clip 兜底：hevc/opus 等边界编码或 codec 不可判时抽 wav 片段
+        from subtransjav.refine import audio_detect as ad
+        from subtransjav.refine.config import TEMP_DIR
+        ff = ad._find_ffmpeg()
+        if ff is None:
+            return {"ok": False, "error": "未检测到 ffmpeg，无法解码该容器",
+                    "error_key": "no_ffmpeg"}
+        clip_start = max(0.0, start - self._AUDIO_PREVIEW_PAD_S)
+        clip_end = end + self._AUDIO_PREVIEW_PAD_S
+        duration = clip_end - clip_start
+        preview_dir = Path(TEMP_DIR) / ad.AUDIO_DETECT_SUBDIR / "preview"
+        try:
+            os.makedirs(preview_dir, exist_ok=True)
+        except OSError as e:
+            return {"ok": False, "error": f"试听临时目录创建失败: {e}"}
+        self._sweep_stale_preview_clips(str(preview_dir))
+        identity = f"{media}|{clip_start:.3f}|{clip_end:.3f}"
+        h = hashlib.sha1(identity.encode("utf-8", "replace")).hexdigest()[:12]
+        out_path = str(preview_dir / f"pv_{h}.wav")
+        if not os.path.isfile(out_path):    # 同参数复播直接复用既有片段
+            try:
+                self._extract_preview_wav(ff, media, out_path,
+                                          clip_start, duration)
+            except Exception as e:
+                return {"ok": False,
+                        "error": f"试听片段抽取失败: {e}"}
+        try:
+            with open(out_path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("ascii")
+        except OSError as e:
+            return {"ok": False, "error": f"试听片段读取失败: {e}"}
+        return {"ok": True, "mode": "clip",
+                "data_url": f"data:audio/wav;base64,{b64}",
+                "duration_s": round(duration, 3), "clip_path": out_path}
 
     # ================================================================
     # 翻译记忆库 (Translation Memory) API
