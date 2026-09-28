@@ -55,9 +55,17 @@ def _synopsis_prompt_block(synopsis_text: str | None) -> str:
                       synopsis_text.strip()])
 
 
+# 单批词库注入上限（词条数）：超出按词库优先级序截断，其余省略上报
+MAX_GLOSSARY_INJECT = 100
+
+
 def _v2_glossary_block(cfg: RefineConfig, tag: str, src_text: str,
                        glossary: list) -> str:
-    """按阶段复用 legacy 词库生效开关：A→stage1 开关，B→stage2 开关。"""
+    """按阶段复用 legacy 词库生效开关：A→stage1 开关，B→stage2 开关。
+
+    命中超过 MAX_GLOSSARY_INJECT 时按词库优先级序只注入前 N 条，
+    打印两行上报：命中总数、实际注入与省略条数（防超长词表撑爆提示词）。
+    """
     if not glossary:
         return ""
     enabled = (tag == "A" and cfg.apply_glossary_stage1) or \
@@ -67,6 +75,11 @@ def _v2_glossary_block(cfg: RefineConfig, tag: str, src_text: str,
     hits = match_glossary(src_text, glossary)
     if hits:
         print(f"   📚 词库命中 {len(hits)} 条，注入提示词")
+        if len(hits) > MAX_GLOSSARY_INJECT:
+            print(f"   📚 超出单批注入上限 {MAX_GLOSSARY_INJECT}："
+                  f"实际注入 {MAX_GLOSSARY_INJECT} 条 / "
+                  f"省略 {len(hits) - MAX_GLOSSARY_INJECT} 条")
+            return format_glossary_block(hits[:MAX_GLOSSARY_INJECT])
         return format_glossary_block(hits)
     return ""
 

@@ -103,19 +103,33 @@ def load_glossary_merged(cfg: RefineConfig) -> list:
     两列消费者（match_glossary / format_glossary_block）已兼容三列词条。
 
     低层（用户词库/learned）与更高层同 src 时被压制不重复追加
-    （原 learned "同 src 不覆盖" 语义保持并扩展到 override 层）。
+    （原 learned "同 src 不覆盖" 语义保持并扩展到 override 层），
+    压制点统一收集，函数末打印 ⚠️ 覆盖冲突告警（同一 src 多层压制
+    合并为一行列出）；返回结构不变，调用方零改动。
     """
     glossary = load_glossary_override(cfg)
+    _src_layer = {s: "override" for s, _d, _a in glossary}
     _override_srcs = {s for s, _d, _a in glossary}
     _user = load_glossary_ex(cfg.glossary_path) if cfg.glossary_path else []
+    # 压制点收集 (src, 保留层, 保留译法, 忽略层, 忽略译法)，末尾统一告警
+    _suppressed: list = []
     # 仅当 override 启用时才压制用户同 src 词（override 为空时用户层
     # 保持旧链逐字节语义，含用户文件内部重复词条原样保留）
     if _override_srcs:
+        _override_dst: dict = {}
+        for s, d, _a in glossary:
+            _override_dst.setdefault(s, d)
         for s, d, a in _user:
-            if s not in _override_srcs:     # 同 src 被 override 压制（D2 终选）
+            if s not in _override_srcs:
                 glossary.append((s, d, a))
+                _src_layer.setdefault(s, "user")
+            else:                       # 同 src 被 override 压制（D2 终选）
+                _suppressed.append(
+                    (s, "override", _override_dst[s], "user", d))
     else:
         glossary.extend(_user)
+        for s, _d, _a in _user:
+            _src_layer.setdefault(s, "user")
     _existing_srcs = {s for s, _d, _a in glossary}
     _learned = load_glossary_ex(learned_glossary_path())
     if _learned:
@@ -123,8 +137,25 @@ def load_glossary_merged(cfg: RefineConfig) -> list:
             if s not in _existing_srcs:
                 glossary.append((s, d, a))
                 _existing_srcs.add(s)
+                _src_layer[s] = "learned"
+            else:                       # learned 同 src 只留首条（§11.5）
+                _kept = next(e for e in glossary if e[0] == s)
+                _suppressed.append(
+                    (s, _src_layer[s], _kept[1], "learned", d))
     if glossary:
         print(f"📚 [refine] 词库已加载：{len(glossary)} 条")
+    if _suppressed:
+        _by_src: dict = {}
+        for s, k_layer, k_val, d_layer, d_val in _suppressed:
+            info = _by_src.setdefault(s, {"keep": (k_layer, k_val),
+                                          "drops": []})
+            info["drops"].append((d_layer, d_val))
+        segs = []
+        for s, info in _by_src.items():
+            k_layer, k_val = info["keep"]
+            drops = " ".join(f"忽略[{lay}]{val}" for lay, val in info["drops"])
+            segs.append(f"src={s} 保留[{k_layer}]{k_val} {drops}")
+        print(f"⚠️ 词库覆盖冲突 {len(_suppressed)} 处：" + "；".join(segs))
     return glossary
 
 

@@ -112,6 +112,20 @@ def test_lock_timeout_skips_save(tmp_path, monkeypatch, caplog):
     assert "锁" in caplog.text
 
 
+def test_learn_dedup_by_ascii_lowercase_src(tmp_path, monkeypatch):
+    """手册 §11.5 回归钉：truly_new 按 ascii 小写 src 过滤——已有 IKU
+    时候选 iku 不重复学，只有全新 src 入库。"""
+    p = tmp_path / "learned.csv"
+    p.write_text("IKU,去了\n", encoding="utf-8-sig")
+    in_f, out_f = _s2_files(tmp_path, src="iku と新词", dst="去了二 与新译")
+    monkeypatch.setattr(gl, "extract_glossary_from_pair",
+                        lambda *a, **k: [("iku", "去了二"), ("新词", "新译")])
+    n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
+    assert n == 1                               # 仅 新词 入库
+    assert gl.load_learned_glossary(str(p)) == [
+        ("IKU", "去了"), ("新词", "新译")]
+
+
 # ---------------------------------------------------------------------------
 # _ensure_http_url：端点 scheme 白名单（设计决策：不拦截 localhost/私有地址，
 # 连接本地 LM Studio/Ollama 是核心功能）

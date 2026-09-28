@@ -38,6 +38,7 @@ from .artifact_lock import (  # noqa: E402  # 复用产物级 lockfile 先例
     release_artifact_lock,
 )
 from .config import TEMP_DIR  # noqa: E402  # 延迟导入规避循环依赖
+from .glossary import term_in_text  # noqa: E402  # 命中判定单一口径
 from .pass_disagreement import (  # noqa: E402  # 与 pipeline_v2 同源实现
     _timing_span,
 )
@@ -78,10 +79,9 @@ ADVICE_NOT_READY = "未满足转阻断条件，继续观察"
 # ---------------------------------------------------------------------------
 
 def _term_in_text(term: str, text: str) -> bool:
-    """源词命中判定：英文词条忽略大小写，其余原样子串（与 match_glossary 同款）。"""
-    if term.isascii():
-        return term.lower() in (text or "").lower()
-    return term in (text or "")
+    """源词命中判定：委托 glossary.term_in_text 单一口径
+    （NFKC 归一 + 拉丁词边界，与 match_glossary 一致）。"""
+    return term_in_text(term, text or "")
 
 
 def _align_orig_by_timing(entries: list, orig_entries: list) -> list:

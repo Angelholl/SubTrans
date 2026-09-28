@@ -111,13 +111,14 @@ class TestGlossaryAliases:
         assert ("ザーメン", "精液", ()) in merged
 
     def test_injection_uses_main_target_only(self, tmp_path):
-        """命中/注入仍只用主译法：别名不进提示词块。"""
+        """命中/注入仍只用主译法：主译法进 JSON 数据块，别名不出现。"""
         p = _write_glossary_csv(tmp_path / "g.csv", GLOSSARY_3COL)
         glossary = load_glossary_ex(str(p))
         hits = match_glossary("ムラムラして IKU した", glossary)
         assert ("ムラムラ", "心痒") in hits
         block = format_glossary_block(hits)
-        assert "ムラムラ → 心痒" in block
+        assert '"source": "ムラムラ"' in block
+        assert '"target": "心痒"' in block
         assert "燥热" not in block and "悸动" not in block
 
 
@@ -182,6 +183,77 @@ class TestGlossaryOverrideChain:
             ("先生", "用户老师", ()),
             ("ムラムラ", "心痒", ("燥热",)),
             ("ザーメン", "精液", ())]
+
+
+# ---------------------------------------------------------------------------
+# v1.4 三级链冲突可见化：压制点收集 + 函数末统一告警（返回结构不变）
+# ---------------------------------------------------------------------------
+
+class TestGlossaryMergeConflictWarning:
+
+    def test_three_layer_same_src_one_line_warning(
+            self, tmp_path, monkeypatch, capsys):
+        """override/user/learned 三层同 src 异 dst：一行告警含三层信息
+        与最终保留值；返回结构不变。"""
+        import subtransjav.refine.pipeline_support as ps
+        ov = _write_glossary_csv(tmp_path / "ovr.csv",
+                                 [("先生", "覆盖老师", None)])
+        up = _write_glossary_csv(tmp_path / "user.csv",
+                                 [("先生", "用户老师", None)])
+        learned = tmp_path / "learned.csv"
+        learned.write_text("先生,learned老师\n", encoding="utf-8-sig")
+        monkeypatch.setattr(ps, "learned_glossary_path", lambda: str(learned))
+        merged = ps.load_glossary_merged(RefineConfig(
+            glossary_path=str(up), glossary_override_path=str(ov)))
+        assert merged == [("先生", "覆盖老师", ())]      # 返回结构/内容不变
+        out = capsys.readouterr().out
+        assert "⚠️ 词库覆盖冲突 2 处" in out
+        assert "src=先生" in out
+        assert "保留[override]覆盖老师" in out            # 最终保留值
+        assert "忽略[user]用户老师" in out
+        assert "忽略[learned]learned老师" in out
+
+    def test_no_conflict_no_warning(self, tmp_path, monkeypatch, capsys):
+        """无同 src 冲突 → 不打印告警行。"""
+        import subtransjav.refine.pipeline_support as ps
+        up = _write_glossary_csv(tmp_path / "user.csv",
+                                 [("先生", "用户老师", None)])
+        learned = tmp_path / "learned.csv"
+        learned.write_text("ザーメン,精液\n", encoding="utf-8-sig")
+        monkeypatch.setattr(ps, "learned_glossary_path", lambda: str(learned))
+        ps.load_glossary_merged(RefineConfig(glossary_path=str(up)))
+        assert "词库覆盖冲突" not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# 手册 §11.5 合并去重行为声明回归钉（真实三层 CSV 文件实测，非 mock）
+# ---------------------------------------------------------------------------
+
+class TestGlossaryMergeLearnedPins:
+
+    def test_learned_first_only_and_upper_layers_suppress_learned(
+            self, tmp_path, monkeypatch):
+        """learned 层同 src 只留首条；override/user 层同 src 压制 learned。"""
+        import subtransjav.refine.pipeline_support as ps
+        ov = _write_glossary_csv(tmp_path / "ovr.csv",
+                                 [("先生", "覆盖老师", None)])
+        up = _write_glossary_csv(tmp_path / "user.csv",
+                                 [("先生", "用户老师", None),
+                                  ("ザーメン", "精液", None)])
+        learned = tmp_path / "learned.csv"
+        learned.write_text(
+            "先生,learned老师\n"
+            "ザーメン,learned精液\n"
+            "ドキドキ,心跳一\n"
+            "ドキドキ,心跳二\n", encoding="utf-8-sig")
+        monkeypatch.setattr(ps, "learned_glossary_path", lambda: str(learned))
+        merged = ps.load_glossary_merged(RefineConfig(
+            glossary_path=str(up), glossary_override_path=str(ov)))
+        assert merged == [
+            ("先生", "覆盖老师", ()),      # override 压 user 与 learned
+            ("ザーメン", "精液", ()),      # user 压 learned
+            ("ドキドキ", "心跳一", ()),    # learned 同 src 只留首条
+        ]
 
 
 # ---------------------------------------------------------------------------

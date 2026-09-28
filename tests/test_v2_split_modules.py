@@ -8,6 +8,7 @@ v2_manifest_fp / v2_outputs / v2_learn / v2_rules）每个模块至少一个
 """
 
 import hashlib
+import json
 
 import subtransjav.refine.pipeline_v2 as pv
 import subtransjav.refine.v2_learn as v2_learn
@@ -141,6 +142,28 @@ class TestContextBlocks:
         # 开关关闭 → 不注入
         assert v2_context_blocks._v2_glossary_block(
             _Cfg(), "B", "先生", [("先生", "老师")]) == ""
+
+    def test_v2_glossary_block_injection_cap(self, monkeypatch, capsys):
+        """_v2_glossary_block：命中超过 MAX_GLOSSARY_INJECT 时按词库
+        优先级序截断前 100 条，并打印两行上报（命中总数 / 注入与省略数）。"""
+        from subtransjav.refine import v2_context_blocks
+
+        class _Cfg:
+            apply_glossary_stage1 = True
+            apply_glossary_stage2 = False
+
+        long_hits = [(f"词{i:03d}", f"译{i:03d}") for i in range(120)]
+        monkeypatch.setattr(v2_context_blocks, "match_glossary",
+                            lambda src, gl: long_hits)
+        out = v2_context_blocks._v2_glossary_block(
+            _Cfg(), "A", "长文本", long_hits)
+        printed = capsys.readouterr().out
+        assert "词库命中 120 条" in printed
+        assert "实际注入 100 条 / 省略 20 条" in printed
+        data = json.loads(out.split("```json")[1].split("```")[0])
+        assert len(data) == v2_context_blocks.MAX_GLOSSARY_INJECT
+        assert data[0] == {"source": "词000", "target": "译000"}
+        assert data[-1] == {"source": "词099", "target": "译099"}
 
 
 # ---------------------------------------------------------------------------
