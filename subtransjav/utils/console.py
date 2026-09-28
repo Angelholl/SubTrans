@@ -27,53 +27,6 @@ import warnings
 from typing import Any, TextIO
 
 
-def relaunch_for_utf8(module_name: str) -> None:
-    """
-    On Windows with non-UTF-8 locale, relaunch the process in UTF-8 mode.
-
-    Third-party libraries (PySubtrans, etc.) may use open() without explicit
-    encoding, which defaults to the system locale (GBK on Chinese Windows).
-    This causes UnicodeDecodeError when processing non-ASCII content like
-    Chinese translations. See GitHub issue #190.
-
-    The only way to fix open() default encoding in Python 3.10-3.14 is to
-    start the interpreter with ``-X utf8`` or ``PYTHONUTF8=1``. This function
-    transparently relaunches the process with UTF-8 mode enabled.
-
-    Call at the very start of CLI entry points, before any other code.
-    Does nothing on non-Windows or if already in UTF-8 mode.
-
-    Args:
-        module_name: The module to run via ``-m`` (e.g., 'subtransjav.translate.cli')
-    """
-    if os.name != 'nt':
-        return
-
-    if getattr(sys.flags, 'utf8_mode', False):
-        return
-
-    # Safety guard against infinite relaunch (shouldn't happen since
-    # utf8_mode would be True after relaunch, but protects edge cases)
-    if os.environ.get('_SUBTRANSJAV_UTF8') == '1':
-        return
-
-    if not sys.executable:
-        return
-
-    import subprocess
-
-    env = os.environ.copy()
-    env['PYTHONUTF8'] = '1'
-    env['PYTHONIOENCODING'] = 'utf-8:replace'
-    env['_SUBTRANSJAV_UTF8'] = '1'
-
-    result = subprocess.run(
-        [sys.executable, '-X', 'utf8', '-m', module_name] + sys.argv[1:],
-        env=env,
-    )
-    sys.exit(result.returncode)
-
-
 def ensure_utf8_console() -> None:
     """
     Ensure stdout and stderr use UTF-8 encoding on Windows.
@@ -360,7 +313,6 @@ def print_missing_extra_error(
 
 # Module-level exports
 __all__ = [
-    "relaunch_for_utf8",
     "ensure_utf8_console",
     "safe_print",
     "suppress_dependency_warnings",

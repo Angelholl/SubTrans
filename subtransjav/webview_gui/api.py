@@ -23,6 +23,7 @@ from webview import FileDialog
 from subtransjav import paths
 from subtransjav.utils.process_manager import (
     PSUTIL_AVAILABLE,
+    spawn_refine_cli,
     terminate_process_tree,
     terminate_process_tree_robust,
 )
@@ -172,7 +173,10 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
       dry_run: bool                     试运行（仅生成执行计划，不调用模型）
       verbose: bool
     """
-    args = [sys.executable, "-u", "-m", "subtransjav.refine.cli"]
+    # 纯 CLI 参数（不含解释器前缀）：解释器形态统一由
+    # process_manager.spawn_refine_cli 拼装（frozen → --subtrans-cli，
+    # 源码 → -u -m subtransjav.refine.cli，D2026-0929-06 修订③）
+    args: list[str] = []
 
     inputs = options.get("inputs") or []
     for p in inputs:
@@ -632,11 +636,9 @@ class TranslateAPI:
             except Exception:
                 pass
 
-            # Unbuffered + UTF-8 so streaming works with non-ASCII output (#190)
-            env = os.environ.copy()
-            env["PYTHONUNBUFFERED"] = "1"
-            env["PYTHONUTF8"] = "1"
-            env["PYTHONIOENCODING"] = "utf-8:replace"
+            # Unbuffered + UTF-8（PYTHONUTF8/PYTHONIOENCODING 已由
+            # spawn_refine_cli 统一注入，这里只补差异项）(#190)
+            env_extra: dict[str, str] = {"PYTHONUNBUFFERED": "1"}
 
             # Inject API keys into subprocess env (not CLI args) for security.
             # Variable names match those checked by RefineConfig.resolve_api_key().
@@ -649,11 +651,11 @@ class TranslateAPI:
             for opt_key, env_var in _key_env_map.items():
                 v = options.get(opt_key)
                 if v:
-                    env[env_var] = str(v)
+                    env_extra[env_var] = str(v)
 
             # stdout/stderr 分离：stdout 逐行喂 NDJSON 事件解析器，
             # stderr 原样入日志队列；各自独立线程排空管道防死锁（#190）
-            proc = subprocess.Popen(
+            proc = cast(subprocess.Popen, spawn_refine_cli(
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -662,8 +664,8 @@ class TranslateAPI:
                 encoding="utf-8",
                 errors="replace",
                 cwd=str(REPO_ROOT),
-                env=env
-            )
+                env_extra=env_extra,
+            ))
 
             with self._translate_lock:
                 self._translate_process = proc
@@ -1408,8 +1410,8 @@ class TranslateAPI:
         else:
             stem = os.path.splitext(name)[0]
 
-        args = [sys.executable, "-u", "-m", "subtransjav.refine.cli",
-                "--ai-analyze", p]
+        # 纯 CLI 参数：解释器前缀由 spawn_refine_cli 统一拼装（修订③收敛）
+        args = ["--ai-analyze", p]
         model = (model or "").strip()
         if model:
             args.extend(["--ai-model", model])
@@ -1418,10 +1420,9 @@ class TranslateAPI:
         # 同源读取）：GUI 阶段A 配云端时，分析子进程若不传 --s1-provider
         # 会落到 CLI 缺省 lmstudio 本地端点，必然失败且与隐私横幅错位。
         # 端点按 CLI 既有旗标 --<provider>-endpoint 显式非空才传。
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        env["PYTHONUTF8"] = "1"
-        env["PYTHONIOENCODING"] = "utf-8:replace"
+        # 密钥/差异项经 env_extra 注入；PYTHONUTF8/PYTHONIOENCODING 由
+        # spawn_refine_cli 统一强制（#190）。
+        env_extra: dict[str, str] = {"PYTHONUNBUFFERED": "1"}
         provider = self._stage_a_provider_name()
         endpoint = self._stage_a_endpoint()
         if provider:
@@ -1440,13 +1441,14 @@ class TranslateAPI:
                 except Exception:
                     key = ""
                 if key:
-                    env[key_env] = key
+                    env_extra[key_env] = key
 
         try:
-            proc = subprocess.run(
-                args, cwd=str(REPO_ROOT), capture_output=True,
+            proc = cast(subprocess.CompletedProcess, spawn_refine_cli(
+                args, capture=True, cwd=str(REPO_ROOT),
                 timeout=self._AI_ANALYZE_TIMEOUT_S,
-                encoding="utf-8", errors="replace", env=env)
+                encoding="utf-8", errors="replace",
+                env_extra=env_extra))
         except subprocess.TimeoutExpired:
             return {"success": False,
                     "error": f"AI 分析超时（>{self._AI_ANALYZE_TIMEOUT_S}s）"}

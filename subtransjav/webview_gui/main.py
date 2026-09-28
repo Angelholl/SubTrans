@@ -26,6 +26,7 @@ setup_console()
 import platform  # noqa: E402
 
 from subtransjav import paths  # noqa: E402  frozen 判定单一来源
+from subtransjav.utils.process_manager import spawn_refine_cli  # noqa: E402  spawn 单一收敛点
 from subtransjav.webview_gui.strings import msg  # noqa: E402  文案表零依赖
 
 
@@ -60,10 +61,11 @@ def _auto_setup():
         # 创建虚拟环境（如果不存在）
         if not venv_python.exists():
             print(msg("setup_creating_venv"))
-            subprocess.run(
-                [sys.executable, "-m", "venv", str(project_root / ".venv")],
-                check=True
-            )
+            # spawn 收敛点（修订③）：venv 引导走 helper；frozen 下 helper
+            # 返回 None（此处实际不可达——上方 frozen guard 已短路，双保险）
+            spawn_refine_cli(
+                ["-m", "venv", str(project_root / ".venv")],
+                purpose="venv_bootstrap", check=True)
 
         # Issue#4: venv已存在且依赖完整 → 跳过安装直接重启
         if venv_python.exists():
@@ -331,6 +333,22 @@ def create_window():
 
 def main():
     """Entry point for subtransjav-gui."""
+    # PyInstaller frozen 多进程（multiprocessing）安全：必须在任何
+    # multiprocessing 子进程被拉起之前调用；非 frozen 下为 no-op。
+    import multiprocessing
+
+    multiprocessing.freeze_support()
+
+    # --subtrans-cli 分派（D2026-0929-06 修订③）：frozen 下 exe 直接充当
+    # refine CLI 解释器（spawn_refine_cli 拼的 [exe, --subtrans-cli, ...]）。
+    # 必须先于 pywebview 初始化与 _parse_args（GUI 参数解析不认 CLI 旗标）。
+    # 源码形态同样生效；packaging/entry_gui.py 经 main() 进入，天然覆盖。
+    if "--subtrans-cli" in sys.argv:
+        sys.argv.remove("--subtrans-cli")
+        from subtransjav.refine.cli import main as refine_main
+
+        sys.exit(refine_main())
+
     # --help / --version 在此直接退出，不触发 venv 自举与依赖检查
     args = _parse_args()
     if args.version:

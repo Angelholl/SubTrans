@@ -15,7 +15,10 @@ import logging
 import os
 import signal
 import subprocess
+import sys
 from typing import Any
+
+from subtransjav import paths
 
 try:
     import psutil
@@ -444,6 +447,92 @@ def terminate_process_tree_robust(pid: int) -> bool:
     except OSError as e:
         logger.warning(f"单杀降级失败（pid={pid}）: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# spawn 单一收敛点（D2026-0929-06 修订③ + 07 点 1 + 08 点 1）
+# ---------------------------------------------------------------------------
+
+_CREATE_NO_WINDOW = 0x08000000  # Windows: 不为子进程弹控制台窗口
+
+
+def _utf8_child_env(env_extra: dict[str, str] | None) -> dict[str, str]:
+    """UTF-8 保证落点：子进程环境统一在此强制 UTF-8（#190）。
+
+    - ``PYTHONUTF8=1``：子进程 open()/locale 缺省即 UTF-8；
+    - ``PYTHONIOENCODING=utf-8:replace``：窄码页管道下输出不崩、不可编码降级替换。
+    在 os.environ.copy() 基础上合并 env_extra——显式变量（API 密钥、
+    SUBTRANSJAV_DATA_ROOT 等）自然继承，无需特判。
+    """
+    env = os.environ.copy()
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8:replace"
+    if env_extra:
+        env.update(env_extra)
+    return env
+
+
+def spawn_refine_cli(
+    args: list[str],
+    *,
+    purpose: str = "subprocess",
+    capture: bool = False,
+    cwd: str = "",
+    env_extra: dict[str, str] | None = None,
+    **kwargs: Any,
+) -> subprocess.Popen | subprocess.CompletedProcess | None:
+    """refine CLI 子进程统一 spawn 入口（全项目三 spawn 点收敛到此）。
+
+    收敛口径（改动前落点 → 现一律调本函数）：
+      1. webview_gui/api.py start_translation（主翻译子进程，Popen 流式）；
+      2. webview_gui/api.py refine_ai_analyze（AI 分析子进程，run 同步捕获）；
+      3. webview_gui/main.py _auto_setup（venv 引导，purpose="venv_bootstrap"）。
+
+    purpose 两位（D2026-0929-08）：
+      - "subprocess"：拉起 refine CLI 子进程。命令形态：
+        frozen（paths.is_frozen()）→ ``[sys.executable, "--subtrans-cli"] + args``；
+        源码 → ``[sys.executable, "-u", "-m", "subtransjav.refine.cli"] + args``。
+      - "venv_bootstrap"：venv 引导（``-m venv`` 等）。frozen 下整段 no-op
+        直接返回 None（调用方据 None 跳过）；源码形态 ``[sys.executable] + args``，
+        维持现状不带 CREATE_NO_WINDOW。
+
+    其余口径：
+      - env：``_utf8_child_env`` 强制 UTF-8 两变量后合并 env_extra；
+      - Windows 下 "subprocess" 段带 creationflags=CREATE_NO_WINDOW（不弹黑窗）；
+      - capture=True → subprocess.run 返回 CompletedProcess；否则 Popen；
+      - cwd 缺省 app_root()（源码=仓库根，frozen=数据根）；
+      - 杀树复用现有 terminate_process_tree / taskkill /T /F 原语，本函数不重复造轮子。
+
+    kwargs 原样透传给 Popen / run（stdout/stderr/bufsize/timeout/...）。
+    """
+    if purpose == "venv_bootstrap":
+        if paths.is_frozen():
+            # 打包版不走 venv 自举（main._auto_setup 的 frozen guard 之外的第二道保险）
+            return None
+        return subprocess.run(
+            [sys.executable, *args],
+            env=_utf8_child_env(env_extra),
+            cwd=cwd or None,
+            **kwargs,
+        )
+    if purpose != "subprocess":
+        raise ValueError(f"未知 purpose: {purpose!r}（应为 subprocess | venv_bootstrap）")
+
+    if paths.is_frozen():
+        cmd = [sys.executable, "--subtrans-cli", *args]
+    else:
+        cmd = [sys.executable, "-u", "-m", "subtransjav.refine.cli", *args]
+
+    if os.name == "nt":
+        kwargs.setdefault("creationflags", _CREATE_NO_WINDOW)
+
+    if capture:
+        return subprocess.run(
+            cmd, capture_output=True, cwd=cwd or str(paths.app_root()),
+            env=_utf8_child_env(env_extra), **kwargs)
+    return subprocess.Popen(
+        cmd, cwd=cwd or str(paths.app_root()),
+        env=_utf8_child_env(env_extra), **kwargs)
 
 
 def is_process_alive(pid: int) -> bool:
