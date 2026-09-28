@@ -1152,8 +1152,8 @@ class TranslateAPI:
                     key_status[prov] = bool(read_secret(prov))
                 except Exception:
                     key_status[prov] = False
-            # A4 首启初始化（D2026-0927-05 补充①）：settings 文件不存在即
-            # 首启（additive 键，前端据此默认 novice 画像）
+            # 首启信号（additive 键）：settings 文件不存在即首启，供前端
+            # 或集成方做欢迎/初始化引导
             return {"success": True, "stages": stages,
                     "settings": settings, "key_status": key_status,
                     "first_run": not os.path.isfile(path)}
@@ -1319,6 +1319,247 @@ class TranslateAPI:
             return {"success": False, "error": msg("dialog_cancelled")}
         except Exception as e:
             _log_exc("tm_pick_db")
+            return {"success": False, "error": str(e)}
+
+    # ================================================================
+    # AI 质量分析（D2026-0929：--ai-analyze 前后端接入）
+    # 注意：本批新增错误文案为内联中文（未进 strings.py），系任务边界
+    # 限定改动面（api.py/app.js/index.html/两测试）所致；行为与
+    # msg() 回退语义等价（fail 返回 error 字符串）。
+    # ================================================================
+
+    _AI_ANALYZE_TIMEOUT_S = 600
+    _AI_REPORT_SUFFIX = "_质量报告.txt"
+    _AI_SUGGESTION_SUFFIX = "_AI质量建议.json"
+
+    # 分析子进程按 provider 选择的端点旗标（与 cli.build_parser 一致）
+    _AI_PROVIDER_ENDPOINT_FLAGS = {
+        "lmstudio": "--lmstudio-endpoint",
+        "ollama": "--ollama-endpoint",
+        "zen": "--zen-endpoint",
+        "siliconflow": "--siliconflow-endpoint",
+        "custom": "--custom-endpoint",
+    }
+    # 云端 provider → 子进程密钥环境变量名（与 RefineConfig.resolve_api_key、
+    # start_translation 注入表一致；zen 走 OPENCODE_API_KEY）
+    _AI_PROVIDER_KEY_ENV = {
+        "deepseek": "DEEPSEEK_API_KEY",
+        "zen": "OPENCODE_API_KEY",
+        "siliconflow": "SILICONFLOW_API_KEY",
+        "custom": "CUSTOM_API_KEY",
+    }
+
+    def _stage_a_provider_name(self) -> str:
+        """阶段A（槽0/存储 stage=1）provider 名；读取失败返回空串。"""
+        try:
+            got = self.refine_get_stage_settings()
+        except Exception:
+            return ""
+        if not isinstance(got, dict) or not got.get("success"):
+            return ""
+        for s in got.get("stages") or []:
+            if isinstance(s, dict) and int(s.get("stage") or 0) == 1:
+                return str(s.get("provider") or "")
+        return ""
+
+    def _stage_a_endpoint(self) -> str:
+        """阶段A（存储 stage=1）端点；读取失败/未存返回空串。"""
+        try:
+            got = self.refine_get_stage_settings()
+        except Exception:
+            return ""
+        if not isinstance(got, dict) or not got.get("success"):
+            return ""
+        for s in got.get("stages") or []:
+            if isinstance(s, dict) and int(s.get("stage") or 0) == 1:
+                return str(s.get("endpoint") or "").strip()
+        return ""
+
+    def refine_ai_analyze(self, report_path: str,
+                          model: str = None) -> dict[str, Any]:
+        """同步执行 AI 质量分析并读回建议件。
+
+        流程：_resolve_safe_path 校验 → 同步 subprocess 跑
+        ``python -m subtransjav.refine.cli --ai-analyze <path>
+        [--ai-model m]``（cwd=项目根，timeout=600s）→ 成功后读回
+        ``{stem}_AI质量建议.json`` 解析返回。
+        超时/非零退出/建议件缺失 → success=False + error。
+        """
+        p = str(report_path or "").strip()
+        if not p:
+            return {"success": False, "error": msg("guide_path_empty")}
+        try:
+            p = str(_resolve_safe_path(p))
+        except ValueError as ve:
+            return {"success": False, "error": msg("guide_path_denied", e=ve)}
+        if not os.path.isfile(p):
+            return {"success": False,
+                    "error": msg("guide_file_missing", path=p)}
+        if not os.path.basename(p).endswith(self._AI_REPORT_SUFFIX):
+            return {"success": False,
+                    "error": f"需要 {self._AI_REPORT_SUFFIX} 质量报告文件: "
+                             f"{os.path.basename(p)}"}
+
+        name = os.path.basename(p)
+        if name.endswith(self._AI_REPORT_SUFFIX):
+            stem = name[: -len(self._AI_REPORT_SUFFIX)]
+        else:
+            stem = os.path.splitext(name)[0]
+
+        args = [sys.executable, "-u", "-m", "subtransjav.refine.cli",
+                "--ai-analyze", p]
+        model = (model or "").strip()
+        if model:
+            args.extend(["--ai-model", model])
+
+        # 分析子进程跟随阶段A 服务商/端点（与 refine_get_stage_settings
+        # 同源读取）：GUI 阶段A 配云端时，分析子进程若不传 --s1-provider
+        # 会落到 CLI 缺省 lmstudio 本地端点，必然失败且与隐私横幅错位。
+        # 端点按 CLI 既有旗标 --<provider>-endpoint 显式非空才传。
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8:replace"
+        provider = self._stage_a_provider_name()
+        endpoint = self._stage_a_endpoint()
+        if provider:
+            args.extend(["--s1-provider", provider])
+            flag = self._AI_PROVIDER_ENDPOINT_FLAGS.get(provider)
+            if endpoint and flag:
+                args.extend([flag, endpoint])
+            # 密钥仅经子进程环境变量注入（不写命令行、不落日志），
+            # 变量名与 RefineConfig.resolve_api_key / start_translation 一致；
+            # 本地服务商（lmstudio/ollama）无密钥，不注入。
+            key_env = self._AI_PROVIDER_KEY_ENV.get(provider)
+            if key_env:
+                try:
+                    from subtransjav.refine.secrets import read_secret
+                    key = read_secret(provider)
+                except Exception:
+                    key = ""
+                if key:
+                    env[key_env] = key
+
+        try:
+            proc = subprocess.run(
+                args, cwd=str(REPO_ROOT), capture_output=True,
+                timeout=self._AI_ANALYZE_TIMEOUT_S,
+                encoding="utf-8", errors="replace", env=env)
+        except subprocess.TimeoutExpired:
+            return {"success": False,
+                    "error": f"AI 分析超时（>{self._AI_ANALYZE_TIMEOUT_S}s）"}
+        stderr_tail = (proc.stderr or "")[-2000:]
+        if proc.returncode != 0:
+            return {"success": False,
+                    "error": msg("process_exit_code", code=proc.returncode),
+                    "stderr_tail": stderr_tail}
+
+        companion = os.path.join(os.path.dirname(p),
+                                 stem + self._AI_SUGGESTION_SUFFIX)
+        if not os.path.isfile(companion):
+            return {"success": False,
+                    "error": "分析已结束但建议件缺失: "
+                             f"{os.path.basename(companion)}",
+                    "stderr_tail": stderr_tail}
+        try:
+            with open(companion, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError) as e:
+            return {"success": False,
+                    "error": f"建议件读取/解析失败: {e}",
+                    "stderr_tail": stderr_tail}
+        if not isinstance(data, dict):
+            return {"success": False, "error": "建议件格式异常（非对象）",
+                    "stderr_tail": stderr_tail}
+        return {
+            "success": True,
+            "parse_ok": bool(data.get("parse_ok")),
+            "suggestions": (data.get("suggestions")
+                            if isinstance(data.get("suggestions"), dict)
+                            else {}),
+            "provider_name": self._stage_a_provider_name(),
+            "companion_path": companion,
+            "stderr_tail": stderr_tail,
+        }
+
+    def refine_ai_apply_glossary(self, entries_json: str) -> dict[str, Any]:
+        """把 AI 术语建议逐条锁定追加进词库（glossary.append_glossary_entries）。
+
+        词库路径与 refine_get_glossary 同源（config.default_glossary_path）。
+        entries_json 解析失败/非数组 → success=False。
+        """
+        try:
+            entries = json.loads(entries_json)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "entries_json 不是合法 JSON"}
+        if not isinstance(entries, list):
+            return {"success": False, "error": "entries_json 需为对象数组"}
+        try:
+            from subtransjav.refine.config import default_glossary_path
+            from subtransjav.refine.glossary import append_glossary_entries
+            gp = str(_resolve_safe_path(default_glossary_path()))
+            results = append_glossary_entries(entries, gp)
+            return {"success": True, "path": gp, "results": results}
+        except Exception as e:
+            _log_exc("refine_ai_apply_glossary")
+            return {"success": False, "error": str(e)}
+
+    def refine_ai_apply_tm(self, entries_json: str) -> dict[str, Any]:
+        """把 AI TM 建议逐条存入翻译记忆库（缺省库路径）。
+
+        每条附 conflict_warn：source 命中术语冲突观察闸 JSON
+        （glossary_conflict_watch.json）中"未裁决冲突"（conflicts>0 且
+        未被 manual_false_positive 标记）的源词集合。观察闸读取失败
+        不阻断（warn 全 False）。
+        """
+        try:
+            entries = json.loads(entries_json)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "entries_json 不是合法 JSON"}
+        if not isinstance(entries, list):
+            return {"success": False, "error": "entries_json 需为对象数组"}
+        try:
+            from subtransjav.refine import glossary_conflict as gc
+            from subtransjav.refine import tm as tm_mod
+
+            conflicted: set[str] = set()
+            try:
+                records = gc.load_watch_records(gc.default_watch_path())
+                for rec in records:
+                    if not isinstance(rec, dict):
+                        continue
+                    mfp = rec.get("manual_false_positive") or {}
+                    for term, info in (rec.get("per_term") or {}).items():
+                        try:
+                            n_conf = int((info or {}).get("conflicts", 0) or 0)
+                        except (TypeError, ValueError):
+                            n_conf = 0
+                        if n_conf > 0 and term not in mfp:
+                            conflicted.add(str(term))
+            except Exception:   # noqa: BLE001 观察闸旁路数据，绝不阻断
+                conflicted = set()
+
+            db = tm_mod.TranslationMemory()
+            results: list[dict] = []
+            try:
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    src = str(e.get("source", "")).strip()
+                    tgt = str(e.get("target", "")).strip()
+                    if not src or not tgt:
+                        continue
+                    added = db.store(src, tgt)
+                    warn = src in conflicted or (
+                        src.isascii() and src.lower() in conflicted)
+                    results.append({"source": src, "target": tgt,
+                                    "status": "added" if added else "exists",
+                                    "conflict_warn": warn})
+            finally:
+                db.close()
+            return {"success": True, "results": results}
+        except Exception as e:
+            _log_exc("refine_ai_apply_tm")
             return {"success": False, "error": str(e)}
 
     # ================================================================

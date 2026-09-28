@@ -6,8 +6,10 @@
   规避 ``__init__`` 的副作用（Documents 建目录 / atexit 注册）；
 - URL/endpoint 守卫入口在发起任何网络请求之前即短路，无网络副作用。
 """
+import json
 import os
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +22,7 @@ pytestmark = [pytest.mark.gui]
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试", exc_type=ImportError)
 
 from subtransjav.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
+    REPO_ROOT,
     SESSION_SELECTED_PATHS,
     TranslateAPI,
     _build_refine_args,
@@ -799,3 +802,340 @@ def test_start_translation_drains_stale_log_queue(gui_api_obj, monkeypatch):
         while not gui_api_obj._translate_log_queue.empty():
             residue.append(gui_api_obj._translate_log_queue.get_nowait())
         assert residue == [], f"第 {round_no} 轮启动后残留上轮日志: {residue}"
+
+# ---------------------------------------------------------------------------
+# AI 质量分析（D2026-0929：--ai-analyze 前后端接入）
+# ---------------------------------------------------------------------------
+
+_AI_REPORT_STEM = "ep01"
+_AI_SUGGESTIONS = {
+    "glossary": [{"src": "気持ちよさそう", "target": "看起来很爽",
+                  "reason": "全片统一"}],
+    "tm": [{"source": "先生、だめです", "target": "老师，不行的",
+            "reason": "高频句式"}],
+    "observations": ["整体节奏良好"],
+}
+
+
+def _make_ai_report(tmp_path: Path, with_companion: bool = True) -> Path:
+    """落一份 _质量报告.txt（可选伴生 _AI质量建议.json）供分析接口消费。"""
+    report = tmp_path / f"{_AI_REPORT_STEM}_质量报告.txt"
+    report.write_text("【结论】正常\n", encoding="utf-8")
+    if with_companion:
+        (tmp_path / f"{_AI_REPORT_STEM}_AI质量建议.json").write_text(
+            json.dumps({"model": "m", "parse_ok": True,
+                        "suggestions": _AI_SUGGESTIONS},
+                       ensure_ascii=False),
+            encoding="utf-8")
+    return report
+
+
+def _install_fake_stage_settings(gui_api_obj, monkeypatch,
+                                 provider="deepseek", endpoint=""):
+    """替身 refine_get_stage_settings：不触碰真实 config/refine_stage_settings.json。"""
+    monkeypatch.setattr(
+        gui_api_obj, "refine_get_stage_settings",
+        lambda: {"success": True,
+                 "stages": [{"stage": 1, "provider": provider,
+                             "endpoint": endpoint}],
+                 "settings": {}, "key_status": {}, "first_run": False})
+
+
+def _install_fake_ai_run(monkeypatch, *, returncode=0, stderr="",
+                         raise_timeout=False):
+    """替身 subprocess.run：捕获 CLI 参数与环境，杜绝真实子进程。"""
+    import subtransjav.webview_gui.api as api_mod
+    captured: dict = {}
+
+    def _fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        if raise_timeout:
+            raise subprocess.TimeoutExpired(cmd=args, timeout=600)
+        return SimpleNamespace(returncode=returncode, stderr=stderr,
+                               stdout="")
+
+    monkeypatch.setattr(api_mod.subprocess, "run", _fake_run)
+    return captured
+
+
+def test_refine_ai_analyze_success(gui_api_obj, monkeypatch, tmp_path):
+    """成功路径：CLI 参数/超时/cwd 正确，读回建议件并带 provider 名。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch, provider="zen")
+    captured = _install_fake_ai_run(monkeypatch, stderr="warn-tail\n")
+
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is True
+    assert r["parse_ok"] is True
+    assert r["suggestions"] == _AI_SUGGESTIONS
+    assert r["provider_name"] == "zen"
+    assert r["companion_path"].endswith(
+        f"{_AI_REPORT_STEM}_AI质量建议.json")
+    assert "warn-tail" in r["stderr_tail"]
+
+    args = captured["args"]
+    assert "--ai-analyze" in args
+    assert args[args.index("--ai-analyze") + 1] == str(report)
+    assert "--ai-model" not in args, "model 缺省不得传空 --ai-model"
+    # F1：分析子进程跟随阶段A 服务商（fake 存储 provider=zen）
+    assert args[args.index("--s1-provider") + 1] == "zen"
+    kw = captured["kwargs"]
+    assert kw.get("timeout") == 600
+    assert kw.get("cwd") == str(REPO_ROOT)
+    assert kw.get("encoding") == "utf-8"
+
+
+def test_refine_ai_analyze_model_passthrough(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """显式 model → 追加 --ai-model <m>。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    captured = _install_fake_ai_run(monkeypatch)
+    r = gui_api_obj.refine_ai_analyze(str(report), model="glm-4")
+    assert r["success"] is True
+    args = captured["args"]
+    assert args[args.index("--ai-model") + 1] == "glm-4"
+
+
+def _install_fake_secret(monkeypatch, stored=("deepseek",)):
+    """替身 DPAPI read_secret：仅 stored 中 provider 返回假密钥。"""
+    import subtransjav.refine.secrets as secrets_mod
+    monkeypatch.setattr(
+        secrets_mod, "read_secret",
+        lambda name, store_path=None: "sk-fake" if name in stored else "")
+
+
+def test_refine_ai_analyze_follows_stage_a_endpoint(gui_api_obj,
+                                                    monkeypatch, tmp_path):
+    """F1：阶段A 存储 endpoint → 子进程 argv 带 --<provider>-endpoint。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(
+        gui_api_obj, monkeypatch, provider="siliconflow",
+        endpoint="https://api.siliconflow.cn/v1")
+    _install_fake_secret(monkeypatch, stored=("siliconflow",))
+    captured = _install_fake_ai_run(monkeypatch)
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is True
+    args = captured["args"]
+    assert args[args.index("--s1-provider") + 1] == "siliconflow"
+    assert args[args.index("--siliconflow-endpoint") + 1] == \
+        "https://api.siliconflow.cn/v1"
+    env = captured["kwargs"].get("env") or {}
+    assert env.get("SILICONFLOW_API_KEY") == "sk-fake"
+    # 密钥不写命令行
+    assert all("sk-fake" not in str(a) for a in args)
+
+
+def test_refine_ai_analyze_deepseek_key_env(gui_api_obj, monkeypatch,
+                                            tmp_path):
+    """F1：deepseek 已存密钥 → env 注入 DEEPSEEK_API_KEY（不落 argv）。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch, provider="deepseek")
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+    captured = _install_fake_ai_run(monkeypatch)
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is True
+    env = captured["kwargs"].get("env") or {}
+    assert env.get("DEEPSEEK_API_KEY") == "sk-fake"
+    assert all("sk-fake" not in str(a) for a in captured["args"])
+
+
+def test_refine_ai_analyze_local_provider_no_key_env(gui_api_obj,
+                                                     monkeypatch, tmp_path):
+    """F1：本地 provider（lmstudio）→ 不注入密钥 env，端点跟随存储。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(
+        gui_api_obj, monkeypatch, provider="lmstudio",
+        endpoint="http://localhost:1234/v1")
+    _install_fake_secret(monkeypatch, stored=("deepseek", "zen",
+                                              "siliconflow", "custom"))
+    captured = _install_fake_ai_run(monkeypatch)
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is True
+    args = captured["args"]
+    assert args[args.index("--s1-provider") + 1] == "lmstudio"
+    assert args[args.index("--lmstudio-endpoint") + 1] == \
+        "http://localhost:1234/v1"
+    env = captured["kwargs"].get("env") or {}
+    for var in ("DEEPSEEK_API_KEY", "OPENCODE_API_KEY",
+                "SILICONFLOW_API_KEY", "CUSTOM_API_KEY"):
+        assert var not in env, f"本地 provider 不得注入 {var}"
+
+
+def test_refine_ai_analyze_nonzero_exit(gui_api_obj, monkeypatch, tmp_path):
+    """非零退出 → success=False，stderr 尾部随行返回。"""
+    report = _make_ai_report(tmp_path, with_companion=False)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    _install_fake_ai_run(monkeypatch, returncode=1,
+                         stderr="boom-line1\nboom-line2\n")
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is False
+    assert "boom-line2" in r["stderr_tail"]
+
+
+def test_refine_ai_analyze_timeout(gui_api_obj, monkeypatch, tmp_path):
+    """超时 → success=False 且错误含超时语义。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    _install_fake_ai_run(monkeypatch, raise_timeout=True)
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is False
+    assert "超时" in r["error"]
+
+
+def test_refine_ai_analyze_rejects_non_report_and_missing(
+        gui_api_obj, monkeypatch, tmp_path):
+    """非 _质量报告.txt 后缀 / 路径不存在 → 前置拒绝，不触 subprocess。"""
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    captured = _install_fake_ai_run(monkeypatch)
+    other = tmp_path / "ep01.txt"
+    other.write_text("x", encoding="utf-8")
+    r1 = gui_api_obj.refine_ai_analyze(str(other))
+    assert r1["success"] is False and "质量报告" in r1["error"]
+    r2 = gui_api_obj.refine_ai_analyze(
+        str(tmp_path / "不存在_质量报告.txt"))
+    assert r2["success"] is False
+    r3 = gui_api_obj.refine_ai_analyze("")
+    assert r3["success"] is False
+    assert captured == {}, "前置拒绝必须发生在 subprocess 之前"
+
+
+def test_refine_ai_analyze_companion_missing(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """CLI 退出 0 但建议件未落盘 → success=False。"""
+    report = _make_ai_report(tmp_path, with_companion=False)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    _install_fake_ai_run(monkeypatch)
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is False
+    assert "建议件" in r["error"]
+
+
+def test_refine_ai_analyze_parse_failed_degraded(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """parse_ok=False 的降级建议件：原样透传，前端按纯文本降级展示。"""
+    report = tmp_path / f"{_AI_REPORT_STEM}_质量报告.txt"
+    report.write_text("【结论】x\n", encoding="utf-8")
+    (tmp_path / f"{_AI_REPORT_STEM}_AI质量建议.json").write_text(
+        json.dumps({"model": "m", "parse_ok": False,
+                    "suggestions": {"glossary": [], "tm": [],
+                                    "observations": ["原始文本"]}},
+                   ensure_ascii=False),
+        encoding="utf-8")
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    _install_fake_ai_run(monkeypatch)
+    r = gui_api_obj.refine_ai_analyze(str(report))
+    assert r["success"] is True
+    assert r["parse_ok"] is False
+    assert r["suggestions"]["observations"] == ["原始文本"]
+
+
+def test_refine_ai_apply_glossary_passes_entries(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """词库追加：走 config.default_glossary_path 同源路径 + 逐条状态回传。"""
+    import subtransjav.refine.config as cfg_mod
+    import subtransjav.refine.glossary as gl_mod
+    gp = tmp_path / "glossary.csv"
+    monkeypatch.setattr(cfg_mod, "default_glossary_path", lambda: str(gp))
+    seen: dict = {}
+
+    def _fake_append(entries, path):
+        seen["entries"] = entries
+        seen["path"] = path
+        return [{"src": e.get("src"), "target": e.get("target"),
+                 "status": "added"} for e in entries]
+
+    monkeypatch.setattr(gl_mod, "append_glossary_entries", _fake_append)
+    entries = [{"src": "気持ちよさそう", "target": "看起来很爽"}]
+    r = gui_api_obj.refine_ai_apply_glossary(json.dumps(
+        entries, ensure_ascii=False))
+    assert r["success"] is True
+    assert r["path"] == str(gp)
+    assert r["results"][0]["status"] == "added"
+    assert seen["entries"] == entries
+    assert seen["path"] == str(gp)
+
+
+def test_refine_ai_apply_glossary_bad_json(gui_api_obj):
+    """entries_json 非 JSON / 非数组 → success=False 且不触词库。"""
+    for payload in ("not-json", "123", "null"):
+        r = gui_api_obj.refine_ai_apply_glossary(payload)
+        assert r["success"] is False, payload
+
+
+def test_refine_ai_apply_tm_store_and_conflict_warn(gui_api_obj,
+                                                    monkeypatch,
+                                                    tmp_path):
+    """TM 落库：store 新增/已存在状态 + watch 未裁决冲突 conflict_warn 黄标。"""
+    import subtransjav.refine.glossary_conflict as gc_mod
+    import subtransjav.refine.tm as tm_mod
+
+    stored: list = []
+
+    class _FakeTM:
+        def __init__(self, db_path=None):
+            pass
+
+        def store(self, source, target, stage=0, source_name=None):
+            stored.append((source, target))
+            return len(stored) == 1  # 第 1 条新增，第 2 条已存在
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tm_mod, "TranslationMemory", _FakeTM)
+    watch = tmp_path / "glossary_conflict_watch.json"
+    watch.write_text(json.dumps([
+        {"date": "2026-09-29", "source": "a.srt",
+         "per_term": {"魔鏡番号": {"candidates": 3, "conflicts": 2},
+                      "先生": {"candidates": 5, "conflicts": 1}},
+         "manual_false_positive": {"先生": {"by": "user"}}},
+    ], ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(gc_mod, "default_watch_path", lambda: str(watch))
+
+    entries = [
+        {"source": "魔鏡番号", "target": "片商编号"},
+        {"source": "先生、だめです", "target": "老师，不行的"},
+    ]
+    r = gui_api_obj.refine_ai_apply_tm(json.dumps(entries,
+                                                  ensure_ascii=False))
+    assert r["success"] is True
+    assert [x["status"] for x in r["results"]] == ["added", "exists"]
+    assert r["results"][0]["conflict_warn"] is True, \
+        "watch 未裁决冲突词必须黄标"
+    assert r["results"][1]["conflict_warn"] is False, \
+        "manual_false_positive 豁免词不黄标"
+    assert stored == [(e["source"], e["target"]) for e in entries]
+
+
+def test_refine_ai_apply_tm_watch_missing_no_block(gui_api_obj,
+                                                   monkeypatch,
+                                                   tmp_path):
+    """watch JSON 缺失 → 不阻断，warn 全 False。"""
+    import subtransjav.refine.glossary_conflict as gc_mod
+    import subtransjav.refine.tm as tm_mod
+
+    class _FakeTM:
+        def __init__(self, db_path=None):
+            pass
+
+        def store(self, source, target, stage=0, source_name=None):
+            return True
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tm_mod, "TranslationMemory", _FakeTM)
+    monkeypatch.setattr(gc_mod, "default_watch_path",
+                        lambda: str(tmp_path / "no_such_watch.json"))
+    r = gui_api_obj.refine_ai_apply_tm(json.dumps(
+        [{"source": "あ", "target": "啊"}], ensure_ascii=False))
+    assert r["success"] is True
+    assert r["results"][0]["conflict_warn"] is False
+
+
+def test_refine_ai_apply_tm_bad_json(gui_api_obj):
+    """entries_json 非 JSON → success=False。"""
+    r = gui_api_obj.refine_ai_apply_tm("{{{bad")
+    assert r["success"] is False
