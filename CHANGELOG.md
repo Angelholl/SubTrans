@@ -6,6 +6,7 @@
 
 ### 新增
 
+- **疑似漏听检测（音频能量粗筛，2.0.0-beta 头牌第一阶段）**：新增"视听对比检测层"CLI/管线侧能力——媒体路径契约值（上游 manifest 自动配对或 `--media-path` 显式覆盖，C-5 收窄语义：ffmpeg 输入仅限该本地契约路径）非空且开关开时，探测系统 ffmpeg（`shutil.which` + `ffmpeg -version` 冒烟防残桩）抽取 16kHz 单声道 WAV（临时文件落 `Temp/audio_detect/`，命名带输入哈希，管线 finally 清理 + 启动时清扫超 24h 残留），以**纯标准库**（wave + array/memoryview 分块求和，10ms hop，无 numpy/audioop——显式声明 **wave 级 VAD 降级：RMS 能量代理，非神经 VAD**）计算能量序列，字幕时间轴间隙（≥300ms，可调）内能量超过文件内相对分位阈值（默认 P85，可调）即记"疑似（粗筛）"漏听候选（每片上限 20 条，可调，超限注明"已达截断上限"）。质量报告新增【疑似漏听观测（音频能量粗筛）】纯观测章节，导读 json 新增 `suspected_missed_speech` 类别（仅报告，**不进入可定点重翻的行动条目**，`current_text` 恒为 null）；未装 ffmpeg/无媒体/关闭开关时章节缺席或一行说明，检测失败一律降级跳过，绝不阻断翻译主流程。2 小时片目标 <30s，超标自动降采样率至 8000 重测并在报告注明。开关与三参数经 `config/user_settings.json` 或环境变量分层可调（`audio_detect_enabled` / `audio_detect_threshold_pct` / `audio_detect_min_gap_ms` / `audio_detect_max_candidates`），不加 CLI 参数。
 - **媒体路径链路打通（v1.5 前置）**：refine 经上游 WhisperJAV 运行 manifest（`whisperjav_run.json`）自动配对媒体文件——`files[].output` 与输入 SRT 归一化匹配后取对应 `files[].path`；`--media-path` 可显式覆盖（用户明示即采信，覆盖值以规范化 sha1 参与断点指纹）。媒体路径与来源（自动发现/显式指定）写入质量报告头部与质量报告导读 json（`media_path` / `media_path_source`），供 v1.6 音频级检测/试听消费；配对失败不阻断翻译管线，仅告警。
 
 ## [1.4.0] - 2026-09-28

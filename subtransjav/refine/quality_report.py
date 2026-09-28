@@ -548,6 +548,48 @@ def render_observation_section(single_line: list | None,
     return "\n".join(lines)
 
 
+def render_audio_insight_section(audio_insights: dict | None) -> str:
+    """渲染「疑似漏听观测（音频能量粗筛）」章节为文本（纯函数）。
+
+    audio_insights 为 None（无媒体/开关关/旧调用方）时整节省略；
+    available=False 时输出一行不可用说明；有候选时逐条列出（标注
+    "疑似（粗筛）"），零候选显示"未发现疑似漏听段"。wave 级 VAD
+    降级声明恒有（RMS 能量代理，非神经 VAD，只观测不重翻）。
+    """
+    if audio_insights is None:
+        return ""
+    lines = ["【疑似漏听观测（音频能量粗筛）】"]
+    if not audio_insights.get("available"):
+        reason = audio_insights.get("reason") or "未检测到 ffmpeg"
+        lines.append(f"　（音频检测不可用：{reason}）")
+        lines.append("wave 级 VAD 降级（RMS 能量代理，非神经 VAD）；"
+                     "本节为观测数据，不触发自动重翻。")
+        return "\n".join(lines)
+    candidates = audio_insights.get("candidates") or []
+    metrics = audio_insights.get("metrics") or {}
+    if candidates:
+        lines.append("疑似漏听候选（粗筛，供对照音频人工确认）:")
+        for c in candidates:
+            lines.append(f"  {_fmt_timing(c['timing'])} "
+                         f"间隙 {c['gap_ms']}ms 内语音能量约 "
+                         f"{c['speech_overlap_s']:.2f}s "
+                         f"（疑似（粗筛）#{c['index']}）")
+        if metrics.get("truncated"):
+            lines.append(f"  （已达截断上限 "
+                         f"{metrics.get('total_candidates', '?')} 条中的"
+                         f" {len(candidates)} 条，其余省略）")
+    else:
+        lines.append("未发现疑似漏听段。")
+    ds = ("；检测超时已降采样率至 8000Hz 重测"
+          if metrics.get("downsampled_to_8000") else "")
+    lines.append(f"汇总: 候选 {len(candidates)} 条 | 阈值 P"
+                 f"{metrics.get('threshold_pct', 85)} | 时长 "
+                 f"{metrics.get('duration_s', 0):g}s{ds}")
+    lines.append("wave 级 VAD 降级（RMS 能量代理，非神经 VAD）；"
+                 "本节为观测数据，不触发自动重翻。")
+    return "\n".join(lines)
+
+
 def write_divergence_review_csv(out_path: str, rows: list, file_label: str,
                                 final_entries: list | None = None) -> None:
     """分歧复核 CSV 落盘（独立可调用，输出路径由调用方指定）。
@@ -603,6 +645,9 @@ _SECTION_NOTES: tuple[tuple[str, str], ...] = (
     ("【语速与间隙观测】",
      "　（单行超长为检测与建议，处理走导读行动条目；语速与间隙为观测"
      "数据，供日文语速定标调研，不触发自动重翻）"),
+    ("【疑似漏听观测（音频能量粗筛）】",
+     "　（wave 级 VAD 降级（RMS 能量代理，非神经 VAD）；候选为疑似"
+     "（粗筛）观测条目，仅报告不重翻，不进入行动条目）"),
     ("【双引擎分歧】",
      "　（两遍引擎译法不同的行，可选抽查；引擎降级时此处仅显示模式）"),
     ("【统计】",
@@ -701,7 +746,8 @@ def build_quality_report(orig_entries: list, final_entries: list,
                          guide_sink: dict | None = None,
                          structured_warnings: list[dict] | None = None,
                          media_path: str = "",
-                         media_path_source: str = "") -> str:
+                         media_path_source: str = "",
+                         audio_insights: dict | None = None) -> str:
     """对比 期望条目（预合并后） 与 终稿条目，返回复核工单式报告文本。
 
     Parameters
@@ -767,6 +813,12 @@ def build_quality_report(orig_entries: list, final_entries: list,
         头部"媒体文件"行与导读 json media_path/media_path_source 键缺席。
     media_path_source : str
         媒体路径来源："override"（显式指定）| "manifest"（自动发现）。
+    audio_insights : dict | None
+        2.0.0-beta 疑似漏听检测（音频能量粗筛）结果（audio_detect
+        .detect_audio_insights 返回值）；None（无媒体/开关关/旧调用方）
+        时【疑似漏听观测（音频能量粗筛）】章节整体省略且导读无
+        suspected_missed_speech 条目。候选只进观测类别，绝不置行动
+        条目（current_text 恒为 None）。
 
     条数核对恒等式（统计段"条数核对"行）各项定义：
       原文 N —— 闸门0 前原始条目总数（orig_total，缺省按上述推算）；
@@ -1173,6 +1225,13 @@ def build_quality_report(orig_entries: list, final_entries: list,
     if observation_text:
         lines.extend(observation_text.splitlines())
         lines.append("-" * 60)
+    # 疑似漏听观测章节（2.0.0-beta，D2026-0929-09）：音频能量粗筛，
+    # 纯观测（候选绝不进行动条目）；audio_insights 为 None 时整节省略。
+    # 置于【语速与间隙观测】之后、【双引擎分歧】之前。
+    audio_text = render_audio_insight_section(audio_insights)
+    if audio_text:
+        lines.extend(audio_text.splitlines())
+        lines.append("-" * 60)
     # 双引擎分歧章节：无条件输出（pass_mode 决定完整/降级展示），
     # 渲染逻辑提为纯函数 render_disagreement_section（离线重算脚本复用）
     lines.extend(render_disagreement_section(pass_disagreement,
@@ -1283,6 +1342,22 @@ def build_quality_report(orig_entries: list, final_entries: list,
                 "status": "open",
                 "severity": None,
             })
+        # 来源 D：疑似漏听候选（2.0.0-beta，D2026-0929-09，纯观测类）。
+        # category 固定 suspected_missed_speech；current_text 恒为 None
+        # ——语义即"不可自动重翻"，绝不进入行动条目；audio_insights
+        # 缺席（无媒体/开关关）时无此类别条目。
+        if audio_insights is not None and audio_insights.get("available"):
+            for c in audio_insights.get("candidates") or []:
+                guide_items.append({
+                    "index": c.get("index"),
+                    "timing": c.get("timing") or "",
+                    "category": "suspected_missed_speech",
+                    "message": c.get("message") or "疑似漏听（粗筛）",
+                    "current_text": None,
+                    "source_excerpt": "",
+                    "status": "observation",
+                    "severity": None,
+                })
         # index 升序稳定排序（None 防御：无 index 的排末尾）
         guide_items.sort(key=lambda it: (it["index"] is None,
                                          it["index"] if it["index"] is not None else 0))

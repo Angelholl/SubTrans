@@ -66,6 +66,12 @@ TUNABLE_FIELD_TYPES = {
     # H4b：条目级阈值自适应开关（bool 白名单字面量收敛）与显式遥测路径
     "adaptive_thresholds": bool,
     "asr_telemetry": str,
+    # 2.0.0-beta 疑似漏听检测（音频能量粗筛）：开关与三参数（不加 CLI
+    # 参数，user_settings/env 可调，见 audio_detect 模块 docstring）
+    "audio_detect_enabled": bool,
+    "audio_detect_threshold_pct": int,
+    "audio_detect_min_gap_ms": int,
+    "audio_detect_max_candidates": int,
 }
 
 # ---- 服务商预设 ----
@@ -316,6 +322,14 @@ class RefineConfig:
     # manifest.compute_config_hash：显式覆盖值以规范化 sha1 参与，自动
     # 发现值不参与指纹。
     media_path: str = ""
+    # 2.0.0-beta 疑似漏听检测（音频能量粗筛，D2026-0929-09）：仅在
+    # media_path 契约路径非空且开关开时执行；wave 级 VAD 降级（RMS
+    # 能量代理，非神经 VAD），候选只进报告/导读观测类别，绝不进行动
+    # 条目。未装 ffmpeg 静默跳过（报告注明一行）。不加 CLI 参数。
+    audio_detect_enabled: bool = True
+    audio_detect_threshold_pct: int = 85      # 文件内相对分位阈值（P85）
+    audio_detect_min_gap_ms: int = 300        # 字幕间隙判定下限（毫秒）
+    audio_detect_max_candidates: int = 20     # 每片候选截断上限
     # H4b 分支 b 子集口径：条目级阈值自适应开关——需上游 Balanced 模式产出
     # 的 asr_telemetry.jsonl；缺失/超龄时按默认阈值执行（风险清单标注）。
     # 仅收紧删五类参数，计数类永不解锁（见 asr_meta.scene_low_trust 铁律）。

@@ -46,6 +46,7 @@ from .asr_meta import (
 )
 from .config import (
     DEEPSEEK_BASE_DEFAULT,
+    TEMP_DIR,
     RefineConfig,
     ensure_language_support,
 )
@@ -898,6 +899,14 @@ def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
     if isinstance(cfg.inputs, str):
         cfg.inputs = [cfg.inputs]
 
+    # 2.0.0-beta 音频检测临时目录 stale 清扫（启动时一次；超 24h 清除，
+    # 全容错不阻断）
+    try:
+        from .audio_detect import cleanup_stale_audio_files
+        cleanup_stale_audio_files(TEMP_DIR)
+    except Exception as e:      # noqa: BLE001
+        print(f"⚠️ 音频检测临时目录清扫失败（忽略）: {e}")
+
     collector = RiskCollector()
     emitter = EventEmitter(
         stream=event_stream,
@@ -1643,6 +1652,30 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                 # → None）；L=本次学习入库数（未启用 TM → None）
                 tm_exact_hits = (len(a_result.exact_hits)
                                  if (tm is not None and not reused_a) else None)
+                # ---- 2.0.0-beta 疑似漏听检测（音频能量粗筛，D2026-0929-09）----
+                # 仅 media_path 契约路径非空且开关开时执行；detect 内部
+                # 全容错，此处再兜一层异常——任何失败都降级为"本次跳过
+                # 音频检测"，绝不阻断翻译主流程。候选只进观测类别。
+                audio_insights = None
+                if media_path and bool(getattr(cfg, "audio_detect_enabled",
+                                               True)):
+                    try:
+                        from .audio_detect import detect_audio_insights
+                        audio_insights = detect_audio_insights(
+                            media_path, final_entries,
+                            temp_root=TEMP_DIR,
+                            threshold_pct=int(getattr(
+                                cfg, "audio_detect_threshold_pct", 85) or 85),
+                            min_gap_ms=int(getattr(
+                                cfg, "audio_detect_min_gap_ms", 300) or 300),
+                            max_candidates=int(getattr(
+                                cfg, "audio_detect_max_candidates", 20) or 20))
+                    except Exception as e:      # noqa: BLE001
+                        print(f"   ⚠️ 音频检测不可用，本次跳过（不阻断）: {e}")
+                        audio_insights = {
+                            "available": False,
+                            "reason": f"音频检测失败，本次跳过: {e}",
+                            "candidates": [], "metrics": {}}
                 guide: dict = {}
                 report = build_quality_report(
                     orig_entries, final_entries, Path(in_path).name,
@@ -1664,7 +1697,8 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     tm_learned_count=learned_count,
                     guide_sink=guide,
                     media_path=media_path,
-                    media_path_source=media_source)
+                    media_path_source=media_source,
+                    audio_insights=audio_insights)
                 rp = write_quality_report(out_dir, stem, report)
                 write_guide_json(out_dir, stem, guide)
                 print(f"\n📋 质量报告已生成: {Path(rp).name}")
