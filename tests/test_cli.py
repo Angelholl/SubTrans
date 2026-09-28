@@ -283,11 +283,37 @@ def test_cli_asr_meta_wired_to_config(tmp_path):
     assert cfg.asr_meta == str(meta_path)
 
 
-def test_cli_v2_ctx_default_is_production_locked_22272(tmp_path):
-    """防回退锁：CLI 不传 --v2-ctx 时缺省=生产锁定 22272，不得把引擎 22272 重载回 32768。"""
-    args = build_parser().parse_args(["-i", str(tmp_path / "x.srt")])
-    cfg = config_from_args(args)
-    assert cfg.v2_ctx_local == 22272
+def test_cli_v2_ctx_default_is_generic_16384_with_layering(tmp_path,
+                                                           monkeypatch):
+    """A1 缺省重绑定（D2026-0927-01）：CLI 不传 --v2-ctx 时缺省=通用保守值
+    16384；22272 退到文档/示例层（作者 16GB 档案值，非全局缺省）。
+    分层契约：默认 16384 < user_settings.json < SUBTRANSJAV_V2_CTX_LOCAL
+    < 显式 --v2-ctx（显式 22272 档案值仍生效）。"""
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path))
+    monkeypatch.delenv("SUBTRANSJAV_V2_CTX_LOCAL", raising=False)
+
+    # 不传 --v2-ctx：dataclass 缺省 16384
+    cfg = config_from_args(build_parser().parse_args(
+        ["-i", str(tmp_path / "x.srt")]))
+    assert cfg.v2_ctx_local == 16384
+
+    # user_settings.json 分层覆盖
+    (tmp_path / "user_settings.json").write_text('{"v2_ctx_local": 8192}',
+                                                 encoding="utf-8")
+    cfg2 = config_from_args(build_parser().parse_args(
+        ["-i", str(tmp_path / "x.srt")]))
+    assert cfg2.v2_ctx_local == 8192
+
+    # 环境变量分层覆盖（高于用户文件）
+    monkeypatch.setenv("SUBTRANSJAV_V2_CTX_LOCAL", "12288")
+    cfg3 = config_from_args(build_parser().parse_args(
+        ["-i", str(tmp_path / "x.srt")]))
+    assert cfg3.v2_ctx_local == 12288
+
+    # 显式 --v2-ctx 最高优先级：显式 22272 档案值仍生效
+    cfg4 = config_from_args(build_parser().parse_args(
+        ["-i", str(tmp_path / "x.srt"), "--v2-ctx", "22272"]))
+    assert cfg4.v2_ctx_local == 22272
 
 
 def test_cli_v2_ctx_explicit_override(tmp_path):
@@ -296,6 +322,38 @@ def test_cli_v2_ctx_explicit_override(tmp_path):
         "-i", str(tmp_path / "x.srt"), "--v2-ctx", "16384"])
     cfg = config_from_args(args)
     assert cfg.v2_ctx_local == 16384
+
+
+# ---------------------------------------------------------------------------
+# A2 兜底重绑定（D2026-0927-01）：--fallback-model 缺省空串=不启用本地兜底
+# ---------------------------------------------------------------------------
+
+def test_cli_fallback_model_default_empty(tmp_path):
+    """缺省空串：gemma-4-12b（已否决模型）不再作隐式缺省；未启用
+    fallback_local 时缺省构造校验零报错。"""
+    args = build_parser().parse_args(["-i", _write_input(tmp_path)])
+    cfg = config_from_args(args)
+    assert cfg.fallback_model == ""
+    assert cfg.fallback_local is False
+    errs = cfg.validate()
+    assert not any("接管" in e for e in errs)
+
+
+def test_cli_fallback_model_explicit_still_wired(tmp_path):
+    """显式 --fallback-model 照常接线（留空=不启用的反面：显式指定即传）。"""
+    args = build_parser().parse_args([
+        "-i", str(tmp_path / "x.srt"), "--fallback-model", "my-local-model"])
+    cfg = config_from_args(args)
+    assert cfg.fallback_model == "my-local-model"
+
+
+def test_cli_fallback_local_with_empty_model_fails_validation(tmp_path):
+    """启用 --fallback-local 而未指定接管模型 → validate 友好报错。"""
+    args = build_parser().parse_args([
+        "-i", _write_input(tmp_path), "--fallback-local"])
+    cfg = config_from_args(args)
+    errs = cfg.validate()
+    assert any("未指定接管模型" in e for e in errs)
 
 
 def test_main_module_entry_forwards_exit_code():

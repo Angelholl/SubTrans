@@ -119,14 +119,19 @@ def build_parser():
 
     p.add_argument("--fallback-local", action="store_true",
                    help="云端阶段故障(限流/宕机/持续解析失败)时自动切换本地模型接管")
-    p.add_argument("--fallback-model", default="google/gemma-4-12b",
-                   help="本地接管使用的 LM Studio 模型名")
+    p.add_argument("--fallback-model", default="",
+                   help="本地接管使用的 LM Studio 模型名（留空=不启用本地兜底；"
+                        "需与 --fallback-local 同用且显式指定模型，否则校验报错）")
 
     grp_v2 = p.add_argument_group("v2 管线")
     grp_v2.add_argument("--v2-concurrency", type=int, default=1,
                         help="批间并发数（1-5，默认1为串行，越界自动钳制）")
-    grp_v2.add_argument("--v2-ctx", type=int, default=22272,
-                        help="本地模型上下文窗口（缺省 22272=作者 16GB 单卡实测档案值，请按显存调整；LM Studio 手工改过 ctx 时用本参数显式覆盖）")
+    grp_v2.add_argument("--v2-ctx", type=int, default=None,
+                        help="本地模型上下文窗口（不传=缺省 16384 通用保守值，"
+                             "可经 config/user_settings.json 或环境变量 "
+                             "SUBTRANSJAV_V2_CTX_LOCAL 覆盖；22272 为作者 16GB "
+                             "单卡档案值示例，非缺省；LM Studio 手工改过 ctx 时"
+                             "用本参数显式覆盖）")
     grp_v2.add_argument("--force", action="store_true",
                         help="忽略已有产物强制重跑（覆盖前自动备份）")
     grp_v2.add_argument("--resume", action="store_true",
@@ -224,7 +229,7 @@ def config_from_args(args):
 
     input_files = _collect_input_files(args)
 
-    return RefineConfig(
+    cfg = RefineConfig(
         inputs=input_files,
         output_dir=args.output_dir,
         stages=stages,
@@ -252,7 +257,6 @@ def config_from_args(args):
         cleaner_config_dir=args.cleaner_config or "",
         v2_profile=args.profile,
         v2_concurrency=args.v2_concurrency,
-        v2_ctx_local=args.v2_ctx,
         v2_source_filter=args.source_filter,
         auto_synopsis=not args.no_auto_synopsis,
         asr_meta=args.asr_meta,
@@ -265,6 +269,12 @@ def config_from_args(args):
         heartbeat_interval=args.heartbeat_interval,
         tm_learn_gate=not args.no_tm_learn_gate,
     )
+    # A1 缺省重绑定：仅显式传 --v2-ctx 时赋值（构造后赋值天然处于分层链
+    # 最高优先级）；不传时 dataclass 缺省 16384 与 user_settings/env 分层
+    # 链在 RefineConfig.__post_init__ 内生效。
+    if args.v2_ctx is not None:
+        cfg.v2_ctx_local = args.v2_ctx
+    return cfg
 
 
 def print_plan(cfg):

@@ -46,6 +46,9 @@ TUNABLE_FIELD_TYPES = {
     "premerge_max_chars": int,
     "premerge_min_fragment_chars": int,
     "v2_concurrency_max": int,
+    # A1 缺省重绑定（D2026-0927-01）：v2_ctx_local 纳入用户可调字段，
+    # 用户可经 config/user_settings.json 或 SUBTRANSJAV_V2_CTX_LOCAL 自定
+    "v2_ctx_local": int,
     "timeout_llm": float,
     "timeout_http": float,
     "timeout_probe": float,
@@ -90,6 +93,9 @@ PROVIDER_MODEL_DEFAULTS = {
     "siliconflow": "",
     "custom": "",
 }
+
+# D6：已否决的 v1 旧缺省模型（读入即告警并清空，见 RefineConfig.__post_init__）
+_LEGACY_VETO_MODEL = "gemma3:12b"
 
 # Zen 实测免费名单（2026-08；官方轮换，以测试为准）
 ZEN_FREE_MODELS = [
@@ -284,7 +290,7 @@ class RefineConfig:
     # ------------------------------------------------------------------
     v2_profile: str = "local"       # local=strict兜底(cleaner+误译拦截) | cloud=lenient(仅通用校验)
     v2_concurrency: int = 1         # 批间并发数（1-5，默认1为串行，对所有服务商生效）
-    v2_ctx_local: int = 22272       # 本地模型上下文窗口（批大小/max_tokens 预算依据；22272=作者 16GB 单卡实测档案值（生产锁定值），请按自身显存调整；原 32768 为历史缺省）
+    v2_ctx_local: int = 16384       # 本地模型上下文窗口（批大小/max_tokens 预算依据；缺省演变：32768（历史）→ 22272（作者 16GB 单卡档案值，见文档/示例层）→ 16384（A1 缺省重绑定，D2026-0927-01：通用保守值）。可经 config/user_settings.json 或 SUBTRANSJAV_V2_CTX_LOCAL 覆盖）
     v2_keep_untranslated: str = "original"   # D1 后仅兼容保留：A/B 双失败一律回退原文+[未翻译] 标记（原 original/empty 两档已并轨，不再删行）
     # 闸门0 送翻前源侧幻觉检测（预合并前对原始条目生效，两档 profile 均执行；
     # 规则库见 refine/defaults/source_hallucination.yaml）
@@ -367,6 +373,14 @@ class RefineConfig:
         except (TypeError, ValueError):
             n_max = DEFAULT_V2_CONCURRENCY_MAX
         self.v2_concurrency = max(1, min(n_max, n))
+        # D6 兼容清理：v1 旧缺省模型 gemma3:12b 已否决——配置读入含该值时
+        # 告警并清空，落回 PROVIDER_MODEL_DEFAULTS 自动推荐链（覆盖链由
+        # resolve_model 承接；彻底为空由 validate() "未指定模型名" 兜底）。
+        for _s in self.stages:
+            if _s.model == _LEGACY_VETO_MODEL:
+                print(f"⚠️ 检测到已否决的旧缺省模型 {_LEGACY_VETO_MODEL}，"
+                      f"请重新配置；本次运行将使用自动推荐模型")
+                _s.model = ""
 
     def _apply_layered_overrides(self):
         """分层配置：仅当字段仍为 dataclass 默认值时允许用户文件/环境变量覆盖。

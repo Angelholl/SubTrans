@@ -91,6 +91,9 @@ def test_run_manifest_roundtrip(tmp_path):
         "git_head": "unknown",
         "glossary": "config/glossary.csv",
         "glossary_sha1": "a" * 40,
+        # golden 显式钉档案值（v2_ctx_local=22272，作者 16GB 单卡档案值），
+        # 与代码缺省解耦（A1 缺省重绑定后代码缺省为 16384）；golden 期望
+        # 输出保持可复现，不受缺省变更影响。
         "config_fingerprint": {"v2_ctx_local": 22272, "v2_concurrency": 1,
                                "tm_enabled": True, "auto_synopsis": False},
         "files": {"demo": {"input": "x.srt", "input_sha256": "b" * 64,

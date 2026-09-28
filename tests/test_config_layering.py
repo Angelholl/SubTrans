@@ -166,6 +166,31 @@ def test_resolve_tunable_follows_layering(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# A1 缺省重绑定（D2026-0927-01）：v2_ctx_local 新缺省 16384（22272 退到
+# 文档/示例层），经 TUNABLE_FIELD_TYPES 注册走完整分层链
+# ---------------------------------------------------------------------------
+
+def test_v2_ctx_local_default_16384_registered_as_tunable():
+    cfg = RefineConfig()
+    assert cfg.v2_ctx_local == 16384
+    assert rc.TUNABLE_FIELD_TYPES.get("v2_ctx_local") is int
+
+
+def test_v2_ctx_local_layering_user_file_env_explicit(tmp_path, monkeypatch):
+    """分层优先级：默认 16384 < user_settings.json < 环境变量 < 显式赋值。"""
+    # 用户配置文件覆盖
+    _write_user_settings(tmp_path, {"v2_ctx_local": 8192})
+    assert RefineConfig().v2_ctx_local == 8192
+    assert resolve_tunable("v2_ctx_local") == 8192
+    # 环境变量覆盖（高于用户文件）
+    monkeypatch.setenv("SUBTRANSJAV_V2_CTX_LOCAL", "12288")
+    assert RefineConfig().v2_ctx_local == 12288
+    assert resolve_tunable("v2_ctx_local") == 12288
+    # 显式赋值最高（模拟 CLI/GUI 构造后赋值；显式 22272 档案值仍生效）
+    assert RefineConfig(v2_ctx_local=22272).v2_ctx_local == 22272
+
+
+# ---------------------------------------------------------------------------
 # 生效配置摘要
 # ---------------------------------------------------------------------------
 
