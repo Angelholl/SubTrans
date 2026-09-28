@@ -1,6 +1,6 @@
 # 7b③ 受限探针（D2026-0925-03 定案二；v1.3.2 任务5 二次评审转 B-月级，2026-09-27）。
 # 性质：开发者探针（CI 侧），非用户功能；月级定时（schedule + workflow_dispatch），不进 required checks，不阻塞 PR/Release。
-# kill-criterion（2026-09-27 刷新）：import webview 抛错即弃；GUI 收集面以 tests/test_gui_api 用例数为准（当前全量基线 1185 passed+4 skipped，2026-09-27 实测；探针仅断言 GUI 收集数 >= 1，不钉死具体数字防基线漂移假红）；1 次失败即弃腿。
+# kill-criterion（2026-09-27 刷新）：import webview 抛错即弃；GUI 收集面以 tests/test_gui_api 用例数为准（全量基线随主口径滚动，不在此钉死具体数字防漂移假红；探针仅断言 GUI 收集数 >= 1）；1 次失败即弃腿。
 # 失败处置：月级失败先手动复跑（workflow_dispatch）确认，确认环境漂移再修本 workflow 或临时提频。
 # 升级条件（满足其一可评估升格为 required/更高频率）：外部 PR 增多（不再单一活跃提交者）/ 进入发布稳定期需更强 CI 保障 / GUI 依赖或测试收集面频繁变动致月级滞后。
 name: gui-probe

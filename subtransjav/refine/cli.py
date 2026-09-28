@@ -82,7 +82,7 @@ def build_parser():
     grp_tm.add_argument("--tm-db", default="",
                         help="翻译记忆库路径（默认 Temp/translation_memory/tm.db）")
     grp_tm.add_argument("--tm", action="store_true", default=True,
-                        help="启用翻译记忆库（默认启用）")
+                        help="启用翻译记忆库（兼容保留：默认即启用，停用用 --no-tm）")
     grp_tm.add_argument("--no-tm", action="store_true",
                         help="禁用翻译记忆库")
     grp_tm.add_argument("--tm-threshold", type=float, default=0.85,
