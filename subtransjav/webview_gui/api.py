@@ -160,7 +160,8 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
       batch_local / batch_cloud: int
       v2_concurrency: int              批间并发数（1-5，缺省1）
       v2_ctx: int                      本地模型上下文窗口（显式对齐引擎与管线两侧；
-                                       缺省不传=CLI 默认 22272，缺省为作者 16GB 单卡实测档案值，请按显存调整）
+                                       缺省不传=后端缺省 16384（A1 缺省重绑定，
+                                       D2026-0927-01）；22272 为作者 16GB 档案值示例，非缺省）
       lmstudio_endpoint / zen_endpoint / custom_endpoint: str
       deepseek_key / zen_key / custom_key: str
       source_filter: str                闸门0 源侧幻觉检测档位 strict|default|off（缺省 default 不传参）
@@ -1151,8 +1152,11 @@ class TranslateAPI:
                     key_status[prov] = bool(read_secret(prov))
                 except Exception:
                     key_status[prov] = False
+            # A4 首启初始化（D2026-0927-05 补充①）：settings 文件不存在即
+            # 首启（additive 键，前端据此默认 novice 画像）
             return {"success": True, "stages": stages,
-                    "settings": settings, "key_status": key_status}
+                    "settings": settings, "key_status": key_status,
+                    "first_run": not os.path.isfile(path)}
         except Exception as e:
             _log_exc("refine_get_stage_settings")
             return {"success": False, "error": str(e)}

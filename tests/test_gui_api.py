@@ -611,6 +611,26 @@ def test_refine_stage_settings_model_incremental_merge(gui_api_obj, tmp_path,
 
 
 # ---------------------------------------------------------------------------
+# A4 首启初始化：refine_get_stage_settings additive first_run 标志
+# ---------------------------------------------------------------------------
+def test_refine_get_stage_settings_first_run_flag(gui_api_obj, tmp_path,
+                                                  monkeypatch):
+    """settings 文件不存在 → first_run=True；存在 → False（additive 键）。"""
+    path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(path))
+    got = gui_api_obj.refine_get_stage_settings()
+    assert got["success"] is True
+    assert got["first_run"] is True
+    path.write_text('{"stages": [], "settings": {"ui_profile": "novice"}}',
+                    encoding="utf-8")
+    got2 = gui_api_obj.refine_get_stage_settings()
+    assert got2["success"] is True
+    assert got2["first_run"] is False
+    assert got2["settings"]["ui_profile"] == "novice"
+
+
+# ---------------------------------------------------------------------------
 # cancel_translation 运行态契约（M3）：
 # - 哨兵期（Popen 未完成）取消返回 success=False，由前端保持运行态；
 # - 击杀成功后 cancelled 状态才置位；击杀抛异常时状态/句柄原样保留

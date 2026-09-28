@@ -101,6 +101,11 @@ const MSG = {
 
     // ---- 净语翻译面板 ----
     refine_panel_title: '净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）',
+    // A4 画像预设（novice=小白 / standard=标准 / developer=开发者）
+    userModeLabel: '用户模式',
+    userModeNovice: '小白模式',
+    userModeStandard: '标准',
+    userModeDeveloper: '开发者',
     stage_a_label: '阶段A 净语+翻译（日译中）',
     stage_b_label: '阶段B 审校+抛光（中文）',
     provider_zen: 'Zen 免费',
@@ -121,7 +126,8 @@ const MSG = {
     profile_local: '本地·严格',
     profile_cloud: '云端·宽松',
     ctx_label: '上下文窗口',
-    ctx_title: '本地模型上下文窗口：启动后管线自动按此值对齐引擎（覆盖 LM Studio 手工设置），并据此收紧批大小。16GB 显存建议 16384~22272（缺省 22272 为作者 16GB 单卡实测档案值，请按自身显存调整）',
+    ctx_title: '本地模型上下文窗口：留空=用缺省 16384（通用保守值，可经 config/user_settings.json 或环境变量 SUBTRANSJAV_V2_CTX_LOCAL 调整）；显式填写时启动后管线自动按此值对齐引擎（覆盖 LM Studio 手工设置），并据此收紧批大小。16GB 显存建议 16384~22272；22272 为作者 16GB 单卡档案值（示例），非缺省',
+    ctx_placeholder: '缺省 16384',
     cleaner_dir_label: '净语配置目录',
     cleaner_dir_placeholder: '留空=使用内置默认',
     browse_dots: '浏览...',
@@ -188,6 +194,8 @@ const MSG = {
     fallback_local_label: '云端故障时本地接管',
     fallback_local_title: '云端阶段遭遇限流/宕机/持续解析失败时，自动切换本地模型完成剩余批次',
     fallback_model_label: '接管模型',
+    // A2 兜底重绑定：空值默认项（不启用本地兜底）
+    fallback_no_auto: '不自动兜底',
     refresh_local_title: '刷新本地模型列表',
 
     // ---- 高级设置折叠区（v1.3.2 任务2：纯 DOM 收纳，仅小标题文案键，无 JS 行为逻辑）----
@@ -209,6 +217,22 @@ const MSG = {
     stop_btn: '⏹ 停止',
     artifact_note: '产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过',
     status_idle: 'Idle',
+
+    // ---- v1.4 小白模式引导面板（顶部服务下拉栏 + 三步引导卡）----
+    novicePanelServiceLabel: '翻译服务',
+    noviceBadgeLLM: 'AI 大模型',
+    noviceHintLocal: '需本机安装并启动 LM Studio（或 Ollama）并加载模型',
+    noviceStep1Title: '导入文件',
+    noviceStep1Desc: '把 .srt 字幕拖入上方 Source 区，或点右侧「添加文件」按钮选择字幕',
+    noviceStep2Title: '核对配置',
+    noviceStep2Desc: '在上方选择翻译服务；选用 DeepSeek / 硅基流动 / 自定义接口时填入 API Key',
+    noviceStep3Title: '开始任务',
+    noviceStep3Desc: '点击下方开始按钮，批量处理并实时查看进度',
+    noviceStartBtn: '▶ 开始翻译',
+    noviceNeedFile: '请先导入 .srt 字幕',
+    noviceKeyLabel: 'API Key',
+    noviceKeySaveBtn: '保存',
+    noviceAddFiles: '＋ 添加文件',
 
     // ---- 质量报告导读 ----
     guide_summary: '质量报告导读',
@@ -898,6 +922,9 @@ const TranslatorManager = {
         const cancelBtn = document.getElementById('refineCancelBtn');
         if (startBtn) startBtn.disabled = !hasFiles || isRunning;
         if (cancelBtn) cancelBtn.disabled = !isRunning;
+        // v1.4 小白模式停止键同步（novice 隐藏完整面板后保留唯一停止入口）
+        const novStop = document.getElementById('refineNoviceStopBtn');
+        if (novStop) novStop.disabled = !isRunning;
     },
 
     async startTranslation() {
@@ -1179,7 +1206,19 @@ const ThemeManager = {
         try {
             localStorage.setItem(this.storageKey, key);
         } catch (e) {
-            // ignore
+            // ignore（private_mode 下 localStorage 不可用，仅后端持久化生效）
+        }
+        // A3 主题持久化走后端（main.py private_mode=True：用户设置一律走
+        // 后端文件）：settings KV 键 theme；桥不可用时静默降级（仅
+        // localStorage 生效）
+        try {
+            const p = window.pywebview && pywebview.api
+                ? pywebview.api.refine_save_stage_settings(null, null,
+                    { theme: key })
+                : null;
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch (e) {
+            // 桥不可用时静默降级
         }
     },
 
@@ -1189,6 +1228,20 @@ const ThemeManager = {
         this.linkEl.setAttribute('href', href);
         this.saveTheme(key in this.themes ? key : 'default');
         ConsoleManager.log(MSG.themeSwitched(key), 'info');
+    },
+
+    // A3：pywebviewready 后读取后端 settings.theme 并应用
+    //（早于该时机的 ThemeManager.init 保持 localStorage/默认主题现状）
+    async loadSavedThemeFromBackend() {
+        try {
+            const r = await pywebview.api.refine_get_stage_settings();
+            const t = (r && r.success && r.settings) ? r.settings.theme : null;
+            if (t && this.themes[t]) {
+                this.applyTheme(t);
+            }
+        } catch (e) {
+            // 静默降级：后端无存档/读取失败时保持现状默认
+        }
     }
 };
 
@@ -1346,11 +1399,19 @@ function closeAbout() {
     return Math.max(1, Math.min(5, n));
   }
 
-  // ---- 上下文窗口读取（≥4096，非法/缺省回退22272；管线会按此值对齐引擎）----
+  // ---- 上下文窗口读取（A1 缺省重绑定：显式合法值才传；空/非法/<4096
+  // 返回 null=不传，走后端缺省 16384；管线会按生效值对齐引擎）----
   function readRefineCtx() {
     let n = parseInt(($('refineV2Ctx') || {}).value, 10);
-    if (!Number.isFinite(n) || n < 4096) n = 22272;
+    if (!Number.isFinite(n) || n < 4096) return null;
     return n;
+  }
+
+  // ---- 正整数读取（A5：空/非法/0/负数返回 null=不传，后端缺省接管；
+  // 替代 parseInt(v)||30 形态——0 会被吞成缺省值）----
+  function readPositiveInt(id) {
+    let n = parseInt(($(id) || {}).value, 10);
+    return (Number.isFinite(n) && n > 0) ? n : null;
   }
 
   // ---- 启动选项收集器（v2 两阶段：阶段A→s1 槽位，阶段B→s3 槽位）----
@@ -1373,8 +1434,8 @@ function closeAbout() {
       deepseek_key: stageKeyFor('deepseek'),
       apply_glossary_stage1: !($('refineGl1') && !$('refineGl1').checked),
       apply_glossary_stage2: !($('refineGl2') && !$('refineGl2').checked),
-      batch_local: parseInt(($('refineBatchLocal') || {}).value) || 30,
-      batch_cloud: parseInt(($('refineBatchCloud') || {}).value) || 30,
+      batch_local: readPositiveInt('refineBatchLocal'),
+      batch_cloud: readPositiveInt('refineBatchCloud'),
       lmstudio_endpoint: stageEndpointFor('lmstudio'),
       ollama_endpoint: stageEndpointFor('ollama'),
       zen_endpoint: stageEndpointFor('zen'),
@@ -1503,8 +1564,11 @@ function closeAbout() {
       const r = await pywebview.api.list_local_models(endpoint);
       if (r.success && r.models.length) {
         const cur = sel.value;
-        sel.innerHTML = r.models.map(m =>
-          '<option value="' + esc(m) + '">' + esc(m) + (r.loaded.includes(m) ? ' ✓' : '') + '</option>').join('');
+        // A2 兜底重绑定：保留空值默认项（"不自动兜底"），用户未显式
+        // 选择接管模型时不强塞本地模型
+        sel.innerHTML = '<option value="">' + MSG.fallback_no_auto + '</option>'
+          + r.models.map(m =>
+            '<option value="' + esc(m) + '">' + esc(m) + (r.loaded.includes(m) ? ' ✓' : '') + '</option>').join('');
         // 尝试保持之前选中的值
         if (cur && r.models.includes(cur)) sel.value = cur;
       } else {
@@ -1761,7 +1825,9 @@ function closeAbout() {
     try {
       const r = await pywebview.api.refine_save_stage_settings(stages, null,
         { v2_concurrency: readRefineConcurrency(),
-          v2_ctx: readRefineCtx() });
+          // A1：留空存空串（回填侧 parseInt('')=NaN 忽略），null 由后端
+          // 跳过不入库——空串即可覆盖清除旧存档值
+          v2_ctx: readRefineCtx() || '' });
       if (st) {
         st.style.color = r.success ? 'green' : 'crimson';
         st.textContent = r.success
@@ -1777,6 +1843,18 @@ function closeAbout() {
     try {
       const r = await pywebview.api.refine_get_stage_settings();
       if (!r.success) return;
+      // A4 画像回填：ui_profile 存档优先；首启（first_run=true 且无
+      // ui_profile）默认小白模式 novice（D2026-0927-05 补充①口径）
+      if (r.settings && r.settings.ui_profile) {
+        applyUserMode(String(r.settings.ui_profile));
+      } else if (r.first_run) {
+        applyUserMode('novice');
+        // 首启默认立即落盘：否则用户先改其他设置（触发建档）后，
+        // 下次启动 first_run=false 且无 ui_profile，会回落 standard
+        saveUserMode('novice');
+      } else {
+        applyUserMode('standard');
+      }
       // 回填并行度（1-5，越界忽略；缺省时保持控件默认值1）
       if (r.settings && r.settings.v2_concurrency != null) {
         const n = parseInt(r.settings.v2_concurrency, 10);
@@ -1819,10 +1897,136 @@ function closeAbout() {
             inp.placeholder = MSG.key_saved_placeholder;
         }
       }
+      // v1.4 小白模式下拉回填（settings KV 键 novice_provider）+ key 行联动
+      if (r.settings && r.settings.novice_provider && $('refineNoviceProvider')) {
+        $('refineNoviceProvider').value = String(r.settings.novice_provider);
+      }
+      refreshNoviceKeyRow();
     } catch (e) { console.warn('[refine] 读取已保存接口配置失败', e); }
   }
 
   // ---- 兜底档位（v2：local=strict / cloud=lenient，无 UI 联动需求）----
+
+  // ---- 画像预设（A4：novice=小白 / standard=标准 / developer=开发者）----
+  // novice 经 persona-novice CSS 类隐藏进阶配置块（不删 DOM，保控件 id 钉）
+  const REFINE_USER_MODES = ['novice', 'standard', 'developer'];
+
+  function applyUserMode(mode) {
+    const m = REFINE_USER_MODES.indexOf(mode) !== -1 ? mode : 'standard';
+    const root = $('refinePanel');
+    if (root) root.classList.toggle('persona-novice', m === 'novice');
+    // v1.4 面板级显隐：novice 显示小白引导面板并隐藏完整面板根容器
+    //（standard/developer 恢复完整面板；refine-novice-hide CSS 保留为冗余兜底）
+    const full = $('refineFullPanel');
+    if (full) full.style.display = (m === 'novice') ? 'none' : 'flex';
+    const nov = $('refineNovicePanel');
+    if (nov) nov.style.display = (m === 'novice') ? 'flex' : 'none';
+    refreshNoviceKeyRow();
+    const sel = $('refineUserMode');
+    if (sel && sel.value !== m) sel.value = m;
+    return m;
+  }
+
+  function currentUserMode() {
+    const sel = $('refineUserMode');
+    const v = sel ? sel.value : '';
+    return REFINE_USER_MODES.indexOf(v) !== -1 ? v : 'standard';
+  }
+
+  // 切换即存（settings KV 键 ui_profile；桥不可用静默降级）
+  function saveUserMode(mode) {
+    try {
+      const p = window.pywebview && pywebview.api
+        ? pywebview.api.refine_save_stage_settings(null, null,
+            { ui_profile: mode })
+        : null;
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) { /* 静默降级 */ }
+  }
+
+  // ---- v1.4 小白模式引导面板（refineNovicePanel）----
+  // key 行联动：deepseek/siliconflow/custom 为云服务需密钥（显示 key 行），
+  // 本地 lmstudio/ollama 免钥（隐藏 key 行、显示本地启动提示行）
+  function refreshNoviceKeyRow() {
+    const prov = ($('refineNoviceProvider') || {}).value || '';
+    const cloud = (prov === 'deepseek' || prov === 'siliconflow'
+      || prov === 'custom');
+    const row = $('refineNoviceKeyRow');
+    if (row) row.style.display = cloud ? 'flex' : 'none';
+    const hint = $('refineNoviceLocalHint');
+    if (hint) hint.style.display = cloud ? 'none' : '';
+    return cloud;
+  }
+
+  // novice 服务下拉联动：同步完整面板阶段A/B provider（写 stage A 并同步
+  // stage B），endpoint 缺省沿用 applyProviderEndpoint 既有映射（不新造）；
+  // 持久化复用 saveStageEndpoints 的 stages 数组通道 + settings KV 键
+  // novice_provider（回填在 applySavedStageSettings / pywebviewready 链路）
+  function applyNoviceProvider(persist) {
+    const prov = ($('refineNoviceProvider') || {}).value || 'lmstudio';
+    for (const n of [1, 3]) {
+      const pv = $('refineS' + n + 'Provider');
+      if (pv) pv.value = prov;
+      // 与完整面板 provider change 行为一致：重置模型下拉并填充缺省地址
+      const sel = $('refineS' + n + 'Model');
+      if (sel) {
+        sel.innerHTML = '<option value="">' + MSG.model_refresh_hint
+          + '</option>';
+      }
+      applyProviderEndpoint(n);
+    }
+    refreshNoviceKeyRow();
+    if (persist && window.__pywebviewReady) {
+      saveStageEndpoints();
+      try {
+        const p = window.pywebview && pywebview.api
+          ? pywebview.api.refine_save_stage_settings(null, null,
+              { novice_provider: prov })
+          : null;
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch (e) { /* 静默降级 */ }
+      refreshModels(1);
+      refreshModels(3);
+    }
+  }
+
+  // novice API Key 保存：复用既有单阶段密钥保存通道（refine_save_stage_settings
+  // 的 keys 数组，落 stage A=阶段A；DPAPI 密钥库按服务商隔离存储）
+  async function saveNoviceKey() {
+    const prov = ($('refineNoviceProvider') || {}).value || '';
+    const inp = $('refineNoviceKey');
+    const key = inp && inp.value.trim() ? inp.value.trim() : '';
+    const st = $('refineNoviceKeyStatus');
+    if (!prov || prov === 'lmstudio' || prov === 'ollama') return;
+    try {
+      const r = await pywebview.api.refine_save_stage_settings(null,
+        [{ stage: 1, provider: prov, key: key }]);
+      if (st) {
+        st.style.color = r.success ? 'green' : 'crimson';
+        st.textContent = r.success
+          ? (key ? MSG.key_saved(prov) : MSG.key_cleared) : '❌ ' + r.error;
+      }
+      if (r.success && inp) {
+        inp.value = '';
+        if (key) inp.placeholder = MSG.key_saved_placeholder;
+      }
+    } catch (e) {
+      if (st) { st.style.color = 'crimson'; st.textContent = '❌ ' + e; }
+    }
+  }
+
+  // novice 开始按钮：无文件→行内错误提示（不弹窗）；有文件→复用与
+  // #refineStartBtn 完全相同的启动流程（TranslatorManager.startTranslation，
+  // 不复制粘贴启动逻辑）
+  function noviceStartTranslation() {
+    const err = $('refineNoviceFileError');
+    if (AppState.selectedFiles.length === 0) {
+      if (err) err.style.display = '';
+      return;
+    }
+    if (err) err.style.display = 'none';
+    TranslatorManager.startTranslation();
+  }
 
   // ---- 质量报告导读查看器（W1b：仅读 *_质量报告导读.json，不读 txt/全量 json）----
   const GUIDE_SUFFIX = '_质量报告导读.json';
@@ -1962,6 +2166,35 @@ function closeAbout() {
     const epSaveBtn = $('refineSaveEndpointsBtn');
     if (epSaveBtn) epSaveBtn.addEventListener('click', saveStageEndpoints);
 
+    // A4 用户模式切换：应用 + 即存
+    const userModeSel = $('refineUserMode');
+    if (userModeSel) userModeSel.addEventListener('change', () => {
+      const m = currentUserMode();
+      applyUserMode(m);
+      saveUserMode(m);
+    });
+
+    // v1.4 小白模式引导面板绑定
+    const novProv = $('refineNoviceProvider');
+    if (novProv) novProv.addEventListener('change',
+      () => applyNoviceProvider(true));
+    const novKeyBtn = $('refineNoviceSaveKeyBtn');
+    if (novKeyBtn) novKeyBtn.addEventListener('click', saveNoviceKey);
+    const novStartBtn = $('refineNoviceStartBtn');
+    if (novStartBtn) {
+      novStartBtn.addEventListener('click', noviceStartTranslation);
+    }
+    const novStopBtn = $('refineNoviceStopBtn');
+    if (novStopBtn) {
+      novStopBtn.addEventListener('click',
+        () => TranslatorManager.cancelTranslation());
+    }
+    // 第 1 步「添加文件」快捷按钮：复用 Source 区既有 addFiles 流程
+    const novAddBtn = $('refineNoviceAddFilesBtn');
+    if (novAddBtn) {
+      novAddBtn.addEventListener('click', () => FileListManager.addFiles());
+    }
+
     const glAddBtn = $('refineGlAdd');
     if (glAddBtn) glAddBtn.addEventListener('click', glAdd);
     const glDelBtn = $('refineGlDel');
@@ -2084,6 +2317,9 @@ window.addEventListener('pywebviewready', async () => {
     console.log('PyWebView API ready!');
     ConsoleManager.log(MSG.bridgeConnected, 'success');
     window.__pywebviewReady = true;
+
+    // A3 主题持久化走后端：读取 settings.theme 并应用
+    await ThemeManager.loadSavedThemeFromBackend();
 
     await AppState.loadDefaultOutputDir();
 
