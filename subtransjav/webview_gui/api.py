@@ -174,6 +174,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
       source_filter: str                闸门0 源侧幻觉检测档位 strict|default|off（缺省 default 不传参）
       auto_synopsis: bool               剧情自摘要（默认 True；显式 False 才传 --no-auto-synopsis）
       adaptive_thresholds: bool         条目级阈值自适应（H4b，默认 False；勾选才传 --adaptive-thresholds）
+      source_lang / target_lang: str    翻译方向（2.1 D2026-0930-04 定案① GUI 补齐；
+                                        缺省 ja/zh 不传参=CLI 缺省字节不变；非缺省才传）
+      s1_instructions / s3_instructions: str
+                                        非缺省方向配套的阶段A/B 指令卡路径
+                                        （有值才传 --s{n}-instructions；缺卡由 CLI validate 报错）
       dry_run: bool                     试运行（仅生成执行计划，不调用模型）
       verbose: bool
     """
@@ -205,6 +210,20 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
         mv = options.get(f"s{n}_model")
         if mv:
             args.extend([f"--s{n}-model", str(mv)])
+
+    # 2.1 翻译方向（D2026-0930-04 定案① GUI 补齐）：仅非缺省方向传参
+    # （缺省 ja→zh 与 CLI 缺省一致，不产生旗标=字节不变）；非缺省方向
+    # 须配套全部启用阶段的指令卡，缺卡由 CLI validate 前置报错
+    src_lang = options.get("source_lang")
+    tgt_lang = options.get("target_lang")
+    if src_lang and src_lang != "ja":
+        args.extend(["--source-lang", str(src_lang)])
+    if tgt_lang and tgt_lang != "zh":
+        args.extend(["--target-lang", str(tgt_lang)])
+    if options.get("s1_instructions"):
+        args.extend(["--s1-instructions", str(options["s1_instructions"])])
+    if options.get("s3_instructions"):
+        args.extend(["--s3-instructions", str(options["s3_instructions"])])
 
     if options.get("templates_dir"):
         args.extend(["--templates-dir", options["templates_dir"]])

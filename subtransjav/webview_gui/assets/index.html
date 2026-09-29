@@ -593,6 +593,36 @@
                             </label>
                         </div>
 
+                        <!-- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐） -->
+                        <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+                            <label style="display:flex; align-items:center; gap:4px;"
+                                   data-i18n-title="direction_title" title="缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 指令卡路径），缺卡启动即被校验拒绝">
+                                <span data-i18n="direction_label">翻译方向</span>
+                                <select id="directionSource" class="form-select compact" style="width:5.5em;">
+                                    <option value="ja" selected data-i18n="lang_ja">日文</option>
+                                    <option value="zh" data-i18n="lang_zh">中文</option>
+                                    <option value="en" data-i18n="lang_en">英文</option>
+                                </select>
+                                <span>→</span>
+                                <select id="directionTarget" class="form-select compact" style="width:5.5em;">
+                                    <option value="ja" data-i18n="lang_ja">日文</option>
+                                    <option value="zh" selected data-i18n="lang_zh">中文</option>
+                                    <option value="en" data-i18n="lang_en">英文</option>
+                                </select>
+                            </label>
+                            <label style="display:flex; align-items:center; gap:4px; flex:1;">
+                                <span data-i18n="direction_card_s1_label">阶段A 指令卡</span>
+                                <input id="directionCardS1" class="form-input compact" style="flex:1; min-width:var(--w-model);"
+                                       data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                            </label>
+                            <label style="display:flex; align-items:center; gap:4px; flex:1;">
+                                <span data-i18n="direction_card_s3_label">阶段B 指令卡</span>
+                                <input id="directionCardS3" class="form-input compact" style="flex:1; min-width:var(--w-model);"
+                                       data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                            </label>
+                        </div>
+                        <div class="muted" style="font-size:12px;" data-i18n="direction_hint">缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套模板卡，缺卡启动即报错</div>
+
                         </div>
 
                         <div style="display:flex; flex-direction:column; gap:6px; min-width:var(--w-min);">

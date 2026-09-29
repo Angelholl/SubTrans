@@ -1477,3 +1477,58 @@ def test_refine_dict_download_progress_endpoint(gui_api_obj, monkeypatch):
     # 无记录 kind：success + 空（前端按无进度处理）
     empty = gui_api_obj.refine_dict_download_progress("jieba")
     assert empty == {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# 2.1 翻译方向控件（D2026-0930-04 定案① GUI 补齐，第五批）
+# ---------------------------------------------------------------------------
+def test_build_refine_args_direction_default_omitted():
+    """缺省 ja/zh/空卡：不传方向与指令卡参数（与 CLI 缺省一致，字节钉）。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "profile": "local"})
+    joined = " ".join(args)
+    assert "--source-lang" not in joined
+    assert "--target-lang" not in joined
+    assert "--s1-instructions" not in joined
+    assert "--s3-instructions" not in joined
+
+
+def test_build_refine_args_direction_default_values_omitted():
+    """显式传 ja/zh（=缺省值）同样不传参（控件缺省选中不产生旗标）。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "profile": "local",
+                               "source_lang": "ja", "target_lang": "zh"})
+    joined = " ".join(args)
+    assert "--source-lang" not in joined and "--target-lang" not in joined
+
+
+def test_build_refine_args_direction_non_default_passthrough():
+    """非缺省方向+指令卡：四旗标逐项透传。"""
+    card_a = str(Path("cards") / "a.txt")
+    card_b = str(Path("cards") / "b.txt")
+    args = _build_refine_args({
+        "inputs": ["a.srt"], "profile": "local",
+        "source_lang": "zh", "target_lang": "en",
+        "s1_instructions": card_a, "s3_instructions": card_b})
+    joined = " ".join(args)
+    assert "--source-lang zh" in joined
+    assert "--target-lang en" in joined
+    assert f"--s1-instructions {card_a}" in joined
+    assert f"--s3-instructions {card_b}" in joined
+
+
+def test_stage_settings_direction_keys_roundtrip(gui_api_obj, tmp_path,
+                                                 monkeypatch):
+    """direction_* 四键写→读一致（settings 顶层字典任意键）。"""
+    path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(path))
+    r = gui_api_obj.refine_save_stage_settings(
+        settings={"direction_source": "zh", "direction_target": "en",
+                  "direction_card_s1": "cards/a.txt",
+                  "direction_card_s3": "cards/b.txt"})
+    assert r["success"] is True
+    got = gui_api_obj.refine_get_stage_settings()
+    assert got["success"] is True
+    s = got["settings"]
+    assert (s["direction_source"], s["direction_target"]) == ("zh", "en")
+    assert s["direction_card_s1"] == "cards/a.txt"
+    assert s["direction_card_s3"] == "cards/b.txt"

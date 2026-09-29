@@ -88,6 +88,17 @@ MSG = {
     "dict_verify": "校验中…",
     "dict_extract": "解压中…",
 
+    # ---- 翻译方向（高级参数页，2.1 D2026-0930-04 定案① GUI 补齐）----
+    "direction_label": "翻译方向",
+    "direction_title": "缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 指令卡路径），缺卡启动即被校验拒绝",
+    "lang_ja": "日文",
+    "lang_zh": "中文",
+    "lang_en": "英文",
+    "direction_card_s1_label": "阶段A 指令卡",
+    "direction_card_s3_label": "阶段B 指令卡",
+    "direction_card_placeholder": "非缺省方向必填（.txt 路径）",
+    "direction_hint": "缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套模板卡，缺卡启动即报错",
+
     # ---- open_url / 目录（api.py）----
     "url_scheme_unsupported": "仅支持 http/https 链接",
     "dir_not_exist": "目录不存在: {path}",

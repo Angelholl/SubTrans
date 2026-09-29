@@ -129,6 +129,17 @@ const MSG = {
     templates_dir_label: '角色卡目录',
     templates_dir_placeholder: '（未设置，使用默认）',
 
+    // ---- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐） ----
+    direction_label: '翻译方向',
+    direction_title: '缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 指令卡路径），缺卡启动即被校验拒绝',
+    lang_ja: '日文',
+    lang_zh: '中文',
+    lang_en: '英文',
+    direction_card_s1_label: '阶段A 指令卡',
+    direction_card_s3_label: '阶段B 指令卡',
+    direction_card_placeholder: '非缺省方向必填（.txt 路径）',
+    direction_hint: '缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套模板卡，缺卡启动即报错',
+
     // ---- 翻译记忆库高级 ----
     tm_enable_label: '翻译记忆库',
     tm_enable_title: '开启后翻译时可复用以往积累的译文记忆，取消后本次完全不读写记忆库，一般保持勾选。\n技术细节：取消勾选时向管线传递 --no-tm（不读取也不写入翻译记忆库）',
@@ -1568,7 +1579,13 @@ function switchTab(tabId) {
       // 翻译记忆库：勾选取消时才传 no_tm（--no-tm）；路径/阈值非空才传
       no_tm: !!($('refineTmEnable') && !$('refineTmEnable').checked),
       tm_db: (($('refineTmDb') || {}).value || '').trim(),
-      tm_threshold: (($('refineTmThreshold') || {}).value || '').trim()
+      tm_threshold: (($('refineTmThreshold') || {}).value || '').trim(),
+      // 2.1 翻译方向（D2026-0930-04 定案①）：缺省 ja/zh 由 api 侧过滤
+      // 不产生旗标；指令卡路径有值才传（缺卡由 CLI validate 报错）
+      source_lang: ($('directionSource') || {}).value || '',
+      target_lang: ($('directionTarget') || {}).value || '',
+      s1_instructions: (($('directionCardS1') || {}).value || '').trim(),
+      s3_instructions: (($('directionCardS3') || {}).value || '').trim()
     };
   }
 
@@ -2049,8 +2066,54 @@ function switchTab(tabId) {
       if (r.settings && r.settings.service_quick && $('refineServiceQuick')) {
         $('refineServiceQuick').value = String(r.settings.service_quick);
       }
+      // 2.1 翻译方向（D2026-0930-04 定案①）：回填方向与配套指令卡路径
+      // （缺省 ja/zh/空——控件 HTML selected 即缺省，缺键不动）
+      if (r.settings) {
+        const dSrc = $('directionSource');
+        const dTgt = $('directionTarget');
+        if (dSrc && r.settings.direction_source) {
+          dSrc.value = String(r.settings.direction_source);
+        }
+        if (dTgt && r.settings.direction_target) {
+          dTgt.value = String(r.settings.direction_target);
+        }
+        const dC1 = $('directionCardS1');
+        if (dC1 && r.settings.direction_card_s1 != null) {
+          dC1.value = String(r.settings.direction_card_s1);
+        }
+        const dC3 = $('directionCardS3');
+        if (dC3 && r.settings.direction_card_s3 != null) {
+          dC3.value = String(r.settings.direction_card_s3);
+        }
+      }
       refreshServiceQuickRow();
     } catch (e) { console.warn('[refine] 读取已保存接口配置失败', e); }
+  }
+
+  // 2.1 翻译方向控件持久化（D2026-0930-04 定案①）：change 即写 settings
+  // 顶层字典（direction_* 四键），程序性回填 .value 不触发 change 不打架
+  function bindDirectionControls() {
+    const saveDirection = () => {
+      pywebview.api.refine_save_stage_settings(null, null, {
+        direction_source: ($('directionSource') || {}).value || 'ja',
+        direction_target: ($('directionTarget') || {}).value || 'zh',
+        direction_card_s1: ($('directionCardS1') || {}).value || '',
+        direction_card_s3: ($('directionCardS3') || {}).value || ''
+      }).catch((e) => console.warn('[refine] 翻译方向保存失败', e));
+    };
+    // input 防抖兜底程序化赋值（自动填充等）不触发 change 的场景
+    let t = null;
+    const saveDebounced = () => {
+      clearTimeout(t);
+      t = setTimeout(saveDirection, 400);
+    };
+    for (const id of ['directionSource', 'directionTarget',
+                      'directionCardS1', 'directionCardS3']) {
+      const el = $(id);
+      if (!el) continue;
+      el.addEventListener('change', saveDirection);   // select 即时保存保留
+      el.addEventListener('input', saveDebounced);    // text input 双通道
+    }
   }
 
   // ---- 兜底档位（v2：local=strict / cloud=lenient，无 UI 联动需求）----
@@ -2916,6 +2979,7 @@ function switchTab(tabId) {
   // ---- 远程数据加载（pywebview 就绪后调用一次）----
   async function loadRemote() {
     applySavedStageSettings();
+    bindDirectionControls();
     dataRootLoad();
     dictLoad();
     // 净语配置目录默认值
