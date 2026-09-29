@@ -123,6 +123,20 @@ def build_parser():
                                "glossary_learned.csv；目标已存在先备份到数据根 "
                                "backups/，内容一致幂等跳过")
 
+    # ---- 词典管理（2.1，D2026-0930-03 ②④）----
+    grp_dict = p.add_argument_group("词典管理")
+    grp_dict.add_argument("--dict-status", action="store_true",
+                          help="查看日/中/英三词典状态（可用性/自定义路径/"
+                               "已落位文件）后退出（只读零网络）")
+    grp_dict.add_argument("--dict-download", choices=["sudachi"], default="",
+                          help="下载词典到数据根 dict/ 后退出（显式动作；"
+                               "SHA256 与源清单不符拒绝落位）")
+    grp_dict.add_argument("--dict-from-file", metavar="FILE", default="",
+                          help="离线导入：本地 wheel/dic 文件路径"
+                               "（配合 --dict-download；wheel 过哈希校验）")
+    grp_dict.add_argument("--dict-allow-unverified", action="store_true",
+                          help="允许使用源清单中未核实哈希的下载源")
+
     p.add_argument("--deepseek-key", default="",
                    help="DeepSeek API Key（命令行传密钥会暴露在进程列表，建议改用环境变量 DEEPSEEK_API_KEY）")
     p.add_argument("--zen-key", default="",
@@ -434,6 +448,38 @@ def _print_where() -> str:
     return "\n".join(lines)
 
 
+def _cmd_dict_status() -> int:
+    """--dict-status：三词典状态（只读零网络）。"""
+    from .dict_manager import dict_status
+    st = dict_status()
+    print(f"数据根词典目录: {st['dict_dir']}")
+    for kind, info in st["dicts"].items():
+        line = f"  {kind}: {'可用' if info['available'] else '不可用'}"
+        if info.get("custom_path"):
+            line += f" | 自定义词典: {info['custom_path']}（优先于内置）"
+        if info.get("files"):
+            line += f" | 文件: {', '.join(info['files'])}"
+        print(line)
+    return 0
+
+
+def _cmd_dict_download(kind: str, from_file: str = "",
+                       allow_unverified: bool = False) -> int:
+    """--dict-download：显式下载/离线导入词典（两类失败分开报错）。"""
+    from .dict_manager import DictChecksumError, DictDownloadError, download_dict
+    try:
+        path = download_dict(kind, allow_unverified=allow_unverified,
+                             local_file=from_file)
+    except DictDownloadError as e:
+        print(f"❌ 词典下载失败（网络/源不可达）: {e}")
+        return 1
+    except DictChecksumError as e:
+        print(f"❌ 词典校验失败（SHA256 不符或清单非法，已拒绝落位）: {e}")
+        return 1
+    print(f"✅ 词典已就位: {path}")
+    return 0
+
+
 def main(argv=None):
     # stdio 加固（同 tools/guard_banned_paths.py）：argparse 在 parse 时才打印
     # 中文 help，stdout 为管道且 locale 码页过窄（CI windows cp1252 实测回归）
@@ -464,6 +510,15 @@ def main(argv=None):
         from subtransjav.data_migration import import_legacy
         import_legacy(legacy_dir)
         return 0
+
+    # ---- 词典管理命令（2.1）：--where 同层早退，不进 run_v2、不触发迁移 ----
+    if getattr(args, "dict_status", False):
+        return _cmd_dict_status()
+    if getattr(args, "dict_download", ""):
+        return _cmd_dict_download(
+            args.dict_download,
+            from_file=getattr(args, "dict_from_file", "") or "",
+            allow_unverified=getattr(args, "dict_allow_unverified", False))
 
     # ---- EXE 首发数据迁移插桩（D2026-0929-05/07/08）：位于 --where 只读
     #      早退之后、config_from_args 之前；全容错，任何异常不阻塞 CLI ----

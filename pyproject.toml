@@ -52,6 +52,10 @@ gui = [
     "pywebview>=5.0.0",
     "pythonnet>=3.0; sys_platform == 'win32'",
 ]
+# 中文分词提示（2.1，D2026-0930-03 ④）：可选组件，缺失走静默降级
+zh = [
+    "jieba>=0.42",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

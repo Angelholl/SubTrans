@@ -36,7 +36,24 @@ def _get_tokenizer():
             return _tokenizer_instance
         try:
             from sudachipy import Dictionary
-            _tokenizer_instance = Dictionary().create()
+            # 2.1 词典管理（D2026-0930-03 ②）：数据根 dict/sudachi/ 存在
+            # 用户下载词典时按路径优先（sudachipy>=0.6 支持 dict= 绝对
+            # 路径），否则维持零参缺省（sudachidict_core）；自定义词典
+            # 加载失败回退内置（打印告警），不整体禁用语法提示。
+            custom = ""
+            try:
+                from .dict_manager import sudachi_custom_dict_path
+                custom = sudachi_custom_dict_path()
+            except Exception:    # noqa: BLE001 - 词典管理缺席不阻塞分词
+                custom = ""
+            if custom:
+                try:
+                    _tokenizer_instance = Dictionary(dict=custom).create()
+                except Exception as e:   # noqa: BLE001
+                    print(f"⚠️ 自定义 Sudachi 词典加载失败，回退内置词典: {e}")
+                    _tokenizer_instance = Dictionary().create()
+            else:
+                _tokenizer_instance = Dictionary().create()
             _sudachi_available = True
         except Exception:
             _tokenizer_instance = None

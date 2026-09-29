@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-09-30",
+  "note": "词典下载源清单（2.1，D2026-0930-03 ②）。三源策略：PyPI 官方（主）→ 清华镜像（fallback，网络失败才降级）→ 本地文件导入（离线备选，--dict-from-file）。sha256 为 PyPI JSON API 官方 digest（2026-09-30 核实）；镜像与官方为同一 wheel 文件、哈希一致。上游 SudachiDict 已转 PyPI-only 分发（GitHub release 无资产包）。词典版本升级=换行重核哈希。",
+  "dicts": {
+    "sudachi": {
+      "description": "Sudachi 日语形态素分析词典（system_core，语法提示分词用）",
+      "install_dir": "sudachi",
+      "target_name": "system_core.dic",
+      "archive_member": "sudachidict_core/resources/system.dic",
+      "downloads": [
+        {
+          "source": "pypi",
+          "url": "https://files.pythonhosted.org/packages/85/af/ba8419f684865b8cca587e01cedb41ba83fbdc985d75ab9e6ff38fdedf1a/sudachidict_core-20260723.1-py3-none-any.whl",
+          "sha256": "2b711055dca03423869e491eca0ddbe3e17c4d7418ed738fd7c75d4e0eb9e4b1",
+          "sha256_verified": true
+        },
+        {
+          "source": "tuna",
+          "url": "https://pypi.tuna.tsinghua.edu.cn/packages/85/af/ba8419f684865b8cca587e01cedb41ba83fbdc985d75ab9e6ff38fdedf1a/sudachidict_core-20260723.1-py3-none-any.whl",
+          "sha256": "2b711055dca03423869e491eca0ddbe3e17c4d7418ed738fd7c75d4e0eb9e4b1",
+          "sha256_verified": true
+        }
+      ]
+    },
+    "jieba": {
+      "description": "jieba 中文分词（pip extra [zh] 提供，纯 python，无下载文件）",
+      "install_dir": "jieba",
+      "target_name": "",
+      "archive_member": "",
+      "downloads": []
+    },
+    "english_rules": {
+      "description": "英文分词规则级（内置，无外部词典文件）",
+      "install_dir": "english",
+      "target_name": "",
+      "archive_member": "",
+      "downloads": []
+    }
+  }
+}
