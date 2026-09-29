@@ -29,6 +29,7 @@ import json
 import math
 import os
 
+from ..paths import normalize_path_case
 from .config import DEFAULT_V2_ASR_META_STALE_MAX_HOURS
 
 # 上游运行 manifest 的旁车文件名（SRT 同目录自动发现）
@@ -304,7 +305,7 @@ def resolve_media_path(in_path: str, asr_meta_result: dict,
     if not isinstance(files, list):
         _warn("媒体路径配对跳过（manifest 无 files 列表，忽略）")
         return "", ""
-    target = os.path.normcase(os.path.abspath(in_path))
+    target = normalize_path_case(in_path)
     hits: list = []
     for entry in files:
         if not isinstance(entry, dict):
@@ -312,7 +313,7 @@ def resolve_media_path(in_path: str, asr_meta_result: dict,
         out = entry.get("output")
         if not out:                     # output 空/缺失：跳过该条目
             continue
-        if os.path.normcase(os.path.abspath(str(out))) == target:
+        if normalize_path_case(str(out)) == target:
             hits.append(entry)
     if not hits:
         _warn(f"未在 {RUN_META_NAME} 中配对到当前 SRT 的媒体文件"

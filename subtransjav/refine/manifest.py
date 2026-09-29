@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from ..paths import normalize_path_case
+
 # 清单协议版本：字段布局发生不兼容变更时递增
 MANIFEST_VERSION = 1
 
@@ -417,7 +419,7 @@ def compute_config_hash(cfg) -> str:
     _raw_media = payload.get("media_path")
     payload["media_path"] = (
         hashlib.sha1(
-            os.path.normcase(os.path.abspath(str(_raw_media)))
+            normalize_path_case(str(_raw_media))
             .encode("utf-8")).hexdigest()
         if _raw_media else "")
     files = instruction_source_files(cfg)

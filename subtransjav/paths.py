@@ -13,6 +13,17 @@ import sys
 from pathlib import Path
 
 
+def normalize_path_case(path: str) -> str:
+    """路径大小写归一化（Windows 语义跨平台对齐）。
+
+    ``os.path.normcase`` 仅在 Windows 折叠大小写，POSIX 上是 no-op；
+    本项目为 Windows-only，大小写不敏感配对是既定设计语义，故显式
+    ``.lower()`` 补齐跨平台一致性。``abspath`` 先行保证相对路径的
+    解析基准一致。
+    """
+    return os.path.normcase(os.path.abspath(path)).lower()
+
+
 def is_frozen() -> bool:
     """canonical frozen 判定：全库内联 ``getattr(sys, "frozen", False)`` 收拢到此。"""
     return getattr(sys, "frozen", False)
