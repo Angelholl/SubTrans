@@ -1289,3 +1289,54 @@ def test_refine_audio_preview_guide_missing_media_path(gui_api_obj,
     r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
     assert r["ok"] is False
     assert "媒体路径" in r["error"]
+
+
+# ---------------------------------------------------------------------------
+# 数据保存目录（owner 反馈②）：refine_get/set_data_root 三态
+# ---------------------------------------------------------------------------
+def test_refine_get_data_root_default(gui_api_obj, monkeypatch):
+    """读态：返回 data_root/source/pointer/is_frozen，与 paths 同源。"""
+    from subtransjav import paths
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    got = gui_api_obj.refine_get_data_root()
+    assert got["success"] is True
+    assert got["data_root"] == str(paths.data_root())
+    assert got["source"] == paths.data_root_source()
+    assert got["pointer"] == paths.get_data_root_pointer()
+    assert got["is_frozen"] is False
+
+
+def test_refine_set_data_root_writes_pointer(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """写态：绝对路径写入 pointer 文件，need_restart=True。"""
+    from subtransjav import paths
+    pointer = tmp_path / ".data-root"
+    monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: pointer)
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    target = tmp_path / "custom_root"
+    target.mkdir()
+    got = gui_api_obj.refine_set_data_root(str(target))
+    assert got["success"] is True
+    assert got["need_restart"] is True
+    assert got["data_root"] == str(target)
+    assert pointer.read_text(encoding="utf-8").strip() == str(target)
+
+
+def test_refine_set_data_root_clear_and_reject(gui_api_obj, monkeypatch,
+                                               tmp_path):
+    """清除态（空串=恢复默认）+ 相对路径拒绝。"""
+    from subtransjav import paths
+    pointer = tmp_path / ".data-root"
+    monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: pointer)
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    target = tmp_path / "custom_root"
+    target.mkdir()
+    assert gui_api_obj.refine_set_data_root(str(target))["success"] is True
+    got = gui_api_obj.refine_set_data_root("")
+    assert got["success"] is True
+    assert got["need_restart"] is True
+    assert not pointer.exists()
+    # 相对路径拒绝
+    bad = gui_api_obj.refine_set_data_root("relative/dir")
+    assert bad["success"] is False
+    assert bad["error"] == "请输入绝对路径"

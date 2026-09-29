@@ -145,6 +145,9 @@ MSG = {
 
     # ---- refine 阶段设置（app.js MSG 镜像；JS 侧专用，双表同步）----
     "resume_fingerprint_hint": "（修改模型或窗口/并发参数后，旧断点将不可复用）",
+
+    # ---- 数据保存目录（api.py refine_set_data_root 校验文案）----
+    "data_root_need_abs": "请输入绝对路径",
 }
 
 

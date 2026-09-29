@@ -910,6 +910,40 @@ class TranslateAPI:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def refine_get_data_root(self) -> dict[str, Any]:
+        """返回当前数据保存根目录与来源（供高级参数页「数据保存目录」区块）。"""
+        try:
+            return {
+                "success": True,
+                "data_root": str(paths.data_root()),
+                "source": paths.data_root_source(),
+                "pointer": paths.get_data_root_pointer(),
+                "is_frozen": paths.is_frozen(),
+            }
+        except Exception as e:
+            _log_exc("refine_get_data_root")
+            return {"success": False, "error": str(e)}
+
+    def refine_set_data_root(self, path: str) -> dict[str, Any]:
+        """设置/清除数据保存根目录（写入 .data-root 指针，重启应用后生效）。
+
+        path 为空串 = 清除指针恢复默认；否则必须是绝对路径
+        （交 paths.set_data_root_pointer，不做白名单：
+        用户自选本机目录，env 通道本就无界）。
+        """
+        try:
+            target = str(path or "").strip()
+            if target and not os.path.isabs(target):
+                return {"success": False, "error": msg("data_root_need_abs")}
+            ok, result = paths.set_data_root_pointer(target)
+            if not ok:
+                return {"success": False, "error": result}
+            return {"success": True, "data_root": result,
+                    "need_restart": True}
+        except Exception as e:
+            _log_exc("refine_set_data_root")
+            return {"success": False, "error": str(e)}
+
     def refine_list_models(self, provider: str, endpoint: str = None,
                            api_key: str = None) -> dict[str, Any]:
         """在线拉取服务商可用模型列表（Zen 免费模型置顶）"""

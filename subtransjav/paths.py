@@ -29,17 +29,51 @@ def app_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+POINTER_FILENAME = ".data-root"
+
+
+def _data_root_pointer_path() -> Path:
+    """pointer 文件固定位置（先找到先算的唯一候选）：
+
+    frozen → exe 同目录（``Path(sys.executable).parent``）；
+    源码 → app_root()（即仓库根）。
+    """
+    if is_frozen():
+        return Path(sys.executable).parent / POINTER_FILENAME
+    return Path(__file__).resolve().parents[1] / POINTER_FILENAME
+
+
+def _read_data_root_pointer() -> str:
+    """读 pointer：存在且内容为单行绝对路径才生效，否则忽略（容错）。"""
+    p = _data_root_pointer_path()
+    try:
+        if not p.is_file():
+            return ""
+        content = p.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    if not content or not os.path.isabs(content):
+        return ""
+    return content
+
+
 def data_root() -> Path:
-    """数据根目录，三级优先级：
+    """数据根目录，四级优先级：
 
     1. 环境变量 ``SUBTRANSJAV_DATA_ROOT``（非空才生效）；
-    2. frozen → ``%LOCALAPPDATA%\\SubTransJAV``（LOCALAPPDATA 缺失回退家目录，
+    2. pointer 文件 ``.data-root``（单行绝对路径；不存在/为空/非法则忽略）；
+    3. frozen → ``%LOCALAPPDATA%\\SubTransJAV``（LOCALAPPDATA 缺失回退家目录，
        不抛异常）；
-    3. 否则 = app_root()（源码形态，行为与现状逐字节一致）。
+    4. 否则 = app_root()（源码形态，行为与现状逐字节一致）。
+
+    注意：各模块级常量在 import 期已求值，pointer 修改须重启应用生效。
     """
     env = os.environ.get("SUBTRANSJAV_DATA_ROOT", "").strip()
     if env:
         return Path(env)
+    pointer = _read_data_root_pointer()
+    if pointer:
+        return Path(pointer)
     if is_frozen():
         base = os.environ.get("LOCALAPPDATA") or str(Path.home())
         return Path(base) / "SubTransJAV"
@@ -47,12 +81,46 @@ def data_root() -> Path:
 
 
 def data_root_source() -> str:
-    """数据根来源标识：``"env"`` / ``"frozen-default"`` / ``"legacy"``。"""
+    """数据根来源标识：``"env"`` / ``"pointer"`` / ``"frozen-default"`` / ``"legacy"``。"""
     if os.environ.get("SUBTRANSJAV_DATA_ROOT", "").strip():
         return "env"
+    if _read_data_root_pointer():
+        return "pointer"
     if is_frozen():
         return "frozen-default"
     return "legacy"
+
+
+def get_data_root_pointer() -> str:
+    """当前 pointer 指向（无 pointer / pointer 无效时返回空串）。"""
+    return _read_data_root_pointer()
+
+
+def set_data_root_pointer(path: str) -> tuple[bool, str]:
+    """写/清除 pointer 文件。
+
+    path 为空串 = 清除 pointer，恢复默认（返回 (True, 默认数据根)）；
+    否则写单行绝对路径（utf-8）。写前确保 pointer 所在目录存在。
+
+    返回 (成功?, 新数据根或错误信息)。
+    """
+    target = (path or "").strip()
+    try:
+        if not target:
+            p = _data_root_pointer_path()
+            if p.exists():
+                p.unlink()
+            return True, str(data_root())
+        if not os.path.isabs(target):
+            return False, str(Path(target))
+        new_root = str(Path(target))
+        p = _data_root_pointer_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(new_root + "\n")
+        return True, new_root
+    except OSError as e:
+        return False, f"{type(e).__name__}: {e}"
 
 
 def data_subdir(*parts: str) -> str:

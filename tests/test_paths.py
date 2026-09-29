@@ -2,6 +2,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 from subtransjav import paths
 
 REPO_ROOT = Path(paths.__file__).resolve().parents[1]
@@ -136,3 +138,102 @@ def test_pin_learned_glossary_path_is_repo_config():
     from subtransjav.refine import pipeline_support as ps
     assert ps.learned_glossary_path() == str(
         REPO_ROOT / "config" / "glossary_learned.csv")
+
+
+# ---------------------------------------------------------------------------
+# pointer 层（.data-root，owner 反馈②：数据保存目录用户自选）
+# ---------------------------------------------------------------------------
+@pytest.fixture()
+def pointer_tmp(monkeypatch, tmp_path):
+    """把 pointer 文件指到 tmp，隔离仓库根真实 .data-root。"""
+    p = tmp_path / ".data-root"
+    monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: p)
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    return p
+
+
+def test_pointer_file_directs_data_root(pointer_tmp):
+    target = pointer_tmp.parent / "mydata"
+    target.mkdir()
+    pointer_tmp.write_text(str(target) + "\n", encoding="utf-8")
+    assert paths.data_root() == target
+    assert paths.data_root_source() == "pointer"
+    assert paths.get_data_root_pointer() == str(target)
+
+
+def test_env_wins_over_pointer(pointer_tmp, monkeypatch):
+    target = pointer_tmp.parent / "mydata"
+    target.mkdir()
+    pointer_tmp.write_text(str(target), encoding="utf-8")
+    env_dir = pointer_tmp.parent / "envroot"
+    env_dir.mkdir()
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(env_dir))
+    assert paths.data_root() == env_dir
+    assert paths.data_root_source() == "env"
+
+
+@pytest.mark.parametrize("content", ["", "   ", "relative/dir", "\n\n"])
+def test_broken_pointer_ignored_falls_back_default(pointer_tmp, content):
+    pointer_tmp.write_text(content, encoding="utf-8")
+    assert paths.get_data_root_pointer() == ""
+    assert paths.data_root() == REPO_ROOT
+    assert paths.data_root_source() == "legacy"
+
+
+def test_set_pointer_then_clear(pointer_tmp):
+    target = pointer_tmp.parent / "custom"
+    target.mkdir()
+    ok, new_root = paths.set_data_root_pointer(str(target))
+    assert ok is True
+    assert Path(new_root) == target
+    assert paths.data_root() == target
+    # 清除（空串）→ pointer 删除，回默认
+    ok2, default_root = paths.set_data_root_pointer("")
+    assert ok2 is True
+    assert not pointer_tmp.exists()
+    assert Path(default_root) == REPO_ROOT
+
+
+def test_set_pointer_relative_rejected(pointer_tmp):
+    ok, err = paths.set_data_root_pointer("relative/dir")
+    assert ok is False
+    assert err
+    assert not pointer_tmp.exists()
+
+
+def test_set_pointer_write_failure(pointer_tmp):
+    # pointer 位置本身是目录 → 写入 OSError，返回 (False, 错误)
+    pointer_tmp.mkdir()
+    ok, err = paths.set_data_root_pointer(
+        str(pointer_tmp.parent / "elsewhere"))
+    assert ok is False
+    assert err
+
+
+def test_frozen_pointer_lives_next_to_executable(monkeypatch, tmp_path):
+    exe = tmp_path / "SubTransJAV.exe"
+    exe.write_bytes(b"")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(exe))
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    target = tmp_path / "data"
+    target.mkdir()
+    ok, new_root = paths.set_data_root_pointer(str(target))
+    assert ok is True
+    assert Path(new_root) == target
+    assert (tmp_path / ".data-root").is_file()
+    assert paths.get_data_root_pointer() == str(target)
+    assert paths.data_root() == target
+    assert paths.data_root_source() == "pointer"
+
+
+def test_no_pointer_file_behavior_unchanged(monkeypatch, tmp_path):
+    """pointer 不存在时行为与现状逐字节一致（回归钉）。"""
+    monkeypatch.setattr(paths, "_data_root_pointer_path",
+                        lambda: tmp_path / ".data-root")
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    assert paths.data_root() == REPO_ROOT
+    assert paths.data_root_source() == "legacy"
+    assert paths.get_data_root_pointer() == ""

@@ -46,3 +46,6 @@ tm_full_backup_*.csv
 subtransjav-d1-d5-commit.txt
 subtransjav-d1-d5.bundle
 subtransjav-d1-d5.patch
+
+# 数据根指针（GUI 自选数据保存目录，本地生成不入库）
+.data-root
