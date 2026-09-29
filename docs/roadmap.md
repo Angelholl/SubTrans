@@ -32,10 +32,10 @@
 - ✅ 引擎页词典管理三区块（2026-09-30，846fae5：日/中/英 状态/下载/自定义路径+下载中态；api refine_dict_status/refine_dict_download；文案全 MSG 键 i18n 契约过；GUI 黑盒未跑——配额限，提交注明未验证）
 - ✅ 日语=sudachi 下载式（2026-09-30，7ca43ec：dict_manager 三源策略——上游已转 PyPI-only，"GitHub 主源"按现状映射为 PyPI 官方→清华镜像（仅网络失败降级）→本地导入；SHA256 官方 digest 核实+不符拒载；两类失败分开报错；sudachidict_core 主依赖保留；grammar_hint 自定义词典路径优先（sudachipy 0.6.11 实证 Dictionary(dict=路径)）；CLI --dict-status/--dict-download）
 - ✅ 中文=jieba 走 `[zh]` extra（7ca43ec，缺失静默降级）；英文=规则级起步（en 签名/质量门随批 2 落）
-- ⬜ 中/英提示注入绑定审校消费场景：jieba 可用性探测已落（7ca43ec），中/英分词提示**生成与注入**未落（jieba 需随 [zh] extra 安装后接 grammar_hint 同款生成链）；语言判定=字符集启发式逐条路由（en 签名已落 a18119c）
-- ✅ 翻译方向参数化批 1+批 2（2026-09-30，be29cda/a18119c，拍板 D2026-0930-04：两 HRO 全采纳）：批 1=final_suffix 单点命名契约（缺省 _final_cn 一字符不变）+方向字段/validate 三查/CLI+TM 唯一约束升维表重建迁移（全 CRUD 语言过滤/CSV 语言列/指纹不变）+manifest direction+指纹条件键缺席归一（HRO-2 字节不变式钉）；批 2=提示词方向 builder（缺省逐字节复刻）+hardened_suffix/synopsis/词库/日文特调规则非缺省抑制+en 签名+is_fluent_target 分派+文法缓存键方向隔离+GUI 完成检测方向化+_v2_stage_prompts_sha1 cfg 感知；全量 1519→1522 基线只增，105 枚 pipeline_v2 缺省快照全绿=E2E 字节不变门
-- ⬜ 方向参数化残余（随下轮）：zh→en 真跑冒烟（需 owner 环境 LLM 后端实跑，单测级快照已过）；测试基线语言假设人工分类复核（批 3 项）；README 已写回方向参数（846fae5 批，措辞守 HRO"需配套模板卡"）
-- 实施序（D2026-0930-03 执行序 ⑤→①→④→②→③ 的 2.1 段）：词典 ④→② 先行、方向参数化 ③ 收尾——已按序完成；放行门=E2E 快照+新方向冒烟+方向字段钉+语言路由（快照/字段钉/语言路由已落，真跑冒烟待 owner）
+- ✅ 中/英分词提示生成与注入（2026-09-30，D2026-0930-05 拍板+落地，**机制层完成**——zh→en 端到端含提示实效果验证归 owner 真跑冒烟项）：新模块 token_hint（zh=jieba 分词参考，token≥2 且行长≥6 门槛、每条 ≤1 条、缺失静默降级；en=全大写缩写规则零依赖）+_collect_grammar_hints 源语言分派（ja→sudachi 逐字节不动/zh→jieba/en→规则）+A/B 双缝零新缝+【语法提示】头复用残留清理零改动+缓存键 direction 透传缺口顺修；critic 1 HRO（审校绑定口径）采纳落澄清"A/B 均为真实消费点"+4 条件项全采纳；语言判定=字符集启发式逐条路由（en 签名已落 a18119c）
+- ✅ 翻译方向参数化批 1+批 2（2026-09-30，be29cda/a18119c，拍板 D2026-0930-04：两 HRO 全采纳）：批 1=final_suffix 单点命名契约（缺省 _final_cn 一字符不变）+方向字段/validate 三查/CLI+TM 唯一约束升维表重建迁移（全 CRUD 语言过滤/CSV 语言列/指纹不变）+manifest direction+指纹条件键缺席归一（HRO-2 字节不变式钉）；批 2=提示词方向 builder（缺省逐字节复刻）+hardened_suffix/synopsis/词库/日文特调规则非缺省抑制+en 签名+is_fluent_target 分派+文法缓存键方向隔离（缓存键位含方向；调用点透传随 D2026-0930-05 补齐）+GUI 完成检测方向化+_v2_stage_prompts_sha1 cfg 感知；全量 1519→1522 基线只增，105 枚 pipeline_v2 缺省快照全绿=E2E 字节不变门
+- ⬜ 方向参数化残余（随下轮）：zh→en 真跑冒烟（需 owner 环境 LLM 后端实跑，单测级快照已过；中英提示注入实效果一并验证）；~~测试基线语言假设人工分类复核~~ ✅ 已落（docs/测试基线语言假设分类-20260930.md：34 文件=默认方向钉 22/方向无关 8/方向专项 4，无错配）；README 已写回方向参数（846fae5 批，措辞守 HRO"需配套模板卡"）
+- 实施序（D2026-0930-03 执行序 ⑤→①→④→②→③ 的 2.1 段）：词典 ④→② 先行、方向参数化 ③ 收尾——已按序完成，中英提示注入（D2026-0930-05）随收尾落；放行门=E2E 快照+新方向冒烟+方向字段钉+语言路由（快照/字段钉/语言路由已落，真跑冒烟待 owner）
 
 ### 2.0.1（独立 tag+Release，先于 2.1 发布；milestone 可与 2.1 共用仅限展示，D2026-0930-03 ①）
 

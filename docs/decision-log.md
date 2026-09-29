@@ -1644,3 +1644,25 @@ ftkd-030 事故（2026-09-23 02:13）：跑批中 LM Studio 引擎被卸载，�
 - **条件是否已闭环**：未启动（随三批落地闭环；批 2 放行门=缺省 E2E 字节快照+zh→en 冒烟；全项放行门=D2026-0930-03 ③ 四条：E2E 快照+新方向冒烟+方向字段钉+语言路由）。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：en 拉丁签名误杀率（语言校验侧小样数据）；非缺省方向 resume 指纹盲区（卡片解析进指纹后回归）；TM 表重建迁移执行顺序（生产库先备份 zip 再迁移）；GUI 方向控件与完成检测联动（web-gui-tester 黑盒）。
+
+## [2026-09-30] [D2026-0930-05] 中/英分词提示生成与注入接线（token_hint 模块 + 源语言分派 + 缓存键透传）[已拍板]
+
+- **原决策**：2.1 中/英分词提示生成与注入接线（roadmap ⬜ 项）。新模块 `subtransjav/refine/token_hint.py`：`is_zh_hint_available()`（jieba 探测，缺失静默降级）+ `generate_zh_hints`（R1 分词参考，jieba 精确模式，token≥2 输出『【语法提示】\n- 分词参考：tok1 | tok2 | …』）+ `generate_en_hints`（R1 全大写缩写 ≥2 字母词界匹配，纯正则零依赖）；`_collect_grammar_hints` 增 direction 参数并透传缓存键（顺修 :586 未透传缺口）；按**源语言**分派后端（ja→sudachi 逐字节不动 / zh→jieba / en→规则）；槽位=A、B 两现成注入缝（零新缝）；复用【语法提示】头与『原文：』包装格式（残留清理零改动）；无条目总量阈值、无用户开关/CLI 参数/user_settings 键；不动 GUI/i18n/CLI/manifest；TDD 双态可跑（假 jieba 注入全量 + 真 jieba skipif）；缺省 ja→zh 全链字节不变为放行门。
+- **约束回链**：jieba 为 pyproject `[zh]` extra（>=0.42），主依赖与 CI 缺省不装（本机 .venv 实测未装）；缺省方向字节不变红线=105 枚 pipeline_v2 E2E 快照 + HRO-2 config_hash 字节不变式（D2026-0930-04）；缓存键方向隔离沿用 D2026-0930-04 联动 4（`_grammar_cache_key` 已有 direction 参数但调用点从未透传——隔离实际失效，本批顺修补洞）。
+- **评议轮次**：首轮；decision-critic 独立评议。实证抽查：pipeline_v2.py `_collect_grammar_hints`/缓存键/阶段 A/B 注入缝、cleaner_rules.py 残留清理三模式+rsplit 兜底、grammar_hint.py（8 规则+正则回退+D4 双锁）、dict_manager.py jieba 探测、test_dict_manager.py 假组件范式、pyproject.toml [zh] extra、config.py `_is_default_direction`/generic B prompt『{sn}原文 ||| {tn}译文』、源/目标白名单 ja/zh/en、decision-log D2026-0930-01 P3 原文、roadmap 2.1 节、CHANGELOG [未发布] 段、test_direction_batch2.py。核验结论：方案全部事实引用准确、无材料矛盾。立场=**有条件支持**；产出 [HIGH_RISK_OBJECTION]×1（HRO-1 接线范围 vs D2026-0930-01「绑定审校消费场景」字面口径）+ 条件项 4（R1 token 成本量级低估/R2 find_spec×sys.modules 假体测试双态坑/R3 jieba 冷启动并发/R4 direction 参数双语义）+ 提示项 R5（同源异目标缓存键冗余）+ 清单外联动 2 项（批2「缓存键方向隔离」宣称-实际落差文档措辞、zh→en 真跑冒烟归属）。
+- **我的异议**：[HIGH_RISK_OBJECTION-1] A 缝接线超出 D2026-0930-01 P3「中/英提示注入**绑定 2.1 审校消费场景**」已记录口径字面（审校=阶段 B，阶段 A 属净语+翻译）——构成对已拍板决策的阐释变更，须显式裁定并落澄清记录，防止 roadmap ⬜→✅ 时口径与实际行为静默漂移。条件项：R1 zh 分词参考为**逐行全命中**（区别于 ja 8 规则稀疏命中），提示文本≈源文复写，A 阶段 token 量级 ≈+0.5~1× 源文，方案自陈"同先例"低估；R2 生产探测用裸 `find_spec("jieba")` 与测试引用的 sys.modules 假体范式冲突（假体无 `__spec__` 时 find_spec 抛 ValueError 击穿"静默降级不抛"；开发机装有 [zh] extra 时假体被真 spec 旁路，"双态可跑"失稳）；R3 jieba 冷启动建前缀词典并发竞态，须镜像 grammar_hint D4 双检锁；R4 direction 参数同担缓存键判别与分派两职，须显式字符串契约。
+- **主模型最终决定**：**1 HRO 采纳、4 条件项全采纳、2 联动点采纳、无驳回无复议**。
+  - **HRO-1 采纳**：接线范围=A、B 两注入缝（源语言分派，零新增 gate）。落澄清句：**"对 D2026-0930-01『绑定审校消费场景』的澄清：意为『存在真实消费点（A/B 注入缝均消费）即接线』，非限定 B-only"**（回链本次 critic 评议）。
+  - **R1 采纳**：zh 提示注入门槛=分词 token≥2 **且 strip 后长度≥6 字符**；决策日志如实记账"zh 分词参考为逐行命中（区别于 ja 稀疏命中），A 阶段提示文本量级 ≈+0.5~1× 源文 token；非缺省方向+显式配卡为天然缓解，LRU 缓存命中后重复批零成本"。
+  - **R2 采纳**：`is_zh_hint_available()` 走 **try-import + 模块级缓存布尔**（可被测试重置），不用裸 `find_spec`；测试 monkeypatch 模块装载函数，不依赖 find_spec 对无 `__spec__` 假体的行为。
+  - **R3 采纳**：jieba 惰性单例双检锁（镜像 grammar_hint D4 模式）。
+  - **R4 采纳**：缓存键传方向对全串，分派显式 `direction.split("→")[0]`，测试钉字符串契约。
+  - **R5 不处理**（认同：纯缓存条目冗余，无正确性影响）。
+  - **联动 ①采纳**：CHANGELOG/roadmap 中批 2「文法缓存键方向隔离」措辞补注"调用点透传随 D2026-0930-05 补齐"。
+  - **联动 ②采纳**：roadmap ⬜→✅ 措辞**限定"机制层完成"**，zh→en 端到端（含提示实效果）验证责任仍归 owner 真跑冒烟项。
+- **定案条目**：①槽位=A、B 双缝（源语言分派：ja→generate_grammar_hints 逐字节不动 / zh→jieba / en→大写缩写规则）；②阈值=token≥2 且 strip 长度≥6，每条目 ≤1 条提示，无条目总量阈值、无用户开关/CLI 参数/user_settings 键；③缓存沿用 `_GRAMMAR_CACHE`（键含方向对全串，跨方向不串）；④B 输入『原文：中文 ||| English』与 generic B prompt『中文原文 ||| 英文译文』格式自洽，残留清理零改动；⑤不动 GUI/i18n/CLI/manifest，提示只改发 LLM 文本（阶段 A 既定契约"不影响 TM 键与产物"）。
+- **验证门**：①既有 105 枚 pipeline_v2 缺省快照原样跑绿=E2E 字节不变门；②新增 `_grammar_cache_key(text, tag, profile)` 与显式 "ja→zh" 传参**逐字节相等**钉测试（缓存层字节不变式直接对应）；③en 回显『【语法提示】…原文：中文 ||| English』→保留英文侧残留清理钉测试；④ja/zh 同文本双方向键不同且 hint 不串功能测试；⑤缺 jieba 静默降级（`_collect_grammar_hints` 返回空 dict 不抛）双态测试——本机（未装 [zh]）与装有 [zh] extra 环境各跑一轮；⑥真 jieba 用例 skipif（CI/本地缺省不装不跑）；⑦测试基线 1522+4 只增不减。
+- **条件是否已闭环**：本批实施期闭环——R1 门槛与记账、R2 try-import+模块级缓存布尔、R3 双检锁、R4 字符串契约钉测试随代码落地即闭环；HRO-1 澄清句已在本条目落盘（2026-09-30）；联动 ①② 随 CHANGELOG/roadmap 修订闭环。闭环后本决定视为支持。
+- **决策点三问终答**：①消费槽位=A+B 双缝（源语言分派，零新增 gate，D2026-0930-01 口径按澄清句理解）；②阈值/上限=token≥2 且 len≥6、每条目 ≤1 条、无总量阈值/无用户开关；③方案过 critic（1 HRO 采纳、4 条件项全采纳、2 联动点采纳，无驳回无复议）。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：①zh→en 端到端（含 jieba 提示实效果）验证责任在 owner 真跑冒烟项，未真跑前 roadmap 仅计"机制层完成"；②en 源方向（en→zh，白名单内）的 en 规则分支为低频路径，需真实方向冒烟覆盖；③jieba 版本（>=0.42 浮动）分词差异仅影响非缺省 prompt 文本、不入字节门，观察是否有必要钉版本下限；④缓存键双语义契约（方向对全串 vs 源语言分派）经 R4 钉测试防回归。
