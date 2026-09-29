@@ -46,7 +46,7 @@ from typing import Any
 
 from subtransjav import paths
 
-__all__ = ["ensure_migrated"]
+__all__ = ["ensure_migrated", "import_legacy"]
 
 MIGRATION_VERSION = "2.0.0"
 BACKUP_PREFIX = "pre-2.0.0-"
@@ -474,3 +474,152 @@ def ensure_migrated(verbose: bool = False) -> str:
         _log(verbose, f"⚠️ [迁移] 数据迁移异常（程序以新根继续，"
                       f"旧数据可从数据根 backups/ 寻回）: {type(e).__name__}: {e}")
         return "failed:exception"
+
+
+# ---------------------------------------------------------------------------
+# 手动导入旧资产（--import-legacy，owner 裁定：不做导入向导，只迁 TM 库+词库）
+# ---------------------------------------------------------------------------
+# 用户指定范围内的可迁文件（conflict_watch 不在范围，跳过）
+_IMPORT_FILES: tuple[str, ...] = (
+    "Temp/translation_memory/tm.db",
+    "config/glossary.csv",
+    "config/glossary_learned.csv",
+)
+
+
+def _import_target(rel: str) -> Path:
+    """旧根相对路径 → 数据根目标路径（动态读模块属性，测试可重定向）。"""
+    parts = Path(rel).parts
+    if rel.startswith("Temp/"):
+        from subtransjav.refine import tm as _tm
+        return Path(_tm._DEFAULT_TM_DIR).joinpath(*parts[2:])  # noqa: SLF001 - 模块级锚点常量
+    from subtransjav.refine import config as _cfg
+    return Path(_cfg.CONFIG_DIR).joinpath(*parts[1:])
+
+
+def import_legacy(legacy_dir: str, verbose: bool = True) -> dict[str, Any]:
+    """从旧目录手动导入旧资产（仅 tm.db[-wal/-shm] 与 glossary*.csv）。
+
+    纪律（复用既有迁移机制）：
+    - 仅接受目录（成员逐个 isfile 校验，conflict_watch 不在范围）；
+    - 目标已存在且内容不同 → 先按 manifest+zip 机制备份到数据根 backups/；
+    - tm.db 迁入前暂存校验（integrity_check + ensure_source_name_column），
+      坏库绝不写目标；
+    - 幂等：同哈希文件跳过；
+    - 全程 list-args/无 shell；任何异常降级为 errors 条目，绝不抛出。
+
+    返回 ``{"ok": bool, "imported": [...], "skipped": [...], "errors": [...]}``。
+    """
+    result: dict[str, Any] = {"ok": True, "imported": [], "skipped": [], "errors": []}
+    try:
+        src_root = Path(legacy_dir)
+        if not src_root.is_dir():
+            result["ok"] = False
+            result["errors"].append(f"目录不存在: {legacy_dir}")
+            print(f"❌ [导入] 目录不存在: {legacy_dir}")
+            return result
+
+        # 收集实际存在的可迁文件
+        srcs: list[tuple[str, Path]] = []
+        for rel in _IMPORT_FILES:
+            p = src_root.joinpath(*Path(rel).parts)
+            if p.is_file():
+                srcs.append((rel, p))
+                if rel.endswith("tm.db"):
+                    for side in _TM_SIDECARS:
+                        sp = src_root.joinpath(*Path(side).parts)
+                        if sp.is_file():
+                            srcs.append((side, sp))
+        if not srcs:
+            print("ℹ️ [导入] 未发现可导入的旧资产"
+                  "（tm.db / glossary.csv / glossary_learned.csv 均不存在）")
+            return result
+
+        root = paths.data_root()
+
+        # 阶段一：暂存副本 + 处理（tm.db integrity_check + ensure_source_name_column
+        # 可能在暂存上补列，故幂等/备份判定一律基于"处理后的暂存"哈希）
+        staged: list[tuple[str, Path, Path]] = []   # (rel, src, tmp)
+        for rel, src in srcs:
+            dst = _import_target(rel)
+            tmp = dst.with_name(dst.name + ".importing")
+            try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, tmp)
+                if rel.endswith("tm.db"):
+                    try:
+                        conn = sqlite3.connect(str(tmp))
+                        try:
+                            row = conn.execute("PRAGMA integrity_check").fetchone()
+                        finally:
+                            conn.close()
+                        if not row or row[0] != "ok":
+                            raise MigrationError("integrity_check 未通过")
+                        from subtransjav.refine.tm import ensure_source_name_column
+                        ensure_source_name_column(str(tmp))
+                    except Exception as e:  # noqa: BLE001 - 坏库降级，绝不写目标
+                        raise MigrationError(f"tm.db 校验失败: {e}") from e
+            except Exception as e:  # noqa: BLE001 - 单文件失败不阻断其余导入
+                with contextlib.suppress(OSError):
+                    tmp.unlink(missing_ok=True)
+                result["ok"] = False
+                result["errors"].append(f"{rel}: {e}")
+                _log(verbose, f"❌ [导入] 失败（目标未写入）: {rel} ({e})")
+                continue
+            staged.append((rel, src, tmp))
+
+        # 阶段二：幂等判定 + 备份（目标已存在且内容不同 → 先备份再覆盖）
+        overwrite: list[tuple[str, Path]] = []      # (rel, 现存目标)
+        installable: list[tuple[str, Path, Path]] = []
+        for rel, src, tmp in staged:
+            dst = _import_target(rel)
+            if dst.is_file() and _sha256_file(dst) == _sha256_file(tmp):
+                with contextlib.suppress(OSError):
+                    tmp.unlink(missing_ok=True)
+                result["skipped"].append(rel)
+                _log(verbose, f"⏭️ [导入] 内容一致，跳过: {rel}")
+                continue
+            if dst.is_file():
+                overwrite.append((rel, dst))
+            installable.append((rel, src, tmp))
+
+        if overwrite:
+            manifest = _build_manifest(src_root, overwrite)
+            try:
+                zpath = _write_backup(root, manifest, overwrite)
+            except OSError as e:
+                result["ok"] = False
+                result["errors"].append(f"备份失败: {e}")
+                print(f"❌ [导入] 目标文件备份失败，导入中止: {e}")
+                for _rel, _src, tmp in installable:
+                    with contextlib.suppress(OSError):
+                        tmp.unlink(missing_ok=True)
+                return result
+            _log(verbose, f"📦 [导入] 已备份现有文件到: {zpath}")
+
+        # 阶段三：落位（tmp + os.replace 原子化）
+        for rel, _src, tmp in installable:
+            dst = _import_target(rel)
+            try:
+                os.replace(tmp, dst)
+            except OSError as e:  # noqa: BLE001 - 单文件失败不阻断其余导入
+                with contextlib.suppress(OSError):
+                    tmp.unlink(missing_ok=True)
+                result["ok"] = False
+                result["errors"].append(f"{rel}: {e}")
+                _log(verbose, f"❌ [导入] 落位失败: {rel} ({e})")
+                continue
+            result["imported"].append(rel)
+            _log(verbose, f"✅ [导入] 已导入: {rel} -> {dst}")
+
+        if result["errors"]:
+            result["ok"] = False
+        print(f"✅ [导入] 旧资产导入完成：导入 {len(result['imported'])} 个，"
+              f"跳过 {len(result['skipped'])} 个，错误 {len(result['errors'])} 个"
+              + (f"；详情: {result['errors']}" if result["errors"] else ""))
+        return result
+    except Exception as e:  # noqa: BLE001 - 全容错：手动导入失败不抛出
+        result["ok"] = False
+        result["errors"].append(f"{type(e).__name__}: {e}")
+        print(f"❌ [导入] 旧资产导入异常: {type(e).__name__}: {e}")
+        return result

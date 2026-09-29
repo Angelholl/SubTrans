@@ -288,3 +288,119 @@ def test_gui_stub_present_source_level():
     assert i_freeze < i_stub < i_setup       # freeze_support 后、_auto_setup 前
     stub = main_body[i_stub - 400:i_stub + 200]
     assert "try:" in stub and "except Exception" in stub   # 全容错包裹
+
+
+# ---------------------------------------------------------------------------
+# 手动导入旧资产（--import-legacy，owner 裁定范围：TM 库 + 词库 CSV）
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def import_roots(monkeypatch, tmp_path):
+    """导入测试夹具：数据根经 SUBTRANSJAV_DATA_ROOT 指向 tmp；
+    TM/配置锚点常量（tm._DEFAULT_TM_DIR / config.CONFIG_DIR）动态重定向。"""
+    from subtransjav.refine import config as cfg_mod
+    from subtransjav.refine import tm as tm_mod
+
+    root = tmp_path / "dataroot"
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    root.mkdir()
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setattr(tm_mod, "_DEFAULT_TM_DIR", str(root / "Temp" / "translation_memory"))
+    monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(root / "config"))
+    return legacy, root
+
+
+def _make_import_legacy(legacy: Path) -> None:
+    tm_dir = legacy / "Temp" / "translation_memory"
+    cfg = legacy / "config"
+    tm_dir.mkdir(parents=True)
+    cfg.mkdir()
+    conn = sqlite3.connect(str(tm_dir / "tm.db"))
+    conn.execute("CREATE TABLE tm_entries "
+                 "(source_text TEXT, target_text TEXT, stage INTEGER)")
+    conn.executemany("INSERT INTO tm_entries VALUES (?, ?, ?)",
+                     [(f"s{i}", f"d{i}", 1) for i in range(3)])
+    conn.commit()
+    conn.close()
+    (cfg / "glossary.csv").write_text("旧词库A,新译A\n", encoding="utf-8")
+    (cfg / "glossary_learned.csv").write_text("学习词B,译B\n", encoding="utf-8")
+
+
+def test_import_legacy_normal_two_kinds(import_roots):
+    legacy, root = import_roots
+    _make_import_legacy(legacy)
+    r = dm.import_legacy(str(legacy), verbose=True)
+    assert r["ok"] is True
+    assert sorted(r["imported"]) == [
+        "Temp/translation_memory/tm.db",
+        "config/glossary.csv",
+        "config/glossary_learned.csv",
+    ]
+    assert r["errors"] == []
+    assert (root / "Temp" / "translation_memory" / "tm.db").is_file()
+    assert (root / "config" / "glossary.csv").read_text(encoding="utf-8") == "旧词库A,新译A\n"
+    assert (root / "config" / "glossary_learned.csv").read_text(encoding="utf-8") == "学习词B,译B\n"
+    # tm.db 行数完整且迁入后可读
+    assert _rows(root / "Temp" / "translation_memory" / "tm.db") == 3
+
+
+def test_import_legacy_idempotent_same_hash_skips(import_roots):
+    legacy, root = import_roots
+    _make_import_legacy(legacy)
+    assert dm.import_legacy(str(legacy), verbose=False)["ok"] is True
+    backups = sorted((root / "backups").glob(f"{dm.BACKUP_PREFIX}*.zip"))
+    r2 = dm.import_legacy(str(legacy), verbose=False)
+    assert r2["ok"] is True
+    assert sorted(r2["skipped"]) == [
+        "Temp/translation_memory/tm.db",
+        "config/glossary.csv",
+        "config/glossary_learned.csv",
+    ]
+    assert r2["imported"] == []
+    # 幂等重跑不产生新备份
+    assert sorted((root / "backups").glob(f"{dm.BACKUP_PREFIX}*.zip")) == backups
+
+
+def test_import_legacy_existing_target_backed_up(import_roots):
+    legacy, root = import_roots
+    _make_import_legacy(legacy)
+    # 预置不同内容的目标文件 → 应先备份再覆盖
+    cfg_dir = root / "config"
+    cfg_dir.mkdir()
+    (cfg_dir / "glossary.csv").write_text("现有词库,现有译\n", encoding="utf-8")
+
+    r = dm.import_legacy(str(legacy), verbose=False)
+    assert r["ok"] is True
+    assert "config/glossary.csv" in r["imported"]
+    assert (cfg_dir / "glossary.csv").read_text(encoding="utf-8") == "旧词库A,新译A\n"
+    zips = sorted((root / "backups").glob(f"{dm.BACKUP_PREFIX}*.zip"))
+    assert len(zips) == 1
+    with zipfile.ZipFile(zips[0]) as zf:
+        names = zf.namelist()
+        assert dm.MANIFEST_NAME in names
+        assert "config/glossary.csv" in names
+        assert zf.read("config/glossary.csv").decode("utf-8").replace(
+            "\r\n", "\n") == "现有词库,现有译\n"
+
+
+def test_import_legacy_corrupt_tm_db_error_no_write(import_roots):
+    legacy, root = import_roots
+    _make_import_legacy(legacy)
+    db = legacy / "Temp" / "translation_memory" / "tm.db"
+    db.write_bytes(db.read_bytes()[:32])   # 截断损坏
+    r = dm.import_legacy(str(legacy), verbose=False)
+    assert r["ok"] is False
+    assert any("tm.db" in e for e in r["errors"])
+    # 坏库绝不写目标，且无 .importing 残留
+    assert not (root / "Temp" / "translation_memory" / "tm.db").exists()
+    assert not list((root / "Temp" / "translation_memory").glob("*.importing"))
+    # 其余文件照常导入
+    assert "config/glossary.csv" in r["imported"]
+
+
+def test_import_legacy_missing_dir_ok_false(import_roots):
+    _legacy, _root = import_roots
+    r = dm.import_legacy(str(_legacy.parent / "no-such-dir"), verbose=False)
+    assert r["ok"] is False
+    assert r["errors"] and "目录不存在" in r["errors"][0]
+    assert r["imported"] == []

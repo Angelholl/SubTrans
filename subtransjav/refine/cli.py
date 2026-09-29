@@ -117,6 +117,11 @@ def build_parser():
                           help="数据路径诊断：打印版本/运行形态/数据根及来源/"
                                "配置与翻译记忆库/密钥/旧数据根/迁移状态后退出"
                                "（纯只读，不创建任何目录）")
+    grp_diag.add_argument("--import-legacy", metavar="DIR", default="",
+                          help="从旧目录导入旧资产后退出：仅迁移 tm.db（含 "
+                               "-wal/-shm 旁车）与 glossary.csv/"
+                               "glossary_learned.csv；目标已存在先备份到数据根 "
+                               "backups/，内容一致幂等跳过")
 
     p.add_argument("--deepseek-key", default="",
                    help="DeepSeek API Key（命令行传密钥会暴露在进程列表，建议改用环境变量 DEEPSEEK_API_KEY）")
@@ -447,6 +452,14 @@ def main(argv=None):
     # 数据路径诊断（独立早退：先于 config_from_args，纯诊断不建配置不建目录）
     if getattr(args, "where", False):
         print(_print_where())
+        return 0
+
+    # ---- 旧资产手动导入（--import-legacy）：--where 同层早退，不进 run_v2；
+    #      全容错降级在 import_legacy 内部完成（errors 不抛出），恒返回 0 ----
+    legacy_dir = getattr(args, "import_legacy", "") or ""
+    if legacy_dir:
+        from subtransjav.data_migration import import_legacy
+        import_legacy(legacy_dir)
         return 0
 
     # ---- EXE 首发数据迁移插桩（D2026-0929-05/07/08）：位于 --where 只读
