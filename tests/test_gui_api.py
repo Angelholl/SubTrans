@@ -1416,3 +1416,48 @@ def test_learned_glossary_truncated_at_cap(gui_api_obj, monkeypatch, tmp_path):
     assert got["total"] == 503
     assert got["truncated"] is True
     assert got["rows"][0]["source"] == "src0"
+
+
+# ---------------------------------------------------------------------------
+# 词典管理端点（2.1 引擎页词典管理三区块）
+# ---------------------------------------------------------------------------
+def test_refine_dict_status_shape(gui_api_obj, monkeypatch, tmp_path):
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    got = gui_api_obj.refine_dict_status()
+    assert got["success"] is True
+    assert set(got["dicts"]) == {"sudachi", "jieba", "english_rules"}
+    assert got["dicts"]["english_rules"]["available"] is True
+
+
+def test_refine_dict_download_unsupported_kind(gui_api_obj):
+    got = gui_api_obj.refine_dict_download("jieba")
+    assert got["success"] is False
+    assert "不支持下载" in got["error"]
+
+
+def test_refine_dict_download_success_and_checksum(gui_api_obj, monkeypatch,
+                                                   tmp_path):
+    from subtransjav.refine import dict_manager as dm
+    from subtransjav.refine.dict_manager import DictChecksumError, DictDownloadError
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    # api 方法为函数内导入，patch 源模块属性才生效
+    monkeypatch.setattr(dm, "download_dict",
+                        lambda kind: str(tmp_path / "dict" / "system_core.dic"))
+    got = gui_api_obj.refine_dict_download("sudachi")
+    assert got["success"] is True
+
+    def _raise_checksum(kind):
+        raise DictChecksumError("SHA256 不符")
+
+    monkeypatch.setattr(dm, "download_dict", _raise_checksum)
+    got2 = gui_api_obj.refine_dict_download("sudachi")
+    assert got2["success"] is False
+    assert "校验失败" in got2["error"]
+
+    def _raise_net(kind):
+        raise DictDownloadError("超时")
+
+    monkeypatch.setattr(dm, "download_dict", _raise_net)
+    got3 = gui_api_obj.refine_dict_download("sudachi")
+    assert got3["success"] is False
+    assert "下载失败" in got3["error"]

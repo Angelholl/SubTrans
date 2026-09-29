@@ -388,6 +388,23 @@ const MSG = {
     data_root_default_restored: '已恢复默认，重启应用后生效',
     data_root_need_abs: '请输入绝对路径',
 
+    // 词典管理（引擎页三区块，2.1）
+    dict_panel_title: '词典管理（日/中/英）',
+    dict_sudachi_label: '日语（sudachi）',
+    dict_sudachi_desc: '日语形态素分析词典（语法提示分词用；完整安装自带，精简安装可经此下载）',
+    dict_jieba_label: '中文（jieba）',
+    dict_jieba_desc: '中文分词（完整版含 [zh] 组件后自动启用；缺失时静默降级）',
+    dict_english_label: '英文（规则级）',
+    dict_english_desc: '英文分词规则级（内置，无需下载）',
+    dict_status_available: '可用',
+    dict_status_unavailable: '不可用',
+    dict_custom_path: '自定义词典已就位',
+    dict_download: '下载',
+    dict_downloading: '下载中…',
+    dict_download_done: '下载完成',
+    dict_download_failed: '下载失败',
+    dict_load_failed: '词典状态加载失败',
+
     // 控制台折叠
     console_collapse: '折叠控制台',
     console_expand: '展开控制台',
@@ -2795,10 +2812,74 @@ function switchTab(tabId) {
     }
   }
 
+  // ---- 词典管理（2.1 引擎页三区块：日/中/英 状态/下载/路径）----
+  const DICT_KINDS = [
+    { kind: 'sudachi', label: MSG.dict_sudachi_label,
+      desc: MSG.dict_sudachi_desc, downloadable: true },
+    { kind: 'jieba', label: MSG.dict_jieba_label,
+      desc: MSG.dict_jieba_desc, downloadable: false },
+    { kind: 'english_rules', label: MSG.dict_english_label,
+      desc: MSG.dict_english_desc, downloadable: false },
+  ];
+  function dictLoad() {
+    const box = $('dictRows');
+    if (!box || !window.pywebview || !pywebview.api ||
+        !pywebview.api.refine_dict_status) return;
+    pywebview.api.refine_dict_status().then(r => {
+      if (!r || !r.success) {
+        box.innerHTML = `<span class="muted">${esc(MSG.dict_load_failed)}${r && r.error ? '：' + esc(r.error) : ''}</span>`;
+        return;
+      }
+      box.innerHTML = '';
+      DICT_KINDS.forEach(item => {
+        const info = (r.dicts && r.dicts[item.kind]) || {};
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
+        const badge = info.available
+          ? `<span class="pill" style="color:var(--accent,#2a7);">${esc(MSG.dict_status_available)}</span>`
+          : `<span class="pill" style="color:var(--muted,#987);">${esc(MSG.dict_status_unavailable)}</span>`;
+        const custom = info.custom_path
+          ? `<span class="muted" title="${esc(info.custom_path)}">${esc(MSG.dict_custom_path)}</span>`
+          : '';
+        const btn = item.downloadable
+          ? `<button class="btn" id="dictDl-${item.kind}" style="padding:2px 10px;">${esc(MSG.dict_download)}</button>`
+          : '';
+        row.innerHTML =
+          `<span style="font-weight:600; min-width:110px;">${esc(item.label)}</span>` +
+          badge + custom +
+          `<span class="muted" style="flex:1; min-width:200px;">${esc(item.desc)}</span>` + btn;
+        box.appendChild(row);
+        if (item.downloadable) {
+          const b = $('dictDl-' + item.kind);
+          if (b) b.addEventListener('click', () => dictDownload(item.kind, b));
+        }
+      });
+    }).catch(() => {});
+  }
+  async function dictDownload(kind, btn) {
+    const st = $('dictStatus');
+    if (btn) { btn.disabled = true; btn.textContent = MSG.dict_downloading; }
+    if (st) st.textContent = '';
+    try {
+      const r = await pywebview.api.refine_dict_download(kind);
+      if (st) {
+        st.textContent = (r && r.success)
+          ? `${MSG.dict_download_done}：${r.path}`
+          : `${MSG.dict_download_failed}：${(r && r.error) || ''}`;
+      }
+    } catch (e) {
+      if (st) st.textContent = String(e);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = MSG.dict_download; }
+      dictLoad();
+    }
+  }
+
   // ---- 远程数据加载（pywebview 就绪后调用一次）----
   async function loadRemote() {
     applySavedStageSettings();
     dataRootLoad();
+    dictLoad();
     // 净语配置目录默认值
     const defCleanerDir = 'config/templates';
     if ($('refineCleanerConfig') && !$('refineCleanerConfig').value) {

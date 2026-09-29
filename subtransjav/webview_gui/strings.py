@@ -80,6 +80,11 @@ MSG = {
     "grammar_hints_available": "日语形态素分析提示（阶段A 自动启用）",
     "grammar_hints_unavailable": "日语形态素分析提示（未安装 sudachipy）",
 
+    # ---- 词典管理（api.py，2.1 引擎页词典管理三区块）----
+    "dict_kind_unsupported": "该词典暂不支持下载（仅 sudachi 提供下载式）",
+    "dict_download_failed": "词典下载失败（网络/源不可达）",
+    "dict_checksum_failed": "词典校验失败（SHA256 不符，已拒绝落位）",
+
     # ---- open_url / 目录（api.py）----
     "url_scheme_unsupported": "仅支持 http/https 链接",
     "dir_not_exist": "目录不存在: {path}",

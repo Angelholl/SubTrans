@@ -925,6 +925,42 @@ class TranslateAPI:
             _log_exc("refine_get_data_root")
             return {"success": False, "error": str(e)}
 
+    def refine_dict_status(self) -> dict[str, Any]:
+        """三词典状态（2.1 引擎页词典管理三区块；只读零网络）。"""
+        try:
+            from subtransjav.refine.dict_manager import dict_status
+            return {"success": True, **dict_status()}
+        except Exception as e:
+            _log_exc("refine_dict_status")
+            return {"success": False, "error": str(e)}
+
+    def refine_dict_download(self, kind: str) -> dict[str, Any]:
+        """显式下载词典（2.1；当前仅 sudachi；SHA256 不符拒绝落位）。
+
+        同步执行（下载 25MB 级 wheel，GUI 侧按钮转下载中态）；网络失败与
+        校验失败分开报错（DictDownloadError / DictChecksumError）。
+        """
+        try:
+            from subtransjav.refine.dict_manager import (
+                DictChecksumError,
+                DictDownloadError,
+                download_dict,
+            )
+            if kind != "sudachi":
+                return {"success": False,
+                        "error": msg("dict_kind_unsupported")}
+            path = download_dict(kind)
+            return {"success": True, "path": path}
+        except DictDownloadError as e:
+            return {"success": False,
+                    "error": f"{msg('dict_download_failed')}: {e}"}
+        except DictChecksumError as e:
+            return {"success": False,
+                    "error": f"{msg('dict_checksum_failed')}: {e}"}
+        except Exception as e:
+            _log_exc("refine_dict_download")
+            return {"success": False, "error": str(e)}
+
     def refine_set_data_root(self, path: str) -> dict[str, Any]:
         """设置/清除数据保存根目录（写入 .data-root 指针，重启应用后生效）。
 
