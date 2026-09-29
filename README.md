@@ -13,7 +13,7 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 
 ## 它解决什么问题
 
-直译工具翻此类字幕的三大痛点：
+直译工具翻字幕的三大痛点：
 
 1. 直白表述生硬尴尬 → refine 角色卡二次精修（净语翻译 / 审校抛光）
 2. 术语/人名前后不一致 → TM 术语自学习（带准入门槛防污染）+ 强制术语表
@@ -117,7 +117,7 @@ GUI 为左侧五 TAB 外壳：**字幕翻译**（主页保留选文件、输出�
 
 ## 本地模型实测推荐（两轮矩阵测试）
 
-> 以下结论来自 2026-09 的两轮全有序矩阵实测：第一轮 5 款本地模型 × A/B 席位全搭配 = 25 组合 × 2 部影片（TM 零学习）；其中 trans8b 因不读取输入（疑 GGUF 聊天模板损坏）确认不可用，被剔除后第二轮以其余 4 款继续 = 16 组合 × 1 部影片 1162 条台词（TM 启用并逐组合清零，模拟全新安装首用）。两轮共 66 个测试单元全部零失败。评测口径：终稿条目保全（逐条对源）＋ 未翻译占位成因分层 ＋ 考点锚定对照（51 锚点 × 16 组合共识聚类）＋ 主观盲评，多口径交叉验证。测试时点为 2026-09-21，早于 2026-09-23 发现并修复的引擎 GPU 部分卸载问题；本节耗时与速度读数均为该时点实测口径，修复后的生产速度见下文「速度提示」。
+> 以下结论来自 2026-09 的两轮全有序矩阵实测：第一轮 5 款本地模型 × A/B 席位全搭配 = 25 组合 × 2 部影片（TM 零学习）；其中 trans8b 因不读取输入（疑 GGUF 聊天模板损坏）确认不可用，被剔除后第二轮以其余 4 款继续 = 16 组合 × 1 部影片 1162 条台词（TM 启用并逐组合清零，模拟全新安装首用）。两轮共 66 个测试单元全部零失败。评测口径：终稿条目保全（逐条对源）＋ 未翻译占位成因分层 ＋ 考点锚定对照（51 锚点 × 16 组合共识聚类）＋ 主观盲评，多口径交叉验证。测试时点为 2026-09-21，早于 2026-09-23 发现并修复的引擎 GPU 部分卸载问题；本节耗时与速度读数均为该时点实测口径，修复后的生产速度见下文「速度提示」。以下 5 款模型为日译中方向的本地翻译模型，本节测试语料为 JAV 影片（2026-09 全有序矩阵实测），结论仅代表该领域的实测表现；通用场景请选择你自备的通用翻译模型（如 qwen/gemma 等通用 LLM），搭配方式与席位逻辑仍可参考本节。
 
 ### 参测模型（LM Studio 本地加载）
 
@@ -190,9 +190,9 @@ SRT 输入
 
 本项目面向中文用户：默认翻译方向为 日文 → 中文，角色卡模板、质量审校规则与 GUI 均为中文语境设计。
 
-英文等其他目标语言在翻译引擎层受支持（`target_language` 设置），但精修管线（refine）与模板未做英文适配，请自行调整：
+精修管线当前方向为 日→中；其他目标语言的完整适配列入后续版本。如需适配，修改角色卡模板与规则文件中的语言相关条目：
 
-- 修改 `config/templates/` 下的角色卡模板（当前硬性要求"只输出中文译文"）
+- 编辑词库与模板页中的角色卡（2.0 自带通用模板，保存写入可编辑层）
 - 调整 refine 规则（`config/rules/translation_rules.yaml` 等）中的语言相关条目
 
 ## 配置分层速查
@@ -266,7 +266,7 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 
 `config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target，可选第三列 target_aliases 别名，`|` 分隔）与 TM 库不入版本库，克隆后按需自建。
 
-本项目只提供翻译工程框架，不分发任何语料/词库数据，按需自行配置。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
+初始自带通用模板角色卡与默认规则（`config/templates/` 与 `subtransjav/refine/defaults/`，可编辑/可覆盖）；词库 CSV（`--glossary`）与 TM 库不入版本库，克隆后按需自建。领域扩展包（如 JAV）见 `docs/examples/`。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
 
 ## English Quickstart
 
@@ -288,7 +288,7 @@ pip install -e ".[gui]"
 subtransjav-refine -i subs.srt --profile local --s1-provider lmstudio --s1-model <model> --s3-provider lmstudio --s3-model <model>
 ```
 
-The GUI is Chinese-oriented; the refine pipeline and templates are designed for Japanese → Chinese and not yet adapted for other target languages (see 受众定位).
+The GUI is Chinese-oriented; the refine pipeline currently targets Japanese → Chinese; other target languages are not adapted yet.
 
 ### Data Location
 
@@ -309,7 +309,7 @@ See the Chinese sections above for full details.
 
 ## 声明
 
-- 本项目仅供成年人学习研究字幕翻译技术使用，请遵守所在地区法律法规。
+- 本项目为开源字幕翻译工具，使用者须遵守所在地区法律法规。因项目历史领域背景，随仓库保留的领域示例包（`docs/examples/jav-domain/`）与模型实测章节涉及成人领域内容，是否适用请自行判断。
 - 上游转写工具：[WhisperJAV](https://github.com/meizhong986/WhisperJAV)——分工：转写归上游，翻译+精修归本仓库（项目名由此而来）。项目名称保留历史沿革，定位为通用字幕翻译项目。上游 v1.9.2+ 的运行清单（`whisperjav_run.json`）可通过 `--asr-meta` 接入本仓库双幻觉防护（转写可信度信号驱动精修侧自适应过滤）；旧版上游产物同样支持。
 - **设计参考**：GUI 信息架构参考了 [buxuku/SmartSub](https://github.com/buxuku/SmartSub)（MIT 许可）的分层收纳思路（引擎/模型集中管理 + 主界面任务流化），仅借鉴交互理念与信息架构，未复制其代码与图形资产。
 - **非商业声明**：本项目基于个人使用设计，在 GitHub 公开仅为开源分享，未商业化、未收取任何费用。
