@@ -2,15 +2,11 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## [未发布]
+## [2.0.0] - 2026-09-30
 
 ### 新增
 
 - **自带通用模板角色卡（通用化 P1，D2026-0930-01）**：初始安装即含通用净语/审校模板（包内 `subtransjav/refine/defaults/templates/`，两张角色卡 + 模板说明）与通用规则层，无需手动配置即可使用；角色卡解析新增包内兜底，形成四级回落链（显式配置文件 → 数据根 `config/templates/` → 包内 `defaults/templates/` → 明确报错），数据根自定义模板仍最优先（存量用户零感知），包内回落只读、不写回数据根。JAV 等领域调校包作为可选示例提供（`docs/examples/jav-domain/`，角色卡与规则 YAML 成对打包；导入为整包替换语义，须成对导入）。领域分布审计见 `docs/领域包-hardened-审计-20260930.md`（现加固词表无 JAV 独有词条，维持通用层现状）。
-
-## [2.0.0b0] - 2026-09-30
-
-### 新增
 
 - **EXE 分发与数据迁移（2.0 数据根收敛）**：Windows 安装包首发（onedir 打包 + Inno 安装器，卸载不删除用户数据；无 WebView2 环境时给出检测引导）。EXE 首次启动自动迁移旧数据：旧位数据打包备份 zip 至数据根 `backups/`（内含迁移清单与 sha256 校验），迁移失败自动回退不落半程状态（哨兵文件最后写入，标记完整迁移）；pip/源码形态数据位置不变，零感知。新增 `SUBTRANSJAV_DATA_ROOT` 环境变量自定义数据根，`subtransjav-refine --where` 诊断命令一次报全数据根来源、TM/词库/密钥位置与迁移状态（全程只读零副作用）。高级参数页可自定义数据保存目录（写入 .data-root 指针，重启生效）；CLI 亦可经 SUBTRANSJAV_DATA_ROOT 指定。安装器提供完整/精简两种组件（精简不含日语语法词典，语法提示自动降级）。GUI 以窗口子系统构建（启动无控制台黑框）；命令行经独立 subtrans-cli.exe（安装目录内）提供完整控制台语义。
 - **快速试听 UI（视听对比第二阶段，D2026-0929-09）**：质量与建议页导读条目新增「▶ 试听」按钮（所有带时间轴的条目可试听，`suspected_missed_speech` 疑似漏听条目默认高亮样式），点击弹出底部固定播放浮层（audio 控件 + 条目时间轴文案 + 关闭）。媒体路径来源收窄为契约内两种选择：导读 json 的 `media_path`（自动发现）或用户在页顶"媒体来源"条中显式输入的路径（语义等价 `--media-path`，仅本报告会话内生效，经安全锚点校验），本期不提供文件浏览对话框。可播判定用 ffprobe 真实 codec：mp4/m4a/webm/mov 容器内 h264/vp8/vp9 视频 + aac 音轨（或无轨）直接交浏览器播放（mode=direct）；hevc/opus 等边界编码一律走 ffmpeg 抽取 `[start-0.5s, end+0.5s]` 的 16kHz wav 片段兜底（mode=clip，list-args 禁 shell，片段落 `Temp/audio_detect/preview/`、命名带哈希、播放后保留供复播并受 24h stale 清扫管辖，同参数复播直接复用），抽不了才灰显。未装 ffmpeg 时 mp4/m4a 尝试直接播放、其余容器内联提示"未检测到 ffmpeg，无法解码该容器"。全部新文案走 i18n MSG 键，暗色主题经既有 token 自动适配；时间轴起止越界钳制，接口全容错不抛。
