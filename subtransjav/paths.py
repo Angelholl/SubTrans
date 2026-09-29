@@ -148,8 +148,8 @@ def data_subdir(*parts: str) -> str:
 MIGRATION_SENTINEL = ".migration-complete"
 
 # 旧位（pip/源码形态数据）保留期下限：≥ 1.4.1 EOL 声明时点
-# （D2026-0929-05 R4 / D2026-0929-08 点 3）。当前为占位值，最终由发布文档
-# EOL 字段定值驱动（1.4.1 EOL 声明随通道启用写入 release notes 后回填）；
+# （D2026-0929-05 R4 / D2026-0929-08 点 3）。值已由 owner 终裁定版
+# （D2026-0930-03 ⑤）：到达 EOL 后旧版停止修补、旧位数据保留可用；
 # 未来的旧位清理逻辑读本常量判断是否到期，而非"保留 N 版"
 # （字面量 = EOL 声明时点，非版本计数）。
 LEGACY_RETENTION_EOL = "2027-06-30"

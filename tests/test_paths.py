@@ -1,4 +1,5 @@
 """subtransjav.paths 数据路径单一来源测试（打包地基批）"""
+import datetime
 import sys
 from pathlib import Path
 
@@ -103,6 +104,18 @@ def test_migration_state_migrated_with_sentinel(monkeypatch, tmp_path):
     (tmp_path / "SubTransJAV").mkdir()
     (tmp_path / "SubTransJAV" / paths.MIGRATION_SENTINEL).write_text("", encoding="utf-8")
     assert paths.migration_state() == "migrated"
+
+
+# ---------------------------------------------------------------------------
+# 旧位保留 EOL 常量钉（D2026-0930-03 ⑤：定版值，防误改与文档漂移）
+# ---------------------------------------------------------------------------
+def test_legacy_retention_eol_pinned():
+    assert paths.LEGACY_RETENTION_EOL == "2027-06-30"
+    d = datetime.date.fromisoformat(paths.LEGACY_RETENTION_EOL)
+    assert (d.year, d.month, d.day) == (2027, 6, 30)
+    # 迁移模块文档与常量口径同步（防文档漂移）
+    from subtransjav import data_migration as dm
+    assert "LEGACY_RETENTION_EOL" in (dm.__doc__ or "")
 
 
 # ---------------------------------------------------------------------------
