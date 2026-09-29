@@ -27,8 +27,14 @@ if TYPE_CHECKING:
     from subtransjav.translate.llm_client import LLMClient
 
 # 导读快照刷新时重算存在性的伴生成品后缀（与 write_guide_json 六件同源，
-# 台账 {stem}_重翻记录.json 不入 companions：它是执行器自己的审计件）
-_COMPANION_SUFFIXES = ("_final_cn.srt", "_质量报告.txt", "_分歧复核.csv",
+# 台账 {stem}_重翻记录.json 不入 companions：它是执行器自己的审计件）。
+# 终稿后缀走单点命名契约（D2026-0930-04 ②）；离线执行器无 cfg，按缺省
+# 方向（zh→cn）判定，非缺省方向 run 内导航由导读 json 方向字段承接（批 2）。
+from .v2_outputs import final_stem as _final_stem
+from .v2_outputs import final_suffix as _final_suffix
+
+_COMPANION_SUFFIXES = (f"_final_{_final_suffix()}.srt", "_质量报告.txt",
+                       "_分歧复核.csv",
                        "_风险清单.md", "_风险清单.json", "_术语冲突观察.csv")
 
 # 重翻后需管线态重算、离线不可得而标陈旧的伴生成品（打印口径，双钉于
@@ -284,7 +290,7 @@ def run_action_retranslate(cfg, args) -> int:
         return 2
 
     out_dir = str(guide_dir)
-    final_path = guide_dir / f"{stem}_final_cn.srt"
+    final_path = guide_dir / f"{_final_stem(stem)}.srt"
     ledger_path = guide_dir / f"{stem}_重翻记录.json"
     apply_mode = bool(getattr(args, "apply", False))
     sample_n = int(getattr(args, "action_sample", 0) or 0)

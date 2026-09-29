@@ -199,6 +199,24 @@ def _remove_stale_risk_reports(out_dir: str, stem: str) -> list:
     return removed
 
 
+# ---------------------------------------------------------------------------
+# 产物命名契约（D2026-0930-04 ②）：终稿后缀单点映射。缺省方向（target=zh）
+# 保留历史别名 "cn" 一字符不变（存量工具链/档案/GUI 完成检测零感知）；非
+# 缺省方向取语言码。全仓终稿路径只许经本函数取后缀（契约钉测试在
+# tests/test_v2_outputs.py）。
+_FINAL_SUFFIX_BY_TARGET = {"zh": "cn"}
+
+
+def final_suffix(target_lang: str = "zh") -> str:
+    """终稿产物后缀语言段：target=zh→"cn"（历史别名），其余取语言码。"""
+    return _FINAL_SUFFIX_BY_TARGET.get(target_lang or "zh", target_lang or "zh")
+
+
+def final_stem(stem: str, target_lang: str = "zh") -> str:
+    """终稿文件名主干：``{stem}_final_{final_suffix(target_lang)}``。"""
+    return f"{stem}_final_{final_suffix(target_lang)}"
+
+
 def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
                              file_name: str = None) -> None:
     """--force 重跑前的产物备份（仅精确匹配文件名，存在才备份）。
@@ -217,7 +235,8 @@ def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
     from datetime import datetime
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    for suffix in ("_final_cn.srt", "_质量报告.txt", "_分歧复核.csv",
+    for suffix in (f"_final_{final_suffix()}.srt", "_质量报告.txt",
+                   "_分歧复核.csv",
                    "_术语冲突观察.csv", "_风险清单.md", "_风险清单.json",
                    "_质量报告导读.json", "_重翻记录.json",
                    "_AI质量建议.json"):

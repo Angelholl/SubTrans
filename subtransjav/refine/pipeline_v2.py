@@ -124,6 +124,7 @@ from .v2_outputs import (  # noqa: F401
     _remove_stale_risk_reports,
     _remove_tmp_dir,
     filter_stage_output_srt,
+    final_stem,
 )
 
 # ---- 1.3.0 拆分批次 1：纯函数层迁出（facade re-export——保持 pv.<name> 可解析、
@@ -1126,7 +1127,10 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
             CREATED_TMP_DIRS.append(tmp_dir)
 
     out_a_path = str(Path(out_dir) / f"{stem}_refine_A.srt")
-    out_final_path = str(Path(out_dir) / f"{stem}_final_cn.srt")
+    # 终稿命名走单点契约（D2026-0930-04 ②）：缺省方向 _final_cn 一字符
+    # 不变，非缺省方向 _final_{lang}
+    out_final_path = str(Path(out_dir) / (
+        final_stem(stem, getattr(cfg, "target_lang", "zh") or "zh") + ".srt"))
     force = bool(getattr(cfg, "force", False))
     if Path(out_final_path).is_file() and not force:
         print(f"\n🔹 [v2] 终稿已存在，跳过：{Path(out_final_path).name}")

@@ -77,7 +77,14 @@ TUNABLE_FIELD_TYPES = {
     "cps_action_enabled": bool,
     "cps_action_threshold": float,
     "cps_action_max_per_film": int,
+    # 2.1 方向参数化（D2026-0930-04 ①）：任务级方向，分层可调；CLI 显式
+    # 传参优先。str 类型 _coerce 直通，白名单校验在 validate() 补
+    "source_lang": str,
+    "target_lang": str,
 }
+
+# 方向参数化白名单（D2026-0930-04 ①）：起步 ja/zh/en；扩展=加码+配套模板卡
+_SUPPORTED_LANG_CODES = ("ja", "zh", "en")
 
 # ---- 服务商预设 ----
 # deepseek 走原生通道；其余统一以 provider='custom' + endpoint 调用
@@ -344,6 +351,11 @@ class RefineConfig:
     audio_detect_threshold_pct: int = 85      # 文件内相对分位阈值（P85）
     audio_detect_min_gap_ms: int = 300        # 字幕间隙判定下限（毫秒）
     audio_detect_max_candidates: int = 20     # 每片候选截断上限
+    # 2.1 方向参数化（D2026-0930-04 ①）：任务级翻译方向（非 StageConfig），
+    # 缺省 ja→zh 全链零感知；非缺省方向须配套模板卡（validate 前置校验），
+    # 产物命名走 v2_outputs.final_suffix 单点映射（target=zh→"cn" 历史别名）
+    source_lang: str = "ja"
+    target_lang: str = "zh"
     # 2.0.1 CPS 行动化（定标 docs/cps-定标报告-20260930.md：阈值 5.0≈批次E
     # p95+5%，触发率 3.87%+每片截断上限防洪水；间隙不行动化被数据否决）
     cps_action_enabled: bool = True
@@ -571,6 +583,25 @@ class RefineConfig:
             if v <= 0:
                 errors.append(
                     f"{name} 必须为正整数，当前: {getattr(self, name)}")
+        # 方向参数化（D2026-0930-04 ①）：白名单+同语言禁止+缺卡前置报错
+        # （批 2 前仅 ja→zh 有内置模板卡；非缺省方向必须显式给 A/B 卡）
+        for name in ("source_lang", "target_lang"):
+            if getattr(self, name, "") not in _SUPPORTED_LANG_CODES:
+                errors.append(
+                    f"{name} 仅支持 {'/'.join(_SUPPORTED_LANG_CODES)}，"
+                    f"当前: {getattr(self, name)!r}")
+        if self.source_lang == self.target_lang:
+            errors.append(
+                f"source_lang 与 target_lang 不得相同（当前均为 "
+                f"{self.source_lang}）")
+        if (self.source_lang, self.target_lang) != ("ja", "zh") \
+                and not all(
+                    (s.instructions or "").strip()
+                    for s in self.stages if s.enabled):
+            errors.append(
+                "非缺省方向（ja→zh 之外）须为全部启用阶段显式指定配套模板卡"
+                "（--s{n}-instructions）；包内仅随 ja→zh 卡，其他方向的"
+                "卡按需自制后显式传入")
         return errors
 
 

@@ -587,7 +587,8 @@ class TranslateAPI:
                 except Exception:
                     continue
                 if _st.get("state") == "completed":
-                    existing.append(f"{_st['stem']}_final_cn.srt")
+                    from subtransjav.refine.v2_outputs import final_stem
+                    existing.append(f"{final_stem(_st['stem'])}.srt")
             if existing:
                 return {
                     "success": False,

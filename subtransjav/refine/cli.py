@@ -170,6 +170,14 @@ def build_parser():
     grp_v2.add_argument("--source-filter", choices=["strict", "default", "off"],
                         default="default",
                         help="闸门0 送翻前源侧幻觉检测档位：strict=严格(叠加启发式删除) | default=标准(仅明确幻觉删除) | off=关闭")
+    grp_v2.add_argument("--source-lang", choices=["ja", "zh", "en"],
+                        default="ja",
+                        help="源语言（2.1 方向参数化，缺省 ja 全链零感知；"
+                             "非缺省方向须配套模板卡 --s{n}-instructions）")
+    grp_v2.add_argument("--target-lang", choices=["ja", "zh", "en"],
+                        default="zh",
+                        help="目标语言（2.1 方向参数化，缺省 zh 产物名"
+                             "一字符不变；非缺省方向产物 _final_{lang}）")
     grp_v2.add_argument("--no-auto-synopsis", action="store_true",
                         help="关闭剧情自摘要（Beta：默认开启；摘要仅注入翻译提示词，不产生任何输出内容）")
     p.add_argument("--event-format", choices=["text", "ndjson"], default="text",
@@ -311,6 +319,13 @@ def config_from_args(args):
     # 链在 RefineConfig.__post_init__ 内生效。
     if args.v2_ctx is not None:
         cfg.v2_ctx_local = args.v2_ctx
+    # 方向参数化（D2026-0930-04 ①）：同 v2_ctx 模式——仅非缺省 CLI 值
+    # 赋值（构造后赋值=user_settings/env 分层链之上的显式层）；缺省值
+    # 不赋，保 dataclass 缺省以让分层链生效。
+    if args.source_lang != "ja":
+        cfg.source_lang = args.source_lang
+    if args.target_lang != "zh":
+        cfg.target_lang = args.target_lang
     return cfg
 
 

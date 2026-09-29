@@ -167,7 +167,10 @@ def resume_state_for_path(path: str, exists=os.path.exists,
     p = Path(path)
     stem = strip(p.stem)
     parent = p.parent
-    has_final = bool(exists(str(parent / f"{stem}_final_cn.srt")))
+    # 终稿命名走单点契约（D2026-0930-04 ②）；缺省方向 _final_cn（GUI 完成
+    # 检测随任务方向取后缀在批 2 接线，导读/manifest 方向字段落地后启用）
+    from subtransjav.refine.v2_outputs import final_stem
+    has_final = bool(exists(str(parent / f"{final_stem(stem)}.srt")))
     has_manifest = bool(exists(str(parent / f"{stem}_manifest.json")))
     if has_final:
         state = "completed"

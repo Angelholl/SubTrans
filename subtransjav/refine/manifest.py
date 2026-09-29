@@ -63,6 +63,9 @@ class TaskManifest:
     started_at: str = ""
     updated_at: str = ""
     run_pid: int | None = None
+    # 2.1 方向参数化（D2026-0930-04 ②）：任务方向；旧 manifest 缺字段
+    # 回退缺省（from_dict），历史任务即视为 ja→zh
+    direction: str = "ja→zh"
 
     # ------------------------------------------------------------------
     def to_dict(self) -> dict:
@@ -95,6 +98,7 @@ class TaskManifest:
             started_at=d.get("started_at", ""),
             updated_at=d.get("updated_at", ""),
             run_pid=d.get("run_pid"),
+            direction=d.get("direction", "ja→zh"),
         )
 
     # ------------------------------------------------------------------
@@ -422,6 +426,14 @@ def compute_config_hash(cfg) -> str:
             normalize_path_case(str(_raw_media))
             .encode("utf-8")).hexdigest()
         if _raw_media else "")
+    # 方向参数化（D2026-0930-04 ⑧ HRO-2）：条件键缺席归一——缺省方向
+    # （ja→zh）不进 payload，compute_config_hash 字节与旧版逐字节一致
+    # （存量 --resume 零误伤）；非缺省方向贡献规范化 "src→tgt"（方向变更
+    # =断点失效属预期，--force-resume 兜底）。
+    _dir_src = str(getattr(cfg, "source_lang", None) or "ja")
+    _dir_tgt = str(getattr(cfg, "target_lang", None) or "zh")
+    if (_dir_src, _dir_tgt) != ("ja", "zh"):
+        payload["direction"] = f"{_dir_src}→{_dir_tgt}"
     files = instruction_source_files(cfg)
     payload["instruction_files_sha1"] = (
         hashlib.sha1(

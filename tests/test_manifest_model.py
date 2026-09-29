@@ -636,3 +636,29 @@ def test_remove_stale_risk_reports_matches_writer_names(tmp_path):
     assert unrelated.is_file()
     # 无残留时再调：返回空列表
     assert pv._remove_stale_risk_reports(str(tmp_path), "ep01") == []
+
+
+# ---------------------------------------------------------------------------
+# 2.1 方向参数化批 1（D2026-0930-04）：方向指纹字节不变式 + 旧清单回退
+# ---------------------------------------------------------------------------
+def test_config_hash_default_direction_byte_identical():
+    """HRO-2 不变式：缺省方向（含显式 ja/zh）不进 payload，指纹逐字节一致。"""
+    base = compute_config_hash(_make_cfg())
+    assert compute_config_hash(
+        _make_cfg(source_lang="ja", target_lang="zh")) == base
+
+
+def test_config_hash_non_default_direction_changes():
+    base = compute_config_hash(_make_cfg())
+    changed = compute_config_hash(
+        _make_cfg(source_lang="ja", target_lang="en"))
+    assert changed != base
+
+
+def test_manifest_direction_fallback_for_legacy():
+    """旧 manifest 无 direction 字段回退缺省 ja→zh；新字段照读。"""
+    m = TaskManifest.from_dict({"manifest_version": MANIFEST_VERSION})
+    assert m.direction == "ja→zh"
+    m2 = TaskManifest.from_dict({"manifest_version": MANIFEST_VERSION,
+                                 "direction": "ja→en"})
+    assert m2.direction == "ja→en"

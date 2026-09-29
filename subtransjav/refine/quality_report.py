@@ -1512,10 +1512,12 @@ def write_guide_json(out_dir: str, stem: str, guide: dict) -> str:
     """
     if not guide:
         return ""
+    from .v2_outputs import final_suffix
     guide["stem"] = stem
     guide["companions"] = {
         f"{stem}{suffix}": (Path(out_dir) / f"{stem}{suffix}").is_file()
-        for suffix in ("_final_cn.srt", "_质量报告.txt", "_分歧复核.csv",
+        for suffix in (f"_final_{final_suffix()}.srt",
+                       "_质量报告.txt", "_分歧复核.csv",
                        "_风险清单.md", "_风险清单.json",
                        "_术语冲突观察.csv")
     }

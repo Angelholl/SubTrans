@@ -373,10 +373,16 @@ def test_ensure_source_name_column_idempotent(tmp_path):
 
     assert ensure_source_name_column(db) is False       # 幂等：不再加列
     assert _schema(db) == schema1
-    # 再走一次 TranslationMemory 初始化（自动迁移路径）也不变
+    # 再走一次 TranslationMemory 初始化（自动迁移路径）：source_name 加列
+    # 语义不变；2.1 方向参数化升维迁移（D2026-0930-04 ④）会重建表并追加
+    # source_lang/target_lang 两列——schema 升级属预期，此处钉升级后形态
     tm = TranslationMemory(db)
     try:
-        assert _schema(db) == schema1
+        schema2 = _schema(db)
+        names2 = [c[1] for c in schema2]
+        assert names2.count("source_name") == 1     # 加列结果保留
+        assert "source_lang" in names2 and "target_lang" in names2
+        assert names2.index("source_name") == names2.index("source_name")
     finally:
         tm.close()
 
