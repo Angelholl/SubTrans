@@ -6,7 +6,14 @@ import ast
 import re
 from pathlib import Path
 
-import tomllib
+import pytest
+
+try:
+    import tomllib
+
+    _HAS_TOMLIB = True
+except ImportError:  # Python 3.10
+    _HAS_TOMLIB = False
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,6 +23,7 @@ def _load_pyproject() -> dict:
         return tomllib.load(f)
 
 
+@pytest.mark.skipif(not _HAS_TOMLIB, reason="tomllib requires 3.11+")
 def test_pyproject_dependencies_no_pysubtrans():
     data = _load_pyproject()
     deps = data["project"]["dependencies"]
@@ -23,6 +31,7 @@ def test_pyproject_dependencies_no_pysubtrans():
     assert not offending, f"pyproject dependencies 仍含 pysubtrans: {offending}"
 
 
+@pytest.mark.skipif(not _HAS_TOMLIB, reason="tomllib requires 3.11+")
 def test_pyproject_keywords_no_pysubtrans():
     data = _load_pyproject()
     assert "pysubtrans" not in [k.lower() for k in data["project"]["keywords"]]

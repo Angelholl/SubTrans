@@ -19,9 +19,14 @@ def normalize_path_case(path: str) -> str:
     ``os.path.normcase`` 仅在 Windows 折叠大小写，POSIX 上是 no-op；
     本项目为 Windows-only，大小写不敏感配对是既定设计语义，故显式
     ``.lower()`` 补齐跨平台一致性。``abspath`` 先行保证相对路径的
-    解析基准一致。
+    解析基准一致。斜杠方向统一为正斜杠（normcase 之后 replace，Windows
+    下 normcase 已折叠斜杠、再 replace 幂等无害；POSIX 下把反斜杠
+    转为正斜杠使正反斜杠两变体归一后相等）。
+
+    注意：2.0.0b0 期间哈希口径统一（斜杠表示改变），依赖本函数指纹的
+    旧 manifest 断点会一次性失配，需 ``--force-resume`` 恢复。
     """
-    return os.path.normcase(os.path.abspath(path)).lower()
+    return os.path.normcase(os.path.abspath(path)).lower().replace("\\", "/")
 
 
 def is_frozen() -> bool:
