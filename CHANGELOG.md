@@ -2,7 +2,11 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## [未发布]
+## [2.0.1] - 2026-09-30
+
+### 新增
+
+- **语速行动化与单行超长白名单**：质量导读新增"语速偏快"行动条目（阈值 5.0 CPS——按批次 E 五片 7510 条实测分布定标，每片截断上限 20 防洪水），可走条目级定点重翻（处理要点=精简压缩字数）；开关与阈值经 `config/user_settings.json` 分层可调（`cps_action_enabled` / `cps_action_threshold` / `cps_action_max_per_film`）。时间轴间隙经数据论证维持纯观测（>5s 间隙占 10-20% 属素材结构性节奏）。单行超长检测新增用户白名单（数据根 `config/single_line_whitelist.txt`，每行一条正则，先摘除后计量，豁免条数透明计数；文件不存在=行为不变）。定标依据见 `docs/cps-定标报告-20260930.md`。
 
 ### 变更
 
