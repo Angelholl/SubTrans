@@ -102,7 +102,7 @@ MSG = {
     "guide_path_empty": "路径为空，请先指定导读文件",
     "guide_path_denied": "路径不允许访问：{e}",
     "guide_file_missing": "文件不存在：{path}",
-    "guide_suffix_only": "仅支持质量报告导读文件（*{suffix}），拒绝读取其他文件：{name}",
+    "guide_suffix_only": "仅支持质量报告导读/报告文件（*{suffix}），拒绝读取其他文件：{name}",
     "guide_bad_format": "导读文件格式异常：顶层应为 JSON 对象",
     "guide_corrupted": "导读文件损坏：不是有效的 JSON，请重新生成质量报告",
 

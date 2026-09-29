@@ -314,9 +314,19 @@ const MSG = {
     guide_loaded: p => `已加载：${p}`,
     guide_load_failed: m => `加载失败：${m}`,
     guide_open_other_btn: '📂 打开其他质量报告导读',
-    guide_custom_placeholder: '粘贴质量报告导读 json 的完整路径（以 *_质量报告导读.json 结尾）',
+    guide_custom_placeholder: '粘贴质量报告完整路径（*_质量报告导读.json 或 *_质量报告.txt）',
     guide_custom_load_btn: '加载',
-    guide_custom_need_path: '请先粘贴导读 json 的完整路径',
+    guide_custom_need_path: '请先粘贴报告文件完整路径（导读 json 或报告 txt）',
+    guide_txt_loaded: p => `已加载报告全文（只读）：${p}`,
+    guide_txt_truncated_note: '（报告过长，仅显示前 100 万字符）',
+    gl_learned_title: '学习词库',
+    gl_learned_reload: '刷新',
+    gl_learned_col_aliases: '别名',
+    gl_learned_note: '自学习写入，优先级低于全局词库。',
+    gl_learned_empty: '尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。',
+    gl_learned_stats: (n, t) => `共 ${n} 条${n !== t ? `（总计 ${t} 条，仅显示前 ${n} 条）` : ''}`,
+    gl_learned_more: n => `…其余 ${n} 条未显示`,
+    gl_learned_load_failed: m => `学习词库加载失败：${m}`,
     guide_items_none: '行动条目：0',
     guide_item_current_label: '现译: ',
     guide_item_unresolvable: '不可自动重翻',
@@ -1750,6 +1760,53 @@ function switchTab(tabId) {
     } catch (e) { console.warn('[refine] 词库加载失败', e); }
   }
 
+  // 学习词库只读查看（config/glossary_learned.csv；自学习产物，优先级低于全局词库）
+  async function glLearnedLoad() {
+    const st = $('glLearnedStatus');
+    const stats = $('glLearnedStats');
+    const empty = $('glLearnedEmpty');
+    const more = $('glLearnedMore');
+    const tb = document.querySelector('#glLearnedTable tbody');
+    if (!tb) return;
+    try {
+      const r = await window.pywebview.api.refine_get_learned_glossary();
+      if (!r || r.success === false) {
+        if (st) st.textContent = MSG.gl_learned_load_failed(
+          (r && r.error) || MSG.unknown);
+        return;
+      }
+      if (st) st.textContent = '';
+      if (!r.exists) {
+        tb.innerHTML = '';
+        if (stats) stats.textContent = '';
+        if (more) more.style.display = 'none';
+        if (empty) empty.style.display = '';
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      const rows = r.rows || [];
+      tb.innerHTML = rows.map(row =>
+        '<tr style="border-bottom:1px solid #ddd;">' +
+        '<td style="padding:2px 4px;">' + esc(row.source || '') + '</td>' +
+        '<td style="padding:2px 4px;">' + esc(row.target || '') + '</td>' +
+        '<td style="padding:2px 4px;">' + esc(row.aliases || '') + '</td>' +
+        '</tr>').join('');
+      if (stats) {
+        stats.textContent = MSG.gl_learned_stats(
+          r.count != null ? r.count : rows.length,
+          r.total != null ? r.total : rows.length);
+      }
+      if (more) {
+        const rest = (r.total || 0) - rows.length;
+        more.textContent = rest > 0 ? MSG.gl_learned_more(rest) : '';
+        more.style.display = rest > 0 ? '' : 'none';
+      }
+    } catch (e) {
+      if (st) st.textContent = MSG.gl_learned_load_failed(
+        e && e.message ? e.message : String(e));
+    }
+  }
+
   async function glSave() {
     const r = await pywebview.api.refine_save_glossary(
       glRows(), $('refineGlossary') ? $('refineGlossary').value : null);
@@ -2029,6 +2086,10 @@ function switchTab(tabId) {
   const GUIDE_SUFFIX = '_质量报告导读.json';
   // 最近一次成功加载的导读路径（AI 分析按其 stem 推导质量报告 txt 路径）
   let lastLoadedGuidePath = '';
+  // 最近一次成功加载的报告 txt 路径（双格式入口：AI 分析直接以其为入参）
+  let lastLoadedReportTxtPath = '';
+  // 最近一次加载的成品类型：'json' | 'txt'（决定 AI 分析取数来源）
+  let lastLoadedIsTxt = false;
   // 最近一次 AI 分析的建议载荷（逐条落库时按下标取条目）
   let lastAiSuggestions = null;
   // 最近一次成功加载的导读数据（媒体来源条渲染依据）
@@ -2057,6 +2118,11 @@ function switchTab(tabId) {
   }
 
   function guideRender(data) {
+    // json 模式：显示结构化导读块，隐藏只读文本块（双格式互斥）
+    const txtView = $('guideTxtView');
+    const jsonBlocks = $('guideJsonBlocks');
+    if (txtView) txtView.style.display = 'none';
+    if (jsonBlocks) jsonBlocks.style.display = '';
     const ulC = $('guideConclusions');
     const dlS = $('guideSections');
     const ulP = $('guideCompanions');
@@ -2149,14 +2215,28 @@ function switchTab(tabId) {
       if (r && r.success) {
         const dv = $('refineGuideViewer');
         if (dv) dv.open = true;
+        const geh = $('guideEmptyHint');
+        if (geh) geh.style.display = 'none';
+        if (r.kind === 'txt') {
+          // 报告 txt：只读文本块展示；AI 分析直接以该报告 stem 为入参
+          lastLoadedReportTxtPath = r.path || p;
+          lastLoadedIsTxt = true;
+          guideRenderTxt(r);
+          guideStatus(MSG.guide_txt_loaded(r.path || p)
+            + (r.truncated ? MSG.guide_txt_truncated_note : ''));
+          if (isCustom) {
+            guideCustomStatus(MSG.guide_txt_loaded(r.path || p)
+              + (r.truncated ? MSG.guide_txt_truncated_note : ''), false);
+          }
+          return;
+        }
         lastLoadedGuidePath = r.path || p;
+        lastLoadedIsTxt = false;
         lastGuideData = r.data || {};
         updateMediaSourceBar(lastGuideData);
         guideRender(r.data || {});
         guideStatus(MSG.guide_loaded(r.path || p));
         if (isCustom) guideCustomStatus(MSG.guide_loaded(r.path || p), false);
-        const geh = $('guideEmptyHint');
-        if (geh) geh.style.display = 'none';
       } else {
         const err = MSG.guide_load_failed((r && r.error) || MSG.unknownError);
         guideStatus(err);
@@ -2167,6 +2247,18 @@ function switchTab(tabId) {
         e && e.message ? e.message : String(e));
       guideStatus(err);
       if (isCustom) guideCustomStatus(err, true);
+    }
+  }
+
+  // 报告 txt 只读文本块：等宽/可滚动/保留换行（CSS 类 guide-txt-view）
+  function guideRenderTxt(r) {
+    const txtView = $('guideTxtView');
+    const jsonBlocks = $('guideJsonBlocks');
+    if (jsonBlocks) jsonBlocks.style.display = 'none';
+    if (txtView) {
+      txtView.style.display = '';
+      // textContent 赋值天然保留换行且免注入
+      txtView.textContent = String(r.text || '');
     }
   }
 
@@ -2314,6 +2406,9 @@ function switchTab(tabId) {
   }
 
   function aiReportPath() {
+    // 双格式联动：用户显式加载的报告 txt 优先（stem 即用户自选报告），
+    // 缺省仍按导读 json stem 推导（向后兼容）
+    if (lastLoadedIsTxt) return lastLoadedReportTxtPath;
     const gp = lastLoadedGuidePath || guidePath();
     if (!gp) return '';
     return gp.replace(/_质量报告导读\.json$/, '_质量报告.txt');
@@ -2395,7 +2490,7 @@ function switchTab(tabId) {
   }
 
   async function refineAiAnalyze() {
-    if (!lastLoadedGuidePath) {
+    if (!lastLoadedGuidePath && !lastLoadedIsTxt) {
       aiStatus(MSG.aiNeedGuide);
       return;
     }
@@ -2557,6 +2652,9 @@ function switchTab(tabId) {
 
     const glAddBtn = $('refineGlAdd');
     if (glAddBtn) glAddBtn.addEventListener('click', glAdd);
+    // 学习词库只读刷新（词库与模板页）
+    const glLearnedReload = $('glLearnedReloadBtn');
+    if (glLearnedReload) glLearnedReload.addEventListener('click', glLearnedLoad);
     const glDelBtn = $('refineGlDel');
     if (glDelBtn) glDelBtn.addEventListener('click', glDel);
     const glImpBtn = $('refineGlImport');
@@ -2705,6 +2803,7 @@ function switchTab(tabId) {
       $('refineCleanerConfigShow').value = defCleanerDir;
     }
     glLoad();
+    glLearnedLoad();
     for (const n of [1, 3]) {
       const pv = $('refineS' + n + 'Provider');
       if (pv && pv.value) refreshModels(n);

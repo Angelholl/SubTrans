@@ -2452,3 +2452,22 @@ button:focus {
     min-width: 200px;
     height: 32px;
 }
+
+/* ============================================================
+   Guide txt read-only view (*_质量报告.txt：等宽/可滚动/保留换行)
+   ============================================================ */
+.guide-txt-view {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--hover-tab-bg, rgba(128, 128, 128, 0.06));
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px;
+    margin: 4px 0;
+    max-height: 320px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: text;
+    cursor: text;
+}

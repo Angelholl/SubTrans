@@ -1257,6 +1257,40 @@ class TranslateAPI:
             _log_exc("refine_save_glossary")
             return {"success": False, "error": str(e)}
 
+    # 学习词库只读查看上限（防超大自学习文件卡 UI；超出截断 + total 计数）
+    _LEARNED_GLOSSARY_MAX_ROWS = 500
+
+    def refine_get_learned_glossary(self) -> dict[str, Any]:
+        """只读查看学习词库 config/glossary_learned.csv（自学习产物）。
+
+        路径锚 CONFIG_DIR（数据根 config 子目录，与 v2_learn 写入侧
+        learned_glossary_path 同源），经 _resolve_safe_path 校验；
+        复用 glossary.load_glossary_ex（utf-8-sig、两列起有效、别名
+        第三列 `|` 拆分）。文件缺失 → ``{"exists": False}`` 零门槛不报错。
+        超过 _LEARNED_GLOSSARY_MAX_ROWS 只返回前 N 行，``total`` 给全量
+        行数，``truncated`` 标记截断。
+        """
+        try:
+            from subtransjav.refine.config import CONFIG_DIR
+            from subtransjav.refine.glossary import load_glossary_ex
+            p = str(_resolve_safe_path(
+                os.path.join(CONFIG_DIR, "glossary_learned.csv")))
+            if not os.path.isfile(p):
+                return {"success": True, "exists": False, "count": 0,
+                        "total": 0, "rows": []}
+            rows = load_glossary_ex(p)
+            total = len(rows)
+            cap = self._LEARNED_GLOSSARY_MAX_ROWS
+            out = [{"source": s, "target": d,
+                    "aliases": "|".join(a) if a else ""}
+                   for s, d, a in rows[:cap]]
+            return {"success": True, "exists": True, "path": p,
+                    "count": len(out), "total": total,
+                    "truncated": total > cap, "rows": out}
+        except Exception as e:
+            _log_exc("refine_get_learned_glossary")
+            return {"success": False, "error": str(e)}
+
     def refine_get_template(self, stage_index, templates_dir: str = None) -> dict[str, Any]:
         """读取角色卡原文。stage_index: 'A'|'B'（v2 两阶段）。"""
         try:
@@ -1278,8 +1312,21 @@ class TranslateAPI:
             _log_exc("refine_get_template")
             return {"success": False, "error": str(e)}
 
+    # 质量报告查看器白名单后缀（只读；双格式 D2026-0929 批次：
+    # 导读 json 渲染结构化导读，报告 txt 只读文本展示，不扩安全面）
+    _GUIDE_JSON_SUFFIX = "_质量报告导读.json"
+    _GUIDE_TXT_SUFFIX = "_质量报告.txt"
+    # 报告 txt 只读展示上限（防超大报告卡 UI；超出截断并置 truncated）
+    _GUIDE_TXT_MAX_CHARS = 1_000_000
+
     def read_output_artifact(self, path: str) -> dict[str, Any]:
-        """读取输出目录中的质量报告导读 JSON（仅 *_质量报告导读.json 白名单后缀）。"""
+        """读取输出目录中的质量报告成品（白名单双后缀，均只读）。
+
+        - ``*_质量报告导读.json``：解析 JSON，返回 ``data``（行为向后兼容）；
+        - ``*_质量报告.txt``：返回 ``text``/``kind:"txt"``/``truncated``，
+          供前端页内只读文本块展示。
+        其余后缀一律拒绝（目录守卫 + 后缀白名单不扩安全面）。
+        """
         try:
             p = str(path or "").strip()
             if not p:
@@ -1290,17 +1337,28 @@ class TranslateAPI:
                 return {"success": False, "error": msg("guide_path_denied", e=ve)}
             if not os.path.isfile(p):
                 return {"success": False, "error": msg("guide_file_missing", path=p)}
-            suffix = "_质量报告导读.json"
-            if not os.path.basename(p).endswith(suffix):
-                return {"success": False,
-                        "error": msg("guide_suffix_only", suffix=suffix,
-                                     name=os.path.basename(p))}
-            with open(p, encoding="utf-8") as _f:
-                data = json.load(_f)
-            if not isinstance(data, dict):
-                return {"success": False,
-                        "error": msg("guide_bad_format")}
-            return {"success": True, "path": p, "data": data}
+            name = os.path.basename(p)
+            if name.endswith(self._GUIDE_JSON_SUFFIX):
+                with open(p, encoding="utf-8") as _f:
+                    data = json.load(_f)
+                if not isinstance(data, dict):
+                    return {"success": False,
+                            "error": msg("guide_bad_format")}
+                return {"success": True, "path": p, "kind": "json",
+                        "data": data}
+            if name.endswith(self._GUIDE_TXT_SUFFIX):
+                with open(p, encoding="utf-8", errors="replace") as _f:
+                    text = _f.read(self._GUIDE_TXT_MAX_CHARS + 1)
+                truncated = len(text) > self._GUIDE_TXT_MAX_CHARS
+                if truncated:
+                    text = text[: self._GUIDE_TXT_MAX_CHARS]
+                return {"success": True, "path": p, "kind": "txt",
+                        "text": text, "truncated": truncated}
+            return {"success": False,
+                    "error": msg("guide_suffix_only",
+                                 suffix=self._GUIDE_JSON_SUFFIX
+                                 + " / " + self._GUIDE_TXT_SUFFIX,
+                                 name=name)}
         except json.JSONDecodeError:
             _log_exc("read_output_artifact")
             return {"success": False,

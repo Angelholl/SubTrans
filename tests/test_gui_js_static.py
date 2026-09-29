@@ -539,3 +539,38 @@ def test_guide_custom_path_entry_pinned():
     for key in ("guide_open_other_btn", "guide_custom_placeholder",
                 "guide_custom_load_btn", "guide_custom_need_path"):
         assert key in keys, f"MSG 缺少其他导读入口键: {key}"
+
+
+def test_guide_txt_view_and_learned_glossary_pinned():
+    """双格式报告查看 + 学习词库只读区块：锚点唯一、渲染与互斥契约。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for anchor in ("guideTxtView", "guideJsonBlocks",
+                   "glLearnedReloadBtn", "glLearnedStats",
+                   "glLearnedStatus", "glLearnedTable",
+                   "glLearnedEmpty", "glLearnedMore"):
+        assert html.count(f'id="{anchor}"') == 1, \
+            f"锚点必须恰出现一次: {anchor}"
+    source = _app_js_source()
+    body = _extract_function(source, "guideRenderTxt")
+    assert "guideJsonBlocks" in body, "txt 模式必须隐藏结构化导读块"
+    assert "textContent" in body, "txt 只读文本块必须用 textContent 免注入"
+    load_body = _extract_function(source, "guideLoad")
+    assert "lastLoadedReportTxtPath" in load_body, \
+        "txt 加载必须记录报告路径（AI 分析取数来源）"
+    ai_body = _extract_function(source, "aiReportPath")
+    assert "lastLoadedIsTxt" in ai_body, \
+        "AI 分析必须优先采用用户加载的报告 txt stem"
+    keys = _js_msg_keys()
+    for key in ("guide_txt_loaded", "guide_txt_truncated_note",
+                "gl_learned_title", "gl_learned_reload",
+                "gl_learned_col_aliases", "gl_learned_note",
+                "gl_learned_empty", "gl_learned_stats",
+                "gl_learned_more", "gl_learned_load_failed"):
+        assert key in keys, f"MSG 缺少新键: {key}"
+    # 只读区块说明与空态引导必须挂 i18n（中文全配键）
+    for i18n in ("gl_learned_title", "gl_learned_reload",
+                 "gl_learned_col_aliases", "gl_learned_note",
+                 "gl_learned_empty"):
+        assert f'data-i18n="{i18n}"' in html, f"缺少 data-i18n: {i18n}"
+    bind = _extract_function(source, "bindDom")
+    assert "glLearnedReloadBtn" in bind, "学习词库刷新按钮必须绑定 click"

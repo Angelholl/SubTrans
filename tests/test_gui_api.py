@@ -1340,3 +1340,79 @@ def test_refine_set_data_root_clear_and_reject(gui_api_obj, monkeypatch,
     bad = gui_api_obj.refine_set_data_root("relative/dir")
     assert bad["success"] is False
     assert bad["error"] == "请输入绝对路径"
+
+
+# ---------------------------------------------------------------------------
+# read_output_artifact 双格式扩展：*_质量报告.txt 只读文本
+# ---------------------------------------------------------------------------
+
+def test_read_output_artifact_txt(gui_api_obj, tmp_path):
+    """报告 txt：kind=txt + text 透传（只读，不解析 JSON）。"""
+    p = tmp_path / "EP01_质量报告.txt"
+    p.write_text("== 报告 ==\n结论一行\n", encoding="utf-8")
+    got = gui_api_obj.read_output_artifact(str(p))
+    assert got["success"] is True
+    assert got["kind"] == "txt"
+    assert got["text"] == "== 报告 ==\n结论一行\n"
+    assert got["truncated"] is False
+
+
+def test_read_output_artifact_json_kind_backward_compat(gui_api_obj, tmp_path):
+    """导读 json：返回含 kind=json 且 data 透传（向后兼容）。"""
+    p = tmp_path / "EP01_质量报告导读.json"
+    p.write_text('{"version":"2","items":[]}', encoding="utf-8")
+    got = gui_api_obj.read_output_artifact(str(p))
+    assert got["success"] is True
+    assert got["kind"] == "json"
+    assert got["data"]["version"] == "2"
+
+
+# ---------------------------------------------------------------------------
+# refine_get_learned_glossary：学习词库只读查看（存在/缺失/上限截断）
+# ---------------------------------------------------------------------------
+
+def _learned_csv(rows: list[tuple]) -> str:
+    return "\n".join(
+        ",".join(list(r)) for r in rows) + "\n"
+
+
+def test_learned_glossary_missing(gui_api_obj, monkeypatch, tmp_path):
+    """文件缺失：exists=False 零门槛不报错。"""
+    from subtransjav.refine import config as cfg_mod
+    monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(tmp_path))
+    got = gui_api_obj.refine_get_learned_glossary()
+    assert got["success"] is True
+    assert got["exists"] is False
+    assert got["count"] == 0 and got["rows"] == []
+
+
+def test_learned_glossary_present(gui_api_obj, monkeypatch, tmp_path):
+    """存在：返回 source/target/aliases 行（utf-8-sig 兼容）。"""
+    from subtransjav.refine import config as cfg_mod
+    cfg = tmp_path / "glossary_learned.csv"
+    cfg.write_text(
+        "マスター,主人,女将|ママ\n先生,老师,\n", encoding="utf-8-sig")
+    monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(tmp_path))
+    got = gui_api_obj.refine_get_learned_glossary()
+    assert got["success"] is True
+    assert got["exists"] is True
+    assert got["total"] == 2 and got["count"] == 2
+    assert got["truncated"] is False
+    assert got["rows"][0] == {"source": "マスター", "target": "主人",
+                              "aliases": "女将|ママ"}
+    assert got["rows"][1]["aliases"] == ""
+
+
+def test_learned_glossary_truncated_at_cap(gui_api_obj, monkeypatch, tmp_path):
+    """上限截断：只返回前 500 行，total/truncated 如实。"""
+    from subtransjav.refine import config as cfg_mod
+    cfg = tmp_path / "glossary_learned.csv"
+    lines = "".join(f"src{i},dst{i}\n" for i in range(503))
+    cfg.write_text(lines, encoding="utf-8")
+    monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(tmp_path))
+    got = gui_api_obj.refine_get_learned_glossary()
+    assert got["success"] is True
+    assert got["count"] == 500
+    assert got["total"] == 503
+    assert got["truncated"] is True
+    assert got["rows"][0]["source"] == "src0"

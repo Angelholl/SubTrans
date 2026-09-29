@@ -448,6 +448,27 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- 学习词库只读查看（自学习写入 config/glossary_learned.csv） -->
+                    <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <div style="cursor:default; font-weight:600;" data-i18n="gl_learned_title">学习词库</div>
+                            <button type="button" id="glLearnedReloadBtn" class="btn btn-text btn-sm" data-i18n="gl_learned_reload">刷新</button>
+                            <span id="glLearnedStats" style="font-size:12px; color:#888;"></span>
+                            <span id="glLearnedStatus" style="font-size:12px; color:crimson;"></span>
+                        </div>
+                        <div style="font-size:12px; color:#888;" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
+                        <table id="glLearnedTable" style="width:var(--w-full); border-collapse:collapse;">
+                            <thead><tr>
+                                <th style="text-align:left; width:var(--w-gl-source);" data-i18n="th_source">原文词条</th>
+                                <th style="text-align:left;" data-i18n="th_target">期望译文</th>
+                                <th style="text-align:left;" data-i18n="gl_learned_col_aliases">别名</th>
+                            </tr></thead>
+                            <tbody></tbody>
+                        </table>
+                        <div class="empty-guide" id="glLearnedEmpty" style="display:none;" data-i18n="gl_learned_empty">尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。</div>
+                        <div id="glLearnedMore" style="font-size:12px; color:#888; display:none;"></div>
+                    </div>
                 </div>
 
                 <!-- ======================================================
@@ -487,15 +508,20 @@
                             <div class="section-content" style="padding-top:8px;">
                                 <div class="empty-guide" id="guideEmptyHint" data-i18n="guide_empty_hint">暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「🤖 AI 分析本报告」前先加载导读。</div>
                                 <div><span id="guideStatus"></span></div>
-                                <h4 data-i18n="guide_conclusions">结论</h4>
-                                <ul id="guideConclusions"></ul>
-                                <h4 data-i18n="guide_sections">章节导读</h4>
-                                <dl id="guideSections"></dl>
-                                <h4 data-i18n="guide_items_title">行动条目</h4>
-                                <div id="guideItems"></div>
-                                <h4 data-i18n="guide_companions">伴生文件</h4>
-                                <ul id="guideCompanions"></ul>
-                                <div><span id="guideMeta"></span></div>
+                                <!-- 只读报告全文文本块（*_质量报告.txt：等宽/可滚动/保留换行） -->
+                                <div id="guideTxtView" class="guide-txt-view" style="display:none;"></div>
+                                <!-- 结构化导读块（*_质量报告导读.json） -->
+                                <div id="guideJsonBlocks">
+                                    <h4 data-i18n="guide_conclusions">结论</h4>
+                                    <ul id="guideConclusions"></ul>
+                                    <h4 data-i18n="guide_sections">章节导读</h4>
+                                    <dl id="guideSections"></dl>
+                                    <h4 data-i18n="guide_items_title">行动条目</h4>
+                                    <div id="guideItems"></div>
+                                    <h4 data-i18n="guide_companions">伴生文件</h4>
+                                    <ul id="guideCompanions"></ul>
+                                    <div><span id="guideMeta"></span></div>
+                                </div>
                             </div>
                         </details>
                     </section>

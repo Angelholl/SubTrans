@@ -144,3 +144,10 @@
 .gl-tab.active {
     color: var(--primary-color);
 }
+
+/* Guide txt read-only view: keep console identity on dark theme */
+.guide-txt-view {
+    background: #0D1117;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
