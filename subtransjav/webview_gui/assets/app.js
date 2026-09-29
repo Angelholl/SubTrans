@@ -55,8 +55,7 @@ const MSG = {
         '检测到已完成的终稿产物：\n'
         + (files || []).join('\n')
         + '\n\n· 旧产物将自动备份为 *_bak_时间戳 同目录文件\n'
-        + '· 备份失败将继续覆盖并在日志告警\n'
-        + '· 建议先用试运行预览\n\n是否覆盖并重新翻译？',
+        + '· 备份失败将继续覆盖并在日志告警\n\n是否覆盖并重新翻译？',
     completedLog: '翻译完成',
     translationFailedTitle: '翻译失败',
     unknownError: '未知错误',
@@ -140,6 +139,7 @@ const MSG = {
     tm_threshold_placeholder: '默认',
     // 学习闸开关（manifest 钉定三开关之二；tm_learn_gate 默认开启，GUI 不设开关）
     glossary_learn_label: 'learned 词库自学习',
+    glossary_learn_title: '开启后翻译命中将写入学习词库（默认关闭）；学习词库与手动词库分层生效，可在词库页查看',
     glossary_conflict_block_label: '冲突条目禁入 TM（默认仅观察）',
 
     // ---- 角色卡编辑 ----
@@ -186,8 +186,6 @@ const MSG = {
     synopsis_title: '剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容',
     adaptive_thresholds_label: '阈值自适应',
     adaptive_thresholds_title: '按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。\n技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注',
-    dry_run_label: '试运行',
-    dry_run_title: '试运行：仅生成执行计划，不调用模型、不产出字幕',
     fallback_local_label: '云端故障时本地接管',
     fallback_local_title: '云端阶段遭遇限流/宕机/持续解析失败时，自动切换本地模型完成剩余批次',
     fallback_model_label: '接管模型',
@@ -225,8 +223,6 @@ const MSG = {
     serviceQuickLabel: '翻译服务',
     serviceQuickBadge: 'AI 大模型',
     serviceQuickHintLocal: '需本机安装并启动 LM Studio（或 Ollama）并加载模型',
-    serviceQuickKeyLabel: 'API Key',
-    serviceQuickKeySaveBtn: '保存',
 
     // ---- 质量报告导读 ----
     guide_summary: '质量报告导读',
@@ -317,6 +313,10 @@ const MSG = {
     guide_loading: '加载中…',
     guide_loaded: p => `已加载：${p}`,
     guide_load_failed: m => `加载失败：${m}`,
+    guide_open_other_btn: '📂 打开其他质量报告导读',
+    guide_custom_placeholder: '粘贴质量报告导读 json 的完整路径（以 *_质量报告导读.json 结尾）',
+    guide_custom_load_btn: '加载',
+    guide_custom_need_path: '请先粘贴导读 json 的完整路径',
     guide_items_none: '行动条目：0',
     guide_item_current_label: '现译: ',
     guide_item_unresolvable: '不可自动重翻',
@@ -363,6 +363,21 @@ const MSG = {
     audio_preview_failed: m => `试听失败：${m}`,
     audio_preview_no_timing: '该条目缺少可解析时间轴，无法试听',
     audio_preview_no_guide: '请先加载质量报告导读',
+
+    // ---- 数据保存目录（高级参数页；pointer 写入 .data-root，重启生效）----
+    data_root_title: '数据保存目录',
+    data_root_current_label: '当前',
+    data_root_source_env: '环境变量指定',
+    data_root_source_pointer: '自定义目录',
+    data_root_source_frozen_default: '打包默认',
+    data_root_source_legacy: '仓库根传统',
+    data_root_change_btn: '更改',
+    data_root_restore_btn: '恢复默认',
+    data_root_input_placeholder: '输入新的数据保存目录完整路径（绝对路径）',
+    data_root_apply_btn: '保存',
+    data_root_saved_restart: '已保存，重启应用后生效',
+    data_root_default_restored: '已恢复默认，重启应用后生效',
+    data_root_need_abs: '请输入绝对路径',
 
     // 控制台折叠
     console_collapse: '折叠控制台',
@@ -1522,7 +1537,6 @@ function switchTab(tabId) {
       auto_synopsis: !($('refineAutoSynopsis') && !$('refineAutoSynopsis').checked),
       // H4b 条目级阈值自适应：默认不勾选不传旗标（api.py 侧按需转 --adaptive-thresholds）
       adaptive_thresholds: !!($('refineAdaptiveThresholds') || {}).checked,
-      dry_run: !!($('refineDryRun') || {}).checked,
       // 翻译记忆库：勾选取消时才传 no_tm（--no-tm）；路径/阈值非空才传
       no_tm: !!($('refineTmEnable') && !$('refineTmEnable').checked),
       tm_db: (($('refineTmDb') || {}).value || '').trim(),
@@ -1967,14 +1981,12 @@ function switchTab(tabId) {
   // ---- 兜底档位（v2：local=strict / cloud=lenient，无 UI 联动需求）----
 
   // ---- v1.5 翻译服务快捷下拉（tab-translate 页；原小白模式顶栏迁入）----
-  // key 行联动：deepseek/siliconflow/custom 为云服务需密钥（显示 key 行），
-  // 本地 lmstudio/ollama 免钥（隐藏 key 行、显示本地启动提示行）
+  // 本地提示行联动：本地 lmstudio/ollama 显示启动提示行，云服务隐藏。
+  // （API Key 填写已收口至「引擎与模型」TAB，主页不再提供 key 输入域）
   function refreshServiceQuickRow() {
     const prov = ($('refineServiceQuick') || {}).value || '';
     const cloud = (prov === 'deepseek' || prov === 'siliconflow'
       || prov === 'custom');
-    const row = $('refineServiceQuickKeyRow');
-    if (row) row.style.display = cloud ? 'flex' : 'none';
     const hint = $('refineServiceQuickLocalHint');
     if (hint) hint.style.display = cloud ? 'none' : '';
     return cloud;
@@ -2010,32 +2022,6 @@ function switchTab(tabId) {
       } catch (e) { /* 静默降级 */ }
       refreshModels(1);
       refreshModels(3);
-    }
-  }
-
-  // 快捷下拉 API Key 保存：复用既有单阶段密钥保存通道
-  // （refine_save_stage_settings 的 keys 数组，落 stage A=阶段A；
-  // DPAPI 密钥库按服务商隔离存储）
-  async function saveServiceQuickKey() {
-    const prov = ($('refineServiceQuick') || {}).value || '';
-    const inp = $('refineServiceQuickKey');
-    const key = inp && inp.value.trim() ? inp.value.trim() : '';
-    const st = $('refineServiceQuickKeyStatus');
-    if (!prov || prov === 'lmstudio' || prov === 'ollama') return;
-    try {
-      const r = await pywebview.api.refine_save_stage_settings(null,
-        [{ stage: 1, provider: prov, key: key }]);
-      if (st) {
-        st.style.color = r.success ? 'green' : 'crimson';
-        st.textContent = r.success
-          ? (key ? MSG.key_saved(prov) : MSG.key_cleared) : '❌ ' + r.error;
-      }
-      if (r.success && inp) {
-        inp.value = '';
-        if (key) inp.placeholder = MSG.key_saved_placeholder;
-      }
-    } catch (e) {
-      if (st) { st.style.color = 'crimson'; st.textContent = '❌ ' + e; }
     }
   }
 
@@ -2132,17 +2118,32 @@ function switchTab(tabId) {
     }
   }
 
-  async function guideLoad(silent) {
+  // customPath 传入时走「打开其他质量报告导读」：加载用户显式指定路径
+  // （后端 read_output_artifact 白名单后缀 + 目录守卫，只读）；缺省走
+  // guidePath 按输入/输出目录自动推导（只加载最近产出）
+  async function guideLoad(silent, customPath) {
     if (!window.pywebview || !window.pywebview.api) {
       if (!silent) guideStatus(MSG.api_not_ready);
       return;
     }
-    const p = guidePath();
-    if (!p) {
-      if (!silent) guideStatus(MSG.guide_need_inputs);
-      return;
+    let p;
+    const isCustom = customPath != null;
+    if (isCustom) {
+      p = String(customPath).trim();
+      if (!p) {
+        guideStatus(MSG.guide_custom_need_path);
+        guideCustomStatus(MSG.guide_custom_need_path, true);
+        return;
+      }
+    } else {
+      p = guidePath();
+      if (!p) {
+        if (!silent) guideStatus(MSG.guide_need_inputs);
+        return;
+      }
     }
-    if (!silent) guideStatus(MSG.guide_loading);
+    if (!silent || isCustom) guideStatus(MSG.guide_loading);
+    if (isCustom) guideCustomStatus(MSG.guide_loading, false);
     try {
       const r = await window.pywebview.api.read_output_artifact(p);
       if (r && r.success) {
@@ -2153,14 +2154,28 @@ function switchTab(tabId) {
         updateMediaSourceBar(lastGuideData);
         guideRender(r.data || {});
         guideStatus(MSG.guide_loaded(r.path || p));
+        if (isCustom) guideCustomStatus(MSG.guide_loaded(r.path || p), false);
         const geh = $('guideEmptyHint');
         if (geh) geh.style.display = 'none';
       } else {
-        guideStatus(MSG.guide_load_failed((r && r.error) || MSG.unknownError));
+        const err = MSG.guide_load_failed((r && r.error) || MSG.unknownError);
+        guideStatus(err);
+        if (isCustom) guideCustomStatus(err, true);
       }
     } catch (e) {
-      guideStatus(MSG.guide_load_failed(e && e.message ? e.message : String(e)));
+      const err = MSG.guide_load_failed(
+        e && e.message ? e.message : String(e));
+      guideStatus(err);
+      if (isCustom) guideCustomStatus(err, true);
     }
+  }
+
+  // 「打开其他质量报告导读」行内状态（成功灰色 / 失败红色）
+  function guideCustomStatus(text, isError) {
+    const st = $('guideCustomStatus');
+    if (!st) return;
+    st.textContent = text || '';
+    st.style.color = isError ? 'crimson' : '#888';
   }
 
   // 完成翻译后的静默自动探测：成功才展开面板，失败不打扰用户
@@ -2516,8 +2531,24 @@ function switchTab(tabId) {
     const quickProv = $('refineServiceQuick');
     if (quickProv) quickProv.addEventListener('change',
       () => applyServiceQuickProvider(true));
-    const quickKeyBtn = $('refineServiceQuickSaveKeyBtn');
-    if (quickKeyBtn) quickKeyBtn.addEventListener('click', saveServiceQuickKey);
+    // 「打开其他质量报告导读」：切换单行输入行 + 显式路径加载（只读端点）
+    const guideOtherBtn = $('guideOpenOtherBtn');
+    if (guideOtherBtn) guideOtherBtn.addEventListener('click', () => {
+      const row = $('guideCustomRow');
+      if (row) row.style.display
+        = row.style.display === 'none' ? '' : 'none';
+    });
+    const guideCustomBtn = $('guideCustomLoadBtn');
+    if (guideCustomBtn) guideCustomBtn.addEventListener('click', () => {
+      guideLoad(false, ($('guideCustomInput') || {}).value || '');
+    });
+    const guideCustomInp = $('guideCustomInput');
+    if (guideCustomInp) guideCustomInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        guideLoad(false, guideCustomInp.value || '');
+      }
+    });
 
     // v1.5 左侧 TAB 栏绑定（SmartSub 式功能选择）
     document.querySelectorAll('.side-tab-btn').forEach(btn => {
@@ -2611,11 +2642,60 @@ function switchTab(tabId) {
       }
       updateMediaSourceBar(lastGuideData);
     });
+
+    // 数据保存目录（高级参数页）：与媒体源「更换」同款展开单行输入交互
+    const drToggleBtn = $('dataRootToggleBtn');
+    if (drToggleBtn) drToggleBtn.addEventListener('click', () => {
+      const row = $('dataRootEditRow');
+      if (row) row.style.display =
+        row.style.display === 'none' ? '' : 'none';
+    });
+    const drApplyBtn = $('dataRootApplyBtn');
+    if (drApplyBtn) drApplyBtn.addEventListener('click', () => {
+      const inp = $('dataRootInput');
+      dataRootSave(inp ? inp.value.trim() : '');
+    });
+    const drRestoreBtn = $('dataRootRestoreBtn');
+    if (drRestoreBtn) drRestoreBtn.addEventListener('click',
+      () => dataRootSave(''));
+  }
+
+  // ---- 数据保存目录（高级参数页；pointer 写入 .data-root，重启应用后生效）----
+  function dataRootSourceLabel(src) {
+    const k = 'data_root_source_' + (src || '');
+    return typeof MSG[k] === 'string' ? MSG[k] : (src || '');
+  }
+  function dataRootLoad() {
+    if (!window.pywebview || !pywebview.api ||
+        !pywebview.api.refine_get_data_root) return;
+    pywebview.api.refine_get_data_root().then(r => {
+      if (!r || !r.success) return;
+      const pathEl = $('dataRootCurrentPath');
+      const tagEl = $('dataRootSourceTag');
+      if (pathEl) pathEl.textContent = r.data_root;
+      if (tagEl) tagEl.textContent = dataRootSourceLabel(r.source);
+    }).catch(() => {});
+  }
+  async function dataRootSave(value) {
+    const st = $('dataRootStatus');
+    try {
+      const r = await pywebview.api.refine_set_data_root(value || '');
+      if (st) {
+        st.textContent = (r && r.success)
+          ? (value ? MSG.data_root_saved_restart
+                   : MSG.data_root_default_restored)
+          : ((r && r.error) || '');
+      }
+      if (r && r.success) dataRootLoad();
+    } catch (e) {
+      if (st) st.textContent = String(e);
+    }
   }
 
   // ---- 远程数据加载（pywebview 就绪后调用一次）----
   async function loadRemote() {
     applySavedStageSettings();
+    dataRootLoad();
     // 净语配置目录默认值
     const defCleanerDir = 'config/templates';
     if ($('refineCleanerConfig') && !$('refineCleanerConfig').value) {

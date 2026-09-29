@@ -46,6 +46,17 @@ def _extract_function(source: str, name: str) -> str:
     raise AssertionError(f"app.js 函数花括号未配平: {name}")
 
 
+def _js_msg_keys() -> set:
+    """解析 app.js 顶部 const MSG = {...} 键名集合（同口径
+    tests/test_strings_and_shortcut.py，本文件独立实现避免跨文件导入）。"""
+    m = re.search(r"const MSG = \{(.*?)\n\};", _app_js_source(), re.S)
+    assert m, "app.js 未找到 const MSG = {...} 键表"
+    keys = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", m.group(1),
+                          re.M))
+    assert keys, "app.js MSG 键表解析为空"
+    return keys
+
+
 def test_app_js_syntax_node_check():
     """node --check 全文件语法校验（node 不可用时跳过）。"""
     node = shutil.which("node")
@@ -269,7 +280,8 @@ _SERVICE_QUICK_PROVIDER_VALUES = ["lmstudio", "ollama", "deepseek",
 
 def test_index_html_service_quick_with_provider_options():
     """tab-translate 页含翻译服务快捷下拉：既定 5 个 provider 值
-    （lmstudio 默认），并具备 key 行 / 保存按钮 / 状态 / 本地提示行锚点。"""
+    （lmstudio 默认）+ 本地提示行锚点；API KEY 输入域已收口至引擎页
+    （主页 key 行整体移除，删除钉防回退）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'id="refineServiceQuick"' in html, "缺少翻译服务快捷下拉"
     m = re.search(r'<select[^>]*id="refineServiceQuick".*?</select>',
@@ -280,11 +292,17 @@ def test_index_html_service_quick_with_provider_options():
         f"服务快捷下拉选项值不符: {values}"
     assert 'value="lmstudio" selected' in m.group(0), \
         "默认项必须为本地 LM Studio（lmstudio）"
-    for anchor in ("refineServiceQuickKeyRow", "refineServiceQuickKey",
-                   "refineServiceQuickSaveKeyBtn",
-                   "refineServiceQuickKeyStatus",
-                   "refineServiceQuickLocalHint"):
-        assert f'id="{anchor}"' in html, f"缺少快捷下拉锚点: {anchor}"
+    assert 'id="refineServiceQuickLocalHint"' in html, \
+        "缺少本地服务提示行锚点"
+    for removed in ("refineServiceQuickKeyRow", "refineServiceQuickKey",
+                    "refineServiceQuickSaveKeyBtn",
+                    "refineServiceQuickKeyStatus"):
+        assert f'id="{removed}"' not in html, \
+            f"主页 API KEY 域应已移除却仍残留: {removed}"
+    js = _app_js_source()
+    for sym in ("saveServiceQuickKey", "serviceQuickKeyLabel",
+                "serviceQuickKeySaveBtn"):
+        assert sym not in js, f"app.js 仍残留快捷 key 旧逻辑/旧键: {sym}"
     # 快捷下拉必须位于 tab-translate 页内（引导卡删除后仍属翻译主页）
     assert html.index('id="refineServiceQuick"') \
         > html.index('id="tab-translate"')
@@ -293,12 +311,13 @@ def test_index_html_service_quick_with_provider_options():
 
 
 def test_service_quick_key_row_toggles_on_cloud_providers():
-    """key 行联动：deepseek/siliconflow/custom（云服务）显示 key 行；
-    本地服务隐藏 key 行并显示本地启动提示行。"""
+    """本地提示行联动：deepseek/siliconflow/custom（云服务）隐藏提示行；
+    本地服务显示本地启动提示行（key 行已随主页密钥域移除）。"""
     body = _extract_function(_app_js_source(), "refreshServiceQuickRow")
     for prov in ("deepseek", "siliconflow", "custom"):
-        assert prov in body, f"key 行联动缺少云服务分支: {prov}"
-    assert "refineServiceQuickKeyRow" in body, "必须联动 key 行显隐"
+        assert prov in body, f"提示行联动缺少云服务分支: {prov}"
+    assert "refineServiceQuickKeyRow" not in body, \
+        "key 行已删除，refreshServiceQuickRow 不得再引用"
     assert "refineServiceQuickLocalHint" in body, "本地服务必须显示提示行"
 
 
@@ -326,14 +345,14 @@ def test_service_quick_change_syncs_stages_and_persists():
         "applySavedStageSettings 必须回填 service_quick"
 
 
-def test_service_quick_key_save_uses_stage_a_key_channel():
-    """快捷下拉密钥保存必须复用 refine_save_stage_settings 的 keys 数组通道
-    （即单阶段密钥保存通道）并落 stage A（阶段A）。"""
-    body = _extract_function(_app_js_source(), "saveServiceQuickKey")
-    assert "refine_save_stage_settings" in body, \
-        "必须复用既有密钥保存通道"
-    assert "stage: 1" in body, "密钥必须落 stage A（阶段A）"
-    assert "provider: prov" in body, "密钥必须随当前服务商隔离存储"
+def test_service_quick_key_save_removed():
+    """删除钉：主页快捷下拉密钥保存函数已随 API KEY 域整体移除
+    （引擎页为唯一密钥填写入口）。"""
+    js = _app_js_source()
+    assert "saveServiceQuickKey" not in js, \
+        "saveServiceQuickKey 应已删除"
+    assert "refineServiceQuickKey" not in js, \
+        "快捷 key 输入域 id 引用应已删除"
 
 
 def test_translate_page_has_start_stop_and_no_guide_card():
@@ -465,3 +484,58 @@ def test_guide_load_records_last_loaded_path():
     """guideLoad 成功后必须记录 lastLoadedGuidePath（AI 分析的前置依据）。"""
     body = _extract_function(_app_js_source(), "guideLoad")
     assert "lastLoadedGuidePath = r.path || p" in body
+
+
+# ---------------------------------------------------------------------------
+# owner 实测反馈批：dry-run 勾选移除 + 其他质量报告导读入口（显式路径）
+# ---------------------------------------------------------------------------
+
+def test_dry_run_entry_removed_from_gui():
+    """删除钉：GUI 试运行勾选项整体移除（CLI --dry-run 保留不动）。
+
+    index.html 不再有 refineDryRun 控件与 dry_run_* i18n 锚；
+    app.js 不再读取 dry_run（buildRefineOptions 不传该键，后端缺省
+    false 语义不变），MSG 键表无 dry_run 死键。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'id="refineDryRun"' not in html, "refineDryRun 控件应已删除"
+    assert "dry_run_label" not in html and "dry_run_title" not in html, \
+        "dry_run i18n 锚应已删除"
+    js = _app_js_source()
+    assert "refineDryRun" not in js, "app.js 仍读取 refineDryRun"
+    assert "dry_run" not in js, "app.js 仍传 dry_run 键"
+    assert "dry_run_label" not in js and "dry_run_title" not in js, \
+        "MSG 键表残留 dry_run 死键"
+    assert "建议先用试运行预览" not in js, \
+        "覆盖确认弹窗文案仍含试运行提示"
+
+
+def test_glossary_learn_has_tooltip():
+    """learned 词库自学习勾选项必须带悬停说明（data-i18n-title + MSG 键）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<label[^>]*>\s*<input type="checkbox"'
+                  r'\s+id="refineGlossaryLearn">', html, re.S)
+    assert m, "未找到 refineGlossaryLearn 所在 label"
+    assert 'data-i18n-title="glossary_learn_title"' in m.group(0), \
+        "learned 自学习选项缺少 data-i18n-title"
+    assert "glossary_learn_title" in _js_msg_keys()
+
+
+def test_guide_custom_path_entry_pinned():
+    """「打开其他质量报告导读」入口：单行输入（无文件对话框 API）+
+    显式路径加载，复用只读端点 read_output_artifact。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for anchor in ("guideOpenOtherBtn", "guideCustomRow",
+                   "guideCustomInput", "guideCustomLoadBtn",
+                   "guideCustomStatus"):
+        assert f'id="{anchor}"' in html, f"缺少其他导读入口锚点: {anchor}"
+    source = _app_js_source()
+    body = _extract_function(source, "guideLoad")
+    assert "customPath" in body, "guideLoad 必须支持显式路径覆盖"
+    assert "guide_custom_need_path" in body, "空路径必须行内提示"
+    bind = _extract_function(source, "bindDom")
+    assert "guideOpenOtherBtn" in bind, "入口按钮必须绑定 click"
+    assert "guideCustomLoadBtn" in bind, "加载按钮必须绑定 click"
+    keys = _js_msg_keys()
+    for key in ("guide_open_other_btn", "guide_custom_placeholder",
+                "guide_custom_load_btn", "guide_custom_need_path"):
+        assert key in keys, f"MSG 缺少其他导读入口键: {key}"

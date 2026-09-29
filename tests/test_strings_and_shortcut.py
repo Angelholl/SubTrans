@@ -200,8 +200,8 @@ _ADVANCED_CONTROL_IDS = (
     # TM 与学习闸
     "refineTmEnable", "refineTmDb", "refineTmThreshold",
     "refineGlossaryLearn", "refineGlossaryConflictBlock",
-    # 断点与日志
-    "resumeToggle", "refineForceResume", "refineDryRun", "debugLogging",
+    # 断点与日志（refineDryRun 试运行勾选已按 owner 反馈整体移除）
+    "resumeToggle", "refineForceResume", "debugLogging",
     # 兜底与并发（含 ⟳ 刷新按钮）
     "refineFallbackModel", "refreshFallbackModels", "refineFallbackLocal",
     "refineBatchLocal", "refineBatchCloud", "refineConcurrency",
@@ -209,7 +209,7 @@ _ADVANCED_CONTROL_IDS = (
 
 
 def test_advanced_settings_panel_keeps_all_control_ids():
-    """折叠收纳后 19 控件+1 按钮的 id 必须仍存在于 index.html（各恰好一次）。"""
+    """折叠收纳后 18 控件+1 按钮的 id 必须仍存在于 index.html（各恰好一次）。"""
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
     missing = [i for i in _ADVANCED_CONTROL_IDS if f'id="{i}"' not in html]
     assert not missing, f"index.html 丢失高级设置控件 id: {missing}"

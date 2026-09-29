@@ -53,9 +53,6 @@
       .service-quick-badge { font-size: 11px; padding: 2px 10px; border-radius: var(--radius-pill, 999px);
         white-space: nowrap; color: var(--primary-color, #1a73e8);
         border: 1px solid var(--primary-color, #1a73e8); background: transparent; }
-      .service-quick-key-row { display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
-      .service-quick-key-label { font-size: 12px; white-space: nowrap;
-        color: var(--secondary-color, #666); }
       .service-quick-local-hint { font-size: 12px; color: var(--secondary-color, #888); }
     </style>
 </head>
@@ -195,13 +192,6 @@
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
                         <span class="service-quick-badge" data-i18n="serviceQuickBadge">AI 大模型</span>
-                    </div>
-                    <div id="refineServiceQuickKeyRow" class="service-quick-key-row">
-                        <label for="refineServiceQuickKey" class="service-quick-key-label" data-i18n="serviceQuickKeyLabel">API Key</label>
-                        <input type="password" id="refineServiceQuickKey" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
-                               data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
-                        <button type="button" id="refineServiceQuickSaveKeyBtn" class="btn btn-secondary btn-compact" data-i18n="serviceQuickKeySaveBtn">保存</button>
-                        <span id="refineServiceQuickKeyStatus" style="font-size:12px; color:#888;"></span>
                     </div>
                     <div id="refineServiceQuickLocalHint" class="service-quick-local-hint" data-i18n="serviceQuickHintLocal">需本机安装并启动 LM Studio（或 Ollama）并加载模型</div>
 
@@ -477,6 +467,16 @@
                         <button type="button" id="mediaOverrideApplyBtn" class="btn btn-secondary btn-compact" data-i18n="media_override_apply">应用</button>
                         <span id="mediaOverrideStatus" style="font-size:12px; color:#888;"></span>
                     </div>
+                    <!-- 其他质量报告导读入口（无文件对话框 API，与媒体源「更换」同款单行输入交互） -->
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
+                        <button type="button" id="guideOpenOtherBtn" class="btn btn-text btn-sm" data-i18n="guide_open_other_btn">📂 打开其他质量报告导读</button>
+                        <span id="guideCustomStatus" style="font-size:12px; color:#888;"></span>
+                    </div>
+                    <div class="media-source-edit-row" id="guideCustomRow" style="display:none;">
+                        <input type="text" id="guideCustomInput" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
+                               data-i18n-placeholder="guide_custom_placeholder" placeholder="粘贴质量报告导读 json 的完整路径（以 *_质量报告导读.json 结尾）" autocomplete="off">
+                        <button type="button" id="guideCustomLoadBtn" class="btn btn-secondary btn-compact" data-i18n="guide_custom_load_btn">加载</button>
+                    </div>
                     <!-- 质量报告导读查看器（W1b：仅读 *_质量报告导读.json） -->
                     <section class="section console-section">
                         <details id="refineGuideViewer">
@@ -518,6 +518,22 @@
                      ====================================================== -->
                 <div class="tab-page" id="tab-advanced" data-testid="tab-advanced">
                     <div style="font-size:12px; color:#888;" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
+
+                    <!-- 数据保存目录（owner 反馈②：用户可选数据根；写入 .data-root 指针，重启生效；
+                         与媒体源「更换」同款单行输入交互，复用其暗色 token 类） -->
+                    <div class="media-source-bar" id="dataRootBar" style="margin-top:8px;">
+                        <span class="media-source-label" data-i18n="data_root_title">数据保存目录</span>
+                        <span class="media-source-path" id="dataRootCurrentPath"></span>
+                        <span class="media-source-tag" id="dataRootSourceTag"></span>
+                        <button type="button" id="dataRootToggleBtn" class="btn btn-text btn-sm" data-i18n="data_root_change_btn">更改</button>
+                        <button type="button" id="dataRootRestoreBtn" class="btn btn-text btn-sm" data-i18n="data_root_restore_btn">恢复默认</button>
+                    </div>
+                    <div class="media-source-edit-row" id="dataRootEditRow" style="display:none;">
+                        <input type="text" id="dataRootInput" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
+                               data-i18n-placeholder="data_root_input_placeholder" placeholder="输入新的数据保存目录完整路径（绝对路径）" autocomplete="off">
+                        <button type="button" id="dataRootApplyBtn" class="btn btn-secondary btn-compact" data-i18n="data_root_apply_btn">保存</button>
+                        <span id="dataRootStatus" style="font-size:12px; color:#888;"></span>
+                    </div>
 
                     <div class="adv-grid">
                         <div style="display:flex; flex-direction:column; gap:6px; min-width:var(--w-min);">
@@ -569,7 +585,8 @@
                                 <input type="number" id="refineTmThreshold" class="form-input compact" style="width:var(--w-tm-threshold);"
                                        min="0" max="1" step="0.05" data-i18n-placeholder="tm_threshold_placeholder" placeholder="默认">
                             </label>
-                            <label style="display:flex; align-items:center; gap:4px;">
+                            <label style="display:flex; align-items:center; gap:4px;"
+                                   data-i18n-title="glossary_learn_title" title="开启后翻译命中将写入学习词库（默认关闭）；学习词库与手动词库分层生效，可在词库页查看">
                                 <input type="checkbox" id="refineGlossaryLearn"> <span data-i18n="glossary_learn_label">learned 词库自学习</span>
                             </label>
                             <label style="display:flex; align-items:center; gap:4px;">
@@ -591,9 +608,6 @@
                                    data-i18n-title="force_resume_title" title="上次中断后重跑时，即使检测到改动也接着上次的进度继续，可能用到过期的中间结果。
 技术细节：覆盖清单指纹校验；会复用可能过期的阶段A产物">
                                 <input type="checkbox" id="refineForceResume" data-testid="force-resume-toggle"> <span data-i18n="force_resume_label">强制断点恢复（指纹不匹配仍复用）</span>
-                            </label>
-                            <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="dry_run_title" title="试运行：仅生成执行计划，不调用模型、不产出字幕">
-                                <input type="checkbox" id="refineDryRun"> <span data-i18n="dry_run_label">试运行</span>
                             </label>
                             <label style="display:flex; align-items:center; gap:4px;" data-i18n-title="verbose_title" title="向子进程传递 --verbose 输出调试日志">
                                 <input type="checkbox" id="debugLogging"> <span data-i18n="verbose_label">详细日志</span>
