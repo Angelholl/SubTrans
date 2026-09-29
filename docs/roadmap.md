@@ -29,7 +29,7 @@
 
 ## 2.1 —— 三语词典与方向参数化（owner 钦点必落，D2026-0930-01 P3；细则 D2026-0930-03 ②③④；拍板 D2026-0930-04）
 
-- ✅ 引擎页词典管理三区块（2026-09-30，846fae5：日/中/英 状态/下载/自定义路径+下载中态；api refine_dict_status/refine_dict_download；文案全 MSG 键 i18n 契约过；GUI 黑盒未跑——配额限，提交注明未验证）
+- ✅ 引擎页词典管理三区块（2026-09-30，846fae5：日/中/英 状态/下载/自定义路径+下载中态；api refine_dict_status/refine_dict_download；文案全 MSG 键 i18n 契约过；GUI 黑盒已验——bridge 黑盒三区块渲染+下载全链 PASS，截图证据在 Temp/gui-test-screenshots/）+ **下载进度反馈批（同日 owner 验收反馈，词典下载分块化+phase 状态+前端 1s 轮询：按钮百分比/已下载 MB/校验解压分阶段/完成回显路径与大小+行内"自定义词典已就位"徽标；真下载 73.4MB wheel→192.9MB .dic 全链黑盒 PASS）**
 - ✅ 日语=sudachi 下载式（2026-09-30，7ca43ec：dict_manager 三源策略——上游已转 PyPI-only，"GitHub 主源"按现状映射为 PyPI 官方→清华镜像（仅网络失败降级）→本地导入；SHA256 官方 digest 核实+不符拒载；两类失败分开报错；sudachidict_core 主依赖保留；grammar_hint 自定义词典路径优先（sudachipy 0.6.11 实证 Dictionary(dict=路径)）；CLI --dict-status/--dict-download）
 - ✅ 中文=jieba 走 `[zh]` extra（7ca43ec，缺失静默降级）；英文=规则级起步（en 签名/质量门随批 2 落）
 - ✅ 中/英分词提示生成与注入（2026-09-30，D2026-0930-05 拍板+落地，**机制层完成**——zh→en 端到端含提示实效果验证归 owner 真跑冒烟项）：新模块 token_hint（zh=jieba 分词参考，token≥2 且行长≥6 门槛、每条 ≤1 条、缺失静默降级；en=全大写缩写规则零依赖）+_collect_grammar_hints 源语言分派（ja→sudachi 逐字节不动/zh→jieba/en→规则）+A/B 双缝零新缝+【语法提示】头复用残留清理零改动+缓存键 direction 透传缺口顺修；critic 1 HRO（审校绑定口径）采纳落澄清"A/B 均为真实消费点"+4 条件项全采纳；语言判定=字符集启发式逐条路由（en 签名已落 a18119c）
