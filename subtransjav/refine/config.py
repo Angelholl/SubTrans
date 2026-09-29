@@ -72,6 +72,11 @@ TUNABLE_FIELD_TYPES = {
     "audio_detect_threshold_pct": int,
     "audio_detect_min_gap_ms": int,
     "audio_detect_max_candidates": int,
+    # 2.0.1 CPS 行动化（D2026-0930-03 ①内部序；阈值定标见
+    # docs/cps-定标报告-20260930.md）：不加 CLI 参数，user_settings/env 可调
+    "cps_action_enabled": bool,
+    "cps_action_threshold": float,
+    "cps_action_max_per_film": int,
 }
 
 # ---- 服务商预设 ----
@@ -154,6 +159,15 @@ def user_settings_path() -> str:
         {"temperature_cloud": 0.3, "timeout_llm": 600}
     """
     return os.path.join(CONFIG_DIR, "user_settings.json")
+
+
+def single_line_whitelist_path() -> str:
+    """单行超长白名单路径：<repo_root>/config/single_line_whitelist.txt。
+
+    每行一条 Python 正则（re.search 语义）；``#`` 注释行与空白行忽略；
+    文件不存在 = 空白名单（单行超长检测行为与无白名单一致）。
+    """
+    return os.path.join(CONFIG_DIR, "single_line_whitelist.txt")
 
 
 def _coerce_tunable(raw, typ):
@@ -330,6 +344,11 @@ class RefineConfig:
     audio_detect_threshold_pct: int = 85      # 文件内相对分位阈值（P85）
     audio_detect_min_gap_ms: int = 300        # 字幕间隙判定下限（毫秒）
     audio_detect_max_candidates: int = 20     # 每片候选截断上限
+    # 2.0.1 CPS 行动化（定标 docs/cps-定标报告-20260930.md：阈值 5.0≈批次E
+    # p95+5%，触发率 3.87%+每片截断上限防洪水；间隙不行动化被数据否决）
+    cps_action_enabled: bool = True
+    cps_action_threshold: float = 5.0         # 行动阈值（CJK 译文语速）
+    cps_action_max_per_film: int = 20         # 每片行动条目截断上限
     # H4b 分支 b 子集口径：条目级阈值自适应开关——需上游 Balanced 模式产出
     # 的 asr_telemetry.jsonl；缺失/超龄时按默认阈值执行（风险清单标注）。
     # 仅收紧删五类参数，计数类永不解锁（见 asr_meta.scene_low_trust 铁律）。

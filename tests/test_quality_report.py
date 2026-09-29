@@ -696,3 +696,174 @@ def test_normal_entries_zero_observation_rows():
     assert "【语速与间隙观测】" not in report
     assert "CPS" not in report
     assert "间隙" not in report
+
+
+# ----------------------------------------------------------------------
+# 2.0.1 单行超长白名单（先摘除后计量）
+# ----------------------------------------------------------------------
+def _patch_whitelist_path(monkeypatch, path):
+    monkeypatch.setattr(
+        "subtransjav.refine.config.single_line_whitelist_path",
+        lambda: str(path))
+
+
+def test_single_line_whitelist_no_file_unchanged(monkeypatch, tmp_path):
+    """白名单文件不存在：检测行为与无白名单逐字节一致（回归红线）。"""
+    _patch_whitelist_path(monkeypatch, tmp_path / "single_line_whitelist.txt")
+    t = "00:00:01,000 --> 00:00:04,000"
+    final = [{"index": 1, "timing": t, "text": "这" * 45}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert f"{t} #1 行长 45（阈值 30）" in report
+    assert "白名单豁免" not in report
+    assert [it["category"] for it in sink["items"]].count(
+        "single_line_too_long") == 1
+
+
+def test_single_line_whitelist_empty_file_zero_change(monkeypatch, tmp_path):
+    """空白名单文件（仅注释/空行）：与无文件行为一致。"""
+    wl = tmp_path / "single_line_whitelist.txt"
+    wl.write_text("# 注释\n\n   \n", encoding="utf-8")
+    _patch_whitelist_path(monkeypatch, wl)
+    t = "00:00:01,000 --> 00:00:04,000"
+    final = [{"index": 1, "timing": t, "text": "这" * 45}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert f"{t} #1 行长 45（阈值 30）" in report
+    assert "白名单豁免" not in report
+    assert [it["category"] for it in sink["items"]].count(
+        "single_line_too_long") == 1
+
+
+def test_single_line_whitelist_exempts_entry(monkeypatch, tmp_path):
+    """命中白名单的条目整条豁免：不进违规列表/行动条目，豁免计数可见。"""
+    wl = tmp_path / "single_line_whitelist.txt"
+    wl.write_text("# OP/ED 歌词开场\n^歌词开场\n", encoding="utf-8")
+    _patch_whitelist_path(monkeypatch, wl)
+    t1 = "00:00:01,000 --> 00:00:04,000"
+    t2 = "00:00:05,000 --> 00:00:08,000"
+    final = [{"index": 1, "timing": t1, "text": "歌词开场" + "这" * 40},
+             {"index": 2, "timing": t2, "text": "这" * 45}]
+    exp = [{"index": 1, "timing": t1, "text": "ソ"},
+           {"index": 2, "timing": t2, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    assert f"{t2} #2 行长 45（阈值 30）" in report
+    assert "#1 行长" not in report
+    assert "白名单豁免 1 条" in report
+    items = [it for it in sink["items"]
+             if it["category"] == "single_line_too_long"]
+    assert [it["index"] for it in items] == [2]
+
+
+def test_single_line_whitelist_invalid_regex_skipped_warns(monkeypatch,
+                                                           tmp_path,
+                                                           capsys):
+    """非法正则行跳过并告警（含行号），合法行照常生效。"""
+    wl = tmp_path / "single_line_whitelist.txt"
+    wl.write_text("([bad\n^这{45}$\n", encoding="utf-8")
+    _patch_whitelist_path(monkeypatch, wl)
+    t = "00:00:01,000 --> 00:00:04,000"
+    final = [{"index": 1, "timing": t, "text": "这" * 45}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink)
+    out = capsys.readouterr().out
+    assert "第 1 行正则无效" in out
+    assert "白名单豁免 1 条" in report
+    assert [it["category"] for it in sink["items"]].count(
+        "single_line_too_long") == 0
+
+
+# ----------------------------------------------------------------------
+# 2.0.1 CPS 行动化（定标 docs/cps-定标报告-20260930.md）
+# ----------------------------------------------------------------------
+def test_cps_action_scan_threshold_and_cjk_only():
+    """行动层：仅 CJK 条目参与、严格大于阈值、时长门槛与观测层同源。"""
+    from subtransjav.refine import quality_report as qr
+    t_fast = "00:00:01,000 --> 00:00:02,000"    # 30 字/1s = 30 CPS
+    t_slow = "00:00:03,000 --> 00:00:08,000"    # 10 字/5s = 2 CPS
+    t_short = "00:00:09,000 --> 00:00:09,400"   # 时长 <0.5s 不参与
+    final = [
+        {"index": 1, "timing": t_fast, "text": "这" * 30},
+        {"index": 2, "timing": t_slow, "text": "这" * 10},
+        {"index": 3, "timing": t_short, "text": "这" * 30},
+        {"index": 4, "timing": t_fast, "text": "abcdefghij" * 10},
+    ]
+    cands, truncated = qr._scan_cps_action(final, 5.0, 20)
+    assert [c["index"] for c in cands] == [1]
+    assert truncated is False
+
+
+def test_cps_action_truncation_keeps_highest():
+    """截断：超上限按 CPS 降序保留最高 N 条，truncated=True。"""
+    from subtransjav.refine import quality_report as qr
+    final = [{"index": i + 1,
+              "timing": "00:00:01,000 --> 00:00:02,000",
+              "text": "这" * (10 * (i + 1))} for i in range(5)]
+    cands, truncated = qr._scan_cps_action(final, 5.0, 3)
+    assert truncated is True
+    assert [c["index"] for c in cands] == [5, 4, 3]
+
+
+def test_cps_action_build_report_items_and_note():
+    """cps_action 参数：items 含 cps_too_fast（字段闭集/current_text 正确）、
+    章节含行动提示行；无参数（旧调用方）二者缺席行为不变。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    text = "这" * 30
+    final = [{"index": 1, "timing": t, "text": text}]
+    exp = [{"index": 1, "timing": t, "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink,
+                                  cps_action={"threshold": 5.0,
+                                              "max_items": 20})
+    assert "行动提示: 语速偏快 1 条（行动阈值 5，处理走导读行动条目）" in report
+    items = [it for it in sink["items"] if it["category"] == "cps_too_fast"]
+    assert len(items) == 1
+    it = items[0]
+    assert it["index"] == 1 and it["status"] == "open"
+    assert it["current_text"] == text
+    assert "CPS 30.00（行动阈值 5）" in it["message"]
+    fields = {"index", "timing", "category", "message",
+              "current_text", "source_excerpt", "status", "severity"}
+    assert set(it) == fields
+    sink2: dict = {}
+    report2 = build_quality_report(exp, final, "demo", guide_sink=sink2)
+    assert "行动提示: 语速偏快" not in report2
+    assert all(it["category"] != "cps_too_fast" for it in sink2["items"])
+
+
+def test_cps_action_truncation_note_in_report():
+    """达截断上限时行动提示行注明。"""
+    final = [{"index": i + 1,
+              "timing": "00:00:01,000 --> 00:00:02,000",
+              "text": "这" * (10 * (i + 1))} for i in range(2)]
+    exp = [{"index": 1, "timing": final[0]["timing"], "text": "ソ"}]
+    sink: dict = {}
+    report = build_quality_report(exp, final, "demo", guide_sink=sink,
+                                  cps_action={"threshold": 5.0,
+                                              "max_items": 1})
+    assert "行动提示: 语速偏快 1 条" in report
+    assert "已达截断上限" in report
+    assert [it["category"] for it in sink["items"]].count("cps_too_fast") == 1
+
+
+def test_cps_action_tunables_registered_and_defaults():
+    """三参数注册 TUNABLE_FIELD_TYPES 且缺省值与定标一致。"""
+    from subtransjav.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
+    assert TUNABLE_FIELD_TYPES["cps_action_enabled"] is bool
+    assert TUNABLE_FIELD_TYPES["cps_action_threshold"] is float
+    assert TUNABLE_FIELD_TYPES["cps_action_max_per_film"] is int
+    cfg = RefineConfig()
+    assert cfg.cps_action_enabled is True
+    assert cfg.cps_action_threshold == 5.0
+    assert cfg.cps_action_max_per_film == 20
+
+
+def test_cps_too_fast_retranslate_hint():
+    """定点重翻处理要点登记（压缩字数降语速）。"""
+    from subtransjav.refine.action_retranslate import _CATEGORY_HINTS
+    assert "压缩字数" in _CATEGORY_HINTS["cps_too_fast"]
+    assert "不得删除条目" in _CATEGORY_HINTS["cps_too_fast"]

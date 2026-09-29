@@ -14,8 +14,9 @@
 - 实义漏覆盖逐条列出（无门槛，上限 20 条；拆"整条缺失/条目在但未译"
   两口径，总数 = 之和）；
 - post_validate 告警逐条进入复核清单，warn_only=false 的硬性告警一并呈现；
-- 单行超长（v1.4 C2）进导读行动条目可自动重翻；语速 CPS 与时间轴
-  间隙（v1.4 C3）只观测不行动，绝不进 items；
+- 单行超长（v1.4 C2）进导读行动条目可自动重翻；语速 CPS 行动层
+  （2.0.1 定标 5.0，docs/cps-定标报告-20260930.md）进导读行动条目，
+  时间轴间隙（v1.4 C3）只观测不行动，绝不进 items；
 - 统计段含条数核对恒等式（原文 = 闸门0删除 + 预合并合并 + 规则清洗
   合并 + 规则清洗删除 + 隔离区移出 + 终稿），不平则以 ⚠️ 显式呈现，
   绝不静默。
@@ -415,18 +416,51 @@ def _cjk_dominant(compact_text: str) -> bool:
     return n / len(compact_text) >= 0.5
 
 
-def _scan_single_line_violations(final_entries: list) -> list[dict]:
+def _load_single_line_whitelist() -> list:
+    """单行超长白名单加载（先摘除后计量）。
+
+    数据根 config/single_line_whitelist.txt，每行一条正则（re.search），
+    ``#`` 注释与空行忽略；文件不存在 = 空白名单（检测行为与无白名单
+    完全一致）；非法正则行跳过并告警，不抛异常。
+    """
+    from .config import single_line_whitelist_path
+    try:
+        raw = Path(single_line_whitelist_path()).read_text(encoding="utf-8")
+    except OSError:
+        return []
+    patterns: list = []
+    for lineno, line in enumerate(raw.splitlines(), 1):
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        try:
+            patterns.append(re.compile(s))
+        except re.error as exc:
+            print(f"⚠️ 单行超长白名单第 {lineno} 行正则无效，已跳过: {exc}")
+    return patterns
+
+
+def _scan_single_line_violations(final_entries: list,
+                                 whitelist: list = ()) -> tuple[list[dict], int]:
     """C2：终稿单行超长扫描（每行去除全部空白后 > _SINGLE_LINE_MAX_CHARS）。
+
+    whitelist 非空时"先摘除后计量"：条目任一行命中任一 pattern → 整条
+    豁免（不进违规列表，亦不进导读行动条目）；返回 (违规记录, 豁免数)。
 
     每个违规条目一条记录：index/timing/message/excerpt/max_len；message
     恒含最长违规行行长与阈值；excerpt 取最长违规行（并列取首行）截断
     60 字符内。纯函数。
     """
     violations: list[dict] = []
+    exempted = 0
     for e in final_entries:
+        lines = (e.get("text") or "").split("\n")
+        if whitelist and any(p.search(ln) for p in whitelist for ln in lines):
+            exempted += 1
+            continue
         best_len = 0
         best_line = ""
-        for line in (e.get("text") or "").split("\n"):
+        for line in lines:
             compact = "".join(line.split())
             n = len(compact)
             if n > _SINGLE_LINE_MAX_CHARS and n > best_len:
@@ -441,7 +475,7 @@ def _scan_single_line_violations(final_entries: list) -> list[dict]:
                             f"（阈值 {_SINGLE_LINE_MAX_CHARS}，不含空白）"),
                 "excerpt": best_line[:60],
             })
-    return violations
+    return violations, exempted
 
 
 def _scan_cps_observations(final_entries: list) -> list[dict]:
@@ -470,6 +504,36 @@ def _scan_cps_observations(final_entries: list) -> list[dict]:
                         "timing": e.get("timing") or "",
                         "cps": cps, "base": base, "limit": limit})
     return obs
+
+
+def _scan_cps_action(final_entries: list, threshold: float,
+                     max_items: int) -> tuple[list[dict], bool]:
+    """CPS 行动层扫描（2.0.1，定标 docs/cps-定标报告-20260930.md）。
+
+    仅 CJK 为主条目参与（非 CJK 词典未定标，沿观测层口径不入行动层，
+    见定标报告结论一降级说明）；时长门槛与观测层同源
+    （≥_CPS_MIN_DURATION_S、空文本跳过），严格大于 threshold；按 CPS
+    降序截断 max_items 条（防行动条目洪水，沿 audio_detect_max_candidates
+    先例），截断发生时第二返回值为 True。纯函数。
+    """
+    from .v2_premerge import _timing_span
+    cands: list[dict] = []
+    for e in final_entries:
+        compact = "".join((e.get("text") or "").split())
+        if not compact or not _cjk_dominant(compact):
+            continue
+        s0, e0 = _timing_span(e.get("timing") or "")
+        dur = e0 - s0
+        if s0 < 0 or dur < _CPS_MIN_DURATION_S:
+            continue
+        cps = len(compact) / dur
+        if cps > threshold:
+            cands.append({"index": e.get("index"),
+                          "timing": e.get("timing") or "",
+                          "cps": cps})
+    cands.sort(key=lambda c: c["cps"], reverse=True)
+    truncated = len(cands) > max_items
+    return cands[:max_items], truncated
 
 
 def _scan_gap_observations(final_entries: list) -> tuple[list[dict],
@@ -505,21 +569,29 @@ def _scan_gap_observations(final_entries: list) -> tuple[list[dict],
 def render_observation_section(single_line: list | None,
                                cps_obs: list | None,
                                gap_obs: list | None,
-                               max_gap: float | None = None) -> str:
+                               max_gap: float | None = None,
+                               whitelist_exempt: int = 0,
+                               cps_action_note: str | None = None) -> str:
     """渲染「语速与间隙观测」章节（v1.4 C2/C3）为文本（纯函数）。
 
     三部分：单行超长（C2，只检测与建议，处理走导读行动条目）、语速
     CPS（C3①，纯观测）、时间轴间隙（C3②，纯观测）；节尾汇总行（超
-    CPS 条数、间隙数、最大 gap）与观测免责声明恒有。三组全空时整节
-    省略（返回空串）。观测行统一"时间轴在前、条目号在后"排版（与复核
+    CPS 条数、间隙数、最大 gap）与观测免责声明恒有。三组全空且无白名单
+    豁免时整节省略（返回空串）。whitelist_exempt>0 时节首加一行豁免计数
+    （2.0.1 先摘除后计量），为 0 时不输出（无白名单场景输出与旧版
+    逐字节一致）。观测行统一"时间轴在前、条目号在后"排版（与复核
     清单 "#N <timing>" 形态刻意区分）。
     """
     single_line = single_line or []
     cps_obs = cps_obs or []
     gap_obs = gap_obs or []
-    if not (single_line or cps_obs or gap_obs):
+    if not (single_line or cps_obs or gap_obs or whitelist_exempt
+            or cps_action_note):
         return ""
     lines = ["【语速与间隙观测】"]
+    if whitelist_exempt:
+        lines.append(f"  白名单豁免 {whitelist_exempt} 条"
+                     "（config/single_line_whitelist.txt）")
     if single_line:
         lines.append(f"单行超长（阈值 {_SINGLE_LINE_MAX_CHARS} 字符，不含空白；"
                      "只检测与建议，处理走导读行动条目）:")
@@ -540,6 +612,8 @@ def render_observation_section(single_line: list | None,
             lines.append(f"  {_fmt_timing(g['timing'])} #{g['index']} "
                          f"间隙 {g['gap']:.2f}s（上一条 #{g['prev_index']}"
                          f" 结束于 {g['prev_end']:.3f}s）")
+    if cps_action_note:
+        lines.append(cps_action_note)
     gap_show = f"{max_gap:.2f}s" if max_gap is not None else "无"
     lines.append(f"汇总: 超 CPS {len(cps_obs)} 条 | "
                  f"间隙 >{_GAP_MAX_SECONDS:.1f}s {len(gap_obs)} 处 | "
@@ -643,8 +717,8 @@ _SECTION_NOTES: tuple[tuple[str, str], ...] = (
     ("【术语一致性】",
      "　（各源词在译文中的覆盖情况统计）"),
     ("【语速与间隙观测】",
-     "　（单行超长为检测与建议，处理走导读行动条目；语速与间隙为观测"
-     "数据，供日文语速定标调研，不触发自动重翻）"),
+     "　（单行超长与语速偏快行动提示处理走导读行动条目；观测明细为"
+     "定标调研数据，供日文语速定标调研，不触发自动重翻）"),
     ("【疑似漏听观测（音频能量粗筛）】",
      "　（wave 级 VAD 降级（RMS 能量代理，非神经 VAD）；候选为疑似"
      "（粗筛）观测条目，仅报告不重翻，不进入行动条目）"),
@@ -747,8 +821,13 @@ def build_quality_report(orig_entries: list, final_entries: list,
                          structured_warnings: list[dict] | None = None,
                          media_path: str = "",
                          media_path_source: str = "",
-                         audio_insights: dict | None = None) -> str:
+                         audio_insights: dict | None = None,
+                         cps_action: dict | None = None) -> str:
     """对比 期望条目（预合并后） 与 终稿条目，返回复核工单式报告文本。
+
+    cps_action：2.0.1 CPS 行动层参数 {"threshold": float,
+    "max_items": int}；None（缺省/关闭）时不启用行动层（行为与 2.0.0
+    一致）。定标依据 docs/cps-定标报告-20260930.md。
 
     Parameters
     ----------
@@ -1217,11 +1296,29 @@ def build_quality_report(orig_entries: list, final_entries: list,
     # 语速 CPS 与时间轴间隙（纯观测，绝不进 items）。内联检测在组装区
     # 一次完成，渲染提为纯函数 render_observation_section；三组全空时
     # 整节省略。置于【术语一致性】之后、【双引擎分歧】之前。
-    single_line_violations = _scan_single_line_violations(final_entries)
+    # 单行超长白名单（2.0.1 先摘除后计量）：文件缺失=空白名单=行为不变。
+    single_line_whitelist = _load_single_line_whitelist()
+    single_line_violations, whitelist_exempt = _scan_single_line_violations(
+        final_entries, single_line_whitelist)
     cps_obs = _scan_cps_observations(final_entries)
     gap_obs, max_gap = _scan_gap_observations(final_entries)
+    # CPS 行动层（2.0.1 定标 5.0；cps_action=None=旧调用方/关闭，行为不变）
+    cps_action_cands: list = []
+    cps_action_truncated = False
+    if cps_action:
+        cps_action_cands, cps_action_truncated = _scan_cps_action(
+            final_entries, float(cps_action.get("threshold", 5.0)),
+            int(cps_action.get("max_items", 20)))
+    cps_action_note = None
+    if cps_action_cands or cps_action_truncated:
+        _thr = float(cps_action.get("threshold", 5.0))
+        cps_action_note = (f"行动提示: 语速偏快 {len(cps_action_cands)} 条"
+                           f"（行动阈值 {_thr:g}，处理走导读行动条目"
+                           + ("，已达截断上限" if cps_action_truncated else "")
+                           + "）")
     observation_text = render_observation_section(
-        single_line_violations, cps_obs, gap_obs, max_gap)
+        single_line_violations, cps_obs, gap_obs, max_gap,
+        whitelist_exempt=whitelist_exempt, cps_action_note=cps_action_note)
     if observation_text:
         lines.extend(observation_text.splitlines())
         lines.append("-" * 60)
@@ -1358,6 +1455,23 @@ def build_quality_report(orig_entries: list, final_entries: list,
                     "status": "observation",
                     "severity": None,
                 })
+        # 来源 E：语速偏快行动条目（2.0.1 CPS 行动化，D2026-0930-03 ①
+        # 内部序第二件；阈值定标见 docs/cps-定标报告-20260930.md）。仅
+        # CJK 译文条目参与；cps_action=None（旧调用方/关闭）时缺席；
+        # 截断上限防洪水（定标 20 条/片，超限在报告章节注明）。
+        for c in cps_action_cands:
+            fe = resolve_final_block(final_entries, c["index"])
+            guide_items.append({
+                "index": c["index"],
+                "timing": c["timing"],
+                "category": "cps_too_fast",
+                "message": (f"语速偏快 CPS {c['cps']:.2f}"
+                            f"（行动阈值 {float(cps_action.get('threshold', 5.0)):g}）"),
+                "current_text": (fe or {}).get("text"),
+                "source_excerpt": "",
+                "status": "open",
+                "severity": None,
+            })
         # index 升序稳定排序（None 防御：无 index 的排末尾）
         guide_items.sort(key=lambda it: (it["index"] is None,
                                          it["index"] if it["index"] is not None else 0))

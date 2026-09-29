@@ -1686,6 +1686,16 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                             "reason": f"音频检测失败，本次跳过: {e}",
                             "candidates": [], "metrics": {}}
                 guide: dict = {}
+                # 2.0.1 CPS 行动化（定标 docs/cps-定标报告-20260930.md）：
+                # 开关开时传行动层参数；关闭/旧配置缺席时 None=行为不变。
+                cps_action = None
+                if bool(getattr(cfg, "cps_action_enabled", True)):
+                    cps_action = {
+                        "threshold": float(getattr(
+                            cfg, "cps_action_threshold", 5.0)),
+                        "max_items": int(getattr(
+                            cfg, "cps_action_max_per_film", 20)),
+                    }
                 report = build_quality_report(
                     orig_entries, final_entries, Path(in_path).name,
                     expected_entries=orig_entries,
@@ -1707,7 +1717,8 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     guide_sink=guide,
                     media_path=media_path,
                     media_path_source=media_source,
-                    audio_insights=audio_insights)
+                    audio_insights=audio_insights,
+                    cps_action=cps_action)
                 rp = write_quality_report(out_dir, stem, report)
                 write_guide_json(out_dir, stem, guide)
                 print(f"\n📋 质量报告已生成: {Path(rp).name}")
