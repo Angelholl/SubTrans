@@ -38,14 +38,16 @@ PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; 简中语言文件随仓库分发（choco innosetup 不含 Unofficial 语言包），
+; 相对路径按 .iss 所在目录解析 → packaging/ChineseSimplified.isl
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Types]
 Name: full; Description: 完整安装（含日语语法词典，约 217MB）
-Name: compact; Description: 完整安装（含日语语法词典，约 217MB）
+Name: compact; Description: 标准安装（含日语语法词典）
 Name: custom; Description: 自定义安装（可选是否含日语语法词典）
 
 [Components]
@@ -86,6 +88,8 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
+var
+  RC: Integer;
 begin
   Result := True;
   if not WebView2Installed() then
@@ -94,7 +98,7 @@ begin
         '检测到系统未安装 Microsoft WebView2 Runtime（SubTransJAV 界面运行所必需）。' + #13#10 +
         '是否打开官方下载页面安装后再继续？', mbConfirmation, MB_YESNO) = IDYES then
     begin
-      ShellExec('open', WebView2DlUrl, '', '', SW_SHOW, ewNoWait, Result);
+      ShellExec('open', WebView2DlUrl, '', '', SW_SHOW, ewNoWait, RC);
     end;
     // 不阻断安装：允许先装应用，运行时 main.py 会再次探测并提示
   end;
