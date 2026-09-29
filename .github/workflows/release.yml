@@ -35,45 +35,82 @@ jobs:
           pip install -e ".[gui]"
           pip install pyinstaller
 
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (full, 含词典)
         run: >
           python -m PyInstaller packaging/SubTransJAV.spec
           --noconfirm --distpath Temp/pyinstaller_dist --workpath Temp/pyinstaller_work
 
+      - name: Build with PyInstaller (lite, SUBTRANSJAV_SPEC_LITE=1 排除词典)
+        run: >
+          python -m PyInstaller packaging/SubTransJAV.spec
+          --noconfirm --distpath Temp/pyinstaller_dist_lite
+          --workpath Temp/pyinstaller_work_lite
+        env:
+          SUBTRANSJAV_SPEC_LITE: "1"
+
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Compile installer
+      - name: Prepare lite dict_src empty dir
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path "Temp/innoinstall/empty_dict" | Out-Null
+
+      - name: Compile installer (full)
         shell: cmd
-        run: '"%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=${{ inputs.version }} packaging\setup.iss'
+        run: >-
+          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=${{ inputs.version }}
+          /Ddict_src=..\Temp\pyinstaller_dist\SubTransJAV\_internal\sudachidict_core\resources
+          packaging\setup.iss
+
+      - name: Compile installer (lite)
+        shell: cmd
+        run: >-
+          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=${{ inputs.version }}
+          /Dsuffix=-lite
+          /Ddict_src=..\Temp\innoinstall\empty_dict
+          packaging\setup.iss
 
       - name: Smoke check key artifacts
         shell: pwsh
         run: |
           $root = "Temp/pyinstaller_dist/SubTransJAV"
+          $lite = "Temp/pyinstaller_dist_lite/SubTransJAV"
           $paths = @(
             "$root/SubTransJAV.exe",
             "$root/_internal/webview_gui_assets/index.html",
             "$root/_internal/subtransjav/refine/defaults/translation_rules.yaml",
             "$root/_internal/sudachidict_core/resources/system.dic",
             "$root/_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll",
-            "$root/_internal/pythonnet/runtime/Python.Runtime.dll"
+            "$root/_internal/pythonnet/runtime/Python.Runtime.dll",
+            "$lite/SubTransJAV.exe",
+            "$lite/_internal/webview_gui_assets/index.html",
+            "$lite/_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll"
           )
           foreach ($p in $paths) {
             if (-not (Test-Path $p)) { Write-Error "MISSING artifact: $p"; exit 1 }
           }
-          # 体积下限断言：防静默空包（system.dic ~208MB，onedir 总量应 >250MB）
+          # 词典组件化断言：full 含 system.dic，lite 不含
+          if (-not (Test-Path "$root/_internal/sudachidict_core/resources/system.dic")) {
+            Write-Error "full dist missing system.dic"; exit 1
+          }
+          if (Test-Path "$lite/_internal/sudachidict_core/resources/system.dic") {
+            Write-Error "lite dist must NOT contain system.dic"; exit 1
+          }
+          # 体积下限断言：防静默空包（system.dic ~208MB，full onedir 总量应 >250MB）
           $dic = (Get-Item "$root/_internal/sudachidict_core/resources/system.dic").Length
           if ($dic -lt 100MB) { Write-Error "system.dic too small: $dic bytes"; exit 1 }
           $total = (Get-ChildItem $root -Recurse -File | Measure-Object Length -Sum).Sum
-          Write-Host "onedir total = $([math]::Round($total/1MB,1)) MB"
-          if ($total -lt 250MB) { Write-Error "onedir too small: $total bytes"; exit 1 }
+          Write-Host "full onedir total = $([math]::Round($total/1MB,1)) MB"
+          if ($total -lt 250MB) { Write-Error "full onedir too small: $total bytes"; exit 1 }
+          $liteTotal = (Get-ChildItem $lite -Recurse -File | Measure-Object Length -Sum).Sum
+          Write-Host "lite onedir total = $([math]::Round($liteTotal/1MB,1)) MB"
+          if ($liteTotal -ge $total) { Write-Error "lite dist should be smaller than full"; exit 1 }
 
       - name: Generate SHA256 manifest
         shell: pwsh
         run: |
           $out = "Temp/innoinstall"
-          Get-ChildItem $out | ForEach-Object {
+          Get-ChildItem $out -Filter "SubTransJAV-setup-*.exe" | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
             "$h  $($_.Name)"
           } | Set-Content "$out/SHA256SUMS.txt"
@@ -85,6 +122,7 @@ jobs:
           name: SubTransJAV-${{ inputs.version }}
           path: |
             Temp/pyinstaller_dist/SubTransJAV/**
+            Temp/pyinstaller_dist_lite/SubTransJAV/**
             Temp/innoinstall/*.exe
             Temp/innoinstall/SHA256SUMS.txt
           if-no-files-found: error

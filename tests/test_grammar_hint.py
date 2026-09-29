@@ -305,3 +305,42 @@ class TestThreadSafety:
         expected = [t.surface() for t in gh._tokenize_cached(texts[0])]
         gh._tokenize_cached.cache_clear()
         assert [t.surface() for t in gh._tokenize_cached(texts[0])] == expected
+
+
+# ---------------------------------------------------------------------------
+# Test: lite 版降级链——Dictionary() 失败（无词典数据）必须降级不炸
+# ---------------------------------------------------------------------------
+
+class TestDictionaryFailureDegradation:
+    """精简安装（无 sudachidict_core 数据文件）时的运行时降级。"""
+
+    def test_dictionary_raises_degrades_to_fallback(self, monkeypatch):
+        import sys
+        import types
+
+        from subtransjav.refine import grammar_hint as gh
+
+        class _Boom:
+            def __init__(self) -> None:
+                raise RuntimeError("system.dic not found")
+
+        fake = types.ModuleType("sudachipy")
+        fake.Dictionary = _Boom  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "sudachipy", fake)
+        monkeypatch.setattr(gh, "_tokenizer_instance", None)
+        monkeypatch.setattr(gh, "_sudachi_available", None)
+        gh._tokenize_cached.cache_clear()
+        try:
+            # 可用性判定降级为 False，不抛
+            assert gh.is_grammar_hint_available() is False
+            # 规则检测走 fallback，不炸
+            from subtransjav.refine.filters import parse_srt
+            entries = parse_srt(SRT_CONNECTIVE)
+            hints = gh._detect_rules_fallback(
+                entries[1]["text"], entries[:1], entries[2:])
+            assert hints
+            # generate_grammar_hints 端到端不炸，返回字符串
+            out = gh.generate_grammar_hints(SRT_CONNECTIVE, 2)
+            assert isinstance(out, str)
+        finally:
+            gh._tokenize_cached.cache_clear()
