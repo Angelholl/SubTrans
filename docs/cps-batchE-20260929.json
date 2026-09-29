@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "file": "4k2.me@ftkd-030.ja.merged.whisperjav_final_cn.srt",
+      "skipped": 0,
+      "skipped_short": 44,
+      "over_threshold": 0,
+      "count": 1620,
+      "mean": 2.727368995527607,
+      "p50": 2.5288002247821026,
+      "p90": 4.255319148936953,
+      "p95": 4.943696786596985,
+      "max": 9.883198562441326
+    },
+    {
+      "file": "4k2.me@hsoda-106.ja.merged.whisperjav_final_cn.srt",
+      "skipped": 0,
+      "skipped_short": 22,
+      "over_threshold": 1,
+      "count": 1254,
+      "mean": 2.597211210628224,
+      "p50": 2.446696959104536,
+      "p90": 3.968253968253997,
+      "p95": 4.5,
+      "max": 9.987515605488325
+    },
+    {
+      "file": "4k2.me@hsoda-114.ja.merged.whisperjav_final_cn.srt",
+      "skipped": 0,
+      "skipped_short": 23,
+      "over_threshold": 0,
+      "count": 1665,
+      "mean": 2.9052804379286608,
+      "p50": 2.8061224489795396,
+      "p90": 4.333333333333333,
+      "p95": 4.811547714514836,
+      "max": 9.090909090906084
+    },
+    {
+      "file": "4k2.me@jur-531.ja.merged.whisperjav_final_cn.srt",
+      "skipped": 0,
+      "skipped_short": 50,
+      "over_threshold": 3,
+      "count": 1430,
+      "mean": 2.7455578904774476,
+      "p50": 2.555677254472829,
+      "p90": 4.333333333333333,
+      "p95": 5.0,
+      "max": 10.0
+    },
+    {
+      "file": "4k2.me@jur-550.ja.merged.whisperjav_final_cn.srt",
+      "skipped": 0,
+      "skipped_short": 56,
+      "over_threshold": 1,
+      "count": 1541,
+      "mean": 2.527934378119682,
+      "p50": 2.3560209424085565,
+      "p90": 3.9228506047725498,
+      "p95": 4.537719795801645,
+      "max": 13.253012048193932
+    }
+  ],
+  "global": {
+    "skipped": 0,
+    "skipped_short": 195,
+    "over_threshold": 5,
+    "count": 7510,
+    "mean": 2.7076201358320797,
+    "p50": 2.5461489497136998,
+    "p90": 4.222150048717495,
+    "p95": 4.770164787510758,
+    "max": 13.253012048193932
+  },
+  "scenes": null
+}

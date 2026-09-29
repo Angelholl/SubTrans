@@ -1,0 +1,19 @@
+== 4k2.me@ftkd-030.ja.merged.whisperjav_final_cn.srt ==
+  条目 1620 条（跳过 0：空文本/时长无效或 ≤0；超短 44：时长 <0.5s） | 超 CPS 0 条
+  CPS 分布: mean=2.73 p50=2.53 p90=4.26 p95=4.94 max=9.88
+== 4k2.me@hsoda-106.ja.merged.whisperjav_final_cn.srt ==
+  条目 1254 条（跳过 0：空文本/时长无效或 ≤0；超短 22：时长 <0.5s） | 超 CPS 1 条
+  CPS 分布: mean=2.60 p50=2.45 p90=3.97 p95=4.50 max=9.99
+== 4k2.me@hsoda-114.ja.merged.whisperjav_final_cn.srt ==
+  条目 1665 条（跳过 0：空文本/时长无效或 ≤0；超短 23：时长 <0.5s） | 超 CPS 0 条
+  CPS 分布: mean=2.91 p50=2.81 p90=4.33 p95=4.81 max=9.09
+== 4k2.me@jur-531.ja.merged.whisperjav_final_cn.srt ==
+  条目 1430 条（跳过 0：空文本/时长无效或 ≤0；超短 50：时长 <0.5s） | 超 CPS 3 条
+  CPS 分布: mean=2.75 p50=2.56 p90=4.33 p95=5.00 max=10.00
+== 4k2.me@jur-550.ja.merged.whisperjav_final_cn.srt ==
+  条目 1541 条（跳过 0：空文本/时长无效或 ≤0；超短 56：时长 <0.5s） | 超 CPS 1 条
+  CPS 分布: mean=2.53 p50=2.36 p90=3.92 p95=4.54 max=13.25
+== 全局 ==
+  条目 7510 条（跳过 0；超短 195） | 超 CPS 5 条
+  CPS 分布: mean=2.71 p50=2.55 p90=4.22 p95=4.77 max=13.25
+注：CPS 为'去空白字符数/时长秒'观测口径；场景归属按遥测时长累计窗口近似。本工具为只读调研，不触发重翻。
