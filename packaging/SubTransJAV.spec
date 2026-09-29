@@ -32,7 +32,7 @@ datas = [
 # Dictionary() 失败走既有 try/except 降级链，功能自动降级不炸）。
 _LITE = os.environ.get("SUBTRANSJAV_SPEC_LITE", "").strip() == "1"
 if _LITE:
-    print("[spec] SUBTRANSJAV_SPEC_LITE=1：排除 sudachidict_core 词典数据")
+    print("[spec] SUBTRANSJAV_SPEC_LITE=1: excluding sudachidict_core dict data")
 else:
     datas += collect_data_files("sudachidict_core")
 
@@ -63,7 +63,7 @@ if _LITE:
     # sudachidict_core 的数据一律剔除，运行时 Dictionary() 失败走降级链）。
     before = len(a.datas)
     a.datas = [t for t in a.datas if "sudachidict_core" not in t[0].replace("\\", "/")]
-    print(f"[spec] lite：已剔除词典数据 {before - len(a.datas)} 项")
+    print(f"[spec] lite: removed {before - len(a.datas)} dict data entries")
 pyz = PYZ(a.pure)
 
 exe = EXE(
