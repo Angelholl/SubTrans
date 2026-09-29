@@ -546,18 +546,13 @@
                     <div style="font-size:12px; color:#888;" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
 
                     <!-- 数据保存目录（owner 反馈②：用户可选数据根；写入 .data-root 指针，重启生效；
-                         与媒体源「更换」同款单行输入交互，复用其暗色 token 类） -->
+                         浏览选择目录（与角色卡同款原生目录对话框），复用媒体源暗色 token 类） -->
                     <div class="media-source-bar" id="dataRootBar" style="margin-top:8px;">
                         <span class="media-source-label" data-i18n="data_root_title">数据保存目录</span>
                         <span class="media-source-path" id="dataRootCurrentPath"></span>
                         <span class="media-source-tag" id="dataRootSourceTag"></span>
-                        <button type="button" id="dataRootToggleBtn" class="btn btn-text btn-sm" data-i18n="data_root_change_btn">更改</button>
+                        <button type="button" id="dataRootToggleBtn" class="btn btn-text btn-sm" data-i18n="data_root_change_btn">浏览…</button>
                         <button type="button" id="dataRootRestoreBtn" class="btn btn-text btn-sm" data-i18n="data_root_restore_btn">恢复默认</button>
-                    </div>
-                    <div class="media-source-edit-row" id="dataRootEditRow" style="display:none;">
-                        <input type="text" id="dataRootInput" class="form-input compact" style="flex:1; min-width:var(--w-key-input);"
-                               data-i18n-placeholder="data_root_input_placeholder" placeholder="输入新的数据保存目录完整路径（绝对路径）" autocomplete="off">
-                        <button type="button" id="dataRootApplyBtn" class="btn btn-secondary btn-compact" data-i18n="data_root_apply_btn">保存</button>
                         <span id="dataRootStatus" style="font-size:12px; color:#888;"></span>
                     </div>
 

@@ -381,10 +381,9 @@ const MSG = {
     data_root_source_pointer: '自定义目录',
     data_root_source_frozen_default: '打包默认',
     data_root_source_legacy: '仓库根传统',
-    data_root_change_btn: '更改',
+    data_root_change_btn: '浏览…',
     data_root_restore_btn: '恢复默认',
-    data_root_input_placeholder: '输入新的数据保存目录完整路径（绝对路径）',
-    data_root_apply_btn: '保存',
+    data_root_unchanged: '目录未变化',
     data_root_saved_restart: '已保存，重启应用后生效',
     data_root_default_restored: '已恢复默认，重启应用后生效',
     data_root_need_abs: '请输入绝对路径',
@@ -2741,18 +2740,9 @@ function switchTab(tabId) {
       updateMediaSourceBar(lastGuideData);
     });
 
-    // 数据保存目录（高级参数页）：与媒体源「更换」同款展开单行输入交互
+    // 数据保存目录（高级参数页）：浏览选择目录（与角色卡同款原生目录对话框）
     const drToggleBtn = $('dataRootToggleBtn');
-    if (drToggleBtn) drToggleBtn.addEventListener('click', () => {
-      const row = $('dataRootEditRow');
-      if (row) row.style.display =
-        row.style.display === 'none' ? '' : 'none';
-    });
-    const drApplyBtn = $('dataRootApplyBtn');
-    if (drApplyBtn) drApplyBtn.addEventListener('click', () => {
-      const inp = $('dataRootInput');
-      dataRootSave(inp ? inp.value.trim() : '');
-    });
+    if (drToggleBtn) drToggleBtn.addEventListener('click', dataRootBrowse);
     const drRestoreBtn = $('dataRootRestoreBtn');
     if (drRestoreBtn) drRestoreBtn.addEventListener('click',
       () => dataRootSave(''));
@@ -2773,6 +2763,21 @@ function switchTab(tabId) {
       if (pathEl) pathEl.textContent = r.data_root;
       if (tagEl) tagEl.textContent = dataRootSourceLabel(r.source);
     }).catch(() => {});
+  }
+  async function dataRootBrowse() {
+    const st = $('dataRootStatus');
+    try {
+      const r = await pywebview.api.refine_pick_folder();
+      if (!r || !r.success || !r.path) return; // 取消/失败静默返回
+      const cur = $('dataRootCurrentPath');
+      if (cur && cur.textContent && cur.textContent === r.path) {
+        if (st) st.textContent = MSG.data_root_unchanged;
+        return;
+      }
+      await dataRootSave(r.path);
+    } catch (e) {
+      if (st) st.textContent = String(e);
+    }
   }
   async function dataRootSave(value) {
     const st = $('dataRootStatus');
