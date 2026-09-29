@@ -156,6 +156,11 @@ V2_TEMPLATE_FILES = {
     "B": "角色-审校抛光.txt",
 }
 
+# 包内自带通用模板目录（四级回落第 3 段，只读兜底——不写回数据根；
+# 用户在词库页保存模板时才写入数据根 config/templates）。
+# 测试通过 monkeypatch 本常量模拟"全缺"场景。
+_PKG_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "defaults", "templates")
+
 V2_STAGE_PROMPTS = {
     "A": (
         "请对以下日文字幕进行净语清洗并翻译成中文。"
@@ -320,12 +325,16 @@ def _load_v2_instruction(cfg: RefineConfig, tag: str, gl_block: str,
 
 
 def _read_v2_card(tag: str, explicit_path: str, templates_dir: str) -> str:
+    # 四级回落：显式文件 → 数据根 config/templates → 包内 defaults/templates → 报错
     if explicit_path and os.path.isfile(explicit_path):
         return Path(explicit_path).read_text(encoding="utf-8")
     p = os.path.join(templates_dir, V2_TEMPLATE_FILES[tag])
-    if not os.path.isfile(p):
-        raise RefineError(f"v2 角色卡缺失：{p}")
-    return Path(p).read_text(encoding="utf-8")
+    if os.path.isfile(p):
+        return Path(p).read_text(encoding="utf-8")
+    pkg = os.path.join(_PKG_TEMPLATES_DIR, V2_TEMPLATE_FILES[tag])
+    if os.path.isfile(pkg):
+        return Path(pkg).read_text(encoding="utf-8")
+    raise RefineError(f"v2 角色卡缺失：{p}")
 
 
 def _split_instruction_file(path: str) -> tuple:

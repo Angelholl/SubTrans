@@ -33,6 +33,7 @@ datas = [
     (os.path.join(SPECPATH, "..", "subtransjav", "webview_gui", "assets"),
      "webview_gui_assets"),
     # refine 默认规则：保持包内相对路径
+    # （整目录递归拷贝，已覆盖 defaults/templates/**——通用角色卡随包内回落链走）
     (os.path.join(SPECPATH, "..", "subtransjav", "refine", "defaults"),
      os.path.join("subtransjav", "refine", "defaults")),
 ]
