@@ -330,6 +330,16 @@ def _is_default_direction(cfg) -> bool:
     return (src, tgt) == ("ja", "zh")
 
 
+def _direction_key(cfg) -> str:
+    """方向键 "src→tgt"（manifest.py direction 同格式，U+2192）。
+
+    缺省（字段缺席/空值）回退 ja→zh——与 _collect_grammar_hints 的
+    direction 默认值一致，保证缺省方向缓存键逐字节不变。
+    """
+    return (f"{getattr(cfg, 'source_lang', None) or 'ja'}"
+            f"→{getattr(cfg, 'target_lang', None) or 'zh'}")
+
+
 def _load_v2_instruction(cfg: RefineConfig, tag: str, gl_block: str,
                          tmp_dir: str, sidecar_block: str = "",
                          synopsis_block: str = "") -> tuple:
@@ -566,7 +576,8 @@ def _run_with_fallback(cfg: RefineConfig, tag: str, client,
 def _collect_grammar_hints(context_entries: list, targets: list,
                            verbose: bool = True,
                            collector=None, file_name: str = None,
-                           tag: str = "A", profile: str = "") -> dict:
+                           tag: str = "A", profile: str = "",
+                           direction: str = "ja→zh") -> dict:
     """对 targets 逐条生成语法提示（SudachiPy 句法分析，legacy 同款）。
 
     context_entries 提供条目上下文（前后条参与分析），targets 为需要
@@ -574,6 +585,9 @@ def _collect_grammar_hints(context_entries: list, targets: list,
 
     P1-6：结果按 (sha1(条目文本), tag, profile) 缓存（模块级，A/B 两阶段
     与多文件共享）；全部命中时跳过 build_srt 与逐条分析。
+
+    2.1 方向参数化（D2026-0930-05）：direction 为 "src→tgt" 方向键，
+    进缓存键并按源语言分派提示后端（ja=sudachi / zh=jieba / en=规则）。
     """
     hints = {}
     misses = []
@@ -583,7 +597,9 @@ def _collect_grammar_hints(context_entries: list, targets: list,
         while len(_GRAMMAR_CACHE) >= _GRAMMAR_CACHE_MAX:
             _GRAMMAR_CACHE.popitem(last=False)
         for e in targets:
-            key = _grammar_cache_key(e.get("text"), tag, profile)
+            # 2.1 方向参数化（D2026-0930-05 缺口修复）：direction 透传
+            # 缓存键——原实现漏传恒取默认 "ja→zh"，跨方向同文本会串缓存
+            key = _grammar_cache_key(e.get("text"), tag, profile, direction)
             if key in _GRAMMAR_CACHE:
                 _GRAMMAR_CACHE.move_to_end(key)
                 hint = _GRAMMAR_CACHE[key]
@@ -594,15 +610,37 @@ def _collect_grammar_hints(context_entries: list, targets: list,
     if not misses:
         return hints
     try:
-        from .grammar_hint import generate_grammar_hints, is_grammar_hint_available
-        if not is_grammar_hint_available():
-            if verbose:
-                print("   ℹ️ 语法提示: 未安装 sudachipy，跳过句法分析")
-            return hints
+        # 2.1 分词提示后端分派（D2026-0930-05）：R4 裁定——缓存键传方向
+        # 对全串、分派取源语言（split 首段）。ja 维持现有 sudachi 路径
+        # （逐字节不动）；zh 走 jieba（[zh] 可选组件，缺失静默降级）；
+        # en 走内置规则（纯规则零依赖，无可用性门）。生成循环与负缓存
+        # 写回三路共用。
+        src = direction.split("→")[0]
+        if src == "zh":
+            from .token_hint import generate_zh_hints, is_zh_hint_available
+            if not is_zh_hint_available():
+                if verbose:
+                    print("   ℹ️ 分词提示: 未安装 jieba（[zh] 可选组件），跳过分词提示")
+                return hints
+        elif src == "en":
+            from .token_hint import generate_en_hints
+        else:
+            from .grammar_hint import generate_grammar_hints, is_grammar_hint_available
+            if not is_grammar_hint_available():
+                if verbose:
+                    print("   ℹ️ 语法提示: 未安装 sudachipy，跳过句法分析")
+                return hints
         srt_content = build_srt(context_entries)
         for e, key in misses:
-            hint = generate_grammar_hints(
-                srt_content, e["index"], entries=context_entries)
+            if src == "zh":
+                hint = generate_zh_hints(
+                    srt_content, e["index"], entries=context_entries)
+            elif src == "en":
+                hint = generate_en_hints(
+                    srt_content, e["index"], entries=context_entries)
+            else:
+                hint = generate_grammar_hints(
+                    srt_content, e["index"], entries=context_entries)
             with _GRAMMAR_CACHE_LOCK:
                 # 同款 LRU 淘汰（D3 终选）：写回前先逐条弹出最旧键
                 while len(_GRAMMAR_CACHE) >= _GRAMMAR_CACHE_MAX:
@@ -632,10 +670,11 @@ def _inject_stage_a_assists(cfg: RefineConfig, entries: list, todo: list,
     """
     todo = [dict(e) for e in todo]
 
-    # 1) 语法提示
+    # 1) 语法提示（2.1 方向参数化 D2026-0930-05：透传方向键分派后端）
     hints = _collect_grammar_hints(entries, todo, collector=collector,
                                    file_name=file_name,
-                                   tag="A", profile=cfg.v2_profile)
+                                   tag="A", profile=cfg.v2_profile,
+                                   direction=_direction_key(cfg))
     if hints:
         print(f"   📝 语法提示已注入: {len(hints)}/{len(todo)} 条")
 
@@ -802,7 +841,8 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
          "text": (orig["text"] or "").strip() if orig else ""}
         for ae, orig in zip(a_result.entries, aligned_orig, strict=False)]
     hints = _collect_grammar_hints(ja_entries, ja_entries, verbose=False,
-                                   tag="B", profile=cfg.v2_profile)
+                                   tag="B", profile=cfg.v2_profile,
+                                   direction=_direction_key(cfg))
     if hints:
         print(f"   📝 语法提示已注入（审校）: {len(hints)}/{len(b_entries)} 条")
         for e in b_entries:
