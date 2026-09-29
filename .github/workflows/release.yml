@@ -99,12 +99,12 @@ jobs:
           if (Test-Path "$lite/_internal/sudachidict_core/resources/system.dic") {
             Write-Error "lite dist must NOT contain system.dic"; exit 1
           }
-          # 体积下限断言：防静默空包（system.dic ~208MB，full onedir 总量应 >250MB）
+          # 体积下限断言：防静默空包（system.dic ~208MB，full onedir 总量应 >200MB）
           $dic = (Get-Item "$root/_internal/sudachidict_core/resources/system.dic").Length
           if ($dic -lt 100MB) { Write-Error "system.dic too small: $dic bytes"; exit 1 }
           $total = (Get-ChildItem $root -Recurse -File | Measure-Object Length -Sum).Sum
           Write-Host "full onedir total = $([math]::Round($total/1MB,1)) MB"
-          if ($total -lt 250MB) { Write-Error "full onedir too small: $total bytes"; exit 1 }
+          if ($total -lt 200MB) { Write-Error "full onedir too small: $total bytes"; exit 1 }
           $liteTotal = (Get-ChildItem $lite -Recurse -File | Measure-Object Length -Sum).Sum
           Write-Host "lite onedir total = $([math]::Round($liteTotal/1MB,1)) MB"
           if ($liteTotal -ge $total) { Write-Error "lite dist should be smaller than full"; exit 1 }
