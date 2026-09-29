@@ -25,6 +25,7 @@
 import csv
 import json
 import re
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -441,7 +442,7 @@ def _load_single_line_whitelist() -> list:
 
 
 def _scan_single_line_violations(final_entries: list,
-                                 whitelist: list = ()) -> tuple[list[dict], int]:
+                                 whitelist: Sequence = ()) -> tuple[list[dict], int]:
     """C2：终稿单行超长扫描（每行去除全部空白后 > _SINGLE_LINE_MAX_CHARS）。
 
     whitelist 非空时"先摘除后计量"：条目任一行命中任一 pattern → 整条
