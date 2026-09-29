@@ -10,8 +10,17 @@
   rules_loader.py:34 / source_hallucination.py:74 按 __file__ 拼接可达。
 
 禁 UPX（D2026-0929-07 点 9：upx=False，避免误压缩损坏 DLL/运行时）。
-console=True 为内部门禁件便于诊断（可看 stderr/日志）；正式发布前
-再评估 windowed（届时需确认 print/异常有 GUI 弹窗或日志兜底）。
+
+2.0.0 双 EXE（owner 反馈：GUI 启动有 CMD 黑框）：
+- SubTransJAV.exe：console=False（windowed 子系统，启动无黑框），
+  入口 packaging/entry_gui.py；
+- subtrans-cli.exe：console=True（命令行保留完整控制台语义），
+  入口 packaging/entry_cli.py（薄委托 refine.cli.main）。
+两者共享一次 Analysis 的 binaries/datas（COLLECT 只收 GUI 分析一份，
+_internal 数据只落一份盘）；CLI 分析仅取其 pure/scripts 供 PYZ/入口。
+GUI windowed 下 stdout 为 NullWriter，print 链已按容错加固（见
+utils/console.py / refine/cli.py stdio 处理）；旧构建兼容回退路径
+`[sys.executable, "--subtrans-cli"]` 保留在 spawn_refine_cli。
 """
 
 import os
@@ -66,12 +75,51 @@ if _LITE:
     print(f"[spec] lite: removed {before - len(a.datas)} dict data entries")
 pyz = PYZ(a.pure)
 
-exe = EXE(
+# CLI 薄入口独立 Analysis：只取 pure/scripts 供 PYZ/EXE 入口；
+# binaries/datas 共享上方 GUI 分析（refine.cli 及其依赖已在 GUI 分析的
+# hiddenimports 中钉死，运行库由 COLLECT 统一落 _internal 一份）。
+a_cli = Analysis(
+    [os.path.join(SPECPATH, "entry_cli.py")],
+    pathex=[SPECPATH],
+    binaries=[],
+    datas=[],
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    module_collection_mode={},
+)
+pyz_cli = PYZ(a_cli.pure)
+
+_ICON = os.path.join(SPECPATH, "..", "subtransjav", "webview_gui", "assets", "icon.ico")
+
+exe_gui = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
     name="SubTransJAV",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=_ICON,
+)
+
+exe_cli = EXE(
+    pyz_cli,
+    a_cli.scripts,
+    [],
+    exclude_binaries=True,
+    name="subtrans-cli",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -82,11 +130,12 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(SPECPATH, "..", "subtransjav", "webview_gui", "assets", "icon.ico"),
+    icon=_ICON,
 )
 
 coll = COLLECT(
-    exe,
+    exe_gui,
+    exe_cli,
     a.binaries,
     a.datas,
     strip=False,

@@ -342,7 +342,10 @@ def _handle_tm_commands(args):
     from .tm import TranslationMemory
 
     # Windows GBK 终端兼容：确保 UTF-8 输出
-    if _sys.stdout.encoding and _sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    # （windowed 回退链：GUI exe 无 subtrans-cli.exe 时经 --subtrans-cli 进入，
+    # stdout 可能为无 encoding 属性的 NullWriter——getattr 容错，不炸）
+    _out_enc = getattr(_sys.stdout, "encoding", None)
+    if _out_enc and _out_enc.lower() not in ("utf-8", "utf8"):
         with contextlib.suppress(Exception):
             cast(Any, _sys.stdout).reconfigure(encoding="utf-8",
                                                errors="replace")

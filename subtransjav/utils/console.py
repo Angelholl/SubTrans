@@ -84,8 +84,13 @@ def _fix_stream_encoding(stream: TextIO | None, fd: int) -> None:
         pass
 
     # Fallback: create new TextIOWrapper
+    # windowed（PyInstaller console=False）下 sys.stdout/stderr 是无 buffer
+    # 的 NullWriter——不能凭空对其 fd 重建 TextIOWrapper（fd 1/2 可能无效，
+    # 即便成功写入也只会落黑洞），原样跳过最安全。
+    if not hasattr(stream, 'buffer'):
+        return
     try:
-        buffer = stream.buffer if hasattr(stream, 'buffer') else io.BufferedWriter(io.FileIO(fd, 'w'))
+        buffer = stream.buffer
 
         wrapper = io.TextIOWrapper(
             buffer,
@@ -128,9 +133,11 @@ def safe_print(*args: Any, **kwargs: Any) -> None:
         file = kwargs.get('file')
         flush = kwargs.get('flush', False)
         output = sep.join(str(arg) for arg in args)
+        # windowed 下 sys.stdout 可能为 None 或无 encoding 属性的 NullWriter
+        out_encoding = getattr(sys.stdout, 'encoding', None) or 'utf-8'
         try:
-            encoded = output.encode(sys.stdout.encoding or 'utf-8', errors='replace')
-            decoded = encoded.decode(sys.stdout.encoding or 'utf-8', errors='replace')
+            encoded = output.encode(out_encoding, errors='replace')
+            decoded = encoded.decode(out_encoding, errors='replace')
             print(decoded, sep=sep, end=end, file=file, flush=flush)
         except Exception:
             # Last resort: ASCII only

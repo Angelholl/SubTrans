@@ -101,6 +101,10 @@ jobs:
           foreach ($p in $paths) {
             if (-not (Test-Path $p)) { Write-Error "MISSING artifact: $p"; exit 1 }
           }
+          # 2.0.0 双 EXE：CLI 可执行体存在性断言（full/lite 均应有）
+          foreach ($p in @("$root/subtrans-cli.exe", "$lite/subtrans-cli.exe")) {
+            if (-not (Test-Path $p)) { Write-Error "MISSING artifact: $p"; exit 1 }
+          }
           # 词典组件化断言：full 含 system.dic，lite 不含
           if (-not (Test-Path "$root/_internal/sudachidict_core/resources/system.dic")) {
             Write-Error "full dist missing system.dic"; exit 1
@@ -117,6 +121,38 @@ jobs:
           $liteTotal = (Get-ChildItem $lite -Recurse -File | Measure-Object Length -Sum).Sum
           Write-Host "lite onedir total = $([math]::Round($liteTotal/1MB,1)) MB"
           if ($liteTotal -ge $total) { Write-Error "lite dist should be smaller than full"; exit 1 }
+
+      # 2.0.0 双 EXE：CLI 冒烟改走独立 subtrans-cli.exe（console 版，无头可跑）。
+      # GUI exe（SubTransJAV.exe）为 windowed 子系统：无头环境启动无可见输出、
+      # 无法做 stdout 断言，仅做 Test-Path 存在性检查，GUI 真机验收归安装反馈轮。
+      - name: Smoke check subtrans-cli.exe (CLI semantics, headless)
+        shell: pwsh
+        run: |
+          $root = "Temp/pyinstaller_dist/SubTransJAV"
+          $cli = "$root/subtrans-cli.exe"
+          if (-not (Test-Path $cli)) { Write-Error "MISSING artifact: $cli"; exit 1 }
+          # 数据根隔离：全程不触碰 CI 真实 %LOCALAPPDATA%
+          $env:SUBTRANSJAV_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
+          # 1) --help 含 --where
+          $help = (& $cli --help 2>&1) -join "`n"
+          if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --help rc=$LASTEXITCODE"; exit 1 }
+          if (-not $help.Contains("--where")) { Write-Error "--help output missing --where"; exit 1 }
+          # 2) --where 九字段（九行非空输出）
+          $where = (& $cli --where 2>&1) | Where-Object { $_ -and $_.Trim() }
+          if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --where rc=$LASTEXITCODE"; exit 1 }
+          Write-Host "$($where -join "`n")"
+          if (@($where).Count -lt 9) { Write-Error "--where expected 9 fields, got $(@($where).Count)"; exit 1 }
+          # 3) --dry-run 全链 rc=0（本地档位，无需 API Key；SRT 夹具现场生成）
+          New-Item -ItemType Directory -Force -Path "Temp/cli_smoke_data/in" | Out-Null
+          $srt = "Temp/cli_smoke_data/in/smoke.srt"
+          @("1", "00:00:01,000 --> 00:00:02,000", "スモークテスト", "") |
+            Set-Content $srt -Encoding UTF8
+          & $cli -i $srt `
+            --s1-provider lmstudio --s1-model smoke-model `
+            --s3-provider lmstudio --s3-model smoke-model `
+            --dry-run
+          if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --dry-run rc=$LASTEXITCODE"; exit 1 }
+          Write-Host "subtrans-cli smoke: --help / --where(9) / --dry-run all rc=0"
 
       - name: Generate SHA256 manifest
         shell: pwsh

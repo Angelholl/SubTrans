@@ -94,3 +94,45 @@ def test_detector_passes_clean_snippets(tmp_path: Path):
         encoding="utf-8",
     )
     assert _violations(f) == []
+
+
+# ---------------------------------------------------------------------------
+# 2.0.0 双 EXE：frozen spawn 命令形态钉测试（subtrans-cli.exe 优先 / 回退）
+# ---------------------------------------------------------------------------
+
+def _frozen_spawn_cmd(monkeypatch, cli_exe_exists: bool) -> list[str]:
+    """frozen 形态下 spawn_refine_cli 实际拼出的命令（拦截 subprocess.run）。"""
+    import subprocess
+    import sys as _sys
+
+    import subtransjav.utils.process_manager as pm
+
+    monkeypatch.setattr(_sys, "frozen", True, raising=False)
+    monkeypatch.setattr(Path, "exists", lambda self: cli_exe_exists)
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(pm.subprocess, "run", fake_run)
+    result = pm.spawn_refine_cli(["--where"], capture=True)
+    assert result.returncode == 0
+    return captured["cmd"]
+
+
+def test_frozen_spawn_prefers_subtrans_cli_exe(monkeypatch):
+    """frozen 且 subtrans-cli.exe 存在 → 命令=[cli_exe]+args（不走 --subtrans-cli）。"""
+    cmd = _frozen_spawn_cmd(monkeypatch, cli_exe_exists=True)
+    assert cmd[0].replace("\\", "/").endswith("subtrans-cli.exe")
+    assert cmd[1:] == ["--where"]
+    assert "--subtrans-cli" not in cmd
+
+
+def test_frozen_spawn_falls_back_to_dispatch(monkeypatch):
+    """frozen 但 subtrans-cli.exe 缺失（旧单 exe 构建）→ 回退 [exe, --subtrans-cli]。"""
+    import sys as _sys
+
+    cmd = _frozen_spawn_cmd(monkeypatch, cli_exe_exists=False)
+    assert cmd == [_sys.executable, "--subtrans-cli", "--where"]

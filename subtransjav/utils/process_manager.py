@@ -16,6 +16,7 @@ import os
 import signal
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 from subtransjav import paths
@@ -490,7 +491,11 @@ def spawn_refine_cli(
 
     purpose 两位（D2026-0929-08）：
       - "subprocess"：拉起 refine CLI 子进程。命令形态：
-        frozen（paths.is_frozen()）→ ``[sys.executable, "--subtrans-cli"] + args``；
+        frozen（paths.is_frozen()）→ 优先安装目录内独立 CLI 可执行体
+        ``Path(sys.executable).parent / "subtrans-cli.exe"``（2.0.0 双 EXE
+        改造：GUI 主程序为 windowed，输出不可见，命令行走专用 console 版）；
+        该文件不存在（旧单 exe 构建兼容回退）→
+        ``[sys.executable, "--subtrans-cli"] + args``；
         源码 → ``[sys.executable, "-u", "-m", "subtransjav.refine.cli"] + args``。
       - "venv_bootstrap"：venv 引导（``-m venv`` 等）。frozen 下整段 no-op
         直接返回 None（调用方据 None 跳过）；源码形态 ``[sys.executable] + args``，
@@ -519,7 +524,11 @@ def spawn_refine_cli(
         raise ValueError(f"未知 purpose: {purpose!r}（应为 subprocess | venv_bootstrap）")
 
     if paths.is_frozen():
-        cmd = [sys.executable, "--subtrans-cli", *args]
+        # 2.0.0 双 EXE：优先同目录独立 CLI 可执行体（完整控制台语义）；
+        # 旧单 exe 构建（console 版，无 subtrans-cli.exe）回退 --subtrans-cli 分派。
+        cli_exe = Path(sys.executable).parent / "subtrans-cli.exe"
+        cmd = ([str(cli_exe), *args] if cli_exe.exists()
+               else [sys.executable, "--subtrans-cli", *args])
     else:
         cmd = [sys.executable, "-u", "-m", "subtransjav.refine.cli", *args]
 
