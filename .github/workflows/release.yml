@@ -4,8 +4,7 @@
 # CI 只能证明"能打包"，真机核验（GUI 启动、WebView2 加载、翻译链路）
 # 必须在 Windows 10/11 目标机上完成后方可发布。
 #
-# D2026-0929-07 点 7：本工作流当前仅 workflow_dispatch 手动触发，
-# 全链验证（真机 smoke 通过）后方可启用 tag 触发（见文末注释块）。
+# D2026-0929-07 点 7：tag 触发已于 run 36522842977 全链验证后启用。
 
 name: release
 
@@ -16,6 +15,9 @@ on:
         description: "发布版本号（如 1.0.0），将写入 Inno 产物文件名"
         required: true
         type: string
+  push:
+    tags:
+      - "v*"
 
 jobs:
   build-windows:
@@ -26,6 +28,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          if (-not $v) { $v = $env:GITHUB_REF_NAME -replace '^v','' }
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
@@ -61,14 +70,14 @@ jobs:
       - name: Compile installer (full)
         shell: cmd
         run: >-
-          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=${{ inputs.version }}
+          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=%VERSION%
           /Ddict_src=..\Temp\pyinstaller_dist\SubTransJAV\_internal\sudachidict_core\resources
           packaging\setup.iss
 
       - name: Compile installer (lite)
         shell: cmd
         run: >-
-          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=${{ inputs.version }}
+          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=%VERSION%
           /Dsuffix=-lite
           /Ddict_src=..\Temp\innoinstall\empty_dict
           packaging\setup.iss
@@ -122,7 +131,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SubTransJAV-${{ inputs.version }}
+          name: SubTransJAV-${{ env.VERSION }}
           path: |
             Temp/pyinstaller_dist/SubTransJAV/**
             Temp/pyinstaller_dist_lite/SubTransJAV/**
@@ -130,12 +139,5 @@ jobs:
             Temp/innoinstall/SHA256SUMS.txt
           if-no-files-found: error
 
-# ---------------------------------------------------------------------------
-# D2026-0929-07 点 7：workflow_dispatch 全链验证后方可启用。
-# 启用时替换/合并上方 on: 段，并补 upload 到 GitHub Release 的步骤。
-#
-# on:
-#   push:
-#     tags:
-#       - "v*"
-# ---------------------------------------------------------------------------
+# D2026-0929-07 点 7：tag 触发已启用（push: tags: v*），
+# 已于 run 36522842977 手动全链验证通过。
