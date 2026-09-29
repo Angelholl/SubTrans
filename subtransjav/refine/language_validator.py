@@ -100,8 +100,18 @@ _KANA_SHORT_RE = re.compile(r"^[\u3040-\u30ff]{1,2}[。！？,.]?$")
 _JA_PARTICLES_RE = re.compile(r'[はがをにでともねよか]|から|まで|へ')
 
 
+def _normalize_target(target_lang: str) -> str:
+    """目标语言形参归一（2.1 方向参数化）：chinese/english 别名折叠；
+    非 zh/en 一律归 ja（旧行为等价）。"""
+    if target_lang in ("chinese", "zh"):
+        return "zh"
+    if target_lang in ("english", "en"):
+        return "en"
+    return "ja"
+
+
 def is_valid_stage_text(text: str, target: str = "ja") -> bool:
-    """校验一条产物是否符合目标语言签名。target: 'ja' 或 'zh'。"""
+    """校验一条产物是否符合目标语言签名。target: 'ja' / 'zh' / 'en'。"""
     if not text or not text.strip():
         return True  # 空条目交给删除感知语义，不进此过滤器
     t = text.strip()
@@ -122,6 +132,13 @@ def is_valid_stage_text(text: str, target: str = "ja") -> bool:
     # 硬乱码：明显控制字符 → 无效
     if _CONTROL_HEAVY_RE.search(t):
         return False
+
+    # === 英文阶段（2.1 规则级起步，D2026-0930-04 ⑤）：无假名残留 + 含
+    # 拉丁字母即有效。与下方"纯拉丁串→无效"的 ja/zh 语义刻意相反（en
+    # 目标下英文串就是有效签名），须置于其前干净分派勿叠加补丁。
+    if target == "en":
+        return (not re.search(r"[\u3040-\u30ff]", t)
+                and bool(re.search(r"[A-Za-z]", t)))
 
     # 纯拉丁串（无任何 CJK）→ 幻觉/乱码转写，无效
     if _LATIN_ONLY_RE.match(t):
@@ -244,7 +261,7 @@ def filter_stage_output(srt_path: str, stage_index: int,
     if not entries:
         return 0, 0
 
-    target = "zh" if target_lang in ("chinese", "zh") else "ja"
+    target = _normalize_target(target_lang)
     kept, dropped = [], []
 
     # 为避免单批误杀，先粗扫全文件剔除率

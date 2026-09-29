@@ -151,6 +151,8 @@ V2_STAGE_TAGS = ("A", "B")
 V2_STAGE_NAMES = {"A": "阶段A 净语+翻译", "B": "阶段B 审校+抛光"}
 # v2 阶段复用 legacy 各阶段槽位的服务商/模型配置：A→stages[0]，B→stages[2]
 V2_STAGE_SLOT = {"A": 0, "B": 2}
+# 方向参数化（2.1，D2026-0930-04 ③）：方向中文名（通用提示词措辞用）
+_LANG_NAMES = {"ja": "日文", "zh": "中文", "en": "英文"}
 
 V2_TEMPLATE_FILES = {
     "A": "角色-净语翻译.txt",
@@ -224,9 +226,12 @@ _GRAMMAR_CACHE_MAX = 50000
 _GRAMMAR_CACHE_LOCK = threading.Lock()
 
 
-def _grammar_cache_key(text: str, tag: str, profile: str) -> tuple:
+def _grammar_cache_key(text: str, tag: str, profile: str,
+                       direction: str = "ja→zh") -> tuple:
+    # 2.1 方向参数化（D2026-0930-04 清单外联动 4）：同进程跨方向运行时
+    # 中日同文本（纯汉字串）会复用对方方向的文法提示——方向进键隔离
     return (hashlib.sha1((text or "").encode("utf-8")).hexdigest(),
-            tag, profile)
+            tag, profile, direction)
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +249,11 @@ def _ensure_auto_synopsis(cfg: RefineConfig, entries: list,
     失败均静默降级（管线照常，不影响翻译结果）。
     """
     if not getattr(cfg, "auto_synopsis", False):
+        return None
+    # 2.1 方向参数化（D2026-0930-04 清单外联动 3）：摘要是中文剧情梗概、
+    # 注入 A/B 提示词消解指代——仅对 ja→zh 缺省方向有意义，非缺省方向
+    # 抑制（中文摘要注入 zh→en 提示词语义错位）
+    if not _is_default_direction(cfg):
         return None
     # 手写优先：sidecar【剧情摘要】小节非空时不做自动摘要
     if sidecar and [ln for ln in (sidecar.get("summary") or [])
@@ -293,6 +303,33 @@ def _ensure_auto_synopsis(cfg: RefineConfig, entries: list,
     return text
 
 
+def _generic_stage_prompt(tag: str, source_lang: str, target_lang: str) -> str:
+    """非缺省方向的规则级通用提示词（2.1 起步版，D2026-0930-04 ③）。
+
+    方向正确、无日语特调规则（句末助词/拟声假名/中文抛光豁免等仅适用于
+    ja→zh 的段落一律不含）；定向调优随对应方向模板卡自制（validate()
+    前置要求非缺省方向显式配卡，本函数只兜底"卡未含 ### prompt"的形态）。
+    """
+    sn = _LANG_NAMES.get(source_lang, source_lang)
+    tn = _LANG_NAMES.get(target_lang, target_lang)
+    if tag == "A":
+        return (f"请对以下{sn}字幕进行净语清洗并翻译成{tn}。"
+                f"#<编号>\nTranslation>\n<该条目的{tn}译文>\n"
+                f"要求：忠实原意、口语自然；无法翻译的行原样保留编号并输出"
+                f"[未翻译] 标记；其余条目按角色卡规范输出{tn}译文")
+    return (f"请对照{sn}原文审查并抛光以下{tn}字幕。"
+            f"输入每条 Original> 下为『{sn}原文 ||| {tn}译文』；"
+            f"{tn}部分为空或带 [未翻译] 标记时，请直接根据{sn}原文补译。"
+            f"按角色卡规范输出终稿。")
+
+
+def _is_default_direction(cfg) -> bool:
+    """缺省方向判定：ja→zh（全链字节级现状路径）。"""
+    src = getattr(cfg, "source_lang", None) or "ja"
+    tgt = getattr(cfg, "target_lang", None) or "zh"
+    return (src, tgt) == ("ja", "zh")
+
+
 def _load_v2_instruction(cfg: RefineConfig, tag: str, gl_block: str,
                          tmp_dir: str, sidecar_block: str = "",
                          synopsis_block: str = "") -> tuple:
@@ -305,12 +342,18 @@ def _load_v2_instruction(cfg: RefineConfig, tag: str, gl_block: str,
         td = default_templates_dir()
     base_text = _read_v2_card(tag, stage_cfg.instructions, td)
 
+    default_dir = _is_default_direction(cfg)
     if "### prompt" in base_text:
         effective = base_text
-    else:
+    elif default_dir:
         effective = (f"### prompt\n{V2_STAGE_PROMPTS[tag]}\n\n"
                      f"### instructions\n{base_text}\n")
-    if tag == "B" and "硬性豁免规则" not in effective:
+    else:
+        effective = (f"### prompt\n{_generic_stage_prompt(tag, cfg.source_lang, cfg.target_lang)}\n\n"
+                     f"### instructions\n{base_text}\n")
+    # hardened_suffix=中文抛光豁免段（ja→zh 特调）：缺省方向维持现状逐字
+    # 节追加；非缺省方向抑制（D2026-0930-04 清单外联动 2）
+    if tag == "B" and default_dir and "硬性豁免规则" not in effective:
         effective += hardened_suffix()
     if gl_block:
         effective = effective.rstrip() + "\n\n" + gl_block + "\n"

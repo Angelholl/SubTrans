@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from .filters import build_srt, parse_srt
 from .quality_report import resolve_final_block, write_guide_json
-from .source_hallucination import is_fluent_zh
+from .source_hallucination import is_fluent_target
 from .v2_outputs import _atomic_write_text
 
 if TYPE_CHECKING:
@@ -114,19 +114,22 @@ def _clean_response(text: str) -> str:
     return t
 
 
-def _passes_min_quality_gate(new_text: str, old_text: str) -> tuple[bool, str]:
-    """失败最小质量门（D11 契约④）：非空 / 异于现有译文 / 合格中文。
+def _passes_min_quality_gate(new_text: str, old_text: str,
+                             target_lang: str = "zh") -> tuple[bool, str]:
+    """失败最小质量门（D11 契约④）：非空 / 异于现有译文 / 合格译文。
 
-    is_fluent_zh 与隔离区回捞同口径，一并覆盖两项契约要求：不含
-    "[未翻译]" 前缀、非纯 ASCII（≥2 汉字才算合格中文）。
-    返回 (是否通过, 失败原因)。
+    zh 缺省与隔离区回捞同口径（is_fluent_zh，≥2 汉字）；非缺省方向经
+    is_fluent_target 分派（2.1 方向参数化，D2026-0930-04 ⑤）——行动层
+    是方向无关执行器，按任务方向取判定。返回 (是否通过, 失败原因)。
     """
     if not new_text:
         return False, "重翻结果为空"
     if new_text == old_text:
         return False, "重翻结果与现有译文相同"
-    if not is_fluent_zh(new_text):
-        return False, "未通过合格中文判定（需≥2汉字且无[未翻译]前缀）"
+    if not is_fluent_target(new_text, target_lang):
+        if (target_lang or "zh") in ("zh", "chinese"):
+            return False, "未通过合格中文判定（需≥2汉字且无[未翻译]前缀）"
+        return False, "未通过合格译文判定（目标语言签名不足）"
     return True, ""
 
 
@@ -390,7 +393,13 @@ def run_action_retranslate(cfg, args) -> int:
 
         new_text = _clean_response(raw)
         base["new_text"] = new_text
-        ok, reason = _passes_min_quality_gate(new_text, old_text)
+        # 方向取值：导读 json 方向字段（run 侧写入）优先，缺省回退执行器
+        # cfg（离线 CLI 缺省 zh，行为不变）
+        _tgt = ((guide or {}).get("direction") or "").split("→")[-1] \
+            if (guide or {}).get("direction") else \
+            (getattr(cfg, "target_lang", "zh") or "zh")
+        ok, reason = _passes_min_quality_gate(new_text, old_text,
+                                              target_lang=_tgt)
         if not ok:
             base["reason"] = reason   # 质量门不过：保留原文，只记台账
             records.append(base)

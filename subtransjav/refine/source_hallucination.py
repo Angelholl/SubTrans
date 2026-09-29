@@ -715,6 +715,28 @@ def is_fluent_zh(text: str, untranslated_prefix: str = "[未翻译]") -> bool:
     return len(_HANZI_RE.findall(t)) >= 2
 
 
+def is_fluent_target(text: str, target_lang: str = "zh",
+                     untranslated_prefix: str = "[未翻译]") -> bool:
+    """按目标语言分派的流畅性代理判定（2.1 方向参数化，D2026-0930-04 ⑤）。
+
+    zh→is_fluent_zh 现状；en→拉丁规则级（≥2 个拉丁字母且无假名残留）；
+    其余（ja 等）保守回退 is_fluent_zh 形态（≥2 个 CJK 字符）——回退仅
+    影响未定标方向的质量门松紧，不产生误放行（缺卡方向被 validate 前置
+    拦截，实际到不了这里）。
+    """
+    t = text or ""
+    if untranslated_prefix and t.startswith(untranslated_prefix):
+        return False
+    if is_untranslated_text(t):
+        return False
+    norm = (target_lang or "zh")
+    if norm in ("english", "en"):
+        if re.search(r"[\u3040-\u30ff]", t):
+            return False
+        return len(re.findall(r"[A-Za-z]", t)) >= 2
+    return len(_HANZI_RE.findall(t)) >= 2
+
+
 def strong_garble_signal(text: str) -> str | None:
     """D5 乱码强译复核：源文命中强乱码信号时返回信号名，否则 None。
 

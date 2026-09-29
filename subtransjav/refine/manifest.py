@@ -284,19 +284,30 @@ def _asr_meta_sha1(cfg):
         return None
 
 
-def _v2_stage_prompts_sha1():
-    """v2 内置阶段提示词（pipeline_v2.V2_STAGE_PROMPTS）语义指纹（D1）。
+def _v2_stage_prompts_sha1(cfg=None) -> str:
+    """v2 阶段提示词语义指纹（D1；2.1 cfg 感知，D2026-0930-04 ⑧）。
 
-    V2_STAGE_PROMPTS 与角色卡共同决定模型行为，却不落任何文件——不纳入
-    指纹的话，改提示词后 --resume 会复用旧提示词产出的阶段产物。按阶段
-    tag 排序后 json 序列化再 sha1，保证跨进程确定性。延迟导入规避模块级
-    循环依赖（pipeline_v2 -> manifest）；导入不可得时返回 None 跳过
-    （与 _gate0_rules_sha1 同款容错）。
+    提示词与角色卡共同决定模型行为，却不落任何文件——不纳入指纹的话，
+    改提示词后 --resume 会复用旧提示词产出的阶段产物。按阶段 tag 排序后
+    json 序列化再 sha1，保证跨进程确定性。延迟导入规避模块级循环依赖
+    （pipeline_v2 -> manifest）；导入不可得时返回 None 跳过（与
+    _gate0_rules_sha1 同款容错）。
+
+    方向感知：缺省方向（ja→zh）哈希内置 V2_STAGE_PROMPTS——与旧版
+    逐字节一致（存量 resume 不失效）；非缺省方向哈希方向感知 builder
+    的有效产出（_generic_stage_prompt），改方向即换指纹（断点失效属
+    预期）。
     """
     try:
-        from .pipeline_v2 import V2_STAGE_PROMPTS
-        payload = {tag: V2_STAGE_PROMPTS[tag]
-                   for tag in sorted(V2_STAGE_PROMPTS)}
+        from .pipeline_v2 import V2_STAGE_PROMPTS, _generic_stage_prompt
+        src = str(getattr(cfg, "source_lang", None) or "ja")
+        tgt = str(getattr(cfg, "target_lang", None) or "zh")
+        if (src, tgt) == ("ja", "zh"):
+            payload = {tag: V2_STAGE_PROMPTS[tag]
+                       for tag in sorted(V2_STAGE_PROMPTS)}
+        else:
+            payload = {tag: _generic_stage_prompt(tag, src, tgt)
+                       for tag in sorted(V2_STAGE_PROMPTS)}
         text = json.dumps(payload, sort_keys=True, ensure_ascii=True)
         return hashlib.sha1(text.encode("utf-8")).hexdigest()
     except Exception:
@@ -442,7 +453,7 @@ def compute_config_hash(cfg) -> str:
     payload["cleaner_config_dir_hash"] = compute_dir_hash(getattr(cfg, "cleaner_config_dir", None))
     payload["gate0_rules_sha1"] = _gate0_rules_sha1()
     payload["asr_meta_sha1"] = _asr_meta_sha1(cfg)
-    payload["v2_stage_prompts_sha1"] = _v2_stage_prompts_sha1()
+    payload["v2_stage_prompts_sha1"] = _v2_stage_prompts_sha1(cfg)
     payload["stages"] = [
         {name: getattr(s, name, None) for name in _STAGE_FIELDS}
         for s in (getattr(cfg, "stages", None) or [])

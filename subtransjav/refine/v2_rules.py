@@ -50,6 +50,13 @@ def _apply_fallback_rules(cfg: RefineConfig, entries: list,
     if cfg.v2_profile != "local":
         return entries, [], None, set(), None, []
 
+    # 2.1 方向参数化（D2026-0930-04 清单外联动 1）：dewei「で误译修正」与
+    # 净语清洗规则均为 ja→zh 特调（源文日文行/日文 ASR 清洗语义），非缺省
+    # 方向整段跳过（本地档降级为无兜底拦截，与云端档同形态）
+    if (getattr(cfg, "source_lang", None) or "ja",
+            getattr(cfg, "target_lang", None) or "zh") != ("ja", "zh"):
+        return entries, [], None, set(), None, []
+
     # post_validate：で误译修正 + 主语误判告警（YAML 单一数据源驱动）
     validator_warnings = []
     flagged_indexes: set = set()
@@ -138,7 +145,10 @@ def _filter_language(cfg: RefineConfig, entries: list, stage_idx: int) -> list:
         else:
             normal.append(e)
     srt = build_srt(normal)
-    kept_entries, dropped = filter_stage_output_srt(srt, stage_idx, "zh")
+    # 2.1 方向参数化（D2026-0930-04 ⑤）：目标语言随任务方向，缺省 zh
+    # 行为不变；filter_stage_output 内部归一（chinese/english 别名折叠）
+    tgt = (getattr(cfg, "target_lang", None) or "zh")
+    kept_entries, dropped = filter_stage_output_srt(srt, stage_idx, tgt)
     # build_srt 会重排序号：按时间轴（条目的真实身份标识）映射回原条目——
     # 有效条目恢复原 index；无效条目加 [未翻译] 前缀后并回产物（不丢行）。
     # timing→list 多重映射：同 timing 重复条目逐条消费（优先按文本配对），

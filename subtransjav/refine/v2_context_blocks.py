@@ -65,8 +65,17 @@ def _v2_glossary_block(cfg: RefineConfig, tag: str, src_text: str,
 
     命中超过 MAX_GLOSSARY_INJECT 时按词库优先级序只注入前 N 条，
     打印两行上报：命中总数、实际注入与省略条数（防超长词表撑爆提示词）。
+
+    2.1 方向参数化（D2026-0930-04 清单外联动 5）：词库为 ja→zh 专属语义
+    （术语对=日文原文→中文译文），非缺省方向自动禁用注入（一次告警防
+    zh→en 任务静默注入日中对词表）。
     """
     if not glossary:
+        return ""
+    src = (getattr(cfg, "source_lang", None) or "ja")
+    tgt = (getattr(cfg, "target_lang", None) or "zh")
+    if (src, tgt) != ("ja", "zh"):
+        print(f"   📚 词库为 ja→zh 专属，{src}→{tgt} 方向自动禁用注入")
         return ""
     enabled = (tag == "A" and cfg.apply_glossary_stage1) or \
               (tag == "B" and cfg.apply_glossary_stage2)

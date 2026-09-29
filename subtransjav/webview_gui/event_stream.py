@@ -159,19 +159,31 @@ def resume_state_for_path(path: str, exists=os.path.exists,
                           strip_stem=None) -> dict[str, Any]:
     """计算单个输入 srt 的断点恢复状态。
 
-    - 有 ``{stem}_final_cn.srt``        → completed（整文件已完成）
+    - 有 ``{stem}_final_{后缀}.srt``    → completed（整文件已完成）
     - 有 ``{stem}_manifest.json`` 无终稿 → resumable（可复用已完成阶段）
     - 两者皆无                           → none
+
+    终稿命名走单点契约（D2026-0930-04 ②）：方向取 manifest 的 direction
+    字段（旧 manifest/无 manifest 回退缺省 zh→"cn"），非缺省方向任务
+    （如 _final_en）也能被正确判 completed。
     """
     strip = strip_stem or _default_strip_stem
     p = Path(path)
     stem = strip(p.stem)
     parent = p.parent
-    # 终稿命名走单点契约（D2026-0930-04 ②）；缺省方向 _final_cn（GUI 完成
-    # 检测随任务方向取后缀在批 2 接线，导读/manifest 方向字段落地后启用）
     from subtransjav.refine.v2_outputs import final_stem
-    has_final = bool(exists(str(parent / f"{final_stem(stem)}.srt")))
-    has_manifest = bool(exists(str(parent / f"{stem}_manifest.json")))
+    # 方向解析：manifest 存在才读 direction（零副作用；坏 JSON 回退缺省）
+    target = "zh"
+    manifest_path = parent / f"{stem}_manifest.json"
+    if exists(str(manifest_path)):
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            direction = str((data or {}).get("direction") or "ja→zh")
+            target = direction.split("→")[-1] if "→" in direction else "zh"
+        except Exception:    # noqa: BLE001 - 容错：读不出方向按缺省
+            target = "zh"
+    has_final = bool(exists(str(parent / f"{final_stem(stem, target)}.srt")))
+    has_manifest = bool(exists(str(manifest_path)))
     if has_final:
         state = "completed"
     elif has_manifest:
