@@ -36,6 +36,7 @@ classifiers = [
 # 翻译引擎核心依赖（refine v2 两阶段流水线 + OpenAI 兼容通道）
 dependencies = [
     "openai>=1.35.0",         # OpenAI 兼容接口（deepseek/zen/lmstudio/siliconflow/custom）
+    "httpx>=0.27",            # llm_client O6 回环直连客户端（translate/llm_client.py）
     "requests",
     "srt",
     "regex",                  # 正则引擎（deletion_patch 直接 import）
