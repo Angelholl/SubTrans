@@ -401,6 +401,8 @@ const MSG = {
     dict_custom_path: '自定义词典已就位',
     dict_download: '下载',
     dict_downloading: '下载中…',
+    dict_verify: '校验中…',
+    dict_extract: '解压中…',
     dict_download_done: '下载完成',
     dict_download_failed: '下载失败',
     dict_load_failed: '词典状态加载失败',
@@ -2860,16 +2862,52 @@ function switchTab(tabId) {
     const st = $('dictStatus');
     if (btn) { btn.disabled = true; btn.textContent = MSG.dict_downloading; }
     if (st) st.textContent = '';
+    // 第四批 owner 验收反馈：下载几十 MB 只有"下载中…"三字不可接受——
+    // 1s 轮询后端进度（百分比/字节），终态醒目化（成功带体积、失败带原因）
+    const fmtMB = (n) => (n / 1048576).toFixed(1);
+    let poller = null;
+    let lastBytes = 0;
+    const stopPoll = () => { if (poller) { clearInterval(poller); poller = null; } };
+    poller = setInterval(async () => {
+      try {
+        const p = await pywebview.api.refine_dict_download_progress(kind);
+        if (!p || !p.success || !p.phase) return;
+        if (typeof p.downloaded === 'number' && p.downloaded > 0) {
+          lastBytes = p.downloaded;
+        }
+        if (p.phase === 'download' && p.total) {
+          const pct = Math.min(99, Math.round(p.downloaded / p.total * 100));
+          if (btn) btn.textContent = `${MSG.dict_downloading} ${pct}%`;
+          if (st) {
+            st.textContent = `${MSG.dict_downloading} ` +
+              `${fmtMB(p.downloaded)}/${fmtMB(p.total)}MB`;
+          }
+        } else if (p.phase === 'verify') {
+          if (btn) btn.textContent = MSG.dict_verify;
+        } else if (p.phase === 'extract') {
+          if (btn) btn.textContent = MSG.dict_extract;
+        }
+      } catch (e) { /* 进度轮询失败不干扰主流程 */ }
+    }, 1000);
     try {
       const r = await pywebview.api.refine_dict_download(kind);
+      if (r && r.success) {
+        // 终态大小以 done 快照为准（轮询最后一拍可能滞后）
+        try {
+          const f = await pywebview.api.refine_dict_download_progress(kind);
+          if (f && f.success && typeof f.downloaded === 'number' &&
+              f.downloaded > 0) lastBytes = f.downloaded;
+        } catch (e) { /* ignore */ }
+      }
       if (st) {
         st.textContent = (r && r.success)
-          ? `${MSG.dict_download_done}：${r.path}`
+          ? `${MSG.dict_download_done}：${r.path}（${fmtMB(lastBytes)}MB）`
           : `${MSG.dict_download_failed}：${(r && r.error) || ''}`;
       }
     } catch (e) {
       if (st) st.textContent = String(e);
     } finally {
+      stopPoll();                       // 防重复 poller 泄漏
       if (btn) { btn.disabled = false; btn.textContent = MSG.dict_download; }
       dictLoad();
     }

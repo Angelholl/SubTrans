@@ -50,3 +50,6 @@ subtransjav-d1-d5.patch
 
 # 数据根指针（GUI 自选数据保存目录，本地生成不入库）
 .data-root
+
+# 词典下载数据（pip/源码形态数据根=旧仓库根，引擎页下载的 sudachi 词典落 dict/，本地数据不入库）
+dict/

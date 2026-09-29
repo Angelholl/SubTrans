@@ -9,6 +9,8 @@ import types
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from subtransjav.refine import dict_manager as dm
 
 
@@ -90,7 +92,8 @@ def test_download_dict_success(monkeypatch, tmp_path):
         {"source": "pypi", "url": "https://files.pythonhosted.org/x.whl",
          "sha256": sha, "sha256_verified": True}])
     monkeypatch.setattr(dm, "_http_get",
-                        lambda url, dest: Path(dest).write_bytes(wheel))
+                        lambda url, dest, progress=None:
+                        Path(dest).write_bytes(wheel))
     target = dm.download_dict("sudachi")
     assert Path(target) == tmp_path / "dict" / "sudachi" / "system_core.dic"
     assert Path(target).read_bytes() == b"DICDATA"
@@ -102,7 +105,7 @@ def test_download_dict_checksum_error_no_fallback(monkeypatch, tmp_path):
     wheel = _fake_wheel()
     calls = []
 
-    def _fake_get(url, dest):
+    def _fake_get(url, dest, progress=None):
         calls.append(url)
         Path(dest).write_bytes(wheel)
 
@@ -130,7 +133,7 @@ def test_download_dict_network_fallback(monkeypatch, tmp_path):
         {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
          "sha256": sha, "sha256_verified": True}])
 
-    def _fake_get(url, dest):
+    def _fake_get(url, dest, progress=None):
         if "tuna" not in url:
             raise dm.DictDownloadError("连接超时")
         Path(dest).write_bytes(wheel)
@@ -146,13 +149,184 @@ def test_download_dict_all_sources_down(monkeypatch, tmp_path):
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True}])
 
-    def _always_down(url, dest):
+    def _always_down(url, dest, progress=None):
         raise dm.DictDownloadError("网络不可达")
 
     monkeypatch.setattr(dm, "_http_get", _always_down)
     import pytest
     with pytest.raises(dm.DictDownloadError):
         dm.download_dict("sudachi")
+
+
+# ---------------------------------------------------------------------------
+# 下载进度（第四批 owner 验收反馈：分块回调 + 阶段状态）
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _reset_download_progress(monkeypatch):
+    """每例隔离模块级进度表（换引用，测试后自动还原）。"""
+    monkeypatch.setattr(dm, "_DOWNLOAD_PROGRESS", {})
+    yield
+
+
+class _StreamResponse:
+    """流式假响应：read(n) 分块返回；headers.get 模拟 Content-Length。"""
+
+    def __init__(self, payload: bytes, chunk: int = 4, total=None):
+        self._payload = payload
+        self._chunk = chunk
+        self._off = 0
+        self.headers = types.SimpleNamespace(
+            get=lambda k: "" if total is None else str(total))
+
+    def read(self, n=-1):
+        if self._off >= len(self._payload):
+            return b""
+        # 模拟慢速流：单次至多交付 chunk 字节（请求量再大也分批到货）
+        step = len(self._payload) if n is None or n < 0 \
+            else min(n, self._chunk)
+        end = min(self._off + step, len(self._payload))
+        out = self._payload[self._off:end]
+        self._off = end
+        return out
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_http_get_progress_callback_chunks(monkeypatch, tmp_path):
+    """分块 read + Content-Length → progress 回调序列 (n, total) 单调递增。"""
+    payload = b"abcdefgh" * 2                       # 16 字节，chunk 4 → 4 块
+    seen = []
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda req, timeout=10: _StreamResponse(payload, chunk=4,
+                                                total=len(payload)))
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest,
+                 progress=lambda n, t: seen.append((n, t)))
+    assert Path(dest).read_bytes() == payload
+    assert seen == [(4, 16), (8, 16), (12, 16), (16, 16)]
+
+
+def test_http_get_progress_total_unknown(monkeypatch, tmp_path):
+    """无 Content-Length：total=None 仍逐块回调，落位字节完整。"""
+    payload = b"0123456789"
+    seen = []
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda req, timeout=10: _StreamResponse(payload, chunk=5, total=None))
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest,
+                 progress=lambda n, t: seen.append((n, t)))
+    assert Path(dest).read_bytes() == payload
+    assert seen == [(5, None), (10, None)]
+
+
+def test_http_get_default_progress_none_unchanged(monkeypatch, tmp_path):
+    """progress 缺省 None：一次性 read() 旧行为不变钉（不进分块循环）。"""
+    calls = []
+
+    class _OneShot(_StreamResponse):
+        def read(self, n=-1):
+            calls.append(n)
+            return self._payload
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda req, timeout=10: _OneShot(b"DATA"))
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    assert Path(dest).read_bytes() == b"DATA"
+    assert calls == [-1]          # 仅一次 read()（缺省 n=-1），旧行为形态
+
+
+def test_download_dict_progress_phase_chain(monkeypatch, tmp_path):
+    """网络成功全链：download→verify→extract→done（done 带最终字节数）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/x.whl",
+         "sha256": sha, "sha256_verified": True}])
+    phases = []
+    real_set = dm._set_download_progress
+
+    def _spy(kind, phase, downloaded=0, total=None, error=None):
+        phases.append(phase)
+        real_set(kind, phase, downloaded, total, error)
+
+    monkeypatch.setattr(dm, "_set_download_progress", _spy)
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None:
+                        Path(dest).write_bytes(wheel))
+    target = dm.download_dict("sudachi")
+    assert Path(target).is_file()
+    assert phases[0] == "download"
+    assert phases.index("verify") > phases.index("download")
+    assert phases.index("extract") > phases.index("verify")
+    assert phases[-1] == "done"
+    assert dm.download_progress("sudachi") == {
+        "kind": "sudachi", "phase": "done",
+        "downloaded": 7, "total": 7, "error": None}   # b"DICDATA"=7 字节
+
+
+def test_download_dict_progress_reset_per_source(monkeypatch, tmp_path):
+    """跨源 fallback：每源重置 downloaded=0/total=None，计数不跨源残留。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": sha, "sha256_verified": True}])
+    writes = []
+    real_set = dm._set_download_progress
+
+    def _spy(kind, phase, downloaded=0, total=None, error=None):
+        writes.append((phase, downloaded, total))
+        real_set(kind, phase, downloaded, total, error)
+
+    monkeypatch.setattr(dm, "_set_download_progress", _spy)
+
+    def _flaky(url, dest, progress=None):
+        if "tuna" not in url:
+            progress(8, 100)          # 主源推进计数后网络断
+            raise dm.DictDownloadError("连接超时")
+        Path(dest).write_bytes(wheel)
+
+    monkeypatch.setattr(dm, "_http_get", _flaky)
+    assert Path(dm.download_dict("sudachi")).is_file()
+    resets = [w for w in writes if w == ("download", 0, None)]
+    assert len(resets) == 2           # 初始 + 镜像源各重置一次
+    assert dm.download_progress("sudachi")["phase"] == "done"
+
+
+def test_download_dict_progress_failed_phase(monkeypatch, tmp_path):
+    """全源失败：phase=failed + error 文案，异常照旧向上抛（api 语义不变）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": "1" * 64, "sha256_verified": True}])
+
+    def _down(url, dest, progress=None):
+        raise dm.DictDownloadError("网络不可达")
+
+    monkeypatch.setattr(dm, "_http_get", _down)
+    with pytest.raises(dm.DictDownloadError):
+        dm.download_dict("sudachi")
+    snap = dm.download_progress("sudachi")
+    assert snap["phase"] == "failed"
+    assert "网络不可达" in snap["error"]
+
+
+def test_download_progress_no_record_returns_empty(monkeypatch):
+    """无下载记录：download_progress 返回空 dict（只读零副作用）。"""
+    assert dm.download_progress("sudachi") == {}
+    assert dm.download_progress("nope") == {}
 
 
 def test_local_wheel_import_verifies_hash(monkeypatch, tmp_path):

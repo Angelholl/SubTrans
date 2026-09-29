@@ -84,6 +84,9 @@ MSG = {
     "dict_kind_unsupported": "该词典暂不支持下载（仅 sudachi 提供下载式）",
     "dict_download_failed": "词典下载失败（网络/源不可达）",
     "dict_checksum_failed": "词典校验失败（SHA256 不符，已拒绝落位）",
+    # 下载进度阶段文案（第四批 owner 验收反馈；前端 app.js MSG 同名键双表）
+    "dict_verify": "校验中…",
+    "dict_extract": "解压中…",
 
     # ---- open_url / 目录（api.py）----
     "url_scheme_unsupported": "仅支持 http/https 链接",

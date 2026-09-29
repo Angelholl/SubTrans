@@ -1461,3 +1461,19 @@ def test_refine_dict_download_success_and_checksum(gui_api_obj, monkeypatch,
     got3 = gui_api_obj.refine_dict_download("sudachi")
     assert got3["success"] is False
     assert "下载失败" in got3["error"]
+
+
+def test_refine_dict_download_progress_endpoint(gui_api_obj, monkeypatch):
+    """进度端点（第四批词典下载体验）：success+快照；无记录 success+空。"""
+    from subtransjav.refine import dict_manager as dm
+    # api 方法为函数内导入，patch 源模块属性才生效
+    monkeypatch.setattr(dm, "_DOWNLOAD_PROGRESS", {
+        "sudachi": {"kind": "sudachi", "phase": "download",
+                    "downloaded": 5, "total": 10, "error": None}})
+    got = gui_api_obj.refine_dict_download_progress("sudachi")
+    assert got["success"] is True
+    assert got["phase"] == "download"
+    assert got["downloaded"] == 5 and got["total"] == 10
+    # 无记录 kind：success + 空（前端按无进度处理）
+    empty = gui_api_obj.refine_dict_download_progress("jieba")
+    assert empty == {"success": True}

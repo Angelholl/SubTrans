@@ -49,6 +49,35 @@ class DictChecksumError(RuntimeError):
     """词典 SHA256 校验失败或清单字段非法（拒绝落位）。"""
 
 
+# 下载进度状态（第四批 owner 验收反馈：下载无进度条/成败不醒目）：
+# kind → 快照 {"kind","phase","downloaded","total","error"}，phase ∈
+# download/verify/extract/done/failed。写侧整体赋值换引用（读侧拿到
+# 一致性视图），无需复杂锁；GUI 经 api 层 1s 轮询消费。
+_DOWNLOAD_PROGRESS: dict = {}
+
+
+def download_progress(kind: str) -> dict:
+    """某词典的下载进度快照副本（无记录返回 {}；只读零副作用）。"""
+    snap = _DOWNLOAD_PROGRESS.get(kind)
+    return dict(snap) if snap else {}
+
+
+def _set_download_progress(kind: str, phase: str, downloaded: int = 0,
+                           total: int | None = None,
+                           error: str | None = None) -> None:
+    """整体赋值换引用写进度快照。"""
+    _DOWNLOAD_PROGRESS[kind] = {"kind": kind, "phase": phase,
+                                "downloaded": downloaded, "total": total,
+                                "error": error}
+
+
+def _carry_download_progress(kind: str, phase: str) -> None:
+    """阶段推进（verify/extract）：保留已下载计数，仅换 phase。"""
+    prev = _DOWNLOAD_PROGRESS.get(kind) or {}
+    _set_download_progress(kind, phase,
+                           prev.get("downloaded") or 0, prev.get("total"))
+
+
 def dict_dir() -> str:
     """数据根词典目录：``<数据根>/dict/``。"""
     return paths.data_subdir("dict")
@@ -114,9 +143,14 @@ def _validate_url(url: str) -> str:
     return url
 
 
-def _http_get(url: str, dest: str) -> None:
+def _http_get(url: str, dest: str, progress=None) -> None:
     """下载到 dest（先写 .part 再原子改名；dest 由调用方约束在数据根
     词典目录内且父目录已建）。
+
+    progress 为可选回调 ``progress(downloaded_bytes, total_bytes)``
+    （total 取 Content-Length 响应头，缺席为 None；分块 1MB 读取逐块
+    上报，第四批词典下载进度）——缺省 None 时一次性 read，行为与历史
+    版本一致。
 
     禁 shell、零新依赖（urllib 标准库）；URL 经 ``_validate_url`` 白名单
     校验（仅 https+固定域名，防清单被篡改后指内网）；socket 级超时 10s；
@@ -128,7 +162,23 @@ def _http_get(url: str, dest: str) -> None:
     tmp = dest + ".part"
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            data = resp.read()
+            if progress is None:
+                data = resp.read()          # 旧行为：一次性读
+            else:
+                total = None
+                try:
+                    cl = resp.headers.get("Content-Length")
+                    total = int(cl) if cl else None
+                except (TypeError, ValueError):
+                    total = None
+                buf = bytearray()
+                while True:
+                    chunk = resp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    buf.extend(chunk)
+                    progress(len(buf), total)
+                data = bytes(buf)
     except Exception as e:  # noqa: BLE001 - 网络层统一转义
         _unlink_quiet(tmp)
         raise DictDownloadError(f"{url} -> {type(e).__name__}: {e}") from e
@@ -190,48 +240,65 @@ def download_dict(kind: str, allow_unverified: bool = False,
     dest = str(_ensure_inside_dict_root(out_dir / target_name))
     member = entry.get("archive_member") or ""
 
-    if local_file:
-        src = _validated_path(local_file)
-        if not src.is_file():
-            raise DictDownloadError(f"本地文件不存在: {src}")
-        if src.suffix.lower() in (".whl", ".zip"):
-            shas = [d.get("sha256") for d in entry.get("downloads", [])
-                    if d.get("sha256")]
-            if shas and _sha256_of(str(src)) not in shas:
-                raise DictChecksumError(
-                    f"本地 wheel SHA256 与源清单不符: {src}")
-            _extract_dic(str(src), member, dest)
-        else:
-            print(f"⚠️ 本地 .dic 导入无源清单哈希可校，按用户自解压产物落位: "
-                  f"{src}")
-            import shutil
-            shutil.copyfile(str(src), dest)
-        return dest
+    # 2.1 第四批（owner 验收反馈）：全程写进度状态供 GUI 轮询——
+    # 任何异常 phase=failed+error 后照旧向上抛（api 层语义不变）
+    try:
+        if local_file:
+            src = _validated_path(local_file)
+            if not src.is_file():
+                raise DictDownloadError(f"本地文件不存在: {src}")
+            if src.suffix.lower() in (".whl", ".zip"):
+                _set_download_progress(kind, "verify", 0, None)
+                shas = [d.get("sha256") for d in entry.get("downloads", [])
+                        if d.get("sha256")]
+                if shas and _sha256_of(str(src)) not in shas:
+                    raise DictChecksumError(
+                        f"本地 wheel SHA256 与源清单不符: {src}")
+                _set_download_progress(kind, "extract", 0, None)
+                _extract_dic(str(src), member, dest)
+            else:
+                print(f"⚠️ 本地 .dic 导入无源清单哈希可校，按用户自解压产物落位: "
+                      f"{src}")
+                import shutil
+                shutil.copyfile(str(src), dest)
+            size = os.path.getsize(dest)
+            _set_download_progress(kind, "done", size, size)
+            return dest
 
-    last_err: Exception | None = None
-    for d in entry.get("downloads", []):
-        if not d.get("sha256_verified") and not allow_unverified:
-            continue
-        url = d.get("url") or ""
-        tmp = str(_ensure_inside_dict_root(
-            out_dir / (target_name + ".downloading")))
-        try:
-            _http_get(url, tmp)
-        except DictDownloadError as e:
-            last_err = e
-            continue            # 网络失败 → 试下一源
-        if _sha256_of(tmp) != d.get("sha256"):
+        last_err: Exception | None = None
+        for d in entry.get("downloads", []):
+            if not d.get("sha256_verified") and not allow_unverified:
+                continue
+            url = d.get("url") or ""
+            tmp = str(_ensure_inside_dict_root(
+                out_dir / (target_name + ".downloading")))
+            # 跨源 fallback：每源重置计数（downloaded=0/total=None）
+            _set_download_progress(kind, "download", 0, None)
+            try:
+                _http_get(url, tmp, progress=lambda n, t:
+                          _set_download_progress(kind, "download", n, t))
+            except DictDownloadError as e:
+                last_err = e
+                continue            # 网络失败 → 试下一源
+            _carry_download_progress(kind, "verify")
+            if _sha256_of(tmp) != d.get("sha256"):
+                _unlink_quiet(tmp)
+                # 校验失败不轮换直接报（防串改文件被"换个源洗白"）
+                raise DictChecksumError(
+                    f"SHA256 校验失败，已拒绝落位: {url}")
+            _carry_download_progress(kind, "extract")
+            _extract_dic(tmp, member, dest)
             _unlink_quiet(tmp)
-            # 校验失败不轮换直接报（防串改文件被"换个源洗白"）
-            raise DictChecksumError(
-                f"SHA256 校验失败，已拒绝落位: {url}")
-        _extract_dic(tmp, member, dest)
-        _unlink_quiet(tmp)
-        return dest
-    if last_err is not None:
-        raise last_err
-    raise DictDownloadError(
-        f"词典 {kind} 无可用下载源（全部未核实且未开 --dict-allow-unverified）")
+            size = os.path.getsize(dest)
+            _set_download_progress(kind, "done", size, size)
+            return dest
+        if last_err is not None:
+            raise last_err
+        raise DictDownloadError(
+            f"词典 {kind} 无可用下载源（全部未核实且未开 --dict-allow-unverified）")
+    except Exception as e:
+        _set_download_progress(kind, "failed", error=str(e))
+        raise
 
 
 def sudachi_custom_dict_path() -> str:

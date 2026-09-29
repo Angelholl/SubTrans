@@ -937,8 +937,9 @@ class TranslateAPI:
     def refine_dict_download(self, kind: str) -> dict[str, Any]:
         """显式下载词典（2.1；当前仅 sudachi；SHA256 不符拒绝落位）。
 
-        同步执行（下载 25MB 级 wheel，GUI 侧按钮转下载中态）；网络失败与
-        校验失败分开报错（DictDownloadError / DictChecksumError）。
+        同步执行（下载几十 MB 级 wheel，GUI 侧按钮转下载中态，进度经
+        refine_dict_download_progress 1s 轮询）；网络失败与校验失败
+        分开报错（DictDownloadError / DictChecksumError）。
         """
         try:
             from subtransjav.refine.dict_manager import (
@@ -959,6 +960,20 @@ class TranslateAPI:
                     "error": f"{msg('dict_checksum_failed')}: {e}"}
         except Exception as e:
             _log_exc("refine_dict_download")
+            return {"success": False, "error": str(e)}
+
+    def refine_dict_download_progress(self, kind: str) -> dict[str, Any]:
+        """词典下载进度快照（第四批 owner 验收反馈；只读零副作用）。
+
+        前端在 refine_dict_download 期间 1s 轮询：phase ∈
+        download/verify/extract/done/failed，downloaded/total 为字节
+        数（total 取 Content-Length，可能为 None）。
+        """
+        try:
+            from subtransjav.refine.dict_manager import download_progress
+            return {"success": True, **download_progress(kind)}
+        except Exception as e:
+            _log_exc("refine_dict_download_progress")
             return {"success": False, "error": str(e)}
 
     def refine_set_data_root(self, path: str) -> dict[str, Any]:
