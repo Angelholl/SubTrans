@@ -181,3 +181,69 @@ class TestDirectionCsv:
             assert tm.lookup_exact("テスト", 1) == "旧格式译文"
         finally:
             tm.close()
+
+
+class TestDirectionWiring:
+    """管线/CLI 构造点方向接线（D2026-0930-05 批内缺陷修复）。
+
+    冒烟实测：zh→en 任务学出的 TM 行 direction 列落 ('ja','zh')——
+    根因=实例化不带方向 + store/lookup 全走参数缺省。修复=实例缺省
+    方向（API 兼容零破坏，显式传参优先级最高）。
+    """
+
+    def test_init_tm_uses_cfg_direction(self, tmp_path):
+        """①pipeline_support 构造（zh→en cfg）：store 不传语言落 zh/en。"""
+        from subtransjav.refine.config import RefineConfig
+        from subtransjav.refine.pipeline_support import _init_tm
+        cfg = RefineConfig(inputs=[], tm_enabled=True,
+                           tm_db_path=str(tmp_path / "tm.db"))
+        cfg.source_lang = "zh"
+        cfg.target_lang = "en"
+        tm = _init_tm(cfg)
+        try:
+            assert tm is not None
+            tm.store("12345", "five", 1)          # 不传语言 → 实例缺省
+            conn = sqlite3.connect(tm.db_path)
+            langs = conn.execute(
+                "SELECT source_lang, target_lang FROM tm_entries").fetchall()
+            conn.close()
+            assert langs == [("zh", "en")]
+            assert tm.lookup_exact("12345", 1) == "five"   # 同方向命中
+        finally:
+            tm.close()
+
+    def test_init_tm_default_config_stays_ja_zh(self, tmp_path):
+        """②缺省配置构造：实例缺省 ja/zh（存量行为不变钉）。"""
+        from subtransjav.refine.config import RefineConfig
+        from subtransjav.refine.pipeline_support import _init_tm
+        cfg = RefineConfig(inputs=[], tm_enabled=True,
+                           tm_db_path=str(tmp_path / "tm.db"))
+        tm = _init_tm(cfg)
+        try:
+            tm.store("12345", "五", 1)
+            conn = sqlite3.connect(tm.db_path)
+            langs = conn.execute(
+                "SELECT source_lang, target_lang FROM tm_entries").fetchall()
+            conn.close()
+            assert langs == [("ja", "zh")]
+        finally:
+            tm.close()
+
+    def test_explicit_lang_args_override_instance_default(self, tmp_path):
+        """③store 显式传参覆盖实例缺省（优先级钉）。"""
+        tm = TranslationMemory(os.path.join(str(tmp_path), "tm.db"),
+                               source_lang="zh", target_lang="en")
+        try:
+            tm.store("12345", "五", 1)                     # 实例缺省 zh→en
+            tm.store("12345", "cinq", 1, source_lang="ja",
+                     target_lang="zh")                     # 显式覆盖
+            assert tm.lookup_exact("12345", 1) == "五"     # 实例缺省方向
+            assert tm.lookup_exact("12345", 1, "ja", "zh") == "cinq"
+            conn = sqlite3.connect(tm.db_path)
+            langs = conn.execute(
+                "SELECT source_lang, target_lang FROM tm_entries "
+                "ORDER BY source_lang").fetchall()
+            conn.close()
+            assert langs == [("ja", "zh"), ("zh", "en")]
+        finally:
+            tm.close()

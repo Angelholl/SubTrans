@@ -258,3 +258,42 @@ def test_grammar_hint_residue_cleaner():
     from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
     dirty = "【语法提示】\n- 分词参考：X | Y\n原文：中文 ||| English line"
     assert clean_grammar_hint_residue(dirty) == "English line"
+
+
+# ---------------------------------------------------------------------------
+# en 方向英文回显清理（D2026-0930-05 批内缺陷修复：zh→en 冒烟实测形态）
+# ---------------------------------------------------------------------------
+_EN_ECHO_DIRTY = (
+    "[Grammar Tip]\n"
+    "- Word segmentation reference: Pingpong ball | auction | finished\n"
+    "Original: The pingpong ball auction is over, "
+    "let's practice again next week.\n"
+    "**Final:**\n"
+    "[Grammar Tip]\n"
+    "Word segmentation: Pingpong ball | auction | finished\n"
+    "Source: The pingpong ball auction is over, "
+    "let's practice again next week.\n"
+    "English: The pingpong ball auction is over; \n"
+    "let's practice again next week.")
+
+
+def test_clean_residue_en_mode_strips_english_echo():
+    """②en 方向：真实污染形态多行样例清理后只剩裸译文。"""
+    from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+    out = clean_grammar_hint_residue(_EN_ECHO_DIRTY, "en")
+    assert out == ("The pingpong ball auction is over; \n"
+                   "let's practice again next week.")
+    # 未注入提示的短条目被带偏的形态（"好的。"→ Okay.）同样收拾
+    short = clean_grammar_hint_residue(
+        "Okay.\n**Final:**\nEnglish: Okay.", "en")
+    assert short == "Okay.\n\nOkay."
+
+
+def test_clean_residue_default_ignores_english_echo():
+    """③缺省行为钉：不传/传 zh 均不激活英文模式（缺省零感知）。"""
+    from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+    for cleaned in (clean_grammar_hint_residue(_EN_ECHO_DIRTY),
+                    clean_grammar_hint_residue(_EN_ECHO_DIRTY, "zh")):
+        assert cleaned == _EN_ECHO_DIRTY.strip()
+        assert "[Grammar Tip]" in cleaned
+        assert "English: " in cleaned

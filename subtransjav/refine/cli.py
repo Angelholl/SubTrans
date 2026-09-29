@@ -379,7 +379,13 @@ def _handle_tm_commands(args):
             cast(Any, _sys.stdout).reconfigure(encoding="utf-8",
                                                errors="replace")
 
-    tm = TranslationMemory(args.tm_db) if args.tm_db else TranslationMemory()
+    # 2.1 方向参数化（D2026-0930-05 批内缺陷修复）：实例缺省方向接
+    # args（tm 管理命令与主解析共用 namespace，字段有白名单缺省
+    # ja/zh，直接用即可）——修复非缺省方向任务学出的 TM 行落缺省列
+    tm = (TranslationMemory(args.tm_db, source_lang=args.source_lang,
+                            target_lang=args.target_lang) if args.tm_db
+          else TranslationMemory(source_lang=args.source_lang,
+                                 target_lang=args.target_lang))
     try:
         if args.tm_stats:
             s = tm.stats()

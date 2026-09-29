@@ -33,7 +33,14 @@ def _init_tm(cfg: RefineConfig):
         return None
     try:
         from .tm import TranslationMemory
-        tm = TranslationMemory(cfg.tm_db_path) if cfg.tm_db_path else TranslationMemory()
+        # 2.1 方向参数化（D2026-0930-05 批内缺陷修复）：实例缺省方向接
+        # cfg——修复 zh→en 任务学出的 TM 行落 ('ja','zh') 缺省列
+        # （与 _is_default_direction 同口径：字段缺席/空值回退 ja/zh）
+        src = getattr(cfg, "source_lang", None) or "ja"
+        tgt = getattr(cfg, "target_lang", None) or "zh"
+        tm = (TranslationMemory(cfg.tm_db_path, source_lang=src,
+                                target_lang=tgt) if cfg.tm_db_path
+              else TranslationMemory(source_lang=src, target_lang=tgt))
         return tm
     except Exception as e:
         print(f"⚠️ [refine] 翻译记忆库初始化失败，已忽略: {e}")

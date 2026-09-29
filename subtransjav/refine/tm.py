@@ -143,11 +143,24 @@ def ensure_direction_columns(db_path: str) -> bool:
 class TranslationMemory:
     """SQLite 翻译记忆库"""
 
-    def __init__(self, db_path: str = ""):
+    def __init__(self, db_path: str = "",
+                 source_lang: str = "ja", target_lang: str = "zh"):
         self.db_path = db_path or _default_tm_path()
+        # 2.1 方向参数化（D2026-0930-05 批内缺陷修复）：实例缺省方向——
+        # 管线/CLI 构造时传入任务方向，store/lookup 未显式传参时回落到它
+        # （修复 zh→en 任务学出的行落 ('ja','zh') 缺省列）；裸构造缺省
+        # ja/zh 与旧行为逐字节等价（API 兼容零破坏，GUI/工具零改动）。
+        self.source_lang = source_lang
+        self.target_lang = target_lang
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
         self._conn: sqlite3.Connection | None = None
         self._init_db()
+
+    def _langs(self, source_lang: str | None,
+               target_lang: str | None) -> tuple:
+        """语言参数解析：None 回落实例缺省（显式传参原样透传，优先级最高）。"""
+        return (source_lang if source_lang is not None else self.source_lang,
+                target_lang if target_lang is not None else self.target_lang)
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -195,15 +208,17 @@ class TranslationMemory:
 
     def store(self, source: str, target: str, stage: int = 0,
               source_name: str | None = None,
-              source_lang: str = "ja", target_lang: str = "zh") -> bool:
+              source_lang: str | None = None,
+              target_lang: str | None = None) -> bool:
         """存入翻译对。已存在（同 hash + stage + 方向）则更新译文。返回是否新增。
 
         source_name：来源 srt 文件名 stem（provenance，v1.2.2 起）。
         新插入时写入；覆盖已有条目时仅在该值非 None 时更新
         （COALESCE 保留旧 provenance，None 不回填）。
 
-        source_lang/target_lang（2.1 方向参数化，D2026-0930-04 ④）：缺省
-        ja→zh 与旧行为等价；跨方向同文本各自成行，互不覆写。
+        source_lang/target_lang（2.1 方向参数化，D2026-0930-04 ④）：None
+        （缺省）回落实例缺省方向（D2026-0930-05 批内缺陷修复），显式传参
+        优先；跨方向同文本各自成行，互不覆写。
 
         无竞态实现：INSERT OR IGNORE 的 rowcount 直接区分 新插入(1)/
         已存在(0)，无需前置 SELECT（消除 SELECT 与写入之间的竞态窗口；
@@ -211,6 +226,7 @@ class TranslationMemory:
         无法区分，故不用）。已存在时走 UPDATE：保留原 hit_count 与
         created_at，与原 INSERT OR REPLACE + COALESCE(hit_count) 语义一致。
         """
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         src = _normalize(source)
         tgt = _normalize(target)
         if not src or not tgt:
@@ -239,12 +255,15 @@ class TranslationMemory:
 
     def store_batch(self, pairs: list[tuple[str, str, int]],
                     source_name: str | None = None,
-                    source_lang: str = "ja",
-                    target_lang: str = "zh") -> int:
+                    source_lang: str | None = None,
+                    target_lang: str | None = None) -> int:
         """批量存入。pairs = [(source, target, stage), ...]。返回新增条数。
 
         source_name 为本批统一来源标识（srt 文件名 stem），写入每个条目。
+        source_lang/target_lang None 回落实例缺省（v2_learn 学习链经此
+        落库，D2026-0930-05 批内缺陷修复的接线受益点）。
         """
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         added = 0
         for src, tgt, stg in pairs:
             if self.store(src, tgt, stg, source_name=source_name,
@@ -257,9 +276,10 @@ class TranslationMemory:
     # ------------------------------------------------------------------
 
     def lookup_exact(self, source: str, stage: int = 0,
-                     source_lang: str = "ja",
-                     target_lang: str = "zh") -> str | None:
+                     source_lang: str | None = None,
+                     target_lang: str | None = None) -> str | None:
         """精确查找：返回译文或 None。命中时自动更新 hit_count。"""
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         h = _simhash(_normalize(source))
         conn = self._get_conn()
         row = conn.execute(
@@ -276,8 +296,8 @@ class TranslationMemory:
         return None
 
     def exact_map(self, sources: list[str], stage: int = 0,
-                  source_lang: str = "ja",
-                  target_lang: str = "zh") -> dict:
+                  source_lang: str | None = None,
+                  target_lang: str | None = None) -> dict:
         """批量精确查找（P1-6）：一次参数化 SQL 取回 {原输入串: 译文}。
 
         - sqlite 变量上限（默认 999）→ 按 _EXACT_MAP_CHUNK 分批 IN 查询；
@@ -286,6 +306,7 @@ class TranslationMemory:
         - 命中条目 hit_count 一次性自增并提交（与 lookup_exact 语义一致，
           但从 N 次 commit 收敛为每批 1 次）。
         """
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         mapping: dict = {}
         hash_to_sources: dict = {}
         for src in sources:
@@ -320,9 +341,10 @@ class TranslationMemory:
         return mapping
 
     def has_exact(self, source: str, stage: int = 0,
-                  source_lang: str = "ja",
-                  target_lang: str = "zh") -> bool:
+                  source_lang: str | None = None,
+                  target_lang: str | None = None) -> bool:
         """只读精确查找：返回是否存在匹配条目（不更新 hit_count）。"""
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         h = _simhash(_normalize(source))
         conn = self._get_conn()
         row = conn.execute(
@@ -332,9 +354,10 @@ class TranslationMemory:
         return row is not None
 
     def lookup_exact_all_stages(self, source: str,
-                                source_lang: str = "ja",
-                                target_lang: str = "zh") -> dict:
+                                source_lang: str | None = None,
+                                target_lang: str | None = None) -> dict:
         """精确查找所有阶段：返回 {stage: target_text}"""
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         h = _simhash(_normalize(source))
         conn = self._get_conn()
         rows = conn.execute(
@@ -352,11 +375,13 @@ class TranslationMemory:
 
     def lookup_fuzzy(self, source: str, stage: int = 0,
                      threshold: float = 0.8,
-                     source_lang: str = "ja",
-                     target_lang: str = "zh") -> list[tuple[str, str, float]]:
+                     source_lang: str | None = None,
+                     target_lang: str | None = None
+                     ) -> list[tuple[str, str, float]]:
         """模糊查找：返回 [(source, target, similarity), ...] 按相似度降序。
         threshold: 字符重叠率下限 (0-1)。
         """
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         src = _normalize(source)
         if not src:
             return []
@@ -434,13 +459,15 @@ class TranslationMemory:
             w.writerow(r)
         data_path.write_text(buf.getvalue(), encoding="utf-8-sig")
 
-    def import_csv(self, path: str, source_lang: str = "ja",
-                   target_lang: str = "zh") -> int:
+    def import_csv(self, path: str, source_lang: str | None = None,
+                   target_lang: str | None = None) -> int:
         """从 CSV 导入。返回新增条数。
 
-        语言列兼容：新格式（含 source_lang/target_lang 列）按行值；旧格式
-        （无语言列）按参数缺省回填 ja/zh（存量库语义）。
+        语言列兼容：新格式（含 source_lang/target_lang 列）按行值优先；
+        旧格式（无语言列）按解析后的语言回填（None 回落实例缺省，裸构造
+        仍为 ja/zh 存量库语义，D2026-0930-05 批内缺陷修复）。
         """
+        source_lang, target_lang = self._langs(source_lang, target_lang)
         import csv
         import io
         text = Path(_validated_path(path)).read_text(encoding="utf-8-sig")

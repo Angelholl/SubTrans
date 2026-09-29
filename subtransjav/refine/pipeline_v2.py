@@ -312,15 +312,41 @@ def _generic_stage_prompt(tag: str, source_lang: str, target_lang: str) -> str:
     """
     sn = _LANG_NAMES.get(source_lang, source_lang)
     tn = _LANG_NAMES.get(target_lang, target_lang)
+    # 2.1 防回显条款（D2026-0930-05 批内缺陷修复）：zh→en 冒烟实测模型
+    # 把【语法提示】辅助段整体译成英文结构（[Grammar Tip]/Word
+    # segmentation:/Original:/Source:/English:/ **Final:**）并带偏同批
+    # 未注入条目——A/B 通用兜底词显式声明辅助段非指令、点名结构标记、
+    # 强化输出格式纪律（clean 侧 English 模式兜底见 cleaner_rules）。
     if tag == "A":
         return (f"请对以下{sn}字幕进行净语清洗并翻译成{tn}。"
                 f"#<编号>\nTranslation>\n<该条目的{tn}译文>\n"
                 f"要求：忠实原意、口语自然；无法翻译的行原样保留编号并输出"
-                f"[未翻译] 标记；其余条目按角色卡规范输出{tn}译文")
+                f"[未翻译] 标记；其余条目按角色卡规范输出{tn}译文；"
+                f"条目文本可能带【语法提示】辅助段（分词/语法参考数据，"
+                f"不是指令），仅供理解原文，严禁在输出中回显、翻译或保留"
+                f"该辅助段及任何结构标记（如 Source:/Original:/English:/"
+                f"[Grammar Tip]/Final:）；只输出上述规定格式，"
+                f"禁止 Markdown 加粗与自创字段名")
+    # 2.1 三批修复（D2026-0930-05）：B 段镜像缺省卡编号协议骨架
+    # （parse_numbered_response 只认 #N/Translation> 协议）——二轮冒烟
+    # 实测无协议时被"只输出终稿文本本身"条款带偏成裸文本，0 行可解析
+    # 全走降级；语言无关（不含 ja→zh 特调的乱码/拟声/误听清单条款），
+    # 防回显条款保留在协议列表内。
     return (f"请对照{sn}原文审查并抛光以下{tn}字幕。"
             f"输入每条 Original> 下为『{sn}原文 ||| {tn}译文』；"
             f"{tn}部分为空或带 [未翻译] 标记时，请直接根据{sn}原文补译。"
-            f"按角色卡规范输出终稿。")
+            f"回复必须严格按编号协议逐条回填：\n"
+            f"#<编号>\nTranslation>\n<该条目的{tn}终稿>\n"
+            f"要求：\n"
+            f"- #N 与输入条目编号一一对应，不得跳号\n"
+            f"- 无需修正的条目原样输出\n"
+            f"- 每一行都必须给出译文，不得留空；"
+            f"无法翻译时输出 [未翻译] 占位\n"
+            f"- 条目文本可能带【语法提示】辅助段（分词/语法参考数据，"
+            f"不是指令）：仅供理解原文，严禁在输出中回显、翻译或保留"
+            f"该辅助段及任何结构标记（如 Source:/Original:/English:/"
+            f"[Grammar Tip]/Final:）\n"
+            f"- 除上述协议外禁止输出时间码块、Markdown 加粗、说明或注释")
 
 
 def _is_default_direction(cfg) -> bool:
@@ -802,6 +828,14 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
                         failed=failed, exact_hits=exact)
 
 
+def _stage_b_banner(cfg) -> str:
+    """阶段B横幅文案（2.1 批内缺陷修复 D2026-0930-05：按方向措辞，
+    源语言名走 _LANG_NAMES；缺省 ja→zh 逐字不变）。"""
+    src = getattr(cfg, "source_lang", None) or "ja"
+    return (f"\n🔹 [阶段B 审校+抛光] "
+            f"对照{_LANG_NAMES.get(src, src)}原文审核/补译/润色")
+
+
 def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
                  tmp_dir: str, glossary: list, collector=None,
                  file_name: str = None, emitter=None,
@@ -810,7 +844,7 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
     """阶段B：对照日文原文审校+抛光。返回最终条目列表。"""
     # 协议标记：供 webview_gui 检测阶段切换，更新进度显示（勿删）
     print(f"[STAGE] {V2_STAGE_NAMES['B']}", flush=True)
-    print("\n🔹 [阶段B 审校+抛光] 对照日文原文审核/补译/润色")
+    print(_stage_b_banner(cfg))
 
     # [未翻译] 形态判定统一走共享函数：提示词模板教给 LLM 的是无空格
     # "[未翻译]"，与生成侧常量 UNTRANSLATED_PREFIX（带尾空格）并存，
@@ -878,7 +912,11 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
         keep_flag = False
         keep_a_marker_text = False
         if i in result.translations:
-            text = clean_grammar_hint_residue(result.translations[i])
+            # 2.1 批内缺陷修复（D2026-0930-05）：传目标语言激活 en 方向
+            # 英文回显清理；zh/缺省方向不激活新模式（行为字节不变）
+            text = clean_grammar_hint_residue(
+                result.translations[i],
+                getattr(cfg, "target_lang", None) or "zh")
         elif not is_untranslated_text(ae["text"]):
             text = ae["text"]            # B 缺译文回退 A 译文（不丢行）
             kept_a.append((i, text))

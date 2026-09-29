@@ -16,6 +16,7 @@ from subtransjav.refine.pipeline_v2 import (
     _grammar_cache_key,
     _is_default_direction,
     _load_v2_instruction,
+    _stage_b_banner,
 )
 from subtransjav.refine.source_hallucination import is_fluent_target
 from subtransjav.refine.v2_outputs import final_stem
@@ -44,6 +45,63 @@ def test_generic_stage_prompt_direction_wording():
     from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
     for tag in ("A", "B"):
         assert _generic_stage_prompt(tag, "ja", "zh") != V2_STAGE_PROMPTS[tag]
+
+
+# ---------------------------------------------------------------------------
+# 通用提示词防回显条款（D2026-0930-05 批内缺陷修复：zh→en 冒烟实测
+# 模型把【语法提示】辅助段整体译成英文结构并带偏未注入条目）
+# ---------------------------------------------------------------------------
+def test_generic_stage_prompt_no_echo_clause():
+    """非缺省方向 A/B 通用提示词含禁回显条款（冒烟缺陷回归钉）。"""
+    a = _generic_stage_prompt("A", "zh", "en")
+    b = _generic_stage_prompt("B", "zh", "en")
+    for prompt in (a, b):
+        assert "回显" in prompt
+        assert "[Grammar Tip]" in prompt          # 点名英文结构标记
+        assert "【语法提示】" in prompt            # 点名辅助段本体
+    # A 段格式纪律：只输出规定格式，禁止 Markdown 加粗与自创字段名
+    assert "禁止 Markdown 加粗" in a
+    assert "Translation>" in a
+    # 缺省方向内置提示词零触碰（防回显条款仅进非缺省兜底词）
+    from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
+    for tag in ("A", "B"):
+        assert "[Grammar Tip]" not in V2_STAGE_PROMPTS[tag]
+
+
+# ---------------------------------------------------------------------------
+# 阶段B横幅方向化（D2026-0930-05 批内缺陷修复：console 文案）
+# ---------------------------------------------------------------------------
+def test_stage_b_banner_direction_wording():
+    """④横幅按方向措辞：zh→en 含"中文"，缺省逐字保留"日文"横幅。"""
+    default_banner = _stage_b_banner(SimpleNamespace())
+    assert default_banner == \
+        "\n🔹 [阶段B 审校+抛光] 对照日文原文审核/补译/润色"   # 缺省字节钉
+    assert "中文" in _stage_b_banner(SimpleNamespace(source_lang="zh"))
+    assert "英文" in _stage_b_banner(SimpleNamespace(source_lang="en"))
+
+
+# ---------------------------------------------------------------------------
+# generic B 段编号协议骨架（D2026-0930-05 三批修复：二轮冒烟阶段 B
+# "输入 6 行 / 输出 0 行"——B 段无输出协议被"只输出终稿文本本身"条款
+# 带偏成裸文本，parse_numbered_response 全不可解析）
+# ---------------------------------------------------------------------------
+def test_generic_stage_prompt_b_numbered_protocol():
+    """B 段镜像缺省卡编号协议骨架（不含 ja→zh 特调条款）。"""
+    b = _generic_stage_prompt("B", "zh", "en")
+    assert "回复必须严格按编号协议逐条回填" in b
+    assert "#<编号>\nTranslation>\n<该条目的英文终稿>" in b
+    assert "- #N 与输入条目编号一一对应，不得跳号" in b
+    assert "- 无需修正的条目原样输出" in b
+    assert "每一行都必须给出译文，不得留空；" \
+        "无法翻译时输出 [未翻译] 占位" in b
+    assert "禁止输出时间码块" in b
+    # 二轮带偏根因条款（裸文本输出）已移除
+    assert "终稿文本本身" not in b
+    # 不含 ja→zh 特调（乱码语义反转/拟声假名清单仅缺省卡所有）
+    assert "拒绝↔邀请" not in b and "拟声" not in b
+    # A 段不再动（编号协议自上一批起即在）
+    a = _generic_stage_prompt("A", "zh", "en")
+    assert "#<编号>\nTranslation>" in a
 
 
 def test_load_v2_instruction_default_byte_identical(tmp_path):

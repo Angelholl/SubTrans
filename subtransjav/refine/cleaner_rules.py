@@ -584,12 +584,37 @@ _GRAMMAR_HINT_PATTERNS = [
     re.compile(r'^原文：.*$', re.MULTILINE),
 ]
 
+# 2.1 批内缺陷修复（D2026-0930-05）：en 方向英文回显模式——zh→en 冒烟
+# 实测模型把【语法提示】辅助段整体译成英文结构（[Grammar Tip]/
+# Word segmentation:/Original:/Source:/ **Final:** /English: 前缀），
+# 上述中文模式匹配不上。全部行锚定防误伤正文；仅 target_lang=="en"
+# 激活（缺省 ja→zh 与显式 zh 零感知，行为字节不变）。
+_GRAMMAR_HINT_EN_PATTERNS = [
+    re.compile(r'^\[Grammar Tip\].*$', re.MULTILINE),
+    re.compile(r'^- Word segmentation reference:.*$', re.MULTILINE),
+    re.compile(r'^Word segmentation:.*$', re.MULTILINE),
+    re.compile(r'^(Original|Source): .*$', re.MULTILINE),
+    re.compile(r'^\*\*Final:\*\*$', re.MULTILINE),
+]
+# 行首前缀剥离（保留行内其余文本：译文可能折行）
+_GRAMMAR_HINT_EN_PREFIX = re.compile(r'^English: ', re.MULTILINE)
 
-def clean_grammar_hint_residue(text: str) -> str:
-    """清理 LLM 输出中可能残留的语法提示标记。"""
+
+def clean_grammar_hint_residue(text: str, target_lang: str = "") -> str:
+    """清理 LLM 输出中可能残留的语法提示标记。
+
+    target_lang=="en" 时追加英文回显清理（结构行删除后连续空行收尾
+    压成一个）；默认 "" 不激活新模式，行为与历史版本完全一致。
+    """
     cleaned = text
     for pattern in _GRAMMAR_HINT_PATTERNS:
         cleaned = pattern.sub('', cleaned)
+    if target_lang == "en":
+        for pattern in _GRAMMAR_HINT_EN_PATTERNS:
+            cleaned = pattern.sub('', cleaned)
+        cleaned = _GRAMMAR_HINT_EN_PREFIX.sub('', cleaned)
+        # 收尾：结构行删除后留下的连续空行压成一个
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     # 兜底：阶段B输入格式"日文 ||| 中文"被整体回显时，只保留
     # 最后一个分隔符之后的中文侧
     if " ||| " in cleaned:
