@@ -174,6 +174,10 @@ MSG = {
     "nav_group_quality": "质量与设置",
     "main_subtitle": "一站式 AI 字幕翻译与校对",
 
+    # ---- 右栏系统状态摘要卡（D2026-1001 批3，owner 特批 2 键）----
+    "sys_summary_title": "系统状态",
+    "sys_summary_unavailable": "不可用",
+
     # ---- 数据保存目录（api.py refine_set_data_root 校验文案）----
     "data_root_need_abs": "请输入绝对路径",
 }

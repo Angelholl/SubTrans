@@ -836,3 +836,22 @@ def test_refresh_button_state_restore_uses_innerhtml():
     assert "row.className = 'dict-row'" in src, "词典行未挂 .dict-row 类"
     assert 'row.style.cssText' not in src, "词典行不得再用 inline style 布局（压住网格规则）"
 
+
+# ---------------------------------------------------------------------------
+# 批3（D2026-1001）：右栏系统状态摘要卡——结构在位 + 四接口逐项降级
+# ---------------------------------------------------------------------------
+
+def test_system_summary_card_structure_and_degradation():
+    """摘要卡四数据行在位；SystemSummary 每接口独立 try/catch（单点失败不拖垮右栏）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'id="systemSummaryCard"' in html
+    for val_id in ("sysSummaryVersion", "sysSummaryDataRoot", "sysSummaryTm", "sysSummaryDict"):
+        assert f'id="{val_id}"' in html, f"摘要卡缺少数据行：{val_id}"
+    src = _app_js_source()
+    for api in ("get_version", "refine_get_data_root", "tm_get_stats", "refine_dict_status"):
+        assert api in src, f"摘要卡未接入 {api}"
+    # 降级：SystemSummary 段内必须存在 per-call catch（截取段落内判定）
+    start = src.index("const SystemSummary")
+    seg = src[start:start + 2400]
+    assert "catch" in seg, "SystemSummary 缺少逐接口降级 catch"
+

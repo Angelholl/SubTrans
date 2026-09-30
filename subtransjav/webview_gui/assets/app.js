@@ -385,6 +385,11 @@ const MSG = {
     pipeline_mirror_model: '阶段A 模型',
     pipeline_mirror_conc: '并行',
     pipeline_card_hint: '点击前往「引擎与模型」页修改',
+
+    // ---- 右栏系统状态摘要卡（D2026-1001 批3；strings.py 特批 2 键镜像 + JS-only 标签）----
+    sys_summary_title: '系统状态',
+    sys_summary_unavailable: '不可用',
+    sys_summary_version: '版本',
     media_source_label: '媒体来源',
     media_source_auto: '自动发现',
     media_source_explicit: '显式指定',
@@ -1046,6 +1051,50 @@ const ProgressManager = {
         this.setProgress(0);
         this.setStatus(MSG.idle);
         this.setDot('idle');
+    }
+};
+
+// ============================================================
+// System Summary（D2026-1001 批3：右栏系统状态摘要卡，全部只读现成接口）
+// 每接口独立降级：任一失败仅该行显示"不可用"，不拖垮右栏布局
+// ============================================================
+const SystemSummary = {
+    load() {
+        this._set('sysSummaryVersion', async () => {
+            const r = await pywebview.api.get_version();
+            return (r && r.success) ? r.version : null;
+        });
+        this._set('sysSummaryDataRoot', async () => {
+            const r = await pywebview.api.refine_get_data_root();
+            return (r && r.success && r.data_root) ? r.data_root : null;
+        }, true);
+        this._set('sysSummaryTm', async () => {
+            const r = await pywebview.api.tm_get_stats();
+            if (!r || !r.success) return null;
+            const total = r.total || 0, hits = r.total_hits || 0;
+            return `${MSG.tm_enable_label} ${total} 条 · 命中 ${hits} 次`;
+        });
+        this._set('sysSummaryDict', async () => {
+            const r = await pywebview.api.refine_dict_status();
+            if (!r || !r.success || !r.dicts) return null;
+            const kinds = Object.values(r.dicts);
+            const ok = kinds.filter(d => d && d.available).length;
+            return `${ok}/${kinds.length} ${MSG.dict_status_available}`;
+        });
+    },
+
+    async _set(id, fn, ellipsis) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        let text = MSG.sys_summary_unavailable;
+        try {
+            const v = await fn();
+            if (v !== null && v !== undefined && v !== '') text = v;
+        } catch (e) {
+            console.warn('SystemSummary[' + id + ']:', e);
+        }
+        el.textContent = text;
+        el.title = ellipsis ? text : '';
     }
 };
 
@@ -3359,6 +3408,9 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
     await ThemeManager.loadSavedThemeFromBackend();
 
     await AppState.loadDefaultOutputDir();
+
+    // 右栏系统状态摘要卡（D2026-1001 批3）：只读四接口，逐项降级
+    SystemSummary.load();
 
     // Load saved stage settings, glossary, templates and model lists
     if (window.__refineLoadRemote) {
