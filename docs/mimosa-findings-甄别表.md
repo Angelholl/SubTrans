@@ -21,6 +21,7 @@
 1. **已修复**：本轮改动消除（入库）。
 2. **树外签注**：目标文件 UNTRACKED/.gitignore，不入仓库基线；本机一次性处置/留存声明，不构成仓库基线修复面（UNTRACKED 2 文件 3 条统一用此表述；Temp 瞬态脚本不修，留存期间深扫面不减）。
 3. **留痕维持**：本地单机工具，无不可信输入面，维持现状并留痕判据。
+- **Seal digest（2026-09-30 UI 改版阶段1 批后复扫）**：`sha256:6b709035a51d87b1b3b3f6cadd8c89d1c87dc0e2cafa5e9a819b7f79089e1c31`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-09-30T09-17-01.062Z-e8aa1f6a371b）；本批 9 文件（assets 四件 index.html/app.js/style.css/style.dark.css+删 3 套过时主题 css+tests 钉修订+docs 两件）未引入新发现——api.py 两条 path-traversal 为行号漂移（1226→1260/1453→1579），按 identity.anchor 逐一比对与基线完全相同；仓库面净变动=删 3 主题 css（不在扫描面）。+5 树外签注：`Temp/build_blind_pack.py` 弱随机 2 条与 `Temp/b2_html.py` 路径穿越 1 条均沿既有签注不变；新增 2 条为 `Temp/release-211/pyinstaller_dist{,_lite}/SubTransJAV/_internal/webview/js/api.js:75` code-injection（findingId:dbb7ea9e/c98151da）——2.1.1 发版构建产物中的 pywebview 自带资产拷贝，同 artifact_210 既签注项同源同判据（verdictEffect=none，Temp 瞬态构建目录不入库，清理后自然消除）；依赖扫描 completion=completed / matchedAdvisories=1 同前。
 
 ## 三态统计（双基线并列）：旧基线（2026-09-24 首扫，26 条，历史口径）：①已修复 1 ｜ ②树外签注 3 ｜ ③留痕维持 22 ｜ 新基线（2026-09-26 复扫，24 条）：上式净减 ①中 tm_promote.py SQL 1 条与 ②中 create_shortcut.py 1 条（兑现消除，①已从扫描面消除）→ ②剩 2（Temp/build_blind_pack.py 弱随机）｜ ③ 22 不变
 
