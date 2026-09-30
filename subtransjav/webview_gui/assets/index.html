@@ -15,7 +15,22 @@
            .modal-overlay 等）原样保留，仅重组位置；
          - 运行控制/输出设置/两阶段流水线说明迁入右栏 .aside（所有页可见）；
          - 阶段2 引入 Lucide 图标时须在本注释块补写完整 ISC 声明全文
-           （D2026-0930-08 F 项），本阶段仅复用既有 SVG 与通用图形。 -->
+           （D2026-0930-08 F 项），本阶段仅复用既有 SVG 与通用图形。
+
+         Icons: Lucide (https://lucide.dev)
+         Copyright (c) 2025 Lucide Contributors
+
+         Permission to use, copy, modify, and/or distribute this software for any
+         purpose with or without fee is hereby granted, provided that the above
+         copyright notice and this permission notice appear in all copies.
+
+         THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+         WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+         MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+         ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+         WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+         ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+         OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. -->
 </head>
 <body>
     <!-- ============ 三栏工作台 ============ -->
@@ -32,6 +47,8 @@
 
             <nav class="rail-nav" role="tablist" aria-label="Function tabs">
 
+                <div class="nav-section" data-i18n="nav_group_workspace">工作区</div>
+
                 <button type="button" class="side-tab-btn active" id="tabBtnTranslate"
                         data-tab="tab-translate" role="tab" aria-selected="true"
                         data-i18n-title="tabTranslate" title="字幕翻译"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="side-tab-text" data-i18n="tabTranslate">字幕翻译</span></button>
@@ -41,6 +58,8 @@
                 <button type="button" class="side-tab-btn" id="tabBtnGlossary"
                         data-tab="tab-glossary" role="tab" aria-selected="false"
                         data-i18n-title="tabGlossary" title="词库与模板"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="side-tab-text" data-i18n="tabGlossary">词库与模板</span></button>
+                <div class="nav-section" data-i18n="nav_group_quality">质量与设置</div>
+
                 <button type="button" class="side-tab-btn" id="tabBtnGuide"
                         data-tab="tab-guide" role="tab" aria-selected="false"
                         data-i18n-title="tabGuide" title="质量与建议"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span class="side-tab-text" data-i18n="tabGuide">质量与建议</span></button>
@@ -52,7 +71,9 @@
 
             <div class="rail-foot">
                 <button id="themeBtn" class="theme-button" aria-label="Theme" data-i18n-title="theme_label" title="Theme">
-                    🎨
+                    <!-- Lucide: moon（浅色主题时显示）/ sun（深色主题时显示，JS 切换） -->
+                    <svg id="iconMoon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                    <svg id="iconSun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                 </button>
                 <!-- 主题菜单：5 套收敛为 2 套（google/carbon/primer 已删） -->
                 <div id="themeMenu" class="theme-menu" role="menu" aria-label="Select theme">
@@ -71,9 +92,12 @@
             <!-- TAB 1: 字幕翻译（默认选中；骨架重做为 页头+拖拽区+文件列表卡+控制台） -->
             <div class="tab-page active" id="tab-translate" data-testid="tab-translate">
 
-                <!-- 页头（标题复用既有键 app_header_title） -->
+                <!-- 页头（标题复用既有键 app_header_title；阶段2 批1 加副标题） -->
                 <div class="page-head">
-                    <h1 class="page-title" data-i18n="app_header_title">净语翻译 · SRT</h1>
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="app_header_title">净语翻译 · SRT</h1>
+                        <div class="page-subtitle" data-i18n="main_subtitle">一站式 AI 字幕翻译与校对</div>
+                    </div>
                 </div>
 
                 <!-- 拖拽 / 上传区（蓝色虚线大圆角，对照原型 .dropzone；
@@ -84,7 +108,7 @@
                         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>
                     </div>
                     <div class="dz-title" data-i18n="source_header">Source（.srt 字幕）</div>
-                    <div class="dz-hint" data-i18n="empty_hint">点击「添加文件 / 添加文件夹」或直接拖入 .srt 文件</div>
+                    <div class="dz-hint" data-i18n="empty_hint">点击上方按钮或拖入文件开始</div>
                     <div class="dz-actions">
                         <button type="button" class="btn btn-primary" id="addFilesBtn" data-i18n="add_files">
                             添加文件
@@ -92,23 +116,28 @@
                         <button type="button" class="btn btn-primary" id="addFolderBtn" data-i18n="add_folder">
                             添加文件夹
                         </button>
-                        <button type="button" class="btn btn-secondary" id="removeSelectedBtn" disabled data-i18n="remove_selected">
-                            移除选中
-                        </button>
-                        <button type="button" class="btn btn-secondary" id="clearBtn" disabled data-i18n="clear_btn">
-                            清空
-                        </button>
                     </div>
                 </div>
 
-                <!-- 文件列表卡片（.file-item 由 app.js 动态生成，此处仅容器） -->
+                <!-- 文件列表卡片（.file-item 由 app.js 动态生成，此处仅容器；
+                     阶段2 批1：移除选中/清空两按钮自 dropzone 迁入 card-head 右侧） -->
                 <div class="card">
+                    <div class="card-head">
+                        <div class="card-head-actions">
+                            <button type="button" class="btn btn-secondary" id="removeSelectedBtn" disabled data-i18n="remove_selected">
+                                移除选中
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="clearBtn" disabled data-i18n="clear_btn">
+                                清空
+                            </button>
+                        </div>
+                    </div>
                     <div class="file-list-container" id="fileListContainer">
                         <div class="file-list" id="fileList" tabindex="0" data-testid="file-list">
                             <div class="empty-state" id="emptyState">
-                                <span class="empty-icon">📂</span>
-                                <p data-i18n="no_files_selected">No files selected</p>
-                                <p class="empty-hint" data-i18n="empty_hint">点击「添加文件 / 添加文件夹」或直接拖入 .srt 文件</p>
+                                <span class="empty-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
+                                <p data-i18n="no_files_selected">暂未选择文件</p>
+                                <p class="empty-hint" data-i18n="empty_hint">点击上方按钮或拖入文件开始</p>
                             </div>
                         </div>
                     </div>
@@ -122,7 +151,7 @@
                         <div class="action-row">
                             <button type="button" class="btn btn-ghost btn-sm console-collapse-btn" id="consoleCollapseBtn"
                                     aria-expanded="true" data-i18n-title="console_collapse" title="折叠控制台">
-                                <span class="console-collapse-icon">▾</span>
+                                <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
                             </button>
                             <button type="button" class="btn btn-ghost btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
                                 Clear
@@ -158,9 +187,9 @@
                         </select>
                         <select id="refineS1Model" class="form-select compact grow" style="min-width:var(--w-model);">
                             <option value="custom-model-1" selected data-i18n="model_default_1">custom-model-1（默认）</option>
-                            <option value="" data-i18n="model_refresh_hint">（点 ⟳ 刷新模型列表）</option>
+                            <option value="" data-i18n="model_refresh_hint">（点刷新按钮获取模型列表）</option>
                         </select>
-                        <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表">⟳</button>
+                        <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
                         <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
                         <span id="refineTestS1Status" class="muted" style="max-width:var(--w-test-status);"></span>
                     </div>
@@ -169,7 +198,7 @@
                         <input type="password" id="refineS1Key" class="form-input compact grow" style="min-width:var(--w-key-input);"
                                data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                         <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
-                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）">💾</button>
+                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                     </div>
                 </div>
 
@@ -189,9 +218,9 @@
                         </select>
                         <select id="refineS3Model" class="form-select compact grow" style="min-width:var(--w-model);">
                             <option value="custom-model-2" selected data-i18n="model_default_2">custom-model-2（默认）</option>
-                            <option value="" data-i18n="model_refresh_hint">（点 ⟳ 刷新模型列表）</option>
+                            <option value="" data-i18n="model_refresh_hint">（点刷新按钮获取模型列表）</option>
                         </select>
-                        <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表">⟳</button>
+                        <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
                         <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
                         <span id="refineTestS3Status" class="muted" style="max-width:var(--w-test-status);"></span>
                     </div>
@@ -200,7 +229,7 @@
                         <input type="password" id="refineS3Key" class="form-input compact grow" style="min-width:var(--w-key-input);"
                                data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                         <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
-                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）">💾</button>
+                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                     </div>
                 </div>
 
@@ -245,7 +274,7 @@
                                data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
                     </div>
                     <div class="action-row">
-                        <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact" data-i18n="save_endpoints_btn">💾 保存接口配置</button>
+                        <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
                         <span id="refineEndpointStatus" class="muted"></span>
                     </div>
                 </div>
@@ -259,7 +288,7 @@
                                 <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
                             </select>
                             <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
-                                    data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;">⟳</button>
+                                    data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
                         </label>
                         <label class="inline-field"
                                data-i18n-title="fallback_local_title" title="云端阶段遭遇限流/宕机/持续解析失败时，自动切换本地模型完成剩余批次">
@@ -313,7 +342,7 @@
                     <div class="action-row">
                         <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);"></select>
                         <button type="button" id="refineTemplateReload" class="btn btn-secondary btn-compact" data-i18n="tpl_reload">重新加载</button>
-                        <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact" data-i18n="tpl_save">💾 保存角色卡</button>
+                        <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="tpl_save">保存角色卡</span></button>
                         <span id="refineTemplateStatus" class="muted"></span>
                     </div>
                     <div id="refineTplLoadedPath" class="muted" style="font-size:11px; word-break:break-all;"></div>
@@ -328,7 +357,7 @@
                         <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
                         <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
                                 aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
-                            <span class="console-collapse-icon">▾</span>
+                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
                         </button>
                     </div>
                     <div class="gl-tab-content gl-collapsible-content" style="padding:6px 0;">
@@ -347,7 +376,7 @@
                                 <button type="button" id="refineGlDel" class="btn btn-secondary btn-compact" data-i18n="gl_del">删除选中</button>
                                 <button type="button" id="refineGlImport" class="btn btn-secondary btn-compact" data-i18n="gl_import">导入CSV/TXT</button>
                                 <button type="button" id="refineGlExport" class="btn btn-secondary btn-compact" data-i18n="gl_export">导出CSV</button>
-                                <button type="button" id="refineGlSave" class="btn btn-primary btn-compact" data-i18n="gl_save">💾 保存词库</button>
+                                <button type="button" id="refineGlSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="gl_save">保存词库</span></button>
                                 <span id="refineGlStatus" class="muted"></span>
                             </div>
                             <div class="empty-guide" id="glEmptyHint" data-i18n="gl_empty_hint">词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。</div>
@@ -364,7 +393,7 @@
                         <div class="block-title" data-i18n="gl_learned_title">学习词库</div>
                         <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
                                 aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
-                            <span class="console-collapse-icon">▾</span>
+                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
                         </button>
                         <button type="button" id="glLearnedReloadBtn" class="btn btn-ghost btn-sm" data-i18n="gl_learned_reload">刷新</button>
                         <span id="glLearnedStats" class="muted"></span>
@@ -406,7 +435,7 @@
                          点击弹原生文件对话框选择导读 json，选中即加载；
                          选中路径与加载状态回显到下方 status span） -->
                     <div class="action-row" style="margin-bottom:4px;">
-                        <button type="button" id="guideOpenOtherBtn" class="btn btn-ghost btn-sm" data-i18n="guide_open_other_btn">📂 打开其他质量报告导读</button>
+                        <button type="button" id="guideOpenOtherBtn" class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span data-i18n="guide_open_other_btn">打开其他质量报告导读</span></button>
                         <span id="guideCustomStatus" class="muted"></span>
                     </div>
                 </div>
@@ -418,7 +447,7 @@
                             <button type="button" class="btn btn-ghost btn-sm" id="refineGuideLoadBtn" data-i18n="guide_load_btn">加载导读</button>
                         </summary>
                         <div class="section-content" style="padding-top:8px;">
-                            <div class="empty-guide" id="guideEmptyHint" data-i18n="guide_empty_hint">暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「🤖 AI 分析本报告」前先加载导读。</div>
+                            <div class="empty-guide" id="guideEmptyHint"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span data-i18n="guide_empty_hint">暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「AI 分析本报告」前先加载导读。</span></div>
                             <div><span id="guideStatus"></span></div>
                             <!-- 只读报告全文文本块（*_质量报告.txt：等宽/可滚动/保留换行） -->
                             <div id="guideTxtView" class="guide-txt-view" style="display:none;"></div>
@@ -442,7 +471,7 @@
                 <section class="section console-section" id="refineAiAnalyzeSection">
                     <div class="section-content" style="padding-top:8px;">
                         <div class="action-row">
-                            <button type="button" id="refineAiAnalyzeBtn" class="btn btn-primary btn-compact" data-i18n="aiAnalyzeBtn">🤖 AI 分析本报告</button>
+                            <button type="button" id="refineAiAnalyzeBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span data-i18n="aiAnalyzeBtn">AI 分析本报告</span></button>
                             <span id="refineAiAnalyzeStatus" class="muted"></span>
                         </div>
                         <div id="refineAiPrivacy" class="muted hint-warn" style="display:none; margin-top:6px;"></div>
@@ -606,8 +635,8 @@
 
                 <div class="action-row">
 
-                    <button type="button" id="refineStartBtn" class="btn btn-primary" data-testid="btn-start" data-i18n="start_btn">▶ 开始净语翻译</button>
-                    <button type="button" id="refineCancelBtn" class="btn btn-danger" data-testid="btn-stop" disabled data-i18n="stop_btn">⏹ 停止</button>
+                    <button type="button" id="refineStartBtn" class="btn btn-primary" data-testid="btn-start"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg><span data-i18n="start_btn">开始净语翻译</span></button>
+                    <button type="button" id="refineCancelBtn" class="btn btn-danger" data-testid="btn-stop" disabled><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span data-i18n="stop_btn">停止</span></button>
 
                 </div>
 
@@ -662,7 +691,7 @@
 
                 <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
                     <span class="feature-badge" id="grammarHintBadge" style="display:none;">
-                        <span class="feature-icon">📝</span>
+                        <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>
                         <span class="feature-text" data-i18n="grammar_hint_text">语法提示</span>
                     </span>
                 </div>
@@ -698,7 +727,7 @@
                 <button class="modal-close" onclick="closeAbout()" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="about-logo">🌐</div>
+                <div class="about-logo"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
                 <div class="about-title" data-i18n="doc_title">净语翻译 · SubTransJAV Translate</div>
                 <div class="about-version" id="aboutVersion"></div>
 

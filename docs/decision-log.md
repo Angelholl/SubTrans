@@ -1882,3 +1882,41 @@ UI 改版轮（D2026-0930-07）落地路线第 7 节阶段 1（骨架与主题�
 | pywebview 窗口 GUI 自动化不可驱动 | 中/中 | 试点后回退方案 b（临时 http 伺服，仅测试、无运行时依赖） |
 | 全量重写漏暗色组件 | 中/中 | dark.css 11 组件逐项消单 + 对照双向检查 |
 
+
+---
+
+## [2026-09-30] [D2026-0930-09] 阶段2 UI 冲刺与最终优化方案（锁定版）执行拆分 [已拍板]
+
+### 一、背景与决策
+
+Owner 提出"阶段 2 UI 冲刺与最终优化方案（锁定版）"（Lucide 全面替换/文件列表行重构三态 chip/右栏卡3 只读化/进度状态点/输出目录同行/i18n 破例授权），主模型经代码事实核查（explorer 9 点实证）后提交执行立场（A 三批拆分/B 授权口径/C 实时性两档/D 前提修正/E-G 实施细则）交 decision-critic 评议。
+
+### 二、评议与 HRO 处置
+
+- **[HIGH_RISK_OBJECTION]（1 条，采纳）**：B 的 js MSG 镜像键系契约硬需求（test_html_i18n_keys_exist_in_js_msg + test_html_has_no_unmarked_user_visible_chinese 双钉强制），不可与 strings.py 授权拆分孤立——须将 js 镜像键清单随 B 一揽子一次性提请 owner 裁定，缩批则走"砍文案 or 降级"路径，不带病开工。
+- 其余评议意见全部采纳：半清理风险（批 1 done bar 四件套）、C 档 1 语义坑（files_total 取行数非文件数、fname basename↔全路径 join 须显式定义+双形态走查、per-file 归组不得重构既有聚合路径）、applyI18n 静默覆写 SVG（静态钉守门）、console-collapse-icon/rotate(-90deg) 钉面保护。
+
+### 三、Owner 回执（2026-09-30，"开工"即回执）
+
+- **B 一揽子授权：全量批准**——strings.py +3 键（nav_group_workspace/nav_group_quality/main_subtitle，副标题采纳"加键"）+ app.js MSG 同步镜像 3 键 + 约 11 键值 emoji 清理（start_btn/stop_btn/save_endpoints_btn/tpl_save/gl_save/guide_open_other_btn/guide_empty_hint/aiAnalyzeBtn/model_refresh_hint/no_files_selected/empty_hint）+ 3 死键删除（theme_google/carbon/primer）+ theme_default 中文化（'默认主题'）；strings.py 7 个事件符号键（⚠✗→·）维持禁动。
+- **C 档位：档 1（窄化版）**——_feed_event 末尾旁路 per-file dict + snapshot 新增 files 键 + api 暴露 files_status，既有字节钉一字不改只增新用例。
+- 首跑验证：tests/test_strings_and_shortcut.py **42 passed**（回执后首跑，授权面干净）。
+
+### 四、执行拆分（三批）
+
+- **批 1（P1 视觉收口）**：themeBtn 🎨→Lucide sun/moon（applyTheme 同步显隐）+ no_files_selected/empty_hint 中文化 + 移除选中/清空挪文件列表卡头（id 不动 JS 零改）+ emoji 全量收口（done bar 四件套：HTML 静态 + 11 MSG 键值 + 3 死键 + theme_default）+ 左栏分组标题 2 键落地 + 页头副标题 + ISC 完整声明 + [data-i18n] 无直接子 SVG 静态钉。
+- **批 2（P2 结构重构）**：createFileItem 重构（Lucide 图标盒+文件名/路径双行+三态 chip+移除按钮；签名与 dataset.index 重同步钉不动）+ 三态 chip 档 1（等待灰/翻译中蓝/已完成绿，resumable 呈"可续传"琥珀）+ 右栏卡 3 只读两行状态+整卡跳转 tab-engine（禁双向同步）+ 进度区状态点 + dropzone 高亮扩展（preventDefault 已在）+ 输出目录严格同行。
+- **批 3（P3 打磨）**：控制台行距 1.5-1.6 + 收尾扫查 + 真机走查清单交付（owner 自做 100%/125%/150% 缩放+深色阴影）。
+
+### 五、非改区清单（只增不改）
+
+event_stream.py:313-337（format_event_line 输出）、strings.py:163-165（⚠/✗ 事件文案）、tests/test_gui_js_static.py:616（console-collapse-icon ≥2）与 :637（rotate(-90deg)）、test_event_protocol.py file 字段钉、test_event_stream.py 既有聚合语义钉（current_stage/lines_done/lines_total）。
+
+### 六、风险跟踪
+
+| 跟踪项 | 处置 |
+|---|---|
+| 批 1 半清理观感进 main | done bar 四件套同批收口 |
+| applyI18n 覆写按钮内 SVG | data-i18n 移内层 span + 静态钉 |
+| chip join 语义错位 | basename 映射设计段 + 后端单测 + 串行/双 worker 双形态走查 |
+| 缩批死锁 | 已由 owner 全量批准解除 |

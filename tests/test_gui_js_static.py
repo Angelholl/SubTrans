@@ -731,3 +731,59 @@ def test_direction_card_datalist_pinned():
     # 自由输入语义不变：启动参数仍读输入框 .value（方向参数化钉
     # test_build_refine_args_direction_* 的前端来源）
     assert "direction_card_s1: ($('directionCardS1') || {}).value || ''" in source
+
+
+# ---------------------------------------------------------------------------
+# UI 改版阶段2 批1（D2026-0930-09）：SVG 图标与 i18n 分层守门钉
+# ---------------------------------------------------------------------------
+
+def test_data_i18n_elements_no_direct_svg_child():
+    """任何带 data-i18n（纯文本键；-title/-placeholder 豁免）的元素，
+    其直接子节点不得是 <svg>。
+
+    背景：applyI18n 以 el.textContent = MSG[key] 整体覆写文本，
+    SVG 作为 data-i18n 元素的直接子节点会被整棵抹掉。凡按钮/容器
+    需要 SVG 图标时，data-i18n 必须移到内层 <span>（svg 与 span 为
+    兄弟节点）。解析用 html.parser（标准库，稳健于正则）。
+    """
+    from html.parser import HTMLParser
+
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input",
+            "link", "meta", "param", "source", "track", "wbr"}
+    violations = []
+
+    class SvgChildChecker(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            # 栈元素: [tag, 该元素自身是否带 data-i18n 纯文本键]
+            self.stack = []
+
+        def handle_starttag(self, tag, attrs):
+            if self.stack:
+                ptag, p18n = self.stack[-1]
+                if p18n and tag == "svg":
+                    violations.append(
+                        f"行 {self.getpos()[0]}: <{tag}> 是 data-i18n 元素 "
+                        f"<{ptag}> 的直接子节点")
+            has_text_i18n = any(name == "data-i18n" for name, _ in attrs)
+            if tag not in VOID:
+                self.stack.append([tag, has_text_i18n])
+
+        def handle_startendtag(self, tag, attrs):
+            # 自闭合（void 或 <svg .../> 形式）不入栈：不产生直接子节点
+            self.handle_starttag(tag, attrs)
+            if tag not in VOID:
+                self.stack.pop()
+
+        def handle_endtag(self, tag):
+            for i in range(len(self.stack) - 1, -1, -1):
+                if self.stack[i][0] == tag:
+                    del self.stack[i:]
+                    break
+
+    checker = SvgChildChecker()
+    checker.feed(INDEX_HTML.read_text(encoding="utf-8"))
+    checker.close()
+    assert not violations, (
+        "data-i18n 元素存在直接 <svg> 子节点（applyI18n textContent 会覆写"
+        f"图标，须把 data-i18n 移到内层 span）: {'; '.join(violations)}")

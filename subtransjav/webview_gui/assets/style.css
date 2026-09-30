@@ -251,6 +251,16 @@ button:focus { outline: none; }
     max-width: 100%;
 }
 
+/* 导航分组标题（原型 .nav-section；中文无大写效果无害） */
+.nav-section {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: .4px;
+    padding: 14px 10px 6px;
+    text-transform: uppercase;
+}
+
 .rail-foot {
     margin-top: auto;
     position: relative;
@@ -275,6 +285,10 @@ button:focus { outline: none; }
     transition: background .15s ease, color .15s ease;
 }
 .theme-button:hover { background: var(--surface-3); color: var(--text-1); }
+/* 阶段2 批1：按钮内为 moon/sun 双内联 SVG（显隐由 applyTheme 控制），
+   flex 居中替代原 line-height 文本居中；颜色随按钮 --text-2/hover --text-1 */
+.theme-button { display: inline-flex; align-items: center; justify-content: center; }
+.theme-button svg { flex-shrink: 0; display: block; }
 
 /* 主题菜单：锚定 rail-foot，向上弹出 */
 .theme-menu {
@@ -325,6 +339,9 @@ button:focus { outline: none; }
 
 .page-head { display: flex; align-items: baseline; gap: 12px; }
 .page-title { font-size: 18px; font-weight: 650; letter-spacing: -.3px; }
+/* 页头两行纵排（阶段2 批1：标题 + 副标题包同一列容器，spacer 类兄弟仍可用） */
+.page-head-text { display: flex; flex-direction: column; gap: 3px; }
+.page-subtitle { font-size: 13px; color: var(--text-2); }
 
 /* Tab 页机制：默认隐藏，.active 显示 */
 .tab-page { display: none; }
@@ -438,6 +455,16 @@ button:focus { outline: none; }
 /* ============================================================
    6. 文件列表
    ============================================================ */
+/* 卡片头部行（原型 .card-head：标题左 / 操作右；本批仅右侧按钮组） */
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+}
+.card-head-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
 .file-list-container { min-width: 0; }
 
 .file-list {
@@ -472,6 +499,7 @@ button:focus { outline: none; }
     padding: 14px 8px;
 }
 .empty-icon { font-size: 30px; margin-bottom: 8px; opacity: .6; }
+.empty-icon svg { display: block; margin: 0 auto; }
 .empty-state p { margin: 2px 0; font-size: var(--font-sm); }
 .empty-hint { font-size: var(--font-xs); opacity: .85; }
 
@@ -554,11 +582,15 @@ button:focus { outline: none; }
 .console-collapsible.collapsed { flex: 0 0 auto; }
 .console-collapsible.collapsed .console-output { display: none; }
 .console-collapse-btn .console-collapse-icon {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: transform .2s ease;
     font-size: 10px;
     line-height: 1;
 }
+/* 阶段2 批1：▾ 换 Lucide chevron-down（svg 在 span 内，折叠旋转仍作用于 span） */
+.console-collapse-btn .console-collapse-icon svg { display: block; }
 .console-collapsible.collapsed .console-collapse-btn .console-collapse-icon {
     transform: rotate(-90deg);
 }
@@ -959,7 +991,8 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     color: var(--text-3);
     opacity: .8;
 }
-.feature-icon { font-size: 11px; }
+.feature-icon { font-size: 11px; display: inline-flex; align-items: center; }
+.feature-icon svg { display: block; }
 .feature-text { font-size: 11px; }
 
 /* ============================================================
@@ -1309,6 +1342,8 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 
 .about-logo { text-align: center; font-size: 42px; margin-bottom: 12px; }
+/* 阶段2 批1：🌐 换 Lucide globe（内联 SVG 40×40），居中显示 */
+.about-logo svg { display: inline-block; vertical-align: middle; }
 .about-title { text-align: center; font-size: 20px; font-weight: 650; margin-bottom: 6px; }
 .about-version { text-align: center; color: var(--text-2); margin-bottom: 18px; }
 
@@ -1360,6 +1395,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     .rail-foot-note { display: none; }   /* GUI 走查 P3 修复：64px 图标栏内长注释溢出 */
     .side-tab-btn { justify-content: center; padding: 10px 0; gap: 0; }
     .side-tab-btn .side-tab-text { display: none; }
+    .nav-section { display: none; }      /* 原型同款：64px 图标栏内分组标题隐藏 */
 
     .main { padding: 20px 20px 28px; }
     .aside { padding: 20px 16px 24px; }

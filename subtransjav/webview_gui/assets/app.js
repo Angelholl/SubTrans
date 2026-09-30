@@ -73,19 +73,19 @@ const MSG = {
     // ---- 顶栏 / 主题 ----
     doc_title: '净语翻译 · SubTransJAV Translate',
     app_header_title: '净语翻译 · SRT',
+    main_subtitle: '一站式 AI 字幕翻译与校对',
+    nav_group_workspace: '工作区',
+    nav_group_quality: '质量与设置',
     feature_status_title: '功能状态',
     grammar_hint_text: '语法提示',
     theme_label: 'Theme',
-    theme_default: 'Default Theme',
-    theme_google: 'Google Theme',
-    theme_carbon: 'IBM Carbon Theme',
-    theme_primer: 'GitHub Primer Theme',
+    theme_default: '默认主题',
     theme_dark: '暗色主题',
 
     // ---- Source 区 / 文件按钮 ----
     source_header: 'Source（.srt 字幕）',
-    no_files_selected: 'No files selected',
-    empty_hint: '点击「添加文件 / 添加文件夹」或直接拖入 .srt 文件',
+    no_files_selected: '暂未选择文件',
+    empty_hint: '点击上方按钮或拖入文件开始',
     add_files: '添加文件',
     add_folder: '添加文件夹',
     remove_selected: '移除选中',
@@ -110,7 +110,7 @@ const MSG = {
     provider_custom: '自定义兼容接口',
     model_default_1: 'custom-model-1（默认）',
     model_default_2: 'custom-model-2（默认）',
-    model_refresh_hint: '（点 ⟳ 刷新模型列表）',
+    model_refresh_hint: '（点刷新按钮获取模型列表）',
     refresh_model_title: '在线拉取模型列表',
     test_stage_title: '测试该阶段连通性',
     test_stage_btn: '测试',
@@ -162,7 +162,7 @@ const MSG = {
     tpl_stage_a: '阶段A · 角色-净语翻译.txt',
     tpl_stage_b: '阶段B · 角色-审校抛光.txt',
     tpl_reload: '重新加载',
-    tpl_save: '💾 保存角色卡',
+    tpl_save: '保存角色卡',
     tpl_placeholder: '选择阶段后自动加载角色卡内容，可直接编辑后保存',
     tpl_loaded_path: p => `📄 当前加载：${p}`,
     tpl_dir_empty_hint: '⚠ 角色卡目录为空，保存将新建默认文件',
@@ -176,7 +176,7 @@ const MSG = {
     gl_del: '删除选中',
     gl_import: '导入CSV/TXT',
     gl_export: '导出CSV',
-    gl_save: '💾 保存词库',
+    gl_save: '保存词库',
     gl_scope_note: '生效范围用下方"词库→阶段A/阶段B"勾选控制；绑定文件：',
     gl_path_empty: '（未加载）',
     gl_empty_hint: '词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。',
@@ -223,9 +223,9 @@ const MSG = {
     s1_endpoint_placeholder: '阶段A 服务商的接口地址',
     s3_endpoint_label: '阶段B 地址',
     s3_endpoint_placeholder: '阶段B 服务商的接口地址',
-    save_endpoints_btn: '💾 保存接口配置',
-    start_btn: '▶ 开始净语翻译',
-    stop_btn: '⏹ 停止',
+    save_endpoints_btn: '保存接口配置',
+    start_btn: '开始净语翻译',
+    stop_btn: '停止',
     artifact_note: '产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过',
     status_idle: 'Idle',
 
@@ -243,7 +243,7 @@ const MSG = {
 
     // ---- 质量报告导读 ----
     guide_summary: '质量报告导读',
-    guide_empty_hint: '暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「🤖 AI 分析本报告」前先加载导读。',
+    guide_empty_hint: '暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「AI 分析本报告」前先加载导读。',
     guide_load_btn: '加载导读',
     guide_conclusions: '结论',
     guide_sections: '章节导读',
@@ -331,7 +331,7 @@ const MSG = {
     guide_loading: '加载中…',
     guide_loaded: p => `已加载：${p}`,
     guide_load_failed: m => `加载失败：${m}`,
-    guide_open_other_btn: '📂 打开其他质量报告导读',
+    guide_open_other_btn: '打开其他质量报告导读',
     guide_source_group_title: '来源',
     guide_txt_loaded: p => `已加载报告全文（只读）：${p}`,
     guide_txt_truncated_note: '（报告过长，仅显示前 100 万字符）',
@@ -349,7 +349,7 @@ const MSG = {
     guide_items_more: n => `…其余 ${n} 条见 json`,
 
     // ---- AI 质量分析（D2026-0929 前后端接入）----
-    aiAnalyzeBtn: '🤖 AI 分析本报告',
+    aiAnalyzeBtn: 'AI 分析本报告',
     aiAnalyzing: '分析中（可能需要 1-3 分钟）…',
     aiNeedGuide: '请先加载质量报告导读',
     aiPrivacyCloud: p => `⚠️ 分析内容（含字幕译文）将发送至 ${p}`,
@@ -372,10 +372,10 @@ const MSG = {
     aiDone: 'AI 分析完成，建议仅供人工裁决',
     aiFailed: m => `AI 分析失败：${m}`,
     gui_initialized: '净语翻译 GUI 已初始化',
-    gui_usage_hint: '在上方 Source 区添加 .srt 字幕后点击「▶ 开始净语翻译」',
+    gui_usage_hint: '在上方 Source 区添加 .srt 字幕后点击「开始净语翻译」',
 
     // ---- 快速试听 / 媒体来源（D2026-0929-09 视听对比第二阶段）----
-    preview_play_btn: '▶ 试听',
+    preview_play_btn: '试听',
     media_source_label: '媒体来源',
     media_source_auto: '自动发现',
     media_source_explicit: '显式指定',
@@ -1333,6 +1333,13 @@ const ThemeManager = {
         if (!this.linkEl) return;
         const href = this.themes[key] || this.themes['default'];
         this.linkEl.setAttribute('href', href);
+        // 阶段2 批1（D2026-0930-09）：主题按钮双图标显隐同步
+        //（dark=显示 sun、隐藏 moon；浅色反之。仅切图标，不动持久化逻辑）
+        const dark = (key in this.themes ? key : 'default') === 'dark';
+        const moonIcon = document.getElementById('iconMoon');
+        const sunIcon = document.getElementById('iconSun');
+        if (moonIcon) moonIcon.style.display = dark ? 'none' : '';
+        if (sunIcon) sunIcon.style.display = dark ? '' : 'none';
         this.saveTheme(key in this.themes ? key : 'default');
         ConsoleManager.log(MSG.themeSwitched(key), 'info');
     },
