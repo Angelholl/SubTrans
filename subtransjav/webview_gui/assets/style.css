@@ -854,6 +854,8 @@ input[type="checkbox"] {
 }
 #dictRows .dict-row .btn,
 #dictRows .dict-row .pill { flex-shrink: 0; white-space: nowrap; }
+#dictRows .dict-row .dict-row-label { font-weight: 600; }
+#dictRows .dict-row .dict-row-desc { min-width: 0; }
 .status-err { color: var(--danger); }
 .hint-warn { color: var(--status-warn); }
 

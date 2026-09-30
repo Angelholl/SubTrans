@@ -1782,7 +1782,7 @@ function switchTab(tabId) {
     if (!btn || !sel) return;
     if (!prov) { stageStatus(n, MSG.select_provider_first, 'err'); return; }
     btn.disabled = true;
-    const old = btn.textContent; btn.textContent = '…';
+    const old = btn.innerHTML; btn.textContent = '…';   // innerHTML 保存：按钮含内联 SVG，textContent 会丢图标（D2026-1001 批2）
     // 保留 HTML 初始默认选中项，失败/异常时恢复，避免下拉被清空
     const originalHTML = sel.innerHTML;
     sel.innerHTML = '<option value="">' + MSG.loading_models + '</option>';
@@ -1819,7 +1819,7 @@ function switchTab(tabId) {
       sel.innerHTML = originalHTML;
       stageStatus(n, '❌ ' + e, 'err');
     } finally {
-      btn.disabled = false; btn.textContent = old;
+      btn.disabled = false; btn.innerHTML = old;
     }
   }
 
@@ -1833,7 +1833,7 @@ function switchTab(tabId) {
       const endpoint = stageEndpointFor('lmstudio') || 'http://localhost:1234/v1';
 
     btn.disabled = true;
-    const old = btn.textContent; btn.textContent = '…';
+    const old = btn.innerHTML; btn.textContent = '…';   // innerHTML 保存：按钮含内联 SVG，textContent 会丢图标（D2026-1001 批2）
     try {
       const r = await pywebview.api.list_local_models(endpoint);
       if (r.success && r.models.length) {
@@ -1851,7 +1851,7 @@ function switchTab(tabId) {
     } catch (e) {
       // 静默失败，保留现有选项
     } finally {
-      btn.disabled = false; btn.textContent = old;
+      btn.disabled = false; btn.innerHTML = old;
     }
   }
 
@@ -3183,7 +3183,7 @@ function switchTab(tabId) {
       DICT_KINDS.forEach(item => {
         const info = (r.dicts && r.dicts[item.kind]) || {};
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
+        row.className = 'dict-row';   // D2026-1001 批2：inline style 改类，布局交 #dictRows .dict-row 网格规则
         const badge = info.available
           ? `<span class="pill pill-success">${esc(MSG.dict_status_available)}</span>`
           : `<span class="pill" style="color:var(--text-muted);">${esc(MSG.dict_status_unavailable)}</span>`;
@@ -3191,12 +3191,12 @@ function switchTab(tabId) {
           ? `<span class="muted" title="${esc(info.custom_path)}">${esc(MSG.dict_custom_path)}</span>`
           : '';
         const btn = item.downloadable
-          ? `<button class="btn" id="dictDl-${item.kind}" style="padding:2px 10px;">${esc(MSG.dict_download)}</button>`
+          ? `<button class="btn btn-compact" id="dictDl-${item.kind}">${esc(MSG.dict_download)}</button>`
           : '';
         row.innerHTML =
-          `<span style="font-weight:600; min-width:110px;">${esc(item.label)}</span>` +
+          `<span class="dict-row-label">${esc(item.label)}</span>` +
           badge + custom +
-          `<span class="muted" style="flex:1; min-width:200px;">${esc(item.desc)}</span>` + btn;
+          `<span class="muted dict-row-desc" title="${esc(item.desc)}">${esc(item.desc)}</span>` + btn;
         box.appendChild(row);
         if (item.downloadable) {
           const b = $('dictDl-' + item.kind);

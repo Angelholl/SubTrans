@@ -812,3 +812,27 @@ def test_create_file_item_has_chip_and_remove_button():
     assert "closest('.file-remove-btn')" in src, "fileList click 委托缺少移除按钮分支"
     assert "removeOne(" in src, "缺少单文件移除方法 removeOne"
 
+
+# ---------------------------------------------------------------------------
+# 批2（D2026-1001）：刷新按钮存还模式钉——textContent 会抹掉按钮内联 SVG
+# ---------------------------------------------------------------------------
+
+def test_refresh_button_state_restore_uses_innerhtml():
+    """刷新/测试按钮的 loading 存还必须用 innerHTML（textContent 恢复会丢 SVG 图标）。
+
+    真机反馈：模型刷新按钮加载后图标永久消失——`btn.textContent = old` 中
+    old 取自含 SVG 按钮的 textContent（SVG 贡献空文本），恢复时子节点树被
+    整体替换为纯文本。修复后保存与恢复一律 innerHTML（old 为按钮自身静态
+    模板，无用户输入，无注入面）。适用边界：不得将该模式复制到含用户输入
+    内容的按钮上。
+    """
+    src = _app_js_source()
+    assert "btn.innerHTML = old;" in src, "刷新按钮恢复未用 innerHTML（SVG 会被 textContent 抹掉）"
+    assert "const old = btn.innerHTML;" in src, "刷新按钮保存未用 innerHTML"
+    # 防复发：保存行不得再出现 textContent 保存旧值再写回的模式
+    assert re.search(r"const old = btn\.textContent", src) is None, \
+        "存在 textContent 保存按钮旧值（恢复时会丢内联 SVG）"
+    # 词典行布局类由 JS 模板挂载（配合 style.css #dictRows .dict-row 网格规则）
+    assert "row.className = 'dict-row'" in src, "词典行未挂 .dict-row 类"
+    assert 'row.style.cssText' not in src, "词典行不得再用 inline style 布局（压住网格规则）"
+
