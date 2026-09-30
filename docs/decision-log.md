@@ -1920,3 +1920,33 @@ event_stream.py:313-337（format_event_line 输出）、strings.py:163-165（⚠
 | applyI18n 覆写按钮内 SVG | data-i18n 移内层 span + 静态钉 |
 | chip join 语义错位 | basename 映射设计段 + 后端单测 + 串行/双 worker 双形态走查 |
 | 缩批死锁 | 已由 owner 全量批准解除 |
+
+---
+
+## [2026-10-01] [D2026-1001] 真机五问题修复拍板与执行（布局系统性修复+版本回填+摘要卡）[已拍板]
+
+### 一、背景与拍板
+
+Owner 真机实测反馈五问题（三页拥挤溢出/右栏空白/CMD 弹窗+老式外框）。主模型经设计专家（design-expert）诊断 + 评议员（decision-critic）质证（3 处 [MATERIAL_CONFLICT] 全部裁定）后提交方案，owner 拍板「1A 2不做 3同步 4配合」：占位模组选 A 系统状态摘要卡（特批 2 键）；frameless 自绘标题栏本轮不做；main 版本号回填 2.1.1；DPI 探针 100%/150% 配合实测。
+
+### 二、评议员材料矛盾裁定（引用其编号）
+
+- **甲（版本话术）**：核出 main 分支 `__version__.py`/pyproject 仍为 2.0.0（发版 bump 落在 release/2.1.1 分支未回填）——"v2.0.0=旧安装"话术作废，改两步自查（启动方式：打包版无黑框，开发模式必带控制台属正常）；话术不再依赖版本号。
+- **乙（图 3 纯 CSS 声明不实）**：词典行由 JS inline style 生成——裁定批 1 上 CSS 网格规则、批 2 JS 去 inline 改 .dict-row 类，提交信息如实声明。
+- **丙（断点互顶）**：设计师 1450 断点与候选窗宽 1440 互顶且重蹈视口基准覆辙——裁定下移 ≥1365px 2 列 + ≥1920px 3 列；容器查询治本方案本轮不引入，若 owner DPI 实测异常再评估。
+- 另采纳：右栏贴底弃 flex:1（会拉大 pipelineCard 整卡点击热区）改 margin-top:auto（批 3 后仅末卡摘要卡持有，防多卡 auto 均分间隙）；截图基线四档（1210/1000/1440/1500）；innerHTML 修复无注入面（old 为静态模板）+ 全仓扫并入静态钉。
+
+### 三、执行记录（5 提交全推送，CI 绿）
+
+| 提交 | 内容 |
+|---|---|
+| a5eb5b6 | 版本号回填 2.1.1（__version__/display/info + pyproject）+ tests/test_version_consistency.py 3 钉防复发 |
+| 13bab3f | 批 1 布局系统性修复：adv-grid 恒单列+1365/1920 断点、stage-row 弹性化+警告独立成行（HTML 内联 max-width 改 .stage-test-status 类）、#dictRows width:100%+.dict-row 网格规则、#pipelineCard 贴底 |
+| ed9a1ed | 批 2 JS 真 bug：刷新按钮 4 处 textContent→innerHTML 存还（SVG 丢失根因）+ 词典行模板内联样式清到类（desc 补 title 悬停全文）+ 静态钉防复发 |
+| 882cbbe | 批 3 系统状态摘要卡：四现成接口（get_version/refine_get_data_root/tm_get_stats/refine_dict_status）逐项降级"不可用"；strings.py 特批 2 键（sys_summary_title/sys_summary_unavailable）；贴底移交末卡；结构钉 |
+
+全量基线 1588+4 → **1593+4**（+5：版本一致性 3、innerHTML 钉 1、摘要卡钉 1）。四档前后截图对比存 `%TEMP%\stj_gate\baseline\`（改前 8 张改后 9 张），1210/1440 关键档目检：单列铺满无溢出、2 列断点生效、右栏摘要卡贴底。
+
+### 四、验收口径（owner 真机）
+
+真机清单已补 F 节（DPI 探针两帧+批 1/3 原生面：摘要卡真实数据/版本 2.1.1 显示/词典行 4 列/刷新图标保留/降级验证）。静态面已验证：四档截图、契约闸、全量测试。frameless 后置单独立项。
