@@ -1254,13 +1254,7 @@ const TranslatorManager = {
 // ============================================================
 const ThemeManager = {
     storageKey: 'subtransjav_theme',
-    themes: {
-        'default': 'style.css',
-        'google': 'style.google.css',
-        'carbon': 'style.carbon.css',
-        'primer': 'style.primer.css',
-        'dark': 'style.dark.css'
-    },
+    themes: { 'default': 'style.css', 'dark': 'style.dark.css' },
 
     init() {
         this.linkEl = document.getElementById('themeStylesheet');

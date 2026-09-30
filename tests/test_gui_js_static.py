@@ -279,9 +279,13 @@ _SERVICE_QUICK_PROVIDER_VALUES = ["lmstudio", "ollama", "deepseek", "zen",
 
 
 def test_index_html_service_quick_with_provider_options():
-    """tab-translate 页含翻译服务快捷下拉：既定 6 个 provider 值
+    """右栏 .aside 配置面板含翻译服务快捷下拉：既定 6 个 provider 值
     （lmstudio 默认，zen 与引擎页三处同步）+ 本地提示行锚点；API KEY
-    输入域已收口至引擎页（主页 key 行整体移除，删除钉防回退）。"""
+    输入域已收口至引擎页（主页 key 行整体移除，删除钉防回退）。
+
+    位置钉随 D2026-0930-08 三栏骨架重写同步修订：原 v1.5 钉断言下拉
+    位于 tab-translate 与 tab-engine 之间，方案 A 拍板后服务选择迁入
+    右栏 .aside（所有页可见），本钉改为断言其在 .aside 区间内。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'id="refineServiceQuick"' in html, "缺少翻译服务快捷下拉"
     m = re.search(r'<select[^>]*id="refineServiceQuick".*?</select>',
@@ -303,11 +307,14 @@ def test_index_html_service_quick_with_provider_options():
     for sym in ("saveServiceQuickKey", "serviceQuickKeyLabel",
                 "serviceQuickKeySaveBtn"):
         assert sym not in js, f"app.js 仍残留快捷 key 旧逻辑/旧键: {sym}"
-    # 快捷下拉必须位于 tab-translate 页内（引导卡删除后仍属翻译主页）
-    assert html.index('id="refineServiceQuick"') \
-        > html.index('id="tab-translate"')
-    assert html.index('id="refineServiceQuick"') \
-        < html.index('id="tab-engine"')
+    # 快捷下拉必须位于右栏 .aside 全局配置面板内（D2026-0930-08 方案 A：
+    # 服务选择迁右栏所有页可见，原「tab-translate 与 tab-engine 之间」
+    # 文档序钉随三栏骨架作废；锚 <aside class="aside"> 全文唯一）
+    aside_open = html.index('<aside class="aside">')
+    aside_close = html.index('</aside>', aside_open)
+    quick_pos = html.index('id="refineServiceQuick"')
+    assert aside_open < quick_pos < aside_close, \
+        "翻译服务快捷下拉必须位于右栏 .aside 配置面板内"
 
 
 def test_service_quick_key_row_toggles_on_cloud_providers():
