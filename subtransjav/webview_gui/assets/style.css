@@ -821,6 +821,8 @@ input[type="checkbox"] {
 .panel-card-link { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
 .panel-card-link:hover { border-color: var(--primary-border); box-shadow: var(--shadow-md); }
 .panel-card-link:focus-visible { outline: var(--focus-outline); outline-offset: 2px; }
+/* D2026-1001 批1：右栏底部空白——末卡贴底（不用 flex:1，避免拉大整卡点击热区） */
+#pipelineCard { margin-top: auto; }
 .pipeline-mirror {
     font-size: var(--font-sm);
     color: var(--text-1);
@@ -834,6 +836,24 @@ input[type="checkbox"] {
     text-overflow: ellipsis;
 }
 .footnote { font-size: var(--font-xs); color: var(--text-3); }
+
+/* 词典管理行（D2026-1001 批1）：#dictRows 吃满卡片宽，行内 4 列网格
+   （名称/状态badge/说明/操作）；行 class 由批 2 JS 从 inline style 改造后生效 */
+#dictRows { width: 100%; }
+#dictRows .dict-row {
+    display: grid;
+    grid-template-columns: 110px auto minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+#dictRows .dict-row .muted {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#dictRows .dict-row .btn,
+#dictRows .dict-row .pill { flex-shrink: 0; white-space: nowrap; }
 .status-err { color: var(--danger); }
 .hint-warn { color: var(--status-warn); }
 
@@ -961,11 +981,21 @@ input[type="checkbox"] {
 
 .stage-row {
     flex: 1.2;
-    min-width: var(--w-stage-row);
+    min-width: 0;   /* D2026-1001 批1：618px 容器下 340px 契约贴死必错位，改弹性分配 */
     display: flex;
     gap: 6px;
     align-items: center;
     flex-wrap: wrap;
+}
+/* 模型下拉弹性收缩；连通性测试状态/警告文本独立成行（约 45 字，行尾必折大块） */
+.stage-row .form-select.grow { flex: 1 1 140px; }
+.stage-row .muted,
+.alt-row .muted,
+.stage-row .stage-test-status {
+    flex-basis: 100%;
+    max-width: 100%;
+    order: 99;
+    margin-top: -2px;
 }
 
 .alt-row {
@@ -1078,8 +1108,11 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     align-content: start;
     padding: 2px 0;
 }
-@media (min-width: 800px)  { .adv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1100px) { .adv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* D2026-1001 批1：断点改按 main 区实际内容宽推导的视口值
+   （main ≈ 视口-592px：1210 窗口内容 618px 仅容单列；1365→2 列每卡 ~380px；
+   1920→3 列每卡 ~440px。旧 800/1100 断点以视口为基准导致 618px 塞 3 列必溢出） */
+@media (min-width: 1365px) { .adv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1920px) { .adv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 .adv-group {
     display: flex;
