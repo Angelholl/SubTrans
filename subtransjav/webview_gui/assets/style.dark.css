@@ -1,151 +1,76 @@
 /*
- * SubTransJAV Web GUI - Dark Theme (SmartSub-inspired near-black)
+ * SubTransJAV Web GUI - Dark Theme (modern dark overlay)
  * ---------------------------------------------------------------
- * Imports the base stylesheet for layout/components and overrides
- * only the CSS variable layer (plus a few hard-coded rgba accents
- * in the base sheet that need explicit dark counterparts).
+ * UI 改版阶段1 重写（D2026-0930-08，编码 B）。
+ * 机制：@import 浅色基础层（style.css，已全量 token 化），
+ *       本文件只覆盖变量层 —— 色值逐字对照
+ *       docs/design/redesign-prototype.html 的 [data-theme="dark"] 段。
  *
- * Usage:
- * - Select "Dark" from the theme menu, or set ThemeManager to 'dark'.
- * - Default theme stays the fixed light theme; dark is opt-in.
+ * 旧版 11 项硬编码组件消单（旧 style.dark.css:64-151）结论：
+ *   1. .app-header            元素已随三栏骨架删除，无需覆盖
+ *   2. .theme-button          已 token 化（--text-2/--surface-3），深色自动适配
+ *   3. .feature-badge 三态    已 token 化（--ok-soft/--surface-3 等），自动适配
+ *   4. .btn-secondary         已 token 化（--surface/--border-strong/--text-1），自动适配
+ *   5. .btn-ghost             已 token 化（--text-2/--surface-3），自动适配
+ *   6. .btn:focus             已 token 化（--focus-ring = 3px --primary-soft），自动适配
+ *   7. .file-list:focus-within已 token 化（同上），自动适配
+ *   8. .file-item.selected    已 token 化（--primary-soft 深色为半透明蓝），自动适配
+ *   9. .console-output        已 token 化（--console-bg 深色覆盖为 #0D1117），自动适配
+ *  10. .guide-txt-view        已 token 化（--surface-2/--border/--text-1），自动适配
+ *  11. 滚动条                 已 token 化（--border-strong/--text-3），自动适配
+ * 唯一保留的暗色特判：--status-warn（浅色 #B26A00 琥珀在深底不可读，改用 --warn）。
+ *
+ * 已知取舍：select 自定义箭头 data-uri 描边 #6B7280（原型同款，深色下可辨识）；
+ * 正文对比度：--text-1 #E5E7EB on --surface #141821 ≈ 12:1，辅助 --text-2 #9CA3AF ≈ 6:1。
  */
 
 @import url("style.css");
 
 /* ============================================================
-   CSS Variables (dark palette overrides)
+   Dark palette overrides（原型 [data-theme="dark"] 逐字映射）
    ============================================================ */
 :root {
-    /* Tabs and surfaces */
-    --tab-bar-bg: #1F2328;
-    --content-area-bg: #17191C;    /* app background: near-black */
-    --active-tab-bg: #1F2328;
-    --inactive-tab-bg: #1F2328;
-    --hover-tab-bg: #262B31;
-    --active-tab-text: #58A6FF;
-    --inactive-tab-text: #9CA3AF;
-    --border-color: #30363D;
+    /* 表面与背景 */
+    --bg:        #0B0F17;
+    --surface:   #141821;
+    --surface-2: #1A202B;
+    --surface-3: #1F2530;
 
-    /* Brand / semantic colors (brightened for dark bg) */
-    --primary-color: #4493F8;
-    --primary-hover: #58A6FF;
-    --secondary-color: #8B949E;
-    --secondary-hover: #A3ACB5;
-    --danger-color: #F85149;
-    --success-color: #3FB950;
-    --warning-color: #D29922;
-    --info-color: #58A6FF;
+    /* 边框 */
+    --border:        #262D3B;
+    --border-strong: #333C4D;
 
-    /* Backgrounds */
-    --body-bg: #17191C;
-    --section-bg: #1F2328;         /* panels */
-    --input-bg: #17191C;
-    --disabled-bg: #262B31;
+    /* 文字 */
+    --text-1: #E5E7EB;
+    --text-2: #9CA3AF;
+    --text-3: #6B7280;
 
-    /* Text colors (light-on-dark, three tiers) */
-    --text-primary: #E6EDF3;
-    --text-secondary: #9CA3AF;
-    --text-muted: #6E7681;
-    --text-disabled: #484F58;
+    /* 品牌 */
+    --primary:        #60A5FA;
+    --primary-strong: #3B82F6;
+    --primary-soft:   rgba(59,130,246,.14);
+    --primary-border: rgba(96,165,250,.35);
 
-    /* Focus affordance */
-    --focus-ring: 0 0 0 3px rgba(68, 147, 248, 0.35);
+    /* 语义 */
+    --ok:          #34D399;  --ok-soft:     rgba(16,185,129,.12);
+    --warn:        #FBBF24;  --warn-soft:   rgba(245,158,11,.12);
+    --danger:      #F87171;  --danger-soft: rgba(239,68,68,.12);
+    --danger-soft-hover: rgba(239,68,68,.22);
+    --danger-border: rgba(248,113,113,.35);
 
-    /* Semantic status tokens (D2026-0930-07 2c): --status-ok / --status-err
-       alias --success-color / --danger-color and inherit the overrides above;
-       only warn needs an explicit override (#B26A00 amber is too dark on
-       near-black). --text-muted already overridden above (#6E7681).
-       App shell audit (2d): side-tabs / side-tab-btn / service-quick-bar
-       consume --section-bg / --border-color / --hover-tab-bg / --primary-color
-       / --text-secondary only — all overridden above, contrast verified. */
-    --status-warn: var(--warning-color);
-}
+    /* 控制台（深色下更深一档，保持终端质感） */
+    --console-bg:    #0D1117;
+    --console-border:#1B2330;
+    --console-text:  #C4CFDB;
+    --console-muted: #5B6675;
 
-/* ============================================================
-   Dark-specific component adjustments (variable-layer gaps only)
-   ============================================================ */
+    /* 拖拽区虚线：深色下半透明蓝 */
+    --dropzone-border: rgba(96,165,250,.5);
 
-/* Header: light-weight fusion bar instead of solid blue */
-.app-header {
-    background: var(--section-bg);
-    color: var(--text-primary);
-    border-bottom: 1px solid var(--border-color);
-}
+    /* 阴影加深 */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-md: 0 2px 4px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.4);
 
-.theme-button {
-    color: var(--text-primary);
-}
-
-.theme-button:hover {
-    background: var(--hover-tab-bg);
-}
-
-.feature-badge {
-    background: var(--hover-tab-bg);
-    color: var(--text-secondary);
-}
-
-.feature-badge.active {
-    background: rgba(63, 185, 80, 0.25);
-    border: 1px solid rgba(63, 185, 80, 0.5);
-    color: var(--text-primary);
-}
-
-.feature-badge.inactive {
-    background: var(--hover-tab-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-}
-
-/* Buttons that hard-code light-theme colors in the base sheet */
-.btn-secondary {
-    background: var(--secondary-color);
-    color: #17191C;
-}
-
-.btn-secondary:hover:not(:disabled) {
-    background: var(--secondary-hover);
-}
-
-.btn-ghost {
-    color: var(--primary-color);
-}
-
-.btn-ghost:hover:not(:disabled) {
-    background: rgba(68, 147, 248, 0.15);
-}
-
-.btn:focus {
-    box-shadow: var(--focus-ring);
-}
-
-.file-list:focus-within {
-    box-shadow: var(--focus-ring);
-}
-
-.file-item.selected {
-    background: var(--primary-color);
-    color: #17191C;
-    border-color: var(--primary-color);
-}
-
-/* Console: keep dark console identity on dark theme */
-.console-output {
-    background: #0D1117;
-}
-
-/* Scrollbars */
-::-webkit-scrollbar-thumb {
-    background: #30363D;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #3D444D;
-}
-
-/* Guide txt read-only view: keep console identity on dark theme */
-.guide-txt-view {
-    background: #0D1117;
-    color: var(--text-primary);
-    border-color: var(--border-color);
+    /* 状态文字：浅色琥珀 #B26A00 深底不可读 → 用亮 --warn */
+    --status-warn: var(--warn);
 }
