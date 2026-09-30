@@ -645,7 +645,10 @@
                     <div class="progress-bar" id="progressBar">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
-                    <span class="status-label" id="statusLabel" data-testid="status-bar" data-i18n="status_idle">Idle</span>
+                    <div class="status-row">
+                        <span class="status-dot dot-idle" id="statusDot" aria-hidden="true"></span>
+                        <span class="status-label" id="statusLabel" data-testid="status-bar" data-i18n="status_idle">Idle</span>
+                    </div>
                 </div>
 
 
@@ -685,9 +688,11 @@
 
             </div>
 
-            <!-- 卡3：两阶段流水线说明 + 功能状态徽章 -->
-            <div class="panel-card">
+            <!-- 卡3：两阶段流水线只读镜像（D2026-0930-09：整卡点击跳引擎页，无双向同步） -->
+            <div class="panel-card panel-card-link" id="pipelineCard" data-i18n-title="pipeline_card_hint" title="点击前往「引擎与模型」页修改" tabindex="0" role="link">
                 <div class="block-title" data-i18n="refine_panel_title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
+
+                <div class="pipeline-mirror" id="pipelineMirrorLine"></div>
 
                 <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
                     <span class="feature-badge" id="grammarHintBadge" style="display:none;">
@@ -696,7 +701,7 @@
                     </span>
                 </div>
 
-                <span class="muted" data-i18n="artifact_note">
+                <span class="muted footnote" data-i18n="artifact_note">
 
                     产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过
 

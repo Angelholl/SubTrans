@@ -909,6 +909,7 @@ class TranslateAPI:
             "degraded": risk_count > 0 or majority,
             "warning_level": warning_level,
             "ndjson_mode": bool(snap.get('ndjson_mode')),
+            "files_status": snap.get('files', {}),
         }
 
     def get_translation_logs(self) -> list[str]:

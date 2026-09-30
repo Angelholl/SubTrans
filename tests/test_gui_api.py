@@ -1767,3 +1767,39 @@ def test_refine_get_template_by_name_missing_reports_error(gui_api_obj):
                                  path=os.path.join(str(d), "不存在的卡.txt"))
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# get_translation_status：per-file 三态 chip 归组透传（批 2a files_status）
+# ---------------------------------------------------------------------------
+
+def test_get_translation_status_exposes_files_status(gui_api_obj):
+    """NDJSON 解析器归组的 per-file 状态经 files_status 键透传给前端。"""
+    import io
+
+    from subtransjav.refine.events import EventEmitter
+    from subtransjav.webview_gui.event_stream import EventStreamParser
+
+    api = _manual_state_api(gui_api_obj)
+    buf = io.StringIO()
+    em = EventEmitter(stream=buf, task_id="t")
+    em.emit("phase_started", phase="A", file="ep01.srt")
+    em.emit("phase_started", phase="A", file="ep02.srt")
+    em.emit("phase_finished", phase="final", file="ep01.srt")
+    parser = EventStreamParser()
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            parser.feed(line)
+    api._translate_parser = parser
+
+    status = api.get_translation_status()
+
+    assert status["files_status"] == {
+        "ep01.srt": "done", "ep02.srt": "running"}
+
+
+def test_get_translation_status_files_status_empty_when_no_parser(gui_api_obj):
+    """无解析器（未启动/遗留输出）时 files_status 为空 dict，键始终存在。"""
+    api = _manual_state_api(gui_api_obj)
+    status = api.get_translation_status()
+    assert status["files_status"] == {}

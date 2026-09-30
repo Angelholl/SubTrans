@@ -376,6 +376,15 @@ const MSG = {
 
     // ---- 快速试听 / 媒体来源（D2026-0929-09 视听对比第二阶段）----
     preview_play_btn: '试听',
+
+    // ---- 文件列表三态 chip / 流水线镜像（D2026-0930-09 批2）----
+    chip_pending: '等待中',
+    chip_running: '翻译中',
+    chip_done: '已完成',
+    chip_resumable: '可续传',
+    pipeline_mirror_model: '阶段A 模型',
+    pipeline_mirror_conc: '并行',
+    pipeline_card_hint: '点击前往「引擎与模型」页修改',
     media_source_label: '媒体来源',
     media_source_auto: '自动发现',
     media_source_explicit: '显式指定',
@@ -531,9 +540,19 @@ const ErrorHandler = {
 // ============================================================
 const FileListManager = {
     init() {
+        this.itemStates = {};   // path -> 'pending'|'running'|'done'|'resumable'（D2026-0930-09 批2）
+
         const fileList = document.getElementById('fileList');
 
         fileList.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.file-remove-btn');
+            if (removeBtn) {
+                const item = removeBtn.closest('.file-item');
+                if (item && item.dataset.path) {
+                    this.removeOne(item.dataset.path);
+                }
+                return;
+            }
             const item = e.target.closest('.file-item');
             if (item) {
                 this.handleItemClick(item, e);
@@ -554,27 +573,34 @@ const FileListManager = {
 
     initializeDragDrop() {
         const fileList = document.getElementById('fileList');
+        const dropzone = document.getElementById('dropzone');
+
+        // D2026-0930-09 批2：拖拽高亮同时作用于 dropzone 本体（preventDefault 已有，防 PyWebView 打开文件）
+        const highlight = (on) => {
+            fileList.classList.toggle('drag-over', on);
+            if (dropzone) dropzone.classList.toggle('drag-over', on);
+        };
 
         fileList.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            fileList.classList.add('drag-over');
+            highlight(true);
         });
 
         fileList.addEventListener('dragenter', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            fileList.classList.add('drag-over');
+            highlight(true);
         });
 
         fileList.addEventListener('dragleave', () => {
-            fileList.classList.remove('drag-over');
+            highlight(false);
         });
 
         fileList.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            fileList.classList.remove('drag-over');
+            highlight(false);
             // Actual path extraction happens in Python (main.py) via pywebviewFullPath,
             // which calls back into FileListManager.addDroppedFiles(paths).
         });
@@ -653,6 +679,7 @@ const FileListManager = {
             if (index !== undefined) item.dataset.index = String(index);
         });
 
+        this.updateChips();
         this.updateButtons();
     },
 
@@ -664,17 +691,98 @@ const FileListManager = {
         item.tabIndex = 0;
 
         const icon = document.createElement('span');
-        icon.className = 'file-icon';
-        icon.textContent = '📄';
+        icon.className = 'file-ico';
+        icon.innerHTML =
+            '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>';
 
-        const pathSpan = document.createElement('span');
-        pathSpan.className = 'file-path';
-        pathSpan.textContent = path;
+        const grow = document.createElement('span');
+        grow.className = 'grow';
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.textContent = path.split(/[\\/]/).pop() || path;
+        const sub = document.createElement('span');
+        sub.className = 'file-path';
+        sub.textContent = path;
+        grow.appendChild(name);
+        grow.appendChild(sub);
+
+        const chip = document.createElement('span');
+        chip.className = 'chip chip-pending';
+        chip.textContent = MSG.chip_pending;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'file-remove-btn';
+        removeBtn.title = MSG.remove_selected;
+        removeBtn.setAttribute('aria-label', MSG.remove_selected);
+        removeBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M10 14 21 3"/><path d="M15 3h6v6"/></svg>';
 
         item.appendChild(icon);
-        item.appendChild(pathSpan);
+        item.appendChild(grow);
+        item.appendChild(chip);
+        item.appendChild(removeBtn);
 
         return item;
+    },
+
+    // ---- 三态 chip（D2026-0930-09 批2）：pending/running/done/resumable ----
+    chipClass(state) {
+        return {
+            pending: 'chip-pending',
+            running: 'chip-running',
+            done: 'chip-done',
+            resumable: 'chip-resumable'
+        }[state] || 'chip-pending';
+    },
+
+    chipText(state) {
+        return {
+            pending: MSG.chip_pending,
+            running: MSG.chip_running,
+            done: MSG.chip_done,
+            resumable: MSG.chip_resumable
+        }[state] || MSG.chip_pending;
+    },
+
+    setState(path, state) {
+        if (!state) return;
+        this.itemStates[path] = state;
+        this.updateChips();
+    },
+
+    // files_status 映射（basename -> state）：只更新命中的文件，不回退其他项
+    applyStates(map) {
+        if (!map) return;
+        const base = p => p.split(/[\\/]/).pop();
+        let touched = false;
+        AppState.selectedFiles.forEach(p => {
+            const st = map[base(p)];
+            if (st && this.itemStates[p] !== st) {
+                this.itemStates[p] = st;
+                touched = true;
+            }
+        });
+        if (touched) this.updateChips();
+    },
+
+    updateChips() {
+        document.querySelectorAll('.file-item').forEach(item => {
+            const state = this.itemStates[item.dataset.path] || 'pending';
+            const chip = item.querySelector('.chip');
+            if (chip) {
+                chip.className = 'chip ' + this.chipClass(state);
+                chip.textContent = this.chipText(state);
+            }
+        });
+    },
+
+    removeOne(path) {
+        const idx = AppState.selectedFiles.indexOf(path);
+        if (idx >= 0) AppState.selectedFiles.splice(idx, 1);
+        delete this.itemStates[path];
+        AppState.selectedIndices.clear();
+        this.render();
     },
 
     handleItemClick(item, event) {
@@ -833,6 +941,7 @@ const FileListManager = {
         const count = AppState.selectedFiles.length;
         AppState.selectedFiles = [];
         AppState.selectedIndices.clear();
+        this.itemStates = {};
         this.render();
         ConsoleManager.log(MSG.clearedItems(count), 'info');
     }
@@ -910,6 +1019,7 @@ const ProgressManager = {
         this.progressBar = document.getElementById('progressBar');
         this.progressFill = document.getElementById('progressFill');
         this.statusLabel = document.getElementById('statusLabel');
+        this.statusDot = document.getElementById('statusDot');
     },
 
     setIndeterminate(active) {
@@ -924,10 +1034,18 @@ const ProgressManager = {
         if (this.statusLabel) this.statusLabel.textContent = text;
     },
 
+    // 状态点（D2026-0930-09 批2）：idle 灰 / running 蓝
+    setDot(state) {
+        if (!this.statusDot) return;
+        this.statusDot.classList.toggle('dot-running', state === 'running');
+        this.statusDot.classList.toggle('dot-idle', state !== 'running');
+    },
+
     reset() {
         this.setIndeterminate(false);
         this.setProgress(0);
         this.setStatus(MSG.idle);
+        this.setDot('idle');
     }
 };
 
@@ -1056,13 +1174,23 @@ const TranslatorManager = {
             FileListManager.updateButtons();
             this.setProgress(0);
             this.setStatus(MSG.starting);
+            ProgressManager.setDot('running');
             ProgressManager.setIndeterminate(true);
 
-            // 断点恢复探测：把可恢复文件打到控制台（纯提示，不阻塞启动）
+            // 断点恢复探测：三态 chip 初始点亮（D2026-0930-09 批2）+ 可恢复文件打到控制台
             if (AppState.selectedFiles.length > 0) {
                 try {
                     const states = await pywebview.api.scan_resume_states(
                         AppState.selectedFiles.slice());
+                    (states || []).forEach(s => {
+                        if (!s || !s.path) return;
+                        // state: completed|resumable|none -> done|resumable|pending
+                        FileListManager.setState(
+                            s.path,
+                            s.state === 'completed' ? 'done'
+                                : s.state === 'resumable' ? 'resumable'
+                                    : 'pending');
+                    });
                     const resumable = (states || [])
                         .filter(s => s && s.state === 'resumable');
                     if (resumable.length > 0) {
@@ -1088,6 +1216,7 @@ const TranslatorManager = {
                     AppState.isRunning = false;
                     FileListManager.updateButtons();
                     ProgressManager.setIndeterminate(false);
+                    ProgressManager.setDot('idle');
                     this.setStatus(MSG.idle);
                     return;
                 }
@@ -1131,6 +1260,7 @@ const TranslatorManager = {
         AppState.isRunning = false;
         FileListManager.updateButtons();
         ProgressManager.setIndeterminate(false);
+        ProgressManager.setDot('idle');
         this.setStatus(statusText);
     },
 
@@ -1163,6 +1293,11 @@ const TranslatorManager = {
                     text = `${text || MSG.running}${MSG.risk_suffix(status.risk_count)}`;
                 }
                 if (text) this.setStatus(text);
+
+                // 三态 chip 实时点亮（D2026-0930-09 批2 档1）：basename join，未命中的不回退
+                if (status.files_status) {
+                    FileListManager.applyStates(status.files_status);
+                }
 
                 // 风险明细：仅在数量增长时把新增条目追加到控制台
                 const reported = this._reportedRiskCount || 0;
@@ -3144,6 +3279,7 @@ function switchTab(tabId) {
       const pv = $('refineS' + n + 'Provider');
       if (pv && pv.value) refreshModels(n);
     }
+    refreshPipelineMirror();
   }
 
   if (document.readyState === 'loading') {
@@ -3178,6 +3314,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Update Start button state once at startup
     TranslatorManager.updateButtons();
 
+    // 右栏卡 3 镜像：加载后渲染 + 引擎页控件变更时同步（只读，无回写）
+    refreshPipelineMirror();
+    ['refineS1Model', 'refineConcurrency'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', refreshPipelineMirror);
+    });
+
+    // 卡 3 整卡跳转引擎页（只读镜像的修改入口）
+    const pipelineCard = document.getElementById('pipelineCard');
+    if (pipelineCard) {
+        pipelineCard.addEventListener('click', () => switchTab('tab-engine'));
+        pipelineCard.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                switchTab('tab-engine');
+            }
+        });
+    }
+
     ConsoleManager.log(MSG.gui_initialized, 'success');
     ConsoleManager.log(MSG.gui_usage_hint, 'info');
 });
@@ -3186,9 +3341,17 @@ function RunControlsInit() {
     // Placeholder hook for future global controls; refine panel owns its own buttons.
 }
 
+// 右栏卡 3 只读镜像（D2026-0930-09 批2）：读引擎页当前配置渲染，不做双向同步
+function refreshPipelineMirror() {
+    const line = document.getElementById('pipelineMirrorLine');
+    if (!line) return;
+    const model = (($('refineS1Model') || {}).value || '').trim() || '—';
+    const conc = (($('refineConcurrency') || {}).value || '').trim() || '1';
+    line.textContent = `${MSG.pipeline_mirror_model}：${model}　·　${MSG.pipeline_mirror_conc} ${conc}`;
+}
+
 // PyWebView ready event — backend bridge is now available.
-window.addEventListener('pywebviewready', async () => {
-    console.log('PyWebView API ready!');
+window.addEventListener('pywebviewready', async () => {    console.log('PyWebView API ready!');
     ConsoleManager.log(MSG.bridgeConnected, 'success');
     window.__pywebviewReady = true;
 

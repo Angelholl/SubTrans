@@ -787,3 +787,28 @@ def test_data_i18n_elements_no_direct_svg_child():
     assert not violations, (
         "data-i18n 元素存在直接 <svg> 子节点（applyI18n textContent 会覆写"
         f"图标，须把 data-i18n 移到内层 span）: {'; '.join(violations)}")
+
+
+# ---------------------------------------------------------------------------
+# 批2（D2026-0930-09）：文件行新结构钉——三态 chip 与行内移除按钮防回退
+# ---------------------------------------------------------------------------
+
+def test_create_file_item_has_chip_and_remove_button():
+    """createFileItem 必须生成三态 chip 与 .file-remove-btn 行内移除按钮。
+
+    批 2 重构后的文件行结构 = 图标盒 + 名称/路径双行 + chip + 移除按钮；
+    移除按钮走 fileList click 委托的 .file-remove-btn 分支（先于选择逻辑），
+    chip 由 itemStates/updateChips 驱动（scan 三态 + files_status 实时点亮）。
+    """
+    src = _app_js_source()
+    create = _extract_function(src, "createFileItem")
+    assert "file-remove-btn" in create, "文件行缺少行内移除按钮（list-x）"
+    assert "chip" in create, "文件行缺少状态 chip 元素"
+    assert "file-ico" in create, "文件行缺少图标盒（Lucide file-text）"
+    # chip 状态机四态 class 生成器在位
+    for cls in ("chip-pending", "chip-running", "chip-done", "chip-resumable"):
+        assert cls in src, f"缺少 chip 状态 class：{cls}"
+    # 委托分支：移除按钮必须先于选择逻辑处理（全局唯一分支串，含 removeOne 调用）
+    assert "closest('.file-remove-btn')" in src, "fileList click 委托缺少移除按钮分支"
+    assert "removeOne(" in src, "缺少单文件移除方法 removeOne"
+

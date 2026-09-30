@@ -213,6 +213,9 @@ class EventStreamParser:
         self.batch_total = 0
         self.risks: list[dict[str, Any]] = []
         self.risk_count = 0
+        # per-file 三态 chip 归组（批 2a）：fname → "running"/"done"，
+        # 由 phase_started/phase_finished 事件旁路维护（见 _feed_event 末尾）
+        self.files: dict[str, str] = {}
         self.error: str | None = None
         self.task_summary: dict[str, Any] | None = None
         self.last_event_ts: float | None = None
@@ -283,6 +286,20 @@ class EventStreamParser:
             self.task_summary = dict(payload)
             if payload.get("untranslated_majority"):
                 self.untranslated_majority = True
+
+        # --- per-file 状态旁路（批 2a，只增不改）---
+        # pipeline_v2 逐文件发 phase_started/phase_finished（file=basename），
+        # phase 实际取值 A → B → final（pipeline_v2.py:1488/1521/1570）。
+        # final 为末阶段（含终稿落盘与"终稿已存在跳过"路径 1259-1260），
+        # 其 phase_finished 视为该文件全部完成。
+        ev_file = event.get("file")
+        if etype == "phase_started" and ev_file:
+            self.files[ev_file] = "running"
+        elif etype == "phase_finished" and ev_file:
+            if str(event.get("phase") or "").strip().lower() == "final":
+                self.files[ev_file] = "done"
+            elif self.files.get(ev_file) != "done":
+                self.files[ev_file] = "running"
 
     def _add_risk(self, event: dict[str, Any]) -> None:
         payload = event.get("payload") or {}
@@ -381,4 +398,5 @@ class EventStreamParser:
                 "heartbeat_stale": heartbeat_stale,
                 "ndjson_mode": self.ndjson_mode,
                 "untranslated_majority": self.untranslated_majority,
+                "files": dict(self.files),
             }

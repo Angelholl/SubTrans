@@ -402,3 +402,71 @@ def test_heartbeat_age_uses_wall_clock():
     time.sleep(0.05)
     age2 = parser.snapshot()["heartbeat_age"]
     assert age2 >= age1
+
+
+# ---------------------------------------------------------------------------
+# per-file 三态 chip 归组（批 2a：files 状态机）
+# ---------------------------------------------------------------------------
+
+def test_files_state_transitions_through_phases():
+    """单文件 A→B→final 事件序列下 files 归组状态变迁。
+
+    pipeline_v2 实际 phase 取值为 A → B → final（末阶段为 final，
+    含终稿落盘与"终稿已存在跳过"路径），done 仅在 final 的
+    phase_finished 置位；A/B 的 phase_finished 保持 running。
+    """
+    buf = io.StringIO()
+    em = EventEmitter(stream=buf, task_id="t")
+    em.emit("phase_started", phase="A", file="ep01.srt")
+    em.emit("phase_finished", phase="A", file="ep01.srt")
+    em.emit("phase_started", phase="B", file="ep01.srt")
+    em.emit("phase_finished", phase="B", file="ep01.srt")
+    em.emit("phase_started", phase="final", file="ep01.srt")
+    em.emit("phase_finished", phase="final", file="ep01.srt")
+    parser = EventStreamParser()
+    states = []
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            parser.feed(line)
+            states.append(dict(parser.files))
+    assert states == [
+        {"ep01.srt": "running"},    # phase_started A
+        {"ep01.srt": "running"},    # phase_finished A（非末阶段，保持 running）
+        {"ep01.srt": "running"},    # phase_started B
+        {"ep01.srt": "running"},    # phase_finished B（非末阶段，保持 running）
+        {"ep01.srt": "running"},    # phase_started final
+        {"ep01.srt": "done"},       # phase_finished final（末阶段 → done）
+    ]
+
+
+def test_files_tracks_multiple_files_independently():
+    """多文件各自归组，互不影响。"""
+    parser = _make_parser_with_events(
+        (("phase_started",), {"phase": "A", "file": "ep01.srt"}),
+        (("phase_started",), {"phase": "A", "file": "ep02.srt"}),
+        (("phase_finished",), {"phase": "final", "file": "ep01.srt"}),
+    )
+    assert parser.files == {"ep01.srt": "done", "ep02.srt": "running"}
+
+
+def test_files_ignores_events_without_file_field():
+    """无 file 字段的事件不污染 files 归组。"""
+    parser = _make_parser_with_events(
+        (("phase_started",), {"phase": "A"}),
+        (("phase_finished",), {"phase": "final"}),
+        (("phase_started",), {"phase": "A", "file": "ep01.srt"}),
+    )
+    assert parser.files == {"ep01.srt": "running"}
+
+
+def test_snapshot_files_key_returns_copy():
+    """snapshot() 的 files 键是内部 dict 的浅拷贝，改返回值不影响内部。"""
+    parser = _make_parser_with_events(
+        (("phase_started",), {"phase": "A", "file": "ep01.srt"}),
+    )
+    snap = parser.snapshot()
+    assert snap["files"] == {"ep01.srt": "running"}
+    snap["files"]["ep01.srt"] = "tampered"
+    snap["files"]["inject.srt"] = "x"
+    assert parser.files == {"ep01.srt": "running"}
+    assert parser.snapshot()["files"] == {"ep01.srt": "running"}
