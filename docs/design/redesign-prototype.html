@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTransJAV · 界面改版原型（现代浅色 SaaS 工作台）</title>
+<!--
+  SubTransJAV UI 改版 · 高保真原型
+  ============================================
+  设计方向：现代极简 SaaS 工作台（Notion / Vercel 浅色 Dashboard）
+  布局：左侧导航栏（浅灰） + 中间主工作区（白色卡片） + 右侧配置面板（白色卡片）
+  主色：科技蓝 #3B82F6 · 背景 #F3F4F6 · 警告橙 · 停止浅红
+  图标：Lucide Icons（内联 SVG，零运行时依赖）
+  主题：浅色 / 深色 双主题（右下角切换，对应生产环境收敛后的两套主题）
+  说明：本文件为静态原型，无任何外部依赖，可离线直接打开。
+        落地到生产时保留全部元素 id 与 .file-item / .console-section / .btn-audio-preview。
+-->
+<style>
+/* ============================================================
+   Design Tokens —— 生产环境将以此为唯一样式变量来源
+   ============================================================ */
+:root {
+  /* 表面与背景 */
+  --bg:            #F3F4F6;   /* 应用背景（brief 指定） */
+  --surface:       #FFFFFF;   /* 卡片表面 */
+  --surface-2:     #F9FAFB;   /* 次级表面 / 悬停 */
+  --surface-3:     #F3F4F6;
+
+  /* 边框 */
+  --border:        #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  /* 文字 */
+  --text-1: #111827;
+  --text-2: #6B7280;
+  --text-3: #9CA3AF;
+
+  /* 品牌 */
+  --primary:        #3B82F6;  /* brief 指定科技蓝 */
+  --primary-strong: #2563EB;
+  --primary-soft:   #EFF6FF;
+  --primary-border: #BFDBFE;
+
+  /* 语义 */
+  --ok:          #10B981;
+  --ok-soft:     #ECFDF5;
+  --warn:        #F59E0B;   /* brief 指定警告橙 */
+  --warn-soft:   #FFFBEB;
+  --danger:      #DC2626;
+  --danger-soft: #FEF2F2;   /* 停止按钮浅红 */
+  --danger-border:#FECACA;
+
+  /* 控制台（保持深色） */
+  --console-bg:    #0F172A;
+  --console-border:#1E293B;
+  --console-text:  #CBD5E1;
+  --console-muted: #64748B;
+
+  /* 阴影（柔和） */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --shadow-md: 0 2px 4px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.08);
+
+  /* 圆角 */
+  --radius-sm: 8px;
+  --radius:    12px;   /* rounded-lg 级别 */
+  --radius-lg: 16px;   /* 拖拽区大圆角 */
+
+  /* 字号（修正历轮过度压缩，恢复可读性） */
+  --font: 14px;
+  --font-sm: 13px;
+  --font-xs: 12px;
+  --font-mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+[data-theme="dark"] {
+  --bg:            #0B0F17;
+  --surface:       #141821;
+  --surface-2:     #1A202B;
+  --surface-3:     #1F2530;
+  --border:        #262D3B;
+  --border-strong: #333C4D;
+  --text-1: #E5E7EB;
+  --text-2: #9CA3AF;
+  --text-3: #6B7280;
+  --primary:        #60A5FA;
+  --primary-strong: #3B82F6;
+  --primary-soft:   rgba(59,130,246,.14);
+  --primary-border: rgba(96,165,250,.35);
+  --ok:          #34D399;  --ok-soft:     rgba(16,185,129,.12);
+  --warn:        #FBBF24;  --warn-soft:   rgba(245,158,11,.12);
+  --danger:      #F87171;  --danger-soft: rgba(239,68,68,.12);
+  --danger-border: rgba(248,113,113,.35);
+  --console-bg:    #0D1117;
+  --console-border:#1B2330;
+  --console-text:  #C4CFDB;
+  --console-muted: #55607080;
+  --console-muted: #5B6675;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 2px 4px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.4);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: var(--font); }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font);
+  line-height: 1.55;
+  color: var(--text-1);
+  background: var(--bg);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  transition: background .25s ease, color .25s ease;
+}
+button { font-family: inherit; cursor: pointer; }
+::selection { background: var(--primary-soft); }
+
+/* 细滚动条（现代观感细节） */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+   三栏骨架：rail | main | aside
+   ============================================================ */
+.workbench {
+  display: grid;
+  grid-template-columns: 220px minmax(0,1fr) 316px;
+  height: 100vh;
+}
+
+/* ---------- 左侧导航（浅灰背景） ---------- */
+.rail {
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  gap: 4px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 18px;
+}
+.brand-mark {
+  width: 32px; height: 32px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: #fff;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(59,130,246,.35);
+}
+.brand-name { font-size: var(--font-sm); font-weight: 650; letter-spacing: -.2px; }
+.brand-sub { font-size: 11px; color: var(--text-3); margin-top: -2px; }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  transition: background .15s ease, color .15s ease;
+  text-align: left;
+}
+.nav-item:hover { background: var(--surface-3); color: var(--text-1); }
+.nav-item.active {
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-weight: 600;
+}
+.nav-item svg { flex-shrink: 0; }
+.nav-section {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: .4px;
+  padding: 14px 10px 6px;
+  text-transform: uppercase;
+}
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- 中间主工作区 ---------- */
+.main {
+  overflow-y: auto;
+  padding: 24px 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.page-head { display: flex; align-items: baseline; gap: 12px; }
+.page-title { font-size: 18px; font-weight: 650; letter-spacing: -.3px; }
+.page-desc { font-size: var(--font-sm); color: var(--text-2); }
+.page-head .spacer { flex: 1; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------- 上传拖拽区（虚线科技蓝 + 大圆角） ---------- */
+.dropzone {
+  border: 1.5px dashed #93C5FD;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(0deg, var(--primary-soft), var(--primary-soft));
+  background: var(--primary-soft);
+  padding: 34px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.dropzone.dragover,
+.dropzone:hover { border-color: var(--primary); }
+.dz-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--primary-border);
+  color: var(--primary);
+  display: grid; place-items: center;
+  margin-bottom: 6px;
+}
+.dz-title { font-size: var(--font); font-weight: 600; }
+.dz-hint { font-size: var(--font-sm); color: var(--text-2); }
+.dz-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+/* ---------- 文件列表 ---------- */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.card-head h3 { font-size: var(--font-sm); font-weight: 600; }
+.card-head .meta { font-size: var(--font-xs); color: var(--text-3); }
+.file-list { padding: 6px 8px; }
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  transition: background .12s ease;
+}
+.file-item:hover { background: var(--surface-2); }
+.file-item.selected { background: var(--primary-soft); }
+.file-ico {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.file-name { font-size: var(--font-sm); font-weight: 550; word-break: break-all; }
+.file-path { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.file-item .grow { flex: 1; min-width: 0; }
+.chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.chip-done  { background: var(--ok-soft); color: var(--ok); }
+.chip-wait  { background: var(--surface-3); color: var(--text-2); }
+.chip-run   { background: var(--primary-soft); color: var(--primary-strong); }
+.icon-btn {
+  border: none; background: transparent;
+  color: var(--text-3);
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  display: grid; place-items: center;
+  transition: all .12s ease;
+}
+.icon-btn:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------- 控制台（保留深色 + 圆角 + 内边距） ---------- */
+.console {
+  background: var(--console-bg);
+  border: 1px solid var(--console-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.console-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--console-border);
+}
+.console-dot { width: 8px; height: 8px; border-radius: 50%; }
+.console-title { font-size: var(--font-xs); font-weight: 600; color: #94A3B8; letter-spacing: .3px; }
+.console-head .grow { flex: 1; }
+.console-body {
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--console-text);
+  height: 168px;
+  overflow-y: auto;
+}
+.cl-time { color: var(--console-muted); margin-right: 10px; }
+.cl-info { color: #94A3B8; }
+.cl-ok   { color: #34D399; }
+.cl-warn { color: #FBBF24; }
+.cl-err  { color: #F87171; }
+.cl-dim  { color: #64748B; }
+
+/* ============================================================
+   右侧配置面板
+   ============================================================ */
+.aside {
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  overflow-y: auto;
+  padding: 24px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.panel-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}
+.panel-card h3 {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.panel-card h3 svg { color: var(--primary); }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field:last-child { margin-bottom: 0; }
+.field-label { font-size: var(--font-xs); font-weight: 550; color: var(--text-2); }
+.input, .select {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  font-size: var(--font-sm);
+  font-family: inherit;
+  color: var(--text-1);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input:focus, .select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.input[readonly] { color: var(--text-2); background: var(--surface-2); }
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+}
+.input-row { display: flex; gap: 8px; }
+
+/* 模型行：select + 刷新 */
+.model-row { display: flex; gap: 8px; }
+.model-row .select { flex: 1; }
+
+/* 开关（现代 toggle 替代原生 checkbox） */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+}
+.switch-row .lbl { font-size: var(--font-sm); color: var(--text-1); }
+.switch {
+  position: relative;
+  width: 36px; height: 20px;
+  border-radius: 999px;
+  border: none;
+  background: var(--border-strong);
+  transition: background .18s ease;
+  flex-shrink: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.2);
+  transition: transform .18s ease;
+}
+.switch.on { background: var(--primary); }
+.switch.on::after { transform: translateX(16px); }
+
+/* ---------- 按钮（扁平化：主蓝 / 浅红停止 / 白底灰边次要 / 幽灵） ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: var(--font-sm);
+  font-weight: 550;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(37,99,235,.3);
+}
+.btn-primary:hover { background: var(--primary-strong); }
+.btn-stop {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.btn-stop:hover { background: #FEE2E2; }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text-1);
+  border-color: var(--border-strong);
+}
+.btn-secondary:hover { background: var(--surface-2); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+}
+.btn-ghost:hover { background: var(--surface-3); color: var(--text-1); }
+.btn-block { width: 100%; }
+.btn-sm { height: 30px; padding: 0 10px; font-size: var(--font-xs); border-radius: 8px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 运行动作区 */
+.run-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.run-row { display: flex; gap: 8px; }
+.run-row .btn-primary { flex: 1; }
+
+/* 进度 */
+.progress-wrap { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.progress-fill {
+  width: 62%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width .3s ease;
+}
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.progress-meta .pct { font-weight: 600; color: var(--primary-strong); }
+
+/* 分隔线 */
+.panel-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-xs);
+  color: var(--text-2);
+}
+.link-row a { color: var(--primary); text-decoration: none; font-weight: 550; }
+.link-row a:hover { text-decoration: underline; }
+
+/* ============================================================
+   设计系统速览（展示其余页面如何套用同一体系）
+   ============================================================ */
+.gallery { margin-top: 12px; }
+.gallery h2 { font-size: 15px; font-weight: 650; margin-bottom: 4px; letter-spacing: -.2px; }
+.gallery .sub { font-size: var(--font-sm); color: var(--text-2); margin-bottom: 14px; }
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 14px;
+}
+.gallery-card { padding: 16px; }
+.gallery-card h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch { width: 64px; }
+.swatch .c { height: 40px; border-radius: 8px; border: 1px solid var(--border); }
+.swatch .n { font-size: 10.5px; color: var(--text-2); margin-top: 5px; font-family: var(--font-mono); }
+.gl-table { width: 100%; border-collapse: collapse; font-size: var(--font-sm); }
+.gl-table th {
+  text-align: left;
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 600;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.gl-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-1); }
+.gl-table tr:last-child td { border-bottom: none; }
+.gl-table tr:hover td { background: var(--surface-2); }
+.tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+}
+.tag-ok   { background: var(--ok-soft); color: var(--ok); }
+.tag-warn { background: var(--warn-soft); color: var(--warn); }
+.tag-err  { background: var(--danger-soft); color: var(--danger); }
+.tag-info { background: var(--primary-soft); color: var(--primary-strong); }
+
+/* 原型提示条 */
+.proto-note {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-1);
+  color: var(--bg);
+  font-size: 11.5px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  opacity: .92;
+}
+
+/* 响应式（窗口较窄时右栏收起为可滚动） */
+@media (max-width: 1180px) {
+  .workbench { grid-template-columns: 64px minmax(0,1fr) 300px; }
+  .brand-name, .brand-sub, .nav-item .txt, .nav-section { display: none; }
+  .nav-item { justify-content: center; padding: 10px 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="workbench">
+
+  <!-- ============ 左侧导航 ============ -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">
+        <!-- Lucide: languages -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">净语翻译</div>
+        <div class="brand-sub">SubTransJAV Translate</div>
+      </div>
+    </div>
+
+    <div class="nav-section">工作区</div>
+    <button class="nav-item active" id="navTranslate">
+      <!-- Lucide: languages -->
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+      <span class="txt">字幕翻译</span>
+    </button>
+    <button class="nav-item" id="navEngine">
+      <!-- Lucide: cpu -->
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+      <span class="txt">引擎与模型</span>
+    </button>
+    <button class="nav-item" id="navGlossary">
+      <!-- Lucide: book-open -->
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+      <span class="txt">词库与模板</span>
+    </button>
+
+    <div class="nav-section">质量与设置</div>
+    <button class="nav-item" id="navGuide">
+      <!-- Lucide: gauge -->
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+      <span class="txt">质量与建议</span>
+    </button>
+    <button class="nav-item" id="navAdvanced">
+      <!-- Lucide: sliders-horizontal -->
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+      <span class="txt">高级参数</span>
+    </button>
+
+    <div class="rail-foot">
+      <button class="nav-item" id="themeToggle" title="切换浅色 / 深色主题">
+        <!-- Lucide: moon (浅色时) / sun（深色时） -->
+        <svg id="iconMoon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <svg id="iconSun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <span class="txt" id="themeLabel">深色主题</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============ 中间主工作区 ============ -->
+  <main class="main">
+    <div class="page-head">
+      <div class="page-title">字幕翻译</div>
+      <div class="page-desc">拖入 .srt 字幕文件，配置右侧服务后一键开始</div>
+      <div class="spacer"></div>
+      <button class="btn btn-ghost btn-sm">
+        <!-- Lucide: keyboard -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/></svg>
+        快捷键
+      </button>
+    </div>
+
+    <!-- 上传拖拽区 -->
+    <div class="dropzone" id="dropzone">
+      <div class="dz-icon">
+        <!-- Lucide: upload-cloud -->
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+      </div>
+      <div class="dz-title">拖拽 .srt 字幕文件到这里</div>
+      <div class="dz-hint">或点击下方按钮选择文件 / 文件夹 · 支持批量 · 产物自动命名跳过已完成</div>
+      <div class="dz-actions">
+        <button class="btn btn-primary btn-sm">
+          <!-- Lucide: file-plus -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
+          添加文件
+        </button>
+        <button class="btn btn-secondary btn-sm">
+          <!-- Lucide: folder-plus -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="M9 13h6"/></svg>
+          添加文件夹
+        </button>
+      </div>
+    </div>
+
+    <!-- 文件列表 -->
+    <div class="card">
+      <div class="card-head">
+        <h3>待翻译文件 <span class="meta">· 已选 3 个 · 共 4.2 MB</span></h3>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-ghost btn-sm">移除选中</button>
+          <button class="btn btn-ghost btn-sm">清空</button>
+        </div>
+      </div>
+      <div class="file-list" id="fileList">
+        <div class="file-item selected">
+          <div class="file-ico">
+            <!-- Lucide: file-text -->
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+          </div>
+          <div class="grow">
+            <div class="file-name">ABP-123.srt</div>
+            <div class="file-path">D:\Media\ABP-123\ABP-123.srt · 812 KB</div>
+          </div>
+          <span class="chip chip-run">翻译中</span>
+          <!-- Lucide: x -->
+          <button class="icon-btn" title="移除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="file-item">
+          <div class="file-ico">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+          </div>
+          <div class="grow">
+            <div class="file-name">IPX-456.srt</div>
+            <div class="file-path">D:\Media\IPX-456\IPX-456.srt · 1.3 MB</div>
+          </div>
+          <span class="chip chip-done">已完成</span>
+          <button class="icon-btn" title="移除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="file-item">
+          <div class="file-ico">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+          </div>
+          <div class="grow">
+            <div class="file-name">MIDE-789.srt</div>
+            <div class="file-path">D:\Media\MIDE-789\MIDE-789.srt · 2.1 MB</div>
+          </div>
+          <span class="chip chip-wait">等待中</span>
+          <button class="icon-btn" title="移除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 控制台：保留深色，加圆角与内边距 -->
+    <div class="console console-section" id="consoleSection">
+      <div class="console-head">
+        <span class="console-dot" style="background:#34D399;"></span>
+        <span class="console-title">运行控制台</span>
+        <span class="grow"></span>
+        <button class="btn btn-sm" style="color:#94A3B8; background:transparent; border:none;">折叠</button>
+        <button class="btn btn-sm" style="color:#94A3B8; background:transparent; border:none;">清空</button>
+      </div>
+      <div class="console-body">
+        <div><span class="cl-time">14:32:08</span><span class="cl-info">[INFO]</span> 已加载净语配置：local · 严格模式（cleaner_rules + 误译拦截）</div>
+        <div><span class="cl-time">14:32:09</span><span class="cl-info">[INFO]</span> 阶段A 服务商：本地 LM Studio · 模型 qwen2.5-7b-instruct</div>
+        <div><span class="cl-time">14:32:10</span><span class="cl-ok">[OK]</span> 连通性测试通过 · 延迟 42ms</div>
+        <div><span class="cl-time">14:32:11</span><span class="cl-info">[INFO]</span> 开始处理 ABP-123.srt（1280 条字幕 · 分 43 批）</div>
+        <div><span class="cl-time">14:33:02</span><span class="cl-warn">[WARN]</span> 批次 12 出现 2 条低置信度译文，已标记待审校</div>
+        <div><span class="cl-time">14:34:47</span><span class="cl-info">[INFO]</span> 阶段A 完成 62% · 平均 3.1s / 批 · TM 命中率 18%</div>
+        <div><span class="cl-time">14:34:48</span><span class="cl-dim">产物目录：D:\Media\ABP-123\（.subtransjav 中间件 + *_final_cn.srt 终稿）</span></div>
+      </div>
+    </div>
+
+    <!-- ============ 设计系统速览（其余页面同一体系） ============ -->
+    <div class="gallery">
+      <h2>设计系统速览</h2>
+      <div class="sub">词库、高级参数、质量报告等页面复用同一套组件与令牌，以下为核心样例。</div>
+      <div class="gallery-grid">
+        <div class="card gallery-card">
+          <h4>按钮 Buttons</h4>
+          <div class="btn-row">
+            <button class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              开始净语翻译
+            </button>
+            <button class="btn btn-stop" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              停止
+            </button>
+            <button class="btn btn-secondary">保存</button>
+            <button class="btn btn-ghost">导入 CSV</button>
+            <button class="btn btn-secondary btn-sm">⟳ 刷新</button>
+          </div>
+        </div>
+        <div class="card gallery-card">
+          <h4>状态与色板 Tokens</h4>
+          <div class="swatches">
+            <div class="swatch"><div class="c" style="background:#3B82F6"></div><div class="n">#3B82F6</div></div>
+            <div class="swatch"><div class="c" style="background:#F3F4F6"></div><div class="n">#F3F4F6</div></div>
+            <div class="swatch"><div class="c" style="background:#F59E0B"></div><div class="n">#F59E0B</div></div>
+            <div class="swatch"><div class="c" style="background:#10B981"></div><div class="n">#10B981</div></div>
+            <div class="swatch"><div class="c" style="background:#FEF2F2; border-color:#FECACA"></div><div class="n">浅红停止</div></div>
+          </div>
+          <div class="btn-row" style="margin-top:10px;">
+            <span class="tag tag-ok">已完成</span>
+            <span class="tag tag-run tag-info">翻译中</span>
+            <span class="tag tag-warn">低置信度</span>
+            <span class="tag tag-err">失败</span>
+          </div>
+        </div>
+        <div class="card gallery-card">
+          <h4>表单控件 Forms</h4>
+          <div class="field">
+            <span class="field-label">翻译服务</span>
+            <select class="select"><option>DeepSeek API</option><option>本地 LM Studio</option><option>本地 Ollama</option></select>
+          </div>
+          <div class="switch-row">
+            <span class="lbl">保存到字幕同目录</span>
+            <button class="switch on" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="switch-row">
+            <span class="lbl">learned 词库自学习</span>
+            <button class="switch" onclick="this.classList.toggle('on')"></button>
+          </div>
+        </div>
+        <div class="card gallery-card">
+          <h4>数据表格 Table（词库页）</h4>
+          <table class="gl-table">
+            <thead><tr><th>原文词条</th><th>期望译文</th><th style="width:70px;">状态</th></tr></thead>
+            <tbody>
+              <tr><td>先生</td><td>哥哥</td><td><span class="tag tag-ok">启用</span></td></tr>
+              <tr><td>授業</td><td>上课</td><td><span class="tag tag-ok">启用</span></td></tr>
+              <tr><td>テスト</td><td>测试</td><td><span class="tag tag-warn">冲突</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ 右侧配置面板 ============ -->
+  <aside class="aside">
+    <!-- 运行控制 -->
+    <div class="panel-card">
+      <h3>
+        <!-- Lucide: play-circle -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        运行控制
+      </h3>
+      <div class="field">
+        <span class="field-label">翻译服务</span>
+        <select class="select" id="serviceQuick">
+          <option selected>DeepSeek API</option>
+          <option>本地 LM Studio</option>
+          <option>本地 Ollama</option>
+          <option>Zen 免费</option>
+          <option>硅基流动</option>
+          <option>自定义兼容接口</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="field-label">模型</span>
+        <div class="model-row">
+          <select class="select"><option>deepseek-chat</option><option>deepseek-reasoner</option></select>
+          <button class="btn btn-secondary btn-sm" style="width:36px; padding:0; flex-shrink:0;" title="刷新模型列表">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="run-actions">
+        <button class="btn btn-primary btn-block">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+          开始净语翻译
+        </button>
+        <div class="run-row">
+          <button class="btn btn-stop btn-block" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+            停止
+          </button>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill"></div></div>
+        <div class="progress-meta">
+          <span>阶段A · 批次 27 / 43</span>
+          <span class="pct">62%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 输出设置 -->
+    <div class="panel-card">
+      <h3>
+        <!-- Lucide: folder-output -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="m9 13 3 3 3-3"/></svg>
+        输出设置
+      </h3>
+      <div class="switch-row" style="padding: 2px 0 10px;">
+        <span class="lbl">保存到字幕同目录</span>
+        <button class="switch on" onclick="this.classList.toggle('on')"></button>
+      </div>
+      <div class="field">
+        <span class="field-label">输出目录</span>
+        <div class="input-row">
+          <input class="input" readonly value="D:\Media\output" style="flex:1;">
+          <button class="btn btn-secondary btn-sm" style="flex-shrink:0;">浏览</button>
+          <button class="btn btn-ghost btn-sm" style="flex-shrink:0;">打开</button>
+        </div>
+      </div>
+      <div class="panel-divider"></div>
+      <div class="link-row" style="margin-top:10px;">
+        <span>兜底档位：本地 · 严格</span>
+        <a href="#">全部设置 →</a>
+      </div>
+    </div>
+
+    <!-- 阶段概览 -->
+    <div class="panel-card">
+      <h3>
+        <!-- Lucide: git-branch -->
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+        两阶段流水线
+      </h3>
+      <div class="switch-row">
+        <span class="lbl">阶段A · 净语+翻译（日译中）</span>
+        <span class="tag tag-ok">运行中</span>
+      </div>
+      <div class="switch-row">
+        <span class="lbl">阶段B · 审校+抛光（中文）</span>
+        <span class="tag tag-info">排队</span>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <span class="field-label">并行数</span>
+        <select class="select"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<div class="proto-note">
+  <span>高保真原型 · 布局与样式即生产落地目标 · 点击左下角切换深色主题</span>
+</div>
+
+<script>
+// 主题切换（生产环境中由现有 ThemeManager 驱动 data-theme 属性）
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('click', () => {
+  const html = document.documentElement;
+  const dark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', dark ? 'light' : 'dark');
+  document.getElementById('iconMoon').style.display = dark ? '' : 'none';
+  document.getElementById('iconSun').style.display  = dark ? 'none' : '';
+  document.getElementById('themeLabel').textContent = dark ? '深色主题' : '浅色主题';
+});
+
+// 导航视觉演示（原型内仅切换高亮，不切换页面）
+document.querySelectorAll('.nav-item[id^="nav"]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item[id^="nav"]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// 拖拽区演示
+const dz = document.getElementById('dropzone');
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dragover'); }));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dragover'); }));
+</script>
+</body>
+</html>

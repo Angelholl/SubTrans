@@ -1822,3 +1822,63 @@ D2026-0930-07（UI 改版轮）执行期间的追加批（2.1.1 未发版）。o
 | datalist 空目录误导 | 中/低 | 建议⑩ 空列表提示项 |
 | 首次安装空目录固定 A/B load 报缺件（既有疤痕） | 中/低 | 本批不改功能面；仅补 pkg_fallback 文案提示 |
 | 批 3 基线重拍遗漏新控件 | 中/中 | 截图清单显式列两页新控件 |
+
+---
+
+## [2026-09-30] [D2026-0930-08] UI 改版阶段 1 实施立场定稿（三栏骨架+双主题收敛，critic 2 HRO 全采纳）[已拍板]
+
+### 一、背景
+
+UI 改版轮（D2026-0930-07）落地路线第 7 节阶段 1（骨架与主题）开工前，主模型提交 7 项实施立场 A–G（主题机制保留 link 切换 / JS 依赖契约扩容 / 顺手修 5 个重复 tab id / 富文件行推迟阶段 2 / 全量重写 style.css 风险对冲 / 侵权评估 / 验证链）提请评议。唯一事实来源：`docs/design/UI-REDESIGN-HANDOFF.md`（第 4 节硬性约束、第 7 节落地路线）；原型：`docs/design/redesign-prototype.html`。技术约束：PyWebView 离线桌面应用、前端纯 HTML/CSS/JS 无构建链、app.js 功能逻辑不动。
+
+### 二、评议轮次与立场
+
+- 轮次：首次评议（2026-09-30，decision-critic）。
+- 立场：**有条件支持**，放行前置 = 2 条 [HIGH_RISK_OBJECTION] 获主模型明确回应；另含若干采纳修正项。
+- 材料口径更正（已并入执行单）：
+  - "5 个重复 tab 页 id"为 grep 误报——`data-testid="tab-translate"`（index.html:72 等，共 13 处 data-testid）含 `id=` 子串被朴素正则 `id="[^"]*"` 误计；负向后行断言 `(?<![\w-])id="[^"]*"` 实测 **154 个真实 id 全部唯一、uniq -d 零输出**。
+  - 交接文档第 3 节行数与实文件不符（index.html 677→实测 721 / app.js 2947→3233 / style.css 1377→1751），行数仅供归档参考，闸值一律从实文件现取。
+  - JS 依赖 class 实测多出于文档与 explorer 清单：`.gl-collapsible/.gl-collapse-btn/.gl-collapse-header .block-title`（app.js:2888-2890）、`.gl-src/.gl-dst/.gl-sel`（app.js:1760/1772/1774/1874）、`.theme-option`（app.js:1281/1298）、`.theme-menu.active`（app.js:1279）、`.modal-overlay.active`（app.js:1383/1423）、`[data-ai-kind]/[data-ai-idx]`（app.js:2705）、`data-testid`（13 处）。
+
+### 三、HRO 裁定
+
+- **HRO-1（C 修复重复 id）**：[HIGH_RISK_OBJECTION]（与已验证事实直接冲突——实测无重复 id）。主模型回应：**采纳**。取消"C 修复重复 tab id"，落档"实测无重复 id"一句话；闸脚本 id 断言一律用负向后行断言，避免 data-testid 造成噪声。
+- **HRO-2（B 契约清单不全 + data-i18n 零缺失自相矛盾）**：[HIGH_RISK_OBJECTION]（影响 3 个以上任务 + 契约与已验证事实不符）。主模型回应：**采纳**。契约清单改为从 app.js 程序化抽取（closest/querySelector/querySelectorAll/classList/data-* 引用语句），不手工枚举；data-i18n diff 口径 = "除故意移除白名单外零缺失"，白名单 = 被删 3 个主题菜单项携带的 theme_google/theme_carbon/theme_primer 三键（index.html:36-38）；critic 补录的 `.gl-collapsible` 族/.theme-option/.theme-menu.active/.modal-overlay.active/[data-ai-kind]/data-testid 契约全部确认采纳。
+- 二次复议：不适用（两条均一次采纳，未进入复议/驳回流程）。
+
+### 四、逐条裁定表（A–G 终版）
+
+| 条目 | 终版要点 | 状态 |
+|---|---|---|
+| A 主题机制 | 保留 link 切换，不迁 data-theme；themes 收敛为 {'default','dark'}，菜单 5→2；持久化双通道与 applyTheme/getSavedTheme/loadSavedThemeFromBackend 回退逻辑不动 | **采纳** |
+| A 备忘① | 老用户已存旧主题名（carbon/primer/google）将静默回落 default，属可接受 UX，写入阶段 1 提交说明 | **采纳** |
+| A 备忘② | style.dark.css @import url("style.css") 相对路径不变，双文件同目录无路径风险 | **采纳** |
+| B 契约闸 | 清单从 app.js 程序化抽取；".collapsed"契约绑定 .console-collapsible 与 .gl-collapsible 两族（style.css:1724-1738）；data-i18n diff 带故意移除白名单 | **采纳** |
+| C 重复 id | 取消；落档记录"实测无重复 id"；闸 id 断言用 `(?<![\w-])id="[^"]*"` | **采纳（取消）** |
+| D 富文件行 | 推迟阶段 2；**修正**：交接文档第 7 节阶段 2 清单显式补入"文件列表行富化（文件名/路径分隔、三态 chip、移除按钮，接后端 completed/resumable/none）"（文档修订随阶段 1 docs 提交）；阶段 1 对 .file-item 做 CSS-only 美化（圆角图标盒/悬停底色/暗色 selected 覆盖，style.dark.css:113-117 沿用），不动 createFileItem | **采纳+修正** |
+| E 重写对冲 | dark.css:64-151 硬编码组件 11 项逐项消单；覆盖对照双向检查（旧选择器→新 CSS、JS 生成类→新 CSS）；闸值一律从实文件现取，不抄文档行数；字号恢复 14/13/12px | **采纳** |
+| F 侵权评估 | 无阻断性风险；阶段 2 落地 Lucide 时 index.html 头部注释块写**完整 ISC 声明全文**（Copyright (c) Lucide Contributors + 准予条款），非一行指针 | **采纳+修正** |
+| G 验证链 | 按项目验证链（静态→定向→全量→冒烟）+ GUI 走查；[INFO_GAP] web-gui-tester 对 pywebview 原生窗口驱动能力由执行阶段 coding/测试子智能体试点，不可驱动则回退方案 b（临时 http 伺服 assets 仅供测试，不引入运行时依赖）；提交按实注明"GUI 已验证/未验证" | **采纳** |
+
+### 五、范围定稿
+
+阶段 1 交付面 = 第 7 节原 1-4 步（备份/三栏骨架重写/双主题全量重写/删 3 套过时主题）+ 上述 A–G 修正，不混入新功能。富文件行（chip/移除）属阶段 2，本批不做。`strings.py` 不动（硬性约束第 7 条），旧主题名 i18n 键（theme_google/carbon/primer）作为未引用键保留于 strings.py，不进白名单范畴（白名单仅用于闸 diff 放行被删 3 个菜单项的 data-i18n 属性）。
+
+### 六、验证要求
+
+- 闸脚本（改动前先对当前代码跑基线、零告警再动工）：id 断言用负向后行断言零缺失；契约选择器从 app.js 程序化抽取后逐一与改后 HTML/CSS diff；data-i18n diff 除白名单（theme_google/theme_carbon/theme_primer）外零缺失。
+- 功能走查五页：tab 切换（switchTab）、词库页折叠（.gl-* 族）、拖拽高亮（.drag-over）、主题双切（含旧存值回落）、aboutModal（.modal-overlay.active）、控制台五分色、窄窗折叠（<1180px）。
+- 暗色 11 组件逐项消单（dark.css:64-151）：.app-header/.theme-button/.feature-badge 三态/.btn-secondary/.btn-ghost/.btn:focus/.file-list:focus-within/.file-item.selected/.console-output/.guide-txt-view/滚动条。
+- 全量 pytest 基线只增；无任何外部网络请求（走查一并确认）；翻译全流程（添加文件→开始→进度→控制台→产物）走通；提交注明"GUI 已验证/未验证"。
+
+### 七、风险跟踪表
+
+| 跟踪项 | 概率/影响 | 处置/验证 |
+|---|---|---|
+| 契约闸手工枚举漏项再回归（词库页折叠等静默失效） | 中/中 | HRO-2 采纳后改程序化抽取；验收走查 tab-glossary 折叠 + __refineTplTabHook |
+| 文件行富化规格悬空（文档第 6 节规格无阶段认领） | 高/中 | D 修正：阶段 2 清单显式补入，文档修订随阶段 1 docs 提交 |
+| data-i18n 白名单外误删 | 低/高 | 闸白名单显式列出三键，diff 其余零缺失 |
+| 老主题名静默回落 default | 确定/低 | UX 可接受，提交说明注明 |
+| pywebview 窗口 GUI 自动化不可驱动 | 中/中 | 试点后回退方案 b（临时 http 伺服，仅测试、无运行时依赖） |
+| 全量重写漏暗色组件 | 中/中 | dark.css 11 组件逐项消单 + 对照双向检查 |
+
