@@ -27,7 +27,7 @@
 - ✅ GUI 窗口化双可执行体（SubTransJAV.exe 无黑框+subtrans-cli.exe 控制台，37867dd，已入 CI 构建链并实证 success；owner 覆盖安装验证随三项验收）
 - ⬜ 反馈批二（owner 实测中）：数据保存目录改浏览选择（0b0e31b 已落）、质量报告 txt 整合+学习词库查看（5e36120 已落）、无黑框（37867dd 已落）——均待 owner 新构建复验；+2.0.0 正式实测项：安装/卸载 ≥2 环境、真机 GUI 全链（无黑框/暗色/试听动态链）、10~20 片真实媒体定阈（同 P4 口径：发布后反馈驱动）
 
-## 2.1 —— 三语词典与方向参数化（owner 钦点必落，D2026-0930-01 P3；细则 D2026-0930-03 ②③④；拍板 D2026-0930-04）
+## 2.1 —— 三语词典与方向参数化（owner 钦点必落，D2026-0930-01 P3；细则 D2026-0930-03 ②③④；拍板 D2026-0930-04）✅ 已发布 v2.1.0（2026-09-30，tag v2.1.0→543fb3d release/2.1.0 分支制+Release id 399438370：双 setup.exe 80,993,108/33,538,736B+SHA256SUMS，本地哈希与 CI SHA256SUMS 全一致；含方向角色示例卡 docs/examples/direction-packs/；main CHANGELOG 已同步 [2.1.0]）
 
 - ✅ 引擎页词典管理三区块（2026-09-30，846fae5：日/中/英 状态/下载/自定义路径+下载中态；api refine_dict_status/refine_dict_download；文案全 MSG 键 i18n 契约过；GUI 黑盒已验——bridge 黑盒三区块渲染+下载全链 PASS，截图证据在 Temp/gui-test-screenshots/）+ **下载进度反馈批（同日 owner 验收反馈，词典下载分块化+phase 状态+前端 1s 轮询：按钮百分比/已下载 MB/校验解压分阶段/完成回显路径与大小+行内"自定义词典已就位"徽标；真下载 73.4MB wheel→192.9MB .dic 全链黑盒 PASS）**
 - ✅ 日语=sudachi 下载式（2026-09-30，7ca43ec：dict_manager 三源策略——上游已转 PyPI-only，"GitHub 主源"按现状映射为 PyPI 官方→清华镜像（仅网络失败降级）→本地导入；SHA256 官方 digest 核实+不符拒载；两类失败分开报错；sudachidict_core 主依赖保留；grammar_hint 自定义词典路径优先（sudachipy 0.6.11 实证 Dictionary(dict=路径)）；CLI --dict-status/--dict-download）
