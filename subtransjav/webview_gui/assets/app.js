@@ -1954,15 +1954,13 @@ function switchTab(tabId) {
   function glRender(rows) {
     const tb = document.querySelector('#refineGlossTable tbody');
     tb.innerHTML = rows.map(r =>
-      '<tr style="border-bottom:1px solid var(--border-color);">' +
-      '<td style="padding:2px 4px;"><input class="form-input compact gl-src" ' +
-      'style="width:100%;" value="' + esc(r[0]) + '"></td>' +
-      '<td style="padding:2px 4px;"><input class="form-input compact gl-dst" ' +
-      'style="width:100%;" value="' + esc(r[1]) + '">' +
+      '<tr>' +
+      '<td><input class="form-input compact gl-src" value="' + esc(r[0]) + '"></td>' +
+      '<td><input class="form-input compact gl-dst" value="' + esc(r[1]) + '">' +
       // 别名第三列只读展示（不由前端编辑；无别名不渲染，保存时后端保留）
-      (r[2] ? '<div style="font-size:11px; color:var(--text-muted); margin-top:1px;">' + MSG.alias_label +
+      (r[2] ? '<div class="gl-alias">' + MSG.alias_label +
         esc(r[2]) + '</div>' : '') + '</td>' +
-      '<td style="text-align:center;"><input type="checkbox" class="gl-sel"></td>' +
+      '<td class="gl-sel-cell"><input type="checkbox" class="gl-sel"></td>' +
       '</tr>').join('');
     const cnt = $('refineGlCount');
     if (cnt) cnt.textContent = rows.length;
@@ -2018,10 +2016,10 @@ function switchTab(tabId) {
       if (empty) empty.style.display = 'none';
       const rows = r.rows || [];
       tb.innerHTML = rows.map(row =>
-        '<tr style="border-bottom:1px solid var(--border-color);">' +
-        '<td style="padding:2px 4px;">' + esc(row.source || '') + '</td>' +
-        '<td style="padding:2px 4px;">' + esc(row.target || '') + '</td>' +
-        '<td style="padding:2px 4px;">' + esc(row.aliases || '') + '</td>' +
+        '<tr>' +
+        '<td>' + esc(row.source || '') + '</td>' +
+        '<td>' + esc(row.target || '') + '</td>' +
+        '<td>' + esc(row.aliases || '') + '</td>' +
         '</tr>').join('');
       if (stats) {
         stats.textContent = MSG.gl_learned_stats(
@@ -2858,10 +2856,10 @@ function switchTab(tabId) {
     const parts = [];
     // 一段：术语建议
     parts.push('<h4>' + esc(MSG.aiSectionGlossary) + '</h4>');
-    parts.push('<table style="width:100%;border-collapse:collapse;">'
-      + '<thead><tr><th style="text-align:left;">' + esc(MSG.th_source)
-      + '</th><th style="text-align:left;">' + esc(MSG.th_target)
-      + '</th><th style="text-align:left;">' + esc(MSG.aiThReason)
+    parts.push('<table class="gl-table">'
+      + '<thead><tr><th>' + esc(MSG.th_source)
+      + '</th><th>' + esc(MSG.th_target)
+      + '</th><th>' + esc(MSG.aiThReason)
       + '</th><th></th></tr></thead><tbody>');
     (sug.glossary || []).forEach((g, i) => {
       parts.push('<tr><td>' + esc(g.src) + '</td><td>' + esc(g.target)
@@ -2871,10 +2869,10 @@ function switchTab(tabId) {
     parts.push('</tbody></table>');
     // 二段：TM 建议（conflict_warn 行加黄色 ⚠️ 徽标）
     parts.push('<h4>' + esc(MSG.aiSectionTm) + '</h4>');
-    parts.push('<table style="width:100%;border-collapse:collapse;">'
-      + '<thead><tr><th style="text-align:left;">' + esc(MSG.th_source)
-      + '</th><th style="text-align:left;">' + esc(MSG.th_target)
-      + '</th><th style="text-align:left;">' + esc(MSG.aiThReason)
+    parts.push('<table class="gl-table">'
+      + '<thead><tr><th>' + esc(MSG.th_source)
+      + '</th><th>' + esc(MSG.th_target)
+      + '</th><th>' + esc(MSG.aiThReason)
       + '</th><th></th></tr></thead><tbody>');
     (sug.tm || []).forEach((t, i) => {
       parts.push('<tr><td>' + esc(t.source) + (t.conflict_warn

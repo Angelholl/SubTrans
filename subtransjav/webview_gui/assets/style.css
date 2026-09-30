@@ -983,6 +983,9 @@ input[type="checkbox"] {
     padding: 12px 14px;
 }
 
+/* stack 容器加挂 form-card 时保持纵向拉伸（阶段3 批1/C1：防 align-items:center 级联把列排子项居中收缩） */
+.stack.form-card { align-items: stretch; }
+
 .form-card-header {
     font-weight: 600;
     margin-bottom: 4px;
@@ -990,16 +993,18 @@ input[type="checkbox"] {
     width: 100%;
 }
 
-/* 卡内 label 带输入控件时改为上下排布（阶段A/B 行布局语义保留） */
-.form-card label:has(> .form-input),
-.form-card label:has(> .form-select) {
+/* 卡内 label 带输入控件时改为上下排布（阶段A/B 行布局语义保留）；
+   :not(.stack) 守卫（阶段3 批1/C2）——stack 加挂 form-card 的分组区不适用，
+   防兜底并发组 inline-field label 被强制列排且 !important 覆盖既有宽度 */
+.form-card:not(.stack) label:has(> .form-input),
+.form-card:not(.stack) label:has(> .form-select) {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 4px;
 }
-.form-card label > .form-input,
-.form-card label > .form-select {
+.form-card:not(.stack) label > .form-input,
+.form-card:not(.stack) label > .form-select {
     width: 100% !important;
     min-width: 0;
 }
@@ -1031,6 +1036,14 @@ input[type="checkbox"] {
     align-items: center;
 }
 
+/* 阶段A/B 卡+第三卡内联宽度收编（阶段3 批1：值与原内联逐字一致；C3 域外内联合法存在不动） */
+.stage-row .inline-field:first-child { min-width: var(--w-stage-label); }
+#refineS1Provider, #refineS3Provider { min-width: var(--w-provider); }
+#refineS1Model, #refineS3Model, #refineCleanerConfigShow { min-width: var(--w-model); }
+#refineS1Key, #refineS3Key { min-width: var(--w-key-input); }
+#refineProfile { min-width: var(--w-profile); }
+#refineV2Ctx { width: var(--w-ctx); }
+
 /* ============================================================
    12. 词库页：表格 + 折叠族
    ============================================================ */
@@ -1055,6 +1068,13 @@ input[type="checkbox"] {
 #refineGlossTable tbody tr:hover td,
 #glLearnedTable tbody tr:hover td,
 .gl-table tr:hover td { background: var(--surface-2); }
+
+/* 表级基础与列宽（阶段3 批2/C4：挂类即完整生效的前提；值与原内联逐字一致） */
+.gl-table { width: var(--w-full); border-collapse: collapse; }
+#refineGlossTable th:first-child, #glLearnedTable th:first-child { width: var(--w-gl-source); }
+#refineGlossTable th:last-child { width: var(--w-th-action); }
+.gl-table td.gl-sel-cell { text-align: center; }
+.gl-alias { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
 
 /* 词库行内输入（app.js 模板生成） */
 input.gl-src, input.gl-dst { width: 100%; min-width: 0; }
@@ -1149,6 +1169,17 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     padding: 12px 14px;
+}
+
+/* adv-group 卡头分层（阶段3 批3/C7：首 group-title=卡头，其余=卡内小节分隔；
+   纯 CSS 无 DOM 改动，间距值均在既有节奏档内） */
+.adv-group > .group-title:first-child {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.adv-group > .group-title:not(:first-child) {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }
 
 /* ============================================================

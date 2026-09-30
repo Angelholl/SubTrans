@@ -174,10 +174,10 @@
                 <!-- 阶段A 完整行 -->
                 <div class="form-card">
                     <div class="stage-row">
-                        <label class="inline-field" style="min-width:var(--w-stage-label);">
+                        <label class="inline-field">
                             <input type="checkbox" id="refineS1Enabled" checked> <span data-i18n="stage_a_label">阶段A 净语+翻译（日译中）</span>
                         </label>
-                        <select id="refineS1Provider" class="form-select compact" style="min-width:var(--w-provider);">
+                        <select id="refineS1Provider" class="form-select compact">
                             <option value="deepseek">DeepSeek API</option>
                             <option value="zen" data-i18n="provider_zen">Zen 免费</option>
                             <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
@@ -185,7 +185,7 @@
                             <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
-                        <select id="refineS1Model" class="form-select compact grow" style="min-width:var(--w-model);">
+                        <select id="refineS1Model" class="form-select compact grow">
                             <option value="custom-model-1" selected data-i18n="model_default_1">custom-model-1（默认）</option>
                             <option value="" data-i18n="model_refresh_hint">（点刷新按钮获取模型列表）</option>
                         </select>
@@ -195,7 +195,7 @@
                     </div>
                     <div class="alt-row">
                         <label class="field-label">API Key</label>
-                        <input type="password" id="refineS1Key" class="form-input compact grow" style="min-width:var(--w-key-input);"
+                        <input type="password" id="refineS1Key" class="form-input compact grow"
                                data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                         <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
                                 data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
@@ -205,10 +205,10 @@
                 <!-- 阶段B 完整行 -->
                 <div class="form-card">
                     <div class="stage-row">
-                        <label class="inline-field" style="min-width:var(--w-stage-label);">
+                        <label class="inline-field">
                             <input type="checkbox" id="refineS3Enabled" checked> <span data-i18n="stage_b_label">阶段B 审校+抛光（中文）</span>
                         </label>
-                        <select id="refineS3Provider" class="form-select compact" style="min-width:var(--w-provider);">
+                        <select id="refineS3Provider" class="form-select compact">
                             <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
                             <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
                             <option value="deepseek">DeepSeek API</option>
@@ -216,7 +216,7 @@
                             <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
-                        <select id="refineS3Model" class="form-select compact grow" style="min-width:var(--w-model);">
+                        <select id="refineS3Model" class="form-select compact grow">
                             <option value="custom-model-2" selected data-i18n="model_default_2">custom-model-2（默认）</option>
                             <option value="" data-i18n="model_refresh_hint">（点刷新按钮获取模型列表）</option>
                         </select>
@@ -226,7 +226,7 @@
                     </div>
                     <div class="alt-row">
                         <label class="field-label">API Key</label>
-                        <input type="password" id="refineS3Key" class="form-input compact grow" style="min-width:var(--w-key-input);"
+                        <input type="password" id="refineS3Key" class="form-input compact grow"
                                data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
                         <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
                                 data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
@@ -238,7 +238,7 @@
                     <label class="inline-field field-label"
                            data-i18n-title="profile_title" title="local=兜底规则全开(cleaner_rules+误译拦截，适合本地模型)；cloud=lenient(仅零维护通用校验，适合强模型)">
                         <span data-i18n="profile_label">兜底档位</span>
-                        <select id="refineProfile" class="form-select compact" style="min-width:var(--w-profile);">
+                        <select id="refineProfile" class="form-select compact">
                             <option value="local" selected data-i18n="profile_local">本地·严格</option>
                             <option value="cloud" data-i18n="profile_cloud">云端·宽松</option>
                         </select>
@@ -246,7 +246,7 @@
                     <label class="inline-field field-label"
                            data-i18n-title="ctx_title" title="模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；只有当翻译报错提示文字被截断或超长时，才需要把它调大。">
                         <span data-i18n="ctx_label">上下文窗口</span>
-                        <input type="number" id="refineV2Ctx" class="form-input compact" style="width:var(--w-ctx);"
+                        <input type="number" id="refineV2Ctx" class="form-input compact"
                                value="" min="4096" step="1024"
                                data-i18n-placeholder="ctx_placeholder" placeholder="缺省 16384">
                     </label>
@@ -254,14 +254,14 @@
                         <span class="path-row-label" data-i18n="cleaner_dir_label">净语配置目录</span>
                         <input type="hidden" id="refineCleanerConfig">
                         <input id="refineCleanerConfigShow" class="form-input compact grow" readonly
-                               style="min-width:var(--w-model);" data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=自动查找（config/templates→包内默认）">
+                               data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=自动查找（config/templates→包内默认）">
                         <span class="field-btn-row"><button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
                         <button type="button" id="refineOpenCleanerDir" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button></span>
                     </label>
                 </div>
 
                 <!-- 接口地址（原 details 平铺） -->
-                <div class="stack">
+                <div class="stack form-card">
                     <div class="block-title" data-i18n="endpoints_summary">接口地址（对应阶段A/B，切换服务商自动填充）</div>
                     <div class="action-row">
                         <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s1_endpoint_label">阶段A 地址</label>
@@ -280,7 +280,7 @@
                 </div>
 
                 <!-- 兜底与并发（原高级设置第四组迁入） -->
-                <div class="stack">
+                <div class="stack form-card">
                     <div class="group-title" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
                     <div class="field-row">
                         <label class="inline-field"><span data-i18n="fallback_model_label">接管模型</span>
@@ -363,11 +363,11 @@
                     <div class="gl-tab-content gl-collapsible-content" style="padding:6px 0;">
                         <!-- 翻译术语 Tab（legacy 性暗示替换 Tab 已随 legacy 管线删除） -->
                         <div id="glTabGlossary">
-                            <table id="refineGlossTable" style="width:var(--w-full); border-collapse:collapse;">
+                            <table id="refineGlossTable" class="gl-table">
                                 <thead><tr>
-                                    <th style="text-align:left; width:var(--w-gl-source);" data-i18n="th_source">原文词条</th>
-                                    <th style="text-align:left;" data-i18n="th_target">期望译文</th>
-                                    <th style="width:var(--w-th-action);"></th>
+                                    <th data-i18n="th_source">原文词条</th>
+                                    <th data-i18n="th_target">期望译文</th>
+                                    <th></th>
                                 </tr></thead>
                                 <tbody></tbody>
                             </table>
@@ -400,11 +400,11 @@
                         <span id="glLearnedStatus" class="muted status-err"></span>
                     </div>
                     <div class="muted gl-collapsible-content" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
-                    <table id="glLearnedTable" class="gl-collapsible-content" style="width:var(--w-full); border-collapse:collapse;">
+                    <table id="glLearnedTable" class="gl-collapsible-content gl-table">
                         <thead><tr>
-                            <th style="text-align:left; width:var(--w-gl-source);" data-i18n="th_source">原文词条</th>
-                            <th style="text-align:left;" data-i18n="th_target">期望译文</th>
-                            <th style="text-align:left;" data-i18n="gl_learned_col_aliases">别名</th>
+                            <th data-i18n="th_source">原文词条</th>
+                            <th data-i18n="th_target">期望译文</th>
+                            <th data-i18n="gl_learned_col_aliases">别名</th>
                         </tr></thead>
                         <tbody></tbody>
                     </table>
@@ -416,7 +416,7 @@
 
             <div class="tab-page" id="tab-guide" data-testid="tab-guide">
                 <!-- 2g（D2026-0930-07）：媒体来源/其他导读/自定义导读 三个来源入口归组 -->
-                <div class="stack">
+                <div class="stack form-card">
                     <div class="group-title" data-i18n="guide_source_group_title">来源</div>
                     <!-- 媒体来源条（D2026-0929-09：契约内选择，无文件对话框） -->
                     <div class="media-source-bar" id="mediaSourceBar" style="display:none;">
