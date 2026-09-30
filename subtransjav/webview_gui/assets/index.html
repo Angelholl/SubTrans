@@ -268,7 +268,7 @@
                             </select>
                         </label>
                         <label class="inline-field field-label"
-                               data-i18n-title="ctx_title" title="本地模型上下文窗口：留空=用缺省 16384（通用保守值，可经 config/user_settings.json 或环境变量 SUBTRANSJAV_V2_CTX_LOCAL 调整）；显式填写时启动后管线自动按此值对齐引擎（覆盖 LM Studio 手工设置），并据此收紧批大小。16GB 显存建议 16384~22272；22272 为作者 16GB 单卡档案值（示例），非缺省">
+                               data-i18n-title="ctx_title" title="模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；只有当翻译报错提示文字被截断或超长时，才需要把它调大。">
                             <span data-i18n="ctx_label">上下文窗口</span>
                             <input type="number" id="refineV2Ctx" class="form-input compact" style="width:var(--w-ctx);"
                                    value="" min="4096" step="1024"
@@ -379,10 +379,16 @@
                             data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
                     </div>
 
-                    <!-- 全局词库编辑（原 details 平铺） -->
-                    <div class="stack">
-                        <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
-                        <div style="padding:6px 0; display:flex; flex-direction:column; gap:6px;">
+                    <!-- 全局词库编辑（原 details 平铺；2.1.1 加折叠：默认展开，标题行常驻） -->
+                    <div class="stack gl-collapsible">
+                        <div class="action-row gl-collapse-header">
+                            <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
+                            <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
+                                    aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
+                                <span class="console-collapse-icon">▾</span>
+                            </button>
+                        </div>
+                        <div class="gl-tab-content gl-collapsible-content" style="padding:6px 0;">
                             <!-- 翻译术语 Tab（legacy 性暗示替换 Tab 已随 legacy 管线删除） -->
                             <div id="glTabGlossary">
                                 <table id="refineGlossTable" style="width:var(--w-full); border-collapse:collapse;">
@@ -409,16 +415,20 @@
                         </div>
                     </div>
 
-                    <!-- 学习词库只读查看（自学习写入 config/glossary_learned.csv） -->
-                    <div class="stack" style="margin-top:10px;">
-                        <div class="action-row">
+                    <!-- 学习词库只读查看（自学习写入 config/glossary_learned.csv；2.1.1 加折叠：默认展开，标题行含刷新按钮与状态 span 常驻） -->
+                    <div class="stack gl-collapsible" style="margin-top:10px;">
+                        <div class="action-row gl-collapse-header">
                             <div class="block-title" data-i18n="gl_learned_title">学习词库</div>
+                            <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
+                                    aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
+                                <span class="console-collapse-icon">▾</span>
+                            </button>
                             <button type="button" id="glLearnedReloadBtn" class="btn btn-ghost btn-sm" data-i18n="gl_learned_reload">刷新</button>
                             <span id="glLearnedStats" class="muted"></span>
                             <span id="glLearnedStatus" class="muted status-err"></span>
                         </div>
-                        <div class="muted" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
-                        <table id="glLearnedTable" style="width:var(--w-full); border-collapse:collapse;">
+                        <div class="muted gl-collapsible-content" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
+                        <table id="glLearnedTable" class="gl-collapsible-content" style="width:var(--w-full); border-collapse:collapse;">
                             <thead><tr>
                                 <th style="text-align:left; width:var(--w-gl-source);" data-i18n="th_source">原文词条</th>
                                 <th style="text-align:left;" data-i18n="th_target">期望译文</th>
@@ -426,8 +436,8 @@
                             </tr></thead>
                             <tbody></tbody>
                         </table>
-                        <div class="empty-guide" id="glLearnedEmpty" style="display:none;" data-i18n="gl_learned_empty">尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。</div>
-                        <div id="glLearnedMore" class="muted" style="display:none;"></div>
+                        <div class="empty-guide gl-collapsible-content" id="glLearnedEmpty" style="display:none;" data-i18n="gl_learned_empty">尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。</div>
+                        <div id="glLearnedMore" class="muted gl-collapsible-content" style="display:none;"></div>
                     </div>
                 </div>
 
@@ -530,8 +540,7 @@
                             <label class="inline-field">
                                 <input type="checkbox" id="refineGl2" checked> <span data-i18n="gl2_label">词库→阶段B</span>
                             </label>
-                            <label class="inline-field" data-i18n-title="sf_title" title="控制翻译开始前对原文可疑内容的清理力度，档位越严删得越多，通常保持默认档位即可。
-技术细节：闸门0 送翻前源侧幻觉检测档位：严格=叠加启发式删除 | 标准=仅明确幻觉删除 | 关闭=关闭检测">
+                            <label class="inline-field" data-i18n-title="sf_title" title="翻译前自动清理原文里的乱码、复读等可疑内容。严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。">
                                 <span data-i18n="source_filter_label">源侧检测</span>
                                 <select id="refineSourceFilter" class="form-select compact" style="width:var(--w-batch);">
                                     <option value="strict" data-i18n="sf_strict">严格</option>

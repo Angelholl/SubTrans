@@ -121,7 +121,7 @@ const MSG = {
     profile_local: '本地·严格',
     profile_cloud: '云端·宽松',
     ctx_label: '上下文窗口',
-    ctx_title: '本地模型上下文窗口：留空=用缺省 16384（通用保守值，可经 config/user_settings.json 或环境变量 SUBTRANSJAV_V2_CTX_LOCAL 调整）；显式填写时启动后管线自动按此值对齐引擎（覆盖 LM Studio 手工设置），并据此收紧批大小。16GB 显存建议 16384~22272；22272 为作者 16GB 单卡档案值（示例），非缺省',
+    ctx_title: '模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；只有当翻译报错提示文字被截断或超长时，才需要把它调大。',
     ctx_placeholder: '缺省 16384',
     cleaner_dir_label: '净语配置目录',
     cleaner_dir_placeholder: '留空=自动查找（config/templates→包内默认）',
@@ -195,7 +195,7 @@ const MSG = {
     sf_strict: '严格',
     sf_default: '标准',
     sf_off: '关闭',
-    sf_title: '控制翻译开始前对原文可疑内容的清理力度，档位越严删得越多，通常保持默认档位即可。\n技术细节：闸门0 送翻前源侧幻觉检测档位：严格=叠加启发式删除 | 标准=仅明确幻觉删除 | 关闭=关闭检测',
+    sf_title: '翻译前自动清理原文里的乱码、复读等可疑内容。严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。',
     synopsis_label: '剧情自摘要',
     synopsis_title: '剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容',
     adaptive_thresholds_label: '阈值自适应',
@@ -425,6 +425,8 @@ const MSG = {
     // 控制台折叠
     console_collapse: '折叠控制台',
     console_expand: '展开控制台',
+    // 词库页区块折叠按钮（2.1.1 owner 痛点批：单键双向文案，展开/折叠态通用）
+    collapse_toggle: '折叠/展开',
 };
 
 // i18n 注入：DOMContentLoaded 时把 MSG 写回带 data-i18n* 标记的元素
@@ -2788,6 +2790,21 @@ function switchTab(tabId) {
     // 学习词库只读刷新（词库与模板页）
     const glLearnedReload = $('glLearnedReloadBtn');
     if (glLearnedReload) glLearnedReload.addEventListener('click', glLearnedLoad);
+    // 词库页区块折叠（2.1.1 owner 痛点批：默认展开；点标题或箭头按钮均可切换，
+    // 会话内生效不持久化；刷新按钮等标题行内其余控件不受影响）
+    document.querySelectorAll('.gl-collapsible').forEach(stack => {
+      const btn = stack.querySelector('.gl-collapse-btn');
+      const title = stack.querySelector('.gl-collapse-header .block-title');
+      const toggle = () => {
+        const collapsed = stack.classList.toggle('collapsed');
+        if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      };
+      if (btn) {
+        btn.setAttribute('aria-label', MSG.collapse_toggle);
+        btn.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+      }
+      if (title) title.addEventListener('click', toggle);
+    });
     const glDelBtn = $('refineGlDel');
     if (glDelBtn) glDelBtn.addEventListener('click', glDel);
     const glImpBtn = $('refineGlImport');

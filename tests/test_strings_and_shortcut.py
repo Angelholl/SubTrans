@@ -275,8 +275,11 @@ def test_html_has_no_unmarked_user_visible_chinese():
 # ---------------------------------------------------------------------------
 
 # 本批改写的 tooltip 键（app.js MSG 值 ↔ index.html 内联 title 双侧同步钉）
+# 2.1.1 owner 痛点批：sf_title 文案简化为面向普通用户的通俗句式，
+# 不再满足两级句式结构（「技术细节：」段已删），从本元组移出，
+# 由下方 _SIMPLIFIED_TITLE_TEXTS 专属钉接管（基线只增不减）。
 _ADVANCED_REWRITE_TITLE_KEYS = (
-    "sf_title", "adaptive_thresholds_title", "tm_enable_title",
+    "adaptive_thresholds_title", "tm_enable_title",
     "tm_threshold_title", "resume_title", "force_resume_title",
 )
 _ADVANCED_NOTICE_KEY = "advanced_settings_notice"
@@ -340,6 +343,36 @@ def test_advanced_settings_notice_value_sync_between_html_and_js():
     """
     assert _js_msg_value(_ADVANCED_NOTICE_KEY) == _ADVANCED_NOTICE_TEXT
     assert _html_inline_text(_ADVANCED_NOTICE_KEY) == _ADVANCED_NOTICE_TEXT
+
+
+# ---------------------------------------------------------------------------
+# 2.1.1 owner 痛点批：tooltip 简化钉（ctx_title / sf_title 面向普通用户改写）
+# ---------------------------------------------------------------------------
+
+# 简化后的 tooltip 文案（app.js MSG 值 ↔ index.html 内联 title 双侧一致 + 内容钉）；
+# 两键均为单行通俗句式：无换行、无「技术细节：」段、无环境变量名/闸门0 等内部术语
+_SIMPLIFIED_TITLE_TEXTS = {
+    "ctx_title": (
+        "模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；"
+        "只有当翻译报错提示文字被截断或超长时，才需要把它调大。"
+    ),
+    "sf_title": (
+        "翻译前自动清理原文里的乱码、复读等可疑内容。"
+        "严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。"
+    ),
+}
+
+
+@pytest.mark.parametrize("key, expected", sorted(_SIMPLIFIED_TITLE_TEXTS.items()))
+def test_simplified_tooltip_sync_and_text(key, expected):
+    """简化 tooltip：双侧逐字节一致，且钉通俗句式（去两级结构与内部术语）。"""
+    js_value = _js_msg_value(key)
+    assert js_value == expected, f"{key}: app.js MSG 值偏离简化文案钉"
+    assert _html_inline_title(key) == expected, \
+        f"{key}: index.html 内联 title 与 app.js MSG 值不一致"
+    # 单行通俗句式：无换行、无「技术细节：」段
+    assert "\n" not in js_value
+    assert "技术细节" not in js_value
 
 
 # ---------------------------------------------------------------------------

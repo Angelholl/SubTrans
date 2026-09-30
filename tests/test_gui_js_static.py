@@ -574,3 +574,59 @@ def test_guide_txt_view_and_learned_glossary_pinned():
         assert f'data-i18n="{i18n}"' in html, f"缺少 data-i18n: {i18n}"
     bind = _extract_function(source, "bindDom")
     assert "glLearnedReloadBtn" in bind, "学习词库刷新按钮必须绑定 click"
+
+
+def test_glossary_blocks_collapsible_pinned():
+    """2.1.1 owner 痛点批：词库页两区块折叠契约（静态断言）。
+
+    全局词库编辑 / 学习词库两 .stack 默认展开（HTML 无 collapsed 类）；
+    标题行常驻（含学习词库刷新按钮与状态 span），折叠只隐藏
+    .gl-collapsible-content 内容区；点标题或箭头按钮均可切换；
+    折叠按钮可访问名称走 MSG.collapse_toggle（data-i18n-title 挂
+    title，aria-label 由 bindDom 补挂）；状态不持久化（无 localStorage）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # 两区块均挂 .gl-collapsible 且默认展开（无内联 collapsed 类）
+    assert html.count('class="stack gl-collapsible"') == 2, \
+        "两个词库区块均应挂 gl-collapsible（全局词库编辑 + 学习词库）"
+    assert html.count(
+        'class="stack gl-collapsible" style="margin-top:10px;"') == 1, \
+        "学习词库区块缺少 gl-collapsible"
+    assert re.search(r'class="stack[^"]*collapsed', html) is None, \
+        "词库区块必须默认展开"
+    # 每区块一个折叠按钮：aria-expanded 初值 true + 可访问名称走 MSG 键
+    assert html.count("gl-collapse-btn") == 2, \
+        "折叠按钮应恰为每区块一个（共 2 个）"
+    for frag in ('aria-expanded="true"', 'data-i18n-title="collapse_toggle"',
+                 'console-collapse-icon'):
+        assert html.count(frag) >= 2, f"每区块折叠按钮缺少: {frag}"
+    # 标题行常驻：学习词库标题行（第二个 gl-collapse-header）包含
+    # 刷新按钮与状态 span（行内元素位于标题行开标签之后）
+    learned_stack_pos = html.index(
+        'class="stack gl-collapsible" style="margin-top:10px;"')
+    learned_header_pos = html.index("gl-collapse-header", learned_stack_pos)
+    for anchor in ("gl_learned_title", "glLearnedReloadBtn",
+                   "glLearnedStats", "glLearnedStatus"):
+        assert html.index(f'data-i18n="{anchor}"' if anchor == "gl_learned_title"
+                          else f'id="{anchor}"') > learned_header_pos, \
+            f"{anchor} 应位于学习词库标题行内"
+    # 折叠按钮不与既有 id 锚冲突（console 折叠按钮 id 不变）
+    assert html.count('id="consoleCollapseBtn"') == 1
+
+    source = _app_js_source()
+    assert "collapse_toggle" in _js_msg_keys(), "MSG 缺少 collapse_toggle 键"
+    bind = _extract_function(source, "bindDom")
+    for frag in ("querySelectorAll('.gl-collapsible')", "gl-collapse-btn",
+                 "gl-collapse-header", "collapse_toggle",
+                 "aria-expanded", "classList.toggle('collapsed')"):
+        assert frag in bind, f"bindDom 缺少折叠接线: {frag}"
+    # 状态不持久化：折叠接线不写 localStorage / bridge 存储
+    assert "localStorage" not in bind, "折叠状态不应持久化"
+    # CSS：折叠只隐藏内容区，标题行（.gl-collapse-header）不隐藏
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert ".gl-collapsible.collapsed .gl-collapsible-content { display: none; }" \
+        in css, "style.css 缺少内容区隐藏规则"
+    assert ".gl-collapsible.collapsed .gl-collapse-header" not in css, \
+        "标题行不得随折叠隐藏"
+    assert "rotate(-90deg)" in css.split("gl-tab-content", 1)[-1], \
+        "折叠态箭头应旋转（transform 过渡）"

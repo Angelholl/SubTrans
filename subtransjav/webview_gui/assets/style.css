@@ -1729,6 +1729,15 @@ button:focus {
 .console-collapsible.collapsed .console-collapse-btn .console-collapse-icon {
   transform: rotate(-90deg); }
 
+/* ---- 词库页区块折叠（2.1.1 owner 痛点批：默认展开，标题行常驻可点；
+   箭头旋转复用 .console-collapse-icon 过渡；状态会话内生效不持久化；
+   全部走主题变量，暗色主题无需另设规则） ---- */
+.gl-tab-content { display: flex; flex-direction: column; gap: 6px; }
+.gl-collapse-header .block-title { cursor: pointer; }
+.gl-collapsible.collapsed .gl-collapsible-content { display: none; }
+.gl-collapsible.collapsed .gl-collapse-btn .console-collapse-icon {
+  transform: rotate(-90deg); }
+
 /* ---- service quick bar (moved from old topbar, theme vars only) ---- */
 .service-quick-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 8px 10px; }
