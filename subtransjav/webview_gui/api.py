@@ -1475,6 +1475,24 @@ class TranslateAPI:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def refine_pick_guide_json(self) -> dict[str, Any]:
+        """打开其他质量报告导读 json 文件选择对话框
+        （D2026-0930-07 owner 痛点批：替代原粘贴路径行；cancelled 标记
+        供前端区分用户取消——静默返回，其余 error 走状态 span）"""
+        try:
+            windows = webview.windows
+            if not windows:
+                return {"success": False, "error": msg("no_active_window")}
+            result = windows[0].create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=False,
+                file_types=(msg("file_type_guide"), msg("file_type_all")))
+            if result:
+                return {"success": True, "path": result[0]}
+            return {"success": False, "cancelled": True,
+                    "error": msg("dialog_cancelled")}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def refine_pick_csv_save(self) -> dict[str, Any]:
         """词库导出保存对话框"""
         try:

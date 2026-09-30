@@ -328,9 +328,6 @@ const MSG = {
     guide_loaded: p => `已加载：${p}`,
     guide_load_failed: m => `加载失败：${m}`,
     guide_open_other_btn: '📂 打开其他质量报告导读',
-    guide_custom_placeholder: '粘贴质量报告完整路径（*_质量报告导读.json 或 *_质量报告.txt）',
-    guide_custom_load_btn: '加载',
-    guide_custom_need_path: '请先粘贴报告文件完整路径（导读 json 或报告 txt）',
     guide_source_group_title: '来源',
     guide_txt_loaded: p => `已加载报告全文（只读）：${p}`,
     guide_txt_truncated_note: '（报告过长，仅显示前 100 万字符）',
@@ -2329,12 +2326,9 @@ function switchTab(tabId) {
     let p;
     const isCustom = customPath != null;
     if (isCustom) {
+      // customPath 来自文件对话框选中结果（refine_pick_guide_json），
+      // 后端 read_output_artifact 仍有白名单后缀 + 目录守卫兜底
       p = String(customPath).trim();
-      if (!p) {
-        guideStatus(MSG.guide_custom_need_path);
-        guideCustomStatus(MSG.guide_custom_need_path, true);
-        return;
-      }
     } else {
       p = guidePath();
       if (!p) {
@@ -2761,22 +2755,27 @@ function switchTab(tabId) {
     const quickProv = $('refineServiceQuick');
     if (quickProv) quickProv.addEventListener('change',
       () => applyServiceQuickProvider(true));
-    // 「打开其他质量报告导读」：切换单行输入行 + 显式路径加载（只读端点）
+    // 「打开其他质量报告导读」：弹原生文件对话框选择导读 json
+    // （D2026-0930-07 owner 痛点批，替代原粘贴路径行）；选中即走
+    // guideLoad 显式路径链路，用户取消静默返回，无窗口/异常显示在状态 span
     const guideOtherBtn = $('guideOpenOtherBtn');
-    if (guideOtherBtn) guideOtherBtn.addEventListener('click', () => {
-      const row = $('guideCustomRow');
-      if (row) row.style.display
-        = row.style.display === 'none' ? '' : 'none';
-    });
-    const guideCustomBtn = $('guideCustomLoadBtn');
-    if (guideCustomBtn) guideCustomBtn.addEventListener('click', () => {
-      guideLoad(false, ($('guideCustomInput') || {}).value || '');
-    });
-    const guideCustomInp = $('guideCustomInput');
-    if (guideCustomInp) guideCustomInp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        guideLoad(false, guideCustomInp.value || '');
+    if (guideOtherBtn) guideOtherBtn.addEventListener('click', async () => {
+      if (!window.pywebview || !window.pywebview.api) {
+        guideCustomStatus(MSG.api_not_ready, true);
+        return;
+      }
+      try {
+        const r = await window.pywebview.api.refine_pick_guide_json();
+        if (r && r.success && r.path) {
+          guideLoad(false, r.path);
+        } else if (!r || !r.cancelled) {
+          // 用户取消（cancelled）静默返回；其余错误（如无活动窗口）静默显示在状态 span，不弹窗
+          guideCustomStatus(
+            MSG.guide_load_failed((r && r.error) || MSG.unknownError), true);
+        }
+      } catch (e) {
+        guideCustomStatus(MSG.guide_load_failed(
+          e && e.message ? e.message : String(e)), true);
       }
     });
 

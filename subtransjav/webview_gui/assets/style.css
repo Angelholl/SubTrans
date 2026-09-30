@@ -1737,6 +1737,9 @@ button:focus {
 .gl-collapsible.collapsed .gl-collapsible-content { display: none; }
 .gl-collapsible.collapsed .gl-collapse-btn .console-collapse-icon {
   transform: rotate(-90deg); }
+/* 2.1.1 owner 痛点批（D2026-0930-07）：词库两处折叠箭头放大一倍；
+   line-height 钉 1 防 20px 字形撑高 btn-sm（min-height 24px），行内居中不受影响 */
+.gl-collapse-btn .console-collapse-icon { font-size: 20px; line-height: 1; }
 
 /* ---- service quick bar (moved from old topbar, theme vars only) ---- */
 .service-quick-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

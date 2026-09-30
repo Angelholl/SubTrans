@@ -127,6 +127,7 @@ MSG = {
 
     # ---- 文件对话框类型 / 取消（api.py）----
     "file_type_glossary": "词库文件 (*.csv;*.txt)",
+    "file_type_guide": "质量报告导读 json (*.json)",
     "file_type_csv": "CSV 文件 (*.csv)",
     "file_type_sqlite": "SQLite 数据库 (*.db)",
     "file_type_all": "所有文件 (*.*)",

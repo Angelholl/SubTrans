@@ -1567,3 +1567,18 @@ def test_build_refine_args_cleaner_config_dir_flag():
             opts["cleaner_config_dir"] = empty
         joined2 = " ".join(_build_refine_args(opts))
         assert "--cleaner-config" not in joined2
+
+
+# ---------------------------------------------------------------------------
+# 文件对话框桥（D2026-0930-07 owner 痛点批）：无活动窗口 error 分支；
+# 真实对话框弹出留 owner 真机验收（headless 无法验证）
+# ---------------------------------------------------------------------------
+
+def test_refine_pick_guide_json_no_active_window(gui_api_obj, monkeypatch):
+    """无活动窗口时导读 json 对话框桥走 error 分支（no_active_window）。"""
+    import subtransjav.webview_gui.api as api_mod
+    monkeypatch.setattr(api_mod.webview, "windows", [])
+    r = gui_api_obj.refine_pick_guide_json()
+    assert r["success"] is False
+    assert r["error"] == "无活动窗口"
+    assert "cancelled" not in r, "无窗口属环境错误，不得误标为用户取消"

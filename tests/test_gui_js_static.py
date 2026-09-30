@@ -521,24 +521,32 @@ def test_glossary_learn_has_tooltip():
 
 
 def test_guide_custom_path_entry_pinned():
-    """「打开其他质量报告导读」入口：单行输入（无文件对话框 API）+
-    显式路径加载，复用只读端点 read_output_artifact。"""
+    """「打开其他质量报告导读」入口：原生文件对话框选择（D2026-0930-07
+    owner 痛点批，替代原粘贴路径行），选中即走 guideLoad 显式路径链路，
+    复用只读端点 read_output_artifact；桥为 refine_pick_guide_json。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    for anchor in ("guideOpenOtherBtn", "guideCustomRow",
-                   "guideCustomInput", "guideCustomLoadBtn",
-                   "guideCustomStatus"):
-        assert f'id="{anchor}"' in html, f"缺少其他导读入口锚点: {anchor}"
+    # 入口按钮与状态 span 保留；粘贴行三锚点必须整体移除
+    assert 'id="guideOpenOtherBtn"' in html, "缺少其他导读入口锚点"
+    assert html.count('id="guideCustomStatus"') == 1, \
+        "状态 span 必须恰出现一次"
+    for anchor in ("guideCustomRow", "guideCustomInput",
+                   "guideCustomLoadBtn"):
+        assert f'id="{anchor}"' not in html, f"粘贴行锚点应已移除: {anchor}"
     source = _app_js_source()
     body = _extract_function(source, "guideLoad")
     assert "customPath" in body, "guideLoad 必须支持显式路径覆盖"
-    assert "guide_custom_need_path" in body, "空路径必须行内提示"
     bind = _extract_function(source, "bindDom")
     assert "guideOpenOtherBtn" in bind, "入口按钮必须绑定 click"
-    assert "guideCustomLoadBtn" in bind, "加载按钮必须绑定 click"
+    assert "refine_pick_guide_json" in bind, \
+        "入口必须调用文件对话框桥 refine_pick_guide_json"
+    assert "guideCustomLoadBtn" not in source and \
+        "guideCustomInput" not in source, \
+        "粘贴行按钮/输入框绑定应已清理"
     keys = _js_msg_keys()
-    for key in ("guide_open_other_btn", "guide_custom_placeholder",
-                "guide_custom_load_btn", "guide_custom_need_path"):
-        assert key in keys, f"MSG 缺少其他导读入口键: {key}"
+    assert "guide_open_other_btn" in keys, "MSG 缺少其他导读入口键"
+    for key in ("guide_custom_placeholder", "guide_custom_load_btn",
+                "guide_custom_need_path"):
+        assert key not in keys, f"MSG 残留失效键: {key}"
 
 
 def test_guide_txt_view_and_learned_glossary_pinned():
