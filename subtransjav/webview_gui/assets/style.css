@@ -618,7 +618,7 @@ button:focus { outline: none; }
     overflow-y: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
-    line-height: 1.7;
+    line-height: 1.55;   /* D2026-0930-09 批3：收紧行距提升单屏信息密度 */
     min-height: 180px;
     max-height: 420px;
     scroll-behavior: smooth;
