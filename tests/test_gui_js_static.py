@@ -638,3 +638,89 @@ def test_glossary_blocks_collapsible_pinned():
         "标题行不得随折叠隐藏"
     assert "rotate(-90deg)" in css.split("gl-tab-content", 1)[-1], \
         "折叠态箭头应旋转（transform 过渡）"
+
+
+# ---------------------------------------------------------------------------
+# 角色卡目录下拉动态化（D2026-0930-07-追加1 范围定稿2/3）：
+# 固定 option 移除 + 动态渲染 esc 钉 + datalist 接线钉
+# ---------------------------------------------------------------------------
+
+def test_template_stage_fixed_options_removed():
+    """index.html 的 #refineTemplateStage 不再内嵌固定 A/B option：
+    选项全部由 refine_list_templates 动态填充（HTML 骨架不留裸中文）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<select id="refineTemplateStage"[^>]*>(.*?)</select>',
+                  html, re.S)
+    assert m, "index.html 未找到 refineTemplateStage 下拉"
+    assert "<option" not in m.group(1), \
+        "固定 option 必须移除（含 data-i18n 引用），改由 JS 动态填充"
+    assert "tpl_stage_a" not in html.split('id="refineTemplateStage"')[1]
+    keys = _js_msg_keys()
+    assert {"tpl_stage_a", "tpl_stage_b"}.issubset(keys), \
+        "动态回落仍需复用 tpl_stage_a/b MSG 键渲染"
+
+
+def test_template_options_render_esc_pinned():
+    """动态渲染函数钉：列目录 → 填充下拉；option value/label 全量 esc()
+    （readdir 结果是外部输入）；目录空回落固定 A/B（MSG 渲染）。"""
+    source = _app_js_source()
+    body = _extract_function(source, "tplRenderOptions")
+    for frag in ("refine_list_templates", "esc(it.value)", "esc(it.label)",
+                 "pkg_fallback", "MSG.tpl_stage_a", "MSG.tpl_stage_b",
+                 "canonical"):
+        assert frag in source, f"动态渲染缺少关键接线: {frag}"
+    # esc 覆盖 option 的 value 与 label 两处（innerHTML 注入面）
+    assert body.count("esc(") >= 2, "option 渲染必须全量 esc()"
+
+
+def test_template_load_save_by_name_pinned():
+    """load-by-name / save-by-name 钉：非 'A'/'B' 选项值视为文件名，
+    load 传 refine_get_template 第三参，save 传 refine_save_template
+    第四参；编辑器区显示当前加载完整路径（新 MSG 键）。"""
+    source = _app_js_source()
+    load = _extract_function(source, "tplLoad")
+    assert "refine_get_template(idx, dir, idx)" in load, \
+        "文件名选项必须走 load-by-name 三参调用"
+    save = _extract_function(source, "tplSave")
+    assert "refine_save_template(" in save and "isStageTag ? null : idx" in save, \
+        "文件名选项必须走 save-by-name 四参调用"
+    for frag in ("refineTplLoadedPath", "tpl_loaded_path"):
+        assert frag in source, "编辑器区必须显示当前加载路径"
+    assert {"tpl_loaded_path", "tpl_dir_empty_hint",
+            "tpl_dir_empty_datalist"}.issubset(_js_msg_keys())
+
+
+def test_switch_tab_glossary_refresh_hook_pinned():
+    """switchTab 到 tab-glossary 触发词库页初始化钩子（动态填充下拉）。"""
+    body = _extract_function(_app_js_source(), "switchTab")
+    assert "'tab-glossary'" in body and "__refineTplTabHook" in body, \
+        "switchTab 必须带 tab-glossary 初始化钩子"
+
+
+def test_direction_card_datalist_pinned():
+    """高级参数页 #directionCardS1/#directionCardS3 挂同一列表生成的
+    <datalist>：option value=完整路径（目录+文件名）、不带 label；
+    空目录注入 disabled 提示项；自由输入语义不变（仍读 .value）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for input_id in ("directionCardS1", "directionCardS3"):
+        m = re.search(rf'<input id="{input_id}"[^>]*>', html)
+        assert m, f"index.html 未找到 {input_id}"
+        assert 'list="directionCardList"' in m.group(0), \
+            f"{input_id} 必须挂 directionCardList datalist"
+    assert 'id="directionCardList"' in html, "缺 datalist 容器"
+    source = _app_js_source()
+    body = _extract_function(source, "tplRenderDatalist")
+    assert "value=\"\" disabled" in body.replace("'", '"'), \
+        "空目录必须注入 disabled 提示项"
+    assert "dir + sep + f.name" in body, "option value 必须是完整路径"
+    # 文件 option 一律无 label 文本节点（value 后立即闭合 '>'）；
+    # disabled 提示项文案（自身 MSG 键）是唯一例外且必须 esc()
+    file_opt = [ln for ln in body.splitlines() if "esc(dir ?" in ln]
+    assert file_opt, "未找到文件 option 渲染行"
+    close_frag = "+ " + chr(39) + chr(34) + chr(62) + chr(39)  # JS: + '">
+    assert "</option>" not in file_opt[0] and close_frag in file_opt[0], \
+        "datalist 文件 option 不得带 label 文本节点"
+    assert "esc(MSG.tpl_dir_empty_datalist)" in body, "提示项文案须 esc()"
+    # 自由输入语义不变：启动参数仍读输入框 .value（方向参数化钉
+    # test_build_refine_args_direction_* 的前端来源）
+    assert "direction_card_s1: ($('directionCardS1') || {}).value || ''" in source

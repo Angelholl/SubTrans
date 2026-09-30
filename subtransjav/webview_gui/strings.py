@@ -116,6 +116,9 @@ MSG = {
     "invalid_stage_tag": "无效阶段标识：{tag}（应为 A 或 B）",
     "template_file_missing": "模板文件不存在：{path}",
     "template_b_note": "阶段B(审校抛光)的硬性豁免段由引擎运行时自动追加，无需写在本卡内",
+    # 角色卡文件名参数位守卫（D2026-0930-07-追加1 必改②/⑤）
+    "template_filename_invalid": "角色卡文件名不合法（仅允许目录内纯 .txt 文件名）：{name}",
+    "template_save_not_allowed": "仅允许保存角色卡目录中已存在的 .txt 文件或默认角色卡：{name}",
 
     # ---- 质量报告导读（api.py）----
     "guide_path_empty": "路径为空，请先指定导读文件",

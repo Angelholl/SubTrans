@@ -88,6 +88,40 @@ def _ensure_template_dir(templates_dir) -> str:
     return resolved
 
 
+def _safe_template_basename(filename) -> str | None:
+    """角色卡**文件名参数位**守卫（D2026-0930-07-追加1 必改②/⑤）。
+
+    仅接受"纯文件名"：无目录成分、无路径分隔符、非空且 .txt 后缀。
+    含任何穿越/嵌套/绝对路径形态（``../../x.txt``、``/abs/x.txt``、
+    ``sub/x.txt``）一律返回 None，由调用方拒绝——目录位守卫
+    （_ensure_template_dir）之外补齐文件名参数位的穿越防线。
+    """
+    raw = str(filename or "").strip()
+    if not raw or raw != os.path.basename(raw):
+        return None
+    if "/" in raw or "\\" in raw or raw in (".", ".."):
+        return None
+    if not raw.lower().endswith(".txt"):
+        return None
+    return raw
+
+
+def _template_file_in_dir(d: str, base: str) -> str | None:
+    """join 后 resolve 复核：结果必须仍落在守卫目录内（双保险）。
+
+    返回绝对路径；越出目录（平台别名/符号链接漂移等异常形态）返回 None。
+    """
+    p = os.path.join(d, base)
+    try:
+        real_p = os.path.realpath(p)
+        real_d = os.path.realpath(d)
+    except OSError:
+        return None
+    if os.path.normcase(os.path.dirname(real_p)) != os.path.normcase(real_d):
+        return None
+    return p
+
+
 # Security guards live in a webview-free module so they are testable on CI
 from .security import (  # noqa: E402
     _resolve_safe_path,
@@ -1362,23 +1396,86 @@ class TranslateAPI:
             _log_exc("refine_get_learned_glossary")
             return {"success": False, "error": str(e)}
 
-    def refine_get_template(self, stage_index, templates_dir: str = None) -> dict[str, Any]:
-        """读取角色卡原文。stage_index: 'A'|'B'（v2 两阶段）。"""
+    def refine_list_templates(self, templates_dir: str = None) -> dict[str, Any]:
+        """列出角色卡目录顶层 .txt 文件（下拉动态化，追加1 必改①）。
+
+        - 目录口径与 _ensure_template_dir 一致（服务端默认目录或本会话
+          登记目录），不新增任意目录列举能力；
+        - 仅顶层不递归、仅 .txt、返回相对文件名（含复合后缀卡与 README
+          类文件，"所见即所编"）；
+        - 目录不存在/为空 → files=[]、pkg_fallback=True，**不创建目录**
+          （前端据此回落固定 A/B 两项）；
+        - ``canonical`` 附带 V2_TEMPLATE_FILES 精确文件名，供前端把
+          阶段A/B 标注排最前（GUI 侧不重复硬编码文件名）。
+        """
         try:
             from subtransjav.refine.pipeline_v2 import V2_TEMPLATE_FILES
-            tag = str(stage_index).upper()
-            if tag not in V2_TEMPLATE_FILES:
-                return {"success": False,
-                        "error": msg("invalid_stage_tag", tag=stage_index)}
             d = _ensure_template_dir(templates_dir)
-            p = os.path.join(d, V2_TEMPLATE_FILES[tag])
+            files: list[dict[str, Any]] = []
+            if d and os.path.isdir(d):
+                try:
+                    names = sorted(os.listdir(d))
+                except OSError:
+                    names = []
+                for name in names:
+                    full = os.path.join(d, name)
+                    if os.path.isfile(full) and name.lower().endswith(".txt"):
+                        try:
+                            mtime = os.path.getmtime(full)
+                        except OSError:
+                            mtime = 0.0
+                        files.append({"name": name, "mtime": mtime})
+            return {
+                "success": True,
+                "dir": d,
+                "files": files,
+                "pkg_fallback": not files,
+                "canonical": dict(V2_TEMPLATE_FILES),
+            }
+        except Exception as e:
+            _log_exc("refine_list_templates")
+            return {"success": False, "error": str(e)}
+
+    def refine_get_template(self, stage_index, templates_dir: str = None,
+                            filename: str = None) -> dict[str, Any]:
+        """读取角色卡原文。
+
+        stage_index: 'A'|'B'（v2 两阶段，canonical 路径）；
+        filename（追加1 必要⑤ load-by-name）：有效目录内纯文件名直读，
+        守卫同保存端（basename 化 + resolve 在目录内 + .txt）；GUI load
+        不做 pkg 回落——文件缺失走既有 template_file_missing 分支。
+        """
+        try:
+            from subtransjav.refine.pipeline_v2 import V2_TEMPLATE_FILES
+            d = _ensure_template_dir(templates_dir)
+            note = ""
+            if filename is not None and str(filename).strip():
+                base = _safe_template_basename(filename)
+                if base is None:
+                    return {"success": False,
+                            "error": msg("template_filename_invalid",
+                                         name=filename)}
+                p = _template_file_in_dir(d, base)
+                if p is None:
+                    return {"success": False,
+                            "error": msg("template_filename_invalid",
+                                         name=filename)}
+                if base == V2_TEMPLATE_FILES.get("B"):
+                    note = msg("template_b_note")
+            else:
+                tag = str(stage_index).upper()
+                if tag not in V2_TEMPLATE_FILES:
+                    return {"success": False,
+                            "error": msg("invalid_stage_tag", tag=stage_index)}
+                p = os.path.join(d, V2_TEMPLATE_FILES[tag])
+                if tag == "B":
+                    note = msg("template_b_note")
             if not os.path.isfile(p):
                 return {"success": False,
                         "error": msg("template_file_missing", path=p), "path": p}
             with open(p, encoding="utf-8") as _f:
                 text = _f.read()
-            return {"success": True, "path": p, "text": text,
-                    "note": msg("template_b_note") if tag == "B" else ""}
+            return {"success": True, "path": p, "text": text, "note": note}
         except Exception as e:
             _log_exc("refine_get_template")
             return {"success": False, "error": str(e)}
@@ -1439,17 +1536,46 @@ class TranslateAPI:
             return {"success": False, "error": str(e)}
 
     def refine_save_template(self, stage_index, text: str,
-                             templates_dir: str = None) -> dict[str, Any]:
-        """保存角色卡文本（stage_index: 'A'|'B'）"""
+                             templates_dir: str = None,
+                             filename: str = None) -> dict[str, Any]:
+        """保存角色卡文本。
+
+        stage_index: 'A'|'B'（canonical 路径，现状行为保留兼容）；
+        filename（追加1 必改② 值域闭环）：允许保存到"有效目录内、
+        .txt 后缀、且该文件名 ∈ refine_list_templates 返回集（目录内
+        既有顶层 .txt）或 canonical 默认卡名"的文件。守卫三重：
+        basename 化（纯文件名，拒穿越/嵌套/绝对路径）+ join 后 resolve
+        仍在有效目录内 + 值域成员校验；pkg_fallback（目录为空）时保存
+        canonical 名 = 新建默认文件，照常放行。
+        """
         try:
             from subtransjav.refine.pipeline_v2 import V2_TEMPLATE_FILES
-            tag = str(stage_index).upper()
-            if tag not in V2_TEMPLATE_FILES:
-                return {"success": False,
-                        "error": msg("invalid_stage_tag", tag=stage_index)}
             d = _ensure_template_dir(templates_dir)
+            if filename is not None and str(filename).strip():
+                base = _safe_template_basename(filename)
+                if base is None:
+                    return {"success": False,
+                            "error": msg("template_filename_invalid",
+                                         name=filename)}
+                p = _template_file_in_dir(d, base)
+                if p is None:
+                    return {"success": False,
+                            "error": msg("template_filename_invalid",
+                                         name=filename)}
+                # 值域成员校验：目录内既有 .txt（=list 返回集）或
+                # canonical 默认卡名（目录为空时新建默认文件的放行路径）
+                if base not in V2_TEMPLATE_FILES.values() \
+                        and not os.path.isfile(p):
+                    return {"success": False,
+                            "error": msg("template_save_not_allowed",
+                                         name=base)}
+            else:
+                tag = str(stage_index).upper()
+                if tag not in V2_TEMPLATE_FILES:
+                    return {"success": False,
+                            "error": msg("invalid_stage_tag", tag=stage_index)}
+                p = os.path.join(d, V2_TEMPLATE_FILES[tag])
             os.makedirs(d, exist_ok=True)
-            p = os.path.join(d, V2_TEMPLATE_FILES[tag])
             with open(p, "w", encoding="utf-8") as f:
                 f.write(text or "")
             return {"success": True, "path": p}

@@ -1582,3 +1582,188 @@ def test_refine_pick_guide_json_no_active_window(gui_api_obj, monkeypatch):
     assert r["success"] is False
     assert r["error"] == "无活动窗口"
     assert "cancelled" not in r, "无窗口属环境错误，不得误标为用户取消"
+
+
+# ---------------------------------------------------------------------------
+# 角色卡目录下拉动态化（D2026-0930-07-追加1）：
+# refine_list_templates / refine_save_template 值域闭环 / load-by-name
+# 文件名参数位穿越防线 + canonical 精确匹配语义。
+# ---------------------------------------------------------------------------
+
+def _dyn_tpl_dir() -> Path:
+    """主目录下登记一个会话目录（_ensure_template_dir 白名单内）。"""
+    d = Path.home() / ("subtransjav_tpl_dyn_" + uuid.uuid4().hex[:8])
+    d.mkdir(parents=True, exist_ok=True)
+    register_session_paths([str(d)])
+    return d
+
+
+def test_refine_list_templates_top_level_txt_only(gui_api_obj):
+    """list 端点：仅顶层 .txt（含复合后缀卡/README 类），不递归子目录，
+    非 .txt 排除；canonical 精确文件名随返回值下发。"""
+    d = _dyn_tpl_dir()
+    try:
+        (d / "角色-净语翻译.txt").write_text("A卡", encoding="utf-8")
+        (d / "角色-净语翻译.en2zh.txt").write_text("en2zh卡", encoding="utf-8")
+        (d / "README-说明.txt").write_text("说明", encoding="utf-8")
+        (d / "ignore.csv").write_text("x", encoding="utf-8")
+        sub = d / "sub"
+        sub.mkdir()
+        (sub / "nested.txt").write_text("n", encoding="utf-8")
+        r = gui_api_obj.refine_list_templates(str(d))
+        assert r["success"] is True
+        names = [f["name"] for f in r["files"]]
+        assert "角色-净语翻译.en2zh.txt" in names
+        assert "README-说明.txt" in names
+        assert "ignore.csv" not in names, "非 .txt 必须排除"
+        assert "nested.txt" not in names and "sub" not in names, \
+            "子目录不递归"
+        assert all(os.path.basename(n) == n for n in names), "仅返回相对文件名"
+        assert all(isinstance(f["mtime"], float) for f in r["files"])
+        assert r["pkg_fallback"] is False
+        assert r["dir"] == str(d)
+        assert r["canonical"] == {"A": "角色-净语翻译.txt",
+                                  "B": "角色-审校抛光.txt"}
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_list_templates_empty_dir_pkg_fallback(gui_api_obj):
+    """空目录：files=[]、pkg_fallback=True，且不创建任何文件。"""
+    d = _dyn_tpl_dir()
+    try:
+        r = gui_api_obj.refine_list_templates(str(d))
+        assert r["success"] is True
+        assert r["files"] == [] and r["pkg_fallback"] is True
+        assert list(d.iterdir()) == [], "目录必须保持为空"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_list_templates_missing_dir_no_mkdir(gui_api_obj):
+    """目录不存在：不创建目录，pkg_fallback=True。"""
+    d = Path.home() / ("subtransjav_tpl_absent_" + uuid.uuid4().hex[:8])
+    register_session_paths([str(d)])
+    try:
+        r = gui_api_obj.refine_list_templates(str(d))
+        assert r["success"] is True
+        assert r["files"] == [] and r["pkg_fallback"] is True
+        assert not d.exists(), "list 端点绝不能创建目录"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_list_templates_unregistered_dir_rejected(gui_api_obj):
+    """未登记目录走目录位守卫拒绝（不新增任意目录列举能力）。"""
+    outsider = Path.home() / ("subtransjav_no_such_" + uuid.uuid4().hex[:8])
+    r = gui_api_obj.refine_list_templates(str(outsider))
+    assert r["success"] is False
+
+
+def test_refine_save_template_filename_traversal_rejected(gui_api_obj):
+    """保存文件名参数位穿越载荷（../../x.txt、绝对路径、嵌套目录）拒绝。"""
+    d = _dyn_tpl_dir()
+    try:
+        (d / "README-说明.txt").write_text("r", encoding="utf-8")
+        bad_names = [
+            str(Path(os.pardir) / os.pardir / "x.txt"),     # ../../x.txt
+            str(Path.home() / "evil_cards.txt"),            # 绝对路径
+            str(Path("sub") / "x.txt"),                     # 嵌套目录
+        ]
+        for bad in bad_names:
+            r = gui_api_obj.refine_save_template("A", "穿越", str(d),
+                                                 filename=bad)
+            assert r["success"] is False, f"穿越载荷必须拒绝: {bad}"
+        assert list(d.iterdir()) == [d / "README-说明.txt"], \
+            "拒绝路径不得落盘任何新文件"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_save_template_unlisted_target_rejected(gui_api_obj):
+    """target 不在 list 返回集（目录内不存在的非 canonical 名）→ 拒绝。"""
+    d = _dyn_tpl_dir()
+    try:
+        (d / "README-说明.txt").write_text("r", encoding="utf-8")
+        r = gui_api_obj.refine_save_template("A", "内容", str(d),
+                                             filename="凭空新建卡.txt")
+        assert r["success"] is False
+        assert not (d / "凭空新建卡.txt").exists(), "值域外目标不得落盘"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_save_template_noncanonical_ok_and_disk(gui_api_obj):
+    """正常非 canonical 复合后缀卡保存成功，且磁盘内容写对。"""
+    d = _dyn_tpl_dir()
+    try:
+        target = "角色-净语翻译.en2zh.txt"
+        (d / target).write_text("旧内容", encoding="utf-8")
+        r = gui_api_obj.refine_save_template("A", "新卡内容", str(d),
+                                             filename=target)
+        assert r["success"] is True
+        assert (d / target).read_text(encoding="utf-8") == "新卡内容"
+        assert os.path.dirname(r["path"]) == str(d)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_save_template_canonical_on_empty_dir_allowed(gui_api_obj):
+    """pkg_fallback（目录为空）时保存 canonical 名 = 新建默认文件，放行。"""
+    d = _dyn_tpl_dir()
+    try:
+        r = gui_api_obj.refine_save_template(
+            "A", "默认卡", str(d), filename="角色-净语翻译.txt")
+        assert r["success"] is True
+        assert (d / "角色-净语翻译.txt").read_text(
+            encoding="utf-8") == "默认卡"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_get_template_by_name_ok(gui_api_obj):
+    """load-by-name：按文件名读取目录内复合后缀卡（非 canonical）。"""
+    d = _dyn_tpl_dir()
+    try:
+        (d / "角色-净语翻译.en2zh.txt").write_text("en2zh卡内容",
+                                                   encoding="utf-8")
+        r = gui_api_obj.refine_get_template("A", str(d),
+                                            filename="角色-净语翻译.en2zh.txt")
+        assert r["success"] is True
+        assert r["text"] == "en2zh卡内容"
+        assert os.path.dirname(r["path"]) == str(d)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_get_template_by_name_traversal_rejected(gui_api_obj):
+    """load-by-name 穿越载荷拒绝（含绝对路径/嵌套/非 .txt）。"""
+    d = _dyn_tpl_dir()
+    try:
+        (d / "README-说明.txt").write_text("r", encoding="utf-8")
+        bad_names = [
+            str(Path(os.pardir) / os.pardir / "x.txt"),
+            str(Path.home() / "evil_cards.txt"),
+            str(Path("sub") / "x.txt"),
+            "config_keys.bin",   # 非 .txt 后缀
+        ]
+        for bad in bad_names:
+            r = gui_api_obj.refine_get_template("A", str(d), filename=bad)
+            assert r["success"] is False, f"穿越/非法载荷必须拒绝: {bad}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_refine_get_template_by_name_missing_reports_error(gui_api_obj):
+    """load-by-name 不做 pkg 回落：文件缺失走 template_file_missing 分支。"""
+    from subtransjav.webview_gui.strings import msg
+    d = _dyn_tpl_dir()
+    try:
+        (d / "README-说明.txt").write_text("r", encoding="utf-8")
+        r = gui_api_obj.refine_get_template("A", str(d),
+                                            filename="不存在的卡.txt")
+        assert r["success"] is False
+        assert r["error"] == msg("template_file_missing",
+                                 path=os.path.join(str(d), "不存在的卡.txt"))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)

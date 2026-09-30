@@ -164,6 +164,9 @@ const MSG = {
     tpl_reload: '重新加载',
     tpl_save: '💾 保存角色卡',
     tpl_placeholder: '选择阶段后自动加载角色卡内容，可直接编辑后保存',
+    tpl_loaded_path: p => `📄 当前加载：${p}`,
+    tpl_dir_empty_hint: '⚠ 角色卡目录为空，保存将新建默认文件',
+    tpl_dir_empty_datalist: '（角色卡目录为空，将使用内置默认卡）',
 
     // ---- 全局词库 ----
     gl_summary: '全局词库编辑',
@@ -1438,6 +1441,11 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-page').forEach(page => {
         page.classList.toggle('active', page.id === tabId);
     });
+    // 词库页初始化钩子（D2026-0930-07-追加1 必要⑧）：打开 tab-glossary 时
+    // 动态填充角色卡下拉并加载当前选中项（refine IIFE 未加载时静默跳过）
+    if (tabId === 'tab-glossary' && typeof window.__refineTplTabHook === 'function') {
+        try { window.__refineTplTabHook(); } catch (e) { /* 初始化失败不阻断切页 */ }
+    }
 }
 
 // ===== Refine UI：模型刷新/测试 + 词库表格编辑器 + 角色卡编辑器 =====
@@ -1901,18 +1909,102 @@ function switchTab(tabId) {
   }
 
   // ---- 角色卡编辑器 ----
-  async function tplLoad() {
-    const idx = ($('refineTemplateStage') || {}).value;
+  // 下拉动态化（D2026-0930-07-追加1 范围定稿2）：refineTemplateStage 的
+  // 选项由后端 refine_list_templates 动态填充（canonical A/B 精确匹配
+  // V2_TEMPLATE_FILES 文件名排最前并带阶段标注，其余文件按文件名列示，
+  // "所见即所编"）；目录空/pkg_fallback 回落固定 A/B 两项（MSG 渲染，
+  // HTML 骨架不留裸中文）。readdir 结果是外部输入 → 渲染全量 esc()。
+  let tplDirState = null;   // 最近一次 refine_list_templates 结果缓存
+
+  function tplRenderOptions(r) {
+    const sel = $('refineTemplateStage');
+    if (!sel) return;
+    const files = (r && r.success && Array.isArray(r.files)) ? r.files : [];
+    const canon = (r && r.success && r.canonical) || {};
+    const items = [];
+    if (files.length) {
+      // canonical 精确匹配（复合后缀卡如 角色-净语翻译.en2zh.txt 不是 canonical）
+      for (const tag of Object.keys(canon)) {
+        if (files.some(f => f.name === canon[tag])) {
+          items.push({ value: tag, label: MSG['tpl_stage_' + tag.toLowerCase()] });
+        }
+      }
+      for (const f of files) {
+        if (Object.values(canon).indexOf(f.name) !== -1) continue;
+        items.push({ value: f.name, label: f.name });
+      }
+    } else {
+      // 目录空 → 回落固定 A/B 两项（JS 按 MSG 渲染）
+      items.push({ value: 'A', label: MSG.tpl_stage_a });
+      items.push({ value: 'B', label: MSG.tpl_stage_b });
+    }
+    const prev = sel.value;
+    sel.innerHTML = items.map(it =>
+      '<option value="' + esc(it.value) + '">' + esc(it.label) + '</option>'
+    ).join('');
+    if (prev && items.some(it => it.value === prev)) sel.value = prev;
+  }
+
+  // 高级参数页 #directionCardS1/#directionCardS3 的 datalist（范围定稿3、
+  // 建议⑩）：option value=完整路径（目录+文件名）、不带 label；自由输入
+  // 与空=自动查找语义不变。空目录注入一条 disabled 提示项。
+  function tplRenderDatalist(r) {
+    const dl = $('directionCardList');
+    if (!dl) return;
+    const files = (r && r.success && Array.isArray(r.files)) ? r.files : [];
+    const dir = (r && r.success && r.dir) || '';
+    if (!files.length) {
+      dl.innerHTML = '<option value="" disabled>' + esc(MSG.tpl_dir_empty_datalist) + '</option>';
+      return;
+    }
+    const sep = dir.indexOf('\\') !== -1 ? '\\' : '/';
+    dl.innerHTML = files.map(f =>
+      '<option value="' + esc(dir ? dir + sep + f.name : f.name) + '">'
+    ).join('');
+  }
+
+  // 打开词库页（switchTab 钩子）/点"重新加载"/启动时：列目录 → 填下拉
+  // 与 datalist；load=true 时按当前选中项加载（选中即加载 load-by-name）。
+  async function tplRefreshSelect(load) {
     const dir = $('refineTemplatesDir') ? $('refineTemplatesDir').value : '';
     const st = $('refineTemplateStatus');
     try {
-      const r = await pywebview.api.refine_get_template(idx, dir);
+      const r = await pywebview.api.refine_list_templates(dir || null);
+      tplDirState = r;
+      tplRenderOptions(r);
+      tplRenderDatalist(r);
+      if (st && r && r.success && r.pkg_fallback) {
+        st.style.color = 'var(--status-warn, #b8860b)';
+        st.textContent = MSG.tpl_dir_empty_hint;
+      }
+    } catch (e) {
+      // 列举失败也回落固定 A/B，编辑器不空转
+      tplDirState = null;
+      tplRenderOptions(null);
+      tplRenderDatalist(null);
+    }
+    if (load) tplLoad();
+  }
+
+  async function tplLoad() {
+    const sel = $('refineTemplateStage');
+    const idx = (sel || {}).value;
+    const dir = $('refineTemplatesDir') ? $('refineTemplatesDir').value : '';
+    const st = $('refineTemplateStatus');
+    // 非 'A'/'B' 值 = 动态填充的文件名选项 → load-by-name（必要⑤）
+    const isStageTag = idx === 'A' || idx === 'B';
+    try {
+      const r = isStageTag
+        ? await pywebview.api.refine_get_template(idx, dir)
+        : await pywebview.api.refine_get_template(idx, dir, idx);
       if (r.success) {
         $('refineTemplateText').value = r.text;
         if (st) {
           st.style.color = 'var(--text-muted)';
           st.textContent = (r.note ? '📌 ' + r.note + '  ' : '') + r.path;
         }
+        const lp = $('refineTplLoadedPath');
+        if (lp) lp.textContent = MSG.tpl_loaded_path(r.path);
       } else if (st) {
         st.style.color = 'var(--status-err)'; st.textContent = r.error;
       }
@@ -1922,10 +2014,12 @@ function switchTab(tabId) {
   async function tplSave() {
     const idx = ($('refineTemplateStage') || {}).value;
     const st = $('refineTemplateStatus');
+    const isStageTag = idx === 'A' || idx === 'B';
     try {
       const r = await pywebview.api.refine_save_template(
         idx, $('refineTemplateText').value,
-        $('refineTemplatesDir') ? $('refineTemplatesDir').value : null);
+        $('refineTemplatesDir') ? $('refineTemplatesDir').value : null,
+        isStageTag ? null : idx);
       if (st) {
         st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
         st.textContent = r.success ? MSG.tpl_saved(r.path) : '❌ ' + r.error;
@@ -1939,7 +2033,7 @@ function switchTab(tabId) {
       $('refineTemplatesDir').value = r.path;
       const show = $('refineTemplatesDirShow');
       if (show) show.value = r.path;
-      tplLoad();
+      tplRefreshSelect(true);
     }
   }
 
@@ -2816,7 +2910,7 @@ function switchTab(tabId) {
     const tStage = $('refineTemplateStage');
     if (tStage) tStage.addEventListener('change', tplLoad);
     const tReload = $('refineTemplateReload');
-    if (tReload) tReload.addEventListener('click', tplLoad);
+    if (tReload) tReload.addEventListener('click', () => tplRefreshSelect(true));
     const tSave = $('refineTemplateSave');
     if (tSave) tSave.addEventListener('click', tplSave);
     const pickBtn = $('refinePickDirBtn');
@@ -3036,6 +3130,10 @@ function switchTab(tabId) {
     bindCleanerDirControls();
     dataRootLoad();
     dictLoad();
+    // 角色卡下拉动态化（追加1）：启动时列目录填充下拉与方向卡 datalist
+    // （不自动加载编辑器内容——保持现状，打开词库页/切换选中时才加载）
+    tplRefreshSelect(false);
+    window.__refineTplTabHook = () => tplRefreshSelect(true);
     // 净语配置目录：不再硬编码填充——留空=自动查找（回落链
     // config/templates→包内默认）；已存值由 applySavedStageSettings 回填
     glLoad();

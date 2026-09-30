@@ -366,14 +366,12 @@
                         <div class="block-title" data-i18n="tpl_editor_summary">角色卡模板编辑</div>
                         <div class="muted" data-i18n="tpl_explicit_card_hint">若在高级参数页为当前方向指定了显式角色卡路径，以其为准；此处编辑的是角色卡目录下的同名文件。</div>
                         <div class="action-row">
-                            <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);">
-                                <option value="A" data-i18n="tpl_stage_a">阶段A · 角色-净语翻译.txt</option>
-                                <option value="B" data-i18n="tpl_stage_b">阶段B · 角色-审校抛光.txt</option>
-                            </select>
+                            <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);"></select>
                             <button type="button" id="refineTemplateReload" class="btn btn-secondary btn-compact" data-i18n="tpl_reload">重新加载</button>
                             <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact" data-i18n="tpl_save">💾 保存角色卡</button>
                             <span id="refineTemplateStatus" class="muted"></span>
                         </div>
+                        <div id="refineTplLoadedPath" class="muted" style="font-size:11px; word-break:break-all;"></div>
                         <textarea id="refineTemplateText" class="form-input" rows="9"
                             style="width:var(--w-full); font-family:Consolas,monospace; font-size:12px;"
                             data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
@@ -575,14 +573,17 @@
                             <label class="field-col">
                                 <span data-i18n="direction_card_s1_label">阶段A 角色卡（可选，留空=自动查找）</span>
                                 <input id="directionCardS1" class="form-input compact grow" style="min-width:var(--w-model);"
+                                       list="directionCardList"
                                        data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
                             </label>
                             <label class="field-col">
                                 <span data-i18n="direction_card_s3_label">阶段B 角色卡（可选，留空=自动查找）</span>
                                 <input id="directionCardS3" class="form-input compact grow" style="min-width:var(--w-model);"
+                                       list="directionCardList"
                                        data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
                             </label>
                         </div>
+                        <datalist id="directionCardList"></datalist>
                         <div class="muted" data-i18n="direction_hint">缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错</div>
                         <div class="muted" data-i18n="direction_card_fallback_hint">角色卡查找：显式路径优先，其次角色卡目录下同名文件，最后使用内置默认。注意：净语配置目录是另一套独立查找规则，互不关联。</div>
 
