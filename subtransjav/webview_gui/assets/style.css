@@ -43,8 +43,17 @@
     /* Text colors */
     --text-primary: #212529;
     --text-secondary: #6C757D;
-    --text-muted: #ADB5BD;
+    --text-muted: #888888;  /* D2026-0930-07 2c: unified to the de-facto muted text color (#888 was used by all inline styles / JS status text) */
     --text-disabled: #CED4DA;
+
+    /* Semantic status tokens (D2026-0930-07 2c): app.js hard-coded colors
+       migrate here as var(--status-*) / var(--text-muted). Aliased to the
+       existing palette so every theme override of --success-color /
+       --danger-color applies automatically; only dark needs a dedicated
+       --status-warn override (amber too dark on near-black). */
+    --status-ok: var(--success-color);
+    --status-err: var(--danger-color);
+    --status-warn: #B26A00;  /* existing warn-text amber (previously inline #b26a00) */
 
     /* Borders and shadows */
     --border-radius: 6px;
@@ -467,50 +476,6 @@ body {
 }
 
 /* ============================================================
-   Tabs Section - File Folder Design
-   ============================================================ */
-
-
-
-
-/* Tab bar - white background with tabs sitting on top */
-.tab-bar {
-    display: flex;
-    gap: 0;
-    background: var(--tab-bar-bg);
-    padding: 0 12px;  /* AGGRESSIVE: Reduced from 16px */
-    border-bottom: 2px solid var(--border-color);
-    position: relative;
-}
-
-/* Tab buttons - file folder metaphor */
-
-
-.tab-button:hover:not(.active) {
-    background: var(--hover-tab-bg);
-    color: var(--text-primary);
-}
-
-.tab-button.active {
-    background: var(--active-tab-bg);
-    color: var(--active-tab-text);
-    font-weight: 600;
-    font-size: 12px;  /* AGGRESSIVE: Reduced from 14px */
-    padding: 8px 24px 6px;  /* AGGRESSIVE: Reduced from 10px 30px 8px */
-    border-bottom: 2px solid var(--active-tab-bg);
-    z-index: 10;
-}
-
-/* Tab content area - seamless connection with active tab */
-
-
-
-
-.tab-panel.active {
-    display: block;
-}
-
-/* ============================================================
    Form Elements
    ============================================================ */
 
@@ -562,6 +527,19 @@ body {
     cursor: pointer;
 }
 
+/* Compact select dropdowns (relocated from removed Ensemble section) */
+.form-select.compact {
+    padding: 4px 6px;
+    font-size: 11px;
+    max-width: 100%;
+    min-height: var(--control-height-sm);  /* 24px，与 btn-compact 对齐 */
+}
+
+.form-input.compact {
+    min-height: var(--control-height-sm);  /* 24px，与 form-select.compact 对齐 */
+}
+
+
 /* Radio buttons */
 
 
@@ -577,13 +555,6 @@ body {
 
 
 
-
-/* Input with button */
-
-
-.input-with-button .form-input {
-    flex: 1;
-}
 
 /* Info text */
 
@@ -625,57 +596,133 @@ body {
 
 
 
-/* =====================
-   Tab 2 Advanced Options
-   ===================== */
-/* Row 1: 4 columns (Model override, model select tight, Async, Debug) */
-#tab2-panel #adv-row-1 {
-    /* Make the first two columns a bit tighter so the select sits closer */
-    grid-template-columns: minmax(160px, 0.75fr) minmax(140px, 0.7fr) minmax(160px, 0.8fr) minmax(160px, 0.8fr);
-    column-gap: 3px; /* bring model select closer to the checkbox */
+/* ============================================================
+   Batch 2 (D2026-0930-07): shared utility classes
+   Consolidates the high-frequency inline styles of index.html
+   into semantic classes. Values mirror the previous inline
+   declarations so rendering stays unchanged.
+   ============================================================ */
+
+/* Muted hint text (12px secondary gray; was inline font-size:12px;
+   color:#888 — .muted previously had NO rule at all) */
+.muted {
+    font-size: var(--font-size-lg);
+    color: var(--text-muted);
 }
 
-/* Make model select visually paired with its checkbox (tighter) */
-#tab2-panel #adv-row-1 .tight-pair .form-select {
-    width: 155px; /* slightly narrower to visually tuck in */
+/* Error-tinted status text (pairs with .muted; color wins by order) */
+.status-err {
+    color: var(--status-err);
 }
 
-/* Make the model select's container shrink and hug the left edge */
+/* Warning-tinted hint text (pairs with .muted) */
+.hint-warn {
+    color: var(--status-warn);
+}
 
+/* Sub-group title (12px semibold; was inline font-weight:600;
+   font-size:12px; color:#666) */
+.group-title {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
 
-/* Make the "Model override" container shrink and hug the left edge */
+/* Block title (13px semibold, non-interactive; was inline
+   font-weight:600 / cursor:default on details summaries) */
+.block-title {
+    font-weight: 600;
+    cursor: default;
+}
 
+/* Field label (12px secondary; was inline font-size:12px; color:#666) */
+.field-label {
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
 
-/* Keep the model override label from wrapping and avoid extra right padding */
-
-
-/* Generic inline field helper: label + control in a single row */
-
+/* Generic inline field helper: label + control in a single row
+   (was inline display:flex; align-items:center; gap:4px) */
+.inline-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
 
 .inline-field .form-select,
 .inline-field .form-input {
     margin: 0; /* neutralize column layout margins */
 }
 
-.inline-field .input-with-button .form-input {
-    width: 100%;
+/* Horizontal control row with wider gaps (was inline
+   display:flex; gap:14px; align-items:center; flex-wrap:wrap) */
+.field-row {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
-/* Row 2: Opening credit inline (label + input on same line) */
+/* Full-width field with label on top (fix for direction card fields:
+   flex-basis 100% forces the field onto its own wrapped line so the
+   CJK label can never be squeezed into a one-character vertical
+   column when sharing a flex line with the direction selects) */
+.field-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1 1 100%;
+}
 
-.input-inline .form-input {
+/* Horizontal action/button row (was inline
+   display:flex; gap:8px; align-items:center; flex-wrap:wrap) */
+.action-row {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Vertical stack (was inline
+   display:flex; flex-direction:column; gap:10px) */
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+/* Advanced TAB cell (was inline
+   display:flex; flex-direction:column; gap:6px; min-width:var(--w-min)) */
+.adv-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: var(--w-min);
+}
+
+/* Flex fill (was inline flex:1) */
+.grow {
     flex: 1;
 }
 
-/* Row 3: 4 columns (3 WIP checkboxes + Skip VAD checkbox) */
-#tab2-panel #adv-row-3 {
-    grid-template-columns: repeat(4, minmax(180px, 1fr));
-    column-gap: 8px;
+/* ---- Path rows: unified "label + path input + actions" pattern
+   (D2026-0930-07 2a: output dir / cleaner dir / templates dir /
+   data root rows share one component) ---- */
+.path-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    min-height: var(--control-height);
 }
 
-/* Row 4: Keep temp + Temp dir group (existing layout, small tweak) */
-#tab2-panel #adv-row-4 .temp-dir-group .form-input {
-    min-width: 260px;
+.path-row .path-row-label {
+    flex: none;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 /* ============================================================
@@ -718,6 +765,18 @@ body {
     background: var(--primary-hover);
 }
 
+/* Danger button (stop translation) — D2026-0930-07 2b: was inline
+   background:#d9534f on the stop button; tokenized to --danger-color */
+.btn-danger {
+    background: var(--danger-color);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--danger-color);
+    opacity: 0.9;
+}
+
 /* Secondary button */
 .btn-secondary {
     background: var(--secondary-color);
@@ -733,16 +792,8 @@ body {
 
 
 
-/* Text button (minimal) */
-.btn-text {
-    background: transparent;
-    color: var(--primary-color);
-    padding: 4px 8px;
-}
-
-.btn-text:hover:not(:disabled) {
-    background: var(--hover-tab-bg);
-}
+/* Text button (minimal) — retired in D2026-0930-07 2f: unified into
+   .btn-ghost (same rules; see v1.6 component system section) */
 
 /* Button sizes */
 .btn-sm {
@@ -750,6 +801,15 @@ body {
     font-size: var(--font-size-sm);  /* Now 10px */
     min-height: var(--control-height-sm);  /* 24px */
 }
+
+/* Compact button (relocated from removed Ensemble section) */
+.btn-compact {
+    padding: 4px 8px;
+    font-size: 10px;
+    white-space: nowrap;
+    min-height: var(--control-height-sm);  /* 24px，补齐高度统一 */
+}
+
 
 
 
@@ -763,9 +823,6 @@ body {
 /* ============================================================
    Run Section - Progress & Controls
    ============================================================ */
-.run-section .section-content {
-    padding: 10px;  /* AGGRESSIVE: Reduced from 12px */
-}
 
 .progress-container {
     display: flex;
@@ -913,48 +970,8 @@ body {
 }
 
 /* ============================================================
-   Responsive Adjustments
-   ============================================================ */
-@media (max-width: 900px) {
-    
-
-    /* Stack two-column layout vertically on mobile */
-    
-
-    /* Stack form columns vertically on mobile */
-    
-
-    /* On narrow screens, stack info boxes naturally */
-    
-
-    /* Stack advanced rows neatly */
-    #tab2-panel #adv-row-1,
-    #tab2-panel #adv-row-3 {
-        grid-template-columns: 1fr;
-    }
-    
-
-    .output-control {
-        flex-wrap: wrap;
-    }
-
-    
-
-    .tab-button.active {
-        padding: 6px 14px 4px;  /* AGGRESSIVE: Further reduced for mobile */
-        font-size: 11px;
-    }
-}
-
-/* ============================================================
    Loading States
    ============================================================ */
-/* Loading spinner */
-
-
-.spinner.active {
-    display: inline-block;
-}
 
 @keyframes spin {
     0% { transform: rotate(0deg); }
@@ -989,7 +1006,7 @@ button.loading::after {
 }
 
 button.btn-secondary.loading::after,
-button.btn-text.loading::after {
+button.btn-ghost.loading::after {
     border-color: var(--primary-color);
     border-top-color: transparent;
 }
@@ -1171,280 +1188,6 @@ button:focus-visible,
 }
 
 /* ============================================================
-   Ensemble Tab Styles
-   ============================================================ */
-
-/* Main container */
-
-
-/* Header row */
-
-
-
-
-
-
-
-
-/* Component rows */
-
-
-
-
-/* Cell with dropdown + gear */
-
-
-
-
-/* Dropdowns */
-
-
-
-
-/* Gear buttons */
-
-
-
-
-
-
-/* Disabled state for cells */
-.ensemble-cell.disabled .ensemble-select,
-.ensemble-cell-wide.disabled .ensemble-select {
-    background: #D1D5DB;
-    color: #9CA3AF;
-    cursor: not-allowed;
-}
-
-.ensemble-cell.disabled .ensemble-gear,
-.ensemble-cell-wide.disabled .ensemble-gear {
-    opacity: 0.3;
-}
-
-/* Footer */
-
-
-
-
-
-
-
-
-/* Two-Pass Ensemble Styles - Grid Layout */
-/* Main grid container */
-
-
-/* Shared grid template for header and data rows */
-/* Columns: Label | Pipeline | Sep | Sensitivity | Sep | Scene | Enhancer | Segmenter | Sep | Model | Actions */
-
-
-/* Header row styling */
-
-
-
-
-/* Data rows */
-
-
-
-
-/* Row labels */
-
-
-/* Checkbox label in col-label */
-
-
-
-
-/* Vertical separators - visible dividers */
-
-
-/* Column content containers - center dropdowns */
-
-
-/* Actions column */
-
-
-/* Merge row - uses same grid, merge dropdown spans multiple columns */
-
-
-/* Compact select dropdowns */
-.form-select.compact {
-    padding: 4px 6px;
-    font-size: 11px;
-    max-width: 100%;
-    min-height: var(--control-height-sm);  /* 24px，与 btn-compact 对齐 */
-}
-
-.form-input.compact {
-    min-height: var(--control-height-sm);  /* 24px，与 form-select.compact 对齐 */
-}
-
-/* Specific column width constraints */
-.col-pipeline .form-select.compact {
-    width: 105px;
-}
-
-.col-sensitivity .form-select.compact {
-    width: 90px;
-}
-
-.col-scene .form-select.compact,
-.col-enhancer .form-select.compact {
-    width: 80px;
-}
-
-.col-segmenter .form-select.compact {
-    width: 105px;
-}
-
-.col-model .form-select.compact {
-    width: 80px;
-}
-
-/* Compact button */
-.btn-compact {
-    padding: 4px 8px;
-    font-size: 10px;
-    white-space: nowrap;
-    min-height: var(--control-height-sm);  /* 24px，补齐高度统一 */
-}
-
-/* Help icon button (parameter guide) */
-
-
-
-/* Pass badge indicators */
-
-
-.pass-badge.default {
-    background: var(--background-tertiary);
-    color: var(--text-secondary);
-}
-
-.pass-badge.custom {
-    background: var(--primary-color);
-    color: white;
-}
-
-
-
-/* Disabled/greyed row state */
-.grid-row.disabled {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-/* Keep checkbox clickable even when row is disabled */
-.grid-row.disabled .col-label {
-    pointer-events: auto;
-    opacity: 1;
-}
-
-.grid-row.disabled .col-label .checkbox-label {
-    cursor: pointer;
-}
-
-
-
-/* Merge strategy select */
-
-
-/* BYOP (Bring Your Own Provider) Settings Panel */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Info footer - minimal */
-
-
-
-
-/* ============================================================
-   Translate After Transcription Integration
-   ============================================================ */
-
-
-
-
-
-
-.translate-quick-settings .form-select {
-    min-width: 100px;
-    font-size: 11px;
-    padding: 4px 8px;
-}
-
-
-
-/* Translation inline settings (provider, model, settings button) */
-
-
-.translate-inline-settings .form-select {
-    min-width: 90px;
-    max-width: 120px;
-    font-size: 11px;
-    padding: 4px 6px;
-}
-
-/* Model override input - compact style for inline layout */
-
-
-
-
-
-
-/* Translation Settings button - compact style */
-.translate-inline-settings .btn-secondary.btn-compact {
-    white-space: nowrap;
-    font-size: 11px;
-    padding: 4px 10px;
-}
-
-/* Icon button for settings gear */
-
-
-
-
-/* API Key Warning Indicator */
-
-
-
-
-/* Translate status badge */
-
-
-
-
-.translate-status.success {
-    background: rgba(76, 175, 80, 0.2);
-    color: #4caf50;
-}
-
-.translate-status.error {
-    background: rgba(229, 57, 53, 0.2);
-    color: var(--error-color, #e53935);
-}
-
-/* ============================================================
    Translator Panel (Refine)
    ============================================================ */
 
@@ -1610,252 +1353,6 @@ details[open] .collapse-icon {
 }
 
 /* ============================================================
-   Translation Settings Modal
-   ============================================================ */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Collapsible Advanced Settings in Modal */
-
-
-
-
-
-
-
-
-
-
-.section-header-collapsible .collapse-icon {
-    font-size: 10px;
-    transition: transform 0.2s ease;
-}
-
-details.translation-advanced-section[open] .collapse-icon {
-    transform: rotate(90deg);
-}
-
-
-
-
-
-
-
-/* API Status in Modal */
-.api-status.testing {
-    background: rgba(33, 150, 243, 0.2);
-    color: var(--primary-color);
-}
-
-
-
-/* Responsive Modal */
-@media (max-width: 480px) {
-    
-
-    
-
-    
-}
-
-/* ============================================================
-   DSP Effects Panel - FFmpeg Audio Filters UI
-   ============================================================ */
-
-
-@keyframes dspSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Responsive: Stack on smaller widths */
-@media (max-width: 900px) {
-    
-}
-
-/* Large modal for parameter customization */
-
-
-.modal-lg .modal-body {
-    max-height: 60vh;
-    overflow-y: auto;
-    padding: 0;
-}
-
-/* Modal tabs */
-
-
-
-
-
-
-.modal-tab.active {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-
-
-
-
-.modal-tab-panel.active {
-    display: block;
-}
-
-
-
-/* Parameter container */
-
-
-/* Parameter controls */
-
-
-
-
-
-
-
-
-/* Slider with number input */
-
-
-
-
-
-
-
-
-
-
-
-
-/* Checkbox */
-
-
-/* Text input */
-
-
-
-
-/* Select dropdown */
-
-
-
-
-/* ============================================================
-   Parameter Groups & Backend Selectors
-   ============================================================ */
-
-/* Parameter groups for organizing related params */
-
-
-
-
-
-
-/* Pipeline-stage group headers (Qwen modal) */
-
-
-
-
-/* Collapsible details sections (Qwen modal) */
-
-
-
-
-
-
-
-
-/* Informational notes within param tabs */
-
-
-/* Backend header with selector */
-
-
-
-
-
-
-
-
-/* Backend-specific parameter container */
-
-
-
-
-/* Checkbox list for DSP effects */
-
-
-
-
-
-
-
-
-
-
-
-
-/* Enhancer-specific: effects section */
-
-
-
-
-/* Backend availability badge */
-
-
-/* ============================================================
    Transformers Mode Styles
    ============================================================ */
 
@@ -1893,326 +1390,44 @@ details.translation-advanced-section[open] .collapse-icon {
 
 
 /* ============================================================
-   Update Indicator (subtle, inline in header)
-   ============================================================ */
-
-
-
-
-
-
-
-/* ============================================================
-   Update Notification Banner (critical updates only)
-   ============================================================ */
-
-
-
-
-
-@keyframes updateSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-100%);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Critical update styling */
-.update-banner.critical {
-    background: linear-gradient(135deg, #922b21 0%, #c0392b 100%);
-}
-
-.update-banner.critical .update-btn-primary {
-    color: #922b21;
-}
-
-/* Major update styling */
-.update-banner.major {
-    background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
-}
-
-/* Minor update styling */
-
-
-
-
-/* Patch update styling */
-
-
-
-
-/* Update progress overlay */
-
-
-
-
-
-
-
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-
-
-
-
-
-
-/* ============================================================
-   Changelog Modal
-   ============================================================ */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* ============================================================
-   Update Check Modal
-   ============================================================ */
-
-/* Theme menu divider */
-
-
-/* Check for Updates menu item */
-
-
-
-
-/* Update check loading state */
-
-
-
-
-
-
-/* Result container */
-
-
-/* Version info display */
-
-
-
-
-
-
-
-
-
-
-
-
-/* Update type badges */
-
-
-
-
-
-
-.update-badge.major {
-    background: #fd7e14;
-    color: white;
-}
-
-.update-badge.critical {
-    background: #dc3545;
-    color: white;
-}
-
-/* Up to date message */
-
-
-
-
-/* Release notes */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Error state */
-
-
-
-
-/* ============================================================
-   Dual-Track Update Modal Styles
-   ============================================================ */
-
-/* Modal sizing */
-
-
-/* Current version info at top */
-
-
-
-
-
-
-
-
-/* Update track containers */
-
-
-
-
-/* Track header */
-
-
-
-
-
-
-
-
-/* Stable track specific colors */
-
-
-
-
-/* Dev track specific colors */
-
-
-
-
-/* Track content */
-
-
-/* Track status line */
-
-
-
-
-
-
-
-
-
-
-
-
-/* Release notes section */
-
-
-/* Track actions */
-
-
-/* Dev commits list */
-
-
-
-
-
-
-
-
-
-
-
-
-/* Ensure spinner shows properly in loading state */
-
-
-/* Glossary tab buttons */
-.gl-tab {
-    border-bottom: 2px solid transparent;
-    background: none;
-    cursor: pointer;
-    padding: 4px 10px;
-    font-size: 13px;
-}
-.gl-tab.active {
-    border-bottom: 2px solid #1a73e8;
-    font-weight: 600;
-}
-
-/* ============================================================
    Form Card - 统一分组卡片（引擎页阶段A/B/兜底行）
    ============================================================ */
 .form-card {
     display: flex;
-    gap: 10px;
+    gap: var(--space-3);
     align-items: center;
     flex-wrap: wrap;
     background: var(--section-bg);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-lg);
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-3);
+}
+
+/* Card header line (D2026-0930-07 2g): unified title rhythm inside
+   form-card (was inline font-weight:600; margin-bottom:6px) */
+.form-card-header {
+    font-weight: 600;
+    margin-bottom: var(--space-1);
+    color: var(--text-primary);
+}
+
+/* Engine stage rows (D2026-0930-07 2b: was inline on stage A/B rows;
+   stage main row flex 1.2 / key row flex 1, gap 6px) */
+.stage-row {
+    flex: 1.2;
+    min-width: var(--w-stage-row);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.alt-row {
+    flex: 1;
+    min-width: var(--w-alt-row);
+    display: flex;
+    gap: 6px;
+    align-items: center;
 }
 
 /* ============================================================
@@ -2282,7 +1497,6 @@ button:focus-visible,
 .btn:focus-visible,
 .theme-option:focus-visible,
 .side-tab-btn:focus-visible,
-.gl-tab:focus-visible,
 summary:focus-visible,
 a:focus-visible,
 .form-input:focus-visible,
@@ -2347,10 +1561,11 @@ button:focus {
 .form-card .field-btn-row {
     display: flex;
     gap: 6px;
+    justify-content: flex-end;  /* D2026-0930-07 fix: normal-size buttons right-aligned */
 }
 
 .form-card .field-btn-row .btn {
-    flex: 1;
+    flex: 0 0 auto;  /* was flex:1 — stretched buttons into half-row-wide blocks */
 }
 
 /* ============================================================
@@ -2471,3 +1686,54 @@ button:focus {
     user-select: text;
     cursor: text;
 }
+
+/* ============================================================
+   App Shell (D2026-0930-07 2d: migrated verbatim from the inline
+   <style> of index.html; hard-coded fallback values stripped —
+   every color/space token is defined in the :root layers above,
+   so all four themes adapt automatically)
+   ============================================================ */
+
+/* ---- sidebar TAB bar + two-column shell ---- */
+.app-shell { display: flex; flex: 1; min-height: 0; align-items: stretch; }
+.side-tabs { flex: none; width: var(--sidebar-width); display: flex; flex-direction: column;
+  align-items: center; gap: 6px; padding: 12px 6px;
+  border-right: 1px solid var(--border-color);
+  background: var(--section-bg); }
+.side-tab-btn { width: 100%; height: auto; min-height: var(--sidebar-btn); position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: 6px 2px; border: 1px solid transparent;
+  border-radius: var(--radius-lg); background: transparent; line-height: 1;
+  cursor: pointer; color: var(--text-secondary); }
+.side-tab-btn .side-tab-icon { display: block; width: 22px; height: 22px; }
+.side-tab-btn .side-tab-text { display: block; font-size: 10px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.side-tab-btn:hover { background: var(--hover-tab-bg);
+  color: var(--text-primary); }
+.side-tab-btn.active { color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: var(--hover-tab-bg); }
+/* selected indicator: 3px accent bar on the rail's left edge */
+.side-tab-btn.active::before { content: ""; position: absolute; left: -7px;
+  top: 50%; transform: translateY(-50%); width: 3px; height: 26px;
+  border-radius: var(--radius-sm); background: var(--primary-color); }
+.tab-page { display: none; flex-direction: column; gap: 10px; }
+.tab-page.active { display: flex; flex: 1 0 auto; }
+/* Console fill/collapse scoped to the collapsible translate-page console
+   (.console-collapsible); quality page reuses .console-section untouched */
+.tab-page .console-collapsible:not(.collapsed) { flex: 1 1 auto; }
+.console-collapsible.collapsed { flex: 0 0 auto; }
+.console-collapsible.collapsed .console-output { display: none; }
+.console-collapse-btn .console-collapse-icon { display: inline-block;
+  transition: transform 0.2s ease; font-size: 10px; }
+.console-collapsible.collapsed .console-collapse-btn .console-collapse-icon {
+  transform: rotate(-90deg); }
+
+/* ---- service quick bar (moved from old topbar, theme vars only) ---- */
+.service-quick-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); padding: 8px 10px; }
+.service-quick-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.service-quick-badge { font-size: 11px; padding: 2px 10px; border-radius: var(--radius-pill);
+  white-space: nowrap; color: var(--primary-color);
+  border: 1px solid var(--primary-color); background: transparent; }
+.service-quick-local-hint { font-size: 12px; color: var(--secondary-color); }

@@ -274,14 +274,14 @@ def test_batch_values_use_positive_int_guard():
 # v1.5 翻译服务快捷下拉（原小白模式顶栏迁入 tab-translate，逻辑保留）
 # ---------------------------------------------------------------------------
 
-_SERVICE_QUICK_PROVIDER_VALUES = ["lmstudio", "ollama", "deepseek",
+_SERVICE_QUICK_PROVIDER_VALUES = ["lmstudio", "ollama", "deepseek", "zen",
                                   "siliconflow", "custom"]
 
 
 def test_index_html_service_quick_with_provider_options():
-    """tab-translate 页含翻译服务快捷下拉：既定 5 个 provider 值
-    （lmstudio 默认）+ 本地提示行锚点；API KEY 输入域已收口至引擎页
-    （主页 key 行整体移除，删除钉防回退）。"""
+    """tab-translate 页含翻译服务快捷下拉：既定 6 个 provider 值
+    （lmstudio 默认，zen 与引擎页三处同步）+ 本地提示行锚点；API KEY
+    输入域已收口至引擎页（主页 key 行整体移除，删除钉防回退）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'id="refineServiceQuick"' in html, "缺少翻译服务快捷下拉"
     m = re.search(r'<select[^>]*id="refineServiceQuick".*?</select>',

@@ -124,21 +124,24 @@ const MSG = {
     ctx_title: '本地模型上下文窗口：留空=用缺省 16384（通用保守值，可经 config/user_settings.json 或环境变量 SUBTRANSJAV_V2_CTX_LOCAL 调整）；显式填写时启动后管线自动按此值对齐引擎（覆盖 LM Studio 手工设置），并据此收紧批大小。16GB 显存建议 16384~22272；22272 为作者 16GB 单卡档案值（示例），非缺省',
     ctx_placeholder: '缺省 16384',
     cleaner_dir_label: '净语配置目录',
-    cleaner_dir_placeholder: '留空=使用内置默认',
+    cleaner_dir_placeholder: '留空=自动查找（config/templates→包内默认）',
     browse_dots: '浏览...',
     templates_dir_label: '角色卡目录',
     templates_dir_placeholder: '（未设置，使用默认）',
 
-    // ---- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐） ----
+    // ---- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐；批1 D2026-0930-07
+    //      统一叙述：指令卡=角色卡，回落链 UI 明示） ----
     direction_label: '翻译方向',
-    direction_title: '缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 指令卡路径），缺卡启动即被校验拒绝',
+    direction_block_title: '翻译方向与角色卡',
+    direction_title: '缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝',
     lang_ja: '日文',
     lang_zh: '中文',
     lang_en: '英文',
-    direction_card_s1_label: '阶段A 指令卡',
-    direction_card_s3_label: '阶段B 指令卡',
+    direction_card_s1_label: '阶段A 角色卡（可选，留空=自动查找）',
+    direction_card_s3_label: '阶段B 角色卡（可选，留空=自动查找）',
     direction_card_placeholder: '非缺省方向必填（.txt 路径）',
-    direction_hint: '缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套模板卡，缺卡启动即报错',
+    direction_hint: '缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错',
+    direction_card_fallback_hint: '角色卡查找：显式路径优先，其次角色卡目录下同名文件，最后使用内置默认。注意：净语配置目录是另一套独立查找规则，互不关联。',
 
     // ---- 翻译记忆库高级 ----
     tm_enable_label: '翻译记忆库',
@@ -155,6 +158,7 @@ const MSG = {
 
     // ---- 角色卡编辑 ----
     tpl_editor_summary: '角色卡模板编辑',
+    tpl_explicit_card_hint: '若在高级参数页为当前方向指定了显式角色卡路径，以其为准；此处编辑的是角色卡目录下的同名文件。',
     tpl_stage_a: '阶段A · 角色-净语翻译.txt',
     tpl_stage_b: '阶段B · 角色-审校抛光.txt',
     tpl_reload: '重新加载',
@@ -163,7 +167,6 @@ const MSG = {
 
     // ---- 全局词库 ----
     gl_summary: '全局词库编辑',
-    gl_tab_label: '翻译术语',
     th_source: '原文词条',
     th_target: '期望译文',
     gl_add: '＋添加',
@@ -328,6 +331,7 @@ const MSG = {
     guide_custom_placeholder: '粘贴质量报告完整路径（*_质量报告导读.json 或 *_质量报告.txt）',
     guide_custom_load_btn: '加载',
     guide_custom_need_path: '请先粘贴报告文件完整路径（导读 json 或报告 txt）',
+    guide_source_group_title: '来源',
     guide_txt_loaded: p => `已加载报告全文（只读）：${p}`,
     guide_txt_truncated_note: '（报告过长，仅显示前 100 万字符）',
     gl_learned_title: '学习词库',
@@ -1509,7 +1513,7 @@ function switchTab(tabId) {
   function stageStatus(n, text, kind) {
     const st = $('refineTestS' + n + 'Status');
     if (!st) return;
-    st.style.color = kind === 'err' ? 'crimson' : (kind === 'ok' ? 'green' : '#888');
+    st.style.color = kind === 'err' ? 'var(--status-err)' : (kind === 'ok' ? 'var(--status-ok)' : 'var(--text-muted)');
     st.textContent = text;
   }
 
@@ -1720,18 +1724,18 @@ function switchTab(tabId) {
     const btn = $('refineTestS' + n);
     if (!btn) return;
     btn.disabled = true;
-    if (st) { st.style.color = '#888'; st.textContent = MSG.testing; }
+    if (st) { st.style.color = 'var(--text-muted)'; st.textContent = MSG.testing; }
     try {
       const r = await pywebview.api.refine_test_stage(
         prov, model, stageEndpoint(n), stageKeyOrNull(n));
       if (st) {
-        st.style.color = r.success ? 'green' : 'crimson';
+        st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
         st.textContent = (r.success ? '✅ ' : '❌ ') +
           (r.success ? r.message : (r.tip || r.error || MSG.failed));
       }
       if (!r.success && r.tip) console.warn('[refine]', r.tip);
     } catch (e) {
-      if (st) { st.style.color = 'crimson'; st.textContent = '❌ ' + e; }
+      if (st) { st.style.color = 'var(--status-err)'; st.textContent = '❌ ' + e; }
     } finally {
       btn.disabled = false;
     }
@@ -1739,7 +1743,7 @@ function switchTab(tabId) {
 
   function glStatus(t) {
     const el = $('refineGlStatus');
-    if (el) { el.style.color = '#888'; el.textContent = t; }
+    if (el) { el.style.color = 'var(--text-muted)'; el.textContent = t; }
   }
 
   // ---- 词库表格 ----
@@ -1757,13 +1761,13 @@ function switchTab(tabId) {
   function glRender(rows) {
     const tb = document.querySelector('#refineGlossTable tbody');
     tb.innerHTML = rows.map(r =>
-      '<tr style="border-bottom:1px solid #ddd;">' +
+      '<tr style="border-bottom:1px solid var(--border-color);">' +
       '<td style="padding:2px 4px;"><input class="form-input compact gl-src" ' +
       'style="width:100%;" value="' + esc(r[0]) + '"></td>' +
       '<td style="padding:2px 4px;"><input class="form-input compact gl-dst" ' +
       'style="width:100%;" value="' + esc(r[1]) + '">' +
       // 别名第三列只读展示（不由前端编辑；无别名不渲染，保存时后端保留）
-      (r[2] ? '<div style="font-size:11px; color:#888; margin-top:1px;">' + MSG.alias_label +
+      (r[2] ? '<div style="font-size:11px; color:var(--text-muted); margin-top:1px;">' + MSG.alias_label +
         esc(r[2]) + '</div>' : '') + '</td>' +
       '<td style="text-align:center;"><input type="checkbox" class="gl-sel"></td>' +
       '</tr>').join('');
@@ -1821,7 +1825,7 @@ function switchTab(tabId) {
       if (empty) empty.style.display = 'none';
       const rows = r.rows || [];
       tb.innerHTML = rows.map(row =>
-        '<tr style="border-bottom:1px solid #ddd;">' +
+        '<tr style="border-bottom:1px solid var(--border-color);">' +
         '<td style="padding:2px 4px;">' + esc(row.source || '') + '</td>' +
         '<td style="padding:2px 4px;">' + esc(row.target || '') + '</td>' +
         '<td style="padding:2px 4px;">' + esc(row.aliases || '') + '</td>' +
@@ -1907,11 +1911,11 @@ function switchTab(tabId) {
       if (r.success) {
         $('refineTemplateText').value = r.text;
         if (st) {
-          st.style.color = '#888';
+          st.style.color = 'var(--text-muted)';
           st.textContent = (r.note ? '📌 ' + r.note + '  ' : '') + r.path;
         }
       } else if (st) {
-        st.style.color = 'crimson'; st.textContent = r.error;
+        st.style.color = 'var(--status-err)'; st.textContent = r.error;
       }
     } catch (e) { if (st) st.textContent = '❌ ' + e; }
   }
@@ -1924,7 +1928,7 @@ function switchTab(tabId) {
         idx, $('refineTemplateText').value,
         $('refineTemplatesDir') ? $('refineTemplatesDir').value : null);
       if (st) {
-        st.style.color = r.success ? 'green' : 'crimson';
+        st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
         st.textContent = r.success ? MSG.tpl_saved(r.path) : '❌ ' + r.error;
       }
     } catch (e) { if (st) st.textContent = '❌ ' + e; }
@@ -1946,6 +1950,7 @@ function switchTab(tabId) {
       $('refineCleanerConfig').value = r.path;
       const show = $('refineCleanerConfigShow');
       if (show) show.value = r.path;
+      saveCleanerDir();   // 程序性赋值不触发 change，显式持久化
     }
   }
 
@@ -2004,13 +2009,13 @@ function switchTab(tabId) {
           // 跳过不入库——空串即可覆盖清除旧存档值
           v2_ctx: readRefineCtx() || '' });
       if (st) {
-        st.style.color = r.success ? 'green' : 'crimson';
+        st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
         st.textContent = r.success
           ? MSG.endpoints_saved + MSG.resume_fingerprint_hint
           : '❌ ' + r.error;
       }
     } catch (e) {
-      if (st) { st.style.color = 'crimson'; st.textContent = '❌ ' + e; }
+      if (st) { st.style.color = 'var(--status-err)'; st.textContent = '❌ ' + e; }
     }
   }
 
@@ -2085,6 +2090,13 @@ function switchTab(tabId) {
         if (dC3 && r.settings.direction_card_s3 != null) {
           dC3.value = String(r.settings.direction_card_s3);
         }
+        // 净语配置目录回填（空串=未指定，走自动查找回落链）
+        const ccd = $('refineCleanerConfig');
+        if (ccd && r.settings.cleaner_config_dir != null) {
+          ccd.value = String(r.settings.cleaner_config_dir);
+          const show = $('refineCleanerConfigShow');
+          if (show) show.value = ccd.value;
+        }
       }
       refreshServiceQuickRow();
     } catch (e) { console.warn('[refine] 读取已保存接口配置失败', e); }
@@ -2113,6 +2125,31 @@ function switchTab(tabId) {
       if (!el) continue;
       el.addEventListener('change', saveDirection);   // select 即时保存保留
       el.addEventListener('input', saveDebounced);    // text input 双通道
+    }
+  }
+
+  // 净语配置目录持久化（批1 D2026-0930-07 bug 修复：浏览/输入值经
+  // settings 键 cleaner_config_dir 保存，重启由 applySavedStageSettings
+  // 回填；trim 后空串=未指定，后端走 config/templates→包内默认回落链）
+  function saveCleanerDir() {
+    pywebview.api.refine_save_stage_settings(null, null, {
+      cleaner_config_dir: (($('refineCleanerConfig') || {}).value || '').trim()
+    }).catch((e) => console.warn('[refine] 净语配置目录保存失败', e));
+  }
+
+  // 与方向控件同款双通道：change 即存 + input 400ms 防抖兜底
+  // （show 输入框当前 readonly，input 通道为防御性保留）
+  function bindCleanerDirControls() {
+    let t = null;
+    const saveDebounced = () => {
+      clearTimeout(t);
+      t = setTimeout(saveCleanerDir, 400);
+    };
+    for (const id of ['refineCleanerConfig', 'refineCleanerConfigShow']) {
+      const el = $(id);
+      if (!el) continue;
+      el.addEventListener('change', saveCleanerDir);
+      el.addEventListener('input', saveDebounced);
     }
   }
 
@@ -2161,6 +2198,20 @@ function switchTab(tabId) {
       refreshModels(1);
       refreshModels(3);
     }
+  }
+
+  // 反向同步（批1 D2026-0930-07）：引擎页阶段A/B provider 变化后刷新
+  // 快捷条显示——A/B 一致且为快捷条已知选项时跟随显示该值；否则置空
+  // （中性态）。只改显示不写 settings：engine 页 provider 的持久化仍走
+  // 「保存接口配置」按钮通道，service_quick 键仅在快捷条自身变更时写。
+  function syncServiceQuickFromStages() {
+    const quick = $('refineServiceQuick');
+    if (!quick) return;
+    const p1 = ($('refineS1Provider') || {}).value || '';
+    const p3 = ($('refineS3Provider') || {}).value || '';
+    const known = [...quick.options].some(o => o.value === p1);
+    quick.value = (p1 && p1 === p3 && known) ? p1 : '';
+    refreshServiceQuickRow();
   }
 
   // ---- 质量报告导读查看器（W1b：仅读 *_质量报告导读.json，不读 txt/全量 json）----
@@ -2240,7 +2291,7 @@ function switchTab(tabId) {
             + esc(o.timing) + '｜' + esc(o.message) + '｜'
             + MSG.guide_item_current_label + cur + '｜' + esc(o.status)
             + (hasTiming
-              ? ' <button type="button" class="btn btn-text btn-sm'
+              ? ' <button type="button" class="btn btn-ghost btn-sm'
                 + ' btn-audio-preview" data-timing="' + esc(o.timing)
                 + '">' + esc(MSG.preview_play_btn) + '</button>'
               : '')
@@ -2348,7 +2399,7 @@ function switchTab(tabId) {
     const st = $('guideCustomStatus');
     if (!st) return;
     st.textContent = text || '';
-    st.style.color = isError ? 'crimson' : '#888';
+    st.style.color = isError ? 'var(--status-err)' : 'var(--text-muted)';
   }
 
   // 完成翻译后的静默自动探测：成功才展开面板，失败不打扰用户
@@ -2692,6 +2743,7 @@ function switchTab(tabId) {
         const sel = $('refineS' + n + 'Model');
         if (sel) sel.innerHTML = '<option value="">' + MSG.model_refresh_hint + '</option>';
         applyProviderEndpoint(n);
+        syncServiceQuickFromStages();
         if (window.__pywebviewReady) refreshModels(n);
       });
       const kb = $('refineSaveS' + n + 'KeyBtn');
@@ -2772,21 +2824,6 @@ function switchTab(tabId) {
 
     // S3 引擎联动已随 v2 移除（原 updateS3EngineUI）
     // 性暗示词替换按钮已随 legacy 管线删除
-
-    // 词库编辑器标签页切换
-    document.querySelectorAll('.gl-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.gl-tab').forEach(b => {
-          b.classList.remove('active');
-          b.style.borderBottom = '2px solid transparent';
-        });
-        btn.classList.add('active');
-        btn.style.borderBottom = '2px solid #1a73e8';
-        const tab = btn.dataset.tab;
-        const glTab = $('glTabGlossary');
-        if (glTab) glTab.style.display = tab === 'glossary' ? '' : 'none';
-      });
-    });
 
     // 质量报告导读查看器（W1b）
     const guideBtn = $('refineGuideLoadBtn');
@@ -2901,8 +2938,8 @@ function switchTab(tabId) {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;';
         const badge = info.available
-          ? `<span class="pill" style="color:var(--accent,#2a7);">${esc(MSG.dict_status_available)}</span>`
-          : `<span class="pill" style="color:var(--muted,#987);">${esc(MSG.dict_status_unavailable)}</span>`;
+          ? `<span class="pill pill-success">${esc(MSG.dict_status_available)}</span>`
+          : `<span class="pill" style="color:var(--text-muted);">${esc(MSG.dict_status_unavailable)}</span>`;
         const custom = info.custom_path
           ? `<span class="muted" title="${esc(info.custom_path)}">${esc(MSG.dict_custom_path)}</span>`
           : '';
@@ -2980,16 +3017,11 @@ function switchTab(tabId) {
   async function loadRemote() {
     applySavedStageSettings();
     bindDirectionControls();
+    bindCleanerDirControls();
     dataRootLoad();
     dictLoad();
-    // 净语配置目录默认值
-    const defCleanerDir = 'config/templates';
-    if ($('refineCleanerConfig') && !$('refineCleanerConfig').value) {
-      $('refineCleanerConfig').value = defCleanerDir;
-    }
-    if ($('refineCleanerConfigShow') && !$('refineCleanerConfigShow').value) {
-      $('refineCleanerConfigShow').value = defCleanerDir;
-    }
+    // 净语配置目录：不再硬编码填充——留空=自动查找（回落链
+    // config/templates→包内默认）；已存值由 applySavedStageSettings 回填
     glLoad();
     glLearnedLoad();
     for (const n of [1, 3]) {

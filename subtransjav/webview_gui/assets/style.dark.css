@@ -50,6 +50,15 @@
 
     /* Focus affordance */
     --focus-ring: 0 0 0 3px rgba(68, 147, 248, 0.35);
+
+    /* Semantic status tokens (D2026-0930-07 2c): --status-ok / --status-err
+       alias --success-color / --danger-color and inherit the overrides above;
+       only warn needs an explicit override (#B26A00 amber is too dark on
+       near-black). --text-muted already overridden above (#6E7681).
+       App shell audit (2d): side-tabs / side-tab-btn / service-quick-bar
+       consume --section-bg / --border-color / --hover-tab-bg / --primary-color
+       / --text-secondary only — all overridden above, contrast verified. */
+    --status-warn: var(--warning-color);
 }
 
 /* ============================================================
@@ -98,11 +107,11 @@
     background: var(--secondary-hover);
 }
 
-.btn-text {
+.btn-ghost {
     color: var(--primary-color);
 }
 
-.btn-text:hover:not(:disabled) {
+.btn-ghost:hover:not(:disabled) {
     background: rgba(68, 147, 248, 0.15);
 }
 
@@ -132,17 +141,6 @@
 
 ::-webkit-scrollbar-thumb:hover {
     background: #3D444D;
-}
-
-/* Glossary sub-tab (.gl-tab): base rule sets no color, so it falls
-   back to the UA button default (pure black) which is unreadable on
-   the near-black page background */
-.gl-tab {
-    color: var(--text-secondary);
-}
-
-.gl-tab.active {
-    color: var(--primary-color);
 }
 
 /* Guide txt read-only view: keep console identity on dark theme */

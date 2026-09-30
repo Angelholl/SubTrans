@@ -1532,3 +1532,38 @@ def test_stage_settings_direction_keys_roundtrip(gui_api_obj, tmp_path,
     assert (s["direction_source"], s["direction_target"]) == ("zh", "en")
     assert s["direction_card_s1"] == "cards/a.txt"
     assert s["direction_card_s3"] == "cards/b.txt"
+
+
+def test_stage_settings_cleaner_config_dir_roundtrip(gui_api_obj, tmp_path,
+                                                     monkeypatch):
+    """cleaner_config_dir 写→读一致（settings 顶层字典任意键，含空串）。"""
+    path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(path))
+    r = gui_api_obj.refine_save_stage_settings(
+        settings={"cleaner_config_dir": "config/templates"})
+    assert r["success"] is True
+    got = gui_api_obj.refine_get_stage_settings()
+    assert got["success"] is True
+    assert got["settings"]["cleaner_config_dir"] == "config/templates"
+    # 空串覆盖清除旧存档值（回填侧得到留空=自动查找语义）
+    r2 = gui_api_obj.refine_save_stage_settings(
+        settings={"cleaner_config_dir": ""})
+    assert r2["success"] is True
+    got2 = gui_api_obj.refine_get_stage_settings()
+    assert got2["settings"]["cleaner_config_dir"] == ""
+
+
+def test_build_refine_args_cleaner_config_dir_flag():
+    """cleaner_config_dir 非空才拼 --cleaner-config；空串/缺席不拼。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "profile": "local",
+                               "cleaner_config_dir": "config/templates"})
+    joined = " ".join(args)
+    assert "--cleaner-config config/templates" in joined
+
+    for empty in ("", None):
+        opts = {"inputs": ["a.srt"], "profile": "local"}
+        if empty is not None:
+            opts["cleaner_config_dir"] = empty
+        joined2 = " ".join(_build_refine_args(opts))
+        assert "--cleaner-config" not in joined2
