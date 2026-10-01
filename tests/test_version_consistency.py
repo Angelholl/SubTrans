@@ -37,7 +37,9 @@ def test_display_version_tracks_pep440_version():
 def test_version_info_tracks_pep440_version():
     from subtransjav.__version__ import __version__, __version_info__
 
-    major, minor, patch = (int(x) for x in __version__.split("."))
+    # main 常驻滚动 dev 号（D2026-1001-03 第⑧项）：__version__ 形如 "2.3.0.dev0"，
+    # 仅取前三段数字段校验；发布版无 dev 后缀时同样兼容，断言语义不变
+    major, minor, patch = (int(x) for x in __version__.split(".")[:3])
     assert __version_info__["major"] == major
     assert __version_info__["minor"] == minor
     assert __version_info__["patch"] == patch
