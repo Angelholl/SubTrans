@@ -2393,3 +2393,38 @@ ruff 全仓 0｜mypy（aggregate_stats/quality_advisor）0｜冒烟 --help OK｜
 ### 四、后续风险跟踪
 
 ①G3：批次 E 语料源片可播放性待 owner 核实（影响定阈退路二选一的可行性）；②阶段 2 启动前置三项（INFO_GAP-1 答复+服务商候选清单+威胁模型 §8 扩写重评）缺一不可；③定阈"参数化回填"为独立验收项不随路线成败；④10~20 片定阈与批 3 验收合并执行口径已立（§4.4）。
+
+---
+
+## [2026-10-02] [D2026-1002-04-批3] 批 3「媒体重点分析·路线 B」开工决议+实现落库 [已拍板·已执行]
+
+**关联**：D2026-1002-04（选型定稿+两项 INFO_GAP 呈报）、owner 四项决策（2026-10-02：云端不接受因限制级内容云端失败风险→路线 B 独走；2.6.0 三批齐发暂不发版；ASR 环境=探测+可选+推荐下载暂定 whisper/qwen；批次 E 不再启用→定阈退路=沿用初值标"未定阈"）、docs/design/d260-批3-批清单.md。**背景授权**：owner 无人值守连续推进指令。
+
+### 一、开工评议（有条件放行 + 1 HRO 采纳方案 a）
+
+**[HIGH_RISK_OBJECTION]（qwen 下载件）采纳方案 a**：HF 多文件目录撞 dict_manager"单一文件"不变式（:15/:97）→ **qwen 下载随运行器移下批**，推荐清单保留两件、qwen 标"下一版本支持"不设下载按钮；本批下载件仅 whisper-large-v2（单文件+sha256 pin，3,086,999,982B/81f7c96c…**本机实测核算**）。
+C2-C10 全采纳：C2 探测升 --selfcheck（导入链+whisper 导入+模型缓存定位，防假阳性）；C3 运行器导入图钉（顶部纯 stdlib、whisper 懒加载，静态测试钉）；C4 预算实现前列名（修订：静态键 +1 恰达 192 无需扩 cap，cap 扩 200 记下一 UI 批首件）；C5 清单强制 sha256 pin+allow_unverified 恒 False；C6 对照块 ≤2000+非真值声明+知情行（CLI 机器标记→GUI 状态行）；C7 审计①②归档+威胁模型 §9 音频注入面登记；C8 失败/完成后切片 best-effort 清理；C9 探测优先级 env>settings>实测默认>不可用成文；C10 media_crosscheck_enabled 双钉+asr_model/asr_python 负向钉+CLI 旗标镜像 --ai-model。
+
+### 二、执行记录
+
+| 面 | 内容 |
+|---|---|
+| 新 asr_runner.py | 上游 env 执行的运行器（--selfcheck/--audio，stdout JSON 契约，whisper 懒加载） |
+| 新 asr_env.py | 探测（三级候选+selfcheck+缓存枚举≥1GB）/run_transcription（子进程 JSON 解析降级）/slice_clips（ffmpeg list-args 16k 单声道，≤20 段，sha256 指纹命名+清理）/build_crosscheck_block（≤2000+非真值声明）/下载薄委托 dict_manager |
+| dict_manager | 白名单+openaipublic；`_sha256_stream` 流式（GB 禁整读）；`download_asr_model`+进度快照（.part+replace 沿既有已审模式；落点常量字面量+根前缀断言） |
+| quality_advisor | crosscheck_block 第五 additive 参数；run_ai_analyze 编排 `_build_media_crosscheck`（媒体定位→切片→重转写→对照块+`[crosscheck] segments=N` 知情标记+C8 清理） |
+| config/cli | media_crosscheck_enabled bool 默认开（TUNABLE+dataclass）；--asr-model/--asr-python（不入指纹负向钉随批） |
+| api.py | refine_asr_status/refine_asr_download（后台线程+防重入）/refine_asr_download_progress 三桥+refine_ai_analyze 旗标透传+crosscheck_segments 知情返回 |
+| 前端 | 引擎页 ASR 卡（探测行/下拉含 qwen 禁选占位/下载按钮按 model_present 显隐/进度三件套）+MSG 14 键+选择持久化 |
+
+### 三、验证链（全绿）
+
+ruff 全仓 0｜mypy refine/ 43 文件 0｜node --check｜定向 136+14 passed｜全量 **1638 passed+4 skipped**（+14 只增）｜gate check 丢失 0→**新基线 190/192** 告警 0 落盘｜Mimosa deep 31=基线零新增（seal 见提交 verify 行）｜黑盒 A1-A4 全 PASS（真实上游探测回显/三选项含 qwen 禁选/下载按钮显隐/持久化断言/暗色渲染，截图 %TEMP%\gui-263-asr\）｜GUI 已验证。
+
+### 四、是否 [PRESSURE-OVERRIDE]
+
+否（owner 四项决策明示+无人值守授权；HRO 采纳闭环；音频零出域）。
+
+### 五、后续风险跟踪
+
+①**qwen 运行器批（下批首件）**：HF 仓库布局核实（I1）→多文件清单 schema+目录落位=from_pretrained 可加载+加载 smoke，开工前二级评议；②静态键 192 满额——下一 UI 耗键批首件=扩 cap 192→200 提案；③crosscheck 默认开+知情行已随批验证（防静默增耗）；④ASR 文本注入面已登记威胁模型 §9（信任域=字幕文本），AI 分析改动回归时复核；⑤**2.6.0 发版=批 1+2+3 齐发**（owner 拍板），发版走 release/2.6.0 分支制+dispatch 试构建先行。
