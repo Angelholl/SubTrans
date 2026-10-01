@@ -43,7 +43,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: full; Description: 标准安装
 
 [Files]
-; onedir 全量递归打包（含 _internal）；词典数据不随安装器分发（去捆绑口径）
+; onedir 全量递归打包（含 _internal）；Excludes 作双保险——spec 已无条件剔除词典数据（D3 去捆绑口径）
+Source: "..\Temp\pyinstaller_dist\SubTransJAV\*"; DestDir: "{app}"; Excludes: "system.dic"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
