@@ -23,7 +23,6 @@
 """
 
 import hashlib
-import io
 import os
 import zipfile
 from pathlib import Path
@@ -39,6 +38,9 @@ _URL_HOST_ALLOW = {
     "pypi.tuna.tsinghua.edu.cn",
     "mirrors.aliyun.com",
     "mirrors.cloud.tencent.com",
+    # sudachi_full 完整版 CDN 直链（2.5.0 修复A）：固定上游官方域名、仅 https、
+    # 落位经 DictChecksumError 校验拒串改
+    "d2ej7fkh96fzlu.cloudfront.net",
 }
 
 
@@ -144,14 +146,34 @@ def _validate_url(url: str) -> str:
     return url
 
 
+def _check_free_space(dest_dir: str, need_bytes: int) -> None:
+    """磁盘空间预检：可用 < need_bytes 即拒（DictDownloadError）。
+
+    量纲口径（2.5.0 修复A）：下载前=zip 体积+2×解压产物（.part/最终 zip
+    与解压临时/落位并存的最坏情况）；解压前从 zipinfo 实时取 2×member
+    体积。清单缺字段时仅解压前一道防线兜底。
+    """
+    import shutil
+    try:
+        free = shutil.disk_usage(dest_dir).free
+    except OSError:
+        return                      # 卷信息不可得时不阻塞下载
+    if free < need_bytes:
+        raise DictDownloadError(
+            f"磁盘可用空间不足：本次约需 {need_bytes // (1024 * 1024)}MB，"
+            f"当前仅剩 {free // (1024 * 1024)}MB（请清理后重试，或改用 "
+            f"--dict-from-file 指向其他盘的离线包）")
+
+
 def _http_get(url: str, dest: str, progress=None) -> None:
-    """下载到 dest（先写 .part 再原子改名；dest 由调用方约束在数据根
-    词典目录内且父目录已建）。
+    """下载到 dest（流式分块落盘，.part 先写再原子改名；dest 由调用方
+    约束在数据根词典目录内且父目录已建）。
+
+    2.5.0 修复A：弃全量进内存（full 的 137MB zip + 内存缓冲双份不可接受），
+    1MB 分块直接写盘。
 
     progress 为可选回调 ``progress(downloaded_bytes, total_bytes)``
-    （total 取 Content-Length 响应头，缺席为 None；分块 1MB 读取逐块
-    上报，第四批词典下载进度）——缺省 None 时一次性 read，行为与历史
-    版本一致。
+    （total 取 Content-Length 响应头，缺席为 None；逐块上报）。
 
     禁 shell、零新依赖（urllib 标准库）；URL 经 ``_validate_url`` 白名单
     校验（仅 https+固定域名，防清单被篡改后指内网）；socket 级超时 10s；
@@ -163,27 +185,25 @@ def _http_get(url: str, dest: str, progress=None) -> None:
     tmp = dest + ".part"
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            if progress is None:
-                data = resp.read()          # 旧行为：一次性读
-            else:
+            total = None
+            try:
+                cl = resp.headers.get("Content-Length")
+                total = int(cl) if cl else None
+            except (TypeError, ValueError):
                 total = None
-                try:
-                    cl = resp.headers.get("Content-Length")
-                    total = int(cl) if cl else None
-                except (TypeError, ValueError):
-                    total = None
-                buf = bytearray()
+            done = 0
+            with open(tmp, "wb") as out:
                 while True:
                     chunk = resp.read(1024 * 1024)
                     if not chunk:
                         break
-                    buf.extend(chunk)
-                    progress(len(buf), total)
-                data = bytes(buf)
+                    out.write(chunk)
+                    done += len(chunk)
+                    if progress is not None:
+                        progress(done, total)
     except Exception as e:  # noqa: BLE001 - 网络层统一转义
         _unlink_quiet(tmp)
         raise DictDownloadError(f"{url} -> {type(e).__name__}: {e}") from e
-    Path(tmp).write_bytes(data)
     os.replace(tmp, dest)
 
 
@@ -195,19 +215,43 @@ def _unlink_quiet(path: str) -> None:
 
 def _extract_dic(archive_path: str, member_suffix: str,
                  dest_path: str) -> str:
-    """从 zip/whl 提取词典文件（按 member 后缀匹配）到 dest（原子改名）。"""
-    data = _validated_path(archive_path).read_bytes()
+    """从 zip/whl 提取词典文件到 dest（流式分块写+原子改名）。
+
+    2.5.0 修复A 加固：①弃 read_bytes 全量双缓冲（full 的 .dic 解压后
+    330MB 档位 OOM 风险），z.open+4MB 分块写；②member 匹配改 basename
+    兼容（部分 zip 内部条目用 ``\\`` 分隔破 endswith，归一化后按完整
+    后缀或 basename 后缀双通道匹配）；③解压前磁盘预检（2×member 体积，
+    .extracting 临时+最终落位并存最坏情况）。
+    """
+    archive = _validated_path(archive_path)
     tmp = Path(dest_path + ".extracting")
+    suffix_norm = member_suffix.replace("\\", "/")
+    base_suffix = os.path.basename(suffix_norm) if suffix_norm else ""
+
+    def _match(name: str) -> bool:
+        n = name.replace("\\", "/")
+        if suffix_norm and n.endswith(suffix_norm):
+            return True
+        if base_suffix and os.path.basename(n).endswith(base_suffix):
+            return True
+        return member_suffix == "" and os.path.basename(n).endswith(".dic")
+
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
-            names = [n for n in z.namelist()
-                     if n.endswith(member_suffix) or
-                     (member_suffix == "" and n.endswith(".dic"))]
+        with zipfile.ZipFile(archive) as z:
+            names = [n for n in z.namelist() if _match(n)]
             if not names:
                 raise DictChecksumError(
                     f"压缩包内未找到词典文件（*{member_suffix or '.dic'}）: "
-                    f"{archive_path}")
-            member_data = z.read(names[0])
+                    f"{archive}")
+            zinfo = z.getinfo(names[0])
+            _check_free_space(str(Path(dest_path).parent),
+                              2 * zinfo.file_size)
+            with z.open(names[0]) as src, open(tmp, "wb") as out:
+                while True:
+                    chunk = src.read(4 * 1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
     except DictChecksumError:
         _unlink_quiet(str(tmp))
         raise
@@ -215,7 +259,6 @@ def _extract_dic(archive_path: str, member_suffix: str,
         _unlink_quiet(str(tmp))
         raise DictChecksumError(
             f"词典压缩包解析失败: {type(e).__name__}: {e}") from e
-    tmp.write_bytes(member_data)
     os.replace(str(tmp), dest_path)
     return dest_path
 
@@ -273,6 +316,12 @@ def download_dict(kind: str, allow_unverified: bool = False,
             url = d.get("url") or ""
             tmp = str(_ensure_inside_dict_root(
                 out_dir / (target_name + ".downloading")))
+            # 下载前磁盘预检（量纲=zip+2×解压产物；清单带 expected_* 字段时
+            # 生效，缺字段由 _extract_dic 内 zipinfo 实时预检兜底）
+            exp_d = int(entry.get("expected_download_bytes") or 0)
+            exp_e = int(entry.get("expected_extracted_bytes") or 0)
+            if exp_d and exp_e:
+                _check_free_space(str(out_dir), exp_d + 2 * exp_e)
             # 跨源 fallback：每源重置计数（downloaded=0/total=None）
             _set_download_progress(kind, "download", 0, None)
             try:
@@ -302,16 +351,30 @@ def download_dict(kind: str, allow_unverified: bool = False,
         raise
 
 
+def _kind_dict_file(kind: str) -> Path:
+    """某 kind 落位词典文件路径（清单缺 kind/字段非法抛异常，调用方捕获）。"""
+    entry = load_source_manifest()["dicts"][kind]
+    install = _safe_component(entry.get("install_dir") or kind)
+    target = _safe_component(entry.get("target_name") or "")
+    return Path(dict_dir()) / install / target
+
+
 def sudachi_custom_dict_path() -> str:
-    """用户下载的 Sudachi 词典路径；不存在返回空串（grammar_hint 回退内置）。"""
-    try:
-        entry = load_source_manifest()["dicts"]["sudachi"]
-        install = _safe_component(entry.get("install_dir") or "sudachi")
-        target = _safe_component(entry.get("target_name") or "system_core.dic")
-    except (KeyError, DictChecksumError):
-        return ""
-    p = Path(dict_dir()) / install / target
-    return str(p) if p.is_file() else ""
+    """用户下载的 Sudachi 词典路径（full 优先→core→空串）。
+
+    2.5.0 修复A：kind 双变体（sudachi=core / sudachi_full，同目录二选一
+    也可并存）——同目录两 dic 时取 full（词覆盖更全）；均不存在返回空串
+    （grammar_hint 走降级链）。"""
+    candidates = []
+    import contextlib
+    with contextlib.suppress(KeyError, DictChecksumError):
+        candidates.append(_kind_dict_file("sudachi_full"))
+    with contextlib.suppress(KeyError, DictChecksumError):
+        candidates.append(_kind_dict_file("sudachi"))
+    for p in candidates:
+        if p.is_file():
+            return str(p)
+    return ""
 
 
 def dict_status() -> dict:
@@ -331,6 +394,14 @@ def dict_status() -> dict:
         if kind == "sudachi":
             available = grammar_hint.is_grammar_hint_available()
             custom = sudachi_custom_dict_path()
+        elif kind == "sudachi_full":
+            # kind 兼容三联（2.5.0 修复A C4）：available=落位文件存在
+            # （防误用恒 True 报"可用"实则未下载）
+            try:
+                available = _kind_dict_file(kind).is_file()
+            except DictChecksumError:
+                available = False
+            custom = ""
         elif kind == "jieba":
             available = find_spec("jieba") is not None
             custom = ""

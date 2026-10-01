@@ -1001,7 +1001,8 @@ class TranslateAPI:
                 DictDownloadError,
                 download_dict,
             )
-            if kind != "sudachi":
+            if kind not in ("sudachi", "sudachi_full"):
+                # 2.5.0 修复A：kind 兼容三联——硬拒放开为双词典 kind 白名单
                 return {"success": False,
                         "error": msg("dict_kind_unsupported")}
             path = download_dict(kind)
@@ -1704,8 +1705,11 @@ class TranslateAPI:
         p = str(report_path or "").strip()
         if not p:
             return {"success": False, "error": msg("guide_path_empty")}
+        # 2.5.0 修复B：守卫 _resolve_safe_path（home/仓库根白名单）→
+        # _validate_user_directory（任意用户磁盘目录、拦系统目录+可执行；
+        # 与 read_output_artifact 同口径），后缀白名单 _AI_REPORT_SUFFIX 保留
         try:
-            p = str(_resolve_safe_path(p))
+            p = str(_validate_user_directory(p))
         except ValueError as ve:
             return {"success": False, "error": msg("guide_path_denied", e=ve)}
         if not os.path.isfile(p):

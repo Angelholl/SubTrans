@@ -455,6 +455,15 @@ const MSG = {
     ui_ok: '确定',
     ui_cancel: '取消',
     first_run_guide: '首次使用：点击「添加文件」导入 .srt 字幕，或直接拖入文件开始翻译。',
+    // 2.5.0 修复批（JS 态键）：词典 full 变体/云分析确认/角色卡跳转与回落提示
+    dict_sudachi_full_label: '日语词典·完整版（sudachi full）',
+    dict_sudachi_full_desc: '完整版词典数据（语法提示分词用，与 core 版二选一即可；官方 CDN 单源直链，点下方按钮下载）',
+    aiCloudConfirm: p => `当前阶段A 服务商为「${p}」（云端），质量报告内容将发送至云端进行 AI 分析。确认继续吗？`,
+    tpl_goto_edit: '去编辑',
+    tpl_goto_empty_hint: '该阶段角色卡未显式指定（留空=自动查找回落链）；编辑器仅支持角色卡目录内顶层文件',
+    tpl_goto_outside_hint: '显式卡在角色卡目录外，编辑器仅支持目录内文件；已在下方定位角色卡目录',
+    tpl_save_hint_explicit: '（显式卡路径指向同名文件，保存后自动生效）',
+    tpl_save_hint_auto: '（角色卡输入留空=自动查找回落链）',
 };
 
 // i18n 注入：DOMContentLoaded 时把 MSG 写回带 data-i18n* 标记的元素
@@ -1175,7 +1184,9 @@ const SystemSummary = {
             if (!r || !r.success || !r.dicts) return null;
             const kinds = Object.values(r.dicts);
             const ok = kinds.filter(d => d && d.available).length;
-            return `${ok}/${kinds.length} ${MSG.dict_status_available}`;
+            // 修复A：分母取 DICT_KINDS 桥接值（防 manifest 增 kind 时前端漂移/漏改）
+            const total = window.AppDictKindsCount || kinds.length;
+            return `${ok}/${total} ${MSG.dict_status_available}`;
         });
     },
 
@@ -2293,6 +2304,59 @@ function switchTab(tabId) {
     } catch (e) { if (st) st.textContent = '❌ ' + e; }
   }
 
+  // 2.5.0 修复D：高级参数阶段A/B 角色卡"去编辑"跳转——两分支写死：
+  // 显式卡路径父目录恰为模板服务端目录且文件名∈refine_list_templates 返回集
+  // （"目录内"定义，子目录属目录外）=跳词库页+编辑器精确打开（canonical→
+  // 下拉 tag 值映射）；目录外=降级跳词库页+定位角色卡目录+状态行提示
+  async function tplGotoEdit(stage) {
+    const inp = $('directionCard' + stage);
+    const p = ((inp && inp.value) || '').trim();
+    switchTab('tab-glossary');
+    const st = $('refineTemplateStatus');
+    if (!p) {
+      if (st) {
+        st.style.color = '';
+        st.textContent = MSG.tpl_goto_empty_hint;
+      }
+      tplRefreshSelect(false);
+      return;
+    }
+    // 列举刷新（显式路径可能刚填，缓存或已过期）
+    const dir = $('refineTemplatesDir') ? $('refineTemplatesDir').value : '';
+    let listing = tplDirState;
+    try {
+      listing = await pywebview.api.refine_list_templates(dir || null);
+      tplDirState = listing;
+      tplRenderOptions(listing);
+      tplRenderDatalist(listing);
+    } catch (e) { listing = null; }
+    const files = (listing && listing.success && Array.isArray(listing.files))
+      ? listing.files : [];
+    const canon = (listing && listing.success && listing.canonical) || {};
+    const serverDir = (listing && listing.success && listing.dir) || '';
+    const norm = (s) => String(s || '').replace(/\//g, '\\').toLowerCase();
+    const parentDir = p.replace(/[\\/][^\\/]*$/, '');
+    const fileName = p.split(/[\\/]/).pop() || '';
+    const inDir = serverDir && norm(parentDir) === norm(serverDir)
+      && files.some(f => f.name === fileName);
+    if (!inDir) {
+      if (st) {
+        st.style.color = 'var(--status-warn, #b8860b)';
+        st.textContent = MSG.tpl_goto_outside_hint;
+      }
+      const show = $('refineTemplatesDirShow');
+      if (show) show.focus();   // 定位角色卡目录
+      return;
+    }
+    // 目录内：canonical→tag 映射（A/B tag）或动态文件名选项精确打开
+    const tag = Object.keys(canon).find(t => canon[t] === fileName);
+    const sel = $('refineTemplateStage');
+    if (sel && (tag || files.some(f => f.name === fileName))) {
+      sel.value = tag || fileName;
+    }
+    tplLoad();
+  }
+
   async function tplSave() {
     const idx = ($('refineTemplateStage') || {}).value;
     const st = $('refineTemplateStatus');
@@ -2303,8 +2367,21 @@ function switchTab(tabId) {
         $('refineTemplatesDir') ? $('refineTemplatesDir').value : null,
         isStageTag ? null : idx);
       if (st) {
-        st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
-        st.textContent = r.success ? MSG.tpl_saved(r.path) : '❌ ' + r.error;
+        if (r.success) {
+          // 2.5.0 修复D：保存后按显式卡路径状态动态提示回落语义
+          const savedName = (r.path || '').split(/[\\/]/).pop() || '';
+          const c1 = (($('directionCardS1') || {}).value || '').trim();
+          const c3 = (($('directionCardS3') || {}).value || '').trim();
+          const sameName = [c1, c3].some(v =>
+            v && (v.split(/[\\/]/).pop() || '') === savedName);
+          const hint = sameName ? MSG.tpl_save_hint_explicit
+            : (!c1 && !c3) ? MSG.tpl_save_hint_auto : '';
+          st.style.color = 'var(--status-ok)';
+          st.textContent = MSG.tpl_saved(r.path) + (hint ? ' ' + hint : '');
+        } else {
+          st.style.color = 'var(--status-err)';
+          st.textContent = '❌ ' + r.error;
+        }
       }
     } catch (e) { if (st) st.textContent = '❌ ' + e; }
   }
@@ -2747,6 +2824,12 @@ function switchTab(tabId) {
     try {
       const r = await window.pywebview.api.read_output_artifact(p);
       if (r && r.success) {
+        // 修复C：载入新报告后清空旧 AI 分析结果——lastAiSuggestions=null
+        // 防 aiApplyGlossary/aiApplyTm 把旧建议落进新报告对应的词库/TM
+        // （错配消费），结果区 DOM 同步清零给用户可见反馈
+        lastAiSuggestions = null;
+        const air = $('refineAiResult');
+        if (air) air.innerHTML = '';
         const dv = $('refineGuideViewer');
         if (dv) dv.open = true;
         const geh = $('guideEmptyHint');
@@ -3037,6 +3120,12 @@ function switchTab(tabId) {
       aiStatus(MSG.aiNeedGuide);
       return;
     }
+    // 修复B：云 provider 发送前确认（与后端密钥注入表同集，zen 属云端）
+    const aiProv = (($('refineS1Provider') || {}).value || '').toLowerCase();
+    if (AI_CLOUD_PROVIDERS.includes(aiProv)) {
+      const go = await AppModal.confirm(MSG.aiCloudConfirm(aiProv));
+      if (!go) return;
+    }
     const btn = $('refineAiAnalyzeBtn');
     if (btn) btn.disabled = true;
     aiStatus(MSG.aiAnalyzing);
@@ -3049,7 +3138,12 @@ function switchTab(tabId) {
         aiRenderResult(r);
         aiStatus(MSG.aiDone);
       } else {
-        aiStatus(MSG.aiFailed((r && r.error) || MSG.unknown));
+        // 修复B：分析失败时 stderr_tail 首行摘要进错误信息（截断 200 字符）
+        let detail = (r && r.error) || MSG.unknown;
+        const tail = (r && r.stderr_tail) || '';
+        const firstLine = tail.split('\n').map(s => s.trim()).find(Boolean) || '';
+        if (firstLine) detail += '｜' + firstLine.slice(0, 200);
+        aiStatus(MSG.aiFailed(detail));
       }
     } catch (e) {
       aiStatus(MSG.aiFailed(e && e.message ? e.message : String(e)));
@@ -3192,6 +3286,11 @@ function switchTab(tabId) {
 
     const glAddBtn = $('refineGlAdd');
     if (glAddBtn) glAddBtn.addEventListener('click', glAdd);
+    // 2.5.0 修复D：高级参数阶段A/B 角色卡"去编辑"跳转（class 承载零 id 预算）
+    document.querySelectorAll('.tpl-goto-btn').forEach((b) => {
+      b.textContent = MSG.tpl_goto_edit;
+      b.addEventListener('click', () => tplGotoEdit(b.dataset.tplStage));
+    });
     // 学习词库只读刷新（词库与模板页）
     const glLearnedReload = $('glLearnedReloadBtn');
     if (glLearnedReload) glLearnedReload.addEventListener('click', glLearnedLoad);
@@ -3340,11 +3439,15 @@ function switchTab(tabId) {
   const DICT_KINDS = [
     { kind: 'sudachi', label: MSG.dict_sudachi_label,
       desc: MSG.dict_sudachi_desc, downloadable: true },
+    { kind: 'sudachi_full', label: MSG.dict_sudachi_full_label,
+      desc: MSG.dict_sudachi_full_desc, downloadable: true },
     { kind: 'jieba', label: MSG.dict_jieba_label,
       desc: MSG.dict_jieba_desc, downloadable: false },
     { kind: 'english_rules', label: MSG.dict_english_label,
       desc: MSG.dict_english_desc, downloadable: false },
   ];
+  // 修复A：词典卡分母单一事实源——顶层 SystemSummary 经此桥取 DICT_KINDS 长度
+  window.AppDictKindsCount = DICT_KINDS.length;
   // 词典状态缓存（B2 案批3）：dictLoad 拉取后写入，dictSelect change 复渲染读取
   let _dictStatusCache = {};
   let _dictDirCache = '';
@@ -3431,11 +3534,13 @@ function switchTab(tabId) {
     if (path) path.textContent = _dictDirCache;
     const pathRow = $('dictPathRow');
     if (pathRow) pathRow.style.display = '';
-    // R2 三态门控：sudachi 未装=primary「下载」/ 已装=ghost「重新下载」；
-    // jieba 无按钮只显 desc 指引（downloadable=false）；english 恒内置隐藏按钮
+    // R2 三态门控：可下载 kind（sudachi/sudachi_full）未装=primary「下载」/
+    // 已装=ghost「重新下载」；jieba 无按钮只显 desc 指引（downloadable=false）；
+    // english 恒内置隐藏按钮（修复A：下载门泛化由 DICT_KINDS.downloadable 驱动）
     const btn = $('dictActionBtn');
+    const dlItem = DICT_KINDS.find(k => k.kind === kind) || {};
     if (btn) {
-      if (kind === 'sudachi') {
+      if (dlItem.downloadable) {
         btn.style.display = '';
         btn.className = info.available ? 'btn btn-ghost btn-compact' : 'btn btn-primary btn-compact';
         btn.textContent = info.available ? MSG.dict_redownload : MSG.dict_download;

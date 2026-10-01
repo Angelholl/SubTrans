@@ -79,8 +79,10 @@ pip install -e .
 :: 安装（含桌面 GUI）
 pip install -e ".[gui]"
 
-:: 可选：日语语法提示词典数据（约 200MB；不装则语法提示自动降级，EXE 版可在引擎页"词典管理"下载）
-pip install -e ".[ja-dict]"
+:: 可选：日语语法提示词典数据（core 版/完整版二选一；不装则语法提示自动降级）
+:: 词典数据一律下载式——EXE 版在引擎页「词典管理」一键下载；pip/CLI 版：
+python -m subtransjav.refine.cli --dict-download sudachi          :: core 版
+python -m subtransjav.refine.cli --dict-download sudachi_full     :: 完整版（约 137MB zip，CDN 单源）
 ```
 
 ## LM Studio 配置指引（本地模型，普通用户视角）

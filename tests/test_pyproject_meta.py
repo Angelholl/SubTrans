@@ -1,9 +1,12 @@
-"""pyproject 元数据钉（D2026-1001 批2 D3 词典去捆绑防复发）。
+"""pyproject 元数据钉（2.5.0 修复A 重写，D2026-1001-06）。
 
-D3 推翻 D2026-0930-01 ⑧ + D2026-0930-03 ② 双决议：sudachidict_core
-（system.dic ~208MB）不再随 pip 主依赖/EXE 安装器分发，改 ja-dict
-可选 extra（pip 用户按需）+ GUI 引擎页下载（EXE 用户）。本钉防
-"捆绑口径"复活（双决议回潮）。
+词典数据政策=**一律下载式**（D3 去捆绑 + 修复A 显式复议采纳）：
+- D2026-1001-03 D3 的"ja-dict extra 保留"支柱因新实证失效——sudachidict_core
+  20260723.1 wheel requires_dist=null 无 resolver 冲突，且 0.6.x 引擎实证
+  无法加载新版 v1 词典（Invalid header 静默失败）；
+- 词典数据经 GUI 引擎页 / CLI --dict-download 下载式补齐，任何声明入口
+  不得携带词典数据。
+本钉防"声明式捆绑口径"复活。
 """
 import re
 from pathlib import Path
@@ -15,20 +18,25 @@ def _pyproject_text() -> str:
     return (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 
-def test_sudachidict_core_not_in_main_dependencies():
-    """sudachidict_core 不得出现在 [project] dependencies（仅允许 ja-dict extra）。"""
+def test_no_dict_data_declaration_entry():
+    """词典数据一律下载式：pyproject 不得出现任何词典数据声明入口。"""
     text = _pyproject_text()
-    m = re.search(r"^dependencies\s*=\s*\[(.*?)^\]", text, re.S | re.M)
-    assert m, "pyproject.toml 缺少 [project] dependencies"
-    assert "sudachidict_core" not in m.group(1), (
-        "sudachidict_core 回流主依赖（D3 去捆绑口径被破坏）；"
-        "仅允许 ja-dict extra 或用户经引擎页下载"
+    assert "sudachidict" not in text, (
+        "sudachidict 回流 pyproject（词典数据一律下载式，"
+        "D2026-1001-06 修复A）；词典经引擎页/--dict-download 补齐"
+    )
+    assert "ja-dict" not in text, (
+        "ja-dict extra 复活（0.6.x 无法加载 v1 词典，统一下载式口径；"
+        "D2026-1001-06 修复A 显式复议采纳）"
     )
 
 
-def test_ja_dict_extra_carries_sudachidict():
-    """ja-dict extra 在位且承载 sudachidict_core（pip 用户按需安装）。"""
+def test_sudachipy_pinned_to_0_7():
+    """sudachipy 主依赖（引擎包，非词典数据）钉 0.7 下限——0.6.x 加载
+    新版 v1 词典 Invalid header 静默失败（20260723 实证）。"""
     text = _pyproject_text()
-    m = re.search(r"^ja-dict\s*=\s*\[(.*?)^\]", text, re.S | re.M)
-    assert m, "pyproject.toml 缺少 ja-dict extra"
-    assert "sudachidict_core" in m.group(1), "ja-dict extra 未承载 sudachidict_core"
+    m = re.search(r'"sudachipy([^"]*)"', text)
+    assert m, "pyproject 缺少 sudachipy 主依赖"
+    assert "0.7.0" in m.group(1), (
+        "sudachipy 版本下限须 >=0.7.0（0.6.x + v1 词典 = Invalid header）"
+    )

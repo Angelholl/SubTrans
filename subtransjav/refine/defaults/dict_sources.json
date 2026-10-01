@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-09-30",
-  "note": "词典下载源清单（2.1，D2026-0930-03 ②）。三源策略：PyPI 官方（主）→ 清华镜像（fallback，网络失败才降级）→ 本地文件导入（离线备选，--dict-from-file）。sha256 为 PyPI JSON API 官方 digest（2026-09-30 核实）；镜像与官方为同一 wheel 文件、哈希一致。上游 SudachiDict 已转 PyPI-only 分发（GitHub release 无资产包）。词典版本升级=换行重核哈希。",
+  "updated": "2026-10-01",
+  "note": "词典下载源清单（2.1，D2026-0930-03 ②；2.5.0 修复A 增 sudachi_full 完整版变体）。core 三源策略：PyPI 官方（主）→ 清华镜像（fallback，网络失败才降级）→ 本地文件导入（离线备选，--dict-from-file）。sha256 为 PyPI JSON API 官方 digest（2026-09-30 核实）；镜像与官方为同一 wheel 文件、哈希一致。sudachi_full 为 CDN 直链 zip：sha256 来源=首次受控下载定 pin 单源 [UNVERIFIABLE 无第二源交叉]（2026-10-01 实下载 137,472,173B 核算），非 PyPI API 口径——PyPI 无 full 数据 wheel 仅 9KB 壳包；镜像缺口：tuna 等无该 CDN 镜像，CN 慢网兜底=--dict-from-file 离线导入。上游 SudachiDict 已转 PyPI-only 分发（GitHub release 无资产包）。词典版本升级=换行重核哈希。",
   "dicts": {
     "sudachi": {
       "description": "Sudachi 日语形态素分析词典（system_core，语法提示分词用）",
@@ -19,6 +19,22 @@
           "source": "tuna",
           "url": "https://pypi.tuna.tsinghua.edu.cn/packages/85/af/ba8419f684865b8cca587e01cedb41ba83fbdc985d75ab9e6ff38fdedf1a/sudachidict_core-20260723.1-py3-none-any.whl",
           "sha256": "2b711055dca03423869e491eca0ddbe3e17c4d7418ed738fd7c75d4e0eb9e4b1",
+          "sha256_verified": true
+        }
+      ]
+    },
+    "sudachi_full": {
+      "description": "Sudachi 日语形态素分析词典（system_full 完整版，语法提示分词用；与 core 二选一，同目录时完整版优先加载）",
+      "install_dir": "sudachi",
+      "target_name": "system_full.dic",
+      "archive_member": "system_full.dic",
+      "expected_download_bytes": 137472173,
+      "expected_extracted_bytes": 330563683,
+      "downloads": [
+        {
+          "source": "cloudfront-cdn",
+          "url": "https://d2ej7fkh96fzlu.cloudfront.net/sudachidict/v1/sudachi-dictionary-20260723-full.zip",
+          "sha256": "eb6d02206e93f1b62508c9f2d4d4940d6f82c7f63c630bc0c1c4f9c50b7e871e",
           "sha256_verified": true
         }
       ]
