@@ -78,6 +78,9 @@ pip install -e .
 
 :: 安装（含桌面 GUI）
 pip install -e ".[gui]"
+
+:: 可选：日语语法提示词典数据（约 200MB；不装则语法提示自动降级，EXE 版可在引擎页"词典管理"下载）
+pip install -e ".[ja-dict]"
 ```
 
 ## LM Studio 配置指引（本地模型，普通用户视角）

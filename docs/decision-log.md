@@ -2047,4 +2047,22 @@ Owner 指令「确认是否还有遗漏，本次任务解决所有挂账内容�
 
 ### 七、后续风险跟踪
 
-① 发版后 main 未前进下一 dev 号=新幽灵版本（★1 条件 1，入 release checklist）；② 攒批死线=下次真机走查结束后 3 日内复盘是否发（⑦），滑期须回本表复议；③ 攒批期间禁阶段3 回灌 2.2.0 重新发布（⑦附加条件）；**③′ D1-D4 执行衔接（开工 会话按"开工"执行中）：D2/D3 落地走批清单→二级评议→实现→验证链→release/2.3.0 发版（D3 解冻预算 id 165→~178/键 186→~192 须先更新钉⑤快照）；交接文档执行序中"发版后 main 回填即时"按本条新口径执行=前进下一 dev 号**；④ 「非中文 issue ≥5」按⑩口径滚动计数，触发即评审；⑤ premerge_max_gap_s：任一指纹/断点/恢复路径改动立项时先出兼容分析（旧断点读取+字段缺失降级+迁移测试），无方案不得动指纹哈希面；⑥ v2_outputs "done" payload：新增/改动消费端或结构时先做消费端核查；⑦ gui-probe 2026-11-01 首跳仍未触发→升格处置，不得仅再调时间；⑧ 钉⑤全集冻结下⑪落地新增 id/键须先更新冻结快照（承 :2000①）。
+① 发版后 main 未前进下一 dev 号=新幽灵版本（★1 条件 1，入 release checklist）；② 攒批死线=下次真机走查结束后 3 日内复盘是否发（⑦），滑期须回本表复议；③ 攒批期间禁阶段3 回灌 2.2.0 重新发布（⑦附加条件）；**③′ D1-D4 执行衔接（开工 会话按"开工"执行中）：D2/D3 落地走批清单→二级评议→实现→验证链→release/2.3.0 发版（D3 解冻预算 id 165→~178/键 186→~192 须先更新钉⑤快照）；交接文档执行序中"发版后 main 回填即时"按本条新口径执行=前进下一 dev 号**；
+
+---
+
+## [2026-10-01] [D2026-1001-03-阶段3] 二级评议签收：d1d4 批清单有条件放行→条件全部采纳→实现层闭环 [已采纳·实现闭环]
+
+关联一级：D2026-1001-03（本文件 :2005，版本口径 2.3.0.dev0、dev 号纪律、发版归 owner）。二级评议对象 `docs/design/d1d4-批清单.md`；按 D2026-1001-02-阶段3 先例，二级评议先于任何代码提交，本条目为签收证据。
+
+- **原决策**：2.3.0 三批（批1 D1 dropzone A 案零新增 id/键 / 批2 D3 词典去捆绑推翻 D2026-0930-01 ⑧+D2026-0930-03 ② 双决议 / 批3 D2 词典管理 B2 解冻 id+9/键+6）三提交+验证链+提交五步；发版归 owner（D4）。
+- **我的异议**：
+  - 无 [HIGH_RISK_OBJECTION]。
+  - 条件级 4 条（全部采纳）：**C1** 批1 `.has-files` 单点 toggle 须置于 render() 入口（app.js:652 空态分支提前 return 使"尾部"写法失效：清空后类残留、dropzone 卡 52px），改用 `getElementById('tab-translate')`；**C2** 批3 空态条件「三词典全未安装」不可达（dict_manager.py:336-337 english_rules 恒 available），改「sudachi 未安装」并定义 dictEmpty CTA 行为（自动选中 sudachi 并触发下载）；**C3** 批2 范围补 ci.yml:25 安装 `-e ".[dev,ja-dict]"`（去捆绑后新环境不再含 sudachidict_core，防 grammar-hint 用例入 skipped、破坏"基线只增"口径；备选=显式调基线口径，二选一不得沉默）；**C4** 批2 HRO② 措辞族 grep 显式化：词组 `未安装 sudachipy|内置|零参缺省`，命中清单 pipeline_v2.py:610/657/693/869、grammar_hint.py:41/53、cli.py:480 区，提交时对照复核（tests 无断言引用，仅 test_grammar_hint.py:281 注释）。
+  - 备注级 6 条：R1 Console "160-220px" 中 220 钉 max-height；R2 dictActionBtn 三态矩阵门控 `downloadable`（jieba=无按钮只指引、english=隐藏，D2 裁定落码）；R3 dictOpenDir 复用 openDir 链（app.js:2234→api.py:570，无新后端 API）；R4 README pip 安装提示 ja-dict extra+2.3.0 发布说明素材并入批 4 docs commit；R5 dictDownload 函数零改动边界自洽成立（:3305 终态文案临时闪回由 finally 重渲染覆盖）；R6 预算只封顶，JS 动态设定键（dict_redownload/dict_status_builtin）按 HTML 实际落点更新快照。
+  - 解冻程序核验（采纳依据）：FROZEN_IDS=165/FROZEN_I18N_KEYS=186 逐字复核一致；9 新 id+6 新键在现行 HTML 全 absent；既有 id/键零删除零改名由钉⑤全等断言（test_ui_phase3_redlines.py:146-161）机制锁定；复用键 dict_status_available/dict_status_unavailable/dict_download 为 JS MSG 键非冻结快照成员，不耗预算；六条 selectedFiles 变更路径实测全汇 render()（app.js:638/790/896/918/939/950），单点方案成立；dict-row 钉实测 test_gui_js_static.py:835-837 定位准确；spec:70-75 反收集过滤机制经 lite 产物实证；下载链（cli.py:487-505、api.py:991）不依赖 sudachidict_core 主依赖，去捆绑不破坏 CLI `--dict-download` 与 GUI 下载链可用性；release.yml 仓库内无 Release 创建步骤（止于 upload-artifact），"Release 组装"归 D4 owner 流程。
+- **主模型最终决定**：**全部采纳**——C1-C4 条件级全采纳、R1-R4 备注全采纳、R5/R6 记录在案；修订全部落进 d1d4-批清单.md（C1=render() 入口 toggle+六路径证据；C2=空态改「sudachi 未安装」+CTA 行为；C3=ci.yml 安装 [dev,ja-dict]；C4=三词组七处命中清单；R1=Console max-height:220；R2=三态门控 downloadable；R3=openDir 链复用；R4=批 4 README/发布说明素材）。
+- **条件是否已闭环**：条件级 C1-C4 已采纳进批清单（计划层闭环）；实现层闭环随执行记录回传验证，闭环路径=批1 黑盒四路径截图（空态 ~112px/52px 切换）、批3 fresh 环境空态 CTA 黑盒、批2 全量基线不变差+ci.yml 生效、批2 提交时对照 C4 命中清单。未闭环前本批不视为支持转正。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：①去捆绑后 fresh-env CI 与本地 .venv 词典数据不对称，批2 验证链明示；②dictEmpty 若条件/CTA 未按 C2 落实现将成为死 UI 占 2 键预算；③老用户升级词典残留不对称如实写入 2.3.0 Release notes（D4，HRO 修正③）；④批3 解冻随批执行后 gate baseline 重打 165+9/186+6 及 check 零拦截须在批3 提交 verify 行逐项回链。
+- **[2026-10-01 执行回传追记：条件实现层闭环]**：C1=黑盒实证（生产回调添加→has-files 折叠 48px/cua 物理点击清空→空态回归 134px，render 入口单点双出口）；C2=黑盒实证（sudachi 未装→空态引导条显示+CTA 在位，三态门控 jieba 无按钮/english「内置」pill/sudachi primary 下载全对）；C3=ci.yml 已改 `.[dev,ja-dict]`+全量 1601 passed+4 skipped（基线 1599+4 只增 +2=防回流新钉 test_pyproject_meta）；C4=七处命中清单逐处改写，残留仅功能必需 2 处（spec 无条件过滤本体+release.yml 反转断言本体）；解冻=gate 旧基线 check 丢失 0（ids 165→174/i18n 186→190，静态键 +4 而非 +6 系 R6 JS 态键不入快照）+新基线 %TEMP%\stj_gate\baseline.json 落盘；黑盒另抓两处 DICT_KINDS 旧口径文案（"完整安装自带/完整版"）随批修正（MSG JS 态键不触快照，R6）；后端 defaults/dict_sources.json description 三条核查均兼容口径；暗色主题词典卡/dropzone 抽查 PASS，截图存 Temp/gui-23/。④ 「非中文 issue ≥5」按⑩口径滚动计数，触发即评审；⑤ premerge_max_gap_s：任一指纹/断点/恢复路径改动立项时先出兼容分析（旧断点读取+字段缺失降级+迁移测试），无方案不得动指纹哈希面；⑥ v2_outputs "done" payload：新增/改动消费端或结构时先做消费端核查；⑦ gui-probe 2026-11-01 首跳仍未触发→升格处置，不得仅再调时间；⑧ 钉⑤全集冻结下⑪落地新增 id/键须先更新冻结快照（承 :2000①）。
