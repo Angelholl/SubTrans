@@ -2267,4 +2267,4 @@ decision-critic 开工评议：**有条件支持、无 [HIGH_RISK_OBJECTION]**�
 
 ### 六、后续风险跟踪
 
-①迁移笔记处置挂 owner（完成报告重推，定夺前不入库）；②owner 若选归档，入库须加"历史方法笔记，非现行规范"front matter 防误引为现行工作流模板；③.pytest_tmp2 未入 .gitignore，定向跑 --basetemp=.pytest_tmp2 复现 untracked 时再处置；④下一到期触发源=gui-probe 定时首跳复核 **2026-11-01**（若仍未触发须升格处置：评估弃定时或转真机承载，不得仅再调时间）。
+①迁移笔记处置挂 owner（完成报告重推，定夺前不入库）——**[2026-10-02 追记] owner 拍板"归档入库"**：docs/design/ZCODE-MIGRATION-NOTES.md 加"历史方法笔记，非现行规范"状态行后入库，本项闭账；②owner 若选归档，入库须加"历史方法笔记，非现行规范"front matter 防误引为现行工作流模板；③.pytest_tmp2 未入 .gitignore，定向跑 --basetemp=.pytest_tmp2 复现 untracked 时再处置；④下一到期触发源=gui-probe 定时首跳复核 **2026-11-01**（若仍未触发须升格处置：评估弃定时或转真机承载，不得仅再调时间）。
