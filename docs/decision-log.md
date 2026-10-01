@@ -2198,3 +2198,41 @@ node --check；红线钉+静态钉 45 passed（钉⑤ 178 **零耗**——跳转
 ### 六、后续风险跟踪
 
 ①**2.5.0 发版提案交 owner 确认**（词典选版=minor）——确认前不动 tag/Release；②full 下载 CDN 单源 CN 慢网→离线导入兜底已写手册 FAQ-11；③full pin 单源 [UNVERIFIABLE]（上游 20260723 更新须换行重核）；④CI 真 sudachi 覆盖退化系显式裁定接受项；⑤问题 3 子现象"无实际按钮"待复现（源码层无缺陷）；⑥.owner 数据根=仓库根传统位（pip 源码态实测），EXE 数据根迁移路径未实测（归反馈批二豁免范围）。
+
+---
+
+## [2026-10-01] [D2026-1001-07] AI 分析独立设置（owner 实测第 5 条：应该由用户设置） [已拍板·实现落库]
+
+**关联**：D2026-1001-06（stderr_tail/云确认基础设施）；first_run_seen marker 先例（settings 惰性 KV 通道）。
+
+### 一、背景与诊断
+
+Owner 反馈："AI 分析调用的是哪个 AI？本地大模型还是云端？我在设置里没有看到相关设置，这个也是应该由用户设置"。主模型核查：refineAiAnalyze（app.js:3124/:3133）读 refineS1Provider/refineS1Model——**AI 分析完全复用引擎页阶段A 配置（provider/model/endpoint/密钥），无独立设置**（v1.4 设计使然）；owner 诉求=服务商与模型应独立可设。
+
+### 二、评议（C1-C3 强制+C4-C6 建议，全采纳）
+
+- **C1（强制）**：provider_name 返回（api.py:1800）与隐私横幅（app.js:3034-3043）/确认弹窗文案（:461）三处须改读**实际生效 provider**——否则独立配置下横幅/状态谎报阶段A，显性化半治标。
+- **C2（强制）**：独立 custom 无 CLI 默认端点（cli.py:72 default=""）——v1 缩范围禁用（下拉排除 custom+提示"请设阶段A 为 custom"，后端兜底拒绝）。
+- **C3（强制）**：api.py:1308 first_run=settings 文件存在性判定——AI 设置写入会建档→首启横幅折叠，须显性入设计；**跟随态不写键、独立态才写**（最小化建档面）；回切跟随写 "follow" 标记。
+- C4=静态键 +0 落实（option/label 静态文本会触"未收编中文"钉——HTML 留英文+MSG JS 填充）；C5=预算 178→180（显性化复用 refineAiPrivacy 升格常驻，非新建 181）；C6=黑盒五用例。
+
+### 三、执行记录
+
+| 件 | 内容 |
+|---|---|
+| DOM | index.html AI 区新增 .ai-config-row（aiProviderSel 下拉 6 选项含"跟随阶段A（默认）"/aiModelInput 输入；HTML 留英文+MSG JS 填中文防未收编中文钉，C4）——**钉⑤ 178→180** |
+| app.js | aiRefreshEffective() 生效配置常驻（refineAiPrivacy 升格：跟随/独立+云端警示）；refineAiAnalyze 改读独立配置（provider 缺席=follow→阶段A；model 独立空=阶段A 当前值）；回填+change 保存（跟随态不写键） |
+| api.py | refine_ai_analyze 加 ai_provider=None 参数（None=跟随阶段A；有值=覆盖 provider，endpoint 走 CLI 默认；custom 兜底拒绝）；provider_name 返回实际生效值 |
+| MSG | +9 JS 态键（ui 配置标签/选项中文/占位/生效插值） |
+
+### 四、验证链（全绿）
+
+node --check；红线钉+静态钉+gui_api **48 passed**（钉⑤ 180 双向+静态键 190 恒等+差分回归）；全量 **1602 passed+4 skipped**；黑盒（IAB）：初始态（下拉 6 项中文 MSG 填充/placeholder/生效配置常驻"跟随阶段A — lmstudio"）/独立覆盖（deepseek+deepseek-chat→"独立配置 — deepseek / deepseek-chat"+save 调用参数精确）/回切 follow（"跟随阶段A — lmstudio / custom-model-1"实时读阶段A+follow 标记写回）；**2.5.0 批 5 并入未发版批**（2.5.0 发版提案仍待 owner 确认，含词典选版+AI 独立设置两件）。
+
+### 五、是否 [PRESSURE-OVERRIDE]
+
+否（owner 反馈明示"应该由用户设置"；评议无 HRO；settings 惰性 KV/预算表通道既有）。
+
+### 六、后续风险跟踪
+
+①模型手填拼错率（stderr_tail 已可见化；owner 再报再上 datalist+独立刷新，需新 id+预算）；②i18n 余量 2（190/192）用完须提案扩 cap；③独立云端 provider 密钥未配→请求失败属用户配置责任（2.5.0 发版说明提及）；④2.5.0 发版提案待 owner 确认。
