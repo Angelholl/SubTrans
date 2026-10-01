@@ -156,13 +156,14 @@ def _normalize_suggestions(parsed: dict) -> dict | None:
 def analyze_quality_report(report_txt: str, guide_json: dict,
                            conflict_summary: str, model: str,
                            chat_fn: Callable[[str, str], str],
-                           aggregate_block: str = "") -> dict:
+                           aggregate_block: str = "",
+                           crosscheck_block: str = "") -> dict:
     """组装提示词调用 LLM 并解析为建议结构（输出契约见模块 docstring）。
 
     chat_fn：单轮 chat 注入点（client._chat 同款签名，测试用 fake 注入）。
-    aggregate_block：跨片聚合统计文本（2.6.0 批 2，D2026-1002-03；additive
-    缺省空串——空=不注入，既有调用与测试字节不变）。非空时作为第四个
-    DATA 定界块插于冲突摘要块之后。
+    aggregate_block：跨片聚合统计（批 2，D2026-1002-03；additive 空串）。
+    crosscheck_block：媒体重点对照（批 3，D2026-1002-04-批3；additive 空
+    串——ASR 重转写对照文本，第五 DATA 块插聚合块之后）。
     解析失败 → 整体降级：parse_ok=False、suggestions 三键全空/原始文本，
     绝不半解析。
     """
@@ -188,6 +189,10 @@ def analyze_quality_report(report_txt: str, guide_json: dict,
     if aggregate_block:
         parts.append("跨片聚合统计（只读，仅供对照参考）:")
         parts.extend([_DATA_BEGIN, aggregate_block, _DATA_END])
+    if crosscheck_block:
+        parts.append("媒体重点对照（本地 ASR 重转写，非真值，仅供漏听/"
+                     "误听对照）:")
+        parts.extend([_DATA_BEGIN, crosscheck_block, _DATA_END])
     parts.append("请只输出符合契约的 JSON 对象。")
     user_text = "\n".join(parts)
 
@@ -281,6 +286,55 @@ def _resolve_ai_model(cfg, model_override: str) -> str:
     return stage.model or PROVIDER_MODEL_DEFAULTS.get(stage.provider, "")
 
 
+def _build_media_crosscheck(cfg, args, out_dir, guide: dict) -> str:
+    """媒体重点对照编排（批 3 路线 B）：媒体定位→候选切片→本地重转写→
+    对照块。失败逐级降级（返回空串，绝不阻塞分析）。
+
+    候选=导读 items 中 suspected_missed_speech 的 timing（≤20，检测层上限
+    同源）；媒体=导读 media_path > cfg.media_path；切片落数据根
+    Temp/media_clips/，分析后 best-effort 清理（C8）。"""
+    try:
+        from . import asr_env
+        media = (str((guide or {}).get("media_path") or "").strip()
+                 or str(getattr(cfg, "media_path", "") or "").strip())
+        if not media:
+            return ""
+        timings = [str(it.get("timing"))
+                   for it in (guide or {}).get("items") or []
+                   if isinstance(it, dict)
+                   and str(it.get("category") or "")
+                   == "suspected_missed_speech" and it.get("timing")]
+        if not timings:
+            return ""
+        sliced = asr_env.slice_clips(media, timings)
+        if not sliced.get("ok"):
+            print(f"⚠️ [AI分析] 媒体重点对照跳过：{sliced.get('error')}")
+            return ""
+        current_by_timing = {str(it.get("timing")):
+                             str(it.get("current_text") or "")
+                             for it in (guide or {}).get("items") or []
+                             if isinstance(it, dict)}
+        clips = [{**c, "current": current_by_timing.get(c["timing"], "")}
+                 for c in sliced.get("clips") or []]
+        r = asr_env.build_crosscheck_block(
+            clips,
+            asr_python=str(getattr(args, "asr_python", "") or ""),
+            model=str(getattr(args, "asr_model", "") or "large-v2"))
+        asr_env.cleanup_clips()          # C8：分析后 best-effort 清理
+        if r.get("block"):
+            print(f"🎙️ [AI分析][crosscheck] segments={r['segments']}"
+                  + (f" failed={r['failed']}" if r["failed"] else ""))
+        return str(r.get("block") or "")
+    except Exception as e:   # noqa: BLE001 对照失败不阻塞分析
+        print(f"⚠️ [AI分析] 媒体重点对照失败（按无对照继续）: {e}")
+        try:
+            from . import asr_env as _ae
+            _ae.cleanup_clips()
+        except Exception:   # noqa: BLE001
+            pass
+        return ""
+
+
 def run_ai_analyze(cfg, args) -> int:
     """--ai-analyze 主入口（cli.main 早退分流）。返回退出码：
     0=建议件已落盘（含 parse_ok=False 的降级件）/ 1=前置失败或执行异常。"""
@@ -311,6 +365,15 @@ def run_ai_analyze(cfg, args) -> int:
               f"{conflict_csv.name}")
         conflict_summary = ""
 
+    # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照（本地切片重转写，
+    # 音频零出域；开关缺省开、双前置=有媒体+有可用 ASR；失败逐级降级
+    # 不阻塞分析；C8=分析后 best-effort 清理切片）
+    crosscheck_block = ""
+    if bool(getattr(cfg, "media_crosscheck_enabled", True)):
+        crosscheck_block = _build_media_crosscheck(cfg, args,
+                                                   report_path.parent,
+                                                   guide)
+
     model_used = _resolve_ai_model(cfg,
                                    getattr(args, "ai_model", "") or "")
     try:
@@ -337,7 +400,8 @@ def run_ai_analyze(cfg, args) -> int:
     try:
         data = analyze_quality_report(report_txt, guide, conflict_summary,
                                       model_used, chat_fn=client._chat,
-                                      aggregate_block=aggregate_block)
+                                      aggregate_block=aggregate_block,
+                                      crosscheck_block=crosscheck_block)
     except Exception as e:   # noqa: BLE001
         print(f"❌ [AI分析] 执行失败: {e}")
         return 1

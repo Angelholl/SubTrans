@@ -318,6 +318,29 @@
                     </div>
                 </div>
 
+                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3）：媒体重点对照的
+                     本地 ASR 探测/选择/推荐下载（音频零出域）。asr_panel_title 为
+                     静态键（+1，191→192 恰达 cap）；其余文案 JS 态填充（批5 C4
+                     体例：HTML 留英文占位），新增文案零静态键消耗 -->
+                <div class="form-card">
+                    <div class="form-card-header" data-i18n="asr_panel_title">ASR models (media crosscheck)</div>
+                    <div class="section-content">
+                        <div class="action-row">
+                            <button type="button" id="asrRefreshBtn" class="btn btn-compact"><span>Re-detect</span></button>
+                            <span id="asrEnvStatus" class="muted"></span>
+                        </div>
+                        <div class="action-row" style="margin-top:6px;">
+                            <select id="asrModelSel" class="form-select compact" style="width:auto;"></select>
+                            <button type="button" id="asrDownloadBtn" class="btn btn-primary btn-compact" style="display:none;"><span>Download</span></button>
+                            <span id="asrStatus" class="muted"></span>
+                        </div>
+                        <div id="asrProgress" style="display:none; margin-top:6px;">
+                            <div class="progress-bar"><div class="progress-fill"></div></div>
+                            <span id="asrProgressText" class="progress-text"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
                      空态引导条（sudachi 未装时显示）→ 词典下拉 → 详情区，JS 只填充不建行；
                      dict_redownload/dict_status_builtin 为 JS 态键，不落 data-i18n（R6）） -->

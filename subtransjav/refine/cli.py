@@ -210,6 +210,14 @@ def build_parser():
                                  "导读 json/术语冲突观察 CSV 同目录自动发现）")
     grp_action.add_argument("--ai-model", default="",
                             help="AI 分析模型名（缺省用阶段A/槽 A 模型）")
+    # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照的 ASR 指定（镜像
+    # --ai-model 直连先例；不入 manifest 指纹——负向钉随批）
+    grp_action.add_argument("--asr-model", default="",
+                            help="媒体重点对照 ASR 模型名"
+                                 "（缺省 large-v2，~/.cache/whisper 缓存）")
+    grp_action.add_argument("--asr-python", default="",
+                            help="本地 ASR 用的上游环境 Python 路径"
+                                 "（缺省按 env/实测默认探测）")
 
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--clean-tmp-on-exit", action="store_true",

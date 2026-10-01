@@ -41,6 +41,9 @@ _URL_HOST_ALLOW = {
     # sudachi_full 完整版 CDN 直链（2.5.0 修复A）：固定上游官方域名、仅 https、
     # 落位经 DictChecksumError 校验拒串改
     "d2ej7fkh96fzlu.cloudfront.net",
+    # ASR 推荐模型下载（2.6.0 批 3，D2026-1002-04-批3）：openai-whisper 官方
+    # 静态分发域；强制 sha256 pin（_sha256_stream），allow_unverified 恒 False
+    "openaipublic.azureedge.net",
 }
 
 
@@ -211,6 +214,95 @@ def _unlink_quiet(path: str) -> None:
     import contextlib
     with contextlib.suppress(OSError):
         Path(path).unlink()
+
+
+# ---------------------------------------------------------------------------
+# ASR 推荐模型下载（2.6.0 批 3 路线 B，D2026-1002-04-批3；复用本模块
+# 流式下载/原子落盘/域名白名单/磁盘预检，GB 级 sha256 走流式）
+# ---------------------------------------------------------------------------
+
+_ASR_MODELS_ROOT = os.path.normpath(str(paths.data_subdir("models", "asr")))
+_ASR_DEST_BASENAME = "large-v2.pt"        # 唯一下载件（字面量，无拼路面）
+_ASR_PROGRESS: dict = {"running": False, "phase": "idle",
+                       "downloaded": 0, "total": 0, "error": ""}
+
+_ASR_DOWNLOADS = {
+    "whisper-large-v2": {
+        "url": ("https://openaipublic.azureedge.net/main/whisper/models/"
+                "81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56effd0b6a"
+                "73e524/large-v2.pt"),
+        "sha256": ("81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56effd"
+                   "0b6a73e524"),
+        "bytes": 3086999982,
+        "note": "openai-whisper large-v2（上游同款）",
+    },
+    # qwen3-asr-1.7b：下一版本支持（HF 多文件目录下载+运行器同批闭环，
+    # D2026-1002-04-批3 HRO 采纳方案 a）——本批不设下载条目
+}
+
+
+def asr_download_progress() -> dict:
+    """ASR 模型下载进度快照（phase ∈ download/verify/done/failed）。"""
+    return dict(_ASR_PROGRESS)
+
+
+def _sha256_stream(path: str) -> str:
+    """流式分块 sha256（GB 级模型文件禁整读进内存）。"""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(1 << 20)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def download_asr_model(kind: str = "whisper-large-v2",
+                       progress_cb=None) -> dict:
+    """下载推荐 ASR 模型到数据根 models/asr/（同步；GB 级由 api 层包线程）。
+
+    校验失败删件不轮换（宁缺毋假）；落点=常量字面量分量 + normpath 根
+    前缀断言（同 _safe_component/_ensure_inside_dict_root 防御体例）。"""
+    entry = _ASR_DOWNLOADS.get(kind)
+    if entry is None:
+        return {"success": False, "error": f"未知 ASR 下载条目: {kind}"}
+    url = str(entry["url"])
+    sha = str(entry["sha256"])
+    need_bytes = int(str(entry["bytes"]))
+    name = _safe_component(_ASR_DEST_BASENAME)
+    dest = os.path.normpath(os.path.join(_ASR_MODELS_ROOT, name))
+    if not dest.startswith(_ASR_MODELS_ROOT + os.sep):
+        return {"success": False, "error": "下载落点越出 models/asr 根"}
+    if os.path.isfile(dest) and os.path.getsize(dest) == need_bytes:
+        try:
+            if _sha256_stream(dest) == sha:
+                _ASR_PROGRESS.update(running=False, phase="done",
+                                     downloaded=need_bytes,
+                                     total=need_bytes, error="")
+                return {"success": True, "path": dest, "cached": True}
+        except OSError:
+            pass
+    _ASR_PROGRESS.update(running=True, phase="download", downloaded=0,
+                         total=need_bytes, error="")
+    try:
+        _check_free_space(str(Path(dest).parent), int(need_bytes * 1.05))
+        _http_get(url, dest,
+                  progress=lambda done, total: (
+                      _ASR_PROGRESS.update(phase="download", downloaded=done,
+                                           total=total or need_bytes),
+                      progress_cb(done, total) if progress_cb else None)[1])
+        _ASR_PROGRESS.update(phase="verify")
+        digest = _sha256_stream(dest)
+        if digest != sha:
+            os.remove(dest)
+            raise DictDownloadError("SHA256 校验不符（已删除，宁缺毋假）")
+        _ASR_PROGRESS.update(running=False, phase="done", error="")
+        return {"success": True, "path": dest, "cached": False}
+    except Exception as e:  # noqa: BLE001 下载失败快照化
+        _ASR_PROGRESS.update(running=False, phase="failed",
+                             error=str(e)[:200])
+        return {"success": False, "error": str(e)[:300]}
 
 
 def _extract_dic(archive_path: str, member_suffix: str,

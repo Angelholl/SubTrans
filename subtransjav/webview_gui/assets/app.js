@@ -492,6 +492,22 @@ const MSG = {
     batchFixSourcePartial: '；部分条目按导读摘录对齐（未提供原始源文）',
     batchFixScopeAll: '全部待修条目',
     batchFixScopeCat: (c, n) => `${c}（${n} 条）`,
+    // 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理（媒体重点对照，音频零出域）。
+    // asr_panel_title 为静态 data-i18n 键（HTML+MSG+钉⑤三处同步）；其余 JS 态
+    asr_panel_title: 'ASR 模型（媒体重点对照）',
+    asrRefreshBtn: '重新探测',
+    asrDownloadBtn: '下载推荐模型',
+    asrProbeReady: (ver, m) => `上游 ASR 就绪（whisper ${ver}｜模型缓存 ${m}）`,
+    asrProbeNoModel: '模型缓存缺失（可下载推荐模型）',
+    asrProbeFail: e => `上游 ASR 不可用：${e}`,
+    asrSelectPlaceholder: '选择 ASR 模型（媒体重点对照用）',
+    asrQwenNext: 'qwen3-asr-1.7b（下一版本支持）',
+    asrDownloadStart: '开始下载推荐模型（约 2.9GB，完成后自动校验）…',
+    asrDownloadDone: '推荐模型下载完成并校验通过',
+    asrDownloadFail: e => `下载失败：${e}`,
+    asrProgressBytes: (done, total) => `${done}/${total} 字节`,
+    asrSaved: '已保存 ASR 模型选择',
+    asrCrosscheckNote: n => `；本地转写 ${n} 段对照`,
     batchFixScopeLabel: '修复范围',
     tpl_goto_edit: '去编辑',
     tpl_goto_empty_hint: '该阶段角色卡未显式指定（留空=自动查找回落链）；编辑器仅支持角色卡目录内顶层文件',
@@ -3229,7 +3245,8 @@ function switchTab(tabId) {
         lastAiSuggestions = r;
         aiSetPrivacy(r.provider_name);
         aiRenderResult(r);
-        aiStatus(MSG.aiDone);
+        aiStatus(MSG.aiDone + (r.crosscheck_segments
+          ? MSG.asrCrosscheckNote(r.crosscheck_segments) : ''));
       } else {
         // 修复B：分析失败时 stderr_tail 首行摘要进错误信息（截断 200 字符）
         let detail = (r && r.error) || MSG.unknown;
@@ -3404,6 +3421,96 @@ function switchTab(tabId) {
       clearInterval(poll);
       if (btn) btn.disabled = false;
       batchFixRefresh();
+    }
+  }
+
+  // ===== 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理 =====
+  function asrStatus(text) {
+    const st = $('asrStatus');
+    if (st) st.textContent = text || '';
+  }
+
+  function asrRefresh() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    const env = $('asrEnvStatus');
+    if (env) env.textContent = '…';
+    window.pywebview.api.refine_asr_status().then((r) => {
+      if (!r || !r.success) {
+        asrStatus((r && r.error) || MSG.unknown);
+        return;
+      }
+      const envEl = $('asrEnvStatus');
+      if (envEl) {
+        envEl.textContent = r.available
+          ? MSG.asrProbeReady(r.whisper_version || '?',
+                              r.model_present ? 'large-v2' : MSG.asrProbeNoModel)
+          : MSG.asrProbeFail(r.reason || '');
+      }
+      const sel = $('asrModelSel');
+      if (!sel) return;
+      sel.innerHTML = '';
+      const models = r.models || [];
+      if (!models.length) {
+        const o = document.createElement('option');
+        o.value = '';
+        o.textContent = MSG.asrSelectPlaceholder;
+        sel.appendChild(o);
+      }
+      models.forEach((m) => {
+        const o = document.createElement('option');
+        o.value = m.name;
+        o.textContent = m.name + '（'
+          + Math.round(m.bytes / 1073741824 * 10) / 10 + 'GB）';
+        sel.appendChild(o);
+      });
+      const q = document.createElement('option');
+      q.value = '__qwen__';
+      q.disabled = true;
+      q.textContent = MSG.asrQwenNext;
+      sel.appendChild(q);
+      const saved = r.saved_model || '';
+      if (saved && models.some(m => m.name === saved)) sel.value = saved;
+      const dl = $('asrDownloadBtn');
+      if (dl) dl.style.display = r.model_present ? 'none' : '';
+    }).catch((e) => asrStatus(String(e)));
+  }
+
+  async function asrDownloadRun() {
+    const btn = $('asrDownloadBtn');
+    if (btn) btn.disabled = true;
+    const prog = $('asrProgress');
+    const fill = prog ? prog.querySelector('.progress-fill') : null;
+    const ptext = prog ? prog.querySelector('.progress-text') : null;
+    if (prog) prog.style.display = '';
+    asrStatus(MSG.asrDownloadStart);
+    const poll = setInterval(async () => {
+      try {
+        const p = await window.pywebview.api.refine_asr_download_progress();
+        if (p && p.running && p.phase === 'download') {
+          if (fill && p.total) {
+            fill.style.width =
+              Math.min(100, Math.round(p.downloaded / p.total * 100)) + '%';
+          }
+          if (ptext) {
+            ptext.textContent = MSG.asrProgressBytes(p.downloaded, p.total);
+          }
+        }
+      } catch (e) { /* 单次轮询失败静默 */ }
+    }, 1000);
+    try {
+      const r = await window.pywebview.api.refine_asr_download();
+      if (r && r.success) {
+        asrStatus(MSG.asrDownloadDone);
+        if (fill) fill.style.width = '100%';
+      } else {
+        asrStatus(MSG.asrDownloadFail((r && r.error) || ''));
+      }
+    } catch (e) {
+      asrStatus(MSG.asrDownloadFail(e && e.message ? e.message : String(e)));
+    } finally {
+      clearInterval(poll);
+      if (btn) btn.disabled = false;
+      asrRefresh();
     }
   }
 
@@ -3610,6 +3717,27 @@ function switchTab(tabId) {
     // 质量闭环一键批次修复（2.6.0 批1）
     const bfBtn = $('refineBatchFixBtn');
     if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());
+    // ASR 模型管理（2.6.0 批3）
+    const asrBtn = $('asrRefreshBtn');
+    if (asrBtn) {
+      const t = asrBtn.querySelector('span');
+      if (t) t.textContent = MSG.asrRefreshBtn;
+      asrBtn.addEventListener('click', () => asrRefresh());
+    }
+    const asrDl = $('asrDownloadBtn');
+    if (asrDl) {
+      const t = asrDl.querySelector('span');
+      if (t) t.textContent = MSG.asrDownloadBtn;
+      asrDl.addEventListener('click', () => asrDownloadRun());
+    }
+    const asrSel = $('asrModelSel');
+    if (asrSel) asrSel.addEventListener('change', () => {
+      if (!window.pywebview || !window.pywebview.api) return;
+      if (asrSel.value === '__qwen__') return;      // 占位项不持久化
+      window.pywebview.api.refine_save_stage_settings(null, null,
+        { asr_model: asrSel.value });
+      asrStatus(MSG.asrSaved);
+    });
 
     // 快速试听（D2026-0929-09）：条目试听按钮事件委托 + 浮层关闭 +
     // 媒体来源条「更换」展开 + 覆盖路径应用
