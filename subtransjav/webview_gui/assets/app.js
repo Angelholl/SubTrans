@@ -3328,18 +3328,49 @@ function switchTab(tabId) {
         btn.style.display = 'none';
         btn.textContent = '';
       }
+      // 一次性 click 绑定（静态 DOM 不重建，dataset.bound 防重复挂监听）；
+      // 回调读当前 sel.value 保证通用性（按钮现仅 sudachi 分支显示）
+      if (!btn.dataset.bound) {
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => dictDownload($('dictSelect').value, btn));
+      }
     }
   }
   async function dictDownload(kind, btn) {
     const st = $('dictStatus');
+    // 进度迁移（2.3.1 批1）：实时进度显示在详情区独立进度条 #dictProgress，
+    // #dictStatus 降级为终态行+错误兜底（轮询中的 MB 文本不再写 #dictStatus）
+    const prog = $('dictProgress');
+    const bar = prog ? prog.querySelector('.progress-bar') : null;
+    const fill = prog ? prog.querySelector('.progress-fill') : null;
+    const text = prog ? prog.querySelector('.progress-text') : null;
+    const showProgress = (visible) => { if (prog) prog.style.display = visible ? '' : 'none'; };
+    const fmtMB = (n) => (n / 1048576).toFixed(1);
+    // 每次轮询按 p.phase 全量刷新进度条状态（相位往返安全：切换须重置旧态——
+    // download→verify 清 fill 宽度、verify→download 移除 indeterminate）
+    const renderProgress = (phase, downloaded, total, owned) => {
+      if (!prog) return;
+      const prefix = owned ? '' : `${kind} `;   // 下载中切换下拉：文本标注词典归属
+      if (phase === 'download' && total) {
+        if (bar) bar.classList.remove('indeterminate');
+        const pct = Math.min(100, Math.round(downloaded / total * 100));
+        if (fill) fill.style.width = pct + '%';
+        if (text) text.textContent = `${prefix}${fmtMB(downloaded)}/${fmtMB(total)}MB`;
+      } else {
+        // verify/extract 相位与无 total 的 download 相位走不定态
+        if (fill) fill.style.width = '';
+        if (bar) bar.classList.add('indeterminate');
+        const label = phase === 'verify' ? MSG.dict_verify
+          : phase === 'extract' ? MSG.dict_extract : MSG.dict_downloading;
+        if (text) text.textContent = prefix + label;
+      }
+    };
     if (btn) { btn.disabled = true; btn.textContent = MSG.dict_downloading; }
     if (st) st.textContent = '';
-    // 第四批 owner 验收反馈：下载几十 MB 只有"下载中…"三字不可接受——
-    // 1s 轮询后端进度（百分比/字节），终态醒目化（成功带体积、失败带原因）
-    const fmtMB = (n) => (n / 1048576).toFixed(1);
     let poller = null;
     let lastBytes = 0;
     const stopPoll = () => { if (poller) { clearInterval(poller); poller = null; } };
+    showProgress(true);
     poller = setInterval(async () => {
       try {
         const p = await pywebview.api.refine_dict_download_progress(kind);
@@ -3347,13 +3378,14 @@ function switchTab(tabId) {
         if (typeof p.downloaded === 'number' && p.downloaded > 0) {
           lastBytes = p.downloaded;
         }
-        if (p.phase === 'download' && p.total) {
-          const pct = Math.min(99, Math.round(p.downloaded / p.total * 100));
-          if (btn) btn.textContent = `${MSG.dict_downloading} ${pct}%`;
-          if (st) {
-            st.textContent = `${MSG.dict_downloading} ` +
-              `${fmtMB(p.downloaded)}/${fmtMB(p.total)}MB`;
-          }
+        // kind 归属校验（批清单条件 3）：下载中切换下拉→进度条标注词典归属，
+        // 且不覆盖当前选中词典的按钮态
+        const sel = $('dictSelect');
+        const owned = !sel || sel.value === kind;
+        renderProgress(p.phase, p.downloaded || 0, p.total, owned);
+        if (!owned) return;
+        if (p.phase === 'download') {
+          if (btn) btn.textContent = MSG.dict_downloading;   // 纯文案，百分比迁移至进度条
         } else if (p.phase === 'verify') {
           if (btn) btn.textContent = MSG.dict_verify;
         } else if (p.phase === 'extract') {
@@ -3380,7 +3412,13 @@ function switchTab(tabId) {
       if (st) st.textContent = String(e);
     } finally {
       stopPoll();                       // 防重复 poller 泄漏
-      if (btn) { btn.disabled = false; btn.textContent = MSG.dict_download; }
+      showProgress(false);              // 隐藏统一放 finally（覆盖成功/失败/异常三路径含 catch）
+      const sel = $('dictSelect');
+      if (!sel || sel.value === kind) {
+        // 终态与当前选中词典一致才直改按钮；不一致交由 dictLoad()→
+        // dictRenderDetail() 重刷详情区对齐（重渲染不触碰静态进度条）
+        if (btn) { btn.disabled = false; btn.textContent = MSG.dict_download; }
+      }
       dictLoad();
     }
   }

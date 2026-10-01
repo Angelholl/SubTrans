@@ -332,6 +332,12 @@
                                 <span id="dictPath" class="muted grow" style="min-width:0;"></span>
                                 <button type="button" class="btn btn-ghost btn-compact" id="dictOpenDir" data-i18n="dict_open_dir">打开文件夹</button>
                             </div>
+                            <!-- 下载进度（2.3.1 批1）：.progress-text 独立于 .progress-bar 之外
+                                 （bar 8px 高 overflow:hidden，文本内嵌必裁切）；复用既有进度类零新增 -->
+                            <div id="dictProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill"></div></div>
+                                <span class="progress-text"></span>
+                            </div>
                             <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
                         </div>
                     </div>
@@ -373,6 +379,8 @@
                 <div class="stack gl-collapsible">
                     <div class="action-row gl-collapse-header">
                         <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
+                        <!-- 行数计数（2.3.1 批2 悬空修复）：元素恢复即生效，glRender/glDel null-guarded 更新点沿用 -->
+                        <span id="refineGlCount" class="muted"></span>
                         <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
                                 aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
                             <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>

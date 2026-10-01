@@ -558,8 +558,7 @@ button:focus { outline: none; }
 .file-item.selected { background: var(--primary-soft); }
 .file-item:focus-visible { outline: var(--focus-outline); outline-offset: -2px; }
 
-.file-item .file-ico,
-.file-item .file-icon {
+.file-item .file-ico {
     width: 30px;
     height: 30px;
     border-radius: var(--radius-sm);
@@ -1150,7 +1149,6 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 .pill-success { background: var(--ok-soft); color: var(--ok); }
 .pill-warning { background: var(--warn-soft); color: var(--warn); }
-.pill-danger  { background: var(--danger-soft); color: var(--danger); }
 
 .feature-status {
     display: flex;
@@ -1391,6 +1389,15 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     border-radius: var(--radius-pill);
     transition: width .3s ease;
     position: relative;
+}
+
+/* 词典下载进度文本（2.3.1 批1）：进度条下的独立文本行——.progress-bar 8px 高
+   +overflow:hidden，文本不得置于其内（二级评议条件 2）；token 变量亮暗主题自动适配 */
+.progress-text {
+    display: block;
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 2px;
 }
 
 /* 不定进度动画 */
