@@ -2197,7 +2197,7 @@ node --check；红线钉+静态钉 45 passed（钉⑤ 178 **零耗**——跳转
 
 ### 六、后续风险跟踪
 
-①**2.5.0 发版提案交 owner 确认**（词典选版=minor）——确认前不动 tag/Release；②full 下载 CDN 单源 CN 慢网→离线导入兜底已写手册 FAQ-11；③full pin 单源 [UNVERIFIABLE]（上游 20260723 更新须换行重核）；④CI 真 sudachi 覆盖退化系显式裁定接受项；⑤问题 3 子现象"无实际按钮"待复现（源码层无缺陷）；⑥.owner 数据根=仓库根传统位（pip 源码态实测），EXE 数据根迁移路径未实测（归反馈批二豁免范围）。
+①**2.5.0 发版提案交 owner 确认**（词典选版=minor）——**owner 已确认发版并延续放权（2026-10-02），2.5.0 已发布**：release/2.5.0 @eb0346c（bump 2.5.0+CHANGELOG 从五批内容起草）→ tag v2.5.0 REST 建 ref（201）→ 构建 run 36892061454 绿 → artifact 并行 Range 70,872,814B 精确+exe 33,579,109B sha256 6382F28A…FAB7 核过 → **Release id 401160543**（notes 禁词 CLEAN）→ main 前进 2.5.1.dev0（第 8 步）；②full 下载 CDN 单源 CN 慢网→离线导入兜底已写手册 FAQ-11；③full pin 单源 [UNVERIFIABLE]（上游 20260723 更新须换行重核）；④CI 真 sudachi 覆盖退化系显式裁定接受项；⑤问题 3 子现象"无实际按钮"待复现（源码层无缺陷）；⑥owner 数据根=仓库根传统位（pip 源码态实测），EXE 数据根迁移路径未实测（归反馈批二豁免范围）。
 
 ---
 
