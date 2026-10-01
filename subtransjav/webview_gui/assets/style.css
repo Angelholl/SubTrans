@@ -1569,6 +1569,40 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     gap: 8px;
 }
 
+/* 自制通用模态（2.4.0 批1 S1）：class-only 承载（#appModal 挂 .modal-overlay），
+   token 对齐 .modal-dialog 系；.modal-body 与 about 弹窗共享既有类，卡内作用域中和 */
+.modal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: auto;
+    padding: 16px 20px 20px;
+    animation: modal-slide-in .2s ease;
+}
+.modal-card .modal-title { font-size: 16px; font-weight: 650; margin-bottom: 8px; }
+.modal-card .modal-body { padding: 0; white-space: pre-wrap; word-break: break-word; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.modal-input { width: 100%; margin-top: 12px; }
+
+/* 首启引导横幅（2.4.0 批2 S2）：低调引导条，token 对齐 .muted 先例
+   （font-sm + text-2 系，亮暗主题变量自动适配） */
+.first-run-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: var(--font-sm);
+    color: var(--text-2);
+}
+
 .about-logo { text-align: center; font-size: 42px; margin-bottom: 12px; }
 /* 阶段2 批1：🌐 换 Lucide globe（内联 SVG 40×40），居中显示 */
 .about-logo svg { display: inline-block; vertical-align: middle; }

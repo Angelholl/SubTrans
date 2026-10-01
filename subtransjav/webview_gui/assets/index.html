@@ -100,6 +100,13 @@
                     </div>
                 </div>
 
+                <!-- 首启引导横幅（2.4.0 批2 S2）：first_run marker 一次性消费，
+                     文案/关闭按钮文字 JS 填充（first_run_guide/ui_ok 均 JS 态键） -->
+                <div id="firstRunBanner" class="first-run-banner" style="display:none;">
+                    <span class="first-run-text"></span>
+                    <button type="button" class="btn btn-ghost btn-compact first-run-close"></button>
+                </div>
+
                 <!-- 拖拽 / 上传区（蓝色虚线大圆角，对照原型 .dropzone；
                      拖拽事件与 .drag-over class 由 app.js 绑定在 #fileList 上，
                      高亮规则见 style.css .file-list.drag-over） -->
@@ -819,6 +826,21 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="closeAbout()" data-i18n="close_btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 自制通用模态（2.4.0 批1 S1）：替换原生 alert/confirm/prompt（宿主无关+防 prompt null）；
+         class-only 承载（复用 .modal-overlay 体系），按钮文字 JS 填 MSG.ui_ok/ui_cancel（静态键 +0） -->
+    <div id="appModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+        <div class="modal-card" data-testid="app-modal-card">
+            <div class="modal-title" data-testid="app-modal-title"></div>
+            <div class="modal-body" data-testid="app-modal-body"></div>
+            <input type="text" class="form-input modal-input" style="display:none;" data-testid="app-modal-input">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost modal-cancel" data-testid="app-modal-cancel"></button>
+                <button type="button" class="btn btn-primary modal-ok" data-testid="app-modal-ok"></button>
             </div>
         </div>
     </div>

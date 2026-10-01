@@ -451,6 +451,10 @@ const MSG = {
     console_expand: '展开控制台',
     // 词库页区块折叠按钮（2.1.1 owner 痛点批：单键双向文案，展开/折叠态通用）
     collapse_toggle: '折叠/展开',
+    // 2.4.0 批1/批2（JS 态键，不入 data-i18n 快照）：自制模态按钮 + 首启引导
+    ui_ok: '确定',
+    ui_cancel: '取消',
+    first_run_guide: '首次使用：点击「添加文件」导入 .srt 字幕，或直接拖入文件开始翻译。',
 };
 
 // i18n 注入：DOMContentLoaded 时把 MSG 写回带 data-i18n* 标记的元素
@@ -532,12 +536,91 @@ const UIHelpers = {
 };
 
 // ============================================================
+// App Modal（2.4.0 批1 S1）：原生 alert/confirm/prompt 的宿主无关自制模态
+// （prompt 在部分 WebView 宿主返回 null——行为与宿主解耦；Promise 永不 reject）
+// ============================================================
+const AppModal = {
+    _busy: false,        // 硬性条款①：打开中守卫——单例，防 F5 连按/glAdd 双击叠加
+    _kind: null,
+    _resolve: null,
+
+    _settle(value) {
+        if (!this._busy) return;
+        this._busy = false;
+        this._kind = null;
+        const resolve = this._resolve;
+        this._resolve = null;
+        const root = document.getElementById('appModal');
+        if (root) root.style.display = 'none';
+        if (resolve) resolve(value);
+    },
+
+    _cancelValue() { return AppModal._kind === 'prompt' ? null : false; },
+
+    _open(kind, title, body, def) {
+        if (this._busy) {
+            // 重入：单例不叠加——在途调用方仍持原 Promise，新调用立即按取消结算
+            return Promise.resolve(kind === 'prompt' ? null : false);
+        }
+        const root = document.getElementById('appModal');
+        if (!root) {
+            // 骨架缺席兜底：退回原生对话框（永不 reject）
+            if (kind === 'alert') { window.alert(`${title}\n\n${body}`); return Promise.resolve(undefined); }
+            if (kind === 'confirm') { return Promise.resolve(window.confirm(`${title}\n\n${body}`)); }
+            return Promise.resolve(window.prompt(`${title}`, def || ''));
+        }
+        root.querySelector('.modal-title').textContent = title || '';
+        root.querySelector('.modal-body').textContent = body || '';
+        const input = root.querySelector('.modal-input');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        cancelBtn.textContent = MSG.ui_cancel;
+        okBtn.textContent = MSG.ui_ok;
+        cancelBtn.style.display = kind === 'alert' ? 'none' : '';   // 硬性条款②：alert 无取消键
+        input.style.display = kind === 'prompt' ? '' : 'none';
+        input.value = kind === 'prompt' ? (def || '') : '';
+        if (!root.dataset.bound) {          // 静态 DOM 一次性绑定
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                if (e.target === root) AppModal._settle(AppModal._cancelValue());   // 遮罩取消
+            });
+            okBtn.addEventListener('click', () => {
+                AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
+            });
+            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
+            document.addEventListener('keydown', (e) => {
+                if (!AppModal._busy) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
+                }
+            });
+        }
+        this._busy = true;
+        this._kind = kind;
+        root.style.display = 'flex';        // 等效 .modal-overlay.active（inline 覆盖基类 display:none）
+        (kind === 'prompt' ? input : okBtn).focus();   // focus 管理：prompt 聚输入框，其余聚确认键
+        if (kind === 'prompt' && input.value) input.select();
+        return new Promise((resolve) => { this._resolve = resolve; });
+    },
+
+    alert(title, body) { return this._open('alert', title, body); },
+    confirm(title, body) { return this._open('confirm', title, body); },
+    prompt(title, body, def) { return this._open('prompt', title, body, def); }
+};
+
+// ============================================================
 // Error Handler
 // ============================================================
 const ErrorHandler = {
     show(title, message) {
         ConsoleManager.log(`✗ ${title}: ${message}`, 'error');
-        alert(`${title}\n\n${message}`);
+        // 2.4.0 批1：原生 alert → 自制模态（非阻塞化语义安全——全调用点均为
+        // "展示后随即 _finish/return"模式，无阻塞依赖；行为变化=模态期间 UI 可交互）
+        AppModal.alert(title, message);
     },
 
     showWarning(title, message) {
@@ -1270,7 +1353,7 @@ const TranslatorManager = {
 
             // 已有终稿产物：needs_confirm 时弹确认框（D2026-0925-01 D6）
             if (result && result.needs_confirm) {
-                const ok = window.confirm(
+                const ok = await AppModal.confirm(
                     MSG.overwriteConfirm(result.existing || []));
                 if (!ok) {
                     // 用户取消：静默返回，仅复位按钮/状态
@@ -1561,7 +1644,7 @@ const ThemeManager = {
 // ============================================================
 const KeyboardShortcuts = {
     init() {
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', async (e) => {
             // Ctrl+O: Add files
             if (e.ctrlKey && e.key === 'o') {
                 e.preventDefault();
@@ -1593,8 +1676,10 @@ const KeyboardShortcuts = {
             // F5: Refresh with warning
             if (e.key === 'F5') {
                 if (AppState.isRunning) {
+                    // preventDefault 必须保持在首个 await 之前同步执行（防默认刷新先跑）
                     e.preventDefault();
-                    if (confirm(MSG.confirm_reload)) {
+                    const ok = await AppModal.confirm(MSG.confirm_reload);
+                    if (ok) {
                         location.reload();
                     }
                 }
@@ -2056,10 +2141,10 @@ function switchTab(tabId) {
     glStatus(r.success ? MSG.gl_saved(r.count) : '❌ ' + r.error);
   }
 
-  function glAdd() {
-    const src = prompt(MSG.gl_prompt_src);
+  async function glAdd() {
+    const src = await AppModal.prompt(MSG.gl_prompt_src);
     if (!src || !src.trim()) return;
-    const dst = prompt(MSG.gl_prompt_dst(src.trim()));
+    const dst = await AppModal.prompt(MSG.gl_prompt_dst(src.trim()));
     if (!dst || !dst.trim()) return;
     const rows = glRows().filter(r => r[0] !== src.trim());
     rows.push([src.trim(), dst.trim()]);
@@ -2386,6 +2471,36 @@ function switchTab(tabId) {
           ccd.value = String(r.settings.cleaner_config_dir);
           const show = $('refineCleanerConfigShow');
           if (show) show.value = ccd.value;
+        }
+        // 2.4.0 S2 首启引导（HRO-1 翻转句）：first_run marker 一次性消费——
+        // 显示横幅后立即写惰性 marker（refine_save_stage_settings 空参=静默
+        // no-op 不落盘，必须带 settings 实参；first_run_seen 对现有消费端惰性
+        // 零污染），os.makedirs+json.dump 建档 → 次启 first_run=false 确定性
+        // 翻转；写回失败仅 console 告警留痕（次启重播属可接受降级）。
+        // first_run 非 true 时零动作；横幅保留至用户点击关闭（不自动消失）
+        if (r.settings.first_run === true) {
+          const banner = $('firstRunBanner');
+          if (banner) {
+            const txt = banner.querySelector('.first-run-text');
+            const closeBtn = banner.querySelector('.first-run-close');
+            if (txt) txt.textContent = MSG.first_run_guide;
+            if (closeBtn) {
+              closeBtn.textContent = MSG.ui_ok;
+              if (!closeBtn.dataset.bound) {
+                closeBtn.dataset.bound = '1';
+                closeBtn.addEventListener('click', () => { banner.style.display = 'none'; });
+              }
+            }
+            banner.style.display = '';
+            pywebview.api.refine_save_stage_settings(null, null, { first_run_seen: true })
+              .then((s) => {
+                if (!s || s.success !== true) {
+                  console.warn('[refine] first_run_seen 翻转写回失败（次启将重播引导横幅）:',
+                    s && s.error);
+                }
+              })
+              .catch((e) => console.warn('[refine] first_run_seen 翻转写回异常:', e));
+          }
         }
       }
       refreshServiceQuickRow();
