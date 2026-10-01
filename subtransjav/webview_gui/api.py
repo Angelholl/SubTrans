@@ -1692,8 +1692,8 @@ class TranslateAPI:
                 return str(s.get("endpoint") or "").strip()
         return ""
 
-    def refine_ai_analyze(self, report_path: str,
-                          model: str = None) -> dict[str, Any]:
+    def refine_ai_analyze(self, report_path: str, model: str = None,
+                          ai_provider: str = None) -> dict[str, Any]:
         """同步执行 AI 质量分析并读回建议件。
 
         流程：_resolve_safe_path 校验 → 同步 subprocess 跑
@@ -1739,8 +1739,19 @@ class TranslateAPI:
         # 密钥/差异项经 env_extra 注入；PYTHONUTF8/PYTHONIOENCODING 由
         # spawn_refine_cli 统一强制（#190）。
         env_extra: dict[str, str] = {"PYTHONUNBUFFERED": "1"}
-        provider = self._stage_a_provider_name()
-        endpoint = self._stage_a_endpoint()
+        # provider 决策（D2026-1001-07）：ai_provider 缺省=跟随阶段A；
+        # 独立 provider 时端点走 CLI 各 provider 默认（custom 无默认端点，
+        # 前端下拉已排除，此处兜底拒绝）；密钥仍按 provider 同槽注入。
+        if ai_provider:
+            provider = str(ai_provider).strip().lower()
+            if provider == "custom":
+                return {"success": False,
+                        "error": "自定义接口暂不支持独立配置："
+                                 "请将阶段A 服务商设为 custom 后使用"}
+            endpoint = ""
+        else:
+            provider = self._stage_a_provider_name()
+            endpoint = self._stage_a_endpoint()
         if provider:
             args.extend(["--s1-provider", provider])
             flag = self._AI_PROVIDER_ENDPOINT_FLAGS.get(provider)
@@ -1797,7 +1808,7 @@ class TranslateAPI:
             "suggestions": (data.get("suggestions")
                             if isinstance(data.get("suggestions"), dict)
                             else {}),
-            "provider_name": self._stage_a_provider_name(),
+            "provider_name": provider,
             "companion_path": companion,
             "stderr_tail": stderr_tail,
         }

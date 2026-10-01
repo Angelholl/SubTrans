@@ -1588,6 +1588,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .modal-input { width: 100%; margin-top: 12px; }
 
+/* 2.5.0 批5（D2026-1001-07）：AI 分析独立配置行（服务商下拉+模型输入） */
+.ai-config-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+
 /* 首启引导横幅（2.4.0 批2 S2）：低调引导条，token 对齐 .muted 先例
    （font-sm + text-2 系，亮暗主题变量自动适配） */
 .first-run-banner {

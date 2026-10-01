@@ -458,7 +458,16 @@ const MSG = {
     // 2.5.0 修复批（JS 态键）：词典 full 变体/云分析确认/角色卡跳转与回落提示
     dict_sudachi_full_label: '日语词典·完整版（sudachi full）',
     dict_sudachi_full_desc: '完整版词典数据（语法提示分词用，与 core 版二选一即可；官方 CDN 单源直链，点下方按钮下载）',
-    aiCloudConfirm: p => `当前阶段A 服务商为「${p}」（云端），质量报告内容将发送至云端进行 AI 分析。确认继续吗？`,
+    aiCloudConfirm: p => `当前使用的服务商为「${p}」（云端），质量报告内容将发送至云端进行 AI 分析。确认继续吗？`,
+    ai_model_placeholder: '留空=使用阶段A 当前模型',
+    ai_cfg_provider_label: '分析服务商',
+    ai_cfg_model_label: '分析模型',
+    ai_prov_follow: '跟随阶段A（默认）',
+    ai_prov_lmstudio: 'LM Studio（本地）',
+    ai_prov_ollama: 'Ollama（本地）',
+    ai_prov_deepseek: 'DeepSeek API',
+    ai_prov_siliconflow: '硅基流动',
+    ai_prov_zen: 'Zen 免费',
     tpl_goto_edit: '去编辑',
     tpl_goto_empty_hint: '该阶段角色卡未显式指定（留空=自动查找回落链）；编辑器仅支持角色卡目录内顶层文件',
     tpl_goto_outside_hint: '显式卡在角色卡目录外，编辑器仅支持目录内文件；已在下方定位角色卡目录',
@@ -2555,6 +2564,40 @@ function switchTab(tabId) {
         // 零污染），os.makedirs+json.dump 建档 → 次启 first_run=false 确定性
         // 翻转；写回失败仅 console 告警留痕（次启重播属可接受降级）。
         // first_run 非 true 时零动作；横幅保留至用户点击关闭（不自动消失）
+        // 2.5.0 批5（D2026-1001-07）：AI 分析独立配置回填+生效显示
+        // （C3：AI 设置写入会建档 → first_run 折叠为 false，已显性入设计；
+        //   跟随态不写键、独立态才写，最小化建档面）
+        const aiProvSel = $('aiProviderSel');
+        const aiModelInput = $('aiModelInput');
+        if (aiProvSel) {
+          aiProvSel.value = (r.settings.ai_analyze_provider) || 'follow';
+          // 2.5.0 批5：option/label 中文走 MSG（HTML 留英文占位，防未收编中文钉）
+          const provOpts = { follow: MSG.ai_prov_follow, lmstudio: MSG.ai_prov_lmstudio, ollama: MSG.ai_prov_ollama, deepseek: MSG.ai_prov_deepseek, siliconflow: MSG.ai_prov_siliconflow, zen: MSG.ai_prov_zen };
+          [...aiProvSel.options].forEach(o => { if (provOpts[o.value]) o.textContent = provOpts[o.value]; });
+          const lblP = document.querySelector('label[for="aiProviderSel"]');
+          if (lblP) lblP.textContent = MSG.ai_cfg_provider_label;
+          const lblM = document.querySelector('label[for="aiModelInput"]');
+          if (lblM) lblM.textContent = MSG.ai_cfg_model_label;
+        }
+        if (aiModelInput) {
+          aiModelInput.value = (r.settings.ai_analyze_model) || '';
+          aiModelInput.placeholder = MSG.ai_model_placeholder;
+        }
+        if (typeof aiRefreshEffective === 'function') aiRefreshEffective();
+        if (aiProvSel && !aiProvSel.dataset.bound) {
+          aiProvSel.dataset.bound = '1';
+          const saveAiConfig = () => {
+            window.pywebview.api.refine_save_stage_settings(null, null, {
+              ai_analyze_provider: aiProvSel.value,
+              ai_analyze_model: aiModelInput.value.trim()
+            }).then(rv => {
+              if (!rv || rv.success !== true) console.warn('[refine] AI 分析设置保存失败');
+            }).catch(e => console.warn('[refine] AI 分析设置保存失败', e));
+            aiRefreshEffective();
+          };
+          aiProvSel.addEventListener('change', saveAiConfig);
+          aiModelInput.addEventListener('change', saveAiConfig);
+        }
         if (r.settings.first_run === true) {
           const banner = $('firstRunBanner');
           if (banner) {
@@ -3106,6 +3149,23 @@ function switchTab(tabId) {
     });
   }
 
+  // 2.5.0 批5（D2026-1001-07）：AI 分析生效配置常驻显示（C1/C5：复用 refineAiPrivacy）
+  function aiRefreshEffective() {
+    const el = $('refineAiPrivacy');
+    if (!el) return;
+    const indep = ($('aiProviderSel') || {}).value || 'follow';
+    const s1p = ($('refineS1Provider') || {}).value || 'lmstudio';
+    const s1m = ($('refineS1Model') || {}).value || '';
+    const im = ($('aiModelInput') || {}).value.trim();
+    const cloud = window.AI_CLOUD_PROVIDERS || [];
+    let prov, model, tag;
+    if (indep === 'follow') { prov = s1p; model = s1m || '（未指定）'; tag = '跟随阶段A'; }
+    else { prov = indep; model = im || '（未指定）'; tag = '独立配置'; }
+    el.style.display = '';
+    el.textContent = '分析模型：' + tag + ' — ' + prov + ' / ' + model
+      + (cloud.includes(prov) ? ' ｜ 注意：分析时报告内容将发送至该云端服务' : '');
+  }
+
   async function refineAiAnalyze() {
     if (!lastLoadedGuidePath && !lastLoadedIsTxt) {
       aiStatus(MSG.aiNeedGuide);
@@ -3120,18 +3180,24 @@ function switchTab(tabId) {
       aiStatus(MSG.aiNeedGuide);
       return;
     }
-    // 修复B：云 provider 发送前确认（与后端密钥注入表同集，zen 属云端）
-    const aiProv = (($('refineS1Provider') || {}).value || '').toLowerCase();
-    if (AI_CLOUD_PROVIDERS.includes(aiProv)) {
-      const go = await AppModal.confirm(MSG.aiCloudConfirm(aiProv));
+    // 修复B+2.5.0 批5（D2026-1001-07）：生效 provider/model=独立配置优先，缺席跟随阶段A；
+    // 云 provider 发送前确认读实际生效值（C1）
+    const indepProv = (($('aiProviderSel') || {}).value || 'follow');
+    const indepModel = (($('aiModelInput') || {}).value || '').trim();
+    const effProvider = (indepProv === 'follow'
+      ? (($('refineS1Provider') || {}).value || '').toLowerCase()
+      : indepProv).toLowerCase();
+    const model = (indepModel || (($('refineS1Model') || {}).value || '')).trim();
+    if (AI_CLOUD_PROVIDERS.includes(effProvider)) {
+      const go = await AppModal.confirm(MSG.aiCloudConfirm(effProvider));
       if (!go) return;
     }
     const btn = $('refineAiAnalyzeBtn');
     if (btn) btn.disabled = true;
     aiStatus(MSG.aiAnalyzing);
     try {
-      const model = (($('refineS1Model') || {}).value || '').trim();
-      const r = await window.pywebview.api.refine_ai_analyze(rp, model);
+      const r = await window.pywebview.api.refine_ai_analyze(
+        rp, model, indepProv === 'follow' ? null : indepProv);
       if (r && r.success) {
         lastAiSuggestions = r;
         aiSetPrivacy(r.provider_name);

@@ -507,6 +507,20 @@
                             <button type="button" id="refineAiAnalyzeBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span data-i18n="aiAnalyzeBtn">AI 分析本报告</span></button>
                             <span id="refineAiAnalyzeStatus" class="muted"></span>
                         </div>
+                        <!-- 2.5.0 批5（D2026-1001-07）：AI 分析独立配置（缺省跟随阶段A；custom 无默认端点已排除） -->
+                        <div class="ai-config-row">
+                            <label class="muted" for="aiProviderSel">Analysis provider</label>
+                            <select id="aiProviderSel" class="form-select compact" style="width:auto;">
+                                <option value="follow">Follow stage A (default)</option>
+                                <option value="lmstudio">LM Studio (local)</option>
+                                <option value="ollama">Ollama (local)</option>
+                                <option value="deepseek">DeepSeek API</option>
+                                <option value="siliconflow">SiliconFlow</option>
+                                <option value="zen">Zen (free)</option>
+                            </select>
+                            <label class="muted" for="aiModelInput">Analysis model</label>
+                            <input type="text" id="aiModelInput" class="form-input compact" style="width:auto;">
+                        </div>
                         <div id="refineAiPrivacy" class="muted hint-warn" style="display:none; margin-top:6px;"></div>
                         <div id="refineAiResult" style="margin-top:8px;"></div>
                     </div>

@@ -59,7 +59,7 @@ def test_r2_rhythm_tokens_frozen():
 # 快照刻意用多行字符串形态（SIM905 已在 pyproject per-file-ignores 豁免）：diff 逐词可读、增删一目了然
 FROZEN_IDS = frozenset(
     """
-    aboutModal aboutVersion appModal addFilesBtn addFolderBtn audioPreviewBar audioPreviewCloseBtn
+    aboutModal aboutVersion aiModelInput aiProviderSel appModal addFilesBtn addFolderBtn audioPreviewBar audioPreviewCloseBtn
 audioPreviewError audioPreviewPlayer audioPreviewTiming browseOutputBtn clearBtn
 clearConsoleBtn consoleCollapseBtn consoleOutput dataRootBar dataRootCurrentPath
 dataRootRestoreBtn dataRootSourceTag dataRootStatus dataRootToggleBtn debugLogging
