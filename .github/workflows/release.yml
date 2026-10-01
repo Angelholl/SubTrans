@@ -80,6 +80,18 @@ jobs:
           if (Test-Path "$root/_internal/sudachidict_core/resources/system.dic") {
             Write-Error "dist must NOT contain system.dic (词典去捆绑口径)"; exit 1
           }
+          # 安装器断言：Inno 产物必须在位且非空壳——防 [Files] 缺 Source 行
+          # 装出空壳而 CI smoke 只断言 dist 目录发现不了的事故复发（D4 发版批）
+          $installers = @(Get-ChildItem "Temp/innoinstall" -Filter "SubTransJAV-setup-*.exe" -ErrorAction SilentlyContinue)
+          if ($installers.Count -eq 0) {
+            Write-Error "MISSING installer: no SubTransJAV-setup-*.exe in Temp/innoinstall"; exit 1
+          }
+          foreach ($ins in $installers) {
+            if ($ins.Length -lt 20MB) {
+              Write-Error "installer too small (空安装器?): $($ins.Name) = $($ins.Length) bytes"; exit 1
+            }
+            Write-Host "installer ok: $($ins.Name) = $([math]::Round($ins.Length/1MB,1)) MB"
+          }
           # 体积下限断言：防静默空包（去词典后 onedir 总量约 33MB 量级，下限放宽）
           $total = (Get-ChildItem $root -Recurse -File | Measure-Object Length -Sum).Sum
           Write-Host "onedir total = $([math]::Round($total/1MB,1)) MB"
