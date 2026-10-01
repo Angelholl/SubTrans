@@ -2333,3 +2333,9 @@ ruff 全仓 0｜node --check｜定向（gui_api/action_retranslate/redlines/stri
 ### 五、后续风险跟踪
 
 ①批 2 台账视图：逐条勾选回滚+"按 ts 取最后"口径随批 2 立项锁死；②静态键余量 1（191/192）——批 2 新 UI 键清单提前列，用尽须提案扩 cap；③批 3 选型轮两 INFO_GAP（owner 云端音频接受度/本地重转写环境基线）+威胁模型扩写重评后才可启用云端音频；④IAB 黑盒教训入档：截图≠实时视口（坐标须 getBoundingClientRect 实测）、Playwright actionability 对本应用系统性超时（cua rect 点击为主、dom_cua 节点路径兜底、长页先滚入视口）。
+
+### 六、push 前双轴评审（code-review Standards/Spec）与修订
+
+- **Standards 硬伤 2 项修正**：①进度正则钉住执行器不存在的 stdout 契约（轮询计数失效）→删正则、pump 透传尾行、计数以台账增量结算、前端 done=0 用中性文案；②两个轻量 bridge 补 try/except+_log_exc 兜底。judgement call：守卫链收敛 `_load_validated_guide`；schema:1（批 2·3 扩展缝规格明载）与上限 50 前后端语义分叉（设计使然）记录不改。
+- **Spec 缺口 4 项补全**：弹窗补修复服务商+分类明细两行、预览行补 timing、batchFixScopeLabel 落实、补 2 测试（exit3 部分+路径守卫）；batchFixAppliedSkip 撤销（NoItems 文案已覆盖）。
+- 修订后复验：全量 **1612 passed+4 skipped**（+10 只增）｜Mimosa 31=基线零新增（seal a89aae6f…）｜ruff/node --check 绿。
