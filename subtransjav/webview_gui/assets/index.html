@@ -311,11 +311,29 @@
                     </div>
                 </div>
 
-                <!-- 词典管理（2.1：日/中/英三区块，状态/下载/路径/启用） -->
+                <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
+                     空态引导条（sudachi 未装时显示）→ 词典下拉 → 详情区，JS 只填充不建行；
+                     dict_redownload/dict_status_builtin 为 JS 态键，不落 data-i18n（R6）） -->
                 <div class="form-card" data-testid="dict-panel">
                     <div class="form-card-header" data-i18n="dict_panel_title">词典管理（日/中/英）</div>
                     <div id="dictRows" style="display:flex; flex-direction:column; gap:8px;">
-                        <span class="muted">…</span>
+                        <div id="dictEmpty" style="display:none;" class="dict-empty">
+                            <span class="muted" data-i18n="dict_empty_guide">尚未下载日语词典数据，语法提示不可用</span>
+                            <button type="button" class="btn btn-primary btn-compact" data-i18n="dict_empty_cta">去下载日语词典</button>
+                        </div>
+                        <label class="field-label" data-i18n="dict_select_label">选择词典查看详情</label>
+                        <select id="dictSelect" class="form-select compact" style="width:100%;"></select>
+                        <div id="dictDetail" style="display:none;" class="dict-detail">
+                            <div class="dict-detail-head">
+                                <span id="dictPill" class="pill"></span>
+                            </div>
+                            <div id="dictDesc" class="muted"></div>
+                            <div id="dictPathRow" class="path-row">
+                                <span id="dictPath" class="muted grow" style="min-width:0;"></span>
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictOpenDir" data-i18n="dict_open_dir">打开文件夹</button>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
+                        </div>
                     </div>
                     <div id="dictStatus" class="muted" style="margin-top:6px; min-height:1em;"></div>
                 </div>

@@ -832,8 +832,13 @@ def test_refresh_button_state_restore_uses_innerhtml():
     # 防复发：保存行不得再出现 textContent 保存旧值再写回的模式
     assert re.search(r"const old = btn\.textContent", src) is None, \
         "存在 textContent 保存按钮旧值（恢复时会丢内联 SVG）"
-    # 词典行布局类由 JS 模板挂载（配合 style.css #dictRows .dict-row 网格规则）
-    assert "row.className = 'dict-row'" in src, "词典行未挂 .dict-row 类"
+    # 词典卡 B2 案（D2026-1001 批3）：.dict-row 行渲染已废——骨架 id 静态落
+    # index.html（见 FROZEN_IDS），JS 只填充下拉与详情区，不再动态建行
+    assert "dict-row" not in src, "词典行 .dict-row 模板残留（B2 案已废行渲染）"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for val_id in ("dictEmpty", "dictSelect", "dictDetail", "dictPill", "dictDesc",
+                   "dictPathRow", "dictPath", "dictOpenDir", "dictActionBtn"):
+        assert f'id="{val_id}"' in html, f"词典卡 B2 骨架缺少：{val_id}"
     assert 'row.style.cssText' not in src, "词典行不得再用 inline style 布局（压住网格规则）"
 
 

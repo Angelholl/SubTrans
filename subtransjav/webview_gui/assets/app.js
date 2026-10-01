@@ -421,9 +421,9 @@ const MSG = {
     // 词典管理（引擎页三区块，2.1）
     dict_panel_title: '词典管理（日/中/英）',
     dict_sudachi_label: '日语（sudachi）',
-    dict_sudachi_desc: '日语形态素分析词典（语法提示分词用；完整安装自带，精简安装可经此下载）',
+    dict_sudachi_desc: '日语形态素分析词典（语法提示分词用；默认不随安装包附带，点下方按钮下载，SHA256 校验三源）',
     dict_jieba_label: '中文（jieba）',
-    dict_jieba_desc: '中文分词（完整版含 [zh] 组件后自动启用；缺失时静默降级）',
+    dict_jieba_desc: '中文分词（pip 安装 [zh] 组件后自动启用；缺失时静默降级）',
     dict_english_label: '英文（规则级）',
     dict_english_desc: '英文分词规则级（内置，无需下载）',
     dict_status_available: '可用',
@@ -436,6 +436,15 @@ const MSG = {
     dict_download_done: '下载完成',
     dict_download_failed: '下载失败',
     dict_load_failed: '词典状态加载失败',
+    // 词典管理 B2 案（批3 解冻键 6 个）：空态引导/CTA/下拉标签/内置态 pill/
+    // 打开目录/重新下载（dict_status_builtin、dict_redownload 为 JS 态键，
+    // 不静态落 data-i18n——R6，快照只收 HTML 静态键）
+    dict_empty_guide: '尚未下载日语词典数据，语法提示不可用',
+    dict_empty_cta: '去下载日语词典',
+    dict_select_label: '选择词典查看详情',
+    dict_status_builtin: '内置',
+    dict_open_dir: '打开文件夹',
+    dict_redownload: '重新下载',
 
     // 控制台折叠
     console_collapse: '折叠控制台',
@@ -647,6 +656,10 @@ const FileListManager = {
     },
 
     render() {
+        // A案 has-files 态单点切换（批1，C1 修正）：必须在函数体第一行、
+        // 空态提前 return 之前——六条 selectedFiles 变更路径全汇 render()，
+        // 单点双出口（空态 return / 正常渲染）全覆盖，清空路径可回归空态
+        document.getElementById('tab-translate').classList.toggle('has-files', AppState.selectedFiles.length > 0);
         const fileList = document.getElementById('fileList');
         const emptyState = document.getElementById('emptyState');
 
@@ -3217,40 +3230,105 @@ function switchTab(tabId) {
     { kind: 'english_rules', label: MSG.dict_english_label,
       desc: MSG.dict_english_desc, downloadable: false },
   ];
+  // 词典状态缓存（B2 案批3）：dictLoad 拉取后写入，dictSelect change 复渲染读取
+  let _dictStatusCache = {};
+  let _dictDirCache = '';
   function dictLoad() {
     const box = $('dictRows');
     if (!box || !window.pywebview || !pywebview.api ||
         !pywebview.api.refine_dict_status) return;
     pywebview.api.refine_dict_status().then(r => {
       if (!r || !r.success) {
-        box.innerHTML = `<span class="muted">${esc(MSG.dict_load_failed)}${r && r.error ? '：' + esc(r.error) : ''}</span>`;
+        const st = $('dictStatus');
+        if (st) st.textContent = `${MSG.dict_load_failed}${r && r.error ? '：' + r.error : ''}`;
         return;
       }
-      box.innerHTML = '';
-      DICT_KINDS.forEach(item => {
-        const info = (r.dicts && r.dicts[item.kind]) || {};
-        const row = document.createElement('div');
-        row.className = 'dict-row';   // D2026-1001 批2：inline style 改类，布局交 #dictRows .dict-row 网格规则
-        const badge = info.available
-          ? `<span class="pill pill-success">${esc(MSG.dict_status_available)}</span>`
-          : `<span class="pill" style="color:var(--text-muted);">${esc(MSG.dict_status_unavailable)}</span>`;
-        const custom = info.custom_path
-          ? `<span class="muted" title="${esc(info.custom_path)}">${esc(MSG.dict_custom_path)}</span>`
-          : '';
-        const btn = item.downloadable
-          ? `<button class="btn btn-compact" id="dictDl-${item.kind}">${esc(MSG.dict_download)}</button>`
-          : '';
-        row.innerHTML =
-          `<span class="dict-row-label">${esc(item.label)}</span>` +
-          badge + custom +
-          `<span class="muted dict-row-desc" title="${esc(item.desc)}">${esc(item.desc)}</span>` + btn;
-        box.appendChild(row);
-        if (item.downloadable) {
-          const b = $('dictDl-' + item.kind);
-          if (b) b.addEventListener('click', () => dictDownload(item.kind, b));
+      _dictStatusCache = (r && r.dicts) || {};
+      _dictDirCache = (r && r.dict_dir) || '';
+      // 空态引导条（C2 修正）：条件=sudachi 未安装——english_rules 规则级
+      // 恒 available（dict_manager.py 实证），"三词典全未安装"不可达
+      const sudachiInfo = _dictStatusCache.sudachi || {};
+      const empty = $('dictEmpty');
+      if (empty) empty.style.display = sudachiInfo.available ? 'none' : '';
+      // 下拉填充（label=词典名+可用态），change→详情刷新（静态骨架只填充不建行）
+      const sel = $('dictSelect');
+      if (sel) {
+        sel.innerHTML = '';
+        DICT_KINDS.forEach(item => {
+          const info = _dictStatusCache[item.kind] || {};
+          const opt = document.createElement('option');
+          opt.value = item.kind;
+          opt.textContent = `${item.label}（${info.available ? MSG.dict_status_available : MSG.dict_status_unavailable}）`;
+          sel.appendChild(opt);
+        });
+        if (!sel.dataset.bound) {          // 一次性绑定，数据经缓存读取防陈旧闭包
+          sel.dataset.bound = '1';
+          sel.addEventListener('change', dictRenderDetail);
         }
-      });
+      }
+      // 空态 CTA（一次性绑定）：自动选中 sudachi 并触发下载
+      if (empty && !empty.dataset.bound) {
+        empty.dataset.bound = '1';
+        const cta = empty.querySelector('button');
+        if (cta) cta.addEventListener('click', () => {
+          if (sel) sel.value = 'sudachi';
+          dictRenderDetail();
+          dictDownload('sudachi', $('dictActionBtn'));
+        });
+      }
+      // 打开文件夹（R3：复用现成 openDir(path)→open_output_folder 链，零新 API）
+      const openBtn = $('dictOpenDir');
+      if (openBtn && !openBtn.dataset.bound) {
+        openBtn.dataset.bound = '1';
+        openBtn.addEventListener('click', () => openDir($('dictPath') && $('dictPath').textContent));
+      }
+      dictRenderDetail();
     }).catch(() => {});
+  }
+  function dictRenderDetail() {
+    const detail = $('dictDetail');
+    const sel = $('dictSelect');
+    if (!detail || !sel) return;
+    const kind = sel.value || (DICT_KINDS[0] && DICT_KINDS[0].kind);
+    const info = _dictStatusCache[kind] || {};
+    const item = DICT_KINDS.find(k => k.kind === kind) || {};
+    detail.style.display = '';
+    // 状态 pill 三态：可用/不可用/内置（english_rules 规则级恒可用→内置）
+    const pill = $('dictPill');
+    if (pill) {
+      if (info.available) {
+        pill.textContent = kind === 'english_rules' ? MSG.dict_status_builtin : MSG.dict_status_available;
+        pill.className = 'pill pill-success';
+        pill.style.color = '';
+      } else {
+        pill.textContent = MSG.dict_status_unavailable;
+        pill.className = 'pill';
+        pill.style.color = 'var(--text-muted)';
+      }
+    }
+    const desc = $('dictDesc');
+    if (desc) {
+      desc.textContent = info.description || item.desc || '';
+      desc.title = desc.textContent;
+    }
+    // 安装目录行（dict_dir 数据根词典目录）+ 打开文件夹按钮
+    const path = $('dictPath');
+    if (path) path.textContent = _dictDirCache;
+    const pathRow = $('dictPathRow');
+    if (pathRow) pathRow.style.display = '';
+    // R2 三态门控：sudachi 未装=primary「下载」/ 已装=ghost「重新下载」；
+    // jieba 无按钮只显 desc 指引（downloadable=false）；english 恒内置隐藏按钮
+    const btn = $('dictActionBtn');
+    if (btn) {
+      if (kind === 'sudachi') {
+        btn.style.display = '';
+        btn.className = info.available ? 'btn btn-ghost btn-compact' : 'btn btn-primary btn-compact';
+        btn.textContent = info.available ? MSG.dict_redownload : MSG.dict_download;
+      } else {
+        btn.style.display = 'none';
+        btn.textContent = '';
+      }
+    }
   }
   async function dictDownload(kind, btn) {
     const st = $('dictStatus');

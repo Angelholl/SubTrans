@@ -421,42 +421,61 @@ button:focus { outline: none; }
 }
 
 /* ============================================================
-   5. 拖拽 / 上传区（蓝色虚线大圆角）
+   5. 拖拽 / 上传区（蓝色虚线大圆角；D1 A案 批1：三分区高度模型
+      全部 #tab-translate 前缀作用域，他 4 页零共用类已 grep 实证）
    ============================================================ */
-.dropzone {
+#tab-translate .dropzone {
     border: 1.5px dashed var(--dropzone-border);
     border-radius: var(--radius-lg);
     background: var(--primary-soft);
-    padding: 34px 24px 28px;
+    padding: 12px 16px;   /* A案空态紧凑 ~112px：原 34/28 → 16/20 → 12/16 单屏收敛 */
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 6px;
+    gap: 4px;
     transition: border-color .15s ease, background .15s ease;
 }
-.dropzone:hover { border-color: var(--primary); }
+#tab-translate .dropzone:hover { border-color: var(--primary); }
 /* 拖拽悬停高亮（D2026-0930-09 批2）：dropzone 本体联动（app.js initializeDragDrop） */
-.dropzone.drag-over {
+#tab-translate .dropzone.drag-over {
     border-color: var(--primary);
     background: var(--primary-soft);
     box-shadow: var(--focus-ring);
 }
 
-.dz-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+/* A案：dropzone 内按钮 compact 尺寸（后代选择器，不加类不改 DOM，与 .btn-compact 同参） */
+#tab-translate .dropzone .btn {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: var(--font-xs);
+    border-radius: var(--radius-sm);
+}
+
+/* A案 has-files 态（批1）：有文件时 dropzone 收为单行 ~52px，隐藏图标与 hint */
+#tab-translate.has-files .dropzone {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 8px 16px;
+    gap: 8px;
+}
+#tab-translate.has-files .dz-icon,
+#tab-translate.has-files .dz-hint { display: none; }
+
+#tab-translate .dz-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
     background: var(--surface);
     border: 1px solid var(--primary-border);
     color: var(--primary);
     display: grid;
     place-items: center;
-    margin-bottom: 6px;
 }
 .dz-title { font-size: var(--font); font-weight: 600; }
 .dz-hint { font-size: var(--font-sm); color: var(--text-2); }
-.dz-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+.dz-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 /* ============================================================
    6. 文件列表
@@ -471,15 +490,29 @@ button:focus { outline: none; }
 }
 .card-head-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 
-.file-list-container { min-width: 0; }
+/* 文件卡弹性内滚（A案 批1）：卡片区填充分区剩余高度，列表容器内滚——
+   弹性链路 #tab-translate > .card → .file-list-container → .file-list */
+#tab-translate > .card {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;          /* 允许收缩，容器内滚生效前提 */
+}
+#tab-translate .file-list-container {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;          /* 取代半成品固定 max-height:300px：随视口弹性伸缩 */
+    overflow-y: auto;
+}
 
 .file-list {
     min-height: 96px;
-    max-height: 260px;
     overflow-y: auto;
     padding: 6px;
     position: relative;
     outline: none;
+    /* 原 max-height:260px 已删（A案 弹性内滚）：高度上交容器统一弹性，
+       内层定高会截断填充并产生双层滚动 */
 }
 
 .file-list:focus-within { box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
@@ -631,8 +664,15 @@ button:focus { outline: none; }
 .console-line.error   { color: var(--cl-err); }
 .console-line.command { color: var(--cl-dim); font-weight: 500; }
 
-/* 折叠行为（.console-section 族，app.js toggle .collapsed） */
-.tab-page .console-collapsible:not(.collapsed) { flex: 1 1 auto; }
+/* 折叠行为（.console-section 族，app.js toggle .collapsed）
+   A案 批1（R1）：Console 保底 160px + 上限 220px——max-height 钉死防
+   flex:1 无上限挤压文件区；类仅 tab-translate 使用（grep 实证），
+   作用域收敛为 #tab-translate 前缀 */
+#tab-translate .console-collapsible:not(.collapsed) {
+    flex: 1 1 auto;
+    min-height: 160px;
+    max-height: 220px;
+}
 .console-collapsible.collapsed { flex: 0 0 auto; }
 .console-collapsible.collapsed .console-output { display: none; }
 .console-collapse-btn .console-collapse-icon {
@@ -860,25 +900,27 @@ input[type="checkbox"] {
 }
 .footnote { font-size: var(--font-xs); color: var(--text-3); }
 
-/* 词典管理行（D2026-1001 批1）：#dictRows 吃满卡片宽，行内 4 列网格
-   （名称/状态badge/说明/操作）；行 class 由批 2 JS 从 inline style 改造后生效 */
+/* 词典管理 B2 案（D2026-1001 批3）：#dictRows 吃满卡片宽；空态引导条 +
+   详情区纵向布局（行渲染 .dict-row 已废，JS 只填充静态骨架） */
 #dictRows { width: 100%; }
-#dictRows .dict-row {
-    display: grid;
-    grid-template-columns: 110px auto minmax(0, 1fr) auto;
-    gap: 8px;
+#dictRows .dict-empty {
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
 }
-#dictRows .dict-row .muted {
+#dictRows .dict-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+#dictRows .dict-detail .muted {
     min-width: 0;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-#dictRows .dict-row .btn,
-#dictRows .dict-row .pill { flex-shrink: 0; white-space: nowrap; }
-#dictRows .dict-row .dict-row-label { font-weight: 600; }
-#dictRows .dict-row .dict-row-desc { min-width: 0; }
+#dictRows .dict-detail .pill { white-space: nowrap; }
 .status-err { color: var(--danger); }
 .hint-warn { color: var(--status-warn); }
 
