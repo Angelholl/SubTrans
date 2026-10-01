@@ -2076,4 +2076,44 @@ Owner 指令「确认是否还有遗漏，本次任务解决所有挂账内容�
 - **执行记录**：release/2.3.0 @ 5c3919b（bump 2.3.0 三常量+pyproject+CHANGELOG [2.3.0] 只写本版+上两项修复；secret 0；全量 1601 passed+4 skipped；Mimosa deep seal sha256:60f64fb4 29=基线 24+树外 5 零新增）→ **dispatch 试构建先行**（打包链批 2 大改后首实证，run 36837536293 success）→ tag v2.3.0 REST 建引用（HTTP 201→5c3919b）→ tag 构建 run 36838069064 success → artifact 并行 Range 8 片下载 70,850,389B 字节精确组装+解包 SubTransJAV-setup-2.3.0.exe 33,568,216B（≈33MB 兑现）sha256 9F393BCF…56BDB4 与 CI SHA256SUMS 一致 → Release id 400807261（非草稿非预发布；资产=单 setup.exe+SHA256SUMS.txt；notes 只写本版+能力边界如实告知：sudachi=EXE 可下载/jieba=仅 pip/english=内置/老用户词典残留+禁词自查 CLEAN）→ main cherry-pick -n 5c3919b 回收发版修复+版本前进 **2.3.1.dev0**（release-checklist 第 8 步自本版首次执行）。
 - **条件是否已闭环**：是。本地验证链/双构建/哈希回读三面全绿；ls-remote 三点复核（main/tag/分支）随 main 同步批执行。
 - **是否 [PRESSURE-OVERRIDE]**：否（owner 显式放权授权）。
-- **后续风险跟踪**：①真人安装验证（≥2 环境）归反馈批二（roadmap 2.3.0 发布后实测项）；②词典下载 GUI 全链真机验收归 owner 走查（本轮黑盒为 stub 桩验证）；③老用户升级词典残留不对称已在 Release notes 如实告知；④release-checklist 第 8 步（发布后 main 前进 dev 号）本轮首跑成功，后续发版沿用；⑤单安装器时代 setup.iss 后缀参数（/Dsuffix）保留未用，如未来需要差异化安装器可直接启用。④ 「非中文 issue ≥5」按⑩口径滚动计数，触发即评审；⑤ premerge_max_gap_s：任一指纹/断点/恢复路径改动立项时先出兼容分析（旧断点读取+字段缺失降级+迁移测试），无方案不得动指纹哈希面；⑥ v2_outputs "done" payload：新增/改动消费端或结构时先做消费端核查；⑦ gui-probe 2026-11-01 首跳仍未触发→升格处置，不得仅再调时间；⑧ 钉⑤全集冻结下⑪落地新增 id/键须先更新冻结快照（承 :2000①）。
+- **后续风险跟踪**：①真人安装验证（≥2 环境）归反馈批二（roadmap 2.3.0 发布后实测项）；②词典下载 GUI 全链真机验收归 owner 走查（本轮黑盒为 stub 桩验证）；③老用户升级词典残留不对称已在 Release notes 如实告知；④release-checklist 第 8 步（发布后 main 前进 dev 号）本轮首跑成功，后续发版沿用；⑤单安装器时代 setup.iss 后缀参数（/Dsuffix）保留未用，如未来需要差异化安装器可直接启用。
+
+---
+
+## [2026-10-01] [D2026-1001-04] 2.3.1 UI 收尾轮立项+二级评议+C2 复议（R1-R6 六项+refineGlCount 借窗） [已拍板·实现闭环]
+
+关联：D2026-1001-03（本文件 :2005，⑪条款执行到期=本批"下一 UI 批"）；D2026-1001-03-D4（:2072，main 常态 2.3.1.dev0，发版归 owner）。
+
+### 一、背景与拍板
+
+Owner 指令"下一轮任务继续开工"。主模型盘点全项目可动工项形成六项立场，decision-critic 开工前评议（无 [HIGH_RISK_OBJECTION]）后拍板：**R1** dictDownload 进度迁移（B2 案 HRO③ 独立子项回窗，条件 C1=id≤2 预算内/静态键 0/黑盒 CTA+三相位全采纳；设计裁决=按钮纯文案/进度条承载 percent+bytes/#dictStatus 只留终态兜底）；**R2** Translator 死规则清理随批固定小节（条件 C2 采纳=盘点对象纠正为"世代 diff+作用域死规则双通道"——原预设 .sidebar/.tab-btn/.file-grid 全史不存在，盘之即盘空气）；**R3** 2.3.1 暂不发版（触发满足≠立即发版，攒至 owner 真机走查 2.3.0 后按死线 3 日复盘，发版归 owner）；**R4** 首启初始化维持挂起（承接诉求载体已被 owner 取消、无痛点信号）；**R5** 黑盒夹具固化仅提议（第 3 实例触发达线，不经 owner 同意不建）；**R6** 真机清单 F 节版本预期修正（评议员查补的我方 docs 陈旧项）+refineGlCount 借窗顺手修（采纳，与 R1 同批解冻）。
+**[INFO_GAP] 出处固化**：「详情区独立进度条复用 progress-fill」出自交接文档（未入库）D2 行原文：「词典管理 B2 案……详情区（名称+pill 状态/描述/安装目录 path-row+打开文件夹/下载按钮+**独立进度条复用 progress-fill**）。#dictStatus 降级为错误兜底行；dictDownload 进度显示迁移=独立子项」——本条引注后转为在案依据，不再依赖 Temp。
+
+### 二、二级评议（D2026-1001-04-b：d231 批清单有条件放行，4 条件级+1 建议级全采纳）
+
+核验证据（评议员全实读）：FROZEN_IDS=174/FROZEN_I18N_KEYS=190 逐词一致（test_ui_phase3_redlines.py:60-96）；预算上限 178/192（:2050 ③′）；dictDownload 与 PipelineManager id 模式无冲突；**.progress-bar 8px+overflow:hidden（style.css:1378-1408）故进度文本须独立成行**（条件②改包裹容器 DOM）；glRender/glDel null-guarded 计数点逐字在位（app.js:1978-1979/:2074-2075）；**style.css:561-572 复合选择器活段为 .file-ico、死段为 .file-icon**（条件①修正清理指令防误删存活规则）；style.dark.css progress/file 系 0 命中。条件③=补"下载中切换下拉"处置（kind 归属校验+黑盒用例）；条件④=键账目修正（dict_verify/dict_extract 已存在 MSG:433-435，无新增键）；条件⑤=隐藏统一 finally 覆盖三路径。
+
+### 三、C2 复议（批 3 盘点超预期命中 2 条裁决）
+
+执行者双通道实盘：世代通道=.translator-* 族 17 类已零残留（前序改版清除）、五 TAB 类全存活；作用域通道=167 class+18 id 全对照，**命中 2+存疑 1**：`.file-item .file-icon`（预期，已删）、`.pill-danger`（超预期，确证死——pill 拼类面封闭可穷举：仅 'pill'/'pill pill-success'/'pill pill-warning' 硬编码字面量）、`.console-line.command`（存疑——经 `console-line ${type}` 自由形参动态拼类，不可证死）。评议员裁决：**.pill-danger 删（随批补删，删后 grep=0）、.console-line.command 留档豁免**——判据=拼类面封闭（pill）vs 开放（console-line），两案落 C2 边界两侧，CSS 类不在钉⑤冻结域。
+
+### 四、执行记录（黑盒抓 1 真 bug 已修）
+
+| 批 | 内容 |
+|---|---|
+| 批 1 | index.html #dictProgress 包裹容器（.progress-bar>.progress-fill+兄弟 .progress-text）；style.css .progress-text（var(--text-3) 双主题 token：style.css:33/dark.css:46 静态保证）；app.js dictDownload 改写（renderProgress 全量刷新+相位往返重置/kind 归属校验/隐藏统一 finally/#dictStatus 只留终态）+**黑盒抓出 #dictActionBtn 漏绑 click 监听（批 3 重构静态化时旧动态按钮监听未迁移）随批修复（dataset.bound 一次性绑定，回调读 sel.value）**；钉⑤ 174→175 |
+| 批 2 | index.html 词库折叠卡头加 `<span id="refineGlCount" class="muted">`，app.js 零改动（null-guarded 更新点恢复即生效）；钉⑤ 175→176 |
+| 批 3 | style.css 删 :562 .file-icon（保留 :561 存活 .file-ico，grep file-ico=1）+C2 复议补删 .pill-danger；盘点小节全文留痕（方法/边界/命中表） |
+| 批 4 | 真机清单 F 节版本预期修正（2.3.0/2.3.1.dev0）+roadmap 2.3.1 立项节+本条目归档 |
+
+### 五、验证链（全绿）
+
+node --check 过；红线钉 6 用例（钉⑤ id 176 双向断言）+静态钉 39 用例=45 passed；全量 **1601 passed+4 skipped**（基线 1601+4 持平）；gate 旧基线 check **丢失 0**（ids 174→176/i18n 190 恒等）+新基线 176/190 落盘（两条 CSS 失联报告=file-icon/pill-danger 即本批有意清理项）；Mimosa deep seal sha256:2eafa499 findingCount=29=基线零新增；secret 定向扫描唯一命中=app.js:2788 token 计数器（既往甄别误报）；**黑盒**（IAB 伺服+stub 桩）：download 相位（fill 50%/15.0/30.0MB/按钮"下载中…"纯文案）/verify 相位（indeterminate+"校验中…"）/相位往返（回 download 75% 干净态）/终态（条隐藏+兜底行"下载完成：路径"+按钮恢复）/**轮询冻结（calls 恒定=无 poller 泄漏）**/切下拉 kind 校验（归属前缀"sudachi 10.0/30.0MB"+jieba 按钮态不被覆盖）/词库计数卡头显示"2"/文件行图标存活回归；截图存 Temp/gui-231/。GUI 已验证。
+
+### 六、是否 [PRESSURE-OVERRIDE]
+
+否（owner 明示继续开工；开工前评议+二级评议+C2 复议三级全过、无 HRO；全程可逆预算内）。
+
+### 七、后续风险跟踪
+
+①2.3.1 发版死线=owner 真机走查 2.3.0 结束后 3 日内复盘，滑期回本表（R3）；②.console-line.command 豁免留档，ConsoleManager.log 调用面专项核查时复核；③黑盒 role 卡区 undefined/阶段卡 TypeError 为 stub 数据不全夹具伪影，真机走查覆盖；④refineGlCount 计数形态=裸数字（JS 态），如需"N 条"走 MSG 键禁静态键；⑤黑盒夹具固化提议（R5）待 owner 同意后升格 tools/ 常驻工具。④ 「非中文 issue ≥5」按⑩口径滚动计数，触发即评审；⑤ premerge_max_gap_s：任一指纹/断点/恢复路径改动立项时先出兼容分析（旧断点读取+字段缺失降级+迁移测试），无方案不得动指纹哈希面；⑥ v2_outputs "done" payload：新增/改动消费端或结构时先做消费端核查；⑦ gui-probe 2026-11-01 首跳仍未触发→升格处置，不得仅再调时间；⑧ 钉⑤全集冻结下⑪落地新增 id/键须先更新冻结快照（承 :2000①）。

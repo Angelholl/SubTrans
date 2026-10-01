@@ -76,6 +76,15 @@
 - ✅ 发版（D4，owner 放权全流程）：release/2.3.0 @ 5c3919b（bump 2.3.0+CHANGELOG 只写本版+setup.iss 空壳修复+安装器断言）→ dispatch 试构建先行（打包链批 2 大改后首实证）→ tag v2.3.0 REST 建引用（201，2.2.0 授权先例通道）→ tag 构建绿 → artifact 并行 Range 8 片 70,850,389B 精确+exe 33,568,216B sha256 与 SHA256SUMS 一致 → Release id 400807261（非草稿非预发布，notes 能力边界如实告知+禁词自查 CLEAN）→ main cherry-pick 回收发版修复+前进 2.3.1.dev0（release-checklist 第 8 步首次执行）；黑盒证据存 Temp/gui-23/，gate 新基线 %TEMP%\stj_gate\baseline.json（174/190）
 - 批清单=docs/design/d1d4-批清单.md（二级评议：无 [HIGH_RISK_OBJECTION]，条件级 C1-C4+备注 R1-R6 全采纳；实现层闭环=批1 清空回归 134px 黑盒/批2 全量只增+ci.yml/批3 三态门控+空态 C2 条件黑盒）
 
+## 2.3.1 —— UI 收尾轮（D2026-1001-04 立项+二级评议有条件放行+C2 复议）✅ 已落库（2026-10-01，基线 1601+4）
+
+- ✅ 批 1 dictDownload 进度迁移（B2 案 HRO③ 独立子项回窗）：详情区独立进度条 #dictProgress（包裹容器+独立文本行，var(--text-3) 双主题 token），#dictStatus 降级终态/兜底；kind 归属校验防下载中切下拉串味；黑盒抓出并修复 #dictActionBtn 漏绑监听（批 3 重构静态化遗留）；解冻 id 174→175、静态键 +0
+- ✅ 批 2 refineGlCount 悬空修复（decision-log:2000② 借同窗消账）：折叠卡头恢复计数 span（黑盒实证显示行数），app.js 零改动；解冻 175→176
+- ✅ 批 3 五 TAB 世代死规则盘点清理（D2026-1001-03 ⑪ 兑现，候选池兑现）：双通道盘点（世代 diff：.translator-* 17 类已零残留；作用域扫描：167 class+18 id 全对照）——清理 .file-item .file-icon（:562 孤儿）+.pill-danger（C2 复议裁决随批删）；.console-line.command 豁免留档（JS 动态拼类不可证死）
+- ✅ 批 4 docs：真机清单 F 节版本预期修正（2.3.0/2.3.1.dev0）+评议归档（D2026-1001-04 三级：立项/二级评议/C2 复议）
+- 验证链：红线钉+静态钉 45 passed（钉⑤ 176 双向）/全量 1601+4 持平/gate 丢失 0+新基线 176/190/Mimosa 29 零新增（seal 2eafa499）/黑盒全用例 PASS（Temp/gui-231/）；GUI 已验证
+- 发版：**暂不发**（R3）——攒至 owner 真机走查 2.3.0 后按死线（走查结束 3 日内）复盘，发版决策归 owner
+
 ## 轨道 B —— 云端闭环（与 2.0 开发并行候选，未启动）
 
 - ⬜ 放行评审（HRO-1 四条件）→ 提案式自动（自动分析+自动提议+批次人工放行）（2026-10-01 复核维持挂起：触发=自动质量闭环真实需求信号，四条件未闭环不进实施，D2026-1001-03 第①项）
