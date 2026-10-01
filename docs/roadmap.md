@@ -67,13 +67,13 @@
 - ✅ 开工门闭环：批清单 docs/design/ui-phase3-批清单.md 二级评议通过（1 HRO 采纳=钉⑤ id 165/i18n 键 186 全集冻结，补 gate 只拦丢失的机器闸；C1-C9 并入第六节）；红线钉 tests/test_ui_phase3_redlines.py 六用例；web-gui-tester 黑盒六组 PASS+四档截图（Temp/gui-phase3/）；Mimosa 复扫 29 零新增（seal 485f0ce9）
 - 待 owner：真机走查时顺带目检阶段3 面（引擎三卡/高级卡头/词库表/暗色）；候选池未动：状态 tag 列、checkbox→toggle、接口地址区深化（三项 2026-10-01 复核维持挂起，D2026-1001-03 第⑤项）
 
-## 2.3.0 —— 轻量安装包与词典自管理（D2026-1001 交接 D1-D4 拍板+D2026-1001-03 版本口径）✅ 三批已落库待推送（2026-10-01，基线 1601+4）
+## 2.3.0 —— 轻量安装包与词典自管理（D2026-1001 交接 D1-D4 拍板+D2026-1001-03 版本口径）✅ 已发布（2026-10-01，tag v2.3.0→5c3919b release/2.3.0 分支制+Release id 400807261：单 setup.exe 33,568,216B+SHA256SUMS 哈希核过，notes 只写本版；release.yml 双跑全绿 dispatch 36837536293+tag 36838069064；发版审读抓出并修复 setup.iss [Files] 空壳缺陷）
 
 - ✅ 批 1 D1 dropzone A 案：#tab-translate 单屏锁定三分区+has-files 双级态（空态 134px/折叠 48px 实测）——黑盒四路径+暗色抽查 PASS（评议员条件①②③零新增 id/键；C1 render 入口单点切换）
 - ✅ 批 2 D3 词典去捆绑：推翻 D2026-0930-01⑧+D2026-0930-03② 双决议——full 安装器去 sudachidict（81MB→≈33MB）双安装器合单（spec/iss/release.yml 三件+ci.yml [dev,ja-dict]）+pip 主依赖移除（ja-dict extra+防回流新钉 2 用例）+spec 反收集过滤无条件化（HRO①）+降级文案 C4 七处改写（HRO②）
 - ✅ 批 3 D2 词典 B2 案：内嵌「空态引导+下拉+详情区」替代三行网格（解冻 id+9/静态键+4 走钉⑤快照程序，gate 旧基线 check 丢失 0 实证+新基线 174/190）；dictDownload 进度迁移=独立子项（HRO③，本批零改动）
 - ✅ 批 4 docs：README ja-dict 安装指引+发布说明素材+批清单评议归档（黑盒发现 DICT_KINDS 两处旧口径文案已随批修正）
-- ⬜ 发版（D4）：release/2.3.0 分支制+tag+Release——**归 owner 返回决策**；main 版本号 2.3.0.dev0（D2026-1001-03 第⑧项）；黑盒证据存 Temp/gui-23/，gate 新基线 %TEMP%\stj_gate\baseline.json（174/190）
+- ✅ 发版（D4，owner 放权全流程）：release/2.3.0 @ 5c3919b（bump 2.3.0+CHANGELOG 只写本版+setup.iss 空壳修复+安装器断言）→ dispatch 试构建先行（打包链批 2 大改后首实证）→ tag v2.3.0 REST 建引用（201，2.2.0 授权先例通道）→ tag 构建绿 → artifact 并行 Range 8 片 70,850,389B 精确+exe 33,568,216B sha256 与 SHA256SUMS 一致 → Release id 400807261（非草稿非预发布，notes 能力边界如实告知+禁词自查 CLEAN）→ main cherry-pick 回收发版修复+前进 2.3.1.dev0（release-checklist 第 8 步首次执行）；黑盒证据存 Temp/gui-23/，gate 新基线 %TEMP%\stj_gate\baseline.json（174/190）
 - 批清单=docs/design/d1d4-批清单.md（二级评议：无 [HIGH_RISK_OBJECTION]，条件级 C1-C4+备注 R1-R6 全采纳；实现层闭环=批1 清空回归 134px 黑盒/批2 全量只增+ci.yml/批3 三态门控+空态 C2 条件黑盒）
 
 ## 轨道 B —— 云端闭环（与 2.0 开发并行候选，未启动）
