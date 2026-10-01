@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -1812,6 +1813,376 @@ class TranslateAPI:
             "companion_path": companion,
             "stderr_tail": stderr_tail,
         }
+
+    # ----------------------------------------------------------------
+    # 质量闭环一键批次修复（2.6.0 批1，D2026-1002-02-批1：HRO-1 条件③
+    # 一键批次人工放行——确认与逐条预览在前端 AppModal，执行经 CLI
+    # --action-retranslate 子进程，无无人值守自动写盘；复验=重跑全片
+    # AI 分析恰 1 次做建议件三键 diff。幂等守卫=GUI 层台账感知
+    # （执行器本体无台账跳过，_refresh_guide 不翻 status，实证
+    # action_retranslate.py:262-280）；威胁模型=docs/design/
+    # 威胁模型-质量闭环-d1002.md）
+    # ----------------------------------------------------------------
+
+    _GUIDE_SUFFIX = "_质量报告导读.json"
+    _LEDGER_SUFFIX = "_重翻记录.json"
+    _BATCH_FIX_MAX_ENTRIES = 50
+    _BATCH_FIX_TIMEOUT_S = 1800
+    _SUGGESTION_KEYS = ("glossary", "tm", "observations")
+    _BATCH_PROGRESS_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
+    # 惰性初始化（_bf_progress），避免触碰 __init__
+    _batch_fix_progress_state: dict[str, Any]
+
+    def _bf_progress(self) -> dict[str, Any]:
+        if not hasattr(self, "_batch_fix_progress_state"):
+            self._batch_fix_progress_state = {
+                "running": False, "phase": "idle", "done": 0,
+                "total": 0, "last_line": ""}
+        return self._batch_fix_progress_state
+
+    def _stage_b_stage_settings(self, key: str) -> str:
+        """阶段B（存储 stage=3，槽 s3）设置项；读取失败/未存返回空串。"""
+        try:
+            got = self.refine_get_stage_settings()
+        except Exception:
+            return ""
+        if not isinstance(got, dict) or not got.get("success"):
+            return ""
+        for s in got.get("stages") or []:
+            if isinstance(s, dict) and int(s.get("stage") or 0) == 3:
+                return str(s.get(key) or "").strip()
+        return ""
+
+    def _stage_b_provider_name(self) -> str:
+        return self._stage_b_stage_settings("provider")
+
+    def _stage_b_endpoint(self) -> str:
+        return self._stage_b_stage_settings("endpoint")
+
+    def _stage_b_model(self) -> str:
+        return self._stage_b_stage_settings("model")
+
+    def _load_guide_json(self, p: str) -> dict[str, Any] | None:
+        try:
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _applied_timings(self, guide_dir: str, stem: str) -> set[str]:
+        """台账中 outcome=="applied" 的 timing 集合；缺/损坏返回空集。"""
+        try:
+            with open(os.path.join(guide_dir, stem + self._LEDGER_SUFFIX),
+                      encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return set()
+        out: set[str] = set()
+        if isinstance(data, list):
+            for rec in data:
+                if (isinstance(rec, dict) and rec.get("outcome") == "applied"
+                        and rec.get("timing")):
+                    out.add(str(rec["timing"]))
+        return out
+
+    def _read_ledger(self, guide_dir: str, stem: str) -> list:
+        try:
+            with open(os.path.join(guide_dir, stem + self._LEDGER_SUFFIX),
+                      encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return []
+        return data if isinstance(data, list) else []
+
+    def _suggestion_counts(self, guide_dir: str, stem: str) -> dict[str, int]:
+        counts = {k: 0 for k in self._SUGGESTION_KEYS}
+        try:
+            with open(os.path.join(guide_dir,
+                                   stem + self._AI_SUGGESTION_SUFFIX),
+                      encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return counts
+        sug = data.get("suggestions") if isinstance(data, dict) else None
+        if isinstance(sug, dict):
+            for k in self._SUGGESTION_KEYS:
+                v = sug.get(k)
+                counts[k] = len(v) if isinstance(v, list) else 0
+        return counts
+
+    def refine_guide_action_items(self, guide_path: str) -> dict[str, Any]:
+        """读导读 json 行动条目并标记台账已修状态（幂等守卫数据源）。
+
+        只回元数据与短摘录（现译前 20 字），不回全量文本（出域面最小化，
+        威胁模型-质量闭环-d1002 §1）。"""
+        p = str(guide_path or "").strip()
+        if not p:
+            return {"success": False, "error": msg("guide_path_empty")}
+        try:
+            p = str(_validate_user_directory(p))
+        except ValueError as ve:
+            return {"success": False, "error": msg("guide_path_denied", e=ve)}
+        if not os.path.isfile(p):
+            return {"success": False,
+                    "error": msg("guide_file_missing", path=p)}
+        name = os.path.basename(p)
+        if not name.endswith(self._GUIDE_SUFFIX):
+            return {"success": False,
+                    "error": f"需要 {self._GUIDE_SUFFIX} 导读文件: {name}"}
+        stem = name[: -len(self._GUIDE_SUFFIX)]
+        guide = self._load_guide_json(p)
+        if guide is None:
+            return {"success": False, "error": "导读读取/解析失败"}
+        items = guide.get("items")
+        if not isinstance(items, list):
+            return {"success": False, "error": "导读格式异常（无 items 数组）"}
+        applied = self._applied_timings(os.path.dirname(p), stem)
+        open_items: list[dict[str, Any]] = []
+        cat_counts: dict[str, int] = {}
+        observation_count = 0
+        applied_open_count = 0
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            status = str(it.get("status") or "")
+            if status == "observation":
+                observation_count += 1
+                continue
+            if status != "open":
+                continue
+            idx = it.get("index")
+            cur = it.get("current_text")
+            timing = str(it.get("timing") or "")
+            in_ledger = timing in applied
+            if in_ledger:
+                applied_open_count += 1
+            open_items.append({
+                "index": idx if isinstance(idx, int) else None,
+                "category": str(it.get("category") or ""),
+                "timing": timing,
+                "excerpt": cur[:20] if isinstance(cur, str) else "",
+                "applied_in_ledger": in_ledger,
+            })
+            if not in_ledger:
+                cat = str(it.get("category") or "")
+                cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        return {
+            "success": True,
+            "stem": stem,
+            "guide_path": p,
+            "report_path": os.path.join(os.path.dirname(p),
+                                        stem + self._AI_REPORT_SUFFIX),
+            "open_items": open_items,
+            "cat_counts": cat_counts,
+            "applied_open_count": applied_open_count,
+            "observation_count": observation_count,
+            "direction": str(guide.get("direction") or ""),
+            "has_media": bool(guide.get("media_path")),
+        }
+
+    def refine_batch_fix(self, guide_path: str, entries: Any,
+                         ai_provider: str = None,
+                         ai_model: str = None) -> dict[str, Any]:
+        """一键批次修复：确认与逐条预览在前端（AppModal），本方法执行。
+
+        守卫链：路径/后缀 → entries 整数数组 ≤_BATCH_FIX_MAX_ENTRIES →
+        逐条命中 open 且有现译（观察类必拒，C6）→ 台账已修拒入批
+        （C1 幂等守卫；重修走 CLI --entries 显式通道）。执行=
+        spawn_refine_cli 子进程跑 --action-retranslate --apply（修复
+        provider=阶段B/槽 s3；台账先于终稿写序/恒等式断言在执行器侧
+        原样生效）；复验=生效后重跑全片 AI 分析恰 1 次做建议件三键
+        计数 diff（复验 provider/model 透传 AI 分析独立配置）。"""
+        p = str(guide_path or "").strip()
+        if not p:
+            return {"success": False, "error": msg("guide_path_empty")}
+        try:
+            p = str(_validate_user_directory(p))
+        except ValueError as ve:
+            return {"success": False, "error": msg("guide_path_denied", e=ve)}
+        if not os.path.isfile(p):
+            return {"success": False,
+                    "error": msg("guide_file_missing", path=p)}
+        name = os.path.basename(p)
+        if not name.endswith(self._GUIDE_SUFFIX):
+            return {"success": False,
+                    "error": f"需要 {self._GUIDE_SUFFIX} 导读文件: {name}"}
+        stem = name[: -len(self._GUIDE_SUFFIX)]
+        guide = self._load_guide_json(p)
+        if guide is None:
+            return {"success": False, "error": "导读读取/解析失败"}
+        items = guide.get("items")
+        if not isinstance(items, list):
+            return {"success": False, "error": "导读格式异常（无 items 数组）"}
+
+        if not isinstance(entries, list) or not entries:
+            return {"success": False, "error": "entries 需为非空整数数组"}
+        want: set[int] = set()
+        for e in entries:
+            if isinstance(e, bool) or not isinstance(e, int):
+                return {"success": False, "error": "entries 需为整数数组"}
+            want.add(e)
+        if len(want) > self._BATCH_FIX_MAX_ENTRIES:
+            return {"success": False,
+                    "error": f"单批上限 {self._BATCH_FIX_MAX_ENTRIES} 条"
+                             f"（本次 {len(want)} 条）；请分批发起"}
+        fixable: dict[int, str] = {}
+        for it in items:
+            if not isinstance(it, dict) or it.get("status") != "open":
+                continue
+            if not isinstance(it.get("current_text"), str):
+                continue  # 观察类/无现译：绝不自动重翻（C6）
+            idx = it.get("index")
+            if isinstance(idx, int):
+                fixable[idx] = str(it.get("timing") or "")
+        unknown = sorted(want - set(fixable))
+        if unknown:
+            return {"success": False,
+                    "error": "条目不存在或不可自动重翻（观察类/无现译）: "
+                             + ",".join(str(i) for i in unknown[:10])}
+        applied = self._applied_timings(os.path.dirname(p), stem)
+        already = sorted(i for i in want if fixable[i] in applied)
+        if already:
+            return {"success": False,
+                    "error": "以下条目已修过（台账在案）: "
+                             + ",".join(str(i) for i in already[:10])
+                             + "；如需重修请用 CLI --entries 显式指定"}
+
+        guide_dir = os.path.dirname(p)
+        pre_counts = self._suggestion_counts(guide_dir, stem)
+        pre_suggestion_missing = not os.path.isfile(
+            os.path.join(guide_dir, stem + self._AI_SUGGESTION_SUFFIX))
+        pre_ledger_len = len(self._read_ledger(guide_dir, stem))
+
+        # 修复 provider=阶段B：与 AI 分析同理不显式传会落 CLI 缺省本地
+        # 端点；密钥仅经子进程环境变量注入（白名单表与翻译/分析一致）。
+        args = ["--action-retranslate", p,
+                "--entries", ",".join(str(i) for i in sorted(want)),
+                "--apply"]
+        provider = self._stage_b_provider_name()
+        if provider:
+            args.extend(["--s3-provider", provider])
+            flag = self._AI_PROVIDER_ENDPOINT_FLAGS.get(provider)
+            endpoint = self._stage_b_endpoint()
+            if endpoint and flag:
+                args.extend([flag, endpoint])
+        fix_model = self._stage_b_model()
+        if fix_model:
+            args.extend(["--action-model", fix_model])
+        env_extra: dict[str, str] = {"PYTHONUNBUFFERED": "1"}
+        key_env = self._AI_PROVIDER_KEY_ENV.get(provider)
+        if key_env:
+            try:
+                from subtransjav.refine.secrets import read_secret
+                key = read_secret(provider)
+            except Exception:
+                key = ""
+            if key:
+                env_extra[key_env] = key
+
+        prog = self._bf_progress()
+        prog.update({"running": True, "phase": "run", "done": 0,
+                     "total": len(want), "last_line": ""})
+        try:
+            proc = cast(subprocess.Popen, spawn_refine_cli(
+                args, cwd=str(REPO_ROOT), env_extra=env_extra,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="replace", bufsize=1))
+        except Exception as e:
+            _log_exc("refine_batch_fix.spawn")
+            prog.update({"running": False, "phase": "failed"})
+            return {"success": False, "error": f"修复子进程启动失败: {e}"}
+
+        tail: list[str] = []
+
+        def _pump() -> None:
+            assert proc.stdout is not None
+            for raw in proc.stdout:
+                line = raw.rstrip()
+                if not line:
+                    continue
+                tail.append(line)
+                prog["last_line"] = line[-200:]
+                m = self._BATCH_PROGRESS_RE.search(line)
+                if m:
+                    prog["done"] = min(int(m.group(1)), prog["total"])
+                    if int(m.group(2)):
+                        prog["total"] = int(m.group(2))
+
+        threading.Thread(target=_pump, daemon=True).start()
+        try:
+            rc = proc.wait(timeout=self._BATCH_FIX_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            try:
+                terminate_process_tree(proc.pid)
+            except Exception:
+                with contextlib.suppress(Exception):
+                    proc.kill()
+            prog.update({"running": False, "phase": "failed",
+                         "last_line": "超时终止"})
+            return {"success": False,
+                    "error": f"批量修复超时（>{self._BATCH_FIX_TIMEOUT_S}s）；"
+                             "已落盘条目以台账为准，可再次发起处理余量",
+                    "stdout_tail": "\n".join(tail[-40:])[-2000:]}
+        prog.update({"running": False,
+                     "phase": "done" if rc in (0, 3) else "failed"})
+        result: dict[str, Any] = {
+            "success": rc in (0, 3),
+            "exit_code": rc,
+            "applied": 0,
+            "failed": 0,
+            "source_partial": 0,
+            "stdout_tail": "\n".join(tail[-40:])[-2000:],
+            "schema": 1,
+        }
+        if rc == 2:
+            result["error"] = "条目选择非法（执行器退出码 2）"
+            return result
+        post_ledger = self._read_ledger(guide_dir, stem)
+        new_records = post_ledger[pre_ledger_len:] \
+            if len(post_ledger) > pre_ledger_len else []
+        result["applied"] = sum(
+            1 for r in new_records
+            if isinstance(r, dict) and r.get("outcome") == "applied")
+        result["failed"] = sum(
+            1 for r in new_records
+            if isinstance(r, dict) and r.get("outcome") == "failed")
+        result["source_partial"] = sum(
+            1 for r in new_records
+            if isinstance(r, dict) and r.get("source_partial"))
+        if rc != 3 and rc != 0:
+            result["error"] = msg("process_exit_code", code=rc)
+            return result
+
+        # 复验（恒开）：重跑全片 AI 分析恰 1 次，建议件三键计数 diff
+        report_txt = os.path.join(guide_dir, stem + self._AI_REPORT_SUFFIX)
+        prog.update({"phase": "verify"})
+        if not os.path.isfile(report_txt):
+            result["verify"] = {"error": "报告 txt 缺失，跳过复验"}
+            prog.update({"phase": "done"})
+            return result
+        vr = self.refine_ai_analyze(report_txt,
+                                    (ai_model or "").strip() or None,
+                                    ai_provider)
+        if vr.get("success"):
+            result["verify"] = {
+                "before": pre_counts,
+                "before_missing": pre_suggestion_missing,
+                "after": self._suggestion_counts(guide_dir, stem),
+                "provider_name": vr.get("provider_name"),
+                "parse_ok": vr.get("parse_ok"),
+            }
+            result["suggestions"] = vr.get("suggestions") or {}
+        else:
+            # refine_ai_analyze 失败不落写建议件——修复前建议件原样保留（R4）
+            result["verify"] = {"error": vr.get("error"),
+                                "stderr_tail": vr.get("stderr_tail", "")}
+        prog.update({"phase": "done"})
+        return result
+
+    def refine_batch_fix_progress(self) -> dict[str, Any]:
+        """批修复进度快照（前端 1s 轮询；复刻 refine_dict_download_progress）。"""
+        return dict(self._bf_progress())
 
     def refine_ai_apply_glossary(self, entries_json: str) -> dict[str, Any]:
         """把 AI 术语建议逐条锁定追加进词库（glossary.append_glossary_entries）。

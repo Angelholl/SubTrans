@@ -21,7 +21,14 @@ from typing import TYPE_CHECKING
 from .filters import build_srt, parse_srt
 from .quality_report import resolve_final_block, write_guide_json
 from .source_hallucination import is_fluent_target
-from .v2_outputs import _atomic_write_text
+from .v2_outputs import (
+    _atomic_write_text,
+)
+from .v2_outputs import (
+    _atomic_write_text as _ledger_atomic_write,  # 台账独立符号：终稿写失败
+    # 注入测试（test_ledger_precedes_final_write）只钉终稿写点，台账原子写
+    # 不受其替身影响（D2026-1002-02-批1 C2）
+)
 
 if TYPE_CHECKING:
     from subtransjav.translate.llm_client import LLMClient
@@ -244,7 +251,9 @@ def _assert_apply_invariants(old_entries: list, new_entries: list,
 
 def _append_ledger(ledger_path: Path, records: list) -> int:
     """台账累积写入：已存在则追加（JSON 数组）；损坏件不阻断、重新起账。
-    返回写入后的累计条数。"""
+    写入走 _atomic_write_text 原子替换（2.6.0 批1 D2026-1002-02-批1 C2：
+    write_text 非原子——杀树落在写中途会留半截 JSON，下次读取损坏即
+    "重新起账"丢全部回滚依据）。返回写入后的累计条数。"""
     existing = []
     if ledger_path.is_file():
         try:
@@ -254,8 +263,8 @@ def _append_ledger(ledger_path: Path, records: list) -> int:
         except (OSError, ValueError):
             print(f"⚠️ [行动层] 重翻台账损坏，重新起账: {ledger_path.name}")
     existing.extend(records)
-    ledger_path.write_text(json.dumps(existing, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
+    _ledger_atomic_write(str(ledger_path),
+                         json.dumps(existing, ensure_ascii=False, indent=2))
     return len(existing)
 
 

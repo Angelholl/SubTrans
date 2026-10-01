@@ -5,7 +5,8 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
 - 钉② 批2：两张词库表挂 .gl-table
 - 钉③ 批2：glRender/glLearnedLoad 行模板无 style= 字面量
 - 钉④ R2：:root 节奏禁区变量与文档级字号行高逐字冻结
-- 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 165 + data-i18n 键全集 186 快照冻结——
+- 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 183 + data-i18n 键全集 191 快照冻结
+  （2.6.0 批1 D2026-1002-02-批1 解冻 +3 id/+1 静态键，程序=批清单预算表）——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
 """
@@ -76,7 +77,9 @@ mediaOverrideInput mediaOverrideStatus mediaSourceBar mediaSourceEditRow mediaSo
 mediaSourceTag mediaSourceToggleBtn openOutputBtn outputDir outputToSource pipelineCard
 pipelineMirrorLine progressBar progressFill refineAdaptiveThresholds refineAiAnalyzeBtn
 refineAiAnalyzeSection refineAiAnalyzeStatus refineAiPrivacy refineAiResult
-refineAutoSynopsis refineBatchCloud refineBatchLocal refineCancelBtn refineCleanerConfig
+refineAutoSynopsis refineBatchCloud refineBatchLocal
+refineBatchFixBtn refineBatchFixScope refineBatchFixStatus
+refineCancelBtn refineCleanerConfig
 refineCleanerConfigShow refineConcurrency refineEndpointStatus refineFallbackLocal
 refineFallbackModel refineForceResume refineGl1 refineGl2 refineGlAdd refineGlCount
 refineGlDel refineGlExport refineGlImport refineGlPath refineGlSave refineGlStatus
@@ -103,7 +106,7 @@ FROZEN_I18N_KEYS = frozenset(
 adaptive_thresholds_title add_files add_folder adv_group_fallback_concurrency
 adv_group_resume_logging adv_group_tm_learn_gate adv_group_translation_glossary
 advanced_settings_notice aiAnalyzeBtn app_header_title artifact_note audio_preview_close
-batch_cloud_label batch_local_label browse_btn browse_dots cleaner_dir_label
+batchFixBtn batch_cloud_label batch_local_label browse_btn browse_dots cleaner_dir_label
 cleaner_dir_placeholder clear_btn clear_console close_btn collapse_toggle
 concurrency_label concurrency_title console_collapse console_header ctx_label
 ctx_placeholder ctx_title data_root_change_btn data_root_restore_btn data_root_title

@@ -468,6 +468,27 @@ const MSG = {
     ai_prov_deepseek: 'DeepSeek API',
     ai_prov_siliconflow: '硅基流动',
     ai_prov_zen: 'Zen 免费',
+    // 2.6.0 批1（D2026-1002-02-批1）：质量闭环一键批次修复。
+    // batchFixBtn 为静态 data-i18n 键（HTML+MSG 表+钉⑤快照三处同步）；
+    // 其余为 JS 态键（不入 data-i18n 快照，受反向悬空钉保护）
+    batchFixBtn: '一键修复建议',
+    batchFixConfirmTitle: '确认执行批量修复？',
+    batchFixPreviewHead: '将修复以下条目：',
+    batchFixPreviewMore: n => `…其余 ${n} 条省略`,
+    batchFixEstimate: n => `预估调用：翻译 ${n} 次 + 复验全片 AI 分析 1 次`,
+    batchFixCloudCost: '当前修复服务商为云端（按量计费）；发送内容为字幕文本与词条上下文，不含音视频。',
+    batchFixCapHit: (n, total) => `待修共 ${total} 条，单批上限 50：本次修前 ${n} 条（按序），确认后可再次发起处理余量`,
+    batchFixNoItems: '当前导读没有可自动修复的待修条目（或均已修过）',
+    batchFixNeedGuide: '请先加载质量报告导读',
+    batchFixRunning: (done, total) => `批量修复中… ${done}/${total}`,
+    batchFixDone: (a, f) => `批量修复完成：成功 ${a} 条` + (f ? `，失败 ${f} 条` : ''),
+    batchFixFail: '批量修复失败',
+    batchFixVerifying: '复验中：重跑全片 AI 分析…',
+    batchFixVerifyFail: '；复验失败（修复前建议已保留，可手动重跑 AI 分析）',
+    batchFixVerifyDelta: d => `；复验建议差 Δ${d >= 0 ? '+' : ''}${d}`,
+    batchFixSourcePartial: '；部分条目按导读摘录对齐（未提供原始源文）',
+    batchFixScopeAll: '全部待修条目',
+    batchFixScopeCat: (c, n) => `${c}（${n} 条）`,
     tpl_goto_edit: '去编辑',
     tpl_goto_empty_hint: '该阶段角色卡未显式指定（留空=自动查找回落链）；编辑器仅支持角色卡目录内顶层文件',
     tpl_goto_outside_hint: '显式卡在角色卡目录外，编辑器仅支持目录内文件；已在下方定位角色卡目录',
@@ -2882,6 +2903,7 @@ function switchTab(tabId) {
           lastLoadedReportTxtPath = r.path || p;
           lastLoadedIsTxt = true;
           guideRenderTxt(r);
+          batchFixRefresh();
           guideStatus(MSG.guide_txt_loaded(r.path || p)
             + (r.truncated ? MSG.guide_txt_truncated_note : ''));
           if (isCustom) {
@@ -2895,6 +2917,7 @@ function switchTab(tabId) {
         lastGuideData = r.data || {};
         updateMediaSourceBar(lastGuideData);
         guideRender(r.data || {});
+        batchFixRefresh();
         guideStatus(MSG.guide_loaded(r.path || p));
         if (isCustom) guideCustomStatus(MSG.guide_loaded(r.path || p), false);
       } else {
@@ -3218,6 +3241,153 @@ function switchTab(tabId) {
     }
   }
 
+  // ===== 2.6.0 批1（D2026-1002-02-批1）：质量闭环一键批次修复 =====
+  // 幂等守卫在后端（台账 applied 拒入批）；前端只做范围选择+逐条预览+
+  // 确认放行（无无人值守自动写盘）。stderr_tail/stdout_tail 一律走
+  // textContent 渲染（R2），禁 innerHTML 拼接。
+  let lastActionItems = null;
+
+  function bfStatus(text) {
+    const st = $('refineBatchFixStatus');
+    if (st) st.textContent = text || '';
+  }
+
+  function batchFixRefresh() {
+    // 使能钩子：导读 json 加载成功后拉取行动条目（含台账已修标记）
+    const btn = $('refineBatchFixBtn');
+    const scope = $('refineBatchFixScope');
+    if (!btn || !window.pywebview || !window.pywebview.api) return;
+    if (!lastLoadedGuidePath || lastLoadedIsTxt) {
+      lastActionItems = null;
+      btn.disabled = true;
+      if (scope) { scope.style.display = 'none'; scope.innerHTML = ''; }
+      return;
+    }
+    window.pywebview.api.refine_guide_action_items(lastLoadedGuidePath)
+      .then((r) => {
+        if (!r || !r.success) {
+          lastActionItems = null;
+          btn.disabled = true;
+          return;
+        }
+        lastActionItems = r;
+        const fixable = (r.open_items || []).filter(it => !it.applied_in_ledger);
+        btn.disabled = fixable.length === 0;
+        if (scope) {
+          scope.innerHTML = '';
+          const optAll = document.createElement('option');
+          optAll.value = 'all';
+          optAll.textContent = MSG.batchFixScopeAll + '（' + fixable.length + '）';
+          scope.appendChild(optAll);
+          Object.keys(r.cat_counts || {}).sort().forEach((c) => {
+            const o = document.createElement('option');
+            o.value = c;
+            o.textContent = MSG.batchFixScopeCat(c, r.cat_counts[c]);
+            scope.appendChild(o);
+          });
+          scope.style.display = fixable.length ? '' : 'none';
+        }
+      })
+      .catch(() => {
+        lastActionItems = null;
+        if (btn) btn.disabled = true;
+      });
+  }
+
+  async function batchFixRun() {
+    if (!lastActionItems) { bfStatus(MSG.batchFixNeedGuide); return; }
+    if (!window.pywebview || !window.pywebview.api) {
+      bfStatus(MSG.api_not_ready);
+      return;
+    }
+    const all = (lastActionItems.open_items || [])
+      .filter(it => !it.applied_in_ledger);
+    if (!all.length) { bfStatus(MSG.batchFixNoItems); return; }
+    const scope = $('refineBatchFixScope');
+    const v = (scope && scope.style.display !== 'none') ? scope.value : 'all';
+    const chosen = (v && v !== 'all')
+      ? all.filter(it => it.category === v)
+      : all.slice();
+    if (!chosen.length) { bfStatus(MSG.batchFixNoItems); return; }
+    let batch = chosen;
+    let capNote = '';
+    if (batch.length > 50) {
+      capNote = MSG.batchFixCapHit(50, batch.length);
+      batch = batch.slice(0, 50);
+    }
+    const provRaw = (($('refineS3Provider') || {}).value || '').toLowerCase();
+    const cloud = isAiCloudProvider(provRaw);
+    const lines = batch.slice(0, 10).map(it =>
+      '#' + it.index + ' [' + it.category + '] ' + (it.excerpt || it.timing));
+    if (batch.length > 10) {
+      lines.push(MSG.batchFixPreviewMore(batch.length - 10));
+    }
+    const body = [
+      MSG.batchFixEstimate(batch.length),
+      cloud ? MSG.batchFixCloudCost : '',
+      capNote,
+      MSG.batchFixPreviewHead,
+      lines.join('\n'),
+    ].filter(Boolean).join('\n\n');
+    const go = await AppModal.confirm(MSG.batchFixConfirmTitle, body);
+    if (!go) return;
+    const btn = $('refineBatchFixBtn');
+    if (btn) btn.disabled = true;
+    bfStatus(MSG.batchFixRunning(0, batch.length));
+    const poll = setInterval(async () => {
+      try {
+        const p = await window.pywebview.api.refine_batch_fix_progress();
+        if (p && p.running && p.phase === 'verify') {
+          bfStatus(MSG.batchFixVerifying);
+        } else if (p && p.running) {
+          bfStatus(MSG.batchFixRunning(p.done, p.total));
+        }
+      } catch (e) { /* 单次轮询失败静默，主调用最终回显为准 */ }
+    }, 1000);
+    try {
+      // 复验 provider/model 透传 AI 分析独立配置（与 refineAiAnalyze 同源读取）
+      const indepProv = (($('aiProviderSel') || {}).value || 'follow');
+      const indepModel = (($('aiModelInput') || {}).value || '').trim();
+      const effModel = (indepModel
+        || (($('refineS1Model') || {}).value || '')).trim();
+      const r = await window.pywebview.api.refine_batch_fix(
+        lastLoadedGuidePath, batch.map(it => it.index),
+        indepProv === 'follow' ? null : indepProv, effModel);
+      if (r && r.success) {
+        let msg = MSG.batchFixDone(r.applied || 0, r.failed || 0);
+        if (r.source_partial) msg += MSG.batchFixSourcePartial;
+        const vfy = r.verify || {};
+        if (vfy.error) {
+          msg += MSG.batchFixVerifyFail;
+        } else if (vfy.after) {
+          const sum = (o) => ['glossary', 'tm', 'observations']
+            .reduce((s, k) => s + ((o && o[k]) || 0), 0);
+          const d = sum(vfy.after) - sum(vfy.before);
+          msg += MSG.batchFixVerifyDelta(d);
+          if (r.suggestions) {
+            lastAiSuggestions = {
+              success: true,
+              parse_ok: vfy.parse_ok !== false,
+              suggestions: r.suggestions,
+              provider_name: vfy.provider_name || '',
+            };
+            aiRenderResult(lastAiSuggestions);
+          }
+        }
+        bfStatus(msg);
+      } else {
+        bfStatus(MSG.batchFixFail + '：' + ((r && r.error) || ''));
+      }
+    } catch (e) {
+      bfStatus(MSG.batchFixFail + '：'
+        + (e && e.message ? e.message : String(e)));
+    } finally {
+      clearInterval(poll);
+      if (btn) btn.disabled = false;
+      batchFixRefresh();
+    }
+  }
+
   function aiBtnState(btn, statusText) {
     if (statusText) {
       btn.textContent = statusText;
@@ -3418,6 +3588,9 @@ function switchTab(tabId) {
     // AI 质量分析（D2026-0929）
     const aiBtn = $('refineAiAnalyzeBtn');
     if (aiBtn) aiBtn.addEventListener('click', () => refineAiAnalyze());
+    // 质量闭环一键批次修复（2.6.0 批1）
+    const bfBtn = $('refineBatchFixBtn');
+    if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());
 
     // 快速试听（D2026-0929-09）：条目试听按钮事件委托 + 浮层关闭 +
     // 媒体来源条「更换」展开 + 覆盖路径应用

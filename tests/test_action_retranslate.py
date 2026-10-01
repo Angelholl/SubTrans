@@ -519,3 +519,24 @@ def test_unknown_category_prompt_has_no_hint_line(tmp_path, install_client):
         "告警说明：疑似误译",
         "请只输出重翻后的中文正文一行。",
     ]
+
+
+# ---------------------------------------------------------------------------
+# 2.6.0 批1（D2026-1002-02-批1 C2）：台账原子写+损坏恢复
+# ---------------------------------------------------------------------------
+
+def test_ledger_append_atomic_and_corrupt_recovery(tmp_path, install_client):
+    """C2：台账写入走 _atomic_write_text（tmp+replace）——杀树落在写中途
+    不再留半截 JSON；既有损坏件不崩溃、重新起账后仍是合法 JSON 数组。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [_item(3, T3, "前辈真厉害")])
+    ledger = tmp_path / "ep01_重翻记录.json"
+    ledger.write_text('{"broken": true', encoding="utf-8")   # 模拟半截写
+    install_client(responses=["修复后的译文。"])
+    assert run_action_retranslate(
+        _cfg(), _args(tmp_path, apply=True, entries="3")) == 0
+    records = _read_ledger(tmp_path)          # 重新起账后可解析（原子写完整）
+    assert len(records) == 1 and records[0]["outcome"] == "applied"
+    assert records[0]["old_text"] == "前辈真厉害"
+    assert not list(tmp_path.glob("*.tmp"))   # 原子写不残留临时件
+

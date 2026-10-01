@@ -1859,3 +1859,253 @@ def test_get_translation_status_files_status_empty_when_no_parser(gui_api_obj):
     api = _manual_state_api(gui_api_obj)
     status = api.get_translation_status()
     assert status["files_status"] == {}
+
+
+# ---------------------------------------------------------------------------
+# 2.6.0 批1（D2026-1002-02-批1）：质量闭环一键批次修复
+# ---------------------------------------------------------------------------
+
+_BF_GUIDE_STEM = "ep01"
+_T3 = "00:00:03,000 --> 00:00:04,000"
+_T7 = "00:00:07,000 --> 00:00:08,000"
+
+
+def _bf_item(index, timing, text, category="cps_too_fast", status="open"):
+    return {"index": index, "timing": timing, "category": category,
+            "message": "m", "current_text": text,
+            "source_excerpt": "src", "status": status, "severity": None}
+
+
+def _make_bf_guide(tmp_path: Path, items, ledger=None, with_report=True,
+                   with_suggestion=None) -> Path:
+    guide = {"version": 2, "stem": _BF_GUIDE_STEM, "items": items,
+             "direction": "", "media_path": ""}
+    p = tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json"
+    p.write_text(json.dumps(guide, ensure_ascii=False), encoding="utf-8")
+    if ledger is not None:
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").write_text(
+            json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
+    if with_report:
+        (tmp_path / f"{_BF_GUIDE_STEM}_质量报告.txt").write_text(
+            "【结论】x\n", encoding="utf-8")
+    if with_suggestion is not None:
+        (tmp_path / f"{_BF_GUIDE_STEM}_AI质量建议.json").write_text(
+            json.dumps({"parse_ok": True, "suggestions": with_suggestion},
+                       ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def _install_fake_stage3(gui_api_obj, monkeypatch, provider="deepseek",
+                         endpoint="", model="sb-model"):
+    """替身 refine_get_stage_settings：只含阶段B（存储 stage=3）。"""
+    monkeypatch.setattr(
+        gui_api_obj, "refine_get_stage_settings",
+        lambda: {"success": True,
+                 "stages": [{"stage": 3, "provider": provider,
+                             "endpoint": endpoint, "model": model}],
+                 "settings": {}, "key_status": {}, "first_run": False})
+
+
+class _FakePopen:
+    def __init__(self, lines, rc=0):
+        self.stdout = iter(lines)
+        self.pid = 4242
+        self._rc = rc
+
+    def wait(self, timeout=None):
+        return self._rc
+
+    def kill(self):
+        pass
+
+
+def _install_fake_bf_spawn(monkeypatch, *, lines=(), rc=0, ledger_path=None,
+                           ledger_records=None, verify_suggestions=None,
+                           verify_returncode=0):
+    """替身 spawn_refine_cli：批修复走 Popen 流式路径（可选模拟执行器落
+    台账）；capture=True 的复验 --ai-analyze 路径可选覆写建议件后返回
+    CompletedProcess 形状（refine_ai_analyze 消费 .stderr/.returncode）。"""
+    import subtransjav.webview_gui.api as api_mod
+    captured: dict = {}
+
+    def _fake_spawn(args, **kwargs):
+        captured.setdefault("calls", []).append(
+            {"args": args, "kwargs": kwargs})
+        if kwargs.get("capture"):
+            if verify_suggestions is not None:
+                report_arg = args[args.index("--ai-analyze") + 1]
+                stem = Path(report_arg).name[:-len("_质量报告.txt")]
+                out = Path(report_arg).parent / f"{stem}_AI质量建议.json"
+                out.write_text(json.dumps(
+                    {"parse_ok": True, "suggestions": verify_suggestions},
+                    ensure_ascii=False), encoding="utf-8")
+            return SimpleNamespace(returncode=verify_returncode,
+                                   stderr="", stdout="")
+        if ledger_path is not None and ledger_records:
+            existing = []
+            if ledger_path.is_file():
+                try:
+                    existing = json.loads(
+                        ledger_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    existing = []
+            existing.extend(ledger_records)
+            ledger_path.write_text(json.dumps(existing, ensure_ascii=False),
+                                   encoding="utf-8")
+        return _FakePopen(lines, rc=rc)
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake_spawn)
+    return captured
+
+
+def _install_fake_verify_run(monkeypatch, new_suggestions=None,
+                             returncode=0):
+    """替身 subprocess.run（复验 --ai-analyze 捕获路径）；可模拟复验后
+    建议件被覆写为新计数。"""
+    import subtransjav.webview_gui.api as api_mod
+    captured: dict = {}
+
+    def _fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        if new_suggestions is not None:
+            report_arg = args[args.index("--ai-analyze") + 1]
+            stem = Path(report_arg).name[:-len("_质量报告.txt")]
+            out = Path(report_arg).parent / f"{stem}_AI质量建议.json"
+            out.write_text(json.dumps(
+                {"parse_ok": True, "suggestions": new_suggestions},
+                ensure_ascii=False), encoding="utf-8")
+        return SimpleNamespace(returncode=returncode, stderr="", stdout="")
+
+    monkeypatch.setattr(api_mod.subprocess, "run", _fake_run)
+    return captured
+
+
+def test_batch_fix_constants_pinned():
+    """成本护栏常量钉：单批上限/超时/导读后缀。"""
+    from subtransjav.webview_gui.api import TranslateAPI as _T
+    assert _T._BATCH_FIX_MAX_ENTRIES == 50
+    assert _T._BATCH_FIX_TIMEOUT_S == 1800
+    assert _T._GUIDE_SUFFIX == "_质量报告导读.json"
+
+
+def test_guide_action_items_marks_applied(gui_api_obj, tmp_path):
+    """台账感知标记：applied 条目入 open_items 但不计入可修分类计数。"""
+    items = [_bf_item(3, _T3, "甲"), _bf_item(7, _T7, "乙")]
+    ledger = [{"timing": _T3, "outcome": "applied"}]
+    guide = _make_bf_guide(tmp_path, items, ledger=ledger)
+    r = gui_api_obj.refine_guide_action_items(str(guide))
+    assert r["success"] is True
+    assert r["applied_open_count"] == 1
+    assert r["cat_counts"] == {"cps_too_fast": 1}
+    marks = {it["index"]: it["applied_in_ledger"] for it in r["open_items"]}
+    assert marks == {3: True, 7: False}
+    assert r["open_items"][0]["excerpt"] == "甲"
+
+
+def test_batch_fix_guards(gui_api_obj, tmp_path):
+    """守卫链：空/非整数 entries、越 cap、观察类与未知条目、错误后缀。"""
+    items = [_bf_item(3, _T3, "甲"),
+             _bf_item(9, "T9", "乙", category="x", status="observation")]
+    guide = _make_bf_guide(tmp_path, items)
+    assert gui_api_obj.refine_batch_fix(str(guide), [])["success"] is False
+    assert gui_api_obj.refine_batch_fix(
+        str(guide), ["3"])["success"] is False
+    r = gui_api_obj.refine_batch_fix(str(guide), list(range(1, 53)))
+    assert "上限" in r["error"]
+    r = gui_api_obj.refine_batch_fix(str(guide), [9])
+    assert "不可自动重翻" in r["error"]          # 观察类必拒（C6）
+    r = gui_api_obj.refine_batch_fix(str(guide), [99])
+    assert "不可自动重翻" in r["error"]
+    bad = tmp_path / "x.json"
+    bad.write_text("{}", encoding="utf-8")
+    r = gui_api_obj.refine_batch_fix(str(bad), [3])
+    assert "_质量报告导读.json" in r["error"]
+
+
+def test_batch_fix_rejects_already_applied(gui_api_obj, tmp_path):
+    """C1 幂等守卫：台账已修条目拒入批，明示 CLI 重修通道。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items,
+                           ledger=[{"timing": _T3, "outcome": "applied"}])
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False
+    assert "已修过" in r["error"]
+    assert "CLI" in r["error"]
+
+
+def test_batch_fix_success_and_ledger_delta(gui_api_obj, monkeypatch,
+                                            tmp_path):
+    """成功链：CLI 参数（--s3-provider/--action-model/--apply）+密钥 env
+    注入+台账增量计数+复验三键 diff+进度终态。"""
+    items = [_bf_item(3, _T3, "甲"),
+             _bf_item(7, _T7, "乙", category="untranslated")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    guide = _make_bf_guide(tmp_path, items, with_suggestion={
+        "glossary": [], "tm": [], "observations": ["o1"]})
+    _install_fake_stage3(gui_api_obj, monkeypatch, provider="deepseek",
+                         model="sb-model")
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=["[1/2] ok", "[2/2] ok"], rc=0,
+        ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied",
+                         "source_partial": True}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    r = gui_api_obj.refine_batch_fix(str(guide), [3, 7])
+    assert r["success"] is True and r["exit_code"] == 0
+    assert r["applied"] == 1 and r["source_partial"] == 1
+    b = captured["calls"][0]          # 第 0 次=批修复；第 1 次=复验 --ai-analyze
+    args = b["args"]
+    assert args[args.index("--action-retranslate") + 1] == str(guide)
+    assert args[args.index("--entries") + 1] == "3,7"
+    assert "--apply" in args
+    assert args[args.index("--s3-provider") + 1] == "deepseek"
+    assert args[args.index("--action-model") + 1] == "sb-model"
+    assert b["kwargs"]["env_extra"].get("DEEPSEEK_API_KEY") == "sk-fake"
+    assert captured["calls"][1]["kwargs"].get("capture") is True
+    assert r["verify"]["before"] == {"glossary": 0, "tm": 0,
+                                     "observations": 1}
+    assert r["verify"]["after"] == {"glossary": 0, "tm": 0,
+                                    "observations": 0}
+    assert r["suggestions"] == {"glossary": [], "tm": [], "observations": []}
+    p = gui_api_obj.refine_batch_fix_progress()
+    assert p["running"] is False and p["phase"] == "done"
+
+
+def test_batch_fix_exit1_skips_verify(gui_api_obj, monkeypatch, tmp_path):
+    """全败（rc=1）：success=False 且不触发复验。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    _install_fake_bf_spawn(monkeypatch, lines=["boom"], rc=1)
+    run_cap = _install_fake_verify_run(monkeypatch)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False and r["exit_code"] == 1
+    assert "verify" not in r
+    assert "args" not in run_cap          # 复验未发起
+
+
+def test_batch_fix_timeout_reports_ledger_semantics(gui_api_obj, monkeypatch,
+                                                    tmp_path):
+    """超时：杀树+如实口径（已落盘以台账为准，可再发起）。"""
+    import subtransjav.webview_gui.api as api_mod
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    monkeypatch.setattr(api_mod, "terminate_process_tree", lambda pid: None)
+
+    class _Hang:
+        stdout = iter([])
+        pid = 1
+
+        def wait(self, timeout=None):
+            raise subprocess.TimeoutExpired(cmd=["x"], timeout=1800)
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", lambda a, **kw: _Hang())
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False and "超时" in r["error"]
+    assert "台账" in r["error"]
