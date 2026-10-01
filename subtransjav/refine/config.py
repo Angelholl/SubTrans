@@ -77,6 +77,9 @@ TUNABLE_FIELD_TYPES = {
     "cps_action_enabled": bool,
     "cps_action_threshold": float,
     "cps_action_max_per_film": int,
+    # 2.6.0 批 2 聚合数据层（D2026-1002-03）：--ai-analyze 跨片统计注入
+    # 开关（纯读取侧不进 manifest 指纹；不加 CLI 参数，user_settings/env 可调）
+    "aggregate_stats_inject": bool,
     # 2.1 方向参数化（D2026-0930-04 ①）：任务级方向，分层可调；CLI 显式
     # 传参优先。str 类型 _coerce 直通，白名单校验在 validate() 补
     "source_lang": str,
@@ -381,6 +384,12 @@ class RefineConfig:
     # 可经 user_settings.json / SUBTRANSJAV_AUTO_SYNOPSIS 覆盖。
     auto_synopsis: bool = True
     synopsis_max_chars: int = 6000  # 抽样文本字符预算（桶采样总限幅）
+    # 2.6.0 批 2（D2026-1002-03）：--ai-analyze 注入跨片聚合统计开关
+    # （默认开；纯读取侧——只影响分析 prompt，不改管线产物，故不进
+    # manifest _CONFIG_FIELDS，asr_meta 路径同款判例；构建失败按无聚合
+    # 继续）。可经 user_settings.json / SUBTRANSJAV_AGGREGATE_STATS_INJECT
+    # 覆盖（bool 白名单字面量收敛）。
+    aggregate_stats_inject: bool = True
     force: bool = False             # v2: 忽略已有产物强制重跑（覆盖前自动备份）
     tm_learn_gate: bool = True      # TM 学习准入门槛总开关（False 用于 A/B 验证）
     # 断点续跑（清单指纹校验见 manifest 模块）
