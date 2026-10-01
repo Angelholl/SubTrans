@@ -578,12 +578,15 @@
                             <input id="directionCardS1" class="form-input compact grow" style="min-width:var(--w-model);"
                                    list="directionCardList"
                                    data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                            <!-- 2.5.0 修复D：去编辑跳转（class 承载零 id 预算；文字 JS 填 MSG.tpl_goto_edit） -->
+                            <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S1"></button>
                         </label>
                         <label class="field-col">
                             <span data-i18n="direction_card_s3_label">阶段B 角色卡（可选，留空=自动查找）</span>
                             <input id="directionCardS3" class="form-input compact grow" style="min-width:var(--w-model);"
                                    list="directionCardList"
                                    data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                            <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S3"></button>
                         </label>
                     </div>
                     <datalist id="directionCardList"></datalist>

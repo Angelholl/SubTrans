@@ -225,22 +225,17 @@ def test_http_get_progress_total_unknown(monkeypatch, tmp_path):
     assert seen == [(5, None), (10, None)]
 
 
-def test_http_get_default_progress_none_unchanged(monkeypatch, tmp_path):
-    """progress 缺省 None：一次性 read() 旧行为不变钉（不进分块循环）。"""
-    calls = []
-
-    class _OneShot(_StreamResponse):
-        def read(self, n=-1):
-            calls.append(n)
-            return self._payload
-
+def test_http_get_default_progress_none_streaming(tmp_path, monkeypatch):
+    """2.5.0 修复A：progress 缺省 None 也统一流式落盘（1MB 分块直写盘、
+    不全量进内存），仅不上报进度；落位字节完整、无 .part 残留。"""
+    payload = b"abcdefgh" * 2
     monkeypatch.setattr(
         "urllib.request.urlopen",
-        lambda req, timeout=10: _OneShot(b"DATA"))
+        lambda req, timeout=10: _StreamResponse(payload, chunk=5, total=16))
     dest = str(tmp_path / "x.whl")
     dm._http_get("https://files.pythonhosted.org/x.whl", dest)
-    assert Path(dest).read_bytes() == b"DATA"
-    assert calls == [-1]          # 仅一次 read()（缺省 n=-1），旧行为形态
+    assert Path(dest).read_bytes() == payload
+    assert not Path(dest + ".part").exists()
 
 
 def test_download_dict_progress_phase_chain(monkeypatch, tmp_path):
@@ -365,10 +360,14 @@ def test_url_allowlist_blocks_non_https_and_unknown_host():
 def test_dict_status_structure(monkeypatch, tmp_path):
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     st = dm.dict_status()
-    assert set(st["dicts"]) == {"sudachi", "jieba", "english_rules"}
+    # 2.5.0 修复A：kind 架构增 sudachi_full（core 零迁移，full=文件存在判定）
+    assert set(st["dicts"]) == {"sudachi", "sudachi_full", "jieba",
+                                "english_rules"}
     assert st["dicts"]["english_rules"]["available"] is True
     assert isinstance(st["dicts"]["jieba"]["available"], bool)
     assert st["dicts"]["sudachi"]["custom_path"] == ""
+    # 全新数据根：full 未下载 → available=False（防恒 True 错报）
+    assert st["dicts"]["sudachi_full"]["available"] is False
 
 
 def test_sudachi_custom_dict_path_when_present(monkeypatch, tmp_path):
