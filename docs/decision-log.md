@@ -2339,3 +2339,35 @@ ruff 全仓 0｜node --check｜定向（gui_api/action_retranslate/redlines/stri
 - **Standards 硬伤 2 项修正**：①进度正则钉住执行器不存在的 stdout 契约（轮询计数失效）→删正则、pump 透传尾行、计数以台账增量结算、前端 done=0 用中性文案；②两个轻量 bridge 补 try/except+_log_exc 兜底。judgement call：守卫链收敛 `_load_validated_guide`；schema:1（批 2·3 扩展缝规格明载）与上限 50 前后端语义分叉（设计使然）记录不改。
 - **Spec 缺口 4 项补全**：弹窗补修复服务商+分类明细两行、预览行补 timing、batchFixScopeLabel 落实、补 2 测试（exit3 部分+路径守卫）；batchFixAppliedSkip 撤销（NoItems 文案已覆盖）。
 - 修订后复验：全量 **1612 passed+4 skipped**（+10 只增）｜Mimosa 31=基线零新增（seal a89aae6f…）｜ruff/node --check 绿。
+
+---
+
+## [2026-10-02] [D2026-1002-03] 批 2「聚合数据层」开工评议+实现落库 [已执行]
+
+**关联**：D2026-1002-02（立项：S4 改向条目）、批 1 扩展缝预留（注入点=quality_advisor prompt 组装）、docs/design/d260-批2-批清单.md（C1 口径成文载体）、威胁模型 §9 增补。**背景授权**：owner 无人值守连续推进指令（"可继续的任务一直继续下去，需要决策的和评议员讨论"）。
+
+### 一、开工评议（有条件支持、无 HRO，C1-C7 全采纳）
+
+- C1 口径成文（d260-批2-批清单.md §1：三口径具名+两处降格声明——CPS"分布"降格为"密度计数≤20"、命中率走势降格为"TM入库量代理指标"+枚举序 generated_at 降序取最近 20+聚合对象 N/A 明示+人工裁决句）；C2 additive 注入签名（analyze_quality_report 增参缺省空串，既有围栏计数钉 3 字节不变，新钉 count=4+块序）；C3 tm 只读纪律（独立新模块 aggregate_stats.py、tm.py 零改动、mode=ro、禁 TranslationMemory() 构造、缺库/锁/DDL 降级）；C4 块内容白名单（计数+stem，绝不引用周边片原文）+字段名精确契约+块头声明+n 恒报；C5 系统提示列举句泛化（兑现 prompt 组装钩子白名单扩展缝）；C6 配置双钉（TUNABLE bool 缺省开+负向钉 NOT in _CONFIG_FIELDS 防 resume 失效）；C7 验证链补全。
+- 裁量裁定：默认开维持（默认关=交付物不可达）；C5 泛化接受；枚举序如上；命中率分母埋点列风险跟踪残留（挂"10~20 片定阈"未来消费链）。
+
+### 二、执行记录
+
+| 面 | 内容 |
+|---|---|
+| 新模块 | `subtransjav/refine/aggregate_stats.py`：collect_directory_stats（枚举+白名单提取）、query_tm_summary（mode=ro 只读聚合，异常降级 None）、build_aggregate_block（口径声明头+n 恒报+白名单块+2000 字符截断）、default_tm_db_path（只读推导禁 makedirs）；tm.py 零改动 |
+| quality_advisor | 系统提示列举句泛化；analyze_quality_report 增 `aggregate_block: str = ""`（第四 DATA 块插冲突摘要后）；run_ai_analyze 装配（开关缺省开、构建失败 ⚠️ 降级不阻塞） |
+| config.py | TUNABLE_FIELD_TYPES+"aggregate_stats_inject"（bool）+dataclass 字段缺省 True（注释载明纯读取侧不进指纹） |
+| 测试 | 新 tests/test_aggregate_stats.py 12 用例（枚举/白名单字段名钉/截断/空串/TM 只读聚合+缺库+锁降级/默认路径零 mkdir/C6 双钉/additive 注入钉/端到端开关隔离真实 tm.db） |
+
+### 三、验证链（全绿）
+
+ruff 全仓 0｜mypy（aggregate_stats/quality_advisor）0｜冒烟 --help OK｜定向 19 passed｜全量 **1624 passed+4 skipped**（1612+4 只增 +12）｜gate check PASS 零漂移（零 UI 改动=钉⑤/静态键 0 耗）｜Mimosa deep 31=基线零新增（seal 见提交 verify 行）。
+
+### 四、是否 [PRESSURE-OVERRIDE]
+
+否（无人值守授权+立项既定批 2 范围；评议无 HRO；零写路径零不可逆动作）。
+
+### 五、后续风险跟踪
+
+①**命中率分母埋点**（查询未命中不留痕）挂"10~20 片定阈"未来消费链——届时真实命中率走势+入库量代理一并作定阈输入；②基线 n 极小（1-2 片）LLM 过信风险=块内提示标注兜底（已落）；③两处降格措辞（"CP​S 行动密度""TM 入库量"）后续文档引用须与本批清单定案一致防口径漂移；④LLM 对聚合块的实际引用质量=无真跑覆盖（stub 黑盒不适用、CLI 真跑归 owner 侧实测反馈通道）。
