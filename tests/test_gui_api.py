@@ -2109,3 +2109,32 @@ def test_batch_fix_timeout_reports_ledger_semantics(gui_api_obj, monkeypatch,
     r = gui_api_obj.refine_batch_fix(str(guide), [3])
     assert r["success"] is False and "超时" in r["error"]
     assert "台账" in r["error"]
+
+
+def test_batch_fix_exit3_partial_with_verify(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """部分成功（rc=3）：success=True、applied/failed 分账、复验仍执行。"""
+    items = [_bf_item(3, _T3, "甲"), _bf_item(7, "T7", "乙")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=["done"], rc=3, ledger_path=ledger_path,
+        ledger_records=[
+            {"index": 3, "timing": _T3, "outcome": "applied"},
+            {"index": 7, "timing": "T7", "outcome": "failed",
+             "source_partial": True}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    r = gui_api_obj.refine_batch_fix(str(guide), [3, 7])
+    assert r["success"] is True and r["exit_code"] == 3
+    assert r["applied"] == 1 and r["failed"] == 1
+    assert r["source_partial"] == 1
+    assert "verify" in r and "after" in r["verify"]
+    assert captured["calls"][0]["kwargs"].get("capture") is None
+
+
+def test_batch_fix_guard_path_missing(gui_api_obj, tmp_path):
+    """守卫：路径不存在 → guide_file_missing。"""
+    r = gui_api_obj.refine_batch_fix(
+        str(tmp_path / "无_质量报告导读.json"), [3])
+    assert r["success"] is False and r["error"]

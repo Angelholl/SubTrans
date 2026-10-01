@@ -476,11 +476,14 @@ const MSG = {
     batchFixPreviewHead: '将修复以下条目：',
     batchFixPreviewMore: n => `…其余 ${n} 条省略`,
     batchFixEstimate: n => `预估调用：翻译 ${n} 次 + 复验全片 AI 分析 1 次`,
+    batchFixProvider: p => `修复服务商：${p}`,
+    batchFixCats: c => `分类明细：${c}`,
     batchFixCloudCost: '当前修复服务商为云端（按量计费）；发送内容为字幕文本与词条上下文，不含音视频。',
     batchFixCapHit: (n, total) => `待修共 ${total} 条，单批上限 50：本次修前 ${n} 条（按序），确认后可再次发起处理余量`,
     batchFixNoItems: '当前导读没有可自动修复的待修条目（或均已修过）',
     batchFixNeedGuide: '请先加载质量报告导读',
     batchFixRunning: (done, total) => `批量修复中… ${done}/${total}`,
+    batchFixRunningPlain: '批量修复中…（执行器逐条处理，完成后回显结果）',
     batchFixDone: (a, f) => `批量修复完成：成功 ${a} 条` + (f ? `，失败 ${f} 条` : ''),
     batchFixFail: '批量修复失败',
     batchFixVerifying: '复验中：重跑全片 AI 分析…',
@@ -489,6 +492,7 @@ const MSG = {
     batchFixSourcePartial: '；部分条目按导读摘录对齐（未提供原始源文）',
     batchFixScopeAll: '全部待修条目',
     batchFixScopeCat: (c, n) => `${c}（${n} 条）`,
+    batchFixScopeLabel: '修复范围',
     tpl_goto_edit: '去编辑',
     tpl_goto_empty_hint: '该阶段角色卡未显式指定（留空=自动查找回落链）；编辑器仅支持角色卡目录内顶层文件',
     tpl_goto_outside_hint: '显式卡在角色卡目录外，编辑器仅支持目录内文件；已在下方定位角色卡目录',
@@ -3275,6 +3279,7 @@ function switchTab(tabId) {
         btn.disabled = fixable.length === 0;
         if (scope) {
           scope.innerHTML = '';
+          scope.title = MSG.batchFixScopeLabel;
           const optAll = document.createElement('option');
           optAll.value = 'all';
           optAll.textContent = MSG.batchFixScopeAll + '（' + fixable.length + '）';
@@ -3317,13 +3322,24 @@ function switchTab(tabId) {
     }
     const provRaw = (($('refineS3Provider') || {}).value || '').toLowerCase();
     const cloud = isAiCloudProvider(provRaw);
+    const provLabel = provRaw
+      ? (MSG['ai_prov_' + provRaw] || provRaw) : '跟随阶段B 配置';
+    const catCount = {};
+    batch.forEach(it => {
+      catCount[it.category] = (catCount[it.category] || 0) + 1;
+    });
+    const catsText = Object.keys(catCount).sort()
+      .map(c => c + '（' + catCount[c] + '）').join('、');
     const lines = batch.slice(0, 10).map(it =>
-      '#' + it.index + ' [' + it.category + '] ' + (it.excerpt || it.timing));
+      '#' + it.index + ' [' + it.category + '] ' + it.timing
+      + ' ｜ ' + (it.excerpt || '（无摘录）'));
     if (batch.length > 10) {
       lines.push(MSG.batchFixPreviewMore(batch.length - 10));
     }
     const body = [
       MSG.batchFixEstimate(batch.length),
+      MSG.batchFixProvider(provLabel),
+      MSG.batchFixCats(catsText),
       cloud ? MSG.batchFixCloudCost : '',
       capNote,
       MSG.batchFixPreviewHead,
@@ -3340,7 +3356,10 @@ function switchTab(tabId) {
         if (p && p.running && p.phase === 'verify') {
           bfStatus(MSG.batchFixVerifying);
         } else if (p && p.running) {
-          bfStatus(MSG.batchFixRunning(p.done, p.total));
+          // 执行器无逐条进度输出契约——done=0 时用中性文案（评审修订）
+          bfStatus(p.done > 0
+            ? MSG.batchFixRunning(p.done, p.total)
+            : MSG.batchFixRunningPlain);
         }
       } catch (e) { /* 单次轮询失败静默，主调用最终回显为准 */ }
     }, 1000);

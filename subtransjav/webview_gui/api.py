@@ -13,7 +13,6 @@ import json
 import logging
 import os
 import queue
-import re
 import shutil
 import subprocess
 import sys
@@ -1829,7 +1828,6 @@ class TranslateAPI:
     _BATCH_FIX_MAX_ENTRIES = 50
     _BATCH_FIX_TIMEOUT_S = 1800
     _SUGGESTION_KEYS = ("glossary", "tm", "observations")
-    _BATCH_PROGRESS_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
     # 惰性初始化（_bf_progress），避免触碰 __init__
     _batch_fix_progress_state: dict[str, Any]
 
@@ -1911,75 +1909,94 @@ class TranslateAPI:
                 counts[k] = len(v) if isinstance(v, list) else 0
         return counts
 
+    def _load_validated_guide(self, guide_path: str):
+        """守卫链（批修复/条目读取共用）：路径校验+后缀白名单+导读加载。
+
+        返回 (p, stem, guide, error)：error 非 None 时前三者无意义。"""
+        p = str(guide_path or "").strip()
+        if not p:
+            return None, None, None, {
+                "success": False, "error": msg("guide_path_empty")}
+        try:
+            p = str(_validate_user_directory(p))
+        except ValueError as ve:
+            return None, None, None, {
+                "success": False, "error": msg("guide_path_denied", e=ve)}
+        if not os.path.isfile(p):
+            return None, None, None, {
+                "success": False, "error": msg("guide_file_missing", path=p)}
+        name = os.path.basename(p)
+        if not name.endswith(self._GUIDE_SUFFIX):
+            return None, None, None, {
+                "success": False,
+                "error": f"需要 {self._GUIDE_SUFFIX} 导读文件: {name}"}
+        stem = name[: -len(self._GUIDE_SUFFIX)]
+        guide = self._load_guide_json(p)
+        if guide is None:
+            return None, None, None, {
+                "success": False, "error": "导读读取/解析失败"}
+        items = guide.get("items")
+        if not isinstance(items, list):
+            return None, None, None, {
+                "success": False, "error": "导读格式异常（无 items 数组）"}
+        return p, stem, guide, None
+
     def refine_guide_action_items(self, guide_path: str) -> dict[str, Any]:
         """读导读 json 行动条目并标记台账已修状态（幂等守卫数据源）。
 
         只回元数据与短摘录（现译前 20 字），不回全量文本（出域面最小化，
         威胁模型-质量闭环-d1002 §1）。"""
-        p = str(guide_path or "").strip()
-        if not p:
-            return {"success": False, "error": msg("guide_path_empty")}
         try:
-            p = str(_validate_user_directory(p))
-        except ValueError as ve:
-            return {"success": False, "error": msg("guide_path_denied", e=ve)}
-        if not os.path.isfile(p):
-            return {"success": False,
-                    "error": msg("guide_file_missing", path=p)}
-        name = os.path.basename(p)
-        if not name.endswith(self._GUIDE_SUFFIX):
-            return {"success": False,
-                    "error": f"需要 {self._GUIDE_SUFFIX} 导读文件: {name}"}
-        stem = name[: -len(self._GUIDE_SUFFIX)]
-        guide = self._load_guide_json(p)
-        if guide is None:
-            return {"success": False, "error": "导读读取/解析失败"}
-        items = guide.get("items")
-        if not isinstance(items, list):
-            return {"success": False, "error": "导读格式异常（无 items 数组）"}
-        applied = self._applied_timings(os.path.dirname(p), stem)
-        open_items: list[dict[str, Any]] = []
-        cat_counts: dict[str, int] = {}
-        observation_count = 0
-        applied_open_count = 0
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            status = str(it.get("status") or "")
-            if status == "observation":
-                observation_count += 1
-                continue
-            if status != "open":
-                continue
-            idx = it.get("index")
-            cur = it.get("current_text")
-            timing = str(it.get("timing") or "")
-            in_ledger = timing in applied
-            if in_ledger:
-                applied_open_count += 1
-            open_items.append({
-                "index": idx if isinstance(idx, int) else None,
-                "category": str(it.get("category") or ""),
-                "timing": timing,
-                "excerpt": cur[:20] if isinstance(cur, str) else "",
-                "applied_in_ledger": in_ledger,
-            })
-            if not in_ledger:
-                cat = str(it.get("category") or "")
-                cat_counts[cat] = cat_counts.get(cat, 0) + 1
-        return {
-            "success": True,
-            "stem": stem,
-            "guide_path": p,
-            "report_path": os.path.join(os.path.dirname(p),
-                                        stem + self._AI_REPORT_SUFFIX),
-            "open_items": open_items,
-            "cat_counts": cat_counts,
-            "applied_open_count": applied_open_count,
-            "observation_count": observation_count,
-            "direction": str(guide.get("direction") or ""),
-            "has_media": bool(guide.get("media_path")),
-        }
+            p, stem, guide, err = self._load_validated_guide(guide_path)
+            if err is not None:
+                return err
+            items = guide["items"]
+            applied = self._applied_timings(os.path.dirname(p), stem)
+            open_items: list[dict[str, Any]] = []
+            cat_counts: dict[str, int] = {}
+            observation_count = 0
+            applied_open_count = 0
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                status = str(it.get("status") or "")
+                if status == "observation":
+                    observation_count += 1
+                    continue
+                if status != "open":
+                    continue
+                idx = it.get("index")
+                cur = it.get("current_text")
+                timing = str(it.get("timing") or "")
+                in_ledger = timing in applied
+                if in_ledger:
+                    applied_open_count += 1
+                open_items.append({
+                    "index": idx if isinstance(idx, int) else None,
+                    "category": str(it.get("category") or ""),
+                    "timing": timing,
+                    "excerpt": cur[:20] if isinstance(cur, str) else "",
+                    "applied_in_ledger": in_ledger,
+                })
+                if not in_ledger:
+                    cat = str(it.get("category") or "")
+                    cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            return {
+                "success": True,
+                "stem": stem,
+                "guide_path": p,
+                "report_path": os.path.join(os.path.dirname(p),
+                                            stem + self._AI_REPORT_SUFFIX),
+                "open_items": open_items,
+                "cat_counts": cat_counts,
+                "applied_open_count": applied_open_count,
+                "observation_count": observation_count,
+                "direction": str(guide.get("direction") or ""),
+                "has_media": bool(guide.get("media_path")),
+            }
+        except Exception as e:
+            _log_exc("refine_guide_action_items")
+            return {"success": False, "error": str(e)}
 
     def refine_batch_fix(self, guide_path: str, entries: Any,
                          ai_provider: str = None,
@@ -1993,27 +2010,10 @@ class TranslateAPI:
         provider=阶段B/槽 s3；台账先于终稿写序/恒等式断言在执行器侧
         原样生效）；复验=生效后重跑全片 AI 分析恰 1 次做建议件三键
         计数 diff（复验 provider/model 透传 AI 分析独立配置）。"""
-        p = str(guide_path or "").strip()
-        if not p:
-            return {"success": False, "error": msg("guide_path_empty")}
-        try:
-            p = str(_validate_user_directory(p))
-        except ValueError as ve:
-            return {"success": False, "error": msg("guide_path_denied", e=ve)}
-        if not os.path.isfile(p):
-            return {"success": False,
-                    "error": msg("guide_file_missing", path=p)}
-        name = os.path.basename(p)
-        if not name.endswith(self._GUIDE_SUFFIX):
-            return {"success": False,
-                    "error": f"需要 {self._GUIDE_SUFFIX} 导读文件: {name}"}
-        stem = name[: -len(self._GUIDE_SUFFIX)]
-        guide = self._load_guide_json(p)
-        if guide is None:
-            return {"success": False, "error": "导读读取/解析失败"}
-        items = guide.get("items")
-        if not isinstance(items, list):
-            return {"success": False, "error": "导读格式异常（无 items 数组）"}
+        p, stem, guide, err = self._load_validated_guide(guide_path)
+        if err is not None:
+            return err
+        items = guide["items"]
 
         if not isinstance(entries, list) or not entries:
             return {"success": False, "error": "entries 需为非空整数数组"}
@@ -2096,6 +2096,8 @@ class TranslateAPI:
         tail: list[str] = []
 
         def _pump() -> None:
+            # 执行器 stdout 无逐条进度契约（评审修订：原 n/m 正则钉住了
+            # 不存在的格式）——只透传尾行供状态展示，计数以台账增量结算。
             assert proc.stdout is not None
             for raw in proc.stdout:
                 line = raw.rstrip()
@@ -2103,11 +2105,6 @@ class TranslateAPI:
                     continue
                 tail.append(line)
                 prog["last_line"] = line[-200:]
-                m = self._BATCH_PROGRESS_RE.search(line)
-                if m:
-                    prog["done"] = min(int(m.group(1)), prog["total"])
-                    if int(m.group(2)):
-                        prog["total"] = int(m.group(2))
 
         threading.Thread(target=_pump, daemon=True).start()
         try:
@@ -2182,7 +2179,12 @@ class TranslateAPI:
 
     def refine_batch_fix_progress(self) -> dict[str, Any]:
         """批修复进度快照（前端 1s 轮询；复刻 refine_dict_download_progress）。"""
-        return dict(self._bf_progress())
+        try:
+            return dict(self._bf_progress())
+        except Exception as e:
+            _log_exc("refine_batch_fix_progress")
+            return {"running": False, "phase": "failed", "done": 0,
+                    "total": 0, "last_line": "", "error": str(e)}
 
     def refine_ai_apply_glossary(self, entries_json: str) -> dict[str, Any]:
         """把 AI 术语建议逐条锁定追加进词库（glossary.append_glossary_entries）。
