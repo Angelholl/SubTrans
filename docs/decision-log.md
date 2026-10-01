@@ -2299,4 +2299,37 @@ roadmap：新增 2.6.0 节（批 1/2/3+实施序+硬化条件全文）；轨道 
 
 ### 六、后续风险跟踪
 
-①**四条件落法呈报 owner 追认=批 1 开工门**（落法：威胁模型开工前落盘送评｜云端不进缺省已满足｜一键批次放行、无人值守仅经显式复议条件③｜台账+复验口径成文）；②批 1 开工评议八项硬化条件逐项勾验；③批 2 自动调整禁触 adaptive 硬化门（origin:real 0/30）；④批 3 选型轮送评+定阈退路（沿用初值标"未定阈"或批次 E 语料）；⑤id 180 已满零余量、i18n 190/192 余量 2——批 1 新 UI 走解冻预算表+快照+gate 新基线程序；⑥批 2/3 改装批 1 管线的扩展缝预留兑现核查；⑦审计积压①②触发核查随批清单固化。
+①**四条件落法呈报 owner 追认=批 1 开工门**（落法：威胁模型开工前落盘送评｜云端不进缺省已满足｜一键批次放行、无人值守仅经显式复议条件③｜台账+复验口径成文）——**[2026-10-02 追记] owner 追认（无修改），批 1 已动工落库，见 D2026-1002-02-批1**；②批 1 开工评议八项硬化条件逐项勾验；③批 2 自动调整禁触 adaptive 硬化门（origin:real 0/30）；④批 3 选型轮送评+定阈退路（沿用初值标"未定阈"或批次 E 语料）；⑤id 180 已满零余量、i18n 190/192 余量 2——批 1 新 UI 走解冻预算表+快照+gate 新基线程序；⑥批 2/3 改装批 1 管线的扩展缝预留兑现核查；⑦审计积压①②触发核查随批清单固化。
+
+---
+
+## [2026-10-02] [D2026-1002-02-批1] 批 1「质量闭环主线」二级评议+实现落库 [已执行]
+
+**关联**：D2026-1002-02（立项+owner 追认四条件）、威胁模型 docs/design/威胁模型-质量闭环-d1002.md、批清单 docs/design/d260-批1-批清单.md。
+
+### 一、二级评议（有条件放行，两 HRO 全采纳）
+
+- **HRO-A（中断语义）采纳折中案**：批评清单"执行器按 timing 幂等跳过"系不实承诺（实证 `_refresh_guide` 只改 current_text 不翻 status，action_retranslate.py:262-280；执行器无台账感知）。落法=**GUI 层台账感知守卫**：refine_guide_action_items 标 `applied_in_ledger`、refine_batch_fix 拒已修条目入批（error 明示 CLI 重修通道）——中断续修语义成立、台账唯一性在 GUI 批次流内保持；执行器选择逻辑零改动；C2=`_append_ledger` 改原子写（独立符号 `_ledger_atomic_write`，终稿写失败注入测试不受扰）+损坏恢复用例。
+- **HRO-B（黑盒四路径）采纳**：B7 双定义更正（B7=超 cap 切片）；**dry-run 预览落 GUI 弹窗逐条预览（B10）**——数据源与执行器 dry-run 计划同源同选择语义（open+有现译），CLI dry-run 保留；作为对立项四路径的显式修订记录在案。
+- C3（复验=全片重跑系硬化条件 1 的释义修订，弹窗明示"全片"）、C5（超 cap 按 index 序切片前 50+余量文案）、C6（current_text 非 None 显式校验，观察类必拒）、C7（威胁模型源文出域措辞+stderr_tail textContent 渲染约束）、C8（R1-R4）全落实。
+
+### 二、执行记录
+
+| 面 | 内容 |
+|---|---|
+| api.py | +3 bridge（refine_guide_action_items/refine_batch_fix/refine_batch_fix_progress）+阶段B 三 helper（存储 stage=3=槽 s3）+常量（`_BATCH_FIX_MAX_ENTRIES=50`/`_BATCH_FIX_TIMEOUT_S=1800`/`_GUIDE_SUFFIX`）；修复经 spawn_refine_cli 子进程 `--action-retranslate --entries --apply [--s3-provider/--endpoint/--action-model]`+密钥 env 白名单注入；Popen 流式解析进度；复验=重跑全片 AI 分析恰 1 次建议件三键（glossary/tm/observations）计数 diff，失败保留修复前建议件（R4） |
+| action_retranslate.py | `_append_ledger` 原子写（C2）；其余零改动 |
+| index.html/app.js | +3 id（refineBatchFixBtn/Scope/Status）+静态键 batchFixBtn+JS 态 MSG 12 键；流程=导读加载使能（排除已修）→scope 类别子集→确认弹窗（逐条预览 10 行折叠+预估 N 翻译+1 全片分析+云端警示）→1s 轮询进度→结果回显（textContent）+复验 Δ+aiRenderResult 重渲染 |
+| 测试 | test_gui_api +8（常量钉/台账标记/守卫 6/成功链+台账增量+复验 diff/exit1 不复验/超时口径）、test_action_retranslate +1（原子写+损坏恢复）；红线快照 180→183、190→191（docstring 165/186 实数修正） |
+
+### 三、验证链（全绿）
+
+ruff 全仓 0｜node --check｜定向（gui_api/action_retranslate/redlines/strings/js_static）**234 passed**｜全量 **1610 passed+4 skipped**（基线 1602+4 只增 +8）｜gate check 丢失 0→**新基线 183/191** 告警 0 落盘｜Mimosa deep **31=基线零新增**（seal sha256:7e58f1ca…）｜黑盒（IAB 伺服+stub 桥+生产回调，截图 %TEMP%\gui-260-bf\）：**B1-B8+B10 全 PASS**、B9 部分（暗色菜单证据在案、暗色应用未捕获——IAB 截图/坐标假象限制；新组件全用既有 token 类）｜GUI 已验证（黑盒）。
+
+### 四、是否 [PRESSURE-OVERRIDE]
+
+否（owner 追认口径执行；二级评议两 HRO 采纳闭环；无不可逆动作）。
+
+### 五、后续风险跟踪
+
+①批 2 台账视图：逐条勾选回滚+"按 ts 取最后"口径随批 2 立项锁死；②静态键余量 1（191/192）——批 2 新 UI 键清单提前列，用尽须提案扩 cap；③批 3 选型轮两 INFO_GAP（owner 云端音频接受度/本地重转写环境基线）+威胁模型扩写重评后才可启用云端音频；④IAB 黑盒教训入档：截图≠实时视口（坐标须 getBoundingClientRect 实测）、Playwright actionability 对本应用系统性超时（cua rect 点击为主、dom_cua 节点路径兜底、长页先滚入视口）。
