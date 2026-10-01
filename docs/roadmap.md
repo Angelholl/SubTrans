@@ -85,14 +85,14 @@
 - 验证链：红线钉+静态钉 45 passed（钉⑤ 176 双向）/全量 1601+4 持平/gate 丢失 0+新基线 176/190/Mimosa 29 零新增（seal 2eafa499）/黑盒全用例 PASS（Temp/gui-231/）；GUI 已验证
 - 发版：✅ **已发布**——D2026-1001-05 S0：R3 攒批前提（owner 未实测）被 owner 新指令显式豁免（"不考虑实测问题…实测发现问题再修"），攒批解除立发（原"暂不发"行作废）
 
-## 2.4.0 —— 界面交互收口批（D2026-1001-05 S1+S2，国庆冲刺收口）🚧 进行中（2026-10-01）
+## 2.4.0 —— 界面交互收口批（D2026-1001-05 S1+S2，国庆冲刺收口）✅ 已落库并发布（2026-10-01，tag v2.4.0→9f1829f release/2.4.0 分支制+Release id 401022313：单 setup.exe 33,571,466B+SHA256SUMS 哈希核过 sha256 A10C6711…8D72B，notes 只写本版；构建 run 36871376836 绿；main 前进 2.4.1.dev0=第 8 步）
 
-- ⬜ 批 1 S1 原生 alert/confirm/prompt 替换自制模态（#appModal 单例，AppModal 三形态 Promise 封装+重入守卫；5 处调用点替换）——解冻 id 176→177
-- ⬜ 批 2 S2 首启初始化（first_run 消费：一次性引导横幅+marker 键翻转句 refine_save_stage_settings(settings={"first_run_seen": true})——HRO-1 修正路径）——解冻 177→178 恰达上限
-- ⬜ 批 3 ⑪ 收尾扫查固定小节（双通道盘点，预期零新增命中）
-- ⬜ 批 4 docs：S4/S5 评估文档（已产出 docs/design/候选池大件评估-d1001-05.md）+评议归档
-- 批清单=docs/design/d24-批清单.md（二级评议 HRO-1 采纳：S2 翻转句空参/回写路径均 no-op，必走 marker 键；7 条修正全并入）
-- 发版：S1+S2 落库+验证链全绿后 **2.4.0 收口单发**（用户可见新能力=minor）；收口底线=未落库则 2.3.1 单发即"计划内容完结"达标
+- ✅ 批 1 S1 原生 alert/confirm/prompt 替换自制模态（#appModal 单例，AppModal 三形态 Promise 封装+重入守卫+alert 隐藏取消键+永不 reject；5 处调用点替换；preventDefault 同步序条款）——解冻 id 176→177
+- ✅ 批 2 S2 首启初始化（first_run 一次性引导横幅+marker 键翻转句 refine_save_stage_settings(settings={first_run_seen:true})——HRO-1 修正路径，黑盒实证翻转调用参数精确）——解冻 177→178 恰达上限
+- ✅ 批 3 ⑪收尾扫查固定小节：双通道扫查零新增死规则（6 候选全甄别为注释误报/沿袭豁免，本批新增规则全在用）
+- ✅ 批 4 docs：S4/S5 评估文档（候选池大件评估-d1001-05.md）+三级评议归档（D2026-1001-05）
+- 验证链：红线钉+静态钉 45 passed（钉⑤ 178 双向）/全量 1601+4 持平/gate 丢失 0+新基线 178/190/Mimosa 29 零新增（seal 92048012）/黑盒全用例 PASS（first_run 两分支+marker 断言/prompt 双段全链/重入守卫/遮罩+Esc/alert 无取消键/暗色+窄窗，截图存 Temp/gui-240 归档位置）；GUI 已验证
+- 发版：✅ **已发布**（2.4.0 收口单发；国庆冲刺计划内容完结）
 
 ## 轨道 B —— 云端闭环（与 2.0 开发并行候选，未启动）
 
