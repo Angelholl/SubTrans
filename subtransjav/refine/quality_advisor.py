@@ -390,10 +390,11 @@ def run_ai_analyze(cfg, args) -> int:
     aggregate_block = ""
     if bool(getattr(cfg, "aggregate_stats_inject", True)):
         try:
-            from .aggregate_stats import build_aggregate_block
+            from .aggregate_stats import WINDOW_MAP, build_aggregate_block
+            window_raw = str(getattr(args, "tm_stats_window", "") or "30")
+            window_days = WINDOW_MAP.get(window_raw, 30)
             aggregate_block = build_aggregate_block(
-                str(report_path.parent), stem, current_items=guide.get(
-                    "items") or [])
+                current_stem=stem, window_days=window_days)
         except Exception as e:   # noqa: BLE001 聚合失败不阻塞分析
             print(f"⚠️ [AI分析] 聚合统计构建失败（按无聚合继续）: {e}")
             aggregate_block = ""

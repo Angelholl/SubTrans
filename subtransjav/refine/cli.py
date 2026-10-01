@@ -218,6 +218,12 @@ def build_parser():
     grp_action.add_argument("--asr-python", default="",
                             help="本地 ASR 用的上游环境 Python 路径"
                                  "（缺省按 env/实测默认探测）")
+    # 2.6.0 批 2 修订（D2026-1002-05，owner 2026-10-02）：跨片统计窗口
+    # 三档（不入 manifest 指纹——负向钉随批）
+    grp_action.add_argument("--tm-stats-window", default="30",
+                            choices=["7", "30", "all"],
+                            help="AI 分析跨片统计窗口：7/30 天或 all=永久"
+                                 "（缺省 30）")
 
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--clean-tmp-on-exit", action="store_true",

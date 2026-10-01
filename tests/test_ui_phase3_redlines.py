@@ -5,9 +5,9 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
 - 钉② 批2：两张词库表挂 .gl-table
 - 钉③ 批2：glRender/glLearnedLoad 行模板无 style= 字面量
 - 钉④ R2：:root 节奏禁区变量与文档级字号行高逐字冻结
-- 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 190 + data-i18n 键全集 192 快照冻结
-  （2.6.0 批3 D2026-1002-04-批3 解冻 +7 id/+1 静态键恰达 cap 192；下一 UI
-  耗键批首件=扩 cap 192→200 提案）——
+- 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 191 + data-i18n 键全集 192 快照冻结
+  （批3 190/192；批2 修订 D2026-1002-05 +1 id=aggregateWindowSel 恰达
+  静态键 cap 192；下一 UI 耗键批首件=扩 cap 192→200 提案）——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
 """
@@ -61,7 +61,7 @@ def test_r2_rhythm_tokens_frozen():
 # 快照刻意用多行字符串形态（SIM905 已在 pyproject per-file-ignores 豁免）：diff 逐词可读、增删一目了然
 FROZEN_IDS = frozenset(
     """
-    aboutModal aboutVersion aiModelInput aiProviderSel appModal addFilesBtn addFolderBtn asrDownloadBtn asrEnvStatus
+    aboutModal aboutVersion aggregateWindowSel aiModelInput aiProviderSel appModal addFilesBtn addFolderBtn asrDownloadBtn asrEnvStatus
 asrModelSel asrProgress asrProgressText asrRefreshBtn asrStatus audioPreviewBar audioPreviewCloseBtn
 audioPreviewError audioPreviewPlayer audioPreviewTiming browseOutputBtn clearBtn
 clearConsoleBtn consoleCollapseBtn consoleOutput dataRootBar dataRootCurrentPath
