@@ -607,7 +607,8 @@ def _collect_grammar_hints(context_entries: list, targets: list,
     """对 targets 逐条生成语法提示（SudachiPy 句法分析，legacy 同款）。
 
     context_entries 提供条目上下文（前后条参与分析），targets 为需要
-    提示的条目。未安装 sudachipy 或分析失败时返回空 dict（静默降级）。
+    提示的条目。未安装 sudachipy、未下载词典数据或分析失败时返回空
+    dict（静默降级）。
 
     P1-6：结果按 (sha1(条目文本), tag, profile) 缓存（模块级，A/B 两阶段
     与多文件共享）；全部命中时跳过 build_srt 与逐条分析。
@@ -654,7 +655,7 @@ def _collect_grammar_hints(context_entries: list, targets: list,
             from .grammar_hint import generate_grammar_hints, is_grammar_hint_available
             if not is_grammar_hint_available():
                 if verbose:
-                    print("   ℹ️ 语法提示: 未安装 sudachipy，跳过句法分析")
+                    print("   ℹ️ 语法提示: 未安装 sudachipy 或未下载日语词典数据，跳过句法分析")
                 return hints
         srt_content = build_srt(context_entries)
         for e, key in misses:
@@ -690,7 +691,7 @@ def _collect_grammar_hints(context_entries: list, targets: list,
 def _inject_stage_a_assists(cfg: RefineConfig, entries: list, todo: list,
                             tm, collector=None, file_name: str = None) -> list:
     """阶段A 输入辅助注入（只改发给 LLM 的文本，不影响 TM 键与产物）：
-      1) 语法提示（SudachiPy 句法分析，legacy 同款；未安装则自动跳过）；
+      1) 语法提示（SudachiPy 句法分析，legacy 同款；词典未就绪则自动跳过）；
       2) TM 模糊命中参考（高阈值旧译文，标注仅供参考防照抄；不写库）。
     返回新的 todo 列表（原 entries 不变）。
     """
@@ -866,7 +867,8 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
         })
 
     # 语法提示注入：日文原文参与审校，同样注入句法提示（如「で」中顿、
-    # 僕たち定语结构）。未安装 sudachipy 时静默降级，不报错。
+    # 僕たち定语结构）。词典未就绪（sudachipy 缺失或未下载词典数据）时
+    # 静默降级，不报错。
     # 提示拼接为『【语法提示】\n- ...\n原文：日文 ||| 译文』，与阶段A
     # 注入格式风格一致；残留可被 cleaner_rules.clean_grammar_hint_residue
     # 清理（该函数的『【语法提示】[\s\S]*?原文：』模式已覆盖此格式）。

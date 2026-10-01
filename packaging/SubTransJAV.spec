@@ -24,7 +24,6 @@ utils/console.py / refine/cli.py stdio 处理）；旧构建兼容回退路径
 """
 
 import os
-from PyInstaller.utils.hooks import collect_data_files
 
 BLOCK = None  # 不禁用任何 hook（webview / pythonnet 官方 hook 需自动收集 DLL）
 
@@ -37,14 +36,9 @@ datas = [
     (os.path.join(SPECPATH, "..", "subtransjav", "refine", "defaults"),
      os.path.join("subtransjav", "refine", "defaults")),
 ]
-# sudachidict_core 词典（system.dic 约 208MB）默认进包；
-# SUBTRANSJAV_SPEC_LITE=1 时剔除词典数据（精简版：语法提示运行时
-# Dictionary() 失败走既有 try/except 降级链，功能自动降级不炸）。
-_LITE = os.environ.get("SUBTRANSJAV_SPEC_LITE", "").strip() == "1"
-if _LITE:
-    print("[spec] SUBTRANSJAV_SPEC_LITE=1: excluding sudachidict_core dict data")
-else:
-    datas += collect_data_files("sudachidict_core")
+# 词典数据不进包（D3 去捆绑 D2026-1001）：sudachidict_core（system.dic 约
+# 208MB）不再随安装器分发，语法提示运行时 Dictionary() 失败走既有
+# try/except 降级链自动降级，词典经 CLI --dict-download / GUI 引擎页下载。
 
 hiddenimports = [
     "subtransjav.refine.cli",
@@ -67,13 +61,12 @@ a = Analysis(
     module_collection_mode={},
 )
 
-if _LITE:
-    # sudachipy 官方 hook 会在 Analysis 阶段重新收集 sudachidict_core 词典，
-    # 仅靠 datas 开关剔不干净——对 Analysis 结果再过滤一次（dest 路径含
-    # sudachidict_core 的数据一律剔除，运行时 Dictionary() 失败走降级链）。
-    before = len(a.datas)
-    a.datas = [t for t in a.datas if "sudachidict_core" not in t[0].replace("\\", "/")]
-    print(f"[spec] lite: removed {before - len(a.datas)} dict data entries")
+# sudachipy 官方 hook 会在 Analysis 阶段重新收集 sudachidict_core 词典数据
+# （构建机已装词典数据时同样触发）——对 Analysis 结果无条件过滤（HRO①，
+# dest 路径含 sudachidict_core 的数据一律剔除，防 hook 重新带回词典）。
+before = len(a.datas)
+a.datas = [t for t in a.datas if "sudachidict_core" not in t[0].replace("\\", "/")]
+print(f"[spec] removed {before - len(a.datas)} dict data entries")
 pyz = PYZ(a.pure)
 
 # CLI 薄入口独立 Analysis：只取 pure/scripts 供 PYZ/EXE 入口；

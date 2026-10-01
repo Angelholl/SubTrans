@@ -47,80 +47,43 @@ jobs:
           pip install -e ".[gui]"
           pip install pyinstaller
 
-      - name: Build with PyInstaller (full, 含词典)
+      - name: Build with PyInstaller (单产物，词典不进包)
         run: >
           python -m PyInstaller packaging/SubTransJAV.spec
           --noconfirm --distpath Temp/pyinstaller_dist --workpath Temp/pyinstaller_work
 
-      - name: Build with PyInstaller (lite, SUBTRANSJAV_SPEC_LITE=1 排除词典)
-        run: >
-          python -m PyInstaller packaging/SubTransJAV.spec
-          --noconfirm --distpath Temp/pyinstaller_dist_lite
-          --workpath Temp/pyinstaller_work_lite
-        env:
-          SUBTRANSJAV_SPEC_LITE: "1"
-
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Prepare lite dict_src empty dir
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path "Temp/innoinstall/empty_dict" | Out-Null
-
-      - name: Compile installer (full)
+      - name: Compile installer
         shell: cmd
         run: >-
           "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=%VERSION%
-          /Ddict_src=..\Temp\pyinstaller_dist\SubTransJAV\_internal\sudachidict_core\resources
-          packaging\setup.iss
-
-      - name: Compile installer (lite)
-        shell: cmd
-        run: >-
-          "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" /Dversion=%VERSION%
-          /Dsuffix=-lite
-          /Ddict_src=..\Temp\innoinstall\empty_dict
           packaging\setup.iss
 
       - name: Smoke check key artifacts
         shell: pwsh
         run: |
           $root = "Temp/pyinstaller_dist/SubTransJAV"
-          $lite = "Temp/pyinstaller_dist_lite/SubTransJAV"
           $paths = @(
             "$root/SubTransJAV.exe",
             "$root/_internal/webview_gui_assets/index.html",
             "$root/_internal/subtransjav/refine/defaults/translation_rules.yaml",
-            "$root/_internal/sudachidict_core/resources/system.dic",
             "$root/_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll",
             "$root/_internal/pythonnet/runtime/Python.Runtime.dll",
-            "$lite/SubTransJAV.exe",
-            "$lite/_internal/webview_gui_assets/index.html",
-            "$lite/_internal/webview/lib/runtimes/win-x64/native/WebView2Loader.dll"
+            "$root/subtrans-cli.exe"
           )
           foreach ($p in $paths) {
             if (-not (Test-Path $p)) { Write-Error "MISSING artifact: $p"; exit 1 }
           }
-          # 2.0.0 双 EXE：CLI 可执行体存在性断言（full/lite 均应有）
-          foreach ($p in @("$root/subtrans-cli.exe", "$lite/subtrans-cli.exe")) {
-            if (-not (Test-Path $p)) { Write-Error "MISSING artifact: $p"; exit 1 }
+          # 去捆绑断言（D3，D2026-1001）：产物不含 system.dic（词典经引擎页按需下载）
+          if (Test-Path "$root/_internal/sudachidict_core/resources/system.dic") {
+            Write-Error "dist must NOT contain system.dic (词典去捆绑口径)"; exit 1
           }
-          # 词典组件化断言：full 含 system.dic，lite 不含
-          if (-not (Test-Path "$root/_internal/sudachidict_core/resources/system.dic")) {
-            Write-Error "full dist missing system.dic"; exit 1
-          }
-          if (Test-Path "$lite/_internal/sudachidict_core/resources/system.dic") {
-            Write-Error "lite dist must NOT contain system.dic"; exit 1
-          }
-          # 体积下限断言：防静默空包（system.dic ~208MB，full onedir 总量应 >200MB）
-          $dic = (Get-Item "$root/_internal/sudachidict_core/resources/system.dic").Length
-          if ($dic -lt 100MB) { Write-Error "system.dic too small: $dic bytes"; exit 1 }
+          # 体积下限断言：防静默空包（去词典后 onedir 总量约 33MB 量级，下限放宽）
           $total = (Get-ChildItem $root -Recurse -File | Measure-Object Length -Sum).Sum
-          Write-Host "full onedir total = $([math]::Round($total/1MB,1)) MB"
-          if ($total -lt 200MB) { Write-Error "full onedir too small: $total bytes"; exit 1 }
-          $liteTotal = (Get-ChildItem $lite -Recurse -File | Measure-Object Length -Sum).Sum
-          Write-Host "lite onedir total = $([math]::Round($liteTotal/1MB,1)) MB"
-          if ($liteTotal -ge $total) { Write-Error "lite dist should be smaller than full"; exit 1 }
+          Write-Host "onedir total = $([math]::Round($total/1MB,1)) MB"
+          if ($total -lt 20MB) { Write-Error "onedir too small: $total bytes"; exit 1 }
 
       # 2.0.0 双 EXE：CLI 冒烟改走独立 subtrans-cli.exe（console 版，无头可跑）。
       # GUI exe（SubTransJAV.exe）为 windowed 子系统：无头环境启动无可见输出、
@@ -170,7 +133,6 @@ jobs:
           name: SubTransJAV-${{ env.VERSION }}
           path: |
             Temp/pyinstaller_dist/SubTransJAV/**
-            Temp/pyinstaller_dist_lite/SubTransJAV/**
             Temp/innoinstall/*.exe
             Temp/innoinstall/SHA256SUMS.txt
           if-no-files-found: error

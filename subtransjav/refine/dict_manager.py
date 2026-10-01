@@ -15,10 +15,11 @@
 - 下载 URL 仅允许 https + 固定域名白名单；清单路径字段必须为单一文件
   名分量；读侧拒绝含 ``..`` 分量的路径；一切落位路径必须包含于数据根
   ``dict/`` 之内（防清单被篡改后指内网/写任意路径）；
-- sudachidict_core 主依赖保留不移除（D2026-0930-03 ②）：grammar_hint 在
-  ``dict/sudachi/`` 存在用户下载词典时优先按路径加载
-  （``Dictionary(dict=...)``，sudachipy>=0.6 支持绝对路径），否则维持
-  零参缺省（sudachidict_core），lite 安装器用户经下载补齐。
+- 词典数据去捆绑（D2026-1001 D3）：sudachidict_core 不随包/不随主依赖
+  分发，grammar_hint 在 ``dict/sudachi/`` 存在已下载词典时按路径加载
+  （``Dictionary(dict=...)``，sudachipy>=0.6 支持绝对路径）；未下载时
+  语法提示自动降级（不可用即跳过），经 CLI ``--dict-download`` / GUI
+  引擎页按钮下载式补齐。
 """
 
 import hashlib

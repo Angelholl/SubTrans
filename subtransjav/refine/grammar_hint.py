@@ -36,10 +36,11 @@ def _get_tokenizer():
             return _tokenizer_instance
         try:
             from sudachipy import Dictionary
-            # 2.1 词典管理（D2026-0930-03 ②）：数据根 dict/sudachi/ 存在
-            # 用户下载词典时按路径优先（sudachipy>=0.6 支持 dict= 绝对
-            # 路径），否则维持零参缺省（sudachidict_core）；自定义词典
-            # 加载失败回退内置（打印告警），不整体禁用语法提示。
+            # 词典管理（2.1 引入；D2026-1001 D3 去捆绑口径）：数据根
+            # dict/sudachi/ 存在已下载词典时按路径优先（sudachipy>=0.6
+            # 支持 dict= 绝对路径）；未下载词典数据时缺省 Dictionary()
+            # 初始化失败走降级链（语法提示自动跳过）；自定义词典加载
+            # 失败回退缺省加载（打印告警），不整体禁用语法提示。
             custom = ""
             try:
                 from .dict_manager import sudachi_custom_dict_path
@@ -50,7 +51,7 @@ def _get_tokenizer():
                 try:
                     _tokenizer_instance = Dictionary(dict=custom).create()
                 except Exception as e:   # noqa: BLE001
-                    print(f"⚠️ 自定义 Sudachi 词典加载失败，回退内置词典: {e}")
+                    print(f"⚠️ 自定义 Sudachi 词典加载失败，回退缺省加载: {e}")
                     _tokenizer_instance = Dictionary().create()
             else:
                 _tokenizer_instance = Dictionary().create()

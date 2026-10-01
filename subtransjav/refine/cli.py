@@ -477,7 +477,7 @@ def _cmd_dict_status() -> int:
     for kind, info in st["dicts"].items():
         line = f"  {kind}: {'可用' if info['available'] else '不可用'}"
         if info.get("custom_path"):
-            line += f" | 自定义词典: {info['custom_path']}（优先于内置）"
+            line += f" | 自定义词典: {info['custom_path']}（优先于数据根下载词典）"
         if info.get("files"):
             line += f" | 文件: {', '.join(info['files'])}"
         print(line)

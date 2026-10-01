@@ -2,11 +2,9 @@
 ; 版本号可由命令行覆盖：iscc /Dversion=1.2.3 packaging/setup.iss
 ; [Files] 源路径相对本脚本：../Temp/pyinstaller_dist/SubTransJAV/*，
 ;         与 CI 中 `pyinstaller --distpath Temp/pyinstaller_dist` 的产物对齐。
-; 词典组件化（2.0.0b0）：完整版 iscc /Ddict_src=<system.dic 所在目录>
-;   （默认指向 full 构建 dist 内的真实词典目录）；lite 版安装器
-;   /Ddict_src 指向空目录 + /Dsuffix=-lite（词典条目挂 Components: full，
-;   lite 组件不装 → 精简安装不含 system.dic，语法提示运行时自动降级）。
-; 可选 /Dsuffix=-lite 追加到安装器文件名以区分两份产物。
+; 词典去捆绑（D3，D2026-1001）：单安装器单产物，不再捆日语词典
+;   （system.dic ~208MB）——语法提示运行时自动降级，词典经 GUI 引擎页 /
+;   CLI --dict-download 按需下载；可选 /Dsuffix 追加到安装器文件名。
 
 #define MyAppName "SubTransJAV"
 #ifndef version
@@ -14,10 +12,6 @@
 #endif
 #ifndef suffix
 #define suffix ""
-#endif
-#ifndef dict_src
-; 默认 = full 构建 dist 内真实词典目录（CI 传参覆盖）
-#define dict_src "..\Temp\pyinstaller_dist\SubTransJAV\_internal\sudachidict_core\resources"
 #endif
 #define MyAppExeName "SubTransJAV.exe"
 
@@ -46,20 +40,10 @@ Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Types]
-Name: full; Description: 完整安装（含日语语法词典，约 217MB）
-Name: compact; Description: 标准安装（含日语语法词典）
-Name: custom; Description: 自定义安装（可选是否含日语语法词典）
-
-[Components]
-Name: "full"; Description: "完整安装（含日语语法词典，约 217MB）"; Types: full compact
-Name: "lite"; Description: "精简安装（不含词典，语法提示不可用）"; Types: custom
+Name: full; Description: 标准安装
 
 [Files]
-; onedir 全量递归打包（含 _internal）；system.dic 从通用条目剔除，
-; 由下方词典条目按组件（Components: full）单独落位。
-Source: "..\Temp\pyinstaller_dist\SubTransJAV\*"; DestDir: "{app}"; Excludes: "system.dic"; Flags: recursesubdirs createallsubdirs ignoreversion
-; 日语语法词典（~208MB）：仅完整组件安装；lite 安装器以 /Ddict_src 指向空目录
-Source: "{#dict_src}\system.dic"; DestDir: "{app}\_internal\sudachidict_core\resources"; Components: full; Flags: ignoreversion skipifsourcedoesntexist
+; onedir 全量递归打包（含 _internal）；词典数据不随安装器分发（去捆绑口径）
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

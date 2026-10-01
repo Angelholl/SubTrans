@@ -44,7 +44,6 @@ dependencies = [
     "opencc-python-reimplemented>=0.1.7",
     "psutil>=5.9",              # 进程树管理（terminate_process_tree 等核心模块）
     "sudachipy>=0.6.0",
-    "sudachidict_core>=20210608",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +54,10 @@ gui = [
 # 中文分词提示（2.1，D2026-0930-03 ④）：可选组件，缺失走静默降级
 zh = [
     "jieba>=0.42",
+]
+# 日语词典数据（D3 去捆绑，D2026-1001）：可选组件按需安装；EXE 用户经引擎页下载
+ja-dict = [
+    "sudachidict_core>=20210608",
 ]
 dev = [
     "pytest>=8.0",
