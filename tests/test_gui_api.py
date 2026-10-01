@@ -1001,6 +1001,59 @@ def test_refine_ai_analyze_rejects_non_report_and_missing(
     assert captured == {}, "前置拒绝必须发生在 subprocess 之前"
 
 
+def test_refine_ai_analyze_user_directory_guard_differential(
+        gui_api_obj, monkeypatch, tmp_path):
+    """修复B（D2026-1001-06）守卫差分回归四断言：
+    _resolve_safe_path（home/仓库根白名单）→ _validate_user_directory
+    （任意用户磁盘目录、拦系统目录+可执行；后缀白名单保留）。
+
+    方案（二级评议 C5）：monkeypatch security.Path.home 与 api.REPO_ROOT
+    至不含测试路径的假目录——tmp_path 在假 home 外，修复前会被
+    _resolve_safe_path 拒绝，修复后必须放行。
+    """
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.security as security_mod
+
+    fake_home = tmp_path / "fakehome"
+    fake_home.mkdir()
+    monkeypatch.setattr(security_mod.Path, "home", lambda: fake_home)
+    monkeypatch.setattr(api_mod, "REPO_ROOT", str(tmp_path / "fakerepo"))
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+
+    # 断言①home 外路径被接受：tmp_path 既不在假 home 也不在假 REPO_ROOT 下，
+    # 走 _validate_user_directory 放行 → 抵达 subprocess（fake run returncode=1
+    # 的确定性失败，证明守卫已过、非路径拒绝）
+    report = _make_ai_report(tmp_path, with_companion=False)
+    captured = _install_fake_ai_run(monkeypatch, returncode=1,
+                                    stderr="boom-line1\nboom-line2\n")
+    r_ok = gui_api_obj.refine_ai_analyze(str(report))
+    assert r_ok["success"] is False
+    assert "不允许" not in r_ok["error"] and "允许范围" not in r_ok["error"], \
+        f"home 外用户目录被误拒：{r_ok['error']}"
+    assert "exit_code" in r_ok["error"] or r_ok.get("stderr_tail"), \
+        "应抵达 subprocess 阶段（守卫放行）"
+    assert captured.get("args"), "放行路径必须触达 fake subprocess"
+
+    # 断言②系统目录拒：SystemRoot 下（守卫先行，不触 subprocess）
+    system_root = os.environ.get("SystemRoot", r"C:\Windows")  # noqa: SIM112 - 与 security.py 同口径
+    r_sys = gui_api_obj.refine_ai_analyze(
+        os.path.join(system_root, "fake_ep01_质量报告.txt"))
+    assert r_sys["success"] is False and "允许范围" in r_sys["error"]
+
+    # 断言③可执行拒：真实存在的 .exe 文件（守卫在 isfile/后缀检查前拒绝）
+    exe = tmp_path / "fake_质量报告.txt.exe"
+    exe.write_bytes(b"MZ")
+    r_exe = gui_api_obj.refine_ai_analyze(str(exe))
+    assert r_exe["success"] is False and "允许范围" in r_exe["error"]
+
+    # 断言④前置拒绝 captured：两拒绝路径均未触 subprocess（先清①的基线）
+    captured.clear()
+    gui_api_obj.refine_ai_analyze(
+        os.path.join(system_root, "fake_ep01_质量报告.txt"))
+    gui_api_obj.refine_ai_analyze(str(exe))
+    assert captured == {}, "拒绝路径不得触达 subprocess"
+
+
 def test_refine_ai_analyze_companion_missing(gui_api_obj, monkeypatch,
                                              tmp_path):
     """CLI 退出 0 但建议件未落盘 → success=False。"""
@@ -1425,8 +1478,11 @@ def test_refine_dict_status_shape(gui_api_obj, monkeypatch, tmp_path):
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     got = gui_api_obj.refine_dict_status()
     assert got["success"] is True
-    assert set(got["dicts"]) == {"sudachi", "jieba", "english_rules"}
+    # 2.5.0 修复A：kind 架构增 sudachi_full（文件存在判定，未装即 False）
+    assert set(got["dicts"]) == {"sudachi", "sudachi_full", "jieba",
+                                 "english_rules"}
     assert got["dicts"]["english_rules"]["available"] is True
+    assert got["dicts"]["sudachi_full"]["available"] is False
 
 
 def test_refine_dict_download_unsupported_kind(gui_api_obj):
