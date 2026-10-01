@@ -2236,3 +2236,35 @@ node --check；红线钉+静态钉+gui_api **48 passed**（钉⑤ 180 双向+静
 ### 六、后续风险跟踪
 
 ①模型手填拼错率（stderr_tail 已可见化；owner 再报再上 datalist+独立刷新，需新 id+预算）；②i18n 余量 2（190/192）用完须提案扩 cap；③独立云端 provider 密钥未配→请求失败属用户配置责任（2.5.0 发版说明提及）；④2.5.0 发版提案待 owner 确认。
+
+---
+
+## [2026-10-02] [D2026-1002-01] 开工盘点与维护收尾小批（refineGlCount 横切勾账+卫生清理；迁移笔记留 owner 处置） [已拍板·执行落库]
+
+**关联**：D2026-1001-04（refineGlCount 修复源头 :2105）、D2026-1001-03（:2017 横切收编、:2028 迁移笔记留 owner 处置）、D2026-1001-05（:2150 处置建议随汇报转达）。
+
+### 一、盘点结论（开工评议前置）
+
+Owner 指令"项目继续开工"。全仓盘点（roadmap 全文+decision-log 尾三决策风险跟踪节，评议员实读复核成立）：2.0→2.5.0 计划内容全部收口（2.5.0 已发布 Release id 401160543，main=2.5.1.dev0）；剩余 ⬜ 全为触发型挂起或 owner 侧——触发型：上游 v1.9.3+ 对齐（触发未到：上游仍 1.9.3，且我方推荐结论经 v1.9.3 增补轮实证零行为漂移已覆盖该版）/Trusted Signing/引擎页重构/节奏 token 化/轨道 B/S4/S5/审计积压 4 项/容器查询/adaptive thresholds 默认开启（gate0 层 origin:"real" 语料 0/30，B2 门② 92 条系翻译层样本不折算，:1308/:1315）；owner 侧：反馈批二复验、gui-probe 定时首跳复核（2026-11-01）、2.5.0 问题 3 子现象复现截图。**结论：无未阻塞可推进计划内容，本轮不点火任何触发型项。**
+
+### 二、评议与拍板
+
+decision-critic 开工评议：**有条件支持、无 [HIGH_RISK_OBJECTION]**；[MATERIAL_CONFLICT]×1+修订×2 全采纳：①迁移笔记（docs/design/ZCODE-MIGRATION-NOTES.md）归档与 :2028"留 owner 处置"存在处置权冲突——裁定采 :2028 口径，owner 对 :2150 转达建议至今未回应、处置权在 owner，**本轮不入库维持 untracked**，完成报告重发建议（主模型推荐=归档入 docs/design/ 加"历史方法笔记，非现行规范"标注，备选=删除，owner 一句话定夺）；②roadmap 勾账注按"解冻钉⑤ 175→176（:2105）"口径落笔，不写"触全集冻结"，不动 :2000②/:2017 历史快照；③dead/.pytest_tmp2 删除（实测量级 25B 桩+3 空目录；.gitignore 仅覆盖 .pytest_tmp/，复现概率低不补条目）。
+
+### 三、执行记录
+
+- docs/roadmap.md 横切观察项 refineGlCount 行勾账（已随 2.3.1 批2 修复：折叠卡头恢复 span#refineGlCount，app.js 零改动；index.html:390 元素实证在，app.js 引用可解析）。
+- 本地清理（不入库）：删仓库根 `dead`（1 行 UI 排查草稿，其记录的 .destination-section 无 CSS 规则事实已由历轮死规则扫查甄别闭环）与 `.pytest_tmp2/`。
+- docs/design/ZCODE-MIGRATION-NOTES.md 维持 untracked（见二①）。
+
+### 四、验证链
+
+全量 pytest **1602 passed+4 skipped**（与基线 1602+4 持平，docs-only 零代码改动）；Mimosa deep **findingCount=31 与基线持平零新增**（seal sha256:f8b3e834…）；gate 契约闸不涉（零 UI/DOM 改动）；静态检查/冒烟不适用（无代码改动）。
+
+### 五、是否 [PRESSURE-OVERRIDE]
+
+否（docs-only 维护批，评议无 HRO，无不可逆动作）。
+
+### 六、后续风险跟踪
+
+①迁移笔记处置挂 owner（完成报告重推，定夺前不入库）；②owner 若选归档，入库须加"历史方法笔记，非现行规范"front matter 防误引为现行工作流模板；③.pytest_tmp2 未入 .gitignore，定向跑 --basetemp=.pytest_tmp2 复现 untracked 时再处置；④下一到期触发源=gui-probe 定时首跳复核 **2026-11-01**（若仍未触发须升格处置：评估弃定时或转真机承载，不得仅再调时间）。

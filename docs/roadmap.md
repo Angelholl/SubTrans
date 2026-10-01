@@ -122,7 +122,7 @@
 - ctx 16384：长文截断 / 术语链断裂 / 重翻触发率 / OOM
 - gui-probe 月跳核对（2026-10-01：workflow active，手动探针先行全绿 run 36757171642＝collected 112/112 passed；**定时首跳核对=未发生**——03:00 UTC 后 3h+ 该 workflow API total_count 仍=2、event=schedule run 数=0；"未触发"为实证、"整点高负载丢弃"为推断（GitHub 已知特性），cron 已错峰 03:00→03:17 UTC（D2026-1001-03）；下次复核=2026-11-01 首跳，若仍未触发须升格处置（评估弃定时或转真机承载），不得仅再调时间）；~~B2 语料相关截止 2026-10-16~~ ✅ 门②已提前结案（2026-10-01，decision-log [B2 门②基线-20260926]）
 - adaptive thresholds 默认开启前置债务：须先补 ≥30 条 origin:"real" 语料，未达标不得改默认开启（decision-log:1316 硬化条件；D2026-1001-03 统一登记）
-- refineGlCount 悬空（app.js:1965/2061 有引用无元素）：修复须新增 id 即触钉⑤全集冻结，随下次 UI DOM 批一并处理（decision-log:2000②）
+- ~~refineGlCount 悬空（app.js:1965/2061 有引用无元素）~~ ✅ 已随 2.3.1 批2 修复（折叠卡头恢复 `<span id="refineGlCount">`，app.js 零改动；解冻钉⑤ 175→176，decision-log:2105；本行 2026-10-02 勾账 D2026-1002-01）
 - 容器查询治本方案：不主动引入；触发=真机清单 F 节 DPI 探针实测异常再评估（decision-log:1939）
 - 审计积压 4 项挂起（2026-10-01 复核维持挂起，decision-log:1395；D2026-1001-03 收编）：v2_outputs "done" payload 消费端核查（触发=新增/改动消费端或结构时先核查）/ premerge_max_gap_s 移出指纹（触发=任一指纹/断点/恢复路径改动立项时先出兼容分析，无方案不得动指纹哈希面）/ tools 一次性脚本债务（笼统挂起）/ _pid_alive AccessDenied（psutil 硬依赖不可达，笼统挂起）
 - 首文件抽检历史观测（v1.3.0 时代，decision-log:1082）：考点=别停/クリ/部長で 误切；后续多轮实测无复发记录，触发=同类误切再现时复核
