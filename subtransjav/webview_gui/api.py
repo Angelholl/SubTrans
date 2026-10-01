@@ -1734,18 +1734,24 @@ class TranslateAPI:
             args.extend(["--ai-model", model])
         # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照的 ASR 指定
         # （设置 KV asr_model/asr_python → CLI 旗标；缺省=运行器侧探测降级）
+        # 2.6.0 批 2 修订（D2026-1002-05）：跨片统计窗口（KV tm_stats_window
+        # → CLI 旗标 --tm-stats-window，三档）
         try:
             got = self.refine_get_stage_settings()
             kv = (got or {}).get("settings") or {}
             asr_model_kv = str(kv.get("asr_model") or "").strip()
             asr_python_kv = str(kv.get("asr_python") or "").strip()
+            tm_window_kv = str(kv.get("tm_stats_window") or "").strip()
         except Exception:
             asr_model_kv = ""
             asr_python_kv = ""
+            tm_window_kv = ""
         if asr_model_kv:
             args.extend(["--asr-model", asr_model_kv])
         if asr_python_kv:
             args.extend(["--asr-python", asr_python_kv])
+        if tm_window_kv in ("7", "30", "all"):
+            args.extend(["--tm-stats-window", tm_window_kv])
 
         # 分析子进程跟随阶段A 服务商/端点（与 refine_get_stage_settings
         # 同源读取）：GUI 阶段A 配云端时，分析子进程若不传 --s1-provider

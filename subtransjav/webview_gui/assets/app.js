@@ -508,6 +508,11 @@ const MSG = {
     asrProgressBytes: (done, total) => `${done}/${total} 字节`,
     asrSaved: '已保存 ASR 模型选择',
     asrCrosscheckNote: n => `；本地转写 ${n} 段对照`,
+    // 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档
+    aggregateWindowLabel: '跨片窗口',
+    aggregateWindow7: '7 天',
+    aggregateWindow30: '30 天',
+    aggregateWindowAll: '全部（永久）',
     batchFixScopeLabel: '修复范围',
     tpl_goto_edit: '去编辑',
     tpl_goto_empty_hint: '该阶段角色卡未显式指定（留空=自动查找回落链）；编辑器仅支持角色卡目录内顶层文件',
@@ -2623,6 +2628,27 @@ function switchTab(tabId) {
         if (aiModelInput) {
           aiModelInput.value = (r.settings.ai_analyze_model) || '';
           aiModelInput.placeholder = MSG.ai_model_placeholder;
+        }
+        // 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（填充/恢复/保存）
+        const aggWin = $('aggregateWindowSel');
+        if (aggWin) {
+          if (!aggWin.dataset.filled) {
+            aggWin.dataset.filled = '1';
+            const winOpts = { 7: MSG.aggregateWindow7, 30: MSG.aggregateWindow30, all: MSG.aggregateWindowAll };
+            Object.keys(winOpts).forEach(k => {
+              const o = document.createElement('option');
+              o.value = k;
+              o.textContent = winOpts[k];
+              aggWin.appendChild(o);
+            });
+            const lblW = document.querySelector('label[for="aggregateWindowSel"]');
+            if (lblW) lblW.textContent = MSG.aggregateWindowLabel;
+            aggWin.addEventListener('change', () => {
+              window.pywebview.api.refine_save_stage_settings(null, null,
+                { tm_stats_window: aggWin.value });
+            });
+          }
+          aggWin.value = (r.settings.tm_stats_window) || '30';
         }
         if (typeof aiRefreshEffective === 'function') aiRefreshEffective();
         if (aiProvSel && !aiProvSel.dataset.bound) {

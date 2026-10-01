@@ -550,6 +550,9 @@
                             </select>
                             <label class="muted" for="aiModelInput">Analysis model</label>
                             <input type="text" id="aiModelInput" class="form-input compact" style="width:auto;">
+                            <!-- 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（JS 填充，零静态键） -->
+                            <label class="muted" for="aggregateWindowSel">Cross-film window</label>
+                            <select id="aggregateWindowSel" class="form-select compact" style="width:auto;"></select>
                         </div>
                         <div id="refineAiPrivacy" class="muted hint-warn" style="display:none; margin-top:6px;"></div>
                         <div id="refineAiResult" style="margin-top:8px;"></div>
