@@ -2166,3 +2166,35 @@ S1 预算扩张 ~184（批清单+二级评议）；S1 原生 prompt 宿主实证
 - **S6/S7 ✅**：触发型四项维持挂起原样；反馈批二/真机项"owner 豁免推迟"标注落 roadmap。
 - **⑪ 固定小节 ✅（S1+S2 批随批执行）**：双通道扫查零新增死规则（6 候选全甄别为注释误报/沿袭豁免，新增规则全在用）。
 - **记账**：预算 FROZEN_IDS 176→178 恰达上限（~184 为估算未兑现，下一 UI 批预算 0 仍走预算表+二级评议）；静态键 190 恒等； Mimosa deep seal sha256:92048012 29=基线零新增；全量 1601+4 持平（1 环境性抖动单测复跑过）。**国庆冲刺计划内容完结达标**（2.3.1+2.4.0 两次收口发版；推断性窗口授权至 2.4.0 收口发版完成止，后续 commit/push 恢复 standing mode owner 终端默认）。
+
+---
+
+## [2026-10-01] [D2026-1001-06] 2.4.0 实测反馈修复轮（owner 四条+词典链真 bug） [已拍板·实现落库]
+
+**关联**：D2026-1001-05（S7"发现问题再修"路径触发——owner 实测 2.4.0 后返回四条）；D2026-1001-03（2.1 词典下载 DEPENDENCY-IMPACT）。
+
+### 一、Owner 四条与诊断
+
+①词典下载应先选择并提供完整版（现直下 74MB lite=core 变体）；②AI 分析报错不可理解（截图：`路径不允许访问： 路径不在允许的目录下: E:\..._质量报告.txt`）；③质量报告加载一个文件后无法更改+加载导读无效+有文字无按钮；④高级参数阶段AB 角色卡与词库页角色卡编辑割裂感。
+
+### 二、开工评议（1 HRO）+实证+二级评议（C1-C6+显式复议）
+
+- **问题 1 [HIGH_RISK_OBJECTION] 采纳修正案**：评议员实拉 PyPI/CDN 核出——sudachidict_full 无数据 wheel（仅 9KB 壳包），真源=CloudFront CDN zip 137,472,173B；**隐式 sudachipy≥0.7 依赖**（20260723 词典 v1 格式，环境 0.6.11）；解压 OOM 风险；无国内镜像；选版形态=词典下拉双条目（否决 AppModal.select 新形态）；kind 不更名保留 sudachi 增 sudachi_full。
+- **开工第一步实证（裁决性）**：sudachipy 0.6.11 加载 system_core.dic(20260723)=**Invalid header 静默失败**——**2.4.0 词典下载核心收益实际未生效**（grammar_hint 回退内置小词典仅打告警）；升级 0.7.0 后 LOAD_OK（0.1s，tokenize 正常）+全量 1601+4 零回归。
+- **二级评议 C1-C6 全采纳+两条显式复议采纳**：C1=ja-dict 移除理由修正（[MATERIAL_CONFLICT]：sudachidict_core 20260723.1 wheel 实证 requires_dist=null，"resolver 冲突"表述作废；政策理由改为统一下载式+0.6.x 无法加载新 dic）+test_pyproject_meta 防捆绑钉重写+ci.yml 改 `.[dev]`（真 sudachi 覆盖接受退化落口径）；C2=full pin 单源受控 [UNVERIFIABLE] 标注+archive_member basename 匹配；C3=流式解压+磁盘预检量纲=解压后体积；C4=kind 兼容三联（dict_manager else 分支/api.py:1004 放开/app.js:3438 按钮门）+SystemSummary 分母改 DICT_KINDS.length；C5=守卫差分回归四断言（monkeypatch 方案）；C6=钉⑤随批。**显式复议**：①d1d4 C3（CI 安装面）②D3 ja-dict 支柱——均因新实证失效，采纳修订。
+
+### 三、执行记录（修复 A-D+⑪，13 文件 +352/-89）
+
+修复 A=sudachipy 升级+ja-dict 移除+README/手册 FAQ-11+sudachi_full kind（CDN 源+**pin sha256=eb6d0220…871e 实下载 137,472,173B 核算**+expected_extracted_bytes 330,563,683）+白名单扩 CloudFront+kind 三联+加载优先链 full→core+流式解压/下载落盘+磁盘预检+防捆绑钉重写；修复 B=守卫统一 `_validate_user_directory`+差分回归四断言+文案改值+stderr_tail 摘要（200 字符）+云 provider 发送前 AppModal.confirm；修复 C=载入新报告清 refineAiResult+lastAiSuggestions=null；修复 D="去编辑"跳转两分支（目录内精确打开含 canonical→tag 映射/目录外降级+提示）+保存后动态回落提示；⑪=零新增死规则（6 候选全甄别误报/豁免）。
+
+### 四、验证链（全绿）
+
+node --check；红线钉+静态钉 45 passed（钉⑤ 178 **零耗**——跳转按钮 class 承载）；全量 **1602 passed+4 skipped**（+1 新行为钉：流式落盘钉替换旧一次性 read 钉）；gate check 零漂移（178/190）；黑盒：词典下拉 4 条目+SystemSummary"2/4 可用"新分母+full 变体详情+角色卡"去编辑"按钮×2；secret 定向 1 hex 甄别放行（dict_sources.json full pin sha256=公开数据包摘要非凭据，首见入扫描面）；**Mimosa deep seal sha256:3762f3cf findingCount=31：identity 级新增 1 条 dict_manager.py:249 path-traversal 判误报留痕维持**（zip 归档内寻址非文件系统拼接+写路径锚定+sha256 pin 三重防护；行内计数差系树外路径漂移口径），甄别表已增记；GUI 已验证（黑盒断言+截图）。
+
+### 五、是否 [PRESSURE-OVERRIDE]
+
+否（owner 实测反馈修复指令+三级评议全过无 HRO 残留）。
+
+### 六、后续风险跟踪
+
+①**2.5.0 发版提案交 owner 确认**（词典选版=minor）——确认前不动 tag/Release；②full 下载 CDN 单源 CN 慢网→离线导入兜底已写手册 FAQ-11；③full pin 单源 [UNVERIFIABLE]（上游 20260723 更新须换行重核）；④CI 真 sudachi 覆盖退化系显式裁定接受项；⑤问题 3 子现象"无实际按钮"待复现（源码层无缺陷）；⑥.owner 数据根=仓库根传统位（pip 源码态实测），EXE 数据根迁移路径未实测（归反馈批二豁免范围）。

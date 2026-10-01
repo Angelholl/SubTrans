@@ -94,6 +94,16 @@
 - 验证链：红线钉+静态钉 45 passed（钉⑤ 178 双向）/全量 1601+4 持平/gate 丢失 0+新基线 178/190/Mimosa 29 零新增（seal 92048012）/黑盒全用例 PASS（first_run 两分支+marker 断言/prompt 双段全链/重入守卫/遮罩+Esc/alert 无取消键/暗色+窄窗，截图存 Temp/gui-240 归档位置）；GUI 已验证
 - 发版：✅ **已发布**（2.4.0 收口单发；国庆冲刺计划内容完结）
 
+## 2.5.0 —— 2.4.0 实测反馈修复批（D2026-1001-06，owner 实测四条+词典链真 bug）🚧 已落库待提交（2026-10-01）
+
+- ✅ 修复 A 词典链真 bug+完整版选版（owner 反馈 1+开工评议 HRO 实证升级）：**sudachipy 0.6.11 加载 20260723 core = Invalid header 静默失败实证（2.4.0 词典下载收益未生效）**→升级 `sudachipy>=0.7.0,<0.8`（0.7.0 LOAD_OK+全量零回归）；ja-dict extra 移除（显式复议：D3 支柱因新实证失效，统一下载式）+test_pyproject_meta 防捆绑钉重写+ci.yml 改 `.[dev]`（真 sudachi 覆盖接受退化落口径）；**sudachi_full 完整版变体**（CDN 直链 137MB+受控定 pin sha256 eb6d0220…871e+白名单扩 CloudFront+kind 三联+SystemSummary 分母 DICT_KINDS.length）+加载优先链 full→core+_extract_dic 流式+磁盘预检（zip+2×extracted）+_http_get 流式落盘
+- ✅ 修复 B AI 分析路径守卫统一（owner 反馈 2）：refine_ai_analyze `_resolve_safe_path`→`_validate_user_directory`（E:\ 型字幕目录放行，与导读同口径）；差分回归四断言；guide_path_denied 文案改值；stderr_tail 摘要进错误信息（200 字符）；云 provider 发送前 AppModal.confirm
+- ✅ 修复 C 质量报告加载链（owner 反馈 3）：载入新报告清旧 AI 结果（refineAiResult+lastAiSuggestions=null）；AI 分析 E:\ 路径点透随修复 B；子现象"无实际按钮"待复现（源码层按钮/绑定均在）
+- ✅ 修复 D 角色卡两处联动（owner 反馈 4）：阶段A/B 角色卡旁"去编辑"跳转两分支（目录内精确打开含 canonical→tag 映射/目录外降级跳转+提示）；保存后动态回落提示——钉⑤ 178 零耗（class 承载）
+- ✅ ⑪ 收尾扫查固定小节：零新增死规则（6 候选全甄别注释误报/沿袭豁免；新增 CSS 全量命中实证）
+- 验证链：红线钉+静态钉 45 passed（钉⑤ 178 零耗）/全量 **1602+4**（+1 新行为钉）/gate 零漂移（178/190）/Mimosa seal 92048012 等待复核/secret 1 hex 甄别放行（full pin 数据摘要非凭据）/黑盒：词典 4 条目+摘要卡 2/4 新分母+full 变体详情+跳转按钮×2（截图 Temp/gui-250 归档位）；GUI 已验证
+- 发版：**2.5.0 提案交 owner 确认**（词典选版=minor；tag/Release 待确认后动）
+
 ## 轨道 B —— 云端闭环（与 2.0 开发并行候选，未启动）
 
 - ⬜ 放行评审（HRO-1 四条件）→ 提案式自动（自动分析+自动提议+批次人工放行）（2026-10-01 复核维持挂起：触发=自动质量闭环真实需求信号，四条件未闭环不进实施，D2026-1001-03 第①项）
