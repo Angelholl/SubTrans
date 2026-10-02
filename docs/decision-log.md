@@ -2576,3 +2576,27 @@ ruff 全仓 0｜mypy 0｜node --check｜定向 12+285 passed｜全量 **1638 pas
 
 **边界**：本件闭环 D2026-1002-07 条件②即止；不预先锁死批 2a id 总额（以批 2a 清单预算表逐段预演为准）；批 2a 其余开工门（播放器 spike 验收口径、N1 编码嗅探首件、N3 跳转契约钉、R1 降级接口预留）仍待批 2a 正式开工评议。
 **风险跟踪**：①批 2a id 面=项目单批最大扩张，预算表逐段列名 ≤9；②--ok/--danger token 存在性首件核实（不存在则映射既有 token 或补定义，不引入新字面量）；③未来引入运行时语言切换时 `.review-status-*` 为漏网重渲染点（批 2b UI 复盘项）；④aria-valuenow 在 indeterminate 时须显式移除；⑤归并评估在批 2b 开工评议，判据两条，不混功能批。
+
+## [2026-10-02] D2026-1002-09 批 2a 校对容器正式开工评议 [已拍板·开工]
+
+**关联**：D2026-1002-07（批 2a 原文+条件增量+程序分界）、D2026-1002-08（状态条四 id 定案+条件②闭环+id 总额 ≤9 待预演）。**背景授权**：owner 无人值守连续推进指令（"流程推到推不动必须要我决策截止"）；决议批 2a 无额外开工门，本件闭环即开工。
+
+### 一、方案要点（评议通过稿）
+
+**spike 首件**（tools/spike_review_video.py）：ffmpeg 合成 10s 片（testsrc2 显式 `-r 30`+drawtext 可选增强降级+aac，H.264 mp4）→ pywebview 真窗口加载 spike HTML（同生产加载链）→ JS 自动采集四组经 api 回传 JSON：A file:/// 直连（loadedmetadata+playing+videoWidth>0）；B timeupdate 间隔分布（50 采样）+currentTime 精度；C seeked 延迟+requestVideoFrameCallback mediaTime 与目标差；D direct/+10ms/+50ms 三组呈现偏差（阈值=实测帧周期 1000/fps 推导；median+P90、每组 ≥30、三组同目标集预登记）。判据：A 失败→转码兜底升级主路径（UX 劣化向 owner 报告）；四组"结果→设计分支"映射表入批清单 annex。
+
+**主体 12 项**：①TAB 骨架（tabBtnReview/tab-review，switchTab 通用零改 app.js）②导入区（#tab-review .dropzone 样式拷贝+reviewDropzone 容器 id+按钮 class 委托 data-kind=video|srt+拖拽后缀放宽+JS active-tab 分流）③videoReviewPlayer file://直连（timeupdate 仅喂状态条）④ffprobe 三态 direct/clip-audio/error（复用 _ffprobe_stream_codecs api.py:2376）⑤手动转码（veryfast+crf23+aac、Temp/review_transcode/rt_{sha12}.mp4 hash 复用、24h 龄清扫、0.25 系数展示级预估、超时 duration×3+120s 可重试）⑥状态条（D2026-1002-08 四 id+makeStatusManager+2px 底轨+四态色板，百分比文字不落 id）⑦N1 嗅探 sniff_text_encoding 落位 refine/（BOM→utf-8 strict→gbk→error，4 用例，不动 8 处硬读）⑧N3 跳转空实现 enqueueJump{timestamp,label,source}+契约钉 ⑨R1 数据模型 blocks 只读/编辑共用+include_raw 预留 ⑩JS 拆分 review.js 独立 REVIEW_MSG 键表（不动 app.js 钉体系）⑪**id 预算 9**=[tabBtnReview,tab-review,reviewDropzone,videoReviewPlayer,reviewTranscodeBtn,reviewStatusBar,reviewStatusDot,reviewStatusLabel,reviewProgressFill]（≤9 留 1 缓冲）⑫测试（嗅探 4+三态+转码命令+load_srt 结构+前端静态钉；全量基线 1652+4 只增；GUI 黑盒含双主题+1180px）。
+
+### 二、评议员条件四条（全采纳，无驳回项）
+
+①spike 判据钉死（-r 30+实测帧率推导阈值；median+P90+每组 ≥30+目标集预登记；四组分支映射表入 annex；drawtext 降级 testsrc2 内建时间码为主）；②自动化可靠性（visibilityState 标签+仅采纳 visible 样本+丢弃计数入 report+窗口置顶前台；样本不足改半自动、D 结论不落参数）；③前端契约钉（REVIEW_MSG 闭合钉+enqueueJump 契约钉+node --check review.js+index.html 断言双 data-kind 值+硬约束"#tab-review 页内零 data-i18n"）；④spike 回报程序（任一分支触发→轻量续评引用本条+07/08；全符合预期→决策日志显式登记"无设计变更，annex 直进主体实现"）。
+
+### 三、事实修正与术语漂移登记（照单全收，批清单落盘标注）
+
+修正①：cleaner_rules.parse_srt 的 Subtitle.start/end 为整数毫秒（cleaner_rules.py:88,101-102，自带 lstrip BOM），非"float 秒"；N1 无"扩 ms"步骤；timing 字段取源（filters timing 字符串 vs cleaner_rules ms 重建）实现时显式选定入批清单。修正②：app.js 实为两个 IIFE（1806 Refine UI+4189 异步 init），非"唯一"。修正③：pywebview 6.2.1/ALLOW_FILE_URLS 默认 True/内置 Bottle 127.0.0.1 [UNVERIFIABLE]，由 spike A 组实证。漂移①：转码清理采 24h 龄 sweep（audio_preview 先例 audio_detect.py:47）而非原文"media_clips 先例"（全删模式），方向更优注明。漂移②：拖拽放宽后视频路径入 register_session_paths 会话信任边界（api.py:55，仅真实 OS 拖放手势可触发），显式声明留痕。
+
+### 四、异议记录与边界
+
+- 评议员：有条件支持，**无 [HIGH_RISK_OBJECTION]、无 [PRESSURE-OVERRIDE]**；条件四条全采纳。
+- 边界：无人值守推进授权至"必须 owner 决策为止"；owner 将执行第五次测试=真机验证波（GUI 黑盒验收项归属真机波复核收口）。
+- 风险跟踪：①id +9 FROZEN_IDS 随批显式更新；②file:// 失败→转码主路径 UX 劣化（spike A 前置）；③背景窗口 throttle（条件 2 护栏）；④转码磁盘总上限批 2b 复盘；⑤批 2b 联动基准取决于 D 组结论（续评衔接点）；⑥#tab-review 页内零 data-i18n 硬约束；⑦N3 契约钉闭合批 3 空窗；⑧0.25 系数展示级无硬保证。
