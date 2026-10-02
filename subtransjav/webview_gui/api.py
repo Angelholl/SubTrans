@@ -27,6 +27,7 @@ import webview
 from webview import FileDialog
 
 from subtransjav import paths
+from subtransjav.refine.fs_utils import BACKUP_SUFFIX  # noqa: E402  共享基底层
 from subtransjav.utils.process_manager import (
     PSUTIL_AVAILABLE,
     spawn_refine_cli,
@@ -430,6 +431,17 @@ def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
         return False, str(e)
 
 
+def _codec_direct(ext: str, codecs: dict, exts, vids, auds) -> bool:
+    """播放矩阵参数化判定（批 3 技术债 e）。
+
+    direct = 容器后缀 ∈ exts ∧ 视频 codec ∈ vids ∧ 音频 codec ∈ auds；
+    两套常量集（audio preview / review probe）各自传参保留语义差异。
+    """
+    return (str(ext or "").lower() in set(exts)
+            and str(codecs.get("video") or "") in set(vids)
+            and str(codecs.get("audio") or "") in set(auds))
+
+
 def _ms_to_srt_time(ms: int) -> str:
     """毫秒 → SRT 时间戳 ``HH:MM:SS,mmm``（cleaner_rules ms 原生重建 timing）。"""
     ms = max(0, int(ms))
@@ -440,20 +452,10 @@ def _ms_to_srt_time(ms: int) -> str:
 
 
 def _write_srt_atomic(path: str, text: str) -> None:
-    """原子写 SRT 文本（D2026-1002-10 批 2b；参数拷贝 v2_outputs._atomic_write_text
-    先例：mkstemp 同目录 + fsync + os.replace，防中断半截产物）。"""
-    import tempfile
-    p = Path(path)
-    fd, tmp = tempfile.mkstemp(dir=str(p.parent), suffix=".srt.tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    finally:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
+    """原子写 SRT 文本（批 3 技术债 a：薄壳委托 refine.fs_utils，行为等价：
+    mkstemp 同目录 + fsync + os.replace，防中断半截产物）。"""
+    from subtransjav.refine.fs_utils import _atomic_write_text as _atomic
+    _atomic(path, text, suffix=".srt.tmp")
 
 
 class TranslateAPI:
@@ -558,22 +560,35 @@ class TranslateAPI:
         """Open native folder dialog to select output directory."""
         return self.select_folder()
 
+    @staticmethod
+    def _open_file_dialog(type_keys, save=False, default_name=None,
+                          allow_multiple=False):
+        """文件对话框收敛（批 3 技术债 g）：统一 OPEN/SAVE 分支。
+
+        返回用户选择结果（OPEN=list / SAVE=str），取消或无窗口返回 None；
+        无窗口分支仍由各调用方先行判定（保留 no_active_window 语义）。
+        """
+        windows = webview.windows
+        if not windows:
+            return None
+        if save:
+            kwargs: dict[str, Any] = {"file_types": list(type_keys)}
+            if default_name:
+                kwargs["save_filename"] = default_name
+            return windows[0].create_file_dialog(webview.SAVE_DIALOG, **kwargs)
+        return windows[0].create_file_dialog(
+            webview.OPEN_DIALOG, allow_multiple=allow_multiple,
+            file_types=list(type_keys))
+
     def select_srt_files(self) -> dict[str, Any]:
         """Open file dialog to select SRT files for translation."""
         windows = webview.windows
         if not windows:
             return {"success": False, "message": msg("no_active_window")}
 
-        file_types = [
-            'Subtitle Files (*.srt)',
-            'All Files (*.*)'
-        ]
-
-        result = windows[0].create_file_dialog(
-            FileDialog.OPEN,
-            allow_multiple=True,
-            file_types=file_types
-        )
+        result = self._open_file_dialog(
+            (msg("file_type_srt"), msg("file_type_all")),
+            allow_multiple=True)
 
         if result and len(result) > 0:
             register_session_paths(result)
@@ -591,7 +606,7 @@ class TranslateAPI:
             folder = Path(result[0])
             # C1（D2026-1002-10）：排除校对页备份件 *.bak.srt
             srt_files = sorted(str(f) for f in folder.glob("*.srt")
-                               if not f.name.endswith(".bak.srt"))
+                               if not f.name.endswith(BACKUP_SUFFIX))
             if srt_files:
                 register_session_paths(srt_files)
                 return {"success": True, "paths": srt_files, "folder": result[0]}
@@ -1667,9 +1682,8 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("no_active_window")}
-            result = windows[0].create_file_dialog(
-                webview.OPEN_DIALOG, allow_multiple=False,
-                file_types=(msg("file_type_glossary"), msg("file_type_all")))
+            result = self._open_file_dialog(
+                (msg("file_type_glossary"), msg("file_type_all")))
             if result:
                 return {"success": True, "path": result[0]}
             return {"success": False, "error": msg("dialog_cancelled")}
@@ -1684,9 +1698,8 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("no_active_window")}
-            result = windows[0].create_file_dialog(
-                webview.OPEN_DIALOG, allow_multiple=False,
-                file_types=(msg("file_type_guide"), msg("file_type_all")))
+            result = self._open_file_dialog(
+                (msg("file_type_guide"), msg("file_type_all")))
             if result:
                 return {"success": True, "path": result[0]}
             return {"success": False, "cancelled": True,
@@ -1700,10 +1713,9 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("dialog_cancelled")}
-            result = windows[0].create_file_dialog(
-                webview.SAVE_DIALOG,
-                file_types=(msg("file_type_csv"),),
-                save_filename="glossary_export.csv")
+            result = self._open_file_dialog(
+                (msg("file_type_csv"),), save=True,
+                default_name="glossary_export.csv")
             if result:
                 return {"success": True, "path": result[0]}
             return {"success": False, "error": msg("dialog_cancelled")}
@@ -2476,16 +2488,14 @@ class TranslateAPI:
             return None
 
     @staticmethod
-    def _sweep_stale_preview_clips(preview_dir: str) -> int:
-        """preview 片段受 audio_detect 既有 stale 时限管辖（同阈值清扫）。
-
-        播放后片段保留（供复播），仅清理超龄文件；目录不存在静默返回。"""
+    def _sweep_aged_files(dir_path: str, hours: int) -> int:
+        """龄期清扫共享实现（批 3 技术债 f）：删除目录内超 hours 龄文件，
+        目录不存在静默返回 0。"""
         try:
-            from subtransjav.refine.audio_detect import STALE_MAX_AGE_HOURS
-            cutoff = datetime.now().timestamp() - STALE_MAX_AGE_HOURS * 3600
+            cutoff = datetime.now().timestamp() - hours * 3600
             removed = 0
-            for name in os.listdir(preview_dir):
-                p = Path(preview_dir) / name
+            for name in os.listdir(dir_path):
+                p = Path(dir_path) / name
                 try:
                     if p.is_file() and p.stat().st_mtime < cutoff:
                         p.unlink()
@@ -2495,6 +2505,13 @@ class TranslateAPI:
             return removed
         except Exception:
             return 0
+
+    @staticmethod
+    def _sweep_stale_preview_clips(preview_dir: str) -> int:
+        """preview 片段受 audio_detect 既有 stale 时限管辖（批 3 技术债 f：
+        薄壳委托 _sweep_aged_files，行为等价）。"""
+        from subtransjav.refine.audio_detect import STALE_MAX_AGE_HOURS
+        return TranslateAPI._sweep_aged_files(preview_dir, STALE_MAX_AGE_HOURS)
 
     @staticmethod
     def _extract_preview_wav(ffmpeg_path: str, media_path: str, out_path: str,
@@ -2588,9 +2605,10 @@ class TranslateAPI:
         ext = os.path.splitext(media)[1].lower()
         codecs = self._ffprobe_stream_codecs(media)
         if codecs is not None:
-            direct = (ext in self._AUDIO_PREVIEW_DIRECT_EXTS
-                      and codecs["video"] in self._AUDIO_PREVIEW_DIRECT_VIDEO
-                      and codecs["audio"] in self._AUDIO_PREVIEW_DIRECT_AUDIO)
+            direct = _codec_direct(ext, codecs,
+                                   self._AUDIO_PREVIEW_DIRECT_EXTS,
+                                   self._AUDIO_PREVIEW_DIRECT_VIDEO,
+                                   self._AUDIO_PREVIEW_DIRECT_AUDIO)
             if direct:
                 return {"ok": True, "mode": "direct", "media_path": media,
                         "codec_probe": True}
@@ -2644,6 +2662,12 @@ class TranslateAPI:
     # 校对页（2.6.1 批 2a D2026-1002-09）：媒体导入 / 三态探测 / 手动转码 / SRT 载入
     # 直接播判定矩阵沿用 audio preview 语义（批清单 §2）；转码产物 24h 龄
     # sweep（术语漂移登记：audio_preview 先例）；全部容错不抛 + msg() 文案。
+    #
+    # error_key 映射表（批 3 技术债 i：后端错误点 → 前端 REVIEW_MSG 键名，
+    # 显式映射防暗合；前端按 key 查表优先、回退 error 文本）：
+    #   review_backup_failed        -> review_save_failed
+    #   review_save_blocks_invalid  -> review_save_failed
+    #   review_srt_bad_encoding     -> review_bad_encoding
     # ================================================================
 
     _REVIEW_DIRECT_EXTS = {".mp4", ".webm", ".mov"}
@@ -2670,9 +2694,8 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("no_active_window")}
-            result = windows[0].create_file_dialog(
-                webview.OPEN_DIALOG, allow_multiple=False,
-                file_types=(msg("file_type_video"), msg("file_type_all")))
+            result = self._open_file_dialog(
+                (msg("file_type_video"), msg("file_type_all")))
             if result:
                 return {"success": True, "path": result[0]}
             return {"success": False, "cancelled": True,
@@ -2686,9 +2709,8 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("no_active_window")}
-            result = windows[0].create_file_dialog(
-                webview.OPEN_DIALOG, allow_multiple=False,
-                file_types=(msg("file_type_srt"), msg("file_type_all")))
+            result = self._open_file_dialog(
+                (msg("file_type_srt"), msg("file_type_all")))
             if result:
                 return {"success": True, "path": result[0]}
             return {"success": False, "cancelled": True,
@@ -2730,9 +2752,10 @@ class TranslateAPI:
             codecs = self._ffprobe_stream_codecs(p)
             duration = self._review_media_duration(p)
             if codecs is not None:
-                direct = (ext in self._REVIEW_DIRECT_EXTS
-                          and codecs["video"] in self._REVIEW_DIRECT_VIDEO
-                          and codecs["audio"] in self._REVIEW_DIRECT_AUDIO)
+                direct = _codec_direct(ext, codecs,
+                                       self._REVIEW_DIRECT_EXTS,
+                                       self._REVIEW_DIRECT_VIDEO,
+                                       self._REVIEW_DIRECT_AUDIO)
                 return {"state": "direct" if direct else "clip-audio",
                         "codec_probe": True, "codecs": codecs,
                         "duration": duration}
@@ -2746,21 +2769,8 @@ class TranslateAPI:
 
     @staticmethod
     def _sweep_review_transcode(transcode_dir: str) -> int:
-        """转码产物 24h 龄清扫（拷贝 _sweep_stale_preview_clips 模式）。"""
-        try:
-            cutoff = datetime.now().timestamp() - 24 * 3600
-            removed = 0
-            for name in os.listdir(transcode_dir):
-                p = Path(transcode_dir) / name
-                try:
-                    if p.is_file() and p.stat().st_mtime < cutoff:
-                        p.unlink()
-                        removed += 1
-                except OSError:
-                    continue
-            return removed
-        except Exception:
-            return 0
+        """转码产物 24h 龄清扫（批 3 技术债 f：薄壳委托 _sweep_aged_files）。"""
+        return TranslateAPI._sweep_aged_files(transcode_dir, 24)
 
     def refine_review_start_transcode(self, path: str) -> dict[str, Any]:
         """后台线程转码为直连可播 mp4（hevc 等边界编码兜底）。
@@ -2851,7 +2861,8 @@ class TranslateAPI:
             data = Path(p).read_bytes()
             enc, trusted = sniff_text_encoding(data)
             if not trusted:
-                return {"success": False, "error": msg("review_srt_bad_encoding")}
+                return {"success": False, "error": msg("review_srt_bad_encoding"),
+                        "error_key": "review_bad_encoding"}
             content = data.decode(enc)
             from subtransjav.refine.cleaner_rules import parse_srt
             blocks = [
@@ -2869,6 +2880,41 @@ class TranslateAPI:
                     "count": len(blocks), "blocks": blocks}
         except Exception as e:
             _log_exc("refine_review_load_srt")
+            return {"success": False, "error": str(e)}
+
+    def refine_review_load_detections(self, guide_path: str) -> dict[str, Any]:
+        """疑点段加载（批 3 D2026-1002-11）：复用 _load_validated_guide
+        白名单读法 → 过滤 items 带 timing（无时间戳=非疑点段）→
+        8 字段透传 {index,timing,category,message,current_text,
+        source_excerpt,status,severity} + media_path（空串→None）。"""
+        try:
+            p, stem, guide, err = self._load_validated_guide(guide_path)
+            if err:
+                return {"success": False,
+                        "error": str(err.get("error") or err)}
+            items = (guide or {}).get("items") or []
+            detections = []
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                timing = str(it.get("timing") or "").strip()
+                if not timing:
+                    continue
+                detections.append({
+                    "index": it.get("index"),
+                    "timing": timing,
+                    "category": it.get("category"),
+                    "message": it.get("message"),
+                    "current_text": it.get("current_text"),
+                    "source_excerpt": it.get("source_excerpt"),
+                    "status": it.get("status"),
+                    "severity": it.get("severity"),
+                })
+            media_path = (guide or {}).get("media_path") or None
+            return {"success": True, "detections": detections,
+                    "media_path": media_path, "count": len(detections)}
+        except Exception as e:
+            _log_exc("refine_review_load_detections")
             return {"success": False, "error": str(e)}
 
     @staticmethod
@@ -2907,12 +2953,13 @@ class TranslateAPI:
                 return {"success": False, "error": msg("review_srt_missing")}
             invalid = self._review_validate_blocks(blocks)
             if invalid:
-                return {"success": False, "error": msg(invalid)}
+                return {"success": False, "error": msg(invalid),
+                        "error_key": "review_save_failed"}
             safe = str(_resolve_safe_path(p))
             target = Path(safe)
             backup_path = None
             if target.exists():
-                backup_path = str(target) + ".bak.srt"
+                backup_path = str(target) + BACKUP_SUFFIX
                 last_err: Exception | None = None
                 for _ in range(2):  # D2：失败重试一次
                     try:
@@ -2923,7 +2970,8 @@ class TranslateAPI:
                         last_err = e
                 if last_err is not None:
                     return {"success": False,
-                            "error": f"{msg('review_backup_failed')}: {last_err}"}
+                            "error": f"{msg('review_backup_failed')}: {last_err}",
+                            "error_key": "review_save_failed"}
             parts = []
             for i, it in enumerate(blocks, 1):
                 # 块内单换行、块间空行（多行文本内部 \n 原样保留）
@@ -2942,17 +2990,19 @@ class TranslateAPI:
             _log_exc("refine_review_save_srt")
             return {"success": False, "error": str(e)}
 
-    def refine_review_saveas_srt(self, src_path: str, blocks: Any,
+    def refine_review_saveas_srt(self, blocks: Any,
                                  target_path: str) -> dict[str, Any]:
-        """另存为第一段：目标已存在 → exists 标记不写（前端确认后走
-        refine_review_save_srt(mode='force') 两段式）；不存在 → 直接原子写。"""
+        """另存为第一段（批 3 技术债 c：删 src_path 死形参）：目标已存在 →
+        exists 标记不写（前端确认后走 refine_review_save_srt(mode='force')
+        两段式）；不存在 → 直接原子写。"""
         try:
             t = str(target_path or "")
             if not t:
                 return {"success": False, "error": msg("review_srt_missing")}
             invalid = self._review_validate_blocks(blocks)
             if invalid:
-                return {"success": False, "error": msg(invalid)}
+                return {"success": False, "error": msg(invalid),
+                        "error_key": "review_save_failed"}
             safe_t = str(_resolve_safe_path(t))
             if Path(safe_t).exists():
                 return {"success": False, "exists": True}
@@ -2967,10 +3017,9 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("no_active_window")}
-            result = windows[0].create_file_dialog(
-                webview.SAVE_DIALOG,
-                file_types=(msg("file_type_srt"), msg("file_type_all")),
-                save_filename=str(default_name or "校对.srt"))
+            result = self._open_file_dialog(
+                (msg("file_type_srt"), msg("file_type_all")), save=True,
+                default_name=str(default_name or "校对.srt"))
             if result:
                 return {"success": True, "path": result}
             return {"success": False, "cancelled": True,
@@ -3066,9 +3115,8 @@ class TranslateAPI:
             windows = webview.windows
             if not windows:
                 return {"success": False, "error": msg("no_active_window")}
-            result = windows[0].create_file_dialog(
-                webview.OPEN_DIALOG, allow_multiple=False,
-                file_types=(msg("file_type_sqlite"), msg("file_type_all")))
+            result = self._open_file_dialog(
+                (msg("file_type_sqlite"), msg("file_type_all")))
             if result:
                 return {"success": True, "path": result[0]}
             return {"success": False, "error": msg("dialog_cancelled")}

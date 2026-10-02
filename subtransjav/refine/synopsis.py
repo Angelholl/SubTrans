@@ -173,19 +173,11 @@ def _key_lock(key: str) -> threading.Lock:
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
-    """原子写：同目录临时文件 + os.replace，防止中断留下半截缓存。"""
-    import tempfile
+    """原子写（批 3 技术债 a：薄壳委托 refine.fs_utils，行为等价：
+    先建父目录 + mkstemp 同目录 + fsync + os.replace，防半截缓存）。"""
+    from subtransjav.refine.fs_utils import _atomic_write_text as _atomic
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    finally:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
+    _atomic(path, text, suffix=".tmp")
 
 
 def request_synopsis(client, sampled_text: str, *, provider: str, model: str,

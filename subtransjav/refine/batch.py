@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from subtransjav.refine.fs_utils import BACKUP_SUFFIX
+
 
 def find_srt_files(
     directory: str,
@@ -54,7 +56,7 @@ def find_srt_files(
             continue
         # C1（D2026-1002-10）：校对页备份件 *.bak.srt 不作为翻译输入收编
         #（2.6.1 批 2b 起存在，排除对现状零变化）
-        if p.name.endswith(".bak.srt"):
+        if p.name.endswith(BACKUP_SUFFIX):
             continue
         abs_path = str(p.resolve())
         # Normalize path separators for regex matching

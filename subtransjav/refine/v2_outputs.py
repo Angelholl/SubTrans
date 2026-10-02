@@ -54,23 +54,10 @@ def _remove_tmp_dir(tmp_dir: str) -> None:
 
 
 def _atomic_write_text(path: str, text: str):
-    """原子写文本文件：同目录临时文件 + os.replace，防止中断留下半截产物。
-
-    参考 filter_stage_output_srt 的 mkstemp+finally 模式；
-    成功 replace 后 finally 中的 unlink 因临时文件已不存在而静默跳过。
-    """
-    import tempfile
-    p = Path(path)
-    fd, tmp = tempfile.mkstemp(dir=str(p.parent), suffix=".srt.tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    finally:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
+    """原子写文本文件（批 3 技术债 a：薄壳委托 refine.fs_utils，行为等价：
+    mkstemp 同目录 + fsync + os.replace，失败 finally 清理临时文件）。"""
+    from subtransjav.refine.fs_utils import _atomic_write_text as _atomic
+    _atomic(path, text, suffix=".srt.tmp")
 
 
 def _asr_meta_min_coverage_pct(cfg) -> float:
