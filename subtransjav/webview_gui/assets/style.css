@@ -1946,6 +1946,98 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     box-shadow: var(--focus-ring);
 }
 
+/* ---- 批 3（D2026-1002-11）：疑点段面板 / ASR 引导卡（token 延续第 16 节） ---- */
+.review-det-tools {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
+}
+.review-det-summary { font-size: var(--font-xs); }
+.review-detections {
+    margin-top: var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+.review-asr-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border);
+    background: var(--primary-soft);
+}
+.review-asr-card-text {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-xs);
+    color: var(--text-2);
+}
+.review-det-list {
+    max-height: 36vh;
+    overflow-y: auto;
+}
+.review-det-row {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+.review-det-row:last-child { border-bottom: none; }
+.review-det-row:hover { background: var(--surface-2); }
+.review-det-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+}
+.review-det-cat {
+    flex-shrink: 0;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--primary-strong);
+    background: var(--primary-soft);
+    border-radius: var(--radius-pill);
+    padding: 1px var(--space-2);
+}
+.review-det-timing {
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.review-det-acts {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.review-det-message {
+    margin-top: var(--space-1);
+    font-size: var(--font-sm);
+    color: var(--text-1);
+    word-break: break-word;
+}
+.review-det-excerpt {
+    margin-top: var(--space-1);
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    word-break: break-word;
+}
+.review-det-row.review-det-stale { opacity: .55; }
+.review-det-row.review-det-stale .review-det-timing {
+    text-decoration: line-through;
+}
+.review-det-row.review-det-confirmed { background: var(--ok-soft); }
+.review-det-row.review-det-skipped { background: var(--surface-2); }
+.review-det-row.review-det-confirmed .review-det-cat,
+.review-det-row.review-det-skipped .review-det-cat { opacity: .7; }
+
 @media (max-width: 1180px) {
     .workbench { grid-template-columns: 64px minmax(0, 1fr) 300px; }
 

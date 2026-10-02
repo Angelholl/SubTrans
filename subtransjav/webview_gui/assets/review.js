@@ -38,6 +38,21 @@ const REVIEW_MSG = {
     review_edit_hint: '双击编辑文本；Enter 提交，Shift+Enter 换行，Esc 取消（时间轴只读）',
     review_save_ok: (n) => `已保存 ${n} 条（UTF-8 重写）`,
     review_save_failed: (m) => `保存失败：${m}`,
+    // ---- 批 3（D2026-1002-11）：疑点段联动 / ASR 入口 ----
+    review_det_load_btn: '载入疑点段',
+    review_asr_btn: 'ASR 对照',
+    review_det_summary: (total, stale) => (stale > 0
+        ? `已载入 ${total} 条疑点，${stale} 处位置失效` : `已载入 ${total} 条疑点`),
+    review_det_seek_btn: '转跳',
+    review_det_listen_btn: '试听',
+    review_det_confirm_btn: '确认已修',
+    review_det_skip_btn: '跳过',
+    review_det_no_srt: '先导入 .srt 字幕，方可转跳/试听',
+    review_det_no_save: '判定标记仅本会话内生效，不落盘',
+    review_asr_card: 'ASR 语音对照为可选能力（依赖本机自备 whisper，非必需）：'
+        + '推荐 whisper-large-v2，自备落位 ~/.cache/whisper 或数据根 models/asr，'
+        + '配好后可在引擎与模型页启用 ASR 验证。',
+    review_asr_goto: '前往引擎与模型页',
 };
 
 // 状态条管理器（D2026-1002-08 定案：四态 + 确定百分比 + 不定进度动画）。
@@ -49,10 +64,12 @@ function makeStatusManager(ids) {
     const fill = document.getElementById(ids.fill);
     const percent = bar ? bar.querySelector('.review-status-percent') : null;
     const STATES = ['idle', 'ready', 'busy', 'error'];
+    let current = null;   // 批 3 技术债 d：暴露当前态供 _markDirty 延迟判定
     return {
         setState(opt) {
             if (!bar || !dot || !label || !fill) { return; }
             const st = opt && opt.state;
+            current = st;
             if (STATES.indexOf(st) < 0) {
                 console.error('[review] 非法状态枚举：', st);
                 return;
@@ -96,6 +113,7 @@ function makeStatusManager(ids) {
         hide() {
             if (bar) { bar.style.display = 'none'; }
         },
+        state() { return current; },
     };
 }
 
@@ -127,6 +145,10 @@ const ReviewUI = {
     _editingIdx: null,
     _editingRow: null,
     _guardAllowTab: null,
+    // ---- 批 3（D2026-1002-11）：疑点段/ASR/dirty 延迟 ----
+    _detections: [],
+    _listenTimer: null,
+    _dirtyPending: false,
 
     // app.js 顶层 fileUrlOf 在 IIFE 内不可复用，语义拷贝
     // （逐段 encodeURIComponent，兼容空格/中文路径）
@@ -137,6 +159,29 @@ const ReviewUI = {
 
     _bridge() {
         return (window.pywebview && window.pywebview.api) ? window.pywebview.api : null;
+    },
+
+    // 批 3 技术债 j：active tab 读取收敛
+    getActiveTab() {
+        const active = document.querySelector('.side-tab-btn.active');
+        return active ? active.dataset.tab : '';
+    },
+
+    // 批 3 技术债 h：桥调用统一包装（桥在位检查 + 异常/error 兜底渲染）。
+    // 失败时 setState(errLabelKey || status_error) 并返回 null；特殊流
+    //（转码轮询 interval、确认弹窗链）不强行套用。
+    _call(promiseFactory, errLabelKey) {
+        const api = this._bridge();
+        if (!api) {
+            this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
+            return Promise.resolve(null);
+        }
+        return Promise.resolve().then(promiseFactory).catch((err) => {
+            console.error('[review] call error:', err);
+            this._status.setState({ state: 'error',
+                                    labelKey: errLabelKey || 'review_status_error' });
+            return null;
+        });
     },
 
     init() {
@@ -154,6 +199,7 @@ const ReviewUI = {
         this._bindLocate();
         this._bindSave();
         this._bindTabGuard();
+        this._bindDetections();
     },
 
     _injectTexts() {
@@ -181,6 +227,15 @@ const ReviewUI = {
         if (save) { save.textContent = REVIEW_MSG.review_save_btn; }
         const saveas = document.getElementById('reviewSaveAsBtn');
         if (saveas) { saveas.textContent = REVIEW_MSG.review_saveas_btn; }
+        // 批 3：疑点面板/ASR 卡文案注入
+        const detLoad = document.getElementById('reviewDetLoadBtn');
+        if (detLoad) { detLoad.textContent = REVIEW_MSG.review_det_load_btn; }
+        const asrBtn = document.getElementById('reviewAsrBtn');
+        if (asrBtn) { asrBtn.textContent = REVIEW_MSG.review_asr_btn; }
+        const asrText = document.querySelector('.review-asr-card-text');
+        if (asrText) { asrText.textContent = REVIEW_MSG.review_asr_card; }
+        const asrGoto = document.querySelector('.review-asr-goto');
+        if (asrGoto) { asrGoto.textContent = REVIEW_MSG.review_asr_goto; }
     },
 
     _bindDropzone() {
@@ -212,8 +267,7 @@ const ReviewUI = {
     _syncWorkbench() {
         const wb = document.querySelector('.workbench');
         if (!wb) { return; }
-        const active = document.querySelector('.side-tab-btn.active');
-        const tab = active ? active.dataset.tab : '';
+        const tab = this.getActiveTab();
         wb.classList.toggle('no-aside', tab === 'tab-review');
         // 首次进入校对页即亮状态条（idle 态提示未导入）
         if (tab === 'tab-review' && !this._barShown && this._status) {
@@ -223,14 +277,10 @@ const ReviewUI = {
     },
 
     _pick(kind) {
-        const api = this._bridge();
-        if (!api) {
-            this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
-            return;
-        }
-        const call = (kind === 'video') ? api.refine_review_pick_media()
-                                        : api.refine_review_pick_srt();
-        Promise.resolve(call).then((r) => {
+        this._call(() => (kind === 'video')
+            ? this._bridge().refine_review_pick_media()
+            : this._bridge().refine_review_pick_srt(),
+        'review_status_error').then((r) => {
             if (!r) { return; }
             if (r.success && r.path) {
                 if (kind === 'video') { this.setVideoPath(r.path); }
@@ -239,15 +289,14 @@ const ReviewUI = {
                 console.warn('[review] pick failed:', r.error);
                 this._status.setState({ state: 'error', labelKey: 'review_status_error' });
             }
-        }).catch((err) => console.error('[review] pick error:', err));
+        });
     },
 
     // OS 拖入分流（main.py on_drop_event 放宽后缀后统一入口）：
     // tab-review 激活 → 按后缀各自消费；否则原样转发翻译页既有路径
     onDroppedFiles(paths) {
         const list = (paths || []).map(String);
-        const active = document.querySelector('.side-tab-btn.active');
-        const tab = active ? active.dataset.tab : '';
+        const tab = this.getActiveTab();
         if (tab !== 'tab-review') {
             if (typeof FileListManager !== 'undefined' && FileListManager.addDroppedFiles) {
                 FileListManager.addDroppedFiles(list);
@@ -271,7 +320,8 @@ const ReviewUI = {
             return;
         }
         this._status.setState({ state: 'busy', labelKey: 'review_status_busy' });
-        Promise.resolve(api.refine_review_probe_media(path)).then((r) => {
+        this._call(() => api.refine_review_probe_media(path),
+                   'review_media_error').then((r) => {
             this._probe = r || null;
             const st = r && r.state;
             const row = document.querySelector('.review-transcode-row');
@@ -299,9 +349,6 @@ const ReviewUI = {
                 console.warn('[review] probe error:', r && r.error);
                 this._status.setState({ state: 'error', labelKey: 'review_media_error' });
             }
-        }).catch((err) => {
-            console.error('[review] probe error:', err);
-            this._status.setState({ state: 'error', labelKey: 'review_media_error' });
         });
     },
 
@@ -355,25 +402,24 @@ const ReviewUI = {
                     console.warn('[review] transcode failed:', s.error);
                     this._status.setState({ state: 'error',
                                             labelKey: 'review_transcode_failed' });
+                    this._flushDirtyPending();
                     return;
                 }
                 if (s.path) {
                     this._showVideo(this.fileUrlOf(s.path));
                     this._hasVideo = true;
                     this._refreshReadiness();
+                    this._flushDirtyPending();
                 }
             }).catch(() => {});
         }, 800);
     },
 
     setSrtPath(path) {
-        const api = this._bridge();
-        if (!api) {
-            this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
-            return;
-        }
-        Promise.resolve(api.refine_review_load_srt(path)).then((r) => {
-            if (r && r.success) {
+        this._call(() => this._bridge().refine_review_load_srt(path),
+                   'review_bad_encoding').then((r) => {
+            if (!r) { return; }
+            if (r.success) {
                 this._srtPath = path || null;
                 this._hasSrt = true;
                 this._blocks = r.blocks || [];
@@ -383,12 +429,15 @@ const ReviewUI = {
                 this._setupList();
                 this._refreshReadiness();
             } else {
-                console.warn('[review] srt load failed:', r && r.error);
-                this._status.setState({ state: 'error', labelKey: 'review_bad_encoding' });
+                // 批 3 技术债 i：error_key 优先查 REVIEW_MSG，回退 error 文本
+                console.warn('[review] srt load failed:', r.error);
+                if (r.error_key && REVIEW_MSG[r.error_key]) {
+                    this._status.setState({ state: 'error', labelKey: r.error_key });
+                } else {
+                    this._status.setState({ state: 'error',
+                                            labelKey: 'review_bad_encoding' });
+                }
             }
-        }).catch((err) => {
-            console.error('[review] srt load error:', err);
-            this._status.setState({ state: 'error', labelKey: 'review_bad_encoding' });
         });
     },
 
@@ -648,10 +697,22 @@ const ReviewUI = {
     _markDirty() {
         if (this._dirty) { return; }
         this._dirty = true;
-        // C6：不新设状态位——dirty=state:'ready'+labelKey 表达
+        // C6：不新设状态位——dirty=state:'ready'+labelKey 表达；
+        // 技术债 d：busy 态不覆盖 busy 视觉，置 _dirtyPending 由 busy 结束回调补显
+        if (this._status.state && this._status.state() === 'busy') {
+            this._dirtyPending = true;
+            return;
+        }
         if (this._hasVideo || this._hasSrt) {
             this._status.setState({ state: 'ready', labelKey: 'review_dirty_hint' });
         }
+    },
+
+    // busy 结束后补显 dirty 提示（技术债 d 配套；_dirty 已 true 故不走 _markDirty）
+    _flushDirtyPending() {
+        if (!this._dirtyPending) { return; }
+        this._dirtyPending = false;
+        this._status.setState({ state: 'ready', labelKey: 'review_dirty_hint' });
     },
 
     _bindSearch() {
@@ -755,8 +816,9 @@ const ReviewUI = {
             await this._save();   // 同路径 → 走覆盖流
             return;
         }
+        // 批 3 技术债 c：后端删 src_path 死形参，新签名 (blocks, target_path)
         const c = await Promise.resolve(
-            api.refine_review_saveas_srt(this._srtPath, this._blocks, target));
+            api.refine_review_saveas_srt(this._blocks, target));
         if (c && c.success) {
             this._srtPath = target;   // 另存后当前路径切换到新件
             this._dirty = false;
@@ -842,12 +904,203 @@ const ReviewUI = {
         if (this._hasVideo || this._hasSrt) {
             this._status.setState({ state: 'ready', labelKey: 'review_status_ready' });
         }
+        // 技术债 d 盲区修补（code-review 批 3）：所有 ready 路径统一补显
+        // pending 的 dirty 提示（probe direct 分支等不经 _pollTranscode）
+        this._flushDirtyPending();
     },
 
     // N3 跳转入队（批 3 联动预留；契约={timestamp,label,source}，空实现）
     enqueueJump(jump) {
         this._jumpQueue.push(jump);
         console.debug('[review] jump enqueued', JSON.stringify(jump));
+    },
+
+    // ===== 疑点段面板（批 3 D2026-1002-11）：自主直载导读 items（带 timing）=====
+    // 数据源裁定（D2026-1002-11 §四）：guide items 为唯一时间戳载体；确认/跳过
+    // 仅会话内标记不落盘（REVIEW_MSG.review_det_no_save 明示）。
+    _autoGuidePath() {
+        // 弱提示自动发现：srt 同目录 {stem}_质量报告导读.json；实际存在性由
+        // 后端 load_detections 校验（失败走文件对话框兜底）
+        if (!this._srtPath) { return null; }
+        const i = this._srtPath.lastIndexOf('.');
+        const stem = i > 0 ? this._srtPath.slice(0, i) : this._srtPath;
+        return stem + '_质量报告导读.json';
+    },
+
+    // 同 app.js timingToSeconds 语义（HH:MM:SS[,.]mmm --> HH:MM:SS[,.]mmm，
+    // 容忍 ,/. 毫秒分隔），禁止只改一处造成漂移。返回 [startMs, endMs]。
+    _parseTimingMs(timing) {
+        const m = String(timing || '').match(
+            /(\d{2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{1,3})/);
+        if (!m) { return null; }
+        const n = m.slice(1).map(Number);
+        return [((n[0] * 60 + n[1]) * 60 + n[2]) * 1000 + n[3],
+                ((n[4] * 60 + n[5]) * 60 + n[6]) * 1000 + n[7]];
+    },
+
+    _matchDetections() {
+        // 位置失效态闭合（D2026-1002-10 C8 留坑）：timing 区间与 blocks 区间
+        // 重叠→记 blockIdx（跳转走 blocks.start_ms 原生）；无 blocks 或无重叠
+        // →stale/pending
+        const dets = this._detections || [];
+        const hasBlocks = (this._blocks || []).length > 0;
+        for (const d of dets) {
+            d.blockIdx = null; d.stale = false; d.pending = !hasBlocks;
+            const ms = this._parseTimingMs(d.timing);
+            if (!ms) { d.stale = hasBlocks; continue; }
+            d.startMs = ms[0]; d.endMs = ms[1];
+            if (!hasBlocks) { continue; }
+            let hit = null;
+            for (let i = 0; i < this._blocks.length; i++) {
+                const b = this._blocks[i];
+                if (b.start_ms < d.endMs && d.startMs < b.end_ms) { hit = i; break; }
+            }
+            if (hit === null) { d.stale = true; } else { d.blockIdx = hit; }
+        }
+    },
+
+    _loadDetections() {
+        const api = this._bridge();
+        if (!api) {
+            this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
+            return;
+        }
+        const attempt = (p) => Promise.resolve()
+            .then(() => api.refine_review_load_detections(p))
+            .then((r) => {
+                if (!r || !r.success) { return false; }
+                this._detections = r.detections || [];
+                this._matchDetections();
+                this._renderDetections();
+                return true;
+            }).catch(() => false);
+        const auto = this._autoGuidePath();
+        attempt(auto).then((ok) => {
+            if (ok) { return null; }
+            // 自动发现失败→文件对话框兜底（refine_pick_guide_json 既有 API）
+            return Promise.resolve(api.refine_pick_guide_json()).then((picked) => {
+                if (!picked || !picked.success) { return null; }
+                return attempt(picked.path);
+            });
+        });
+    },
+
+    _renderDetections() {
+        const wrap = document.getElementById('reviewDetectionsWrap');
+        const list = document.getElementById('reviewDetList');
+        const summary = document.querySelector('.review-det-summary');
+        if (!wrap || !list) { return; }
+        const dets = this._detections || [];
+        wrap.style.display = dets.length ? '' : 'none';
+        if (!dets.length) { return; }
+        const stale = dets.filter((d) => d.stale).length;
+        if (summary) {
+            summary.style.display = '';
+            summary.textContent = REVIEW_MSG.review_det_summary(dets.length, stale);
+            summary.title = REVIEW_MSG.review_det_no_save;
+        }
+        const esc = (s) => String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        list.textContent = '';
+        dets.forEach((d, i) => {
+            const row = document.createElement('div');
+            row.className = 'review-det-row' + (d.stale ? ' review-det-stale' : '');
+            row.dataset.idx = String(i);
+            const noSrt = d.pending;
+            const noSeek = d.pending || d.stale;   // 位置失效态：不崩不跳（D2026-1002-11 §一.2）
+            const acts = [['seek', REVIEW_MSG.review_det_seek_btn],
+                          ['listen', REVIEW_MSG.review_det_listen_btn],
+                          ['confirm', REVIEW_MSG.review_det_confirm_btn],
+                          ['skip', REVIEW_MSG.review_det_skip_btn]];
+            row.innerHTML =
+                '<span class="review-det-cat">' + esc(d.category) + '</span>' +
+                '<span class="review-det-timing">' + esc(d.timing) + '</span>' +
+                '<span class="review-det-msg">' + esc(d.message) + '</span>' +
+                ((d.source_excerpt || d.current_text) ?
+                    '<span class="review-det-excerpt">' +
+                    esc([d.current_text, d.source_excerpt].filter(Boolean).join(' / ')) +
+                    '</span>' : '') +
+                '<span class="review-det-acts">' +
+                acts.map((a) => '<button type="button" class="btn btn-ghost btn-sm review-det-act"' +
+                    ' data-act="' + a[0] + '"' +
+                    ((a[0] === 'seek' || a[0] === 'listen') && noSeek ?
+                        ' disabled title="' + REVIEW_MSG.review_det_no_srt + '"' : '') +
+                    '>' + a[1] + '</button>').join('') +
+                '</span>';
+            list.appendChild(row);
+        });
+    },
+
+    _applyJump(det) {
+        // 跳转用匹配 blocks.start_ms 原生（D2026-1002-11 裁定：timing 解析
+        // 仅用于匹配+试听区间，避免双时钟源）；位置失效态不崩不跳
+        const v = document.getElementById('videoReviewPlayer');
+        if (!v || !det || det.stale) { return; }
+        const ms = (det.blockIdx != null && this._blocks[det.blockIdx])
+            ? this._blocks[det.blockIdx].start_ms : det.startMs;
+        if (ms == null) { return; }
+        v.currentTime = ms / 1000;
+        if (det.blockIdx != null) {
+            this._currentIndex = det.blockIdx;
+            this._highlightCurrent();
+        }
+    },
+
+    _listen(det) {
+        const v = document.getElementById('videoReviewPlayer');
+        if (!v || !det || det.stale || det.endMs == null) { return; }
+        const startMs = (det.blockIdx != null && this._blocks[det.blockIdx])
+            ? this._blocks[det.blockIdx].start_ms : det.startMs;
+        if (startMs == null) { return; }
+        v.currentTime = startMs / 1000;
+        v.play().catch(() => {});
+        if (this._listenTimer) { clearTimeout(this._listenTimer); }
+        this._listenTimer = setTimeout(() => v.pause(),
+                                       Math.max(300, det.endMs - startMs));
+    },
+
+    _bindDetections() {
+        const load = document.getElementById('reviewDetLoadBtn');
+        if (load) { load.addEventListener('click', () => this._loadDetections()); }
+        const list = document.getElementById('reviewDetList');
+        if (list) {
+            list.addEventListener('click', (e) => {
+                const act = e.target.closest('.review-det-act');
+                if (!act) { return; }
+                const row = act.closest('.review-det-row');
+                const det = (this._detections || [])[Number(row && row.dataset.idx)];
+                if (!det) { return; }
+                if (act.dataset.act === 'seek') { this._applyJump(det); }
+                if (act.dataset.act === 'listen') { this._listen(det); }
+                if (act.dataset.act === 'confirm' || act.dataset.act === 'skip') {
+                    // 会话内标记（互斥）+console 留痕；不落盘（review_det_no_save 明示）
+                    const mark = act.dataset.act === 'confirm' ? 'confirmed' : 'skipped';
+                    det.mark = mark;
+                    row.classList.toggle('review-det-confirmed', mark === 'confirmed');
+                    row.classList.toggle('review-det-skipped', mark === 'skipped');
+                    console.log('[review] detection', mark, JSON.stringify({
+                        idx: row.dataset.idx, timing: det.timing, category: det.category }));
+                }
+            });
+        }
+        const asrBtn = document.getElementById('reviewAsrBtn');
+        if (asrBtn) {
+            asrBtn.addEventListener('click', () => {
+                const card = document.querySelector('.review-asr-card');
+                if (card) {
+                    card.style.display = getComputedStyle(card).display !== 'none' ? 'none' : '';
+                }
+            });
+        }
+        const goto = document.querySelector('.review-asr-goto');
+        if (goto) {
+            // switchTab 在 app.js IIFE 内未挂全局（D2026-1002-11 裁定）——
+            // 程序化 click 走真实 handler 链
+            goto.addEventListener('click', () => {
+                const b = document.querySelector('.side-tab-btn[data-tab="tab-engine"]');
+                if (b) { b.click(); }
+            });
+        }
     },
 
     _showVideo(url) {

@@ -26,7 +26,10 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   列名=reviewListWrap/reviewSearchInput/reviewLocateBtn/reviewPager/
   reviewSaveBtn/reviewSaveAsBtn（累计余 3）；FROZEN_I18N_KEYS 不动
   （tabReview 沿用批 1 键，
-  #tab-review 页内零 data-i18n，静态键 cap 零消耗））——
+  #tab-review 页内零 data-i18n，静态键 cap 零消耗））；
+  2.6.1 批 3 D2026-1002-11：联动增强批，FROZEN_IDS 206→210，四 id
+  列名=reviewDetLoadBtn/reviewDetectionsWrap/reviewDetList/reviewAsrBtn
+  （累计余 5）；FROZEN_I18N_KEYS 不动（#tab-review 零 data-i18n 延续）——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
 """
@@ -115,7 +118,8 @@ refineSourceFilter refineStartBtn refineTemplateReload refineTemplateSave
 refineTemplateStage refineTemplateStatus refineTemplateText refineTemplatesDir
 refineTemplatesDirShow refineTestS1 refineTestS1Status refineTestS3 refineTestS3Status
 refineTmDb refineTmEnable refineTmThreshold refineTplLoadedPath refineV2Ctx
-refreshFallbackModels removeSelectedBtn resumeToggle reviewDropzone
+refreshFallbackModels removeSelectedBtn resumeToggle reviewAsrBtn reviewDetList
+reviewDetLoadBtn reviewDetectionsWrap reviewDropzone
 reviewListWrap reviewLocateBtn reviewPager reviewProgressFill
 reviewSaveAsBtn reviewSaveBtn reviewSearchInput reviewStatusBar
 reviewStatusDot reviewStatusLabel reviewTranscodeBtn statusDot statusLabel

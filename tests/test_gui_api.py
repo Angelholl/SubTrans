@@ -2405,10 +2405,11 @@ def test_review_saveas_two_phase(gui_api_obj, tmp_path):
     mode='force' → 备份+覆盖写。"""
     blocks = [{"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "T"}]
     target = tmp_path / "out.srt"
-    r = gui_api_obj.refine_review_saveas_srt("a.srt", blocks, str(target))
+    # 批 3 技术债 c：删 src_path 死形参，新签名 (blocks, target_path)
+    r = gui_api_obj.refine_review_saveas_srt(blocks, str(target))
     assert r["success"] is True and target.exists()
     before = target.read_text(encoding="utf-8")
-    r2 = gui_api_obj.refine_review_saveas_srt("a.srt", blocks, str(target))
+    r2 = gui_api_obj.refine_review_saveas_srt(blocks, str(target))
     assert r2["success"] is False and r2["exists"] is True
     assert target.read_text(encoding="utf-8") == before, "exists 态不得写"
     r3 = gui_api_obj.refine_review_save_srt(str(target), blocks, mode="force")
@@ -2455,3 +2456,88 @@ def test_review_gbk_srt_saved_as_utf8(gui_api_obj, tmp_path):
     raw = p.read_bytes()
     text = raw.decode("utf-8")   # 严格 UTF-8 可解码（gbk 字节序列不再存在）
     assert "中文" in text
+
+
+# ============================================================
+# 2.6.1 批 3（D2026-1002-11）：疑点段加载 / fs_utils / _codec_direct
+# ============================================================
+
+def _make_guide(tmp_path, stem="demo", items=None, media_path=None):
+    """导读 json 夹具（items 8 字段；media_path 空串时键缺席=生产口径）。"""
+    data = {"version": 1, "source": f"{stem}.srt", "items": items or [],
+            "stem": stem}
+    if media_path is not None:
+        data["media_path"] = media_path
+    p = tmp_path / f"{stem}_质量报告导读.json"
+    p.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def test_review_load_detections_filters_and_passthrough(gui_api_obj, tmp_path):
+    """load_detections：仅保留带 timing 的 items；8 字段透传；
+    media_path 透传（非空）。"""
+    items = [
+        {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+         "category": "suspected_missed_speech", "message": "疑似漏听（粗筛）",
+         "current_text": None, "source_excerpt": "", "status": "observation",
+         "severity": None},
+        {"index": 2, "timing": "", "category": "x", "message": "无时间戳",
+         "current_text": None, "source_excerpt": "", "status": "open",
+         "severity": None},
+    ]
+    p = _make_guide(tmp_path, items=items, media_path="D:/m.mp4")
+    r = gui_api_obj.refine_review_load_detections(str(p))
+    assert r["success"] is True and r["count"] == 1
+    d = r["detections"][0]
+    assert d["category"] == "suspected_missed_speech"
+    assert d["timing"] == "00:00:01,000 --> 00:00:02,000"
+    assert r["media_path"] == "D:/m.mp4"
+
+
+def test_review_load_detections_media_path_absent(gui_api_obj, tmp_path):
+    """media_path 空串/缺席 → None（前端对话框兜底分支）。"""
+    p = _make_guide(tmp_path, items=[{"index": 1,
+        "timing": "00:00:01,000 --> 00:00:02,000", "category": "untranslated",
+        "message": "整段未翻译", "current_text": "[未翻译]",
+        "source_excerpt": "", "status": "open", "severity": None}],
+        media_path="")
+    r = gui_api_obj.refine_review_load_detections(str(p))
+    assert r["success"] is True and r["media_path"] is None
+
+
+def test_review_load_detections_rejects_non_guide(gui_api_obj, tmp_path):
+    """白名单外后缀 → error（守卫链不因批 3 放宽）。"""
+    p = tmp_path / "demo.json"
+    p.write_text("{}", encoding="utf-8")
+    r = gui_api_obj.refine_review_load_detections(str(p))
+    assert r["success"] is False
+
+
+def test_codec_direct_two_matrices_diverge():
+    """批 3 技术债 e 语义差异钉：同一输入在两套常量下判定分叉。
+    实测分叉点：m4a 容器（ext 集差异：仅 audio-preview 集）；
+    .mp4+mp3 音频（audio 集差异：仅 review 集）。两套常量均为
+    TranslateAPI 类属性（模块级不可 import）。"""
+    from subtransjav.webview_gui.api import TranslateAPI, _codec_direct
+    ap = TranslateAPI._AUDIO_PREVIEW_DIRECT_EXTS
+    av = TranslateAPI._AUDIO_PREVIEW_DIRECT_VIDEO
+    aa = TranslateAPI._AUDIO_PREVIEW_DIRECT_AUDIO
+    rv = TranslateAPI._REVIEW_DIRECT_EXTS
+    rvid = TranslateAPI._REVIEW_DIRECT_VIDEO
+    ra = TranslateAPI._REVIEW_DIRECT_AUDIO
+    m4a = (".m4a", {"video": "", "audio": "aac"})
+    assert _codec_direct(m4a[0], m4a[1], ap, av, aa) is True
+    assert _codec_direct(m4a[0], m4a[1], rv, rvid, ra) is False
+    mp4_mp3 = (".mp4", {"video": "h264", "audio": "mp3"})
+    assert _codec_direct(mp4_mp3[0], mp4_mp3[1], rv, rvid, ra) is True
+    assert _codec_direct(mp4_mp3[0], mp4_mp3[1], ap, av, aa) is False
+
+
+def test_fs_utils_atomic_write_and_backup_suffix(tmp_path):
+    """fs_utils 收口（批 3 技术债 a/b）：原子写成功+无残留+BACKUP_SUFFIX。"""
+    from subtransjav.refine import fs_utils
+    p = tmp_path / "x.srt"
+    fs_utils._atomic_write_text(str(p), "内容", suffix=".srt.tmp")
+    assert p.read_text(encoding="utf-8") == "内容"
+    assert not list(tmp_path.glob("*.tmp")), "原子写不得留 tmp 残留"
+    assert fs_utils.BACKUP_SUFFIX == ".bak.srt"

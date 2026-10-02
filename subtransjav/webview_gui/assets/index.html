@@ -739,6 +739,21 @@
                     <span class="review-transcode-hint muted" style="display:none;"></span>
                 </div>
 
+                <!-- 疑点段面板（批 3 D2026-1002-11）：折叠容器+行 class 委托零 id；
+                     引导卡=ASR 可选能力说明；文案全 JS 注入 -->
+                <div class="review-det-tools">
+                    <button type="button" id="reviewDetLoadBtn" class="btn btn-ghost btn-sm"></button>
+                    <button type="button" id="reviewAsrBtn" class="btn btn-ghost btn-sm"></button>
+                    <span class="review-det-summary muted" style="display:none;"></span>
+                </div>
+                <div class="review-detections" id="reviewDetectionsWrap" style="display:none;">
+                    <div class="review-asr-card" style="display:none;">
+                        <div class="review-asr-card-text"></div>
+                        <button type="button" class="btn btn-secondary btn-sm review-asr-goto"></button>
+                    </div>
+                    <div id="reviewDetList" class="review-det-list"></div>
+                </div>
+
                 <!-- 字幕列表（批 2b D2026-1002-10）：工具条+列表容器；
                      行/页码 class 委托零 id；文案全 JS 注入 -->
                 <div class="review-list-tools" style="display:none;">

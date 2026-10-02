@@ -1050,3 +1050,41 @@ def test_review_tab_guard_allow_once():
         "放行一次后必须清标志"
     assert re.search(r"this\._guardAllowTab = btn;[\s\S]*?btn\.click\(\);", body), \
         "确认回调必须先置放行标志再重放 btn.click()"
+
+
+def test_review_apply_jump_uses_block_ms_native():
+    """批 3 钉（D2026-1002-11 裁定）：疑点段跳转用匹配 blocks.start_ms 原生
+    毫秒（/1000 转秒），无 +0.01/+10 类偏移字面量（C2 同口径）。"""
+    body = _extract_function(_review_js_source(), "_applyJump")
+    assert "start_ms" in body, "须引用 blocks.start_ms 原生毫秒"
+    assert "/ 1000" in body, "毫秒须除以 1000 转秒"
+    assert not re.search(r"\+\s*0\.01", body), "不得加 0.01 偏移（C2 直接 seek）"
+
+
+def test_review_detections_session_only_pinned():
+    """批 3 条件 4：确认/跳过仅会话内标记不落盘——REVIEW_MSG.review_det_no_save
+    键存在且被引用（title 明示）；位置失效态 class 存在（C8 留坑闭合）。"""
+    src = _review_js_source()
+    assert "review_det_no_save" in src, "不落盘文案键必须被引用"
+    assert "review-det-stale" in src, "位置失效态 class 必须存在"
+
+
+def test_review_asr_goto_programmatic_click():
+    """批 3 条件 1：switchTab 在 app.js IIFE 内未挂全局（ReferenceError）——
+    ASR 引导卡跳引擎页必须走程序化 click（真实 handler 链）。"""
+    body = _extract_function(_review_js_source(), "_bindDetections")
+    assert 'data-tab="tab-engine"' in body, "须定位引擎页按钮"
+    assert re.search(r'data-tab="tab-engine"[\s\S]{0,80}\.click\(\)', body), \
+        "须程序化 click（禁止直调 switchTab）"
+
+
+def test_review_saveas_bridge_arg_order_pinned():
+    """批 3 条件 2：saveas 桥参数序钉——后端删 src_path 后新签名为
+    (blocks, target_path)，前端调用必须 blocks 在前（旧三参调用会丢参）。"""
+    src = _review_js_source()
+    m = re.search(r"refine_review_saveas_srt\(([^)]*)\)", src)
+    assert m, "saveas 桥调用未找到"
+    args = [a.strip() for a in m.group(1).split(",")]
+    assert len(args) == 2, f"新签名为两参，实为 {len(args)}：{args}"
+    assert args[0].endswith("_blocks") or args[0] == "blocks", \
+        f"第一参须为 blocks，实为 {args[0]}"
