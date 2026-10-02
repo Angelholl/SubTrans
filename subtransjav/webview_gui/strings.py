@@ -193,6 +193,10 @@ MSG = {
     "review_srt_missing": "字幕文件不存在或未导入",
     "review_probe_failed": "无法识别该媒体的编码信息",
     "review_srt_bad_encoding": "字幕文件编码无法识别（仅支持 UTF-8 / GBK），请另存为 UTF-8 后重试",
+
+    # ---- 校对编辑（2.6.1 批 2b D2026-1002-10；api.py refine_review_save* 镜像）----
+    "review_backup_failed": "备份原文件失败，已中止保存（原文件未改动）",
+    "review_save_blocks_invalid": "字幕数据无效（blocks 须为非空且每项含 start_ms/end_ms/text）",
 }
 
 

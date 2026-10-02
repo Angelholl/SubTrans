@@ -52,6 +52,10 @@ def find_srt_files(
     for p in iterator:
         if not p.is_file():
             continue
+        # C1（D2026-1002-10）：校对页备份件 *.bak.srt 不作为翻译输入收编
+        #（2.6.1 批 2b 起存在，排除对现状零变化）
+        if p.name.endswith(".bak.srt"):
+            continue
         abs_path = str(p.resolve())
         # Normalize path separators for regex matching
         abs_path_normalized = abs_path.replace("\\", "/")

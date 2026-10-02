@@ -439,6 +439,23 @@ def _ms_to_srt_time(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms3:03d}"
 
 
+def _write_srt_atomic(path: str, text: str) -> None:
+    """原子写 SRT 文本（D2026-1002-10 批 2b；参数拷贝 v2_outputs._atomic_write_text
+    先例：mkstemp 同目录 + fsync + os.replace，防中断半截产物）。"""
+    import tempfile
+    p = Path(path)
+    fd, tmp = tempfile.mkstemp(dir=str(p.parent), suffix=".srt.tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+
+
 class TranslateAPI:
     """
     API class exposed to JavaScript via PyWebView.
@@ -572,7 +589,9 @@ class TranslateAPI:
         result = windows[0].create_file_dialog(FileDialog.FOLDER)
         if result and len(result) > 0:
             folder = Path(result[0])
-            srt_files = sorted(str(f) for f in folder.glob("*.srt"))
+            # C1（D2026-1002-10）：排除校对页备份件 *.bak.srt
+            srt_files = sorted(str(f) for f in folder.glob("*.srt")
+                               if not f.name.endswith(".bak.srt"))
             if srt_files:
                 register_session_paths(srt_files)
                 return {"success": True, "paths": srt_files, "folder": result[0]}
@@ -2850,6 +2869,113 @@ class TranslateAPI:
                     "count": len(blocks), "blocks": blocks}
         except Exception as e:
             _log_exc("refine_review_load_srt")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _review_validate_blocks(blocks: Any) -> str | None:
+        """C8 结构校验：blocks 须为非空 list、每项含 start_ms/end_ms/text
+        且 ms 可转 int。合法返回 None，否则返回错误键。"""
+        if not isinstance(blocks, list) or not blocks:
+            return "review_save_blocks_invalid"
+        for it in blocks:
+            if not isinstance(it, dict):
+                return "review_save_blocks_invalid"
+            try:
+                int(it["start_ms"])
+                int(it["end_ms"])
+            except (KeyError, TypeError, ValueError):
+                return "review_save_blocks_invalid"
+            if "text" not in it:
+                return "review_save_blocks_invalid"
+        return None
+
+    def refine_review_save_srt(self, path: str, blocks: Any,
+                               mode: str = "overwrite") -> dict[str, Any]:
+        """校对结果保存（D2026-1002-10）：备份先行 → 原子写 UTF-8 重写。
+
+        - D3 重编号不变式：输出序号恒按数组位置 enumerate(blocks, 1)，
+          时间轴 ms 由 start_ms/end_ms 重建（跳号源文件合法，行内 index
+          字段仅展示用、不参与输出）；
+        - D2 备份单份滚动固定名 {原名}.bak.srt（overwrite/force 同规则）：
+          shutil.copy2 失败重试一次，再失败中止且**原文件未动**；
+        - mode='force'（另存为确认后）：跳过调用方 exists 判定直接走
+          备份+写（两段式第二段）。
+        """
+        try:
+            p = str(path or "")
+            if not p:
+                return {"success": False, "error": msg("review_srt_missing")}
+            invalid = self._review_validate_blocks(blocks)
+            if invalid:
+                return {"success": False, "error": msg(invalid)}
+            safe = str(_resolve_safe_path(p))
+            target = Path(safe)
+            backup_path = None
+            if target.exists():
+                backup_path = str(target) + ".bak.srt"
+                last_err: Exception | None = None
+                for _ in range(2):  # D2：失败重试一次
+                    try:
+                        shutil.copy2(str(target), backup_path)
+                        last_err = None
+                        break
+                    except (PermissionError, OSError) as e:
+                        last_err = e
+                if last_err is not None:
+                    return {"success": False,
+                            "error": f"{msg('review_backup_failed')}: {last_err}"}
+            parts = []
+            for i, it in enumerate(blocks, 1):
+                # 块内单换行、块间空行（多行文本内部 \n 原样保留）
+                parts.append(f"{i}\n"
+                             f"{_ms_to_srt_time(int(it['start_ms']))} --> "
+                             f"{_ms_to_srt_time(int(it['end_ms']))}\n"
+                             f"{it['text']}")
+            text = "\n\n".join(parts) + "\n"
+            _write_srt_atomic(safe, text)
+            result: dict[str, Any] = {"success": True, "count": len(blocks),
+                                      "bytes": len(text.encode("utf-8"))}
+            if backup_path:
+                result["backup_path"] = backup_path
+            return result
+        except Exception as e:
+            _log_exc("refine_review_save_srt")
+            return {"success": False, "error": str(e)}
+
+    def refine_review_saveas_srt(self, src_path: str, blocks: Any,
+                                 target_path: str) -> dict[str, Any]:
+        """另存为第一段：目标已存在 → exists 标记不写（前端确认后走
+        refine_review_save_srt(mode='force') 两段式）；不存在 → 直接原子写。"""
+        try:
+            t = str(target_path or "")
+            if not t:
+                return {"success": False, "error": msg("review_srt_missing")}
+            invalid = self._review_validate_blocks(blocks)
+            if invalid:
+                return {"success": False, "error": msg(invalid)}
+            safe_t = str(_resolve_safe_path(t))
+            if Path(safe_t).exists():
+                return {"success": False, "exists": True}
+            return self.refine_review_save_srt(safe_t, blocks, mode="force")
+        except Exception as e:
+            _log_exc("refine_review_saveas_srt")
+            return {"success": False, "error": str(e)}
+
+    def refine_review_pick_save_path(self, default_name: str = "校对.srt") -> dict[str, Any]:
+        """另存为保存路径对话框（webview.SAVE_DIALOG 先例 refine_pick_csv_save）。"""
+        try:
+            windows = webview.windows
+            if not windows:
+                return {"success": False, "error": msg("no_active_window")}
+            result = windows[0].create_file_dialog(
+                webview.SAVE_DIALOG,
+                file_types=(msg("file_type_srt"), msg("file_type_all")),
+                save_filename=str(default_name or "校对.srt"))
+            if result:
+                return {"success": True, "path": result}
+            return {"success": False, "cancelled": True,
+                    "error": msg("dialog_cancelled")}
+        except Exception as e:
             return {"success": False, "error": str(e)}
 
     # ================================================================
