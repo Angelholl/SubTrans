@@ -52,6 +52,10 @@ def subprocess_draft_timeout():
 def test_run_transcription_parses_runner_json(monkeypatch, tmp_path):
     clip = tmp_path / "c.wav"
     clip.write_bytes(b"wav")
+    # 显式候选必须真实存在（os.path.isfile 探测）：否则 linux CI 上全部候选
+    # 落空 → 探测降级提前返回 ok=False（owner 机器默认路径存在掩盖此问题）
+    py = tmp_path / "p.exe"
+    py.write_text("", encoding="utf-8")
     payload = json.dumps({"ok": True, "text": "テスト",
                           "segments": [{"start": 0, "end": 1,
                                         "text": "テスト"}]},
@@ -62,7 +66,7 @@ def test_run_transcription_parses_runner_json(monkeypatch, tmp_path):
         return SimpleNamespace(returncode=0, stdout=payload, stderr="")
 
     monkeypatch.setattr(asr_env.subprocess, "run", _fake_run)
-    r = asr_env.run_transcription(str(clip), asr_python=str(tmp_path / "p.exe"))
+    r = asr_env.run_transcription(str(clip), asr_python=str(py))
     assert r["ok"] is True and r["text"] == "テスト"
 
 
@@ -77,6 +81,9 @@ def test_build_crosscheck_block_whitelist_and_limit(monkeypatch, tmp_path):
     """C6：非真值声明在、≤2000 截断；ASR 文本进块、失败段降级展示。"""
     clip = tmp_path / "c.wav"
     clip.write_bytes(b"wav")
+    # 显式候选真实存在（同 test_run_transcription：防 linux CI 探测降级）
+    py = tmp_path / "p.exe"
+    py.write_text("", encoding="utf-8")
 
     def _fake_run(cmd, **kw):
         payload = json.dumps({"ok": True, "text": "转写内容" * 300},
@@ -84,6 +91,7 @@ def test_build_crosscheck_block_whitelist_and_limit(monkeypatch, tmp_path):
         return SimpleNamespace(returncode=0, stdout=payload, stderr="")
 
     monkeypatch.setattr(asr_env.subprocess, "run", _fake_run)
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(py))
     clips = [{"path": str(clip), "timing": "T1", "current": "现译一句"}]
     r = asr_env.build_crosscheck_block(clips)
     assert r["segments"] == 1
