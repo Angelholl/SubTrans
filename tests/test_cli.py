@@ -464,6 +464,41 @@ def test_cli_ai_analyze_params_not_in_config_fingerprint():
 
 
 # ---------------------------------------------------------------------------
+# 2.6.1 修订（D2026-1002-06，验证可选化）：--media-crosscheck-enabled 三态
+# ---------------------------------------------------------------------------
+def test_cli_media_crosscheck_flag_three_states(tmp_path):
+    """0/1 显式落到 cfg（bool 化）；缺省 None 不赋（保分层链默认关）。"""
+    base_inputs = ["-i", str(tmp_path / "x.srt")]
+
+    args = build_parser().parse_args([*base_inputs,
+                                      "--media-crosscheck-enabled", "1"])
+    assert args.media_crosscheck_enabled == 1
+    cfg = config_from_args(args)
+    assert cfg.media_crosscheck_enabled is True
+
+    args0 = build_parser().parse_args([*base_inputs,
+                                       "--media-crosscheck-enabled", "0"])
+    assert config_from_args(args0).media_crosscheck_enabled is False
+
+    args_def = build_parser().parse_args(base_inputs)
+    assert args_def.media_crosscheck_enabled is None
+    cfg_def = config_from_args(args_def)
+    assert cfg_def.media_crosscheck_enabled is False   # dataclass 缺省
+
+    # 旗标不进 manifest 指纹（负向钉随批）
+    from subtransjav.refine.manifest import _CONFIG_FIELDS
+    assert "media_crosscheck_enabled" not in _CONFIG_FIELDS
+
+
+def test_cli_media_crosscheck_invalid_choice_exits(tmp_path, capsys):
+    with pytest.raises(SystemExit) as ei:
+        build_parser().parse_args([
+            "-i", str(tmp_path / "x.srt"),
+            "--media-crosscheck-enabled", "2"])
+    assert ei.value.code == 2
+
+
+# ---------------------------------------------------------------------------
 # --where 数据路径诊断（D2026-0929-07 点 3：一次报全、零副作用早退）
 # ---------------------------------------------------------------------------
 def test_cli_where_prints_key_fields(capsys):

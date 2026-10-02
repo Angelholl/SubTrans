@@ -2428,3 +2428,78 @@ ruff 全仓 0｜mypy refine/ 43 文件 0｜node --check｜定向 136+14 passed�
 ### 五、后续风险跟踪
 
 ①**qwen 运行器批（下批首件）**：HF 仓库布局核实（I1）→多文件清单 schema+目录落位=from_pretrained 可加载+加载 smoke，开工前二级评议；②静态键 192 满额——下一 UI 耗键批首件=扩 cap 192→200 提案；③crosscheck 默认开+知情行已随批验证（防静默增耗）；④ASR 文本注入面已登记威胁模型 §9（信任域=字幕文本），AI 分析改动回归时复核；⑤**2.6.0 发版=批 1+2+3 齐发**（owner 拍板），发版走 release/2.6.0 分支制+dispatch 试构建先行。
+
+---
+
+## [2026-10-02] [D2026-1002-05] 跨片统计修订：TM 库对比+窗口三档（owner 反馈，2.6.0 发版前拦截） [已拍板·已执行]
+
+**关联**：D2026-1002-03（批 2 原口径）、2.6.0 发版流程（tag 已建未随 Release——拦截时点）。**背景授权**：owner 无人值守+发版前反馈窗口。
+
+### 一、owner 反馈（原话要点，2026-10-02）
+
+"跨片聚合统计——同目录其他片的 CPS 行动密度、open 风险密度、TM 入库量走势**应该是用户自主选择 7/30/永久三类**，并且**不应是同目录而应该是和保存的数据库对比**。"
+
+### 二、处置与实现（按 owner 指令直改，无歧义映射）
+
+- **发版拦截**：tag v2.6.0 已建（REST 201）未随 Release→REST 撤销（204，重打无历史负担）；构建作废。
+- **统计源改库**：aggregate_stats.py 重构为纯 TM 只读聚合（-302/+234 行级）——移除同目录导读扫描与 collect_directory_stats；CPS/风险类跨片对比因质量数据未库化**移除**（块内如实声明"未库化暂缺"）。
+- **窗口三档**：WINDOW_MAP {7/30/all→None}；GUI AI 分析设置区下拉 `aggregateWindowSel`（settings KV tm_stats_window 持久化）；CLI `--tm-stats-window {7,30,all}` 缺省 30；均不入 manifest 指纹（负向钉随批）。
+- **发版重入**：main 提交修订（c2aec58）→release/2.6.0 cherry-pick（027fbbe）+CHANGELOG 措辞对齐（ea7de25）→重打 tag→重建。
+
+### 三、验证链（全绿）
+
+ruff 全仓 0｜mypy 0｜node --check｜定向 12+285 passed｜全量 **1638 passed+4 skipped**（发版分支同数）｜gate 新基线 **191/192**（aggregateWindowSel +1 恰达静态键 cap 192）告警 0｜黑盒：窗口下拉复用批 3 A3 同款 selectOption 持久化路径（未单独跑，如实标注）。
+
+### 四、是否 [PRESSURE-OVERRIDE]
+
+否（owner 明确指令；无不可逆动作——tag 撤销时点早于 Release 创建）。
+
+### 五、后续风险跟踪
+
+①CPS/风险类跨片对比=**潜在回归项**：若未来质量数据库化（如导读汇总入库），可按本模块形态恢复对比段；②块内"未库化"声明防 LLM/用户误以为功能缺失；③tm_stats_window 设置 KV 与 CLI 旗标双通道并存，GUI 未设时 CLI 缺省 30——文档口径一致；④发版流程重入后 notes/CHANGELOG 措辞已对齐（"翻译记忆库对比统计+窗口三档"）。
+
+> 补档说明（D2026-1002-06 时点）：本条目正文摘取自 release/2.6.0 分支提交 97cf2f0（05:00）既有归档，main 侧因分叉未并入造成缺口，按 D2026-1002-06 决议照录补齐。
+
+---
+
+## [2026-10-02] D2026-1002-06 ASR 推荐制收口：验证可选化+模型推荐制（owner 反馈修订，2.6.0 发布后） [已拍板·执行中]
+
+**关联**：D2026-1002-04-批3（原批3 落库，本批撤销其后续跟踪①下载部分与③默认开）、D2026-1002-05 补档（正文取 release/2.6.0 分支 97cf2f0 既有条目，main 侧缺失为分叉缺口，摘取注明来源）、owner 原话（2026-10-02，2.6.0 发布后反馈）："asr验证应该是可选向，模型应该是推荐而不随项目打包，做好接口和页面即可"。**背景授权**：owner 无人值守连续推进指令+发布后反馈窗口。
+
+### 一、开评议（决策评议员复评结论）
+
+立场：有条件支持方案 B（推荐制收口）；弃 A（保留下载链=保留 3GB 单源维护承诺，二次反馈风险高于删除风险）、弃 C（不回应推荐制）。无 [HIGH_RISK_OBJECTION]（契约错位属未验证面而非已验证事实冲突，按普通级+硬条件处置）。
+
+**核心异议（契约错位，主模型已采纳 b-1 加强形）**：下载落点=数据根 models/asr/（dict_manager.py:224）而运行器加载点=~/.cache/whisper（asr_runner.py:37-39,53），删除下载链后"已就位"判定与加载点脱钩→假阳性+潜在 whisper 自动联网 3GB（违背零出域/不自动收口意图）。处置：asr_runner 新增 --model-dir 透传 download_root（显式 load_model 后 transcribe，比 transcribe 透传 kwarg 对上游 fork 版本差异更稳）；解析顺序 asr_env 定（~/.cache/whisper 命中不传旗标=原生优先｜数据根命中才传 --model-dir）；selfcheck 的 model_present 按同顺序判定；放置说明两处都列（默认缓存=零配置优先、数据目录=可见性备选）；download_root 若上游 fork 不支持以 TypeError 显性失败进错误通道，不静默；契约测试钉"放置路径→加载点一致性"。
+
+### 二、决议（按主模型拍板）
+
+1. 验证可选化：media_crosscheck_enabled 默认 True→False（TUNABLE+dataclass 双面翻转）；引擎页 ASR 卡新增「启用 ASR 验证」开关（默认关），经 refine_stage_settings KV media_crosscheck_enabled 持久化；CLI 新增 --media-crosscheck-enabled {0,1} 旗标（KV→CLI 镜像 asr_model 既有模式）。
+2. 模型推荐制：删除下载链（dict_manager._ASR_DOWNLOADS/download_asr_model/ASR 进度快照/_sha256_stream（仅 ASR 专属，grep 核实）、asr_env 下载薄委托、API refine_asr_download/refine_asr_download_progress、页面下载按钮+进度条、JS 下载块）；保留 _http_get/_check_free_space/_safe_component 共用基建（sudachi 下载共用，禁删）。
+3. 契约修正（条件①b-1 加强形）：asr_runner 增 --model-dir；asr_env 按双端清单解析顺序决定是否传旗标；selfcheck/转写同步。
+4. 推荐清单纯信息展示两行：whisper-large-v2（推荐可用，大小/sha256 指纹/来源 URL/放置路径说明）+ qwen3-asr-1.7b（规划中/自备，不设下载）；检测命中标"已就位"；保留探测状态+模型下拉（选已就位模型）；补 asr_python 路径输入框（三级候选 settings 档此前无 GUI 入口）。
+5. qwen 运行器批（HF 布局核实+加载 smoke）：保留候选挂账，不点火不排期；本批仅撤销"下载随运行器"。
+6. 测试：默认值钉翻转（test_asr_env.py 双钉）；下载 4 例替换为推荐目录/命中匹配+契约钉测试（净数不降）；补 CLI 旗标与 status 形状测试；钉⑤快照按 id 增删显式更新（asrDownloadBtn/asrProgress* 摘除、asrCrosscheckToggle/asrRecList/asrPythonInput 新增）；新文案全走 JS 态 MSG 键，静态键 cap 192 零消耗（禁新增 data-i18n）。
+7. 文档：D2026-1002-05 补档取 release/2.6.0 分支 97cf2f0 既有正文（已核实该提交完整条目，main 未并入，grep -c=0），注明摘取来源；本条目即 D2026-1002-06 正式记录对批3 后续跟踪①（下载部分）与③（默认开）的撤销；roadmap 更新（qwen 运行器批改候选挂账、修正过期 id/i18n 数字、补 2.6.1 修订行）。
+8. 验证链照常：ruff→定向→单文件→全量（1638+4 基线只增不降）→冒烟→Mimosa 与基线（31，seal 57170263）比对零新增；≥3 文件变更触发 code-review 技能与三查合并。
+
+### 三、异议记录
+
+- **原决策**：方案 B（删下载链+验证开关+推荐清单）；弃 A/C。
+- **评议员异议**：①契约错位（已就位判定 vs 运行器加载点）必须本批内修正；②qwen 运行器批去留须显式表态；③D2026-1002-05 补档应取 release 分支既有正文而非重写；④新文案零静态键消耗。
+- **主模型最终决定**：全部采纳（含 b-1 加强形、qwen3-asr-1.7b 保留挂账、97cf2f0 摘取补档、JS 态 MSG 键约束），无驳回项。
+- **条件闭环判据**：条件①（契约修正）以"契约测试钉'放置路径→加载点一致性'随批绿色通过"为闭环判据；未闭环即本批不得视为完成。
+
+### 四、是否 [PRESSURE-OVERRIDE]
+
+否（owner 明确指令+发布后反馈窗口，无权威/时限施压）。
+
+### 五、后续风险跟踪
+
+①**上游 fork download_root 支持性实证（G1 收件）**：owner 机 whisperJAV 环境一次真实转写端到端验证 b-1 clickthrough（黑盒同款流程补"放置后真被加载"口径）；不支持则 TypeError 显性失败通道兜底，不留静默降级；②静态键 192 满额维持——本批零静态键消耗按承诺兑现，下一 UI 耗键批首件=扩 cap 192→200 提案照旧；③qwen3-asr-1.7b 运行器批挂账（不点火不排期），启动前置=HF 仓库布局核实+多文件目录落位 schema+加载 smoke，开工前二级评议；④钉⑤快照与功能增删同步——未来任何 ASR 卡 id/i18n 增删必须显式走快照更新流程（有意摩擦）；⑤ASR 文本注入面已登记威胁模型 §9（信任域=字幕文本），AI 分析改动回归时复核；⑥默认缓存与数据目录双路径并存——放置说明明示"优先零配置缓存，数据目录为备选"，防双份放置理解偏差。
+
+### 六、执行追记（2026-10-02，双轴评审修复+验证链收口）
+
+- **code-review 双轴（Standards+Spec）修复五项**：①契约钉闭环——test_asr_env 新增 2 例（fake whisper 记录 load_model 调用参数，断言 `--model-dir`→`download_root` 真实透传、缺省时为 None），**条件①闭环判据达成**；②推荐行补 sha256 指纹渲染（api 侧 `{**entry}` 本已透传，前端未消费）；③放置说明补"文件名须为 <model>.pt"（防命名错=永不"已就位"）；④状态行去 'large-v2' 硬编码（saved_model 优先）；⑤fmtGB 去重。
+- **偏差追认**：dict_manager 域名白名单移除 openaipublic.azureedge.net（下载链语义内收口，全仓零残留引用；推荐清单保留 URL 仅供自备参考，非取数面）；CHANGELOG 2.6.0"一键下载"表述过期→按发版时点同步惯例留 2.6.1 发版批（release-checklist 步骤）+使用与维护手册 ASR 段同批补；开关回显只读设置 KV、不读 env/user_settings 分层链（单用户已知限制，后续如需再对齐 config.resolve_tunable）；asr_env/runner 判序同形两处系运行器 stdlib-only 约束（注释维系，不共享代码）。
+- **验证链（全绿）**：ruff 全仓 0｜mypy refine/ 0｜node --check｜定向 191 passed｜全量 **1650 passed+4 skipped**（基线 1638+4 净增 12，只增不降）｜Mimosa deep 31=基线零新增（seal d5d0446b…ca2b41e）｜secret 定向扫描 0 命中（16 文件全集+hex 只扫新增行）｜冒烟 `--help` 新旗标可见｜**GUI 已验证**（stub 桥黑盒：卡片结构/探测渲染/开关持久化+回读一致/python 输入保存/qwen 禁选占位/双主题渲染，截图 %TEMP%\gui-261-asr\）。

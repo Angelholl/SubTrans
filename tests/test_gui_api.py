@@ -634,6 +634,72 @@ def test_refine_get_stage_settings_first_run_flag(gui_api_obj, tmp_path,
 
 
 # ---------------------------------------------------------------------------
+# 2.6.1 修订（D2026-1002-06，模型推荐制+验证可选化）：ASR status 增强
+# recommended/models_dir/cache_dir/crosscheck_enabled + 设置 KV 直存
+# ---------------------------------------------------------------------------
+def test_refine_asr_status_recommended_and_crosscheck(gui_api_obj, tmp_path,
+                                                      monkeypatch):
+    """status 含 recommended（present/path/expected_path）与两处落位/开关。"""
+    from subtransjav.refine import asr_env
+    path = tmp_path / "refine_stage_settings.json"
+    path.write_text(
+        json.dumps({"stages": [], "settings": {
+            "media_crosscheck_enabled": "1", "asr_model": "large-v2"}},
+                   ensure_ascii=False),
+        encoding="utf-8")
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(path))
+
+    def _fake_probe(asr_python_setting=""):
+        return {"available": False, "reason": "x",
+                "models": [{"name": "large-v2",
+                            "path": "C:/cache/large-v2.pt", "bytes": 3}]}
+
+    monkeypatch.setattr(asr_env, "probe_asr_env", _fake_probe)
+    r = gui_api_obj.refine_asr_status()
+    assert r["success"] is True
+    recs = {e["name"]: e for e in r["recommended"]}
+    w = recs["whisper-large-v2"]
+    assert w["present"] is True
+    assert w["path"] == "C:/cache/large-v2.pt"
+    assert w["expected_path"] == os.path.join(asr_env.ASR_MODELS_ROOT,
+                                              "large-v2.pt")
+    q = recs["qwen3-asr-1.7b"]
+    assert q["present"] is False and q["support"] == "planned"
+    assert r["models_dir"] == asr_env.ASR_MODELS_ROOT
+    assert r["cache_dir"] == asr_env.ASR_CACHE_DIR
+    assert r["crosscheck_enabled"] is True
+
+
+def test_refine_asr_status_crosscheck_default_false(gui_api_obj, tmp_path,
+                                                    monkeypatch):
+    """KV 无 media_crosscheck_enabled → crosscheck_enabled=False（默认关）。"""
+    from subtransjav.refine import asr_env
+    path = tmp_path / "refine_stage_settings.json"
+    path.write_text('{"stages": [], "settings": {}}', encoding="utf-8")
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(path))
+    monkeypatch.setattr(asr_env, "probe_asr_env",
+                        lambda asr_python_setting="": {"models": []})
+    r = gui_api_obj.refine_asr_status()
+    assert r["success"] is True
+    assert r["crosscheck_enabled"] is False
+
+
+def test_refine_stage_settings_accepts_media_crosscheck(gui_api_obj, tmp_path,
+                                                        monkeypatch):
+    """save 接受 media_crosscheck_enabled（存 "1"/"0" 惯例）并原样读回。"""
+    path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(path))
+    r = gui_api_obj.refine_save_stage_settings(
+        settings={"media_crosscheck_enabled": "0"})
+    assert r["success"] is True and r["settings_saved"] == 1
+    got = gui_api_obj.refine_get_stage_settings()
+    assert got["settings"]["media_crosscheck_enabled"] == "0"
+
+
+# ---------------------------------------------------------------------------
 # cancel_translation 运行态契约（M3）：
 # - 哨兵期（Popen 未完成）取消返回 success=False，由前端保持运行态；
 # - 击杀成功后 cancelled 状态才置位；击杀抛异常时状态/句柄原样保留

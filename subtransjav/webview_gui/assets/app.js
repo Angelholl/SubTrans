@@ -496,18 +496,22 @@ const MSG = {
     // asr_panel_title 为静态 data-i18n 键（HTML+MSG+钉⑤三处同步）；其余 JS 态
     asr_panel_title: 'ASR 模型（媒体重点对照）',
     asrRefreshBtn: '重新探测',
-    asrDownloadBtn: '下载推荐模型',
     asrProbeReady: (ver, m) => `上游 ASR 就绪（whisper ${ver}｜模型缓存 ${m}）`,
-    asrProbeNoModel: '模型缓存缺失（可下载推荐模型）',
+    asrProbeNoModel: '模型缓存缺失（可自备推荐模型）',
     asrProbeFail: e => `上游 ASR 不可用：${e}`,
     asrSelectPlaceholder: '选择 ASR 模型（媒体重点对照用）',
-    asrQwenNext: 'qwen3-asr-1.7b（下一版本支持）',
-    asrDownloadStart: '开始下载推荐模型（约 2.9GB，完成后自动校验）…',
-    asrDownloadDone: '推荐模型下载完成并校验通过',
-    asrDownloadFail: e => `下载失败：${e}`,
-    asrProgressBytes: (done, total) => `${done}/${total} 字节`,
     asrSaved: '已保存 ASR 模型选择',
     asrCrosscheckNote: n => `；本地转写 ${n} 段对照`,
+    // 2.6.1 修订（D2026-1002-06，模型推荐制）：删下载文案，改推荐清单/
+    // 自备落位指引/验证开关（JS 态零静态键消耗）
+    asrCrosscheckLabel: '启用媒体重点对照（本地切片重转写验证）',
+    asrRecTitle: '推荐模型（项目不内置下载，按提示自备落位）',
+    asrPresent: '已就位',
+    asrMissing: '未就位',
+    asrPlanned: '规划中·自备',
+    asrPlaceHint: (cacheDir, modelsDir, fileName) =>
+      `落位（文件名须为 ${fileName}）：优先放入默认缓存 ${cacheDir}（零配置），或应用数据目录 ${modelsDir}（备选）`,
+    asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
     // 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档
     aggregateWindowLabel: '跨片窗口',
     aggregateWindow7: '7 天',
@@ -3451,9 +3455,43 @@ function switchTab(tabId) {
   }
 
   // ===== 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理 =====
+  // 2.6.1 修订（D2026-1002-06，模型推荐制）：删内置下载链与 1s 进度轮询，
+  // 改推荐清单渲染（present 徽标/大小/来源 URL/落位指引）+验证开关+上游
+  // Python 路径回填（均 JS 态文案，零静态键消耗）。
   function asrStatus(text) {
     const st = $('asrStatus');
     if (st) st.textContent = text || '';
+  }
+
+  function fmtGB(bytes) {
+    return Math.round(bytes / 1073741824 * 10) / 10 + 'GB';
+  }
+
+  function asrRenderRecList(items, cacheDir, modelsDir) {
+    const box = $('asrRecList');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!items || !items.length) return;
+    const title = document.createElement('div');
+    title.textContent = MSG.asrRecTitle;
+    title.className = 'muted';
+    box.appendChild(title);
+    items.forEach((rec) => {
+      const row = document.createElement('div');
+      const badge = rec.present
+        ? MSG.asrPresent
+        : (rec.support === 'planned' ? MSG.asrPlanned : MSG.asrMissing);
+      const size = rec.bytes ? '｜' + fmtGB(rec.bytes) : '';
+      const url = rec.url
+        ? '｜来源：' + rec.url : '';
+      const fp = rec.sha256 ? '｜sha256:' + rec.sha256 : '';
+      const hint = (rec.support === 'available' && cacheDir)
+        ? '。' + MSG.asrPlaceHint(cacheDir, modelsDir,
+                                  (rec.model || rec.name) + '.pt') : '';
+      row.textContent = rec.name + '：' + badge + size + url + fp + hint;
+      row.className = 'muted';
+      box.appendChild(row);
+    });
   }
 
   function asrRefresh() {
@@ -3469,7 +3507,9 @@ function switchTab(tabId) {
       if (envEl) {
         envEl.textContent = r.available
           ? MSG.asrProbeReady(r.whisper_version || '?',
-                              r.model_present ? 'large-v2' : MSG.asrProbeNoModel)
+                              r.model_present
+                                ? (r.saved_model || 'large-v2')
+                                : MSG.asrProbeNoModel)
           : MSG.asrProbeFail(r.reason || '');
       }
       const sel = $('asrModelSel');
@@ -3485,59 +3525,24 @@ function switchTab(tabId) {
       models.forEach((m) => {
         const o = document.createElement('option');
         o.value = m.name;
-        o.textContent = m.name + '（'
-          + Math.round(m.bytes / 1073741824 * 10) / 10 + 'GB）';
+        o.textContent = m.name + '（' + fmtGB(m.bytes) + '）';
         sel.appendChild(o);
       });
       const q = document.createElement('option');
       q.value = '__qwen__';
       q.disabled = true;
-      q.textContent = MSG.asrQwenNext;
+      q.textContent = 'qwen3-asr-1.7b（' + MSG.asrPlanned + '）';
       sel.appendChild(q);
       const saved = r.saved_model || '';
       if (saved && models.some(m => m.name === saved)) sel.value = saved;
-      const dl = $('asrDownloadBtn');
-      if (dl) dl.style.display = r.model_present ? 'none' : '';
+      // 推荐清单 + 验证开关 + 上游 Python 回填（2.6.1 修订）
+      asrRenderRecList(r.recommended || [],
+                       r.cache_dir || '', r.models_dir || '');
+      const tgl = $('asrCrosscheckToggle');
+      if (tgl) tgl.checked = !!r.crosscheck_enabled;
+      const pyInp = $('asrPythonInput');
+      if (pyInp) pyInp.value = r.saved_python || '';
     }).catch((e) => asrStatus(String(e)));
-  }
-
-  async function asrDownloadRun() {
-    const btn = $('asrDownloadBtn');
-    if (btn) btn.disabled = true;
-    const prog = $('asrProgress');
-    const fill = prog ? prog.querySelector('.progress-fill') : null;
-    const ptext = prog ? prog.querySelector('.progress-text') : null;
-    if (prog) prog.style.display = '';
-    asrStatus(MSG.asrDownloadStart);
-    const poll = setInterval(async () => {
-      try {
-        const p = await window.pywebview.api.refine_asr_download_progress();
-        if (p && p.running && p.phase === 'download') {
-          if (fill && p.total) {
-            fill.style.width =
-              Math.min(100, Math.round(p.downloaded / p.total * 100)) + '%';
-          }
-          if (ptext) {
-            ptext.textContent = MSG.asrProgressBytes(p.downloaded, p.total);
-          }
-        }
-      } catch (e) { /* 单次轮询失败静默 */ }
-    }, 1000);
-    try {
-      const r = await window.pywebview.api.refine_asr_download();
-      if (r && r.success) {
-        asrStatus(MSG.asrDownloadDone);
-        if (fill) fill.style.width = '100%';
-      } else {
-        asrStatus(MSG.asrDownloadFail((r && r.error) || ''));
-      }
-    } catch (e) {
-      asrStatus(MSG.asrDownloadFail(e && e.message ? e.message : String(e)));
-    } finally {
-      clearInterval(poll);
-      if (btn) btn.disabled = false;
-      asrRefresh();
-    }
   }
 
   function aiBtnState(btn, statusText) {
@@ -3750,11 +3755,28 @@ function switchTab(tabId) {
       if (t) t.textContent = MSG.asrRefreshBtn;
       asrBtn.addEventListener('click', () => asrRefresh());
     }
-    const asrDl = $('asrDownloadBtn');
-    if (asrDl) {
-      const t = asrDl.querySelector('span');
-      if (t) t.textContent = MSG.asrDownloadBtn;
-      asrDl.addEventListener('click', () => asrDownloadRun());
+    // 2.6.1 修订（D2026-1002-06）：验证开关 + 上游 Python 路径（下载按钮删除）
+    const asrTgl = $('asrCrosscheckToggle');
+    if (asrTgl) {
+      const lbl = asrTgl.parentElement
+        ? asrTgl.parentElement.querySelector('span') : null;
+      if (lbl) lbl.textContent = MSG.asrCrosscheckLabel;
+      asrTgl.addEventListener('change', () => {
+        if (!window.pywebview || !window.pywebview.api) return;
+        window.pywebview.api.refine_save_stage_settings(null, null,
+          { media_crosscheck_enabled: asrTgl.checked ? '1' : '0' });
+        asrStatus(MSG.asrSaved);
+      });
+    }
+    const asrPy = $('asrPythonInput');
+    if (asrPy) {
+      asrPy.placeholder = MSG.asrPythonPlaceholder;
+      asrPy.addEventListener('change', () => {
+        if (!window.pywebview || !window.pywebview.api) return;
+        window.pywebview.api.refine_save_stage_settings(null, null,
+          { asr_python: asrPy.value.trim() });
+        asrStatus(MSG.asrSaved);
+      });
     }
     const asrSel = $('asrModelSel');
     if (asrSel) asrSel.addEventListener('change', () => {

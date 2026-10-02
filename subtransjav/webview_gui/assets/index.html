@@ -318,10 +318,11 @@
                     </div>
                 </div>
 
-                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3）：媒体重点对照的
-                     本地 ASR 探测/选择/推荐下载（音频零出域）。asr_panel_title 为
-                     静态键（+1，191→192 恰达 cap）；其余文案 JS 态填充（批5 C4
-                     体例：HTML 留英文占位），新增文案零静态键消耗 -->
+                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.6.1 修订
+                     D2026-1002-06 模型推荐制：删除内置下载链，改推荐清单+
+                     自备落位指引）。asr_panel_title 为静态键（+1，191→192 恰达
+                     cap）；其余文案 JS 态填充（批5 C4 体例：HTML 留英文占位），
+                     新增文案零静态键消耗（开关 label/placeholder 均由 JS 设） -->
                 <div class="form-card">
                     <div class="form-card-header" data-i18n="asr_panel_title">ASR models (media crosscheck)</div>
                     <div class="section-content">
@@ -331,13 +332,13 @@
                         </div>
                         <div class="action-row" style="margin-top:6px;">
                             <select id="asrModelSel" class="form-select compact" style="width:auto;"></select>
-                            <button type="button" id="asrDownloadBtn" class="btn btn-primary btn-compact" style="display:none;"><span>Download</span></button>
                             <span id="asrStatus" class="muted"></span>
                         </div>
-                        <div id="asrProgress" style="display:none; margin-top:6px;">
-                            <div class="progress-bar"><div class="progress-fill"></div></div>
-                            <span id="asrProgressText" class="progress-text"></span>
+                        <div class="action-row" style="margin-top:6px;">
+                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span>Media crosscheck</span></label>
+                            <input id="asrPythonInput" class="form-input compact" style="width:auto; flex:1;" placeholder="upstream python">
                         </div>
+                        <div id="asrRecList" style="margin-top:6px; display:flex; flex-direction:column; gap:4px;"></div>
                     </div>
                 </div>
 

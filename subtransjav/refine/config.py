@@ -80,8 +80,9 @@ TUNABLE_FIELD_TYPES = {
     # 2.6.0 批 2 聚合数据层（D2026-1002-03）：--ai-analyze 跨片统计注入
     # 开关（纯读取侧不进 manifest 指纹；不加 CLI 参数，user_settings/env 可调）
     "aggregate_stats_inject": bool,
-    # 2.6.0 批 3 媒体重点对照（D2026-1002-04-批3）：本地切片重转写开关
-    # （纯读取侧不进 manifest 指纹；不加 CLI 参数，user_settings/env 可调）
+    # 2.6.0 批 3 媒体重点对照（D2026-1002-04-批3；2.6.1 修订
+    # D2026-1002-06 默认关+可选化）：本地切片重转写开关（纯读取侧不进
+    # manifest 指纹；引擎页开关/user_settings/env 可调，CLI 显式传参优先）
     "media_crosscheck_enabled": bool,
     # 2.1 方向参数化（D2026-0930-04 ①）：任务级方向，分层可调；CLI 显式
     # 传参优先。str 类型 _coerce 直通，白名单校验在 validate() 补
@@ -395,10 +396,12 @@ class RefineConfig:
     aggregate_stats_inject: bool = True
     # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照开关（本地切片重转写，
     # 音频零出域；生效双前置=有媒体+有可用 ASR 模型；纯读取侧不进 manifest
-    # 指纹，aggregate_stats_inject 同款判例）。可经 user_settings.json /
-    # SUBTRANSJAV_MEDIA_CROSSCHECK_ENABLED 覆盖。ASR 模型/上游 python 经
+    # 指纹，aggregate_stats_inject 同款判例）。2.6.1 修订（D2026-1002-06，
+    # owner 反馈验证应可选）：默认关；经引擎页开关/user_settings.json /
+    # SUBTRANSJAV_MEDIA_CROSSCHECK_ENABLED / CLI
+    # --media-crosscheck-enabled 0|1 开启。ASR 模型/上游 python 经
     # CLI --asr-model/--asr-python 或设置 KV（不入指纹，负向钉随批）。
-    media_crosscheck_enabled: bool = True
+    media_crosscheck_enabled: bool = False
     force: bool = False             # v2: 忽略已有产物强制重跑（覆盖前自动备份）
     tm_learn_gate: bool = True      # TM 学习准入门槛总开关（False 用于 A/B 验证）
     # 断点续跑（清单指纹校验见 manifest 模块）

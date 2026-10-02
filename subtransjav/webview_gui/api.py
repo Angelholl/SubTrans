@@ -1742,16 +1742,22 @@ class TranslateAPI:
             asr_model_kv = str(kv.get("asr_model") or "").strip()
             asr_python_kv = str(kv.get("asr_python") or "").strip()
             tm_window_kv = str(kv.get("tm_stats_window") or "").strip()
+            mc_kv = str(kv.get("media_crosscheck_enabled") or "").strip()
         except Exception:
             asr_model_kv = ""
             asr_python_kv = ""
             tm_window_kv = ""
+            mc_kv = ""
         if asr_model_kv:
             args.extend(["--asr-model", asr_model_kv])
         if asr_python_kv:
             args.extend(["--asr-python", asr_python_kv])
         if tm_window_kv in ("7", "30", "all"):
             args.extend(["--tm-stats-window", tm_window_kv])
+        # 2.6.1 修订（D2026-1002-06）：媒体重点对照开关（KV "1"/"0" →
+        # CLI 旗标 --media-crosscheck-enabled；缺省不传=分层链默认关）
+        if mc_kv in ("0", "1"):
+            args.extend(["--media-crosscheck-enabled", mc_kv])
 
         # 分析子进程跟随阶段A 服务商/端点（与 refine_get_stage_settings
         # 同源读取）：GUI 阶段A 配云端时，分析子进程若不传 --s1-provider
@@ -2214,19 +2220,43 @@ class TranslateAPI:
                     "total": 0, "last_line": "", "error": str(e)}
 
     def refine_asr_status(self) -> dict[str, Any]:
-        """零写路径探测＋已存 ASR 选择回显（设置 KV asr_model/asr_python）。"""
+        """零写路径探测＋已存 ASR 选择回显（设置 KV asr_model/asr_python）。
+
+        2.6.1 修订（D2026-1002-06，模型推荐制）：新增 recommended（推荐
+        清单逐条 present/path/expected_path）、models_dir/cache_dir（两处
+        落位绝对路径）、crosscheck_enabled（设置 KV 回显）——下载链已删，
+        前端只展示"自备落位指引"。既有键全保留。"""
         try:
             asr_python = ""
             asr_model = ""
+            crosscheck_enabled = False
             try:
                 got = self.refine_get_stage_settings()
                 settings = (got or {}).get("settings") or {}
                 asr_python = str(settings.get("asr_python") or "")
                 asr_model = str(settings.get("asr_model") or "")
+                crosscheck_enabled = \
+                    str(settings.get("media_crosscheck_enabled") or "") == "1"
             except Exception:
                 pass
             from subtransjav.refine import asr_env
             r = asr_env.probe_asr_env(asr_python_setting=asr_python)
+            by_name = {m.get("name"): m for m in (r.get("models") or [])}
+            recommended: list[dict[str, Any]] = []
+            for entry in asr_env.ASR_RECOMMENDED_MODELS:
+                stem = str(entry.get("model") or entry.get("name") or "")
+                hit = by_name.get(stem)
+                recommended.append({
+                    **entry,
+                    "present": hit is not None,
+                    "path": str((hit or {}).get("path") or ""),
+                    "expected_path": os.path.join(asr_env.ASR_MODELS_ROOT,
+                                                  f"{stem}.pt"),
+                })
+            r["recommended"] = recommended
+            r["models_dir"] = asr_env.ASR_MODELS_ROOT
+            r["cache_dir"] = asr_env.ASR_CACHE_DIR
+            r["crosscheck_enabled"] = crosscheck_enabled
             r["success"] = True
             r["saved_model"] = asr_model
             r["saved_python"] = asr_python
@@ -2234,37 +2264,6 @@ class TranslateAPI:
         except Exception as e:
             _log_exc("refine_asr_status")
             return {"success": False, "error": str(e)}
-
-    _asr_download_thread: threading.Thread | None
-
-    def refine_asr_download(self) -> dict[str, Any]:
-        """后台线程下载推荐 ASR 模型（GB 级；防重入走进度快照）。"""
-        thread = getattr(self, "_asr_download_thread_ref", None)
-        if thread is not None and thread.is_alive():
-            return {"success": False, "error": "已有下载任务进行中"}
-        from subtransjav.refine import dict_manager
-        if dict_manager.asr_download_progress().get("running"):
-            return {"success": False, "error": "已有下载任务进行中"}
-
-        def _work() -> None:
-            try:
-                dict_manager.download_asr_model("whisper-large-v2")
-            except Exception:   # noqa: BLE001 快照化兜底
-                _log_exc("refine_asr_download")
-
-        self._asr_download_thread_ref = threading.Thread(
-            target=_work, daemon=True)
-        self._asr_download_thread_ref.start()
-        return {"success": True, "started": True}
-
-    def refine_asr_download_progress(self) -> dict[str, Any]:
-        """ASR 模型下载进度快照（前端 1s 轮询）。"""
-        try:
-            from subtransjav.refine.dict_manager import asr_download_progress
-            return asr_download_progress()
-        except Exception as e:
-            _log_exc("refine_asr_download_progress")
-            return {"running": False, "phase": "failed", "error": str(e)}
 
     def refine_ai_apply_glossary(self, entries_json: str) -> dict[str, Any]:
         """把 AI 术语建议逐条锁定追加进词库（glossary.append_glossary_entries）。

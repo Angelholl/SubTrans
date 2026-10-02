@@ -218,6 +218,14 @@ def build_parser():
     grp_action.add_argument("--asr-python", default="",
                             help="本地 ASR 用的上游环境 Python 路径"
                                  "（缺省按 env/实测默认探测）")
+    # 2.6.1 修订（D2026-1002-06，owner 反馈验证可选化）：媒体重点对照开关
+    # 显式 CLI 层（镜像 v2_ctx/source_lang "缺省不赋"模式：不传=保 dataclass
+    # 缺省 False 以让引擎页开关/user_settings/env 分层链生效；不入 manifest
+    # 指纹——负向钉随批）
+    grp_action.add_argument("--media-crosscheck-enabled", type=int,
+                            choices=(0, 1), default=None,
+                            help="媒体重点对照开关：1=开 0=关"
+                                 "（缺省=配置分层链决定，默认关）")
     # 2.6.0 批 2 修订（D2026-1002-05，owner 2026-10-02）：跨片统计窗口
     # 三档（不入 manifest 指纹——负向钉随批）
     grp_action.add_argument("--tm-stats-window", default="30",
@@ -340,6 +348,10 @@ def config_from_args(args):
         cfg.source_lang = args.source_lang
     if args.target_lang != "zh":
         cfg.target_lang = args.target_lang
+    # 2.6.1 修订（D2026-1002-06）：媒体重点对照开关——仅显式传参时赋值
+    #（同 v2_ctx 模式；缺省不赋保分层链生效）。
+    if getattr(args, "media_crosscheck_enabled", None) is not None:
+        cfg.media_crosscheck_enabled = bool(args.media_crosscheck_enabled)
     return cfg
 
 

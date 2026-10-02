@@ -366,10 +366,10 @@ def run_ai_analyze(cfg, args) -> int:
         conflict_summary = ""
 
     # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照（本地切片重转写，
-    # 音频零出域；开关缺省开、双前置=有媒体+有可用 ASR；失败逐级降级
-    # 不阻塞分析；C8=分析后 best-effort 清理切片）
+    # 音频零出域；2.6.1 修订 D2026-1002-06 默认关+可选化；双前置=有媒体
+    # +有可用 ASR；失败逐级降级不阻塞分析；C8=分析后 best-effort 清理切片）
     crosscheck_block = ""
-    if bool(getattr(cfg, "media_crosscheck_enabled", True)):
+    if bool(getattr(cfg, "media_crosscheck_enabled", False)):
         crosscheck_block = _build_media_crosscheck(cfg, args,
                                                    report_path.parent,
                                                    guide)
