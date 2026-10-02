@@ -21,7 +21,11 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   FROZEN_IDS 191→200，九 id 列名=tabBtnReview/tab-review/
   reviewDropzone/videoReviewPlayer/reviewTranscodeBtn/reviewStatusBar/
   reviewStatusDot/reviewStatusLabel/reviewProgressFill（预算恰好用满，
-  余 0）；FROZEN_I18N_KEYS 不动（tabReview 沿用批 1 键，
+  余 0）；
+  2.6.1 批 2b D2026-1002-10：校对编辑批，FROZEN_IDS 200→206，六 id
+  列名=reviewListWrap/reviewSearchInput/reviewLocateBtn/reviewPager/
+  reviewSaveBtn/reviewSaveAsBtn（累计余 3）；FROZEN_I18N_KEYS 不动
+  （tabReview 沿用批 1 键，
   #tab-review 页内零 data-i18n，静态键 cap 零消耗））——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
@@ -112,8 +116,9 @@ refineTemplateStage refineTemplateStatus refineTemplateText refineTemplatesDir
 refineTemplatesDirShow refineTestS1 refineTestS1Status refineTestS3 refineTestS3Status
 refineTmDb refineTmEnable refineTmThreshold refineTplLoadedPath refineV2Ctx
 refreshFallbackModels removeSelectedBtn resumeToggle reviewDropzone
-reviewProgressFill reviewStatusBar reviewStatusDot reviewStatusLabel
-reviewTranscodeBtn statusDot statusLabel
+reviewListWrap reviewLocateBtn reviewPager reviewProgressFill
+reviewSaveAsBtn reviewSaveBtn reviewSearchInput reviewStatusBar
+reviewStatusDot reviewStatusLabel reviewTranscodeBtn statusDot statusLabel
 sysSummaryDataRoot sysSummaryDict sysSummaryTm sysSummaryVersion systemSummaryCard
 tab-advanced tab-engine tab-glossary tab-guide tab-review tab-translate tabBtnAdvanced tabBtnEngine
 tabBtnGlossary tabBtnGuide tabBtnReview tabBtnTranslate themeBtn themeMenu themeStylesheet

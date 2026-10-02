@@ -982,3 +982,71 @@ def test_review_video_exts_consistent():
     assert ".srt" in main_exts, "main.py 放行集必须含 .srt（翻译页原路径）"
     assert main_exts - {".srt"} == js_video, \
         "main.py 放行集（去 .srt）与 JS 视频集不相等（后缀漂移）"
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批 2b（D2026-1002-10）：校对编辑静态钉
+# ---------------------------------------------------------------------------
+
+def test_review_seek_formula_direct():
+    """C2 公式钉：行点击 seek 直接 currentTime=start_ms/1000，无偏移字面量。"""
+    body = _extract_function(_review_js_source(), "_bindList")
+    assert "start_ms / 1000" in body, \
+        "行点击 seek 公式漂移（须 currentTime=start_ms/1000）"
+    assert not re.search(r"\+\s*0\.01|\+\s*10\b", body), \
+        "seek 不得带偏移字面量（C2 裁定：10ms 补偿非必需）"
+
+
+def test_review_timing_readonly():
+    """时间轴列只读（D3）：行模板时间轴单元挂只读 class，无输入控件。"""
+    body = _extract_function(_review_js_source(), "_buildRow")
+    assert "review-timing-readonly" in body, "时间轴列缺只读锁形 class"
+    assert "textarea" not in body and "<input" not in body, \
+        "时间轴列不得出现输入控件"
+
+
+def test_review_enter_mapping():
+    """C7 键映射：Enter 提交与 Esc 回滚并存；Shift+Enter 走 textarea 默认换行。"""
+    body = _extract_function(_review_js_source(), "_beginEdit")
+    assert "ev.key === 'Enter' && !ev.shiftKey" in body, \
+        "Enter 提交分支缺失（须排除 Shift+Enter）"
+    assert "ev.key === 'Escape'" in body, "Esc 回滚分支缺失"
+
+
+def test_review_confirm_text_locked():
+    """C4 锁字：覆盖确认文案逐字冻结。"""
+    m = re.search(r"review_confirm_overwrite:\s*'([^']*)'",
+                  _review_js_source())
+    assert m, "REVIEW_MSG 缺 review_confirm_overwrite"
+    assert m.group(1) == "保存将按 1..N 重编号 + UTF-8 重写；行数/时间轴不变。确认覆盖？", \
+        "C4 锁字文案被改动"
+
+
+def test_review_dirty_no_new_state():
+    """C6：dirty 只以既有 'ready' 态 + labelKey 表达，无 'dirty' 新状态枚举。"""
+    src = _review_js_source()
+    for m in re.finditer(r"setState\(\{[^}]*review_dirty_hint[^}]*\}", src):
+        assert "state: 'ready'" in m.group(0), \
+            "dirty 提示必须挂 state:'ready'（不新设状态位）"
+    assert re.search(r"state:\s*'dirty'", src) is None, \
+        "出现 'dirty' 新状态枚举（违反 C6）"
+
+
+def test_review_tab_guard_allow_once():
+    """批 2b 黑盒缺陷回归钉：守卫确认后须一次放行，不得重复确认循环。
+
+    capture 守卫同步 preventDefault + AppModal.confirm 异步 → 重放
+    btn.click() 时 dirty 仍为 true，原实现会被再次拦截形成确认循环；
+    修复=一次性放行标志（确认回调先置标志再重放；handler 开头先判
+    标志放行一次即清，防其他按钮误放行）。
+    """
+    body = _extract_function(_review_js_source(), "_bindTabGuard")
+    assert "_guardAllowTab" in body, "缺一次性放行标志"
+    allow_pos = body.find("this._guardAllowTab === btn")
+    dirty_pos = body.find("!this._dirty")
+    assert allow_pos > -1 and dirty_pos > -1 and allow_pos < dirty_pos, \
+        "放行分支必须先于 dirty 判定（重放 click 时 dirty 仍为 true）"
+    assert re.search(r"this\._guardAllowTab = null;\s*return;", body), \
+        "放行一次后必须清标志"
+    assert re.search(r"this\._guardAllowTab = btn;[\s\S]*?btn\.click\(\);", body), \
+        "确认回调必须先置放行标志再重放 btn.click()"

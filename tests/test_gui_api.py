@@ -2320,3 +2320,138 @@ def test_review_transcode_command_construction(gui_api_obj, monkeypatch,
     assert out.stem.startswith("rt_") and len(out.stem) == 15
     assert out.suffix == ".mp4"
     assert captured["kwargs"].get("shell") is False
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批 2b（D2026-1002-10）：校对编辑（save/saveas/备份/C1 排除）
+# ---------------------------------------------------------------------------
+
+def test_review_save_backup_failure_aborts(gui_api_obj, monkeypatch, tmp_path):
+    """备份先行中止（D2）：copy2 两次（含重试一次）均失败 → success=False
+    且原文件未动、无半截 .bak.srt 残留。"""
+    import subtransjav.webview_gui.api as api_mod
+    original = "1\n00:00:01,000 --> 00:00:02,000\n旧\n"
+    p = tmp_path / "a.srt"
+    p.write_text(original, encoding="utf-8")
+    blocks = [{"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "新"}]
+    calls = {"n": 0}
+
+    def flaky_copy2(src, dst):
+        calls["n"] += 1
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(api_mod.shutil, "copy2", flaky_copy2)
+    r = gui_api_obj.refine_review_save_srt(str(p), blocks)
+    assert r["success"] is False and "备份" in r["error"]
+    assert calls["n"] == 2, "备份失败必须重试一次"
+    assert p.read_text(encoding="utf-8") == original, "原文件未动"
+    assert not (tmp_path / "a.bak.srt").exists(), "无半截备份残留"
+
+
+def test_review_save_success_backup_and_rewrite(gui_api_obj, tmp_path):
+    """成功流：.bak.srt 内容==原内容；新文件==重编号 UTF-8 内容。"""
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\n旧\n", encoding="utf-8")
+    blocks = [
+        {"index": 1, "start_ms": 1000, "end_ms": 2500, "text": "你好"},
+        {"index": 2, "start_ms": 3000, "end_ms": 4000, "text": "世界"},
+    ]
+    r = gui_api_obj.refine_review_save_srt(str(p), blocks)
+    assert r["success"] is True and r["count"] == 2
+    assert r["backup_path"] == str(p) + ".bak.srt"
+    assert Path(r["backup_path"]).read_text(encoding="utf-8") \
+        .endswith("旧\n"), "备份必须等于原内容"
+    assert p.read_text(encoding="utf-8") == (
+        "1\n00:00:01,000 --> 00:00:02,500\n你好\n\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n世界\n")
+
+
+def test_review_save_renumber_invariant(gui_api_obj, tmp_path):
+    """重编号不变式（D3）：跳号源文件 1,3,7 → 保存后 1,2,3，
+    start_ms/end_ms/text 逐块不变。"""
+    p = tmp_path / "j.srt"
+    p.write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\n甲\n\n"
+        "3\n00:00:03,000 --> 00:00:04,000\n乙\n\n"
+        "7\n00:00:05,000 --> 00:00:06,000\n丙\n", encoding="utf-8")
+    loaded = gui_api_obj.refine_review_load_srt(str(p))
+    assert [b["index"] for b in loaded["blocks"]] == [1, 3, 7]
+    r = gui_api_obj.refine_review_save_srt(str(p), loaded["blocks"])
+    assert r["success"] is True and r["count"] == 3
+    out = p.read_text(encoding="utf-8")
+    parts = out.rstrip("\n").split("\n\n")
+    assert [pt.splitlines()[0] for pt in parts] == ["1", "2", "3"]
+    assert parts[0].splitlines()[1] == "00:00:01,000 --> 00:00:02,000"
+    assert parts[1].splitlines()[1] == "00:00:03,000 --> 00:00:04,000"
+    assert parts[2].splitlines()[1] == "00:00:05,000 --> 00:00:06,000"
+    assert [pt.splitlines()[2] for pt in parts] == ["甲", "乙", "丙"]
+
+
+def test_review_save_invalid_blocks_rejected(gui_api_obj, tmp_path):
+    """C8 结构校验：空 blocks / 缺键 / ms 非数值 → 拒绝且不写。"""
+    p = tmp_path / "v.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\n旧\n", encoding="utf-8")
+    assert gui_api_obj.refine_review_save_srt(str(p), [])["success"] is False
+    bad = [{"start_ms": "x", "end_ms": 2000, "text": "t"}]
+    r = gui_api_obj.refine_review_save_srt(str(p), bad)
+    assert r["success"] is False and "无效" in r["error"]
+    missing = [{"start_ms": 1000, "text": "t"}]
+    assert gui_api_obj.refine_review_save_srt(str(p), missing)["success"] is False
+    assert "新" not in p.read_text(encoding="utf-8")
+
+
+def test_review_saveas_two_phase(gui_api_obj, tmp_path):
+    """另存为两段式：目标不存在直接写；存在 → exists 标记不写；
+    mode='force' → 备份+覆盖写。"""
+    blocks = [{"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "T"}]
+    target = tmp_path / "out.srt"
+    r = gui_api_obj.refine_review_saveas_srt("a.srt", blocks, str(target))
+    assert r["success"] is True and target.exists()
+    before = target.read_text(encoding="utf-8")
+    r2 = gui_api_obj.refine_review_saveas_srt("a.srt", blocks, str(target))
+    assert r2["success"] is False and r2["exists"] is True
+    assert target.read_text(encoding="utf-8") == before, "exists 态不得写"
+    r3 = gui_api_obj.refine_review_save_srt(str(target), blocks, mode="force")
+    assert r3["success"] is True and r3.get("backup_path")
+    assert Path(r3["backup_path"]).read_text(encoding="utf-8") == before
+
+
+def test_review_pick_save_path_no_window(gui_api_obj):
+    """pick_save_path：无窗口（测试环境）→ error 分支；真实对话框留真机。"""
+    r = gui_api_obj.refine_review_pick_save_path("x.srt")
+    assert r["success"] is False and r["error"]
+
+
+def test_review_bak_srt_excluded_from_sources(gui_api_obj, monkeypatch, tmp_path):
+    """C1：*.bak.srt 在 batch.find_srt_files 与 select_srt_folder 两处排除。"""
+    from subtransjav.refine.batch import find_srt_files
+    (tmp_path / "a.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "a.bak.srt").write_text("bak", encoding="utf-8")
+    files = find_srt_files(str(tmp_path), recursive=False)
+    assert str(tmp_path / "a.srt") in files
+    assert all(not f.endswith(".bak.srt") for f in files)
+    import subtransjav.webview_gui.api as api_mod
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is True
+    assert str(tmp_path / "a.srt") in r["paths"]
+    assert all(not pth.endswith(".bak.srt") for pth in r["paths"])
+
+
+def test_review_gbk_srt_saved_as_utf8(gui_api_obj, tmp_path):
+    """gbk 原件经 load → save 后落盘为严格 UTF-8。"""
+    p = tmp_path / "g.srt"
+    p.write_bytes("1\n00:00:01,000 --> 00:00:02,000\n中文\n".encode("gbk"))
+    loaded = gui_api_obj.refine_review_load_srt(str(p))
+    assert loaded["encoding"] == "gbk"
+    r = gui_api_obj.refine_review_save_srt(str(p), loaded["blocks"])
+    assert r["success"] is True
+    raw = p.read_bytes()
+    text = raw.decode("utf-8")   # 严格 UTF-8 可解码（gbk 字节序列不再存在）
+    assert "中文" in text

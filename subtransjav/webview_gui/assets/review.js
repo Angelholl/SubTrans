@@ -24,6 +24,20 @@ const REVIEW_MSG = {
     review_api_not_ready: '接口未就绪，请稍后再试',
     review_media_error: '无法解码该媒体，请尝试手动转码',
     review_srt_loaded: (n, enc) => `字幕已载入：${n} 条（${enc}）`,
+    // ---- 批 2b（D2026-1002-10）：校对编辑 ----
+    review_list_empty: '字幕未载入有效条目：请导入 .srt 字幕',
+    review_search_placeholder: '搜索文本/时间轴（Enter）',
+    review_locate_btn: '定位',
+    review_page_info: (cur, total) => `${cur}/${total}`,
+    review_save_btn: '保存',
+    review_saveas_btn: '另存为',
+    // C4 锁字（逐字冻结，静态钉断言）：
+    review_confirm_overwrite: '保存将按 1..N 重编号 + UTF-8 重写；行数/时间轴不变。确认覆盖？',
+    review_saveas_confirm_exists: '目标文件已存在，将按同一规则备份并覆盖。确认？',
+    review_dirty_hint: '有未保存修改',
+    review_edit_hint: '双击编辑文本；Enter 提交，Shift+Enter 换行，Esc 取消（时间轴只读）',
+    review_save_ok: (n) => `已保存 ${n} 条（UTF-8 重写）`,
+    review_save_failed: (m) => `保存失败：${m}`,
 };
 
 // 状态条管理器（D2026-1002-08 定案：四态 + 确定百分比 + 不定进度动画）。
@@ -49,7 +63,11 @@ function makeStatusManager(ids) {
             bar.classList.add('review-st-' + st);
             const key = opt.labelKey;
             const val = REVIEW_MSG[key];
-            label.textContent = (typeof val === 'string') ? val : (key || '');
+            if (typeof val === 'function') {
+                label.textContent = val.apply(null, opt.labelArgs || []);
+            } else {
+                label.textContent = (typeof val === 'string') ? val : (key || '');
+            }
             const progress = opt.progress;
             // D2026-1002-08 正交表：state 定视觉、progress 定进度——
             // indeterminate 流光仅属 busy 态（批 2a 黑盒缺陷回归：
@@ -86,13 +104,29 @@ const ReviewUI = {
     REVIEW_SRT_EXTS: ['.srt'],
 
     _videoPath: null,
+    _srtPath: null,
     _hasVideo: false,
     _hasSrt: false,
     _blocks: [],
+    _loadedCount: null,
     _probe: null,
     _pollTimer: null,
     _jumpQueue: [],
     _barShown: false,
+    // ---- 批 2b（D2026-1002-10）：列表/编辑/联动状态 ----
+    _currentIndex: -1,
+    _dirty: false,
+    _pageMode: 'full',      // 'full' ≤800 行全量；'paged' 801-2000+ 分段
+    _pageSize: 500,
+    _page: 0,
+    _pageCount: 1,
+    _followPaused: false,
+    _followTimer: null,
+    _autoScroll: false,
+    _lastTuTs: 0,
+    _editingIdx: null,
+    _editingRow: null,
+    _guardAllowTab: null,
 
     // app.js 顶层 fileUrlOf 在 IIFE 内不可复用，语义拷贝
     // （逐段 encodeURIComponent，兼容空格/中文路径）
@@ -114,6 +148,12 @@ const ReviewUI = {
         this._bindDropzone();
         this._bindTranscode();
         this._bindTabWatcher();
+        this._bindPlayer();
+        this._bindList();
+        this._bindSearch();
+        this._bindLocate();
+        this._bindSave();
+        this._bindTabGuard();
     },
 
     _injectTexts() {
@@ -132,6 +172,15 @@ const ReviewUI = {
         });
         const tcBtn = document.getElementById('reviewTranscodeBtn');
         if (tcBtn) { tcBtn.textContent = REVIEW_MSG.review_transcode_btn; }
+        // 批 2b：列表工具条/保存组文案注入
+        const search = document.getElementById('reviewSearchInput');
+        if (search) { search.placeholder = REVIEW_MSG.review_search_placeholder; }
+        const locate = document.getElementById('reviewLocateBtn');
+        if (locate) { locate.textContent = REVIEW_MSG.review_locate_btn; }
+        const save = document.getElementById('reviewSaveBtn');
+        if (save) { save.textContent = REVIEW_MSG.review_save_btn; }
+        const saveas = document.getElementById('reviewSaveAsBtn');
+        if (saveas) { saveas.textContent = REVIEW_MSG.review_saveas_btn; }
     },
 
     _bindDropzone() {
@@ -325,9 +374,13 @@ const ReviewUI = {
         }
         Promise.resolve(api.refine_review_load_srt(path)).then((r) => {
             if (r && r.success) {
+                this._srtPath = path || null;
                 this._hasSrt = true;
                 this._blocks = r.blocks || [];
+                this._loadedCount = r.count;   // C8：前端行数守卫基线
+                this._dirty = false;
                 console.log('[review]', REVIEW_MSG.review_srt_loaded(r.count, r.encoding));
+                this._setupList();
                 this._refreshReadiness();
             } else {
                 console.warn('[review] srt load failed:', r && r.error);
@@ -337,6 +390,450 @@ const ReviewUI = {
             console.error('[review] srt load error:', err);
             this._status.setState({ state: 'error', labelKey: 'review_bad_encoding' });
         });
+    },
+
+    // ================================================================
+    // 批 2b（D2026-1002-10）：列表渲染三档 / 播放联动 / 行内编辑 / 保存流
+    // ================================================================
+
+    // D4 性能三档：≤800 行全量渲染；801-2000 分段（500 行/页）+页码；
+    // >2000 分段同上——虚拟化兜底预案=性能口径（首屏 ≤300ms / 滚动
+    // rAF ≥50fps / 定位 ≤100ms）真机不达标时启用窗口化渲染（本批不实现）。
+    _setupList() {
+        const tools = document.querySelector('.review-list-tools');
+        const wrap = document.getElementById('reviewListWrap');
+        if (tools) { tools.style.display = ''; }
+        if (wrap) { wrap.style.display = ''; }
+        this._pageMode = this._blocks.length > 800 ? 'paged' : 'full';
+        this._pageCount = (this._pageMode === 'paged')
+            ? Math.ceil(this._blocks.length / this._pageSize) : 1;
+        this._page = 0;
+        this._currentIndex = -1;
+        this._renderPage();
+    },
+
+    _renderPage() {
+        const wrap = document.getElementById('reviewListWrap');
+        if (!wrap) { return; }
+        wrap.textContent = '';
+        if (!this._blocks.length) {
+            const eg = document.createElement('div');
+            eg.className = 'empty-guide';
+            eg.textContent = REVIEW_MSG.review_list_empty;
+            wrap.appendChild(eg);
+            this._renderPager();
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        const start = (this._pageMode === 'paged') ? this._page * this._pageSize : 0;
+        const end = (this._pageMode === 'paged')
+            ? Math.min(start + this._pageSize, this._blocks.length)
+            : this._blocks.length;
+        for (let i = start; i < end; i++) {
+            frag.appendChild(this._buildRow(i));
+        }
+        wrap.appendChild(frag);
+        this._renderPager();
+    },
+
+    _buildRow(idx) {
+        const b = this._blocks[idx];
+        const row = document.createElement('div');
+        row.className = 'review-row';
+        row.dataset.idx = String(idx);   // 稳定 ID=blocks 数组下标（0 基）
+        const no = document.createElement('span');
+        no.className = 'review-row-no';
+        no.textContent = String(idx + 1);
+        const tm = document.createElement('span');
+        tm.className = 'review-timing-readonly';
+        tm.title = REVIEW_MSG.review_edit_hint;
+        tm.textContent = b.timing || '';
+        const tx = document.createElement('span');
+        tx.className = 'review-row-text';
+        tx.textContent = b.text || '';
+        row.appendChild(no);
+        row.appendChild(tm);
+        row.appendChild(tx);
+        if (idx === this._currentIndex) { row.classList.add('review-row-current'); }
+        return row;
+    },
+
+    _renderPager() {
+        const pager = document.getElementById('reviewPager');
+        if (!pager) { return; }
+        pager.textContent = '';
+        if (this._pageMode !== 'paged' || this._pageCount <= 1) {
+            pager.style.display = 'none';
+            return;
+        }
+        pager.style.display = '';
+        for (let p = 0; p < this._pageCount; p++) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'review-page-btn' + (p === this._page ? ' active' : '');
+            btn.dataset.page = String(p);
+            btn.textContent = String(p + 1);
+            pager.appendChild(btn);
+        }
+        const info = document.createElement('span');
+        info.className = 'review-pager-info';
+        info.textContent = REVIEW_MSG.review_page_info(this._page + 1, this._pageCount);
+        pager.appendChild(info);
+    },
+
+    _bindPlayer() {
+        const v = document.getElementById('videoReviewPlayer');
+        if (!v) { return; }
+        v.addEventListener('timeupdate', () => this._onTimeUpdate(v));
+    },
+
+    _onTimeUpdate(v) {
+        const now = performance.now();
+        if (now - this._lastTuTs < 265) { return; }   // 节流基线（spike B 口径 265.5ms）
+        this._lastTuTs = now;
+        if (!this._blocks.length) { return; }
+        const idx = this._findBlockIndex(v.currentTime * 1000);
+        if (idx < 0 || idx === this._currentIndex) { return; }
+        this._currentIndex = idx;
+        this._highlightCurrent();
+    },
+
+    // 二分查行：start_ms<=t<end_ms；块间隙/越界找不到 → -1（保持原状）
+    _findBlockIndex(t) {
+        const bs = this._blocks;
+        if (!bs.length || t < bs[0].start_ms) { return -1; }
+        let lo = 0;
+        let hi = bs.length - 1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (t < bs[mid].start_ms) { hi = mid - 1; }
+            else if (t >= bs[mid].end_ms) { lo = mid + 1; }
+            else { return mid; }
+        }
+        return -1;
+    },
+
+    _highlightCurrent() {
+        const wrap = document.getElementById('reviewListWrap');
+        if (!wrap) { return; }
+        const prev = wrap.querySelector('.review-row-current');
+        if (prev) { prev.classList.remove('review-row-current'); }
+        if (this._currentIndex < 0) { return; }
+        // C6：跨页自动翻页
+        if (this._pageMode === 'paged') {
+            const page = Math.floor(this._currentIndex / this._pageSize);
+            if (page !== this._page) {
+                this._page = page;
+                this._renderPage();
+            }
+        }
+        const row = wrap.querySelector('.review-row[data-idx="' + this._currentIndex + '"]');
+        if (row) {
+            row.classList.add('review-row-current');
+            if (!this._followPaused) {
+                this._autoScroll = true;   // 程序滚动豁免 scroll 暂停判定
+                row.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    },
+
+    _pauseFollow() {
+        this._followPaused = true;
+        if (this._followTimer) { clearTimeout(this._followTimer); }
+        // C6：2s 内无滚动事件 → 恢复跟随（恢复后 currentIndex 变才滚，逻辑不变）
+        this._followTimer = setTimeout(() => { this._followPaused = false; }, 2000);
+    },
+
+    _bindList() {
+        const wrap = document.getElementById('reviewListWrap');
+        if (!wrap) { return; }
+        // 行点击 → seek（C2 裁定：直接 currentTime=start_ms/1000，无偏移）
+        wrap.addEventListener('click', (e) => {
+            const row = e.target.closest('.review-row');
+            if (!row) { return; }
+            if (row.dataset.idx === String(this._editingIdx)) { return; }
+            const idx = Number(row.dataset.idx);
+            const b = this._blocks[idx];
+            const v = document.getElementById('videoReviewPlayer');
+            if (!b || !v) { return; }
+            v.currentTime = b.start_ms / 1000;
+        });
+        // 行双击 → 行内编辑（单击留给 seek 跳转）
+        wrap.addEventListener('dblclick', (e) => {
+            const row = e.target.closest('.review-row');
+            if (!row) { return; }
+            this._beginEdit(Number(row.dataset.idx), row);
+        });
+        // 手动滚动暂停跟随（wheel=用户意图；scroll 经 _autoScroll 豁免程序滚动）
+        wrap.addEventListener('wheel', () => this._pauseFollow(), { passive: true });
+        wrap.addEventListener('scroll', () => {
+            if (this._autoScroll) { this._autoScroll = false; return; }
+            this._pauseFollow();
+        }, { passive: true });
+        // 页码条委托
+        const pager = document.getElementById('reviewPager');
+        if (pager) {
+            pager.addEventListener('click', (e) => {
+                const btn = e.target.closest('.review-page-btn');
+                if (!btn) { return; }
+                const p = Number(btn.dataset.page);
+                if (!isNaN(p) && p !== this._page) {
+                    this._page = p;
+                    this._renderPage();
+                }
+            });
+        }
+    },
+
+    _beginEdit(idx, row) {
+        if (this._editingIdx !== null) { this._commitEdit(); }
+        if (isNaN(idx) || !this._blocks[idx] || !row) { return; }
+        this._editingIdx = idx;
+        this._editingRow = row;
+        const tx = row.querySelector('.review-row-text');
+        if (!tx) { return; }
+        row.classList.add('review-row-editing');
+        const ta = document.createElement('textarea');
+        ta.className = 'review-edit-input';
+        ta.value = this._blocks[idx].text || '';
+        ta.rows = Math.min(6, ta.value.split('\n').length + 1);
+        tx.textContent = '';
+        tx.appendChild(ta);
+        ta.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
+                ev.stopPropagation();
+                this._cancelEdit();
+            } else if (ev.key === 'Enter' && !ev.shiftKey) {
+                // Enter 提交；Shift+Enter 换行（textarea 默认，不拦截）
+                ev.preventDefault();
+                this._commitEdit();
+            }
+        });
+        // 失焦即提交（裁定：与 Enter 等效，避免丢输入）
+        ta.addEventListener('blur', () => {
+            if (this._editingIdx !== null) { this._commitEdit(); }
+        });
+        ta.focus();
+    },
+
+    _cancelEdit() {
+        const idx = this._editingIdx;
+        const row = this._editingRow;
+        this._editingIdx = null;
+        this._editingRow = null;
+        if (row) {
+            row.classList.remove('review-row-editing');
+            const tx = row.querySelector('.review-row-text');
+            if (tx) { tx.textContent = this._blocks[idx] ? this._blocks[idx].text : ''; }
+        }
+    },
+
+    _commitEdit() {
+        const idx = this._editingIdx;
+        const row = this._editingRow;
+        if (idx === null) { return; }
+        const ta = row ? row.querySelector('.review-edit-input') : null;
+        const val = ta ? ta.value : (this._blocks[idx] ? this._blocks[idx].text : '');
+        this._editingIdx = null;
+        this._editingRow = null;
+        this._blocks[idx].text = val;
+        if (row) {
+            row.classList.remove('review-row-editing');
+            const tx = row.querySelector('.review-row-text');
+            if (tx) { tx.textContent = val; }
+        }
+        this._markDirty();
+    },
+
+    _markDirty() {
+        if (this._dirty) { return; }
+        this._dirty = true;
+        // C6：不新设状态位——dirty=state:'ready'+labelKey 表达
+        if (this._hasVideo || this._hasSrt) {
+            this._status.setState({ state: 'ready', labelKey: 'review_dirty_hint' });
+        }
+    },
+
+    _bindSearch() {
+        const input = document.getElementById('reviewSearchInput');
+        if (!input) { return; }
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this._search(input.value);
+            }
+        });
+    },
+
+    // 搜索：blocks 内 text/timing 不区分大小写匹配；命中行跳所在页+高亮
+    //（口径：定位 ≤100ms，命中计数 console 留档）
+    _search(q) {
+        const query = String(q || '').trim().toLowerCase();
+        const wrap = document.getElementById('reviewListWrap');
+        if (!wrap || !query) { return; }
+        const t0 = performance.now();
+        const hits = [];
+        for (let i = 0; i < this._blocks.length; i++) {
+            const b = this._blocks[i];
+            if (((b.text || '').toLowerCase().indexOf(query) >= 0) ||
+                ((b.timing || '').toLowerCase().indexOf(query) >= 0)) {
+                hits.push(i);
+            }
+        }
+        if (!hits.length) {
+            console.log('[review] search: 0 hits');
+            return;
+        }
+        const first = hits[0];
+        if (this._pageMode === 'paged') {
+            const page = Math.floor(first / this._pageSize);
+            if (page !== this._page) {
+                this._page = page;
+                this._renderPage();
+            }
+        }
+        hits.forEach((i) => {
+            const inPage = (this._pageMode !== 'paged') ||
+                (i >= this._page * this._pageSize && i < (this._page + 1) * this._pageSize);
+            if (!inPage) { return; }
+            const row = wrap.querySelector('.review-row[data-idx="' + i + '"]');
+            if (row) { row.classList.add('review-row-hit'); }
+        });
+        const row0 = wrap.querySelector('.review-row[data-idx="' + first + '"]');
+        if (row0) { row0.scrollIntoView({ block: 'nearest' }); }
+        console.log('[review] search:', hits.length, 'hits in',
+                    (performance.now() - t0).toFixed(1), 'ms');
+    },
+
+    _bindLocate() {
+        const btn = document.getElementById('reviewLocateBtn');
+        if (!btn) { return; }
+        btn.addEventListener('click', () => {
+            if (this._currentIndex < 0) { return; }
+            this._followPaused = false;   // 定位=强制恢复跟随
+            this._highlightCurrent();
+            const row = document.getElementById('reviewListWrap')
+                .querySelector('.review-row[data-idx="' + this._currentIndex + '"]');
+            if (row) { row.scrollIntoView({ block: 'center' }); }
+        });
+    },
+
+    _bindSave() {
+        const save = document.getElementById('reviewSaveBtn');
+        const saveas = document.getElementById('reviewSaveAsBtn');
+        if (save) { save.addEventListener('click', () => this._save()); }
+        if (saveas) { saveas.addEventListener('click', () => this._saveAs()); }
+    },
+
+    async _save() {
+        if (this._editingIdx !== null) { this._commitEdit(); }   // 先提交编辑中行
+        if (!this._srtPath || !this._blocks.length) { return; }
+        if (this._loadedCount !== null && this._blocks.length !== this._loadedCount) {
+            // C8 前端防御：行数不变式（编辑不改行数），漂移即拒绝
+            console.error('[review] 行数与载入时不一致，拒绝保存');
+            return;
+        }
+        const ok = await AppModal.confirm(REVIEW_MSG.review_confirm_overwrite);
+        if (!ok) { return; }
+        await this._doSave(this._srtPath);
+    },
+
+    async _saveAs() {
+        if (this._editingIdx !== null) { this._commitEdit(); }
+        const api = this._bridge();
+        if (!api) {
+            this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
+            return;
+        }
+        if (!this._blocks.length) { return; }
+        const defaultName = this._srtPath
+            ? this._srtPath.split(/[\\/]/).pop() : '校对.srt';
+        const r = await Promise.resolve(api.refine_review_pick_save_path(defaultName));
+        if (!r || !r.success || !r.path) { return; }   // 取消静默
+        const target = String(r.path);
+        if (this._srtPath && target === this._srtPath) {
+            await this._save();   // 同路径 → 走覆盖流
+            return;
+        }
+        const c = await Promise.resolve(
+            api.refine_review_saveas_srt(this._srtPath, this._blocks, target));
+        if (c && c.success) {
+            this._srtPath = target;   // 另存后当前路径切换到新件
+            this._dirty = false;
+            console.log('[review]', REVIEW_MSG.review_save_ok(c.count));
+            this._status.setState({ state: 'ready', labelKey: 'review_save_ok',
+                                    labelArgs: [c.count] });
+            return;
+        }
+        if (c && c.exists) {
+            const ok = await AppModal.confirm(REVIEW_MSG.review_saveas_confirm_exists);
+            if (ok) { await this._doSave(target); }
+            return;
+        }
+        const m = (c && c.error) || 'unknown';
+        console.warn('[review] saveas failed:', m);
+        this._status.setState({ state: 'error', labelKey: 'review_save_failed',
+                                labelArgs: [m] });
+    },
+
+    async _doSave(path) {
+        const api = this._bridge();
+        if (!api) {
+            this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
+            return;
+        }
+        try {
+            const r = await Promise.resolve(
+                api.refine_review_save_srt(path, this._blocks));
+            if (r && r.success) {
+                if (r.backup_path) { console.log('[review] backup:', r.backup_path); }
+                if (path !== this._srtPath) { this._srtPath = path; }
+                this._dirty = false;
+                console.log('[review]', REVIEW_MSG.review_save_ok(r.count));
+                this._status.setState({ state: 'ready', labelKey: 'review_save_ok',
+                                        labelArgs: [r.count] });
+            } else {
+                const m = (r && r.error) || 'unknown';
+                console.warn('[review] save failed:', m);
+                this._status.setState({ state: 'error', labelKey: 'review_save_failed',
+                                        labelArgs: [m] });
+            }
+        } catch (err) {
+            console.error('[review] save error:', err);
+            this._status.setState({ state: 'error', labelKey: 'review_save_failed',
+                                    labelArgs: [String(err)] });
+        }
+    },
+
+    // C7 TAB dirty 守卫：capture 阶段拦截切页（app.js 零改动）。
+    // AppModal.confirm 异步 → 同步 preventDefault+stopImmediatePropagation
+    // 后确认再 btn.click() 重放；确认放行时 dirty/_blocks 保留在内存
+    //（编辑不丢，切回校对页还在）。窗口关闭守卫明示不做：未保存编辑
+    // 仅存内存，原文件与 .bak.srt 均安全（丢失边界声明，见批清单 C7）。
+    _bindTabGuard() {
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            const btn = target && target.closest ? target.closest('.side-tab-btn') : null;
+            if (!btn) { return; }
+            // 一次性放行（批 2b 黑盒缺陷回归：确认重放的 click 时 dirty 仍
+            // 为 true，须放行一次防重复确认循环）；先判标志再判 dirty，
+            // 放行一次即清，防其他按钮误放行
+            if (this._guardAllowTab && this._guardAllowTab === btn) {
+                this._guardAllowTab = null;
+                return;
+            }
+            if (!this._dirty) { return; }
+            if (btn.dataset.tab === 'tab-review') { return; }
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            AppModal.confirm(REVIEW_MSG.review_dirty_hint +
+                '离开将保留编辑于内存（未写盘），确认切换？').then((ok) => {
+                if (ok) {
+                    this._guardAllowTab = btn;   // 先置标志再重放
+                    btn.click();
+                }
+            });
+        }, true);
     },
 
     // 文件就绪判定（批 2a 契约）：video 与 srt 均 set → ready 覆盖先前态；

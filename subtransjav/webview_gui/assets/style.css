@@ -1842,6 +1842,110 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     100% { transform: translateX(400%); }
 }
 
+/* ---- 批 2b（D2026-1002-10）：字幕列表 / 工具条 / 行内编辑（token 延续第 16 节） ---- */
+.review-list-tools {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    flex-wrap: wrap;
+}
+.review-list-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+}
+.review-pager {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+}
+.review-pager-info {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+.review-page-btn {
+    min-height: var(--h-ctl-sm);
+    padding: 0 10px;
+    font-size: var(--font-xs);
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-family: inherit;
+    cursor: pointer;
+}
+.review-page-btn:hover { background: var(--surface-3); color: var(--text-1); }
+.review-page-btn.active {
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+    font-weight: 600;
+}
+.review-list {
+    margin-top: var(--space-2);
+    max-height: 48vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+.review-row {
+    display: grid;
+    grid-template-columns: 3em 11em 1fr;
+    gap: var(--space-2);
+    align-items: baseline;
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+.review-row:last-child { border-bottom: none; }
+.review-row:hover { background: var(--surface-2); }
+.review-row-no {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+.review-row-text {
+    font-size: var(--font-sm);
+    color: var(--text-1);
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-width: 0;
+}
+.review-row-current {
+    background: var(--primary-soft);
+    box-shadow: inset 2px 0 0 var(--primary-strong);
+}
+.review-row-hit { background: var(--ok-soft); }
+.review-row-editing { background: var(--surface-3); cursor: default; }
+.review-timing-readonly {
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    cursor: default;
+    white-space: nowrap;
+}
+.review-edit-input {
+    width: 100%;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: var(--font-sm);
+    resize: vertical;
+}
+.review-edit-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);
+}
+
 @media (max-width: 1180px) {
     .workbench { grid-template-columns: 64px minmax(0, 1fr) 300px; }
 

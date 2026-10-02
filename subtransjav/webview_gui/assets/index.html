@@ -738,6 +738,19 @@
                     <button type="button" id="reviewTranscodeBtn" class="btn btn-warning" style="display:none;"></button>
                     <span class="review-transcode-hint muted" style="display:none;"></span>
                 </div>
+
+                <!-- 字幕列表（批 2b D2026-1002-10）：工具条+列表容器；
+                     行/页码 class 委托零 id；文案全 JS 注入 -->
+                <div class="review-list-tools" style="display:none;">
+                    <input type="text" id="reviewSearchInput" class="form-input compact grow" autocomplete="off">
+                    <button type="button" id="reviewLocateBtn" class="btn btn-ghost btn-sm"></button>
+                    <div id="reviewPager" class="review-pager"></div>
+                    <span class="review-list-actions">
+                        <button type="button" id="reviewSaveBtn" class="btn btn-primary btn-sm"></button>
+                        <button type="button" id="reviewSaveAsBtn" class="btn btn-ghost btn-sm"></button>
+                    </span>
+                </div>
+                <div class="review-list" id="reviewListWrap" style="display:none;"></div>
             </div>
 
         </main>
