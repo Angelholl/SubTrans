@@ -2713,3 +2713,175 @@ def test_review_save_allowed_session_fallback_branch(gui_api_obj, monkeypatch,
     # 未登记同类路径仍拒绝
     with pytest.raises(ValueError):
         api_mod._review_save_allowed(str(tmp_path / "other.srt"))
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批4（D2026-1002-12）：审计②写入端 sanitize / ③转码三件收口
+# ---------------------------------------------------------------------------
+
+
+def test_review_save_srt_sanitize_blank_line_roundtrip(gui_api_obj, tmp_path):
+    """审计②写入端 sanitize：块内文本含空行/连续空白行 → 保存时压成单
+    换行，重解析块数与文本逐字一致（不再裂出残块丢内容）。"""
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:01,000 --> 00:00:02,000\n原文\n", encoding="utf-8")
+    blocks = [
+        {"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "行1\n\n行2"},
+        {"index": 2, "start_ms": 3000, "end_ms": 4000, "text": "行3\r\n\r\n行4"},
+    ]
+    r = gui_api_obj.refine_review_save_srt(str(p), blocks)
+    assert r["success"] is True and r["count"] == 2
+    content = p.read_text(encoding="utf-8")
+    # 块间恰好一个空行（无三连换行）、无尾部多余空行
+    assert "\n\n\n" not in content
+    assert content.endswith("\n") and not content.endswith("\n\n")
+    loaded = gui_api_obj.refine_review_load_srt(str(p))
+    assert loaded["success"] is True and loaded["count"] == 2
+    assert loaded["blocks"][0]["text"] == "行1\n行2"
+    assert loaded["blocks"][1]["text"] == "行3\n行4"
+
+
+def test_transcode_sync_timeout_unlinks_partial(tmp_path, monkeypatch):
+    """审计③a：超时 kill 路径清理半截产物（成功才保留，防 cache 误复用）。"""
+    import subtransjav.webview_gui.api as api_mod
+    out = tmp_path / "out.mp4"
+    out.write_bytes(b"partial-bytes")
+    clock = iter([0.0, 1.0, 999.0])
+
+    class FakeProc:
+        stdout = iter([b"out_time_ms=500000\n", b"out_time_ms=600000\n"])
+
+        @staticmethod
+        def kill() -> None:
+            return None
+
+    monkeypatch.setattr(api_mod.time, "monotonic", lambda: next(clock, 999.0))
+    monkeypatch.setattr(api_mod.subprocess, "Popen",
+                        lambda args, **kwargs: FakeProc())
+    ok, err = api_mod._transcode_sync("/fake/ffmpeg", "in.mkv", str(out), 5.0)
+    assert ok is False and err == "transcode timeout"
+    assert not out.exists()
+
+
+def test_transcode_sync_exception_unlinks_partial(tmp_path, monkeypatch):
+    """审计③a：异常路径（wait 抛错）同样清理半截产物。"""
+    import subtransjav.webview_gui.api as api_mod
+    out = tmp_path / "out.mp4"
+    out.write_bytes(b"partial-bytes")
+
+    class FakeProc:
+        stdout = iter([b"out_time_ms=1\n"])
+
+        @staticmethod
+        def kill() -> None:
+            return None
+
+        @staticmethod
+        def wait(timeout=None) -> int:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(api_mod.subprocess, "Popen",
+                        lambda args, **kwargs: FakeProc())
+    ok, err = api_mod._transcode_sync("/fake/ffmpeg", "in.mkv", str(out), 5.0)
+    assert ok is False and "boom" in err
+    assert not out.exists()
+
+
+def test_transcode_sync_success_keeps_file(tmp_path, monkeypatch):
+    """审计③a 对照：成功路径产物保留不误删。"""
+    import subtransjav.webview_gui.api as api_mod
+    out = tmp_path / "out.mp4"
+    out.write_bytes(b"transcoded-bytes")
+
+    class FakeProc:
+        stdout = iter(())
+
+        @staticmethod
+        def wait(timeout=None) -> int:
+            return 0
+
+    monkeypatch.setattr(api_mod.time, "monotonic", lambda: 0.0)
+    monkeypatch.setattr(api_mod.subprocess, "Popen",
+                        lambda args, **kwargs: FakeProc())
+    ok, err = api_mod._transcode_sync("/fake/ffmpeg", "in.mkv", str(out), 5.0)
+    assert ok is True and err == ""
+    assert out.exists()
+
+
+def test_review_transcode_cache_integrity(gui_api_obj, monkeypatch, tmp_path):
+    """审计③b：cache 命中前完整性校验——ffprobe 探不到正时长（半截件）
+    不复用走重转码；探到正时长才 cached 复用。"""
+    import hashlib
+
+    import subtransjav.refine.audio_detect as ad
+    import subtransjav.refine.config as cfg_mod
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep01.mkv"
+    media.write_bytes(b"fake-mkv")
+    _install_fake_ffprobe(monkeypatch, video="hevc", audio="aac")
+    monkeypatch.setattr(ad, "_find_ffmpeg", lambda: "/fake/ffmpeg")
+    monkeypatch.setattr(cfg_mod, "TEMP_DIR", str(tmp_path / "temp"))
+    out_dir = tmp_path / "temp" / "review_transcode"
+    out_dir.mkdir(parents=True)
+    identity = f"{media}|{media.stat().st_mtime}|{media.stat().st_size}"
+    digest = hashlib.sha256(identity.encode("utf-8", "replace")).hexdigest()[:12]
+    out = out_dir / f"rt_{digest}.mp4"
+    out.write_bytes(b"half-file")
+
+    class SyncThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self._target = target
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(api_mod.threading, "Thread", SyncThread)
+
+    # 半截件：探测不到正时长 → 不复用，走重转码（worker 同步跑完）
+    monkeypatch.setattr(gui_api_obj, "_review_media_duration",
+                        lambda p: None if str(p).endswith(".mp4") else 100.0)
+    r = gui_api_obj.refine_review_start_transcode(str(media))
+    assert r["success"] is True and r.get("started") is True
+    assert not r.get("cached")
+
+    # 完整件：探测到正时长 → cached 复用
+    monkeypatch.setattr(gui_api_obj, "_review_media_duration", lambda p: 30.0)
+    r = gui_api_obj.refine_review_start_transcode(str(media))
+    assert r["success"] is True and r.get("cached") is True
+    assert r["path"] == str(out)
+
+
+def test_review_transcode_inflight_lock(gui_api_obj, monkeypatch, tmp_path):
+    """审计③d：per-media 在飞锁——重复调用幂等返回"转码中"，完成后移除。"""
+    import subtransjav.refine.audio_detect as ad
+    import subtransjav.refine.config as cfg_mod
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep01.mkv"
+    media.write_bytes(b"fake-mkv")
+    _install_fake_ffprobe(monkeypatch, video="hevc", audio="aac")
+    monkeypatch.setattr(ad, "_find_ffmpeg", lambda: "/fake/ffmpeg")
+    monkeypatch.setattr(cfg_mod, "TEMP_DIR", str(tmp_path / "temp"))
+    monkeypatch.setattr(gui_api_obj, "_review_media_duration", lambda p: 10.0)
+
+    key = api_mod.os.path.normcase(str(media))
+    # 在飞中重复调用：幂等返回"转码中"
+    api_mod._REVIEW_TRANSCODE_INFLIGHT.add(key)
+    try:
+        r = gui_api_obj.refine_review_start_transcode(str(media))
+        assert r["success"] is False
+        assert r["error"] == api_mod.msg("review_transcode_running")
+    finally:
+        api_mod._REVIEW_TRANSCODE_INFLIGHT.discard(key)
+
+    # 正常完成（SyncThread 同步跑 worker）→ 在飞集合不含该 media
+    class SyncThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self._target = target
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(api_mod.threading, "Thread", SyncThread)
+    r = gui_api_obj.refine_review_start_transcode(str(media))
+    assert r["success"] is True
+    assert key not in api_mod._REVIEW_TRANSCODE_INFLIGHT

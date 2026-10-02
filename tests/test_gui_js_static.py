@@ -1137,3 +1137,29 @@ def test_review_saveas_bridge_arg_order_pinned():
     assert len(args) == 2, f"新签名为两参，实为 {len(args)}：{args}"
     assert args[0].endswith("_blocks") or args[0] == "blocks", \
         f"第一参须为 blocks，实为 {args[0]}"
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批4（D2026-1002-12）：审计④载入 dirty 守卫 + 审计③ video error 监听
+# ---------------------------------------------------------------------------
+
+
+def test_review_load_srt_dirty_guard_pinned():
+    """审计④：载入新字幕前 dirty 守卫——未保存修改/行内编辑中须先经
+    AppModal.confirm 确认，取消即中止（防 _blocks 被静默覆盖丢编辑）。"""
+    body = _extract_function(_review_js_source(), "setSrtPath")
+    assert "this._dirty" in body, "setSrtPath 缺 dirty 判定分支"
+    assert "this._editingIdx !== null" in body, "setSrtPath 缺编辑中判定分支"
+    assert "AppModal.confirm" in body, "setSrtPath 缺确认弹窗"
+    assert "review_load_dirty_confirm" in body, "setSrtPath 缺守卫文案键"
+    src = _review_js_source()
+    assert ("review_load_dirty_confirm: "
+            "'当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？'") in src, \
+        "REVIEW_MSG 缺 review_load_dirty_confirm 完整中文文案"
+
+
+def test_review_video_error_listener_pinned():
+    """审计③c：video 元素挂 error 监听 → 状态条可读解码失败提示（JS 态）。"""
+    body = _extract_function(_review_js_source(), "_bindPlayer")
+    assert "addEventListener('error'" in body, "video 元素缺 error 监听"
+    assert "review_media_error" in body, "error 监听缺可读错误提示键"

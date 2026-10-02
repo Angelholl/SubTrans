@@ -53,6 +53,8 @@ const REVIEW_MSG = {
         + '推荐 whisper-large-v2，自备落位 ~/.cache/whisper 或数据根 models/asr，'
         + '配好后可在引擎与模型页启用 ASR 验证。',
     review_asr_goto: '前往引擎与模型页',
+    // ---- 批 4（D2026-1002-12）：审计④载入 dirty 守卫 ----
+    review_load_dirty_confirm: '当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？',
 };
 
 // 状态条管理器（D2026-1002-08 定案：四态 + 确定百分比 + 不定进度动画）。
@@ -415,7 +417,14 @@ const ReviewUI = {
         }, 800);
     },
 
-    setSrtPath(path) {
+    async setSrtPath(path) {
+        // 批 4 审计④：载入新字幕前 dirty 守卫——未保存修改/行内编辑中
+        // 时直接覆盖 _blocks 会丢用户编辑；确认才继续，取消即中止。
+        // （pick 对话框 / 拖放分流统一经本入口，守卫单点全覆盖）
+        if (this._dirty || this._editingIdx !== null) {
+            const ok = await AppModal.confirm(REVIEW_MSG.review_load_dirty_confirm);
+            if (!ok) { return; }
+        }
         this._call(() => this._bridge().refine_review_load_srt(path),
                    'review_bad_encoding').then((r) => {
             if (!r) { return; }
@@ -534,6 +543,15 @@ const ReviewUI = {
         const v = document.getElementById('videoReviewPlayer');
         if (!v) { return; }
         v.addEventListener('timeupdate', () => this._onTimeUpdate(v));
+        // 批 4 审计③c：解码/加载失败可读提示（半截件 cache、编码异常
+        // 兜底；_showVideo(null) removeAttribute 触发的无源 error 忽略）
+        v.addEventListener('error', () => {
+            if (!v.getAttribute('src')) { return; }
+            console.error('[review] video error:',
+                          (v.error && v.error.code) || 'unknown');
+            this._status.setState({ state: 'error',
+                                    labelKey: 'review_media_error' });
+        });
     },
 
     _onTimeUpdate(v) {

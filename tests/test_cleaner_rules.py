@@ -608,3 +608,63 @@ def test_stats_counts_mixed_entries(config_dir):
     assert stats["deleted_by_rule"] == {"L8-short-response": 1}
     assert stats["kept_by_source_evidence"] == 1
     assert stats["kept_by_noise_gate"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 批4（D2026-1002-12 审计②）：parse_srt 残块宽容解析
+# ---------------------------------------------------------------------------
+
+
+def test_parse_srt_tail_fragment_kept():
+    """尾块残块（仅文本行）不再静默丢弃：序号自动补、时间轴缺失给 0。"""
+    srt = (
+        "1\n00:00:01,000 --> 00:00:02,000\n完整行\n"
+        "\n"
+        "孤行文本\n"
+    )
+    items = parse_srt(srt)
+    assert len(items) == 2
+    assert items[0].text == "完整行"
+    assert items[1].text == "孤行文本"
+    assert items[1].index == 2
+    assert items[1].start == 0 and items[1].end == 0
+
+
+def test_parse_srt_missing_index_auto():
+    """序号行缺失（首行即时间轴）：自动补序号，正文完整保留。"""
+    srt = "00:00:01,000 --> 00:00:02,000\n无序号块\n"
+    items = parse_srt(srt)
+    assert len(items) == 1
+    assert items[0].index == 1
+    assert items[0].start == 1000 and items[0].end == 2000
+    assert items[0].text == "无序号块"
+
+
+def test_parse_srt_block_without_text_kept():
+    """序号+时间轴两行块（正文被清空）：保留为空文本块，不丢块。"""
+    srt = (
+        "1\n00:00:01,000 --> 00:00:02,000\n"
+        "\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n正文\n"
+    )
+    items = parse_srt(srt)
+    assert len(items) == 2
+    assert items[0].text == ""
+    assert items[1].text == "正文"
+
+
+def test_parse_srt_pure_index_noise_skipped():
+    """纯序号噪声块（无时间轴无文本）：仍跳过，不产空块。"""
+    srt = "1\n00:00:01,000 --> 00:00:02,000\n正文\n\n7\n"
+    items = parse_srt(srt)
+    assert len(items) == 1 and items[0].text == "正文"
+
+
+def test_parse_srt_multiline_roundtrip_stable():
+    """多行往返：parse → format → parse，块数与文本逐字一致（幂等）。"""
+    items = parse_srt(
+        "1\n00:00:01,000 --> 00:00:02,000\n行1\n行2\n\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n行3\n"
+    )
+    rebuilt = parse_srt(format_srt(items))
+    assert rebuilt == items

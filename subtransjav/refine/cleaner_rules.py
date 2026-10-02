@@ -80,28 +80,50 @@ class Subtitle:
 
 
 def parse_srt(content: str) -> list[Subtitle]:
+    """宽容解析 SRT（批4 D2026-1002-12 审计②）。
+
+    结构完整的块（序号行 + 时间轴行 + 正文）语义不变；残块不再静默丢弃：
+    - 序号行缺失（首行即时间轴）→ 序号自动补（len(items)+1）；
+    - 时间轴行缺失 → start/end 给 0（内容保全优先，保存链 format_srt
+      会按位置重编号，时间轴由上游 ms 重建）；
+    - 正文为空的块（序号+时间轴两行）→ 保留为空文本块；
+    - 仅纯序号无时间轴无文本的噪声块仍跳过（不产空块）。
+    """
     content = content.lstrip('\ufeff')
     items: list[Subtitle] = []
     blocks = re.split(r'\n\s*\n', content.strip())
     for block in blocks:
         lines = block.strip().splitlines()
-        if len(lines) < 3:
+        if not lines:
             continue
+        # 序号行（可选）：首行为纯整数则消费，否则残块序号自动补
+        seq: int | None = None
+        rest = lines
         try:
-            index = int(lines[0].strip())
+            seq = int(lines[0].strip())
+            rest = lines[1:]
         except ValueError:
-            continue
+            pass
+        # 时间轴行（可选）：序号行之后的首行
         m = re.match(
             r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})',
-            lines[1].strip(),
-        )
-        if not m:
+            rest[0].strip(),
+        ) if rest else None
+        if m is not None:
+            g = [int(x) for x in m.groups()]
+            start = g[0] * 3600000 + g[1] * 60000 + g[2] * 1000 + g[3]
+            end = g[4] * 3600000 + g[5] * 60000 + g[6] * 1000 + g[7]
+            text = "\n".join(rest[1:]).strip()
+        else:
+            start = 0
+            end = 0
+            text = "\n".join(rest).strip()
+        # 无时间轴且无文本 → 纯噪声块，跳过；否则保全内容不静默丢弃
+        if m is None and not text:
             continue
-        g = [int(x) for x in m.groups()]
-        start = g[0] * 3600000 + g[1] * 60000 + g[2] * 1000 + g[3]
-        end = g[4] * 3600000 + g[5] * 60000 + g[6] * 1000 + g[7]
-        text = "\n".join(lines[2:]).strip()
-        items.append(Subtitle(index=index, start=start, end=end, text=text))
+        items.append(Subtitle(
+            index=seq if seq is not None else len(items) + 1,
+            start=start, end=end, text=text))
     return items
 
 

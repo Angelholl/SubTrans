@@ -430,6 +430,13 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
 # 校对页转码/时长工具（2.6.1 批 2a D2026-1002-09；模块级纯函数便于直测）
 # ---------------------------------------------------------------------------
 
+# 审计③d（批4 D2026-1002-12）：per-media 转码在飞集合（normcase 绝对路径
+# 为键）。running 标志前置的 ffprobe 探测/缓存校验耗时窗口内双击可双线程
+# 写同一 out_path——in-flight 集合在 _review_lock 内 check-and-add 原子
+# 判定，第二次进入幂等返回"转码中"，worker finally 完成后移除。
+_REVIEW_TRANSCODE_INFLIGHT: set[str] = set()
+
+
 def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
                     timeout_s: float, progress_cb=None) -> tuple[bool, str]:
     """同步转码主体（后台线程包壳调用；list-args 禁 shell）。
@@ -437,6 +444,9 @@ def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
     - ``-progress pipe:1`` 逐行解析 out_time_ms（ffmpeg 语义实为微秒）；
     - progress_cb(seconds) 回报已转码媒体秒数（供调用方折算百分比）；
     - 总时长超 timeout_s 杀进程（proc.kill）返回失败，可重试；
+    - 审计③（D2026-1002-12）：finally 语义——成功才保留产物，kill/
+      超时/异常/非零退出路径一律 unlink 半截产物（24h sweep 只清旧
+      文件，兜不住"半截件当 cache 复用"）；
     - 返回 ``(success, error)``。
     """
     cmd = [ffmpeg_path, "-y", "-i", media_path,
@@ -449,6 +459,7 @@ def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
     except OSError as e:
         return False, str(e)
     deadline = time.monotonic() + max(1.0, timeout_s)
+    success = False
     try:
         assert proc.stdout is not None
         for raw in proc.stdout:
@@ -463,11 +474,17 @@ def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
                     continue
         code = proc.wait(timeout=30)
         if code == 0 and os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
+            success = True
             return True, ""
         return False, f"ffmpeg exit {code}"
     except Exception as e:  # noqa: BLE001  兜底杀进程后如实回报
         proc.kill()
         return False, str(e)
+    finally:
+        if not success:
+            # 产物本不存在/被占用：清理语义已达成，不再扩散异常
+            with contextlib.suppress(OSError):
+                os.unlink(out_path)
 
 
 def _codec_direct(ext: str, codecs: dict, exts, vids, auds) -> bool:
@@ -495,6 +512,19 @@ def _write_srt_atomic(path: str, text: str) -> None:
     mkstemp 同目录 + fsync + os.replace，防中断半截产物）。"""
     from subtransjav.refine.fs_utils import _atomic_write_text as _atomic
     _atomic(path, text, suffix=".srt.tmp")
+
+
+def _review_sanitize_block_text(text: str) -> str:
+    """块内文本写入端规范化（批4 D2026-1002-12 审计②）。
+
+    SRT 中空行是块分隔符语义：编辑框引入的块内空行/连续空白行原样写出，
+    下次 parse_srt 会把后续文本裂成残块（内容静默丢失且随 .bak.srt 滚动
+    覆盖固化）。保存前统一换行符、把连续空白行压成单换行、掐头去尾，
+    保证写出的必是标准 SRT 块结构（序号连续/块间恰好一个空行/无尾部
+    多余空行由 save_srt 的组装方式原生保证），往返解析不漂移。
+    """
+    normalized = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r'\n\s*\n+', '\n', normalized).strip()
 
 
 def _load_dict_dir_override() -> None:
@@ -2984,8 +3014,12 @@ class TranslateAPI:
 
         - 三态 direct 时拒绝（review_transcode_no_need）；
         - 目标件 ``Temp/review_transcode/rt_{sha256(path+mtime+size)[:12]}.mp4``
-          已存在 → cached 复用；
-        - 超时 = duration×3+120s 杀进程置 error（可重试）；
+          已存在且完整性校验通过（ffprobe 探到正时长，审计③b）→ cached 复用，
+          否则视为无效 cache 走重转码；
+        - per-media 在飞锁（审计③d）：同一媒体转码中重复调用幂等返回
+          "转码中"，完成后移除；
+        - 超时 = duration×3+120s 杀进程置 error（可重试，半截产物随失败
+          清理，审计③a）；
         - 进度经 refine_review_transcode_status 轮询。
         """
         try:
@@ -3012,11 +3046,24 @@ class TranslateAPI:
             identity = f"{p}|{os.path.getmtime(p)}|{os.path.getsize(p)}"
             digest = hashlib.sha256(identity.encode("utf-8", "replace")).hexdigest()[:12]
             out_path = str(out_dir / f"rt_{digest}.mp4")
+            key = os.path.normcase(p)
             if os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
-                return {"success": True, "cached": True, "path": out_path}
+                # 审计③b：cache 命中前完整性校验——kill 残留半截件"存在且
+                # 非空"但不可解码，ffprobe 探不到正时长即视为无效 cache，
+                # 落到下方重转码（ffmpeg -y 覆盖写）。cache 命中本就是低频
+                # 路径，逐次付一次 ffprobe 探测可接受。
+                cached_dur = self._review_media_duration(out_path)
+                if cached_dur is not None and cached_dur > 0:
+                    return {"success": True, "cached": True, "path": out_path}
             duration = self._review_media_duration(p) or 0.0
             timeout_s = duration * 3 + 120
             with lock:
+                # 审计③d：running/在飞判定 + add 原子化（探测窗口内的
+                # 双击第二次进入在此幂等返回"转码中"，不落双线程写）
+                if state.get("running") or key in _REVIEW_TRANSCODE_INFLIGHT:
+                    return {"success": False,
+                            "error": msg("review_transcode_running")}
+                _REVIEW_TRANSCODE_INFLIGHT.add(key)
                 state.update({"running": True, "percent": None, "error": None,
                               "path": out_path, "cached": False})
 
@@ -3027,16 +3074,26 @@ class TranslateAPI:
                         with lock:
                             state["percent"] = round(pct, 1)
 
-                ok, err = _transcode_sync(ff, p, out_path, timeout_s, _cb)
+                try:
+                    ok, err = _transcode_sync(ff, p, out_path, timeout_s, _cb)
+                    with lock:
+                        state["running"] = False
+                        if ok:
+                            state["percent"] = 100.0
+                        else:
+                            state["error"] = err or msg("review_transcode_failed")
+                finally:
+                    _REVIEW_TRANSCODE_INFLIGHT.discard(key)
+
+            try:
+                threading.Thread(target=_worker, daemon=True,
+                                 name="review-transcode").start()
+            except Exception:
+                # spawn 失败（极端边界）：解除在飞标记，防媒体被永久锁死
+                _REVIEW_TRANSCODE_INFLIGHT.discard(key)
                 with lock:
                     state["running"] = False
-                    if ok:
-                        state["percent"] = 100.0
-                    else:
-                        state["error"] = err or msg("review_transcode_failed")
-
-            threading.Thread(target=_worker, daemon=True,
-                             name="review-transcode").start()
+                raise
             estimated_s = int(duration / 0.25) if duration > 0 else 0
             return {"success": True, "started": True,
                     "estimated_s": estimated_s, "path": out_path}
@@ -3164,6 +3221,12 @@ class TranslateAPI:
             if invalid:
                 return {"success": False, "error": msg(invalid),
                         "error_key": "review_save_failed"}
+            # 审计②（D2026-1002-12）写入端 sanitize：块内空行压平（见
+            # _review_sanitize_block_text），杜绝非常规文本被下次解析改写
+            blocks = [
+                {**it, "text": _review_sanitize_block_text(str(it["text"]))}
+                for it in blocks
+            ]
             safe = _review_save_allowed(p)
             target = Path(safe)
             backup_path = None
