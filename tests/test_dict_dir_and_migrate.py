@@ -592,7 +592,14 @@ def test_api_pick_folder_purpose_dict_persists(
 
 def test_api_init_loads_persisted_dict_dir(
         monkeypatch, _isolated_dict_state):
-    """启动注入（_load_dict_dir_override）：持久值 → 进程内生效。"""
+    """启动注入（_load_dict_dir_override）：持久值 → 进程内生效。
+
+    CI 热修：本用例直接 import webview_gui.api 但不经 gui_api 夹具，
+    须自带 importorskip 闸（与 _api_cls 口径对齐），否则 Ubuntu 腿
+    （不装 pywebview）collection 后 ModuleNotFoundError 致红。
+    """
+    pytest.importorskip("webview", reason="pywebview 未安装时跳过 API 面用例",
+                        exc_type=ImportError)
     from subtransjav.webview_gui import user_dirs as ud
     root = _isolated_dict_state
     custom = root / "startup"
