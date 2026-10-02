@@ -2642,3 +2642,32 @@ owner 拍板 b 追认不重跑，追认边界四条：①只追认"批 2b 行级
 ### 四、异议记录与风险跟踪
 
 评议员：有条件支持，1 HRO（C1 采纳）+1 MATERIAL_CONFLICT（C2 裁定直接 seek）；无 [PRESSURE-OVERRIDE]。风险跟踪：①重编号不变式三断言（行数/时间轴/index==下标+1）防批 3 断裂；②`.bak.srt` 排除测试防扫描收纳回归；③dirty 守卫 capture 拦截须黑盒覆盖；④性能三口径真机波留档，不达标启用虚拟化兜底；⑤外部工具改文件致位置失效=批 3 重扫兜底留坑；⑥并行会话错峰提交。
+
+
+## [2026-10-02] D2026-1002-11 批 3 联动增强开工评议 [已拍板·开工]
+
+**关联**：D2026-1002-07（批 3 原文：对照链/AI 分析疑似问题段进校对视图+ASR 可选入口=承诺件）、D2026-1002-09/10（批 2a/2b 收口，spike 直连结论+位置失效留坑 C8+技术债登记）。**流程**：主模型批 3 方案+勘探事实交评议员；有条件支持（四条件）+裁定项五条，主模型全采纳无驳回，即刻开工。无人值守授权延续。
+
+### 一、方案要点（评议通过稿）
+
+1. **疑点段进校对视图**：数据面裁定=唯一可执行数据源为 **guide items**（8 字段五来源，quality_report.py:1404-1469；AI 建议 observations 纯字符串零时间戳；对照链不落盘 cleanup_clips 即删）。校对页**自主直载**：新 API `refine_review_load_detections(guide_path)` 复用 _load_validated_guide 白名单读法，filter 带 timing 条目，返回 {success, detections[8 字段], media_path}；media_path 透传导读 json 键（空串→null 前端对话框兜底）。**app.js 零改动保持**。
+2. **UI**：疑点面板（折叠式）三新 id `reviewDetLoadBtn/reviewDetectionsWrap/reviewDetList`（FROZEN_IDS 206→210，≤9 留 5 缓冲）；行全 class 委托 review-det-row[data-idx]+review-det-act[data-act]；交互=跳转（匹配 blocks.start_ms 原生）/试听（seek+play+区间差自动暂停）/确认·跳过（会话内标记+console 留痕不写盘+文案明示）+位置失效态（C8 留坑闭合）。
+3. **ASR 承诺件（闭合 R4）**：reviewAsrBtn（第 4 新 id）引导卡（推荐 whisper-large-v2+自备落位指引新 REVIEW_MSG 键，措辞复用引擎页精神不拷贝字面）；**switchTab 全局性冲突裁定=程序化 click 回退**（评议员核实 switchTab 未挂 window——原方案"调既有全局函数"作废）；不实现校对页内转录。
+4. **enqueueJump 契约保留**（队列零消费者，主通道=loadDetections 直载）；校对页内部 _applyJump 抽公共供面板与未来队列共用。
+5. **技术债十一项收官+顺序**：a/b fs_utils 先行（refine/fs_utils.py `_atomic_write_text` 薄壳三处+BACKUP_SUFFIX 常量四处，依赖方向 webview_gui→refine 正确）→c/h/i 同批（saveas 删 src_path 死形参+前端调用点同步+参数序钉；_call helper 收敛 _bridge 样板 8 处；error_key 回退+键名映射表）→e/f/g 独立（_codec_direct 参数化保两套语义差异；_sweep_aged_files 两薄壳；pick helper 收敛）→功能面最后；d _markDirty busy 态 _dirtyPending；j getActiveTab helper；**k）aria 记闭合零代码**（裁定不补 aria-hidden，理由=状态播报连续性）。
+
+### 二、评议员四条件（全采纳，无驳回）
+
+①switchTab 程序化 click 回退（node --check+黑盒零 ReferenceError 验证）；②saveas 签名变更同步前端调用点+bridge 参数序钉；③_codec_direct 两套常量参数传入+m4a/mp3 正反例差异钉；④会话标记"本次不落盘"REVIEW_MSG 键+静态钉断言。
+
+### 三、裁定五项
+
+Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记不做补偿（2.6.2 想法行可选）｜Q3 不落盘文案+复核持久化登记 2.6.2 候选｜Q7 全采纳（ms 原生跳转/序变联动禁用+提示/40 字摘录口径/timing 解析器防漂移注释）｜k 记闭合零代码。
+
+### 四、范围确凿化声明
+
+对照链/AI 分析疑似问题段进校对视图=**guide items 全量（时间戳载体唯一）**；对照链无"疑点清单实体"产物，知情段数已由状态行兑现；AI 建议与 guide 疑点段信息面同源（prompt 只基于导读材料），收窄无信息损失。（D2026-1002-07 批 3 按此口径落档，防"漏做对照链侧"误读。）
+
+### 五、异议记录与边界
+
+评议员有条件支持，**无 [HIGH_RISK_OBJECTION]、无 [PRESSURE-OVERRIDE]**；四条件+五裁定全采纳无驳回。owner 真机波累积待做（性能三口径/导入对话框原生链路/联动运行时，归第五次真机测试复核收口）。风险跟踪：①原子写行为等价三断言；②saveas 桥参数序钉+黑盒 saveAs 流；③timing 解析器防漂移注释；④翻译侧产物写路径回归（v2_outputs.py:56/synopsis.py:175，基线 1683+4 只增）；⑤.bak.srt 收口扫点；⑥位置失效态黑盒；⑦摘录 40 字截断出域口径维持。
