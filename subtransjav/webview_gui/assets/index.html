@@ -198,8 +198,11 @@
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
                         <select id="refineS1Model" class="form-select compact grow">
-                            <option value="custom-model-1" selected data-i18n="model_default_1">custom-model-1（默认）</option>
-                            <option value="" data-i18n="model_refresh_hint">（点刷新按钮获取模型列表）</option>
+                            <!-- 批2（D2026-1002-12 拍板点2）：空态占位 option（文案走
+                                 JS 态键 model_list_empty_hint，bindDom 填充，不挂静态
+                                 data-i18n）；已存模型由 applySavedStageSettings 注入
+                                 标记 option 选中，无硬默认预选 -->
+                            <option value="" disabled selected></option>
                         </select>
                         <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
                         <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
@@ -229,8 +232,8 @@
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
                         <select id="refineS3Model" class="form-select compact grow">
-                            <option value="custom-model-2" selected data-i18n="model_default_2">custom-model-2（默认）</option>
-                            <option value="" data-i18n="model_refresh_hint">（点刷新按钮获取模型列表）</option>
+                            <!-- 同 refineS1Model：空态占位 + 已存值注入，无硬默认预选 -->
+                            <option value="" disabled selected></option>
                         </select>
                         <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
                         <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
@@ -326,22 +329,34 @@
                 <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.6.1 修订
                      D2026-1002-06 模型推荐制：删除内置下载链，改推荐清单+
                      自备落位指引）。asr_panel_title 为静态键（+1，191→192 恰达
-                     cap）；其余文案 JS 态填充（批5 C4 体例：HTML 留英文占位），
-                     新增文案零静态键消耗（开关 label/placeholder 均由 JS 设） -->
+                     cap）。
+                     批2 重整（D2026-1002-12 拍板点1，仅重排入口与文案，不加执行
+                     能力）：header 行（标题+重新探测）→ 状态行（asrEnvStatus 空态
+                     asr_env_undetected）→ 说明行（asr_entry_hint）→ 模型行
+                     （asrModelSel 空态占位 asrSelectPlaceholder + asrStatus）→
+                     开关行（asrCrosscheckToggle + asrPythonInput）→ 推荐清单。
+                     文案全 JS 态填充（bindDom），HTML 不留英文占位（静态钉
+                     禁硬编码英文按钮/开关文案残留）；id 零增减，说明行无
+                     独立 id（class 锚 .asr-entry-hint，id 预算余 0） -->
                 <div class="form-card">
-                    <div class="form-card-header" data-i18n="asr_panel_title">ASR models (media crosscheck)</div>
+                    <div class="action-row">
+                        <div class="form-card-header" data-i18n="asr_panel_title">ASR 模型（媒体重点对照）</div>
+                        <button type="button" id="asrRefreshBtn" class="btn btn-compact"><span></span></button>
+                    </div>
                     <div class="section-content">
                         <div class="action-row">
-                            <button type="button" id="asrRefreshBtn" class="btn btn-compact"><span>Re-detect</span></button>
                             <span id="asrEnvStatus" class="muted"></span>
                         </div>
                         <div class="action-row" style="margin-top:6px;">
-                            <select id="asrModelSel" class="form-select compact" style="width:auto;"></select>
+                            <span class="muted asr-entry-hint"></span>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <select id="asrModelSel" class="form-select compact" style="width:auto;"><option value="" disabled selected></option></select>
                             <span id="asrStatus" class="muted"></span>
                         </div>
-                        <div class="action-row" style="margin-top:6px;">
-                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span>Media crosscheck</span></label>
-                            <input id="asrPythonInput" class="form-input compact" style="width:auto; flex:1;" placeholder="upstream python">
+                        <div class="field-row" style="margin-top:6px;">
+                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
+                            <input id="asrPythonInput" class="form-input compact" style="width:auto; flex:1;">
                         </div>
                         <div id="asrRecList" style="margin-top:6px; display:flex; flex-direction:column; gap:4px;"></div>
                     </div>

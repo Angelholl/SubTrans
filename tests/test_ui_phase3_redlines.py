@@ -36,6 +36,11 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   三 id 列名=dictBrowseBtn/dictRestoreBtn/dictMigrateBtn（预算恰好用满，
   累计余 0）；FROZEN_I18N_KEYS 不动（三键标签均 JS 态 MSG 键，R6 零
   静态 i18n 消耗延续）。
+  2.6.1 批 2 D2026-1002-12（拍板点1/2）：模型下拉删 custom-model-1/2 硬
+  默认，静态 data-i18n 键 -3（model_default_1/model_default_2/
+  model_refresh_hint）——空态占位改 JS 态键 model_list_empty_hint，零
+  静态消耗；快照 192→189；FROZEN_IDS 不动（ASR 卡重整 id 零增减，
+  文案全 JS 态键 asr_env_undetected/asr_entry_hint）。
 """
 import re
 from pathlib import Path
@@ -157,7 +162,7 @@ glossary_learn_title grammar_hint_text guide_companions guide_conclusions
 guide_empty_hint guide_items_title guide_load_btn guide_open_other_btn guide_sections
 guide_summary key_placeholder lang_en lang_ja lang_zh
 main_subtitle media_override_apply media_override_placeholder media_source_change_btn
-media_source_label model_default_1 model_default_2 model_refresh_hint nav_group_quality
+media_source_label nav_group_quality
 nav_group_workspace no_files_selected open_btn output_header output_label
 output_placeholder pipeline_card_hint profile_cloud profile_label profile_local
 profile_title project_home_link provider_custom provider_lmstudio provider_ollama

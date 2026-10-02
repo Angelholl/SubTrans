@@ -1163,3 +1163,127 @@ def test_review_video_error_listener_pinned():
     body = _extract_function(_review_js_source(), "_bindPlayer")
     assert "addEventListener('error'" in body, "video 元素缺 error 监听"
     assert "review_media_error" in body, "error 监听缺可读错误提示键"
+
+
+# ---------------------------------------------------------------------------
+# 批2（D2026-1002-12 拍板点1/2）：模型下拉不自动拉取 + 空态占位 + 删硬默认
+# ---------------------------------------------------------------------------
+
+def test_model_list_no_auto_fetch_pinned():
+    """拍板点2：模型列表一律不自动拉取，只认「刷新/测试」两个显式入口。
+
+    refreshModels 全文件仅允许两处出现：函数定义 + 刷新按钮 click 绑定
+    （bindDom 的 [1,3] 循环一处覆盖阶段A/阶段B）。页面就绪链
+    （loadRemote，pywebviewready → __refineLoadRemote）、服务商切换
+    （provider change 监听）、快捷下拉（applyServiceQuickProvider）均不得
+    触发拉取；provider change 保留接口地址预填 applyProviderEndpoint。
+    """
+    source = _app_js_source()
+    sites = [m.start() for m in re.finditer(r"refreshModels\(", source)]
+    assert len(sites) == 2, \
+        f"refreshModels 只允许定义+刷新按钮绑定两处，实际 {len(sites)} 处"
+    assert re.search(r"async function refreshModels\(n\)", source), \
+        "缺少 refreshModels 定义"
+    assert re.search(r"addEventListener\('click', \(\) => refreshModels\(n\)\)",
+                     source), "刷新按钮 click 绑定缺失"
+    # 三处自动拉取移除钉
+    assert "refreshModels" not in _extract_function(source, "loadRemote"), \
+        "loadRemote（页面就绪链）不得自动拉取模型列表"
+    assert "refreshModels" not in \
+        _extract_function(source, "applyServiceQuickProvider"), \
+        "快捷下拉不得自动拉取模型列表"
+    bind = _extract_function(source, "bindDom")
+    m = re.search(r"pv\.addEventListener\('change', \(\) => \{[\s\S]*?\n      \}\);",
+                  bind)
+    assert m, "bindDom 缺 provider change 监听"
+    assert "refreshModels" not in m.group(0), \
+        "provider change 不得自动拉取模型列表"
+    assert "applyProviderEndpoint" in m.group(0), \
+        "provider change 必须保留接口地址预填"
+    # 刷新/测试按钮绑定保留（显式入口）
+    assert "$('refineRefreshS' + n)" in bind and \
+        "$('refineTestS' + n)" in bind
+
+
+def test_model_selects_empty_placeholder_pinned():
+    """拍板点2：模型下拉空态占位 + 硬默认删除。
+
+    index.html 两个模型下拉不得残留 custom-model 默认项与静态 data-i18n
+    键（model_default_1/2、model_refresh_hint 已随默认语义删除），初始
+    骨架只留 value="" disabled selected 占位 option（文案由 bindDom 以
+    JS 态键 model_list_empty_hint 填充，零静态 i18n 消耗）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "custom-model" not in html, "index.html 仍残留 custom-model 硬默认"
+    for dead in ("model_default_1", "model_default_2", "model_refresh_hint"):
+        assert f'data-i18n="{dead}"' not in html, \
+            f"index.html 仍引用已删除静态键: {dead}"
+    for sel_id in ("refineS1Model", "refineS3Model"):
+        m = re.search(rf'<select id="{sel_id}"[^>]*>([\s\S]*?)</select>', html)
+        assert m, f"index.html 未找到 {sel_id}"
+        assert 'value="" disabled selected' in m.group(1), \
+            f"{sel_id} 缺空态占位 option（value=\"\" disabled selected）"
+    keys = _js_msg_keys()
+    assert "model_list_empty_hint" in keys, "MSG 缺空态占位键 model_list_empty_hint"
+    # bindDom 必须以 JS 态键填充占位文案（两个下拉同一循环覆盖）
+    bind = _extract_function(_app_js_source(), "bindDom")
+    assert "MSG.model_list_empty_hint" in bind, \
+        "bindDom 缺占位文案 JS 态填充"
+    # 已存模型恢复链：applySavedStageSettings 注入标记 option + refreshModels
+    # 命中恢复；default_model_missing 警告仅剩"已存值与刷新列表不匹配"场景
+    backfill = _extract_function(_app_js_source(), "applySavedStageSettings")
+    assert "savedStageModels" in backfill and "createElement('option')" in backfill
+    refresh = _extract_function(_app_js_source(), "refreshModels")
+    assert "savedStageModels" in refresh
+    assert "default_model_missing" in refresh
+    assert "selectDefaultModel" not in refresh and \
+        "LOCAL_MODEL_DEFAULTS" not in _app_js_source(), \
+        "前端硬默认语义未删净"
+
+
+def test_asr_card_restructured_no_hardcoded_english():
+    """拍板点1：ASR 卡重整（仅入口与文案，不加执行能力）。
+
+    结构序=header 行（标题+重新探测）→ 状态行 → 说明行 → 模型行 →
+    开关行 → 推荐清单；卡内不得残留 "Re-detect"/"Media crosscheck"/
+    "upstream python" 硬编码英文（文案全 JS 态键填充，零静态 i18n 消耗）；
+    asrSaved 仅在保存成功后写入（与空态占位区分）；无任何新增执行按钮。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    start = html.index("<!-- ASR 模型管理")
+    end = html.index("<!-- 词典管理", start)
+    card = html[start:end]
+    for banned in ("Re-detect", "Media crosscheck", "upstream python"):
+        assert banned not in card, f"ASR 卡残留硬编码英文: {banned}"
+    # 结构序：header 行（含按钮）→ asrEnvStatus → .asr-entry-hint →
+    # asrModelSel → asrCrosscheckToggle → asrRecList（id 全集不变，仅重排）
+    anchors = ['data-i18n="asr_panel_title"', 'id="asrRefreshBtn"',
+               'id="asrEnvStatus"', 'class="muted asr-entry-hint"',
+               'id="asrModelSel"', 'id="asrStatus"',
+               'id="asrCrosscheckToggle"', 'id="asrPythonInput"',
+               'id="asrRecList"']
+    pos = [card.index(a) for a in anchors]
+    assert pos == sorted(pos), "ASR 卡结构序漂移（header→状态→说明→模型→开关→推荐）"
+    # 无执行按钮：卡内 button 仅 asrRefreshBtn 一个
+    assert len(re.findall(r"<button\b", card)) == 1, \
+        "ASR 卡只允许「重新探测」一个按钮（不加执行能力）"
+    # JS 态文案填充钉 + asrSaved 保存成功门控
+    bind = _extract_function(_app_js_source(), "bindDom")
+    for frag in ("MSG.asrRefreshBtn", "MSG.asr_env_undetected",
+                 "MSG.asr_entry_hint", "MSG.asrSelectPlaceholder",
+                 "MSG.asrCrosscheckLabel", "MSG.asrPythonPlaceholder"):
+        assert frag in bind, f"bindDom 缺 ASR 卡 JS 态文案填充: {frag}"
+    assert bind.count("MSG.asrSaved") == 3 and \
+        bind.count("r.success ? MSG.asrSaved") == 3, \
+        "asrSaved 必须仅在保存成功后写入（三处保存链均门控）"
+
+
+def test_batch2_new_msg_keys_pinned():
+    """批2 新增 JS 态 MSG 键存在（全中文文案，零静态 i18n 消耗）。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    for key in ("model_list_empty_hint", "asr_env_undetected",
+                "asr_entry_hint"):
+        assert key in keys, f"MSG 缺少批2新键: {key}"
+        m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
+        assert m and m.group(1), f"MSG 键 {key} 文案为空"

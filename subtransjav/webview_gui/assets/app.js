@@ -108,9 +108,9 @@ const MSG = {
     provider_ollama: '本地 Ollama',
     provider_siliconflow: '硅基流动',
     provider_custom: '自定义兼容接口',
-    model_default_1: 'custom-model-1（默认）',
-    model_default_2: 'custom-model-2（默认）',
-    model_refresh_hint: '（点刷新按钮获取模型列表）',
+    // 批2（D2026-1002-12 拍板点2）：模型下拉空态占位（JS 态键，HTML 不挂
+    // 静态 data-i18n）；custom-model-1/2 硬默认键随默认语义一并删除
+    model_list_empty_hint: '点击「刷新」获取模型列表',
     refresh_model_title: '在线拉取模型列表',
     test_stage_title: '测试该阶段连通性',
     test_stage_btn: '测试',
@@ -296,7 +296,8 @@ const MSG = {
     select_provider_first: '⚠️ 请先选择该阶段的服务商',
     loading_models: '加载中...',
     fetching_models: '拉取模型列表中...',
-    default_model_missing: (id, cur) => `⚠️ 默认模型 ${id} 不在您的模型列表中，已选择 ${cur}，请按需更换`,
+    // 批2（D2026-1002-12）：唯一触发源=已存值与刷新所得列表不匹配（不再有前端硬默认）
+    default_model_missing: (id, cur) => `⚠️ 已保存模型 ${id} 不在当前模型列表中，已选择 ${cur}，请按需更换`,
     models_loaded: n => `✅ 模型 ${n} 个`,
     fetch_failed: '获取失败',
     testing: '测试中...',
@@ -519,6 +520,9 @@ const MSG = {
     asrProbeFail: e => `上游 ASR 不可用：${e}`,
     asrSelectPlaceholder: '选择 ASR 模型（媒体重点对照用）',
     asrSaved: '已保存 ASR 模型选择',
+    // 批2（D2026-1002-12 拍板点1）：ASR 卡重整空态/说明文案（JS 态零静态键）
+    asr_env_undetected: '未探测——点击「重新探测」检测本机 ASR 环境',
+    asr_entry_hint: '用于翻译完成后对媒体切片做本地重转写重点对照；须自备上游 Python 环境，未配置不影响正常翻译。',
     asrCrosscheckNote: n => `；本地转写 ${n} 段对照`,
     // 2.6.1 修订（D2026-1002-06，模型推荐制）：删下载文案，改推荐清单/
     // 自备落位指引/验证开关（JS 态零静态键消耗）
@@ -1977,38 +1981,19 @@ function switchTab(tabId) {
   TranslatorManager.collectOptions = buildRefineOptions;
   TranslatorManager.guideAutoDetect = guideAutoDetect;
 
-  // ---- 本地模型默认值（槽位1=阶段A，槽位3=阶段B；与 index.html 中 selected 项一致）----
-  const LOCAL_MODEL_DEFAULTS = {
-    1: { id: 'custom-model-1', keys: ['custom-model-1'] },
-    3: { id: 'custom-model-2', keys: ['custom-model-2'] }
-  };
+  // ---- 已存模型名（批2 D2026-1002-12 拍板点2：删 custom-model-1/2 前端
+  // 硬默认，模型下拉不再有"默认模型"语义——仅认用户显式保存过的值）----
+  // 更新时机：applySavedStageSettings 回填 / saveStageEndpoints 保存成功；
+  // 消费时机：refreshModels 成功后命中列表则恢复选中，未命中才提示更换
+  //（default_model_missing 警告的唯一触发源）；无已存值不预选不出警告
+  const savedStageModels = { 1: '', 3: '' };
 
-  // 在已填充的模型下拉中优先选中该槽位的默认模型，三级匹配：
-  // ①大小写不敏感精确匹配；②默认名去掉 "-gguf" 后缀后包含匹配；
-  // ③关键词片段匹配（matchKeys，任一 option 小写 value 包含任一 key 即命中，
-  //   注意嵌入模型如 text-embedding-* 不会被这些 key 命中）。
-  // 都找不到返回 false（由调用方回退 selectedIndex = 0）
-  function selectDefaultModel(sel, n) {
-    const def = LOCAL_MODEL_DEFAULTS[n];
-    if (!def || !def.id) return false;
-    const opts = Array.from(sel.options || []);
-    const idLower = def.id.toLowerCase();
-    // ① 精确匹配
-    let opt = opts.find(o => (o.value || '').toLowerCase() === idLower);
-    // ② 去掉 -gguf 后缀后包含匹配
-    if (!opt) {
-      const idNoGguf = idLower.replace(/-gguf$/, '');
-      opt = opts.find(o => (o.value || '').toLowerCase().indexOf(idNoGguf) !== -1);
-    }
-    // ③ 关键词片段匹配
-    if (!opt && Array.isArray(def.keys) && def.keys.length) {
-      opt = opts.find(o => {
-        const v = (o.value || '').toLowerCase();
-        return !v.startsWith('text-embedding') && def.keys.some(k => v.indexOf(k) !== -1);
-      });
-    }
-    if (opt) { sel.value = opt.value; return true; }
-    return false;
+  // 模型下拉空态占位 option（批2 D2026-1002-12）：value 空 + disabled +
+  // selected，文案走 JS 态键 model_list_empty_hint；HTML 初始骨架 /
+  // 切服务商重置 / 拉取失败恢复共用同一形态
+  function modelEmptyOptionHTML() {
+    return '<option value="" disabled selected>'
+      + MSG.model_list_empty_hint + '</option>';
   }
 
   // ---- 模型列表刷新 ----
@@ -2020,7 +2005,7 @@ function switchTab(tabId) {
     if (!prov) { stageStatus(n, MSG.select_provider_first, 'err'); return; }
     btn.disabled = true;
     const old = btn.innerHTML; btn.textContent = '…';   // innerHTML 保存：按钮含内联 SVG，textContent 会丢图标（D2026-1001 批2）
-    // 保留 HTML 初始默认选中项，失败/异常时恢复，避免下拉被清空
+    // 保留 HTML 空态占位 option，失败/异常时恢复，避免下拉被清空
     const originalHTML = sel.innerHTML;
     sel.innerHTML = '<option value="">' + MSG.loading_models + '</option>';
     stageStatus(n, MSG.fetching_models, '');
@@ -2030,24 +2015,26 @@ function switchTab(tabId) {
       if (r.success && r.models.length) {
         sel.innerHTML = r.models.map(m =>
           '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
+        let warn = '';
         if (prov === 'zen') {
           const free = r.models.filter(x => x.endsWith('-free'));
           if (free.length) sel.value = free[0]; else sel.selectedIndex = 0;
-        } else if (!selectDefaultModel(sel, n)) {
-          // 默认模型未命中：优先选第一个非嵌入模型，避免误选 text-embedding-*
+        } else if (savedStageModels[n]
+                   && r.models.includes(savedStageModels[n])) {
+          // 已存模型命中刷新所得列表：恢复选中（老用户无感）
+          sel.value = savedStageModels[n];
+        } else if (savedStageModels[n]) {
+          // 已存值与刷新所得列表不匹配：优先选第一个非嵌入模型，避免误选
+          // text-embedding-*，并提示更换（default_model_missing 唯一触发源）
           const opts = Array.from(sel.options || []);
           const nonEmbed = opts.find(o =>
             !(o.value || '').toLowerCase().startsWith('text-embedding'));
           sel.value = nonEmbed ? nonEmbed.value : sel.options[0].value;
-          const def = LOCAL_MODEL_DEFAULTS[n];
-          if (def && def.id) {
-            stageStatus(n, MSG.default_model_missing(def.id, sel.value), '');
-          } else {
-            stageStatus(n, MSG.models_loaded(r.models.length), 'ok');
-          }
-        } else {
-          stageStatus(n, MSG.models_loaded(r.models.length), 'ok');
+          warn = MSG.default_model_missing(savedStageModels[n], sel.value);
         }
+        // 无已存值：不预选任何模型（列表首项自然显示）、不出警告
+        stageStatus(n, warn || MSG.models_loaded(r.models.length),
+                    warn ? '' : 'ok');
       } else {
         sel.innerHTML = originalHTML;
         stageStatus(n, '❌ ' + (r.error || MSG.fetch_failed) + (r.tip ? ' · ' + r.tip : ''), 'err');
@@ -2542,6 +2529,12 @@ function switchTab(tabId) {
           // A1：留空存空串（回填侧 parseInt('')=NaN 忽略），null 由后端
           // 跳过不入库——空串即可覆盖清除旧存档值
           v2_ctx: readRefineCtx() || '' });
+      if (r.success) {
+        // 批2（D2026-1002-12）：保存成功即更新已存模型名（refreshModels
+        // 恢复选中的唯一依据，与后端 settings 保持同源）
+        savedStageModels[1] = stages[0].model;
+        savedStageModels[3] = stages[1].model;
+      }
       if (st) {
         st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
         st.textContent = r.success
@@ -2579,15 +2572,20 @@ function switchTab(tabId) {
         if (pv && s.provider) pv.value = s.provider;
         if (ep && s.endpoint) ep.value = s.endpoint;
         else if (ep && !ep.value) applyProviderEndpoint(n);
-        // C1：回填模型下拉选择（saved model 不在当前列表→保持现值，提示一次）
-        if (s.model) {
-          const sel = $('refineS' + n + 'Model');
-          if (sel) {
-            if ([...sel.options].some(o => o.value === s.model)) {
-              sel.value = s.model;
-            } else {
-              console.warn('[refine] 已保存模型不在当前列表，保持现值:', s.model);
+        // 批2（D2026-1002-12 拍板点2）：记录已存模型名作为恢复依据；
+        // 无列表状态（空态占位）下注入标记 option 显示已存名并选中
+        // （老用户无感）——不匹配警告仅保留给"刷新所得列表"场景
+        if (n === 1 || n === 3) {
+          savedStageModels[n] = (s.model || '').trim();
+          if (savedStageModels[n]) {
+            const sel = $('refineS' + n + 'Model');
+            if (sel && ![...sel.options].some(o => o.value === savedStageModels[n])) {
+              const marker = document.createElement('option');
+              marker.value = savedStageModels[n];
+              marker.textContent = savedStageModels[n];
+              sel.appendChild(marker);
             }
+            if (sel) sel.value = savedStageModels[n];
           }
         }
       }
@@ -2796,11 +2794,11 @@ function switchTab(tabId) {
     for (const n of [1, 3]) {
       const pv = $('refineS' + n + 'Provider');
       if (pv) pv.value = prov;
-      // 与引擎页 provider change 行为一致：重置模型下拉并填充缺省地址
+      // 与引擎页 provider change 行为一致：重置模型下拉为空态占位并填充
+      // 缺省地址（批2 D2026-1002-12 拍板点2：不自动拉取模型列表）
       const sel = $('refineS' + n + 'Model');
       if (sel) {
-        sel.innerHTML = '<option value="">' + MSG.model_refresh_hint
-          + '</option>';
+        sel.innerHTML = modelEmptyOptionHTML();
       }
       applyProviderEndpoint(n);
     }
@@ -2814,8 +2812,6 @@ function switchTab(tabId) {
           : null;
         if (p && typeof p.catch === 'function') p.catch(() => {});
       } catch (e) { /* 静默降级 */ }
-      refreshModels(1);
-      refreshModels(3);
     }
   }
 
@@ -3646,17 +3642,22 @@ function switchTab(tabId) {
     $('refineCancelBtn').addEventListener('click', () => TranslatorManager.cancelTranslation());
 
     for (const n of [1, 3]) {
+      // 批2（D2026-1002-12）：空态占位文案 JS 态填充（HTML 不挂静态 data-i18n）
+      const msel = $('refineS' + n + 'Model');
+      const mph = msel ? msel.querySelector('option[value=""]') : null;
+      if (mph) mph.textContent = MSG.model_list_empty_hint;
       const rb = $('refineRefreshS' + n);
       if (rb) rb.addEventListener('click', () => refreshModels(n));
       const tb = $('refineTestS' + n);
       if (tb) tb.addEventListener('click', () => testStage(n));
+      // 批2（D2026-1002-12 拍板点2）：切服务商不自动拉取模型列表，只认
+      // 「刷新/测试」两个显式入口——此处仅重置空态占位并填充缺省地址
       const pv = $('refineS' + n + 'Provider');
       if (pv) pv.addEventListener('change', () => {
         const sel = $('refineS' + n + 'Model');
-        if (sel) sel.innerHTML = '<option value="">' + MSG.model_refresh_hint + '</option>';
+        if (sel) sel.innerHTML = modelEmptyOptionHTML();
         applyProviderEndpoint(n);
         syncServiceQuickFromStages();
-        if (window.__pywebviewReady) refreshModels(n);
       });
       const kb = $('refineSaveS' + n + 'KeyBtn');
       if (kb) kb.addEventListener('click', () => saveStageKey(n));
@@ -3771,43 +3772,70 @@ function switchTab(tabId) {
     // 质量闭环一键批次修复（2.6.0 批1）
     const bfBtn = $('refineBatchFixBtn');
     if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());
-    // ASR 模型管理（2.6.0 批3）
+    // ASR 模型管理（2.6.0 批3；批2 D2026-1002-12 卡重整：空态/说明/占位文案
+    // JS 态填充，HTML 不留英文占位）
     const asrBtn = $('asrRefreshBtn');
     if (asrBtn) {
       const t = asrBtn.querySelector('span');
       if (t) t.textContent = MSG.asrRefreshBtn;
       asrBtn.addEventListener('click', () => asrRefresh());
     }
-    // 2.6.1 修订（D2026-1002-06）：验证开关 + 上游 Python 路径（下载按钮删除）
+    const asrEnv = $('asrEnvStatus');
+    if (asrEnv) asrEnv.textContent = MSG.asr_env_undetected;
+    const asrHint = document.querySelector('.asr-entry-hint');
+    if (asrHint) asrHint.textContent = MSG.asr_entry_hint;
+    const asrSelPh = $('asrModelSel');
+    if (asrSelPh) {
+      const ph = asrSelPh.querySelector('option[value=""]');
+      if (ph) ph.textContent = MSG.asrSelectPlaceholder;
+    }
+    // 2.6.1 修订（D2026-1002-06）：验证开关 + 上游 Python 路径（下载按钮删除）；
+    // 批2：asrSaved 仅在保存成功后写入（失败透出错误，与空态占位区分）
     const asrTgl = $('asrCrosscheckToggle');
     if (asrTgl) {
       const lbl = asrTgl.parentElement
         ? asrTgl.parentElement.querySelector('span') : null;
       if (lbl) lbl.textContent = MSG.asrCrosscheckLabel;
-      asrTgl.addEventListener('change', () => {
+      asrTgl.addEventListener('change', async () => {
         if (!window.pywebview || !window.pywebview.api) return;
-        window.pywebview.api.refine_save_stage_settings(null, null,
-          { media_crosscheck_enabled: asrTgl.checked ? '1' : '0' });
-        asrStatus(MSG.asrSaved);
+        try {
+          const r = await window.pywebview.api.refine_save_stage_settings(
+            null, null,
+            { media_crosscheck_enabled: asrTgl.checked ? '1' : '0' });
+          asrStatus(r && r.success ? MSG.asrSaved
+            : '❌ ' + ((r && r.error) || MSG.unknown));
+        } catch (e) {
+          asrStatus('❌ ' + e);
+        }
       });
     }
     const asrPy = $('asrPythonInput');
     if (asrPy) {
       asrPy.placeholder = MSG.asrPythonPlaceholder;
-      asrPy.addEventListener('change', () => {
+      asrPy.addEventListener('change', async () => {
         if (!window.pywebview || !window.pywebview.api) return;
-        window.pywebview.api.refine_save_stage_settings(null, null,
-          { asr_python: asrPy.value.trim() });
-        asrStatus(MSG.asrSaved);
+        try {
+          const r = await window.pywebview.api.refine_save_stage_settings(
+            null, null, { asr_python: asrPy.value.trim() });
+          asrStatus(r && r.success ? MSG.asrSaved
+            : '❌ ' + ((r && r.error) || MSG.unknown));
+        } catch (e) {
+          asrStatus('❌ ' + e);
+        }
       });
     }
     const asrSel = $('asrModelSel');
-    if (asrSel) asrSel.addEventListener('change', () => {
+    if (asrSel) asrSel.addEventListener('change', async () => {
       if (!window.pywebview || !window.pywebview.api) return;
       if (asrSel.value === '__qwen__') return;      // 占位项不持久化
-      window.pywebview.api.refine_save_stage_settings(null, null,
-        { asr_model: asrSel.value });
-      asrStatus(MSG.asrSaved);
+      try {
+        const r = await window.pywebview.api.refine_save_stage_settings(
+          null, null, { asr_model: asrSel.value });
+        asrStatus(r && r.success ? MSG.asrSaved
+          : '❌ ' + ((r && r.error) || MSG.unknown));
+      } catch (e) {
+        asrStatus('❌ ' + e);
+      }
     });
 
     // 快速试听（D2026-0929-09）：条目试听按钮事件委托 + 浮层关闭 +
@@ -4279,10 +4307,8 @@ function switchTab(tabId) {
     // config/templates→包内默认）；已存值由 applySavedStageSettings 回填
     glLoad();
     glLearnedLoad();
-    for (const n of [1, 3]) {
-      const pv = $('refineS' + n + 'Provider');
-      if (pv && pv.value) refreshModels(n);
-    }
+    // 批2（D2026-1002-12 拍板点2）：页面就绪不再自动拉取模型列表，只认
+    // 「刷新/测试」两个显式入口；已存模型名由 applySavedStageSettings 注入
     refreshPipelineMirror();
   }
 
