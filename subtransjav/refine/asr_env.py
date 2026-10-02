@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 
 from subtransjav import paths
+from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW  # windowed 防黑框单一来源（批0）
 
 # C9：探测优先级 env > settings（调用方传入）> 实测默认 > 不可用
 _UPSTREAM_DEFAULT_PYTHON = r"D:\whisperJAV\python.exe"   # 维护点：owner 机事实
@@ -124,7 +125,8 @@ def _run_selfcheck(python: str, model: str, model_dir: str = "",
             cmd,
             capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout, cwd=str(paths.app_root()),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            creationflags=CREATE_NO_WINDOW)  # GUI windowed 防黑框（批0；POSIX=0 无操作）
     except (OSError, subprocess.TimeoutExpired):
         return False, {}
     for line in (proc.stdout or "").splitlines():
@@ -210,7 +212,8 @@ def run_transcription(clip_path: str, asr_python: str = "",
             cmd,
             capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout, cwd=str(paths.app_root()),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            creationflags=CREATE_NO_WINDOW)  # GUI windowed 防黑框（批0；POSIX=0 无操作）
     except (OSError, subprocess.TimeoutExpired) as e:
         return {"ok": False, "text": "", "error": f"ASR 子进程失败: {e}"}
     for line in (proc.stdout or "").splitlines():
@@ -306,7 +309,8 @@ def slice_clips(media_path: str, timings: list[str],
                  "-i", media_path, "-vn", "-ac", "1", "-ar", "16000",
                  str(out)],
                 capture_output=True, encoding="utf-8", errors="replace",
-                timeout=120)
+                timeout=120,
+                creationflags=CREATE_NO_WINDOW)  # GUI windowed 防黑框（批0；POSIX=0 无操作）
         except (OSError, subprocess.TimeoutExpired):
             skipped += 1
             continue

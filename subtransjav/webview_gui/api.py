@@ -34,6 +34,9 @@ from subtransjav.utils.process_manager import (
     terminate_process_tree,
     terminate_process_tree_robust,
 )
+from subtransjav.utils.subprocess_flags import (
+    CREATE_NO_WINDOW,  # windowed 防黑框单一来源（spawn_refine_cli 内部 + 本模块直接调用共用）
+)
 
 from .event_stream import (  # noqa: E402  webview-free 可测模块
     HEARTBEAT_STALE_S_DEFAULT,
@@ -406,7 +409,8 @@ def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
            "-c:a", "aac", "-progress", "pipe:1", out_path]
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, shell=False)
+                                stderr=subprocess.DEVNULL, shell=False,
+                                creationflags=CREATE_NO_WINDOW)  # windowed 防黑框（批0）
     except OSError as e:
         return False, str(e)
     deadline = time.monotonic() + max(1.0, timeout_s)
@@ -676,9 +680,13 @@ class TranslateAPI:
             if sys.platform.startswith("win"):
                 os.startfile(str(folder))
             elif sys.platform == "darwin":
-                subprocess.run(["open", str(folder)])
+                # POSIX 分支（Windows 走 os.startfile）：常量在 POSIX 解析为 0，
+                # 补 flag 仅为全模块 AST 钉测统一（tests/test_subprocess_no_window.py）。
+                subprocess.run(["open", str(folder)],
+                               creationflags=CREATE_NO_WINDOW)
             else:
-                subprocess.run(["xdg-open", str(folder)])
+                subprocess.run(["xdg-open", str(folder)],
+                               creationflags=CREATE_NO_WINDOW)
 
             return {"success": True, "message": msg("folder_opened")}
         except Exception as e:
@@ -2469,7 +2477,8 @@ class TranslateAPI:
                 [ffprobe, "-v", "error", "-show_entries",
                  "stream=codec_type,codec_name", "-of", "json", media_path],
                 capture_output=True,
-                timeout=self._AUDIO_PREVIEW_FFPROBE_TIMEOUT_S)
+                timeout=self._AUDIO_PREVIEW_FFPROBE_TIMEOUT_S,
+                creationflags=CREATE_NO_WINDOW)  # windowed 防黑框（批0）
             if r.returncode != 0:
                 return None
             data = json.loads(r.stdout.decode("utf-8", "replace"))
@@ -2527,7 +2536,8 @@ class TranslateAPI:
                  media_path, "-t", f"{duration_s:.3f}", "-vn", "-ac", "1",
                  "-ar", "16000", out_path],
                 capture_output=True,
-                timeout=TranslateAPI._AUDIO_PREVIEW_EXTRACT_TIMEOUT_S)
+                timeout=TranslateAPI._AUDIO_PREVIEW_EXTRACT_TIMEOUT_S,
+                creationflags=CREATE_NO_WINDOW)  # windowed 防黑框（批0）
         except Exception:
             with contextlib.suppress(OSError):
                 os.unlink(out_path)
@@ -2727,7 +2737,8 @@ class TranslateAPI:
             r = subprocess.run(
                 [ffprobe, "-v", "error", "-show_entries", "format=duration",
                  "-of", "json", media_path],
-                capture_output=True, timeout=self._REVIEW_FFPROBE_TIMEOUT_S)
+                capture_output=True, timeout=self._REVIEW_FFPROBE_TIMEOUT_S,
+                creationflags=CREATE_NO_WINDOW)  # windowed 防黑框（批0）
             if r.returncode != 0:
                 return None
             data = json.loads(r.stdout.decode("utf-8", "replace"))

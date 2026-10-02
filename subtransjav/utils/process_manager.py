@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from subtransjav import paths
+from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW as _CREATE_NO_WINDOW  # 窗口标志单一来源
 
 try:
     import psutil
@@ -323,6 +324,7 @@ def _taskkill_tree(pid: int) -> tuple[bool, str]:
         cp = subprocess.run(
             ["taskkill", "/PID", str(pid), "/T", "/F"],
             capture_output=True, timeout=_TASKKILL_TIMEOUT_S, check=False,
+            creationflags=_CREATE_NO_WINDOW,  # 批0：GUI 取消路径防黑框（POSIX=0 无操作）
         )
     except Exception as e:  # 含 TimeoutExpired / FileNotFoundError
         return False, f"taskkill 执行失败: {e}"
@@ -376,6 +378,7 @@ def run_with_timeout_tree(
         errors=errors,
         env=env,
         cwd=cwd,
+        creationflags=_CREATE_NO_WINDOW,  # 批0：防黑框（POSIX=0 无操作）
         **popen_kwargs,
     )
     timed_out = False
@@ -454,7 +457,8 @@ def terminate_process_tree_robust(pid: int) -> bool:
 # spawn 单一收敛点（D2026-0929-06 修订③ + 07 点 1 + 08 点 1）
 # ---------------------------------------------------------------------------
 
-_CREATE_NO_WINDOW = 0x08000000  # Windows: 不为子进程弹控制台窗口
+# _CREATE_NO_WINDOW 已收敛到 subtransjav.utils.subprocess_flags（批0 防黑框
+# 单一来源）：Windows=0x08000000 / POSIX=0，本文件顶部导入别名，行为不变。
 
 
 def _utf8_child_env(env_extra: dict[str, str] | None) -> dict[str, str]:
@@ -499,11 +503,12 @@ def spawn_refine_cli(
         源码 → ``[sys.executable, "-u", "-m", "subtransjav.refine.cli"] + args``。
       - "venv_bootstrap"：venv 引导（``-m venv`` 等）。frozen 下整段 no-op
         直接返回 None（调用方据 None 跳过）；源码形态 ``[sys.executable] + args``，
-        维持现状不带 CREATE_NO_WINDOW。
+        维持控制台语义（creationflags 直传 0，不带 CREATE_NO_WINDOW）。
 
     其余口径：
       - env：``_utf8_child_env`` 强制 UTF-8 两变量后合并 env_extra；
-      - Windows 下 "subprocess" 段带 creationflags=CREATE_NO_WINDOW（不弹黑窗）；
+      - "subprocess" 段直传 creationflags（批0）：Windows=CREATE_NO_WINDOW
+        （不弹黑窗），POSIX 常量解析为 0（等价缺省）；
       - capture=True → subprocess.run 返回 CompletedProcess；否则 Popen；
       - cwd 缺省 app_root()（源码=仓库根，frozen=数据根）；
       - 杀树复用现有 terminate_process_tree / taskkill /T /F 原语，本函数不重复造轮子。
@@ -518,6 +523,7 @@ def spawn_refine_cli(
             [sys.executable, *args],
             env=_utf8_child_env(env_extra),
             cwd=cwd or None,
+            creationflags=0,  # venv 引导维持控制台语义（源码模式专属）；0 ≡ Windows 缺省，行为不变
             **kwargs,
         )
     if purpose != "subprocess":
@@ -532,16 +538,19 @@ def spawn_refine_cli(
     else:
         cmd = [sys.executable, "-u", "-m", "subtransjav.refine.cli", *args]
 
-    if os.name == "nt":
-        kwargs.setdefault("creationflags", _CREATE_NO_WINDOW)
-
+    # 批0：窗口标志改直传（Windows=CREATE_NO_WINDOW 防黑框；POSIX 常量=0，
+    # 为 subprocess 唯一合法值、等价缺省，行为不变）。调用方如显式传
+    # creationflags 将与直传参数冲突报 TypeError——现行调用面（api.py ×3、
+    # main.py venv 引导）均不传该参数。
     if capture:
         return subprocess.run(
             cmd, capture_output=True, cwd=cwd or str(paths.app_root()),
-            env=_utf8_child_env(env_extra), **kwargs)
+            env=_utf8_child_env(env_extra),
+            creationflags=_CREATE_NO_WINDOW, **kwargs)
     return subprocess.Popen(
         cmd, cwd=cwd or str(paths.app_root()),
-        env=_utf8_child_env(env_extra), **kwargs)
+        env=_utf8_child_env(env_extra),
+        creationflags=_CREATE_NO_WINDOW, **kwargs)
 
 
 def is_process_alive(pid: int) -> bool:

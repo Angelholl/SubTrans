@@ -35,6 +35,8 @@ from datetime import datetime, timedelta
 from operator import mul
 from pathlib import Path
 
+from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW  # windowed 防黑框单一来源（批0）
+
 # 音频检测临时子目录（TEMP_DIR 下），管线结束 finally 清理 +
 # 启动时清扫超龄 stale 文件
 AUDIO_DETECT_SUBDIR = "audio_detect"
@@ -63,7 +65,8 @@ def _find_ffmpeg() -> str | None:
         return None
     try:
         r = subprocess.run([ff, "-version"], capture_output=True,
-                           timeout=_FFPROBE_TIMEOUT_S)
+                           timeout=_FFPROBE_TIMEOUT_S,
+                           creationflags=CREATE_NO_WINDOW)  # GUI 试听/转码路径触达本函数（api.py ad._find_ffmpeg），windowed 防黑框（批0）
     except (OSError, subprocess.SubprocessError):
         return None
     if r.returncode != 0:
@@ -78,7 +81,8 @@ def _extract_wav(ffmpeg_path: str, media_path: str, out_path: str,
     r = subprocess.run(
         [ffmpeg_path, "-y", "-i", media_path, "-vn", "-ac", "1",
          "-ar", str(sample_rate), "-f", "wav", out_path],
-        capture_output=True, timeout=_FFMPEG_EXTRACT_TIMEOUT_S)
+        capture_output=True, timeout=_FFMPEG_EXTRACT_TIMEOUT_S,
+        creationflags=CREATE_NO_WINDOW)  # CLI 侧调用（console 进程无感）；POSIX=0，补齐为模块级统一钉测（批0）
     if r.returncode != 0 or not os.path.isfile(out_path):
         raise RuntimeError(
             f"ffmpeg 抽取音频失败 (rc={r.returncode}): "
