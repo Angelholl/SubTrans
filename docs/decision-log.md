@@ -2709,3 +2709,7 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 ### 决策日志字段
 
 原决策=D2026-0917-03 决策链续评（二轮全量）；decision-critic 异议=无 HRO、条件 A（契约预声明）/B（异族参考源）均已闭环入 CONTRACT_v2.md 与 vad_reference.py；主模型最终决定=按预注册契约自动裁决维持 F06（无需 owner 改判评审）；条件闭环=全部闭环（测量/裁决完成）；[PRESSURE-OVERRIDE]=否。**遗留登记**：①噪声/BGM 重片型未测（F06 全自动无人审暴露面，需片型补充或按片开关路径）；②伪真值一致率轴未跑（超时放弃条款）；③F02/GAL1 条件格未跑；④HF 缓存双层布局建议择一收编（owner 侧环境整理）；⑤F06 时间轴最弱轴持续挂账（本轮 XXLxTEN 数据为修复路线首份结构面证据）。
+
+### 【2026-10-03 补记】遗留②③④清零轮（owner 指令"本轮不留遗留"，遗留①改登记为片源待触发）
+
+②**伪真值一致率轴已跑**（pseudo_truth.py，族加权投票：qwen 3 席/anime/lv2 2 席/gal，区间聚类+相似 0.75 阈；[UNVERIFIABLE] 不入主判）：七片均值 gal 65.4% ≈ qwen_wseg 65.2% > anime 54.6% > qwen_ten/f02_ten 52.2% > xxl 45.4% > bal 36.0%——weifu 断言②（xxl 逐行准）文本维度不获支持，其优势收敛为时间轴+提速两轴；断言⑤补记=gal 行控全池唯一恒定（max_dur 恒 4.10-4.18s）证实"拖尾极少"。③**F02/GAL1 条件格已跑**（14/14 rc=0；F02 mimk268 首败=瞬时 Temp 竞态，重试即过）：F02 覆盖 44.8%（vs F06 48.1）漂移全池最低 1.05%，两轮方向一致维持备选位；GAL1（jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame，--qwen-model-id 本地目录接线）覆盖 39.7% 但行控/洁净度冠军（max_dur 恒 4.2s/重复率 2.0%/标记 0），登记"求净单遍"候选不改默认。④**HF 缓存双层收编完成**：8 模型实体移至活跃根 G:\HuggingFace_Cache\hub\、嵌套 hub\hub 删除、xxl Models junction 重挂、FE/snapshot/junction 三探针全过（教训追加：Git Bash 双引号 `\\$var` 不展开，cmd/变量组合改 Python os/shutil）。①噪声片型：owner 拍板片源缺席待触发（发现即纳入补充测试）。**README 上游转写推荐段已按两轮结论重写**（默认维持+备选+按片开关①提速②求净+时间轴备注+不推荐名单+gal 模型条目）。裁决不变：F06 维持。
