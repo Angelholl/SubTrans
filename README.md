@@ -114,7 +114,7 @@ subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-mod
 subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
 ```
 
-GUI 为左侧五 TAB 外壳：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**引擎与模型**、**词库与模板**、**质量与建议**（含 AI 质量分析）、**高级参数**。初始安装即默认参数，全部高级定制在对应 TAB 内调整。
+GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**校对**（即将上线）、**质量与建议**（含 AI 质量分析）；「设置」：**引擎与模型**、**词库与模板**、**高级参数**。初始安装即默认参数，全部高级定制在对应页内调整。
 
 常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）、`--v2-ctx`（本地上下文窗口）、`--ai-analyze`（质量报告 AI 分析）、`--action-retranslate --entries`（导读条目定点重翻）、`--media-path`（指定媒体文件，供后续试听/音频检测）、`--source-lang` / `--target-lang`（翻译方向，缺省 ja→zh；非缺省方向须为各启用阶段显式指定配套模板卡 `--s{n}-instructions`，包内仅随 ja→zh 卡）。
 

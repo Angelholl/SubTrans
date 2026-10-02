@@ -171,7 +171,7 @@ MSG = {
 
     # ---- UI 改版阶段2（D2026-0930-09 批1；app.js MSG 镜像，双表同步）----
     "nav_group_workspace": "工作区",
-    "nav_group_quality": "质量与设置",
+    "nav_group_quality": "设置",
     "main_subtitle": "一站式 AI 字幕翻译与校对",
 
     # ---- 右栏系统状态摘要卡（D2026-1001 批3，owner 特批 2 键）----

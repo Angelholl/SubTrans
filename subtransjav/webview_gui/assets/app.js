@@ -75,7 +75,7 @@ const MSG = {
     app_header_title: '净语翻译 · SRT',
     main_subtitle: '一站式 AI 字幕翻译与校对',
     nav_group_workspace: '工作区',
-    nav_group_quality: '质量与设置',
+    nav_group_quality: '设置',
     feature_status_title: '功能状态',
     grammar_hint_text: '语法提示',
     theme_label: 'Theme',
@@ -231,6 +231,7 @@ const MSG = {
 
     // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
     tabTranslate: '字幕翻译',
+    tabReview: '校对',
     tabEngine: '引擎与模型',
     tabGlossary: '词库与模板',
     tabGuide: '质量与建议',
@@ -332,7 +333,6 @@ const MSG = {
     guide_loaded: p => `已加载：${p}`,
     guide_load_failed: m => `加载失败：${m}`,
     guide_open_other_btn: '打开其他质量报告导读',
-    guide_source_group_title: '来源',
     guide_txt_loaded: p => `已加载报告全文（只读）：${p}`,
     guide_txt_truncated_note: '（报告过长，仅显示前 100 万字符）',
     gl_learned_title: '学习词库',

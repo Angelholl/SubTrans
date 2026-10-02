@@ -7,9 +7,15 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
 - 钉④ R2：:root 节奏禁区变量与文档级字号行高逐字冻结
 - 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 191 + data-i18n 键全集 192 快照冻结
   （批3 190/192；批2 修订 D2026-1002-05 +1 id=aggregateWindowSel 恰达
-  静态键 cap 192；下一 UI 耗键批首件=扩 cap 192→200 提案；2.6.1 修订
-  D2026-1002-06 等量换血 -3/+3 id：asrDownloadBtn/asrProgress/asrProgressText
-  出，asrCrosscheckToggle/asrRecList/asrPythonInput 入，总数不变）——
+  静态键 cap 192；2.6.1 修订 D2026-1002-06 等量换血 -3/+3 id：
+  asrDownloadBtn/asrProgress/asrProgressText 出，
+  asrCrosscheckToggle/asrRecList/asrPythonInput 入，总数不变；
+  2.6.1 批1 D2026-1002-07：id 191 零增减——校对占位导航项无 id，
+  批 2a 校对页 id 走批清单预算表程序（目标 ≤10）；静态键本批
+  -guide_source_group_title +tabReview 净变化 0 仍 192，cap 已扩
+  200（余 8），解冻提案随 docs/design/d261-批1-批清单.md 立案；
+  程序分界=静态键 cap 走解冻提案，DOM id 走批清单预算表+二级评议，
+  不并入 200 扩额统一管理）——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
 """
@@ -126,7 +132,7 @@ gl_learned_empty gl_learned_note gl_learned_reload gl_learned_title gl_path_empt
 gl_save gl_scope_note gl_summary glossary_conflict_block_label glossary_learn_label
 glossary_learn_title grammar_hint_text guide_companions guide_conclusions
 guide_empty_hint guide_items_title guide_load_btn guide_open_other_btn guide_sections
-guide_source_group_title guide_summary key_placeholder lang_en lang_ja lang_zh
+guide_summary key_placeholder lang_en lang_ja lang_zh
 main_subtitle media_override_apply media_override_placeholder media_source_change_btn
 media_source_label model_default_1 model_default_2 model_refresh_hint nav_group_quality
 nav_group_workspace no_files_selected open_btn output_header output_label
@@ -139,7 +145,7 @@ save_key_title save_to_source_dir sc_ctrl_o sc_ctrl_r sc_escape sc_f1 serviceQui
 serviceQuickHintLocal serviceQuickLabel sf_default sf_off sf_strict sf_title
 shortcuts_title source_filter_label source_header stage_a_label stage_b_label start_btn
 status_idle stop_btn synopsis_label synopsis_title sys_summary_title sys_summary_version
-tabAdvanced tabEngine tabGlossary tabGuide tabTranslate templates_dir_label
+tabAdvanced tabEngine tabGlossary tabGuide tabReview tabTranslate templates_dir_label
 templates_dir_placeholder test_stage_btn test_stage_title th_source th_target theme_dark
 theme_default theme_label tm_db_label tm_db_placeholder tm_enable_label tm_enable_title
 tm_threshold_label tm_threshold_placeholder tm_threshold_title tpl_editor_summary
@@ -171,3 +177,57 @@ def test_r3_i18n_key_fullset_frozen():
         f"data-i18n 键全集漂移：新增={sorted(cur - FROZEN_I18N_KEYS)} 删除={sorted(FROZEN_I18N_KEYS - cur)}"
         "（R3 契约恒空；合法变更须显式更新快照并走二级评议）"
     )
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批1（D2026-1002-07）UI 基建追加钉
+# ---------------------------------------------------------------------------
+
+def test_r2b_rhythm_tokens_extended():
+    """批 1 token 扩充钉：间距/控件高度/过渡时长 token 化只增不改。
+
+    钉④冻结项不在此重复断言（由 test_r2_rhythm_tokens_frozen 守）；
+    本钉守新增 token 的定义存在性（只增不改的"增"方向机器闸）。
+    """
+    assert ("--space-2: 8px; --space-3: 12px; --space-4: 16px; "
+            "--space-5: 24px; --space-6: 32px;") in CSS, \
+        "间距 token 扩充（--space-2..6）缺失或值被改"
+    assert "--h-ctl: 36px; --h-ctl-sm: 30px;" in CSS, \
+        "控件高度 token（--h-ctl/--h-ctl-sm）缺失或值被改"
+    assert "--dur-fast:" in CSS and "--dur:" in CSS, \
+        "过渡时长 token（--dur-fast/--dur）缺失"
+
+
+def test_nav_grouping_pinned():
+    """批 1 导航三分结构钉：组标题与按钮顺序显式冻结。
+
+    工作区组=字幕翻译/校对占位（无 data-tab 不入列）/质量与建议；
+    设置组=引擎与模型/词库与模板/高级参数；占位项契约=无 id、
+    无 data-tab、非 .side-tab-btn（app.js 只给 .side-tab-btn 绑
+    click，switchTab(undefined) 会把全部按钮置为非激活）。
+    """
+    m = re.search(r'<nav class="rail-nav".*?</nav>', HTML, re.S)
+    assert m, "未找到 rail-nav 导航块"
+    nav = m.group(0)
+    seq = re.findall(
+        r'<div class="nav-section" data-i18n="([^"]+)">|data-tab="([^"]+)"', nav)
+    groups: dict = {}
+    current = None
+    for sec, tab in seq:
+        if sec:
+            current = sec
+            groups[current] = []
+        elif current:
+            groups[current].append(tab)
+    assert list(groups.keys()) == ["nav_group_workspace", "nav_group_quality"], \
+        f"导航分组标题顺序漂移：{list(groups.keys())}"
+    assert groups["nav_group_workspace"] == ["tab-translate", "tab-guide"], \
+        f"工作区组 data-tab 顺序漂移：{groups['nav_group_workspace']}"
+    assert groups["nav_group_quality"] == ["tab-engine", "tab-glossary", "tab-advanced"], \
+        f"设置组 data-tab 顺序漂移：{groups['nav_group_quality']}"
+    pm = re.search(r'<div class="nav-item-placeholder"[^>]*>', HTML)
+    assert pm, "缺校对占位导航项 nav-item-placeholder"
+    tag = pm.group(0)
+    assert "id=" not in tag and "data-tab=" not in tag, \
+        "占位导航项不得带 id/data-tab（批 2a 校对页 id 走批清单预算表程序）"
+    assert "tabReview: '校对'" in JS, "MSG 缺 tabReview 静态键"
