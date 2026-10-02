@@ -2204,3 +2204,119 @@ def test_batch_fix_guard_path_missing(gui_api_obj, tmp_path):
     r = gui_api_obj.refine_batch_fix(
         str(tmp_path / "无_质量报告导读.json"), [3])
     assert r["success"] is False and r["error"]
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批 2a（D2026-1002-09）：校对页后端（probe 三态 / load_srt / 转码命令）
+# ---------------------------------------------------------------------------
+
+def test_review_probe_direct(gui_api_obj, monkeypatch, tmp_path):
+    """direct 态：mp4 + h264/aac → 浏览器原生可播（codec_probe=True）。"""
+    media = tmp_path / "ep01.mp4"
+    media.write_bytes(b"fake-mp4")
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    r = gui_api_obj.refine_review_probe_media(str(media))
+    assert r["state"] == "direct" and r["codec_probe"] is True
+
+
+def test_review_probe_clip_audio(gui_api_obj, monkeypatch, tmp_path):
+    """clip-audio 态：hevc 边界编码 → 需转码。"""
+    media = tmp_path / "ep02.mkv"
+    media.write_bytes(b"fake-mkv")
+    _install_fake_ffprobe(monkeypatch, video="hevc", audio="aac")
+    r = gui_api_obj.refine_review_probe_media(str(media))
+    assert r["state"] == "clip-audio" and r["codec_probe"] is True
+
+
+def test_review_probe_error_when_undetectable(gui_api_obj, monkeypatch, tmp_path):
+    """error 态：ffprobe 缺失且非乐观直连容器 → error + codec_probe=False。"""
+    import subtransjav.webview_gui.api as api_mod
+    media = tmp_path / "ep03.mkv"
+    media.write_bytes(b"fake-mkv")
+    monkeypatch.setattr(api_mod.shutil, "which", lambda name: None)
+    r = gui_api_obj.refine_review_probe_media(str(media))
+    assert r["state"] == "error" and r["codec_probe"] is False and r["error"]
+
+
+def test_review_load_srt_utf8(gui_api_obj, tmp_path):
+    """utf-8 样本：结构化 blocks + timing 由 ms 重建。"""
+    p = tmp_path / "a.srt"
+    p.write_text(
+        "1\n00:00:01,000 --> 00:00:02,500\n你好\n\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n世界\n",
+        encoding="utf-8")
+    r = gui_api_obj.refine_review_load_srt(str(p))
+    assert r["success"] is True
+    assert r["encoding"] == "utf-8" and r["count"] == 2
+    b = r["blocks"][0]
+    assert b["index"] == 1 and b["start_ms"] == 1000 and b["end_ms"] == 2500
+    assert b["timing"] == "00:00:01,000 --> 00:00:02,500"
+    assert b["text"] == "你好"
+
+
+def test_review_load_srt_gbk(gui_api_obj, tmp_path):
+    """gbk 中文样本：嗅探命中 gbk 且正确解码。"""
+    p = tmp_path / "b.srt"
+    p.write_bytes("1\n00:00:01,000 --> 00:00:02,000\n简体中文台词\n".encode("gbk"))
+    r = gui_api_obj.refine_review_load_srt(str(p))
+    assert r["success"] is True and r["encoding"] == "gbk" and r["count"] == 1
+    assert r["blocks"][0]["text"] == "简体中文台词"
+
+
+def test_review_load_srt_bad_encoding(gui_api_obj, tmp_path):
+    """坏字节：双解码失败 → success=False + 编码无法识别文案。"""
+    p = tmp_path / "c.srt"
+    p.write_bytes(b"1\n00:00:01,000 --> 00:00:02,000\nabc\x81")
+    r = gui_api_obj.refine_review_load_srt(str(p))
+    assert r["success"] is False and "编码" in r["error"]
+
+
+def test_review_transcode_command_construction(gui_api_obj, monkeypatch,
+                                                tmp_path):
+    """转码命令构造：libx264/veryfast/crf 23/aac/-progress pipe:1 +
+    输出路径 rt_{sha256[:12]}.mp4；线程同步化直测主体。"""
+    import subtransjav.refine.audio_detect as ad
+    import subtransjav.refine.config as cfg_mod
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep01.mkv"
+    media.write_bytes(b"fake-mkv")
+    _install_fake_ffprobe(monkeypatch, video="hevc", audio="aac")
+    monkeypatch.setattr(ad, "_find_ffmpeg", lambda: "/fake/ffmpeg")
+    monkeypatch.setattr(cfg_mod, "TEMP_DIR", str(tmp_path / "temp"))
+
+    captured: dict = {}
+
+    class FakeProc:
+        stdout = iter(())
+        @staticmethod
+        def wait(timeout=None):
+            return 0
+
+    def fake_popen(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return FakeProc()
+
+    class SyncThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self._target = target
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(api_mod.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(api_mod.threading, "Thread", SyncThread)
+
+    r = gui_api_obj.refine_review_start_transcode(str(media))
+    assert r["success"] is True and r.get("started") is True
+    args = captured["args"]
+    assert args[0] == "/fake/ffmpeg" and "-i" in args
+    for frag in ("libx264", "veryfast", "23", "aac", "-progress", "pipe:1"):
+        assert frag in args, f"转码命令缺 {frag}: {args}"
+    # list-args 禁 shell + 输出件命名 rt_{sha256[:12]}.mp4
+    assert all(isinstance(a, str) for a in args)
+    out = Path(args[-1])
+    assert out.parent.name == "review_transcode"
+    assert out.stem.startswith("rt_") and len(out.stem) == 15
+    assert out.suffix == ".mp4"
+    assert captured["kwargs"].get("shell") is False

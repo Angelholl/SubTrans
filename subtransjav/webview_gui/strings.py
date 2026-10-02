@@ -180,6 +180,19 @@ MSG = {
 
     # ---- 数据保存目录（api.py refine_set_data_root 校验文案）----
     "data_root_need_abs": "请输入绝对路径",
+
+    # ---- 校对页（2.6.1 批 2a D2026-1002-09；api.py refine_review_* 镜像，
+    #      后端侧键不入前端静态快照口径）----
+    "file_type_video": "视频文件 (*.mp4;*.mkv;*.webm;*.mov;*.avi)",
+    "file_type_srt": "字幕文件 (*.srt)",
+    "review_transcode_no_need": "该媒体可直接预览，无需转码",
+    "review_transcode_running": "已有转码任务进行中",
+    "review_transcode_failed": "转码失败，请重试或手动转换格式",
+    "review_no_ffmpeg": "未检测到 ffmpeg，无法转码",
+    "review_media_missing": "媒体文件不存在或未导入",
+    "review_srt_missing": "字幕文件不存在或未导入",
+    "review_probe_failed": "无法识别该媒体的编码信息",
+    "review_srt_bad_encoding": "字幕文件编码无法识别（仅支持 UTF-8 / GBK），请另存为 UTF-8 后重试",
 }
 
 

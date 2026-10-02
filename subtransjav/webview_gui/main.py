@@ -195,22 +195,27 @@ def on_drop_event(e):
         return
 
     paths = []
+    # 2.6.1 批 2a（D2026-1002-09）：放宽至视频后缀供校对页消费；
+    # 非 tab-review 激活时由 ReviewUI.onDroppedFiles 原样转发
+    # FileListManager.addDroppedFiles（对非 .srt 本就静默跳过），翻译页行为零变化
+    allowed_exts = ('.srt', '.mp4', '.mkv', '.webm', '.mov', '.avi')
     for file in files:
         full_path = file.get('pywebviewFullPath')
-        if full_path and str(full_path).lower().endswith('.srt'):
+        if full_path and str(full_path).lower().endswith(allowed_exts):
             paths.append(full_path)
 
     if not paths:
         return
 
     # 登记拖放路径，纳入 scan_resume_states 的会话信任边界
+    # （视频路径入登记=信任边界扩大，已在 D2026-1002-09 登记备案）
     from .api import register_session_paths
     register_session_paths(paths)
 
     try:
         window = webview.windows[0]
         paths_json = json.dumps(paths)
-        window.evaluate_js(f"FileListManager.addDroppedFiles({paths_json})")
+        window.evaluate_js(f"ReviewUI.onDroppedFiles({paths_json})")
     except Exception as ex:
         print(msg("drop_event_error", e=ex))
 

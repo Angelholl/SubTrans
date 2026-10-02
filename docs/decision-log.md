@@ -2600,3 +2600,13 @@ ruff 全仓 0｜mypy 0｜node --check｜定向 12+285 passed｜全量 **1638 pas
 - 评议员：有条件支持，**无 [HIGH_RISK_OBJECTION]、无 [PRESSURE-OVERRIDE]**；条件四条全采纳。
 - 边界：无人值守推进授权至"必须 owner 决策为止"；owner 将执行第五次测试=真机验证波（GUI 黑盒验收项归属真机波复核收口）。
 - 风险跟踪：①id +9 FROZEN_IDS 随批显式更新；②file:// 失败→转码主路径 UX 劣化（spike A 前置）；③背景窗口 throttle（条件 2 护栏）；④转码磁盘总上限批 2b 复盘；⑤批 2b 联动基准取决于 D 组结论（续评衔接点）；⑥#tab-review 页内零 data-i18n 硬约束；⑦N3 契约钉闭合批 3 空窗；⑧0.25 系数展示级无硬保证。
+
+### 七、spike 首件结果登记（2026-10-02，D2026-1002-09 条件 4 回报程序=显式登记）
+
+**结论：设计分支未触发——10ms 补偿非必需，直连为主路径成立，annex 直进主体实现。**
+
+- **A file:/// 直连**：ok（videoWidth=640、load 222ms、hidden_dropped=0、load_mode=file-url）——audio 直连先例扩展到 video 实证成立，修正③ UNVERIFIABLE 就此闭合；直连为主路径、转码兜底保持手动次路径。
+- **B timeupdate**：50 事件（49 间隔，median 265.5ms/P90 266.6ms，Chromium 默认节奏）；currentTime 最大 6 位小数——批 2b 联动"currentIndex 变才滚"节流基线有据。
+- **C/D seek 呈现偏差**：rVFC mediaTime 实证可用；direct median=0.0ms/P90=0（帧级精确）、+10ms=0.0ms（落同帧，亚帧量化）、+50ms=33.33ms（恰一帧周期）。n_visible=12/30 如实落盘（D_verdict=insufficient_data，护栏未放宽）——**判据口径澄清（code-review Spec 轴修正）**：D 组钉死判据（每组 ≥30 可见样本）未达成，按 D2026-1002-09 条件 2 本结论不落正式参数；现登记为**方向性证据**（帧量化旁证支持补偿非必需），批 2b seek 联动的最终基线（直接 seek vs +10ms）须批 2b 开工评议复核（半自动重跑取满样本或 owner 追认方向性证据）后方落参。
+- **平台行为发现（批 2b 设计输入，annex 登记）**：①WebView2 `html=` 注入页（about:blank origin）拒绝加载 file:// 媒体（URL safety check/4）——媒体页必须与产品同构以 url= 本地文件加载（as_uri()）；②**暂停态 seek 后 rVFC 隔次不回调**（严格交替失败模式，seeked 正常触发）——校对页/批 2b 呈现帧确认不能单独依赖 rVFC，需 seeked+currentTime 或 play-kick 兜底。
+- spike 工件：tools/spike_review_video.py + tools/spike_review_report.json（终版=13s 片+单位修复+file-url 加载），随批 2a 实现一并提交。

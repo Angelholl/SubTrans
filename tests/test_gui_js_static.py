@@ -20,6 +20,7 @@ import pytest
 ASSETS = (Path(__file__).resolve().parents[1] / "subtransjav"
           / "webview_gui" / "assets")
 APP_JS = ASSETS / "app.js"
+REVIEW_JS = ASSETS / "review.js"
 INDEX_HTML = ASSETS / "index.html"
 
 
@@ -217,7 +218,7 @@ def test_user_mode_and_novice_panel_removed():
 # ---------------------------------------------------------------------------
 
 _TAB_IDS = ["tab-translate", "tab-engine", "tab-glossary", "tab-guide",
-            "tab-advanced"]
+            "tab-review", "tab-advanced"]
 
 
 def test_index_html_sidebar_tabs_structure():
@@ -860,3 +861,124 @@ def test_system_summary_card_structure_and_degradation():
     seg = src[start:start + 2400]
     assert "catch" in seg, "SystemSummary 缺少逐接口降级 catch"
 
+
+
+# ---------------------------------------------------------------------------
+# 2.6.1 批 2a（D2026-1002-09）：校对页静态钉（review.js / tab-review 骨架）
+# ---------------------------------------------------------------------------
+
+def _review_js_source() -> str:
+    return REVIEW_JS.read_text(encoding="utf-8")
+
+
+def _review_msg_keys() -> set:
+    """解析 review.js 顶部 const REVIEW_MSG = {...} 键名集合（仿 _js_msg_keys）。"""
+    m = re.search(r"const REVIEW_MSG = \{(.*?)\n\};", _review_js_source(), re.S)
+    assert m, "review.js 未找到 REVIEW_MSG 键表"
+    keys = set(re.findall(r"^\s{4}([A-Za-z_][A-Za-z0-9_]*):", m.group(1), re.M))
+    assert keys, "review.js REVIEW_MSG 键表解析为空"
+    return keys
+
+
+def test_review_msg_references_defined_in_table():
+    """REVIEW_MSG 引用闭合钉（仿 test_js_msg_references_defined_in_table）。
+
+    正向：REVIEW_MSG.x 静态引用与 setState labelKey 字面量 ⊆ 键表（防悬空）；
+    反向：键表每键必须被使用（静态引用或 labelKey 字面量，防死键堆积）。
+    """
+    src = _review_js_source()
+    keys = _review_msg_keys()
+    refs = set(re.findall(r"\bREVIEW_MSG\.([A-Za-z_][A-Za-z0-9_]*)", src))
+    label_keys = set(re.findall(r"labelKey:\s*'([A-Za-z_][A-Za-z0-9_]*)'", src))
+    used = refs | label_keys
+    dangling = sorted(used - keys)
+    assert not dangling, f"review.js 引用了 REVIEW_MSG 中不存在的键: {dangling}"
+    unused = sorted(keys - used)
+    assert not unused, f"REVIEW_MSG 键表中存在未被使用的死键: {unused}"
+
+
+def test_review_js_syntax_node_check():
+    """node --check review.js 全文件语法校验（node 不可用时跳过）。"""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node 不可用")
+    r = subprocess.run([node, "--check", str(REVIEW_JS)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+def test_review_page_structure_pinned():
+    """tab-review 骨架钉：预算内 9 id、双 data-kind、review.js 挂载、
+    页内零 data-i18n（静态键 cap 零消耗硬约束）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for i in ("tabBtnReview", "tab-review", "reviewDropzone", "videoReviewPlayer",
+              "reviewTranscodeBtn", "reviewStatusBar", "reviewStatusDot",
+              "reviewStatusLabel", "reviewProgressFill"):
+        assert f'id="{i}"' in html, f"index.html 缺少校对页 id: {i}"
+    assert 'data-kind="video"' in html and 'data-kind="srt"' in html, \
+        "导入按钮必须带 data-kind 双值（事件委托分流契约）"
+    assert '<script src="review.js"></script>' in html, "review.js 未挂载"
+    # tab-review 区间（至 </main>）零 data-i18n
+    m = re.search(
+        r'<div class="tab-page" id="tab-review".*?</main>', html, re.S)
+    assert m, "未找到 tab-review 页面区间"
+    assert "data-i18n" not in m.group(0), \
+        "tab-review 页内出现 data-i18n（静态键 cap 零消耗硬约束被破坏）"
+
+
+def test_review_enqueue_jump_contract_pinned():
+    """N3 契约钉：enqueueJump({timestamp,label,source}) 入队 + console.debug。"""
+    body = _review_js_source()
+    m = re.search(r"enqueueJump\(jump\) \{.*?\},", body, re.S)
+    assert m, "review.js 缺 enqueueJump 空实现"
+    seg = m.group(0)
+    assert "_jumpQueue.push(jump)" in seg, "跳转必须入队（批 3 联动消费）"
+    assert "console.debug" in seg and "JSON.stringify(jump)" in seg, \
+        "契约=入队即可观测（console.debug 序列化）"
+
+
+def test_review_status_manager_idle_no_indeterminate():
+    """批 2a 黑盒缺陷回归钉：idle 态不得显 indeterminate 流光（D2026-1002-08 四态表）。
+
+    正交表=state 定视觉、progress 定进度：idle/ready/error 恒空轨清零；
+    indeterminate 类切换仅允许出现在 busy 分支（progress=null ⇒ indeterminate
+    契约在 busy 语义下不变）。
+    """
+    body = _extract_function(_review_js_source(), "setState")
+    # 非 busy 态（idle/ready/error）清零分支存在
+    busy_pos = body.find("st !== 'busy'")
+    assert busy_pos > -1, "setState 缺非 busy 态判定（idle/ready/error 须清零进度轨）"
+    assert "width = '0%'" in body, "非 busy 态进度轨未清零（width = '0%'）"
+    # indeterminate 加类只允许出现在 busy 分支判定之后
+    add_pos = body.find("classList.add('indeterminate')")
+    assert add_pos > busy_pos, "indeterminate 加类必须位于 busy 分支判定之后"
+    # busy 分支内保留 progress=null ⇒ indeterminate 原契约
+    m = re.search(r"progress === null \|\| progress === undefined", body)
+    assert m and m.start() > busy_pos, "busy 态 progress=null ⇒ indeterminate 契约丢失"
+
+
+def test_review_video_exts_consistent():
+    """批 2a code-review 防漂移钉：拖拽放行与 JS 分流后缀必须一致。
+
+    main.py on_drop_event 的 allowed_exts（放行集，含 .srt）与
+    review.js REVIEW_VIDEO_EXTS（JS 视频分流集）按后缀集合比对：
+    JS 视频后缀 ⊆ main.py 放行集，且放行集去掉 .srt 后恰等于
+    JS 视频集（防三处字面量——含 strings.py file_type_video
+    过滤器文案——漂移）。
+    """
+    main_src = (Path(__file__).resolve().parents[1] / "subtransjav"
+                / "webview_gui" / "main.py").read_text(encoding="utf-8")
+    m = re.search(r"allowed_exts\s*=\s*\(([^)]*)\)", main_src)
+    assert m, "main.py 未找到 allowed_exts 元组"
+    main_exts = set(re.findall(r"'(\.[a-z0-9]+)'", m.group(1)))
+    assert main_exts, "main.py allowed_exts 解析为空"
+    js = _review_js_source()
+    m2 = re.search(r"REVIEW_VIDEO_EXTS:\s*\[([^\]]*)\]", js)
+    assert m2, "review.js 未找到 REVIEW_VIDEO_EXTS"
+    js_video = set(re.findall(r"'(\.[a-z0-9]+)'", m2.group(1)))
+    assert js_video, "review.js REVIEW_VIDEO_EXTS 解析为空"
+    assert js_video <= main_exts, \
+        f"JS 视频后缀超出 main.py 拖拽放行集: {sorted(js_video - main_exts)}"
+    assert ".srt" in main_exts, "main.py 放行集必须含 .srt（翻译页原路径）"
+    assert main_exts - {".srt"} == js_video, \
+        "main.py 放行集（去 .srt）与 JS 视频集不相等（后缀漂移）"

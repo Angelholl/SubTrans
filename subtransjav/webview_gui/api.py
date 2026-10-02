@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -384,6 +385,58 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
     args.extend(["--event-format", "ndjson"])
 
     return args
+
+
+# ---------------------------------------------------------------------------
+# 校对页转码/时长工具（2.6.1 批 2a D2026-1002-09；模块级纯函数便于直测）
+# ---------------------------------------------------------------------------
+
+def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
+                    timeout_s: float, progress_cb=None) -> tuple[bool, str]:
+    """同步转码主体（后台线程包壳调用；list-args 禁 shell）。
+
+    - ``-progress pipe:1`` 逐行解析 out_time_ms（ffmpeg 语义实为微秒）；
+    - progress_cb(seconds) 回报已转码媒体秒数（供调用方折算百分比）；
+    - 总时长超 timeout_s 杀进程（proc.kill）返回失败，可重试；
+    - 返回 ``(success, error)``。
+    """
+    cmd = [ffmpeg_path, "-y", "-i", media_path,
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+           "-c:a", "aac", "-progress", "pipe:1", out_path]
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, shell=False)
+    except OSError as e:
+        return False, str(e)
+    deadline = time.monotonic() + max(1.0, timeout_s)
+    try:
+        assert proc.stdout is not None
+        for raw in proc.stdout:
+            if time.monotonic() > deadline:
+                proc.kill()
+                return False, "transcode timeout"
+            line = raw.decode("utf-8", "replace").strip()
+            if line.startswith("out_time_ms=") and progress_cb is not None:
+                try:
+                    progress_cb(max(0.0, float(line.split("=", 1)[1]) / 1_000_000.0))
+                except ValueError:
+                    continue
+        code = proc.wait(timeout=30)
+        if code == 0 and os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
+            return True, ""
+        return False, f"ffmpeg exit {code}"
+    except Exception as e:  # noqa: BLE001  兜底杀进程后如实回报
+        proc.kill()
+        return False, str(e)
+
+
+def _ms_to_srt_time(ms: int) -> str:
+    """毫秒 → SRT 时间戳 ``HH:MM:SS,mmm``（cleaner_rules ms 原生重建 timing）。"""
+    ms = max(0, int(ms))
+    h, rem = divmod(ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    s, ms3 = divmod(rem, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms3:03d}"
 
 
 class TranslateAPI:
@@ -2567,6 +2620,237 @@ class TranslateAPI:
         return {"ok": True, "mode": "clip",
                 "data_url": f"data:audio/wav;base64,{b64}",
                 "duration_s": round(duration, 3), "clip_path": out_path}
+
+    # ================================================================
+    # 校对页（2.6.1 批 2a D2026-1002-09）：媒体导入 / 三态探测 / 手动转码 / SRT 载入
+    # 直接播判定矩阵沿用 audio preview 语义（批清单 §2）；转码产物 24h 龄
+    # sweep（术语漂移登记：audio_preview 先例）；全部容错不抛 + msg() 文案。
+    # ================================================================
+
+    _REVIEW_DIRECT_EXTS = {".mp4", ".webm", ".mov"}
+    _REVIEW_DIRECT_VIDEO = {"h264", "vp8", "vp9"}
+    _REVIEW_DIRECT_AUDIO = {"", "aac", "mp3"}
+    _REVIEW_TRANSCODE_SUBDIR = "review_transcode"
+    _REVIEW_SWEEP_MAX_AGE_HOURS = 24
+    _REVIEW_FFPROBE_TIMEOUT_S = 15
+
+    def _review_state(self) -> dict:
+        """转码状态 dict + 锁的惰性初始化（object.__new__ 测试实例兼容）。"""
+        state = getattr(self, "_review_transcode_state", None)
+        if state is None:
+            state = {"running": False, "percent": None, "error": None,
+                     "path": None, "cached": False}
+            self._review_transcode_state = state
+        if getattr(self, "_review_lock", None) is None:
+            self._review_lock = threading.Lock()
+        return state
+
+    def refine_review_pick_media(self) -> dict[str, Any]:
+        """校对页视频文件选择对话框（create_file_dialog 先例；cancelled 标记）"""
+        try:
+            windows = webview.windows
+            if not windows:
+                return {"success": False, "error": msg("no_active_window")}
+            result = windows[0].create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=False,
+                file_types=(msg("file_type_video"), msg("file_type_all")))
+            if result:
+                return {"success": True, "path": result[0]}
+            return {"success": False, "cancelled": True,
+                    "error": msg("dialog_cancelled")}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def refine_review_pick_srt(self) -> dict[str, Any]:
+        """校对页字幕文件选择对话框（同上）"""
+        try:
+            windows = webview.windows
+            if not windows:
+                return {"success": False, "error": msg("no_active_window")}
+            result = windows[0].create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=False,
+                file_types=(msg("file_type_srt"), msg("file_type_all")))
+            if result:
+                return {"success": True, "path": result[0]}
+            return {"success": False, "cancelled": True,
+                    "error": msg("dialog_cancelled")}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _review_media_duration(self, media_path: str) -> float | None:
+        """ffprobe format=duration 探测（秒）；缺失/失败返回 None。"""
+        ffprobe = shutil.which("ffprobe")
+        if not ffprobe:
+            return None
+        try:
+            r = subprocess.run(
+                [ffprobe, "-v", "error", "-show_entries", "format=duration",
+                 "-of", "json", media_path],
+                capture_output=True, timeout=self._REVIEW_FFPROBE_TIMEOUT_S)
+            if r.returncode != 0:
+                return None
+            data = json.loads(r.stdout.decode("utf-8", "replace"))
+            value = (data.get("format") or {}).get("duration")
+            return float(value) if value is not None else None
+        except Exception:
+            return None
+
+    def refine_review_probe_media(self, path: str) -> dict[str, Any]:
+        """三态探测：direct（浏览器原生可播）/ clip-audio（需转码）/ error。
+
+        direct = video∈{h264,vp8,vp9} ∧ audio∈{"",aac,mp3}（批清单 §2）；
+        ffprobe 缺失/失败：mp4/webm/mov 乐观 direct（codec_probe=False，
+        与 audio preview 同口径），其余容器 error。
+        """
+        try:
+            p = str(path or "")
+            if not p or not os.path.isfile(p):
+                return {"state": "error", "codec_probe": False,
+                        "error": msg("review_media_missing")}
+            ext = os.path.splitext(p)[1].lower()
+            codecs = self._ffprobe_stream_codecs(p)
+            duration = self._review_media_duration(p)
+            if codecs is not None:
+                direct = (ext in self._REVIEW_DIRECT_EXTS
+                          and codecs["video"] in self._REVIEW_DIRECT_VIDEO
+                          and codecs["audio"] in self._REVIEW_DIRECT_AUDIO)
+                return {"state": "direct" if direct else "clip-audio",
+                        "codec_probe": True, "codecs": codecs,
+                        "duration": duration}
+            if ext in self._REVIEW_DIRECT_EXTS:
+                return {"state": "direct", "codec_probe": False,
+                        "duration": duration}
+            return {"state": "error", "codec_probe": False,
+                    "error": msg("review_probe_failed")}
+        except Exception as e:
+            return {"state": "error", "codec_probe": False, "error": str(e)}
+
+    @staticmethod
+    def _sweep_review_transcode(transcode_dir: str) -> int:
+        """转码产物 24h 龄清扫（拷贝 _sweep_stale_preview_clips 模式）。"""
+        try:
+            cutoff = datetime.now().timestamp() - 24 * 3600
+            removed = 0
+            for name in os.listdir(transcode_dir):
+                p = Path(transcode_dir) / name
+                try:
+                    if p.is_file() and p.stat().st_mtime < cutoff:
+                        p.unlink()
+                        removed += 1
+                except OSError:
+                    continue
+            return removed
+        except Exception:
+            return 0
+
+    def refine_review_start_transcode(self, path: str) -> dict[str, Any]:
+        """后台线程转码为直连可播 mp4（hevc 等边界编码兜底）。
+
+        - 三态 direct 时拒绝（review_transcode_no_need）；
+        - 目标件 ``Temp/review_transcode/rt_{sha256(path+mtime+size)[:12]}.mp4``
+          已存在 → cached 复用；
+        - 超时 = duration×3+120s 杀进程置 error（可重试）；
+        - 进度经 refine_review_transcode_status 轮询。
+        """
+        try:
+            p = str(path or "")
+            if not p or not os.path.isfile(p):
+                return {"success": False, "error": msg("review_media_missing")}
+            state = self._review_state()
+            lock = self._review_lock
+            with lock:
+                if state.get("running"):
+                    return {"success": False,
+                            "error": msg("review_transcode_running")}
+            codecs = self._ffprobe_stream_codecs(p)
+            if codecs is not None and codecs["video"] in self._REVIEW_DIRECT_VIDEO:
+                return {"success": False, "error": msg("review_transcode_no_need")}
+            from subtransjav.refine import audio_detect as ad
+            from subtransjav.refine.config import TEMP_DIR
+            ff = ad._find_ffmpeg()
+            if ff is None:
+                return {"success": False, "error": msg("review_no_ffmpeg")}
+            out_dir = Path(TEMP_DIR) / self._REVIEW_TRANSCODE_SUBDIR
+            os.makedirs(out_dir, exist_ok=True)
+            self._sweep_review_transcode(str(out_dir))
+            identity = f"{p}|{os.path.getmtime(p)}|{os.path.getsize(p)}"
+            digest = hashlib.sha256(identity.encode("utf-8", "replace")).hexdigest()[:12]
+            out_path = str(out_dir / f"rt_{digest}.mp4")
+            if os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
+                return {"success": True, "cached": True, "path": out_path}
+            duration = self._review_media_duration(p) or 0.0
+            timeout_s = duration * 3 + 120
+            with lock:
+                state.update({"running": True, "percent": None, "error": None,
+                              "path": out_path, "cached": False})
+
+            def _worker() -> None:
+                def _cb(seconds: float) -> None:
+                    if duration > 0:
+                        pct = min(100.0, seconds / duration * 100.0)
+                        with lock:
+                            state["percent"] = round(pct, 1)
+
+                ok, err = _transcode_sync(ff, p, out_path, timeout_s, _cb)
+                with lock:
+                    state["running"] = False
+                    if ok:
+                        state["percent"] = 100.0
+                    else:
+                        state["error"] = err or msg("review_transcode_failed")
+
+            threading.Thread(target=_worker, daemon=True,
+                             name="review-transcode").start()
+            estimated_s = int(duration / 0.25) if duration > 0 else 0
+            return {"success": True, "started": True,
+                    "estimated_s": estimated_s, "path": out_path}
+        except Exception as e:
+            _log_exc("refine_review_start_transcode")
+            return {"success": False, "error": str(e)}
+
+    def refine_review_transcode_status(self) -> dict[str, Any]:
+        """转码状态快照（前端 800ms 轮询；无任务时零值字典）。"""
+        state = getattr(self, "_review_transcode_state", None) or {}
+        return {"running": bool(state.get("running")),
+                "percent": state.get("percent"),
+                "error": state.get("error"),
+                "path": state.get("path"),
+                "cached": bool(state.get("cached"))}
+
+    def refine_review_load_srt(self, path: str,
+                               include_raw: bool = False) -> dict[str, Any]:
+        """嗅探编码读 SRT → cleaner_rules.parse_srt（ms 原生）→ 结构化 blocks。
+
+        timing 字符串由 ms 重建（HH:MM:SS,mmm）；include_raw 为批 2b 编辑
+        通道预留参数（本批不消费）。
+        """
+        try:
+            p = str(path or "")
+            if not p or not os.path.isfile(p):
+                return {"success": False, "error": msg("review_srt_missing")}
+            from subtransjav.refine.srt_encoding import sniff_text_encoding
+            data = Path(p).read_bytes()
+            enc, trusted = sniff_text_encoding(data)
+            if not trusted:
+                return {"success": False, "error": msg("review_srt_bad_encoding")}
+            content = data.decode(enc)
+            from subtransjav.refine.cleaner_rules import parse_srt
+            blocks = [
+                {
+                    "index": int(it.index),
+                    "start_ms": int(it.start),
+                    "end_ms": int(it.end),
+                    "timing": (f"{_ms_to_srt_time(it.start)} --> "
+                               f"{_ms_to_srt_time(it.end)}"),
+                    "text": it.text,
+                }
+                for it in parse_srt(content)
+            ]
+            return {"success": True, "encoding": enc,
+                    "count": len(blocks), "blocks": blocks}
+        except Exception as e:
+            _log_exc("refine_review_load_srt")
+            return {"success": False, "error": str(e)}
 
     # ================================================================
     # 翻译记忆库 (Translation Memory) API

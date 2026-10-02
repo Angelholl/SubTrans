@@ -5,7 +5,8 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
 - 钉② 批2：两张词库表挂 .gl-table
 - 钉③ 批2：glRender/glLearnedLoad 行模板无 style= 字面量
 - 钉④ R2：:root 节奏禁区变量与文档级字号行高逐字冻结
-- 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 191 + data-i18n 键全集 192 快照冻结
+- 钉⑤ R1/R3（HRO-1 采纳件）：id 全集 200（批 2a 起实数见下）+
+  data-i18n 键全集 192 快照冻结
   （批3 190/192；批2 修订 D2026-1002-05 +1 id=aggregateWindowSel 恰达
   静态键 cap 192；2.6.1 修订 D2026-1002-06 等量换血 -3/+3 id：
   asrDownloadBtn/asrProgress/asrProgressText 出，
@@ -15,7 +16,13 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   -guide_source_group_title +tabReview 净变化 0 仍 192，cap 已扩
   200（余 8），解冻提案随 docs/design/d261-批1-批清单.md 立案；
   程序分界=静态键 cap 走解冻提案，DOM id 走批清单预算表+二级评议，
-  不并入 200 扩额统一管理）——
+  不并入 200 扩额统一管理；
+  2.6.1 批 2a D2026-1002-09：批 1 占位项按预算表转正 + 校对页骨架，
+  FROZEN_IDS 191→200，九 id 列名=tabBtnReview/tab-review/
+  reviewDropzone/videoReviewPlayer/reviewTranscodeBtn/reviewStatusBar/
+  reviewStatusDot/reviewStatusLabel/reviewProgressFill（预算恰好用满，
+  余 0）；FROZEN_I18N_KEYS 不动（tabReview 沿用批 1 键，
+  #tab-review 页内零 data-i18n，静态键 cap 零消耗））——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
 """
@@ -104,10 +111,13 @@ refineSourceFilter refineStartBtn refineTemplateReload refineTemplateSave
 refineTemplateStage refineTemplateStatus refineTemplateText refineTemplatesDir
 refineTemplatesDirShow refineTestS1 refineTestS1Status refineTestS3 refineTestS3Status
 refineTmDb refineTmEnable refineTmThreshold refineTplLoadedPath refineV2Ctx
-refreshFallbackModels removeSelectedBtn resumeToggle statusDot statusLabel
+refreshFallbackModels removeSelectedBtn resumeToggle reviewDropzone
+reviewProgressFill reviewStatusBar reviewStatusDot reviewStatusLabel
+reviewTranscodeBtn statusDot statusLabel
 sysSummaryDataRoot sysSummaryDict sysSummaryTm sysSummaryVersion systemSummaryCard
-tab-advanced tab-engine tab-glossary tab-guide tab-translate tabBtnAdvanced tabBtnEngine
-tabBtnGlossary tabBtnGuide tabBtnTranslate themeBtn themeMenu themeStylesheet
+tab-advanced tab-engine tab-glossary tab-guide tab-review tab-translate tabBtnAdvanced tabBtnEngine
+tabBtnGlossary tabBtnGuide tabBtnReview tabBtnTranslate themeBtn themeMenu themeStylesheet
+videoReviewPlayer
 """.split())
 
 FROZEN_I18N_KEYS = frozenset(
@@ -199,12 +209,11 @@ def test_r2b_rhythm_tokens_extended():
 
 
 def test_nav_grouping_pinned():
-    """批 1 导航三分结构钉：组标题与按钮顺序显式冻结。
+    """导航三分结构钉（批 1 立钉、批 2a 随批更新）：组标题与按钮顺序显式冻结。
 
-    工作区组=字幕翻译/校对占位（无 data-tab 不入列）/质量与建议；
-    设置组=引擎与模型/词库与模板/高级参数；占位项契约=无 id、
-    无 data-tab、非 .side-tab-btn（app.js 只给 .side-tab-btn 绑
-    click，switchTab(undefined) 会把全部按钮置为非激活）。
+    工作区组=字幕翻译/校对（批 2a D2026-1002-09 占位转正为
+    .side-tab-btn#tabBtnReview）/质量与建议；设置组=引擎与模型/
+    词库与模板/高级参数。
     """
     m = re.search(r'<nav class="rail-nav".*?</nav>', HTML, re.S)
     assert m, "未找到 rail-nav 导航块"
@@ -221,13 +230,17 @@ def test_nav_grouping_pinned():
             groups[current].append(tab)
     assert list(groups.keys()) == ["nav_group_workspace", "nav_group_quality"], \
         f"导航分组标题顺序漂移：{list(groups.keys())}"
-    assert groups["nav_group_workspace"] == ["tab-translate", "tab-guide"], \
+    assert groups["nav_group_workspace"] == ["tab-translate", "tab-review", "tab-guide"], \
         f"工作区组 data-tab 顺序漂移：{groups['nav_group_workspace']}"
     assert groups["nav_group_quality"] == ["tab-engine", "tab-glossary", "tab-advanced"], \
         f"设置组 data-tab 顺序漂移：{groups['nav_group_quality']}"
-    pm = re.search(r'<div class="nav-item-placeholder"[^>]*>', HTML)
-    assert pm, "缺校对占位导航项 nav-item-placeholder"
-    tag = pm.group(0)
-    assert "id=" not in tag and "data-tab=" not in tag, \
-        "占位导航项不得带 id/data-tab（批 2a 校对页 id 走批清单预算表程序）"
+    # 批 2a（D2026-1002-09）：占位项已转正——nav-item-placeholder 必须消失，
+    # 校对项为 .side-tab-btn#tabBtnReview[data-tab=tab-review]（预算表程序落 id）
+    assert "nav-item-placeholder" not in HTML, \
+        "批 1 校对占位项应在批 2a 转正后移除"
+    rb = re.search(r'<button[^>]*id="tabBtnReview"[^>]*>', HTML)
+    assert rb, "缺校对 TAB 按钮 tabBtnReview"
+    assert 'data-tab="tab-review"' in rb.group(0) \
+        and "side-tab-btn" in rb.group(0), \
+        "校对 TAB 按钮必须挂 data-tab=tab-review 且为 .side-tab-btn"
     assert "tabReview: '校对'" in JS, "MSG 缺 tabReview 静态键"

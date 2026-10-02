@@ -1710,6 +1710,138 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 /* ============================================================
    20. 响应式：<1180px rail 收缩为 64px 图标栏，aside 收 300px
    ============================================================ */
+/* ============================================================
+   16. 校对页（2.6.1 批 2a D2026-1002-09；只增不改：参数拷贝既有规则族）
+   ============================================================ */
+
+/* 手动转码按钮（批 2a 骨架指定 btn-warning；既有 btn 族无 warning 变体，
+   新增规则映射既有 --warn 语义 token，hover 走 .btn-danger 同款描边模式） */
+.btn-warning {
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-color: var(--warn-soft);
+}
+.btn-warning:hover:not(:disabled) { border-color: var(--warn); }
+
+/* 导入区：参数拷贝 #tab-translate .dropzone 族（本页作用域前缀，批清单 §2） */
+#tab-review .dropzone {
+    border: 1.5px dashed var(--dropzone-border);
+    border-radius: var(--radius-lg);
+    background: var(--primary-soft);
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-1);
+    transition: border-color var(--dur) ease, background var(--dur) ease;
+}
+#tab-review .dropzone:hover { border-color: var(--primary); }
+#tab-review .dropzone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    box-shadow: var(--focus-ring);
+}
+#tab-review .dropzone .btn {
+    min-height: var(--h-ctl-sm);
+    padding: 0 10px;
+    font-size: var(--font-xs);
+    border-radius: var(--radius-sm);
+}
+#tab-review .dz-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--primary-border);
+    color: var(--primary);
+    display: grid;
+    place-items: center;
+}
+
+/* 播放器容器（letterbox 用既有 --console-bg 深色 token） */
+.review-player-wrap {
+    margin: var(--space-4) auto 0;
+    max-width: 960px;
+    width: 100%;
+}
+.review-player-wrap video {
+    display: block;
+    width: 100%;
+    max-height: 60vh;
+    background: var(--console-bg);
+    border-radius: var(--radius-sm);
+}
+
+/* 状态条（D2026-1002-08 定案：32px 通栏 + sticky；dot/label 参数拷贝
+   .status-dot/.status-label 等值；track 须真实子元素供 JS 设宽） */
+.review-status-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 32px;
+    padding: 0 var(--space-3);
+    background: var(--surface-2);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-shrink: 0;
+}
+.review-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.review-status-label {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.review-status-spacer { flex: 1; }
+.review-status-percent {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+.review-status-track {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--border);
+}
+.review-status-track-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    transition: width .3s;
+}
+
+/* 四态（dot 色/环/label 色按 D2026-1002-08 色板；--ok/--danger 族既有实证直接用） */
+.review-st-idle .review-status-dot { background: var(--border-strong); }
+.review-st-ready .review-status-dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.review-st-ready .review-status-label { color: var(--text-1); }
+.review-st-busy .review-status-dot { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.review-st-busy .review-status-label { color: var(--text-2); }
+.review-st-error .review-status-dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.review-st-error .review-status-label { color: var(--danger); }
+
+/* 不定进度（参数拷贝 indeterminate-progress；keyframes 独立命名防串扰） */
+.review-status-bar.indeterminate .review-status-track-fill {
+    width: 30%;
+    animation: review-indeterminate 1.5s ease-in-out infinite;
+}
+@keyframes review-indeterminate {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+}
+
 @media (max-width: 1180px) {
     .workbench { grid-template-columns: 64px minmax(0, 1fr) 300px; }
 

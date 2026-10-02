@@ -224,7 +224,7 @@ def test_sidebar_tabs_replace_details_shell():
     各 TAB 页面容器 id 存在。"""
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
     for btn in ("tabBtnTranslate", "tabBtnEngine", "tabBtnGlossary",
-                "tabBtnGuide", "tabBtnAdvanced"):
+                "tabBtnGuide", "tabBtnAdvanced", "tabBtnReview"):
         assert f'id="{btn}"' in html, f"index.html 缺少左侧 TAB 按钮: {btn}"
     assert re.search(
         r'<button[^>]*id="tabBtnTranslate"[^>]*class="side-tab-btn active"',
@@ -232,7 +232,7 @@ def test_sidebar_tabs_replace_details_shell():
         r'<button[^>]*class="side-tab-btn active"[^>]*id="tabBtnTranslate"',
         html), "默认选中的 TAB 必须是 tabBtnTranslate"
     for page in ("tab-translate", "tab-engine", "tab-glossary",
-                 "tab-guide", "tab-advanced"):
+                 "tab-guide", "tab-review", "tab-advanced"):
         assert f'id="{page}"' in html, f"index.html 缺少 TAB 页面: {page}"
     # details 折叠壳已平铺：高级设置 summary 锚不再引用
     assert 'data-i18n="advanced_settings_summary"' not in html, \
