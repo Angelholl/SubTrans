@@ -6,7 +6,7 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 
 ## 下载与安装
 
-- **EXE 安装包**（推荐普通用户）：随 2.0.0 正式发布提供，请到 [Releases](../../releases) 页下载；系统要求与安装步骤见下方[安装](#安装)。
+- **EXE 安装包**（推荐普通用户）：随正式版发布提供，请到 [Releases](../../releases) 页下载；系统要求与安装步骤见下方[安装](#安装)。
 - **源码 / pip 方式**：见下方[安装](#安装)（`首次安装.bat` 一键脚本或 `pip install -e ".[gui]"`）。
 
 本文档以中文为主体；英文用户可直接跳转 [English Quickstart](#english-quickstart)。
@@ -32,6 +32,8 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 - 质量报告 + 双引擎分歧分析
 - Webview GUI + CLI 双入口
 - 词库治理：全角/半角（NFKC）归一与拉丁词界匹配、单批注入上限 100 条、结构化 JSON 防注入包装、三级词库链冲突可见化
+- 校对视图（校对页）：导入视频与字幕并排人工复核——字幕列表与播放双向联动、质量报告疑点段转跳/试听/确认标记、行内改译文、保存自动备份原文件并重编号（UTF-8 重写，兼容 GBK 读取）
+- ASR 模型管理（引擎页）：自动探测本机已有模型（上游 WhisperJAV 环境与常见缓存）下拉即用，未装时提供推荐模型自备指引；媒体音频对照验证为可选开关（默认关闭，全程本地）
 
 ## 2.0 新特性（beta）
 
@@ -114,7 +116,7 @@ subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-mod
 subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
 ```
 
-GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**校对**（即将上线）、**质量与建议**（含 AI 质量分析）；「设置」：**引擎与模型**、**词库与模板**、**高级参数**。初始安装即默认参数，全部高级定制在对应页内调整。
+GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**校对**（视频+字幕并排人工复核）、**质量与建议**（含 AI 质量分析）；「设置」：**引擎与模型**、**词库与模板**、**高级参数**。初始安装即默认参数，全部高级定制在对应页内调整。
 
 常用参数速查：`-i` / `--input-dir -r`（输入）、`--filter-pattern` / `--exclude`（文件过滤）、`-o`（输出目录）、`--glossary`（词库 CSV）、`--tm-db`（指定 TM 库）、`--force`（强制重跑）、`--dry-run`（执行计划预览，不实际调用）、`--v2-ctx`（本地上下文窗口）、`--ai-analyze`（质量报告 AI 分析）、`--action-retranslate --entries`（导读条目定点重翻）、`--media-path`（指定媒体文件，供后续试听/音频检测）、`--source-lang` / `--target-lang`（翻译方向，缺省 ja→zh；非缺省方向须为各启用阶段显式指定配套模板卡 `--s{n}-instructions`，包内仅随 ja→zh 卡）。
 
