@@ -2545,3 +2545,34 @@ ruff 全仓 0｜mypy 0｜node --check｜定向 12+285 passed｜全量 **1638 pas
 ### 六、后续风险跟踪
 
 ①批 2a id 面为项目单批最大扩张（历史单批最大 +7）——预算表分段列名+压缩 ≤10；②`<video>` file:// 若整体失败坠入手动转码兜底=UX 大幅劣化——spike 先行+验收口径前置；③SRT 编码 N1 高概率——批 2a 首件 annex；④校对保存覆盖不可逆——确认框+另存为/备份；⑤批 3 跳转契约空窗——空实现先行防返工；⑥CHANGELOG 2.6.0"一键下载"表述与使用与维护手册 ASR 段=2.6.1 发版批同步件（承 D2026-1002-06 执行追记）；⑦app.js 4218 行单文件持续膨胀——批 2a 起校对页 JS 独立文件评估（<script> 拆分，不动既有 IIFE）。
+
+## [2026-10-02] D2026-1002-08 批 2a 校对页迷你状态条 DOM 归属+UI 规格定案 [已拍板·D2026-1002-07 条件②闭环]
+
+**关联**：D2026-1002-07（本件为其条件②闭环件）、docs/design/d261-批1-批清单.md（程序分界：DOM id=批清单预算表+二级评议程序）。**背景授权**：owner 拍板 B+E+4（"DOM 层独立三/四个 id，JS 层新写 makeStatusManager(ids) 小工厂，不动翻译侧 ProgressManager"；首选 +4 含容器，预算硬卡才退 +3）+明示指令"设计到 UI 设计，和评议员和设计师讨论下"。
+
+### 一、决议要点（B+E 独立新写方案）
+
+1. **DOM**：校对页顶部 32px 迷你状态条独立新建四 id——`reviewStatusBar`/`reviewStatusDot`/`reviewStatusLabel`/`reviewProgressFill`；JS 一律 getElementById；翻译侧 DOM（index.html:732-740 右栏卡 1 `.progress-container` 四 id，ProgressManager app.js:1186-1219 单例 8 处引用）零改动。
+2. **i18n**：`reviewStatusLabel` 不挂 data-i18n（零静态键消耗）；文案全走 JS 态 MSG 键（`review.status.*` 族）；~~工厂内语言切换重渲染~~ **删除**（运行时切换机制不存在=INFO_GAP 答复，防御性过度设计）；验收改反向悬空钉保护（`test_js_msg_references_defined_in_table`，tests/test_strings_and_shortcut.py:151）；语言切换议题登记批 2b UI 复盘。
+3. **JS**：新写 `makeStatusManager({ bar?, dot, label, fill })`，缓存元素，暴露 `setState({ state, labelKey, progress })`；ProgressManager 零改动。
+4. **接口契约三条**（评议员条件 2 采纳）：`progress=null` ⇒ indeterminate 显式语义；state 枚举定稿 **4 值 `idle/ready/busy/error`**（state 定视觉、labelKey 定文字，transcoding 等细分由 labelKey 表达如 `review.status.transcoding`，不单列枚举位，与视觉四态正交）；非法 state 显式报错；labelKey 不插值（进度数字由 fill/百分比位表达）。
+5. **aria 重组**（条件 3 采纳）：label=`role="status"`（隐含 polite）；fill=`role="progressbar"`+aria-valuemin/max/now（indeterminate 时移除 valuenow）；dot=aria-hidden。
+6. **批 2b 归并时点硬性化**（条件 5 采纳）：评估时点=批 2b 开工评议；判据两条（批 2a 内 ≥2 独立调用方且接口零改动＋批 2a 验收门全绿）同时满足才评估；归并作为独立小批单列（批 3 末或 2.6.2 首件），不混 2b 功能批。
+
+### 二、设计规格要点（design-expert 同轮交付，采纳）
+
+32px 通栏 `.review-status-bar`（surface-2 底/sticky top:0 z-20 solid 防滚动穿透）+8px dot+12px label ellipsis（min-width:0）+flex spacer+busy 确定态右端百分比文字（**不落 id**，工厂内部管理，守 +4 账）+底部 2px 通栏轨（灰 --border 兼分隔线/蓝 --primary fill，transition .3s）。四态色板：idle=border-strong/text-3；ready=--ok+--ok-soft 环；busy=--primary+--primary-soft 环；error=--danger+--danger-soft 环/danger 文字。`.review-status-*` 类族参数拷贝零复用（翻译侧 7 条规则+既有 keyframe 零改动）；新 `@keyframes review-indeterminate` 参数拷贝（1.5s ease-in-out/width 30%/translateX -100%→400%）；全 token 零新字面量；`--ok/--danger` token 存在性=批 2a 实现首件核实项。批 2b 衔接：状态条=校对 tab-page 首行 sticky，媒体/字幕区 flex:1+min-height:0 自然分配。
+
+### 三、评议员条件与裁决（全采纳，无驳回项）
+
+①id 总额不预锁：本件只锁状态条归属（+4 方向/+3 备选），批 2a 清单预算表逐段预演全部子功能 ≤9（留 ≥1 缓冲），压缩顺序先压 SRT/转码区；②接口契约三条（见一.4）；③aria 重组（见一.5）；④语言切换设计点删除+验收改悬空钉（INFO_GAP 答复=运行时切换机制不存在：MSG 单中文表/applyI18n 仅启动注入一次/无切换入口/GUI 中文导向）；⑤归并时点硬性化（见一.6）；⑥验收补四项：暗色主题双主题截图/1180px 窄屏单行行为/FROZEN_IDS 快照显式更新跑钉/默认空态文案+初始 dot 态；"语言切换 label 正确"验收项按④修正。
+
+### 四、异议记录
+
+- 评议员：有条件支持，**无 [HIGH_RISK_OBJECTION]、无 [PRESSURE-OVERRIDE]**；条件 1-6 全采纳无驳回。经复议修正两项："接口稳定后再评估"归并时点不可判（改硬性时点+判据）、"语言切换重渲染"系主模型防御性过度设计（已删）。
+- 是否 [PRESSURE-OVERRIDE]：否（owner 明示指令+无人值守授权）。
+
+### 五、边界声明与风险跟踪
+
+**边界**：本件闭环 D2026-1002-07 条件②即止；不预先锁死批 2a id 总额（以批 2a 清单预算表逐段预演为准）；批 2a 其余开工门（播放器 spike 验收口径、N1 编码嗅探首件、N3 跳转契约钉、R1 降级接口预留）仍待批 2a 正式开工评议。
+**风险跟踪**：①批 2a id 面=项目单批最大扩张，预算表逐段列名 ≤9；②--ok/--danger token 存在性首件核实（不存在则映射既有 token 或补定义，不引入新字面量）；③未来引入运行时语言切换时 `.review-status-*` 为漏网重渲染点（批 2b UI 复盘项）；④aria-valuenow 在 indeterminate 时须显式移除；⑤归并评估在批 2b 开工评议，判据两条，不混功能批。
