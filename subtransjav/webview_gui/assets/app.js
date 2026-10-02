@@ -391,6 +391,13 @@ const MSG = {
     sys_summary_title: '系统状态',
     sys_summary_unavailable: '不可用',
     sys_summary_version: '版本',
+    // 批3 扩展（D2026-1002-12）：角色卡行 + ASR 行动态渲染所需键（全 JS 态，
+    // 零静态 i18n 消耗；标签复用 templates_dir_label / asr_panel_title 既有键）
+    sys_roles_count: n => `${n} 张`,
+    sys_roles_fallback: '内置回落',
+    sys_asr_undetected: '未探测',
+    sys_asr_unconfigured: '未配置',
+    sys_asr_ready: m => `就绪 · ${m}`,
     media_source_label: '媒体来源',
     media_source_auto: '自动发现',
     media_source_explicit: '显式指定',
@@ -1248,6 +1255,9 @@ const ProgressManager = {
 // ============================================================
 const SystemSummary = {
     load() {
+        // 批3 扩展（D2026-1002-12）：角色卡/ASR 两行动态渲染（FROZEN_IDS 已满，
+        // 行与控件零新增静态 id，经 data-sys-row 定位）
+        this._ensureDynamicRows();
         this._set('sysSummaryVersion', async () => {
             const r = await pywebview.api.get_version();
             return (r && r.success) ? r.version : null;
@@ -1260,17 +1270,22 @@ const SystemSummary = {
             const r = await pywebview.api.tm_get_stats();
             if (!r || !r.success) return null;
             const total = r.total || 0, hits = r.total_hits || 0;
-            return `${MSG.tm_enable_label} ${total} 条 · 命中 ${hits} 次`;
-        });
+            // 批3 扩展（D2026-1002-12）+ 收口件①：改"状态 · 路径"合并值——
+            // 行标签已是"翻译记忆库"（静态键），值内不再拼 tm_enable_label
+            // 前缀防重复（收口前显示"翻译记忆库 | 翻译记忆库 0 条·…"）
+            return `${total} 条 · 命中 ${hits} 次 · ${r.db_path || '—'}`;
+        }, true);
         this._set('sysSummaryDict', async () => {
             const r = await pywebview.api.refine_dict_status();
             if (!r || !r.success || !r.dicts) return null;
             const kinds = Object.values(r.dicts);
             const ok = kinds.filter(d => d && d.available).length;
             // 修复A：分母取 DICT_KINDS 桥接值（防 manifest 增 kind 时前端漂移/漏改）
+            // 批3 扩展（D2026-1002-12）：合并值补 effective_dir
             const total = window.AppDictKindsCount || kinds.length;
-            return `${ok}/${total} ${MSG.dict_status_available}`;
-        });
+            return `${ok}/${total} ${MSG.dict_status_available} · ${r.effective_dir || '—'}`;
+        }, true);
+        this._loadRoles();
     },
 
     async _set(id, fn, ellipsis) {
@@ -1285,6 +1300,100 @@ const SystemSummary = {
         }
         el.textContent = text;
         el.title = ellipsis ? text : '';
+    },
+
+    // 批3 扩展（D2026-1002-12）：角色卡行 + ASR 行动态渲染——
+    // 行样式复用 .sys-summary-row，标签复用既有静态键文案（JS 态取值，
+    // 不挂 data-i18n：applyI18n 首屏已跑完，动态节点收不到）；
+    // ASR 行尾「重新探测」小按钮不带 id，事件委托绑在卡上（见 bindDom）
+    _ensureDynamicRows() {
+        const card = document.getElementById('systemSummaryCard');
+        if (!card || card.querySelector('[data-sys-row="roles"]')) return;
+        const roles = document.createElement('div');
+        roles.className = 'sys-summary-row';
+        roles.dataset.sysRow = 'roles';
+        roles.innerHTML = '<span class="sys-summary-key"></span>'
+            + '<span class="sys-summary-val"></span>';
+        roles.querySelector('.sys-summary-key').textContent
+            = MSG.templates_dir_label;
+        card.appendChild(roles);
+        const asr = document.createElement('div');
+        asr.className = 'sys-summary-row';
+        asr.dataset.sysRow = 'asr';
+        asr.innerHTML = '<span class="sys-summary-key"></span>'
+            + '<span class="sys-summary-val val-muted"></span>'
+            + '<button type="button" class="btn btn-ghost btn-compact"'
+            + ' data-sys-action="asr-probe"></button>';
+        asr.querySelector('.sys-summary-key').textContent = MSG.asr_panel_title;
+        asr.querySelector('button').textContent = MSG.asrRefreshBtn;
+        card.appendChild(asr);
+        asr.querySelector('.sys-summary-val').textContent
+            = MSG.sys_asr_undetected;
+    },
+
+    // 批3 扩展（D2026-1002-12）：角色卡目录行（复用 refine_list_templates，
+    // 只读零写路径）；值="<目录> · N 张"，pkg_fallback 标注内置回落；
+    // 长路径走 .sys-summary-val 既有省略 + title 悬停全文
+    async _loadRoles() {
+        const val = document.querySelector(
+            '#systemSummaryCard [data-sys-row="roles"] .sys-summary-val');
+        if (!val) return;
+        let text = MSG.sys_summary_unavailable;
+        try {
+            const r = await pywebview.api.refine_list_templates(null);
+            if (r && r.success) {
+                const tag = r.pkg_fallback ? `（${MSG.sys_roles_fallback}）` : '';
+                text = `${r.dir || '—'} · ${MSG.sys_roles_count((r.files || []).length)}${tag}`;
+            }
+        } catch (e) {
+            console.warn('SystemSummary[roles]:', e);
+        }
+        val.textContent = text;
+        val.title = text;
+    },
+
+    // 批3 扩展（D2026-1002-12）：ASR 行显式探测（首屏不自动探测——上游
+    // selfcheck 慢，避免卡首屏）；成功="就绪 · 已存模型名/未配置"，
+    // 失败透出原因（复用 asr 相关既有键文案）
+    async probeAsr() {
+        const row = document.querySelector(
+            '#systemSummaryCard [data-sys-row="asr"]');
+        if (!row) return;
+        const val = row.querySelector('.sys-summary-val');
+        const btn = row.querySelector('[data-sys-action="asr-probe"]');
+        if (btn) btn.disabled = true;
+        if (val) {
+            val.textContent = '…';
+            val.title = '';
+        }
+        try {
+            const r = await pywebview.api.refine_asr_status();
+            let text;
+            if (!r || !r.success) {
+                text = MSG.asrProbeFail((r && r.error) || MSG.unknown);
+            } else if (r.available) {
+                text = MSG.sys_asr_ready(
+                    r.model_present && r.saved_model
+                        ? r.saved_model : MSG.sys_asr_unconfigured);
+                if (val) val.classList.remove('val-muted');
+            } else {
+                text = MSG.asrProbeFail(r.reason || '');
+            }
+            if (val) {
+                val.textContent = text;
+                val.title = text;
+            }
+        } catch (e) {
+            // 收口件②：异常分支不走裸 e.message，与失败分支同口径包 asrProbeFail
+            const text = MSG.asrProbeFail(
+                (e && e.message) || MSG.unknown);
+            if (val) {
+                val.textContent = text;
+                val.title = text;
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 };
 
@@ -3769,6 +3878,16 @@ function switchTab(tabId) {
     // AI 质量分析（D2026-0929）
     const aiBtn = $('refineAiAnalyzeBtn');
     if (aiBtn) aiBtn.addEventListener('click', () => refineAiAnalyze());
+    // 批3 补刀（D2026-1002-12 空载复测）：AI 分析区顶置标签中文填充
+    // （HTML 英文留兜底；三键均既有，绑 DOM 即填不依赖设置回填路径，
+    //   设置回填路径的同名填充保留为幂等二次写）
+    const aiCfgLabels = { aiProviderSel: 'ai_cfg_provider_label',
+                          aiModelInput: 'ai_cfg_model_label',
+                          aggregateWindowSel: 'aggregateWindowLabel' };
+    Object.keys(aiCfgLabels).forEach((k) => {
+      const lbl = document.querySelector('label[for="' + k + '"]');
+      if (lbl) lbl.textContent = MSG[aiCfgLabels[k]];
+    });
     // 质量闭环一键批次修复（2.6.0 批1）
     const bfBtn = $('refineBatchFixBtn');
     if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());
@@ -3789,6 +3908,15 @@ function switchTab(tabId) {
       const ph = asrSelPh.querySelector('option[value=""]');
       if (ph) ph.textContent = MSG.asrSelectPlaceholder;
     }
+    // 批3 扩展（D2026-1002-12）：系统状态卡 ASR 行「重新探测」事件委托——
+    // 行由 SystemSummary 动态渲染（零新增静态 id），委托绑卡上按
+    // data-sys-action 分流；首屏不自动探测（上游 selfcheck 慢）
+    const sysCard = $('systemSummaryCard');
+    if (sysCard) sysCard.addEventListener('click', (e) => {
+      if (e.target.closest('[data-sys-action="asr-probe"]')) {
+        SystemSummary.probeAsr();
+      }
+    });
     // 2.6.1 修订（D2026-1002-06）：验证开关 + 上游 Python 路径（下载按钮删除）；
     // 批2：asrSaved 仅在保存成功后写入（失败透出错误，与空态占位区分）
     const asrTgl = $('asrCrosscheckToggle');

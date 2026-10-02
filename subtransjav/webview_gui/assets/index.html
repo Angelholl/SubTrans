@@ -562,24 +562,32 @@
                             <select id="refineBatchFixScope" class="form-select compact" style="width:auto; display:none;" aria-label="fix scope"></select>
                             <span id="refineBatchFixStatus" class="muted"></span>
                         </div>
-                        <!-- 2.5.0 批5（D2026-1001-07）：AI 分析独立配置（缺省跟随阶段A；custom 无默认端点已排除） -->
+                        <!-- 2.5.0 批5（D2026-1001-07）：AI 分析独立配置（缺省跟随阶段A；custom 无默认端点已排除）
+                             批3（D2026-1002-12）：平铺六件套改 3 组顶置标签列（.field-col），
+                             橙色提示移入行尾独立成行（order:99 对齐 .stage-row .muted 先例） -->
                         <div class="ai-config-row">
-                            <label class="muted" for="aiProviderSel">Analysis provider</label>
-                            <select id="aiProviderSel" class="form-select compact" style="width:auto;">
-                                <option value="follow">Follow stage A (default)</option>
-                                <option value="lmstudio">LM Studio (local)</option>
-                                <option value="ollama">Ollama (local)</option>
-                                <option value="deepseek">DeepSeek API</option>
-                                <option value="siliconflow">SiliconFlow</option>
-                                <option value="zen">Zen (free)</option>
-                            </select>
-                            <label class="muted" for="aiModelInput">Analysis model</label>
-                            <input type="text" id="aiModelInput" class="form-input compact" style="width:auto;">
+                            <div class="field-col">
+                                <label class="muted" for="aiProviderSel">Analysis provider</label>
+                                <select id="aiProviderSel" class="form-select compact">
+                                    <option value="follow">Follow stage A (default)</option>
+                                    <option value="lmstudio">LM Studio (local)</option>
+                                    <option value="ollama">Ollama (local)</option>
+                                    <option value="deepseek">DeepSeek API</option>
+                                    <option value="siliconflow">SiliconFlow</option>
+                                    <option value="zen">Zen (free)</option>
+                                </select>
+                            </div>
+                            <div class="field-col">
+                                <label class="muted" for="aiModelInput">Analysis model</label>
+                                <input type="text" id="aiModelInput" class="form-input compact">
+                            </div>
                             <!-- 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（JS 填充，零静态键） -->
-                            <label class="muted" for="aggregateWindowSel">Cross-film window</label>
-                            <select id="aggregateWindowSel" class="form-select compact" style="width:auto;"></select>
+                            <div class="field-col">
+                                <label class="muted" for="aggregateWindowSel">Cross-film window</label>
+                                <select id="aggregateWindowSel" class="form-select compact"></select>
+                            </div>
+                            <div id="refineAiPrivacy" class="muted hint-warn" style="display:none;"></div>
                         </div>
-                        <div id="refineAiPrivacy" class="muted hint-warn" style="display:none; margin-top:6px;"></div>
                         <div id="refineAiResult" style="margin-top:8px;"></div>
                     </div>
                 </section>

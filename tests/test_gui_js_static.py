@@ -911,6 +911,165 @@ def test_system_summary_card_structure_and_degradation():
     assert "catch" in seg, "SystemSummary 缺少逐接口降级 catch"
 
 
+# ---------------------------------------------------------------------------
+# 批3（D2026-1002-12）：AI 分析区重排 + 主页 Console 占比 + 系统状态卡扩展
+# ---------------------------------------------------------------------------
+
+def test_batch3_ai_config_row_field_cols_pinned():
+    """①AI 分析配置六件套改 3 组顶置标签列（.field-col）。
+
+    - style.css 存在 .ai-config-row .field-col 规则组与 align-items:flex-start；
+    - index.html 配置行恰 3 组 .field-col（服务商/模型/跨片窗口），
+      3 处内联 width:auto 不再残留；
+    - 橙色提示 #refineAiPrivacy 移入行尾（order:99 独立成行），
+      四锚点 id 全保留（FROZEN_IDS 契约）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert ".ai-config-row .field-col" in css, "缺 .field-col 规则组"
+    m = re.search(r"\.ai-config-row \{[^}]*\}", css)
+    assert m and "align-items: flex-start;" in m.group(0), \
+        ".ai-config-row 缺 align-items:flex-start"
+    assert re.search(r"\.ai-config-row > #refineAiPrivacy \{[^}]*order: 99;", css), \
+        "#refineAiPrivacy 缺 order:99 行尾规则"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    i = html.index('class="ai-config-row"')
+    row = html[i:html.index("</section>", i)]
+    assert row.count('class="field-col"') == 3, "配置行必须恰 3 组顶置标签列"
+    for dom_id in ("aiProviderSel", "aiModelInput", "aggregateWindowSel",
+                   "refineAiPrivacy"):
+        assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
+    assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
+
+
+def test_batch3_console_ratio_and_section_overflow_pinned():
+    """②主页 Console 与文件列表 70/30 比例分配 + 空态收敛（数值逐字冻结）。
+
+    - .section 补 overflow:hidden（收敛双层圆角不同心）；
+    - .console-output 圆角降为 --radius-sm、min-height:0（高度全交外层，
+      180/420 定高删除）；
+    - #tab-translate > .card 70% / .console-collapsible:not(.collapsed)
+      30%（150 保底 / 300 上限，替换原 160/220）；
+    - 空态（:not(.has-files)）文件卡退出比例分配且列表容器不滚动。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.section \{[^}]*\}", css)
+    assert m and "overflow: hidden;" in m.group(0), ".section 缺 overflow:hidden"
+    m = re.search(r"\.console-output \{[^}]*\}", css)
+    assert m, "缺 .console-output 规则"
+    assert "border-radius: var(--radius-sm);" in m.group(0), \
+        ".console-output 圆角应为 --radius-sm"
+    assert "min-height: 0;" in m.group(0), ".console-output 缺 min-height:0"
+    assert "min-height: 180px" not in m.group(0) \
+        and "max-height: 420px" not in m.group(0), \
+        ".console-output 定高未删净"
+    assert "flex: 1 1 70%;" in css, "文件卡 70% 比例缺失"
+    assert re.search(
+        r"#tab-translate \.console-collapsible:not\(\.collapsed\) \{"
+        r"[^}]*flex: 0 1 30%;[^}]*min-height: 150px;[^}]*max-height: 300px;",
+        css), "Console 30%/150/300 数值漂移"
+    assert "#tab-translate:not(.has-files) > .card { flex: 0 0 auto; }" in css, \
+        "缺空态文件卡收敛规则"
+    assert re.search(
+        r"#tab-translate:not\(\.has-files\) \.file-list-container \{"
+        r"[^}]*overflow-y: hidden;", css), "缺空态列表容器不滚动规则"
+
+
+def test_batch3_system_summary_dynamic_rows_pinned():
+    """③系统状态卡扩展：两行动态渲染（零新增静态 id）+ 委托绑定 + 新 MSG 键。
+
+    - 角色卡/ASR 两行由 SystemSummary 动态建（data-sys-row 定位，
+      行样式复用 .sys-summary-row），index.html 无任何 data-sys 静态锚；
+    - ASR「重新探测」走事件委托绑 #systemSummaryCard（data-sys-action
+      分流，按钮零 id），probeAsr 为唯一显式探测入口（首屏不自动探测）；
+    - TM/词典行改"状态 · 路径"合并值（补 db_path / effective_dir）；
+    - id 全集 213 不变（FROZEN_IDS 契约延续）。
+    """
+    src = _app_js_source()
+    for frag in ("data-sys-row=\"roles\"", "data-sys-row=\"asr\"",
+                 "data-sys-action=\"asr-probe\"",
+                 "sys-summary-row", "sys-summary-val"):
+        assert frag in src, f"app.js 缺少批3动态行接线: {frag}"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "data-sys-row" not in html and "data-sys-action" not in html, \
+        "摘要卡动态行不得新增静态锚（FROZEN_IDS 已满，行全由 JS 渲染）"
+    ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
+    assert len(ids) == 213, f"id 全集数漂移（批3 契约 213 不变），实为 {len(ids)}"
+    # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
+    bind = _extract_function(src, "bindDom")
+    assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
+        "bindDom 缺系统状态卡事件委托"
+    probe = _extract_function(src, "probeAsr")
+    assert "refine_asr_status" in probe, "probeAsr 必须调 refine_asr_status"
+    # 收口件②：失败(!success)/不可用/异常三分支全部经 asrProbeFail 包文案，
+    # 不得出现裸 e.message 直显
+    assert probe.count("MSG.asrProbeFail") == 3, \
+        "probeAsr 失败口径漂移（三分支须统一 asrProbeFail）"
+    assert "e.message : String(e)" not in probe, \
+        "probeAsr 异常分支残留裸 message 直显"
+    assert "refine_list_templates" in src and "pkg_fallback" in src, \
+        "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
+    # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
+    # 收口件①：TM 值形态="N 条·命中 N·<db_path>"，行标签已由静态键
+    # sys-summary-key 呈现，值内不得再拼 tm_enable_label 前缀（防重复）
+    start = src.index("const SystemSummary")
+    seg = src[start:src.index("// ============================================================", start)]
+    for frag in ("r.db_path", "r.effective_dir"):
+        assert frag in seg, f"摘要卡缺少合并值字段: {frag}"
+    assert not re.search(r"return `[^`]*tm_enable_label", seg), \
+        "TM 行值模板拼入 tm_enable_label（与行标签重复，违反状态·路径合并语义）"
+    # 新 MSG 键存在（全中文，JS 态零静态 i18n 消耗）
+    keys = _js_msg_keys()
+    for key in ("sys_roles_count", "sys_roles_fallback", "sys_asr_undetected",
+                "sys_asr_unconfigured", "sys_asr_ready"):
+        assert key in keys, f"MSG 缺少批3新键: {key}"
+
+
+def test_batch4_existing_anchors_no_regression():
+    """④既有锚不回归：.asr-entry-hint 与 AI 分析区四锚保留。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'class="muted asr-entry-hint"' in html, ".asr-entry-hint 锚回归"
+    for dom_id in ("refineAiAnalyzeBtn", "refineAiAnalyzeStatus",
+                   "refineAiResult", "refineBatchFixBtn"):
+        assert f'id="{dom_id}"' in html, f"AI 分析区锚点丢失: {dom_id}"
+
+
+def test_batch3_followup_analyze_section_column_layout_pinned():
+    """补刀（空载复测）：AI 分析区 .section-content 收敛为列向纵排。
+
+    #refineAiAnalyzeSection 挂 .console-section 族类，被
+    `.console-section .section-content { flex:1; display:flex }` 连带设为
+    flex 行向——四个直接子容器被横排挤压（按钮行插进配置列之间、
+    跨片窗口列折行）。列向覆盖规则必须存在于该行向规则之后（源码序，
+    保证同特异性下覆盖生效）；顶置标签中文经 bindDom JS 态填充
+    （三键均既有：ai_cfg_provider_label/ai_cfg_model_label/
+    aggregateWindowLabel），HTML 英文留兜底。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    row_rule = css.index(".console-section .section-content {")
+    col_rule = css.index("#refineAiAnalyzeSection .section-content {")
+    assert col_rule > row_rule, \
+        "列向覆盖规则必须位于行向规则之后（同特异性下靠源码序生效）"
+    block = css[col_rule:css.index("}", col_rule)]
+    assert "flex-direction: column;" in block, "缺 flex-direction:column"
+    assert "align-items: stretch;" in block, "缺 align-items:stretch"
+    # 收口件③：顶置标签不加 nowrap（对齐"field-col 顶置标签允许换行"口径，
+    # 防窄列横向溢出被 .section overflow:hidden 截断）
+    m = re.search(r"\.ai-config-row \.field-col > label \{[^}]*\}", css)
+    assert m, "缺顶置标签视觉规则"
+    assert "white-space" not in m.group(0), \
+        "顶置标签残留 white-space:nowrap（窄列横向溢出风险）"
+    src = _app_js_source()
+    bind = _extract_function(src, "bindDom")
+    assert 'label[for="' in bind and "ai_cfg_provider_label" in bind \
+        and "ai_cfg_model_label" in bind and "aggregateWindowLabel" in bind, \
+        "bindDom 缺顶置标签 JS 态填充"
+    # 三键均既有（静态引用闭合由 test_js_msg_references_defined_in_table 守）
+    keys = _js_msg_keys()
+    for key in ("ai_cfg_provider_label", "ai_cfg_model_label",
+                "aggregateWindowLabel"):
+        assert key in keys, f"MSG 缺顶置标签键: {key}"
+
+
 
 # ---------------------------------------------------------------------------
 # 2.6.1 批 2a（D2026-1002-09）：校对页静态钉（review.js / tab-review 骨架）

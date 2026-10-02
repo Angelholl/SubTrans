@@ -423,6 +423,7 @@ button:focus { outline: none; }
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
+    overflow: hidden;   /* 批3（D2026-1002-12）：收敛子元素溢出导致的双层圆角不同心 */
 }
 
 .panel-card .section {
@@ -453,7 +454,16 @@ button:focus { outline: none; }
 .console-section .section-content {
     flex: 1;
     display: flex;
-    padding: 10px var(--space-3) var(--space-3);
+    padding: 10px 12px 12px;   /* 批3（D2026-1002-12）：与 section-header 10px 统一节奏 */
+}
+/* 批3 补刀（D2026-1002-12 空载复测）：#refineAiAnalyzeSection 挂 .console-section
+   族类，被上方规则连带设为 flex 行向——AI 分析区四个直接子容器（两条
+   action-row / ai-config-row / result）被横排挤压（按钮行插进配置列之间）。
+   收敛为列向纵排：子容器按 DOM 序堆叠，ai-config-row 内部 3 列布局不受影响
+   （列内控件 width:100% 吃满列宽，完整宽度下单行放下） */
+#refineAiAnalyzeSection .section-content {
+    flex-direction: column;
+    align-items: stretch;
 }
 
 /* ============================================================
@@ -527,9 +537,10 @@ button:focus { outline: none; }
 .card-head-actions { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 
 /* 文件卡弹性内滚（A案 批1）：卡片区填充分区剩余高度，列表容器内滚——
-   弹性链路 #tab-translate > .card → .file-list-container → .file-list */
+   弹性链路 #tab-translate > .card → .file-list-container → .file-list
+   批3（D2026-1002-12）：高度分配改比例制——文件卡吃 70%，Console 吃 30% */
 #tab-translate > .card {
-    flex: 1 1 auto;
+    flex: 1 1 70%;
     display: flex;
     flex-direction: column;
     min-height: 0;          /* 允许收缩，容器内滚生效前提 */
@@ -539,6 +550,13 @@ button:focus { outline: none; }
     min-width: 0;
     min-height: 0;          /* 取代半成品固定 max-height:300px：随视口弹性伸缩 */
     overflow-y: auto;
+}
+/* 批3（D2026-1002-12）空态收敛：无文件时文件卡不参与 70% 比例分配
+   （dropzone + 空态列表自然高度即可），防空态出现大片空白 */
+#tab-translate:not(.has-files) > .card { flex: 0 0 auto; }
+#tab-translate:not(.has-files) .file-list-container {
+    flex: 0 0 auto;
+    overflow-y: hidden;
 }
 
 .file-list {
@@ -679,7 +697,7 @@ button:focus { outline: none; }
     flex: 1;
     background: var(--console-bg);
     border: 1px solid var(--console-border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);   /* 批3（D2026-1002-12）：内层降半档，圆角同心 */
     color: var(--console-text);
     font-family: var(--font-mono);
     font-size: var(--font-xs);
@@ -688,8 +706,7 @@ button:focus { outline: none; }
     white-space: pre-wrap;
     word-wrap: break-word;
     line-height: 1.55;   /* D2026-0930-09 批3：收紧行距提升单屏信息密度 */
-    min-height: 180px;
-    max-height: 420px;
+    min-height: 0;       /* 批3：高度全交外层 .console-collapsible 弹性分配，防双滚动 */
     scroll-behavior: smooth;
 }
 
@@ -701,13 +718,15 @@ button:focus { outline: none; }
 .console-line.command { color: var(--cl-dim); font-weight: 500; }
 
 /* 折叠行为（.console-section 族，app.js toggle .collapsed）
-   A案 批1（R1）：Console 保底 160px + 上限 220px——max-height 钉死防
-   flex:1 无上限挤压文件区；类仅 tab-translate 使用（grep 实证），
-   作用域收敛为 #tab-translate 前缀 */
+   A案 批1（R1）：Console 保底高度 + 上限——max-height 钉死防 flex:1
+   无上限挤压文件区；类仅 tab-translate 使用（grep 实证），作用域收敛为
+   #tab-translate 前缀。批3（D2026-1002-12）：高度分配改比例制——
+   文件卡 70% / Console 30%（150px 保底 / 300px 上限），
+   .console-output 本体高度全交此处（min-height:0 防双滚动） */
 #tab-translate .console-collapsible:not(.collapsed) {
-    flex: 1 1 auto;
-    min-height: 160px;
-    max-height: 220px;
+    flex: 0 1 30%;
+    min-height: 150px;
+    max-height: 300px;
 }
 .console-collapsible.collapsed { flex: 0 0 auto; }
 .console-collapsible.collapsed .console-output { display: none; }
@@ -922,6 +941,8 @@ input[type="checkbox"] {
     text-overflow: ellipsis;
     text-align: right;
 }
+/* 批3 扩展（D2026-1002-12）：ASR 行"未探测"默认态弱化（探测成功后 JS 移除） */
+.sys-summary-val.val-muted { color: var(--text-3); }
 .pipeline-mirror {
     font-size: var(--font-sm);
     color: var(--text-1);
@@ -1647,8 +1668,33 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
 .modal-input { width: 100%; margin-top: var(--space-3); }
 
-/* 2.5.0 批5（D2026-1001-07）：AI 分析独立配置行（服务商下拉+模型输入） */
-.ai-config-row { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-2); }
+/* 2.5.0 批5（D2026-1001-07）：AI 分析独立配置行（服务商下拉+模型输入）
+   批3（D2026-1002-12）：平铺改 3 组顶置标签列（.field-col，每组弹性收缩
+   190px 基准 / 110px 下限）；顶置 label 对齐 .field-label 视觉（muted 色 +
+   font-xs），控件吃满列宽（取代原 3 处内联 width:auto）；橙色提示
+   #refineAiPrivacy 移入行尾独立成行（order:99 对齐 .stage-row .muted 先例） */
+.ai-config-row {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-top: var(--space-2);
+}
+.ai-config-row .field-col { flex: 1 1 190px; min-width: 110px; }
+.ai-config-row .field-col > label {
+    font-size: var(--font-xs);
+    font-weight: 550;
+    /* 不加 nowrap：对齐 .field-col 顶置标签"较长允许换行"口径（:field-row 注释），
+       窄列折行优于横向溢出被 .section overflow:hidden 截断 */
+}
+.ai-config-row .field-col > .form-select,
+.ai-config-row .field-col > .form-input { width: 100%; min-width: 0; }
+.ai-config-row > #refineAiPrivacy {
+    flex-basis: 100%;
+    max-width: 100%;
+    order: 99;
+    margin-top: 8px;
+}
 
 /* 首启引导横幅（2.4.0 批2 S2）：低调引导条，token 对齐 .muted 先例
    （font-sm + text-2 系，亮暗主题变量自动适配） */
