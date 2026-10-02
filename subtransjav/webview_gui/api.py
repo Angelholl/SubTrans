@@ -38,6 +38,7 @@ from subtransjav.utils.subprocess_flags import (
     CREATE_NO_WINDOW,  # windowed 防黑框单一来源（spawn_refine_cli 内部 + 本模块直接调用共用）
 )
 
+from . import user_dirs  # noqa: E402  用户目录持久登记（批1a 件1；security 保持纯函数，由本模块装载传入）
 from .event_stream import (  # noqa: E402  webview-free 可测模块
     HEARTBEAT_STALE_S_DEFAULT,
     EventStreamParser,
@@ -67,27 +68,61 @@ def register_session_paths(paths) -> None:
                 continue
 
 
-def _ensure_template_dir(templates_dir) -> str:
-    """角色卡目录守卫（反路径穿越加固）。
+def _review_save_allowed(path: str) -> str:
+    """审计①收口（批1a 件5）：校对保存/另存的放行裁决单一入口。
 
-    角色卡是仓库固定资源语义，仅放行两类目录：
-      1. 服务端默认模板目录（config/templates）——不传目录时的正常主路径；
-      2. 本会话经受信入口（原生文件夹对话框/拖放）登记的用户自选目录，
-         且必须通过 _resolve_safe_path 锚点校验（home/仓库根白名单）。
-    其余前端任意路径一律拒绝，阻断被攻陷前端借角色卡读写接口
-    越锚访问用户主目录下的同名文件。
+    放行集 = 动态根（home ∪ 数据根 ∪ 安装根，_resolve_safe_path 现读）
+    ∪ 持久登记目录（user_dirs.json registered_dirs，经 extra_roots 传入）
+    ∪ 本会话受信入口登记路径（对话框/拖放——覆盖任意盘已登记文件，
+    如从 E:\\ 载入后原盘保存）。
+    返回归一化后的绝对路径；越界抛 ValueError。
+    载入侧（refine_review_load_srt）保持既有语义不动。
+    """
+    try:
+        return str(_resolve_safe_path(
+            path, extra_roots=user_dirs.get_registered_dirs()))
+    except ValueError:
+        resolved = str(Path(path).resolve())
+        if resolved in SESSION_SELECTED_PATHS:
+            return resolved
+        raise
+
+
+def _ensure_template_dir(templates_dir) -> str:
+    """角色卡目录守卫（反路径穿越加固；批1a 件3 持久化收口）。
+
+    缺省目录解析（不传目录时）：持久登记 templates_dir（user_dirs.json）
+    → 服务端默认模板目录（数据根 config/templates）。
+    显式传入目录时仅放行三类（其余前端任意路径一律拒绝，阻断被攻陷
+    前端借角色卡读写接口越锚访问用户主目录下的同名文件）：
+      1. 服务端默认模板目录；
+      2. 本会话经受信入口（原生文件夹对话框/拖放）登记的目录（重启失效）；
+      3. 持久登记目录（user_dirs.json registered_dirs，重启仍生效）。
+    且必须通过 _resolve_safe_path 锚点校验（动态根 ∪ 持久登记 extra_roots）。
     """
     try:
         from subtransjav.refine.config import default_templates_dir
         default_dir = str(_resolve_safe_path(default_templates_dir()))
     except Exception:
         default_dir = ""
+    persisted = ""
+    try:
+        t = user_dirs.get_templates_dir()
+        if t:
+            persisted = str(_resolve_safe_path(
+                t, extra_roots=user_dirs.get_registered_dirs()))
+    except Exception:
+        persisted = ""
     if not templates_dir:
-        return default_dir
-    resolved = str(_resolve_safe_path(templates_dir))
-    if default_dir and os.path.normcase(resolved) == os.path.normcase(default_dir):
-        return resolved
+        # 缺省目录：持久登记的 templates_dir 优先，其次数据根 config/templates
+        return persisted or default_dir
+    resolved = str(_resolve_safe_path(
+        templates_dir, extra_roots=user_dirs.get_registered_dirs()))
+    for cand in (default_dir, persisted):
+        if cand and os.path.normcase(resolved) == os.path.normcase(cand):
+            return resolved
     allowed = {os.path.normcase(p) for p in SESSION_SELECTED_PATHS}
+    allowed |= {os.path.normcase(p) for p in user_dirs.get_registered_dirs()}
     if os.path.normcase(resolved) not in allowed:
         raise ValueError(
             msg("template_dir_not_allowed", path=resolved))
@@ -462,6 +497,24 @@ def _write_srt_atomic(path: str, text: str) -> None:
     _atomic(path, text, suffix=".srt.tmp")
 
 
+def _load_dict_dir_override() -> None:
+    """装载持久化词典目录注入 dict_manager（批1b 件1；追补裁定后为冗余兜底）。
+
+    跨进程单源已由 dict_manager.effective_dict_dir() 直读 user_dirs.json
+    承担（GUI/CLI/--dict-download 统一生效）；本注入保两点：①pick 后
+    JSON 落盘失败时 GUI 会话内仍即时生效（降级语义与 register_dir 一致）；
+    ②get_custom_dir()/状态显示保留用户选取的原始路径（JSON 存储为
+    resolve+normcase 归一化值）。依赖方向：refine 不得反向 import
+    webview_gui，装载由 api 层做；CLI 进程不经此装载，走 JSON 直读。
+    装载失败静默（回落数据根默认）。
+    """
+    try:
+        from subtransjav.refine import dict_manager as dm
+        dm.set_custom_dir(user_dirs.get_dict_dir())
+    except Exception:  # noqa: BLE001 - 全容错：注入失败不阻断 GUI 启动
+        _log_exc("_load_dict_dir_override")
+
+
 class TranslateAPI:
     """
     API class exposed to JavaScript via PyWebView.
@@ -484,6 +537,9 @@ class TranslateAPI:
 
         # Default output directory (ensure it exists and is normalized)
         self.default_output = str(_compute_default_output_dir())
+
+        # 批1b 件1：启动时装载持久化词典目录（user_dirs.dict_dir）注入生效
+        _load_dict_dir_override()
 
     # ========================================================================
     # Version / misc
@@ -1050,12 +1106,20 @@ class TranslateAPI:
     # Refine UI 辅助 API（净语翻译两阶段界面）
     # ================================================================
     def refine_default_paths(self) -> dict[str, Any]:
-        """返回词库/角色卡目录的默认路径"""
+        """返回词库/角色卡目录的默认路径。
+
+        角色卡目录解析（批1a 件3）：持久登记 templates_dir（user_dirs.json）
+        → 服务端默认目录（数据根 config/templates）。
+        """
         try:
             from subtransjav.refine.config import default_glossary_path, default_templates_dir
+            try:
+                persisted = user_dirs.get_templates_dir() or ""
+            except Exception:
+                persisted = ""
             return {
                 "success": True,
-                "templates_dir": default_templates_dir(),
+                "templates_dir": persisted or default_templates_dir(),
                 "glossary_path": default_glossary_path(),
             }
         except Exception as e:
@@ -1125,6 +1189,119 @@ class TranslateAPI:
             return {"success": True, **download_progress(kind)}
         except Exception as e:
             _log_exc("refine_dict_download_progress")
+            return {"success": False, "error": str(e)}
+
+    def refine_pick_dict_dir(self) -> dict[str, Any]:
+        """自定义词典目录收口（批1b 件1）：原生对话框 → 持久登记 → 注入生效。
+
+        链路 = refine_pick_folder('dict')（会话登记 + registered_dirs +
+        user_dirs.dict_dir 持久化）→ dict_manager.set_custom_dir 进程内
+        立即生效。返回体带变更前后目录与旧目录文件数（needs_migration
+        供前端弹迁移确认，不静默自动迁移）；用户取消原样透传失败结果。
+        """
+        try:
+            from subtransjav.refine import dict_manager as dm
+            old_dir = dm.effective_dict_dir()
+            result = self.refine_pick_folder("dict")
+            if not (result.get("success") and result.get("path")):
+                return result               # 取消/失败：原样透传（含 message）
+            dm.set_custom_dir(str(result["path"]))
+            old_files = dm.count_dict_files(old_dir)
+            changed = os.path.normcase(old_dir) != \
+                os.path.normcase(dm.effective_dict_dir())
+            return {
+                "success": True,
+                "path": str(result["path"]),
+                "old_dir": old_dir,
+                "old_files": old_files,
+                "custom_dir": dm.get_custom_dir(),
+                "effective_dir": dm.effective_dict_dir(),
+                "needs_migration": bool(changed and old_files > 0),
+            }
+        except Exception as e:
+            _log_exc("refine_pick_dict_dir")
+            return {"success": False, "error": str(e)}
+
+    def refine_clear_dict_dir(self) -> dict[str, Any]:
+        """恢复默认词典目录（批1b 件1）：清除持久值 + 进程内注入。
+
+        返回体带旧目录与其文件数（供前端提示"原目录文件保留"——本接口
+        不做任何删除/迁移，源文件一律不动）。
+        """
+        try:
+            from subtransjav.refine import dict_manager as dm
+            old_dir = dm.effective_dict_dir()
+            old_custom = dm.get_custom_dir()
+            user_dirs.set_dict_dir(None)
+            dm.set_custom_dir(None)
+            return {
+                "success": True,
+                "old_dir": old_dir,
+                "old_files": dm.count_dict_files(old_dir),
+                "had_custom": bool(old_custom),
+                "effective_dir": dm.effective_dict_dir(),
+            }
+        except Exception as e:
+            _log_exc("refine_clear_dict_dir")
+            return {"success": False, "error": str(e)}
+
+    def refine_dict_migrate(self, source_dir: str) -> dict[str, Any]:
+        """一键迁移旧词典（批1b 件2）：source_dir → 现生效目录。
+
+        复制+校验+原子改名引擎在 dict_manager.migrate_dicts（源文件一律
+        不删；任一文件失败即中止）。进度经 refine_dict_download_progress
+        伪 kind ``__migrate__`` 1s 轮询（复用下载进度通道，零新桥）。
+        未设置自定义目录时拒绝（无可迁移目标）。
+        """
+        try:
+            from subtransjav.refine import dict_manager as dm
+            if not dm.get_custom_dir():
+                return {"success": False,
+                        "error": msg("dict_migrate_need_custom")}
+            src = str(source_dir or "").strip()
+            if not src:
+                return {"success": False,
+                        "error": msg("dict_migrate_need_source")}
+            result = dm.migrate_dicts(src)
+            return {"success": True, **result}
+        except Exception as e:
+            _log_exc("refine_dict_migrate")
+            return {"success": False,
+                    "error": f"{msg('dict_migrate_failed')}: {e}"}
+
+    # ================================================================
+    # 首启数据目录引导（批1b 件4）：后端只供哨兵读写两个 API，
+    # 弹窗与流转逻辑在前端（与既有前端初始化流一致）
+    # ================================================================
+    def should_show_data_guide(self) -> dict[str, Any]:
+        """是否弹首启数据目录引导（frozen-only，源码形态恒否防骚扰）。"""
+        try:
+            if not paths.is_frozen():
+                return {"success": True, "show": False, "reason": "not-frozen"}
+            return {
+                "success": True,
+                "show": not paths.data_guide_sentinel_path().exists(),
+                "data_root": str(paths.data_root()),
+            }
+        except Exception as e:
+            _log_exc("should_show_data_guide")
+            return {"success": False, "error": str(e)}
+
+    def mark_data_guide_done(self) -> dict[str, Any]:
+        """写引导哨兵（防再弹；与 .data-root 指针同位=exe 同目录）。
+
+        源码形态 no-op（哨兵不落地防脏工作树，与 template_seed 同口径）。
+        """
+        try:
+            if not paths.is_frozen():
+                return {"success": True, "written": False,
+                        "reason": "not-frozen"}
+            p = paths.data_guide_sentinel_path()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("done\n", encoding="utf-8")
+            return {"success": True, "written": True}
+        except OSError as e:
+            _log_exc("mark_data_guide_done")
             return {"success": False, "error": str(e)}
 
     def refine_set_data_root(self, path: str) -> dict[str, Any]:
@@ -1681,8 +1858,27 @@ class TranslateAPI:
             _log_exc("refine_save_template")
             return {"success": False, "error": str(e)}
 
-    def refine_pick_folder(self) -> dict[str, Any]:
-        return self.select_folder()
+    def refine_pick_folder(self, purpose: str = None) -> dict[str, Any]:
+        """原生目录对话框选取 + 持久登记（批1a 件3）。
+
+        成功即写 user_dirs.json registered_dirs（重启仍生效，供校对保存/
+        角色卡目录等白名单消费；数据根浏览等所有经此入口的选取统一受益）；
+        purpose='templates' 时同时持久化为角色卡目录；purpose='dict' 时
+        同时持久化为自定义词典目录（批1b 件1，落位注入由
+        refine_pick_dict_dir 收口）。持久化失败不阻断选择结果（会话登记
+        已由 select_folder 完成，仅降级为重启失效）。
+        """
+        result = self.select_folder()
+        if result.get("success") and result.get("path"):
+            try:
+                user_dirs.register_dir(str(result["path"]))
+                if str(purpose or "").strip() == "templates":
+                    user_dirs.set_templates_dir(str(result["path"]))
+                elif str(purpose or "").strip() == "dict":
+                    user_dirs.set_dict_dir(str(result["path"]))
+            except Exception:
+                _log_exc("refine_pick_folder")
+        return result
 
     def refine_pick_csv_open(self) -> dict[str, Any]:
         """打开词库 CSV/TXT 文件选择对话框"""
@@ -2956,7 +3152,9 @@ class TranslateAPI:
         - D2 备份单份滚动固定名 {原名}.bak.srt（overwrite/force 同规则）：
           shutil.copy2 失败重试一次，再失败中止且**原文件未动**；
         - mode='force'（另存为确认后）：跳过调用方 exists 判定直接走
-          备份+写（两段式第二段）。
+          备份+写（两段式第二段）；
+        - 审计①收口（批1a 件5）：放行 = _review_save_allowed
+          （动态根 ∪ 持久登记 ∪ 会话登记），越界写盘在备份前即拒绝。
         """
         try:
             p = str(path or "")
@@ -2966,7 +3164,7 @@ class TranslateAPI:
             if invalid:
                 return {"success": False, "error": msg(invalid),
                         "error_key": "review_save_failed"}
-            safe = str(_resolve_safe_path(p))
+            safe = _review_save_allowed(p)
             target = Path(safe)
             backup_path = None
             if target.exists():
@@ -3014,7 +3212,7 @@ class TranslateAPI:
             if invalid:
                 return {"success": False, "error": msg(invalid),
                         "error_key": "review_save_failed"}
-            safe_t = str(_resolve_safe_path(t))
+            safe_t = _review_save_allowed(t)
             if Path(safe_t).exists():
                 return {"success": False, "exists": True}
             return self.refine_review_save_srt(safe_t, blocks, mode="force")
@@ -3023,7 +3221,11 @@ class TranslateAPI:
             return {"success": False, "error": str(e)}
 
     def refine_review_pick_save_path(self, default_name: str = "校对.srt") -> dict[str, Any]:
-        """另存为保存路径对话框（webview.SAVE_DIALOG 先例 refine_pick_csv_save）。"""
+        """另存为保存路径对话框（webview.SAVE_DIALOG 先例 refine_pick_csv_save）。
+
+        审计①收口（批1a 件5）：对话框返回路径（用户受信入口）即时登记
+        进会话集，保证后续 refine_review_saveas_srt 对任意盘目标放行。
+        """
         try:
             windows = webview.windows
             if not windows:
@@ -3032,6 +3234,7 @@ class TranslateAPI:
                 (msg("file_type_srt"), msg("file_type_all")), save=True,
                 default_name=str(default_name or "校对.srt"))
             if result:
+                register_session_paths([result])
                 return {"success": True, "path": result}
             return {"success": False, "cancelled": True,
                     "error": msg("dialog_cancelled")}

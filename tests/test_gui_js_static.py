@@ -698,6 +698,55 @@ def test_template_load_save_by_name_pinned():
             "tpl_dir_empty_datalist"}.issubset(_js_msg_keys())
 
 
+def _input_tag(html: str, dom_id: str) -> str:
+    """提取 index.html 中指定 id 的 <input> 起始标签（跨行属性容忍）。"""
+    m = re.search(r'<input\b[^>]*\bid="' + re.escape(dom_id) + r'"[^>]*>',
+                  html, re.S)
+    assert m, f"index.html 未找到 input#{dom_id}"
+    return m.group(0)
+
+
+def test_dir_show_inputs_readonly_dialog_only_pinned():
+    """批1a 收口件（D2026-1002-12 拍板点3）：目录回显输入框必须 readonly
+    ——"浏览…"原生对话框是唯一变更入口，网页输入框不接受直接提交任意路径。
+
+    覆盖词库与模板页两组同语义目录（角色卡 refineTemplatesDirShow /
+    净语配置 refineCleanerConfigShow，后者同语义一并收口）；同时钉隐藏
+    载体 refineTemplatesDir/refineCleanerConfig 保持 type="hidden"——
+    该元素 readOnly 属性按 HTML 规范恒为 false（readonly 不适用于
+    hidden 子类型），且从未渲染、不可键盘触达，仅 app.js 从后端返回值
+    程序性写入，不构成手输提交通道。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for dom_id in ("refineTemplatesDirShow", "refineCleanerConfigShow"):
+        tag = _input_tag(html, dom_id)
+        assert re.search(r"\breadonly\b", tag), \
+            f"input#{dom_id} 必须携带 readonly（手输不提交红线）"
+    for dom_id in ("refineTemplatesDir", "refineCleanerConfig"):
+        tag = _input_tag(html, dom_id)
+        assert 'type="hidden"' in tag, \
+            f"input#{dom_id} 必须保持 type=hidden（程序性载体）"
+
+
+def test_dir_hidden_carrier_only_backend_written_pinned():
+    """手输通道不存在钉：隐藏载体 .value 赋值点全部来自后端返回值
+    （refine_default_paths 的 d.templates_dir / 对话框结果的 r.path /
+    settings 回填），不存在把用户键入文本写入的赋值路径；且
+    refineTemplatesDirShow 不绑定 input/change 监听（唯一变更入口=
+    "浏览…"按钮 → 原生对话框）。"""
+    source = _app_js_source()
+    writes = re.findall(
+        r"\$\('(refineTemplatesDir|refineCleanerConfig)'\)\.value"
+        r"\s*=\s*([^;\n]+)", source)
+    assert writes, "赋值点缺失（回显链被破坏）"
+    for rhs in writes:
+        assert ("d.templates_dir" in rhs) or ("r.path" in rhs) or \
+            ("applySaved" in rhs), f"隐藏载体赋值必须源自后端返回值: {rhs}"
+    assert not re.search(
+        r"refineTemplatesDirShow.{0,200}?addEventListener", source, re.S), \
+        "refineTemplatesDirShow 不得绑定 input/change 监听（唯一入口=浏览按钮）"
+
+
 def test_switch_tab_glossary_refresh_hook_pinned():
     """switchTab 到 tab-glossary 触发词库页初始化钩子（动态填充下拉）。"""
     body = _extract_function(_app_js_source(), "switchTab")

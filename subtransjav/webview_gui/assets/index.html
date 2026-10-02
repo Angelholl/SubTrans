@@ -366,7 +366,13 @@
                             <div id="dictDesc" class="muted"></div>
                             <div id="dictPathRow" class="path-row">
                                 <span id="dictPath" class="muted grow" style="min-width:0;"></span>
+                                <!-- 批1b 件1/件2（D2026-1002-12）：词典目录行扩容——
+                                     浏览/恢复默认/迁移三键均 JS 态标签（MSG 键零静态 i18n 消耗），
+                                     迁移键仅 needs_migration 时显示；id +3 走批清单预算程序 -->
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictBrowseBtn"></button>
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictRestoreBtn" style="display:none;"></button>
                                 <button type="button" class="btn btn-ghost btn-compact" id="dictOpenDir" data-i18n="dict_open_dir">打开文件夹</button>
+                                <button type="button" class="btn btn-primary btn-compact" id="dictMigrateBtn" style="display:none;"></button>
                             </div>
                             <!-- 下载进度（2.3.1 批1）：.progress-text 独立于 .progress-bar 之外
                                  （bar 8px 高 overflow:hidden，文本内嵌必裁切）；复用既有进度类零新增 -->

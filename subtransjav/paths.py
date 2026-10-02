@@ -139,6 +139,23 @@ def set_data_root_pointer(path: str) -> tuple[bool, str]:
         return False, f"{type(e).__name__}: {e}"
 
 
+GUIDE_SENTINEL_FILENAME = ".data-guide-done"
+
+
+def data_guide_sentinel_path() -> Path:
+    """首启数据目录引导哨兵位置（批1b 件4）：与 .data-root 指针同位——
+
+    frozen → exe 同目录（``Path(sys.executable).parent``）；
+    源码 → 仓库根（app_root 前身锚，源码形态引导 no-op，哨兵不落地）。
+
+    与数据根解耦是刻意裁定：哨兵若落数据根，首次改数据根后新根无哨兵
+    会再次弹窗骚扰；exe 同目录随安装生命周期只写一次。
+    """
+    if is_frozen():
+        return Path(sys.executable).parent / GUIDE_SENTINEL_FILENAME
+    return Path(__file__).resolve().parents[1] / GUIDE_SENTINEL_FILENAME
+
+
 def data_subdir(*parts: str) -> str:
     """str(data_root() / parts)，供各锚点替换；返回字符串保持 os.path.join 语义。"""
     return str(data_root().joinpath(*parts))

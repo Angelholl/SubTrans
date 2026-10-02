@@ -417,6 +417,9 @@ const MSG = {
     data_root_saved_restart: '已保存，重启应用后生效',
     data_root_default_restored: '已恢复默认，重启应用后生效',
     data_root_need_abs: '请输入绝对路径',
+    // 数据根变更阻断式提示（批1a 件5；仅 JS 侧消费，不入 strings.py）
+    data_root_restart_title: '数据目录已变更',
+    data_root_restart_body: '须重启应用后生效。重启前的后续写入仍会落到旧数据目录，建议确认后尽快重启。',
 
     // 词典管理（引擎页三区块，2.1）
     dict_panel_title: '词典管理（日/中/英）',
@@ -445,6 +448,21 @@ const MSG = {
     dict_status_builtin: '内置',
     dict_open_dir: '打开文件夹',
     dict_redownload: '重新下载',
+    // 批1b 件1/件2（D2026-1002-12）：词典目录设置 + 一键迁移（JS 态键，
+    // 不静态落 data-i18n——R6，静态键快照零消耗）
+    dict_migrate_btn: '迁移旧词典',
+    dict_migrate_title: '迁移旧词典',
+    dict_migrate_confirm: (src, n) => `在旧目录\n${src}\n发现 ${n} 个词典文件。将复制到新目录后生效（源文件保留，同名同大小自动跳过）。确认迁移吗？`,
+    dict_migrating: '迁移中…',
+    dict_migrate_done: (n, skipped) => `迁移完成：复制 ${n} 个文件${skipped ? `，跳过 ${skipped} 个（同大小已存在）` : ''}`,
+    dict_migrate_failed: '迁移失败',
+    dict_dir_set_ok: '词典目录已更改，新下载的词典将保存到所选目录',
+    dict_dir_restored: '已恢复默认词典目录（原目录文件保留，可重新下载或迁移）',
+    // 批1b 件4：首启数据目录引导（frozen-only，哨兵防再弹）
+    data_guide_title: '数据保存目录',
+    data_guide_body: dir => `当前：${dir}\n\n数据目录存放翻译记忆库、词典、角色卡等，可随时在 高级参数 页更改。\n\n「选择其他目录」可更改保存位置；「使用当前目录」保持现状。`,
+    data_guide_pick: '选择其他目录...',
+    data_guide_keep: '使用当前目录',
 
     // 控制台折叠
     console_collapse: '折叠控制台',
@@ -625,7 +643,7 @@ const AppModal = {
 
     _cancelValue() { return AppModal._kind === 'prompt' ? null : false; },
 
-    _open(kind, title, body, def) {
+    _open(kind, title, body, def, opts) {
         if (this._busy) {
             // 重入：单例不叠加——在途调用方仍持原 Promise，新调用立即按取消结算
             return Promise.resolve(kind === 'prompt' ? null : false);
@@ -642,8 +660,10 @@ const AppModal = {
         const input = root.querySelector('.modal-input');
         const cancelBtn = root.querySelector('.modal-cancel');
         const okBtn = root.querySelector('.modal-ok');
-        cancelBtn.textContent = MSG.ui_cancel;
-        okBtn.textContent = MSG.ui_ok;
+        // 批1b 件4：confirm 支持自定义双键文案（opts.okText/cancelText，
+        // 缺省回退 ui_ok/ui_cancel——既有调用点行为零变化）
+        cancelBtn.textContent = (opts && opts.cancelText) || MSG.ui_cancel;
+        okBtn.textContent = (opts && opts.okText) || MSG.ui_ok;
         cancelBtn.style.display = kind === 'alert' ? 'none' : '';   // 硬性条款②：alert 无取消键
         input.style.display = kind === 'prompt' ? '' : 'none';
         input.value = kind === 'prompt' ? (def || '') : '';
@@ -676,7 +696,7 @@ const AppModal = {
     },
 
     alert(title, body) { return this._open('alert', title, body); },
-    confirm(title, body) { return this._open('confirm', title, body); },
+    confirm(title, body, opts) { return this._open('confirm', title, body, undefined, opts); },
     prompt(title, body, def) { return this._open('prompt', title, body, def); }
 };
 
@@ -2446,7 +2466,10 @@ function switchTab(tabId) {
   }
 
   async function pickDir() {
-    const r = await pywebview.api.refine_pick_folder();
+    // 批1a 件3：角色卡目录对话框收口——输入框只读回显（手输不提交），
+    // 仅本按钮经原生对话框变更；purpose='templates' 让后端把选择
+    // 持久化为角色卡目录（user_dirs.json），重启仍生效。
+    const r = await pywebview.api.refine_pick_folder('templates');
     if (r.success && r.path) {
       $('refineTemplatesDir').value = r.path;
       const show = $('refineTemplatesDirShow');
@@ -3863,7 +3886,13 @@ function switchTab(tabId) {
                    : MSG.data_root_default_restored)
           : ((r && r.error) || '');
       }
-      if (r && r.success) dataRootLoad();
+      if (r && r.success) {
+        dataRootLoad();
+        // 批1a 件5：数据根变更后阻断式提示（AppModal 模态须点确认关闭；
+        // 重启前后续写入仍落旧根的说明随文案带出）
+        await AppModal.alert(MSG.data_root_restart_title,
+                             MSG.data_root_restart_body);
+      }
     } catch (e) {
       if (st) st.textContent = String(e);
     }
@@ -3885,6 +3914,11 @@ function switchTab(tabId) {
   // 词典状态缓存（B2 案批3）：dictLoad 拉取后写入，dictSelect change 复渲染读取
   let _dictStatusCache = {};
   let _dictDirCache = '';
+  // 批1b 件1/件2：自定义词典目录态（custom_dir=设置值|null；
+  // needs_migration/old_dir=选新目录后由 refine_pick_dict_dir 返回的迁移提示）
+  let _dictCustomDir = null;
+  let _dictNeedsMigration = false;
+  let _dictOldDir = '';
   function dictLoad() {
     const box = $('dictRows');
     if (!box || !window.pywebview || !pywebview.api ||
@@ -3896,7 +3930,8 @@ function switchTab(tabId) {
         return;
       }
       _dictStatusCache = (r && r.dicts) || {};
-      _dictDirCache = (r && r.dict_dir) || '';
+      _dictDirCache = (r && r.effective_dir) || (r && r.dict_dir) || '';
+      _dictCustomDir = (r && r.custom_dir) || null;
       // 空态引导条（C2 修正）：条件=sudachi 未安装——english_rules 规则级
       // 恒 available（dict_manager.py 实证），"三词典全未安装"不可达
       const sudachiInfo = _dictStatusCache.sudachi || {};
@@ -3934,6 +3969,26 @@ function switchTab(tabId) {
         openBtn.dataset.bound = '1';
         openBtn.addEventListener('click', () => openDir($('dictPath') && $('dictPath').textContent));
       }
+      // 批1b 件1/件2：目录行三键一次性绑定（浏览/恢复默认/迁移；
+      // 标签 JS 态 MSG 键填充，与 dictActionBtn 同款空 HTML 骨架）
+      const browseBtn = $('dictBrowseBtn');
+      if (browseBtn && !browseBtn.dataset.bound) {
+        browseBtn.dataset.bound = '1';
+        browseBtn.textContent = MSG.data_root_change_btn;
+        browseBtn.addEventListener('click', dictPickDir);
+      }
+      const restoreBtn = $('dictRestoreBtn');
+      if (restoreBtn && !restoreBtn.dataset.bound) {
+        restoreBtn.dataset.bound = '1';
+        restoreBtn.textContent = MSG.data_root_restore_btn;
+        restoreBtn.addEventListener('click', dictRestoreDir);
+      }
+      const migBtn = $('dictMigrateBtn');
+      if (migBtn && !migBtn.dataset.bound) {
+        migBtn.dataset.bound = '1';
+        migBtn.textContent = MSG.dict_migrate_btn;
+        migBtn.addEventListener('click', () => dictMigrate());
+      }
       dictRenderDetail();
     }).catch(() => {});
   }
@@ -3963,11 +4018,20 @@ function switchTab(tabId) {
       desc.textContent = info.description || item.desc || '';
       desc.title = desc.textContent;
     }
-    // 安装目录行（dict_dir 数据根词典目录）+ 打开文件夹按钮
+    // 安装目录行（批1b：dict_dir=现生效目录，悬停 title 全文）+ 目录行按钮
     const path = $('dictPath');
-    if (path) path.textContent = _dictDirCache;
+    if (path) {
+      path.textContent = _dictDirCache;
+      path.title = _dictDirCache;       // 悬停全文（长路径截断可读）
+    }
     const pathRow = $('dictPathRow');
     if (pathRow) pathRow.style.display = '';
+    // 恢复默认键：仅设置了自定义目录时显示
+    const restoreBtn = $('dictRestoreBtn');
+    if (restoreBtn) restoreBtn.style.display = _dictCustomDir ? '' : 'none';
+    // 迁移键：仅更改目录且旧目录有词典文件时显示（迁移成功/恢复默认后隐藏）
+    const migBtn = $('dictMigrateBtn');
+    if (migBtn) migBtn.style.display = _dictNeedsMigration ? '' : 'none';
     // R2 三态门控：可下载 kind（sudachi/sudachi_full）未装=primary「下载」/
     // 已装=ghost「重新下载」；jieba 无按钮只显 desc 指引（downloadable=false）；
     // english 恒内置隐藏按钮（修复A：下载门泛化由 DICT_KINDS.downloadable 驱动）
@@ -4077,6 +4141,128 @@ function switchTab(tabId) {
     }
   }
 
+  // ---- 词典目录设置 + 一键迁移（批1b D2026-1002-12 件1/件2）----
+  // 更改目录：refine_pick_dict_dir 收口（对话框+持久化+注入生效）；
+  // needs_migration 时弹 AppModal 确认（不静默自动迁移），确认后走迁移
+  async function dictPickDir() {
+    const st = $('dictStatus');
+    try {
+      const r = await pywebview.api.refine_pick_dict_dir();
+      if (!r || !r.success || !r.path) return;   // 取消/失败静默返回
+      _dictOldDir = r.old_dir || '';
+      _dictNeedsMigration = !!r.needs_migration;
+      if (_dictNeedsMigration) {
+        const ok = await AppModal.confirm(
+          MSG.dict_migrate_title,
+          MSG.dict_migrate_confirm(_dictOldDir, r.old_files || 0),
+          { okText: MSG.dict_migrate_btn });
+        if (ok) {
+          await dictMigrate();
+          return;                       // dictMigrate 内部已 dictLoad 收尾
+        }
+        // 用户暂不迁移：保留迁移键（旧文件仍在旧目录，可稍后点按钮）
+      }
+      if (st) st.textContent = MSG.dict_dir_set_ok;
+      dictLoad();
+    } catch (e) {
+      if (st) st.textContent = String(e);
+    }
+  }
+  // 恢复默认：refine_clear_dict_dir 收口（不做任何文件删除/迁移）
+  async function dictRestoreDir() {
+    const st = $('dictStatus');
+    try {
+      const r = await pywebview.api.refine_clear_dict_dir();
+      if (st) st.textContent = (r && r.success)
+        ? MSG.dict_dir_restored
+        : ((r && r.error) || '');
+      _dictNeedsMigration = false;
+      dictLoad();
+    } catch (e) {
+      if (st) st.textContent = String(e);
+    }
+  }
+  // 一键迁移：refine_dict_migrate 执行引擎（复制+校验+原子改名，源不删）；
+  // 进度复用下载进度通道（伪 kind '__migrate__'）1s 轮询 #dictProgress
+  async function dictMigrate() {
+    const st = $('dictStatus');
+    const migBtn = $('dictMigrateBtn');
+    const prog = $('dictProgress');
+    const bar = prog ? prog.querySelector('.progress-bar') : null;
+    const fill = prog ? prog.querySelector('.progress-fill') : null;
+    const text = prog ? prog.querySelector('.progress-text') : null;
+    const showProgress = (visible) => { if (prog) prog.style.display = visible ? '' : 'none'; };
+    const fmtMB = (n) => (n / 1048576).toFixed(1);
+    if (migBtn) { migBtn.disabled = true; migBtn.textContent = MSG.dict_migrating; }
+    if (st) st.textContent = '';
+    showProgress(true);
+    if (bar) bar.classList.add('indeterminate');
+    let poller = null;
+    const stopPoll = () => { if (poller) { clearInterval(poller); poller = null; } };
+    poller = setInterval(async () => {
+      try {
+        const p = await pywebview.api.refine_dict_download_progress('__migrate__');
+        if (!p || !p.success || !p.phase) return;
+        if (typeof p.total === 'number' && p.total > 0) {
+          if (bar) bar.classList.remove('indeterminate');
+          const pct = Math.min(100, Math.round((p.downloaded || 0) / p.total * 100));
+          if (fill) fill.style.width = pct + '%';
+          if (text) text.textContent = `${MSG.dict_migrating} ${fmtMB(p.downloaded || 0)}/${fmtMB(p.total)}MB`;
+        } else if (text) {
+          const xy = p.file_count ? `（${p.file_index || 0}/${p.file_count}）` : '';
+          text.textContent = MSG.dict_migrating + xy;
+        }
+      } catch (e) { /* 进度轮询失败不干扰主流程 */ }
+    }, 1000);
+    try {
+      const r = await pywebview.api.refine_dict_migrate(_dictOldDir);
+      if (r && r.success) {
+        _dictNeedsMigration = false;      // 成功才消迁移态（失败可重试续传）
+        if (st) st.textContent = MSG.dict_migrate_done(
+          (r.migrated || []).length, (r.skipped || []).length);
+      } else {
+        if (st) st.textContent = `${MSG.dict_migrate_failed}：${(r && r.error) || ''}`;
+      }
+    } catch (e) {
+      if (st) st.textContent = `${MSG.dict_migrate_failed}：${String(e)}`;
+    } finally {
+      stopPoll();                         // 防重复 poller 泄漏
+      showProgress(false);
+      if (fill) fill.style.width = '';    // 复位填充（bar 相位态由下次使用方全量刷新）
+      if (migBtn) { migBtn.disabled = false; migBtn.textContent = MSG.dict_migrate_btn; }
+      dictLoad();
+    }
+  }
+
+  // ---- 首启数据目录引导（批1b 件4）：frozen-only，哨兵防再弹 ----
+  // AppModal.confirm 自定义双键：ok=选择其他目录（原生对话框→
+  // refine_set_data_root 复用既有重启提示文案），cancel=使用当前目录；
+  // 引导交互过即写哨兵（mark_data_guide_done），任何分支不重复骚扰
+  async function maybeShowDataGuide() {
+    try {
+      if (!window.pywebview || !pywebview.api ||
+          !pywebview.api.should_show_data_guide) return;
+      const r = await pywebview.api.should_show_data_guide();
+      if (!r || !r.success || !r.show) return;
+      const pick = await AppModal.confirm(
+        MSG.data_guide_title,
+        MSG.data_guide_body(r.data_root || ''),
+        { okText: MSG.data_guide_pick, cancelText: MSG.data_guide_keep });
+      if (pick) {
+        const sel = await pywebview.api.refine_pick_folder();
+        if (sel && sel.success && sel.path) {
+          const s = await pywebview.api.refine_set_data_root(sel.path);
+          if (s && s.success) {
+            // 复用批1a 件5 的重启阻断提示文案（改根后重启生效语义一致）
+            await AppModal.alert(MSG.data_root_restart_title,
+                                 MSG.data_root_restart_body);
+          }
+        }
+      }
+      pywebview.api.mark_data_guide_done();
+    } catch (e) { /* 引导失败静默（不阻塞主流程） */ }
+  }
+
   // ---- 远程数据加载（pywebview 就绪后调用一次）----
   async function loadRemote() {
     applySavedStageSettings();
@@ -4084,6 +4270,7 @@ function switchTab(tabId) {
     bindCleanerDirControls();
     dataRootLoad();
     dictLoad();
+    maybeShowDataGuide();   // 批1b 件4：首启数据目录引导（frozen-only，哨兵防再弹）
     // 角色卡下拉动态化（追加1）：启动时列目录填充下拉与方向卡 datalist
     // （不自动加载编辑器内容——保持现状，打开词库页/切换选中时才加载）
     tplRefreshSelect(false);

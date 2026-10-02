@@ -87,6 +87,10 @@ MSG = {
     # 下载进度阶段文案（第四批 owner 验收反馈；前端 app.js MSG 同名键双表）
     "dict_verify": "校验中…",
     "dict_extract": "解压中…",
+    # 批1b 件2：一键迁移（refine_dict_migrate）
+    "dict_migrate_need_custom": "尚未设置自定义词典目录，无需迁移",
+    "dict_migrate_need_source": "缺少旧词典目录（请先更改词典目录再迁移）",
+    "dict_migrate_failed": "词典迁移失败",
 
     # ---- 翻译方向（高级参数页，2.1 D2026-0930-04 定案① GUI 补齐）----
     "direction_label": "翻译方向",

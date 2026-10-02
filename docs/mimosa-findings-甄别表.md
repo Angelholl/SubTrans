@@ -30,6 +30,9 @@
 - **Seal digest（2026-10-01 2.4.0 收口批复扫）**：`sha256:9204801222213de4fabb24bb3a61a46756f1fd0f0350c59f2d648640cc329f38`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T13-41-39.845Z-dd96fb6c839b）；本批 4 文件（GUI 三件+钉文件 test_ui_phase3_redlines.py）未引入新发现，与前扫（2eafa499）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
 - **Seal digest（2026-10-01 2.5.0 修复批复扫）**：`sha256:3762f3cf2b7e1a766a182bbd3e24378c90bc3474f73791e210f6bdbfe3dfcc9d`，findingCount=**31 = 上扫 29 + 新增签注 1 + 树外路径漂移口径 1**（scan-2026-10-01T15-38-48.385Z-5acb18308d8e）；**identity 级新增 1 条：`subtransjav/refine/dict_manager.py:249` path-traversal high——判误报留痕维持**：:249 `z.open(names[0])` 为 zip 归档内寻址（非文件系统路径拼接），写出目标=调用方锚定 tmp+原子改名（落位守卫『必须包含于数据根 dict/ 之内』覆盖），member 选取受 manifest archive_member 后缀+下载 sha256 pin 双校验（篡改 zip 先死哈希），2.5.0 流式解压加固为本批引入的新代码面、扫描器静态模式误判；行内计数差 1 系树外项 Temp 路径漂移口径（identity+path 比对 GONE=0 佐证非消除）；本批 14 文件其余未引入新发现；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
 - **Seal digest（2026-10-02 2.5.0 发版批复扫）**：`sha256:61eea2c6d7c136d776504eb1b23f15dfc1ca220c415e3bf7421c0a62a2b70313`，findingCount=**31 = 基线 24 + 树外签注 5 + 新签注 1（dict_manager.py:249 误报，见上行）+1 口径**（scan-2026-10-01T16-12-36.530Z-20b9ddc376b8，批 5 AI 独立设置后）；本批 6 文件（AI 设置 DOM/app.js/api.py/钉文件/批清单/评估文档）未引入新发现，与前扫（3762f3cf）identity 级零新增；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。：`sha256:9204801222213de4fabb24bb3a61a46756f1fd0f0350c59f2d648640cc329f38`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T13-41-39.845Z-dd96fb6c839b）；本批 4 文件（GUI 三件+钉文件 test_ui_phase3_redlines.py）未引入新发现，与前扫（2eafa499）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批0 复扫）**：`sha256:a4eb06899d04f561457407eca5510be5cdcbab8a0b56acdf9b16399d78d45120`，findingCount=**31**，与前扫（20b9ddc3）identity 级比对零新增零消除（scan-2026-10-02T16-44-52.246Z-d4964c0bf1fc）；本批 6 文件（批0 CREATE_NO_WINDOW：subprocess_flags.py 新增+process_manager/api/asr_env/audio_detect+钉测）未引入新发现；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批1 复扫）**：`sha256:0443fe088a17c457ae162a991e69fda55463a9f08740b7e88ca0032f0ccdde99`，findingCount=**32 = 上扫 31 + 新签注 1**（scan-2026-10-02T18-01-20.377Z-7333379f4e3e，批1a+1b 后）；identity 级新增 1 条＝`subtransjav/refine/dict_manager.py` path-traversal high（findingId:finding:b50deb159fa0c0bdb4967000，3 occurrence 写位 :352 下载临时写/:406 解压写/:628 迁移复制写，行号为当次快照）——**判留痕维持+已加固**：写位路径源=词典目录（用户经原生对话框自选任意盘目录=D2026-1002-12 拍板点3/5 产品语义；持久化于本机 config/user_dirs.json，威胁模型与 .data-root 指针同级=本机可信配置）；批1b 已附消费面净化守卫 `_ensure_safe_dict_dir`（四系统根黑名单+`\\?\` 扩展前缀还原+resolve 后大小写不敏感前缀判定，口径对齐 security.py `_validate_user_directory`），JSON 损坏/空白/黑名单命中均静默回退数据根默认，静态污点规则不识别该守卫故仍标记；本批其余 10 文件未引入新发现；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批1 提交前终扫）**：`sha256:dc58a64180f108b3c4d6fa349a13c76dd55e68ec7e5a2515482a2519d56ae534`，findingCount=**32**，与批1 复扫（0443fe08）identity 级零新增零消除（scan-2026-10-02T18-24-51.078Z-26c77de71964）；本扫描面增量仅 tests/test_gui_js_static.py +2 静态钉（T3 复测归档件，见决策日志）与 GUI 黑盒三轮（含两处桩环境修复），代码面零变动；依赖扫描 completion=completed / matchedAdvisories=1 同前。
 
 ## 三态统计（双基线并列）：旧基线（2026-09-24 首扫，26 条，历史口径）：①已修复 1 ｜ ②树外签注 3 ｜ ③留痕维持 22 ｜ 新基线（2026-09-26 复扫，24 条）：上式净减 ①中 tm_promote.py SQL 1 条与 ②中 create_shortcut.py 1 条（兑现消除，①已从扫描面消除）→ ②剩 2（Temp/build_blind_pack.py 弱随机）｜ ③ 22 不变
 
@@ -92,6 +95,12 @@
 |---|---|---|---|---|
 | 25 | subtransjav/refine/glossary_learn.py:91 | high | finding:f47d894d666709fe19ea5304 | `r = requests.get(probe_url, timeout=timeout_probe)`：probe URL 为本地词典服务健康探测（本机回环），目标由本地配置给出。 |
 | 26 | tools/model_matrix_run.py:221 | high | finding:0f0d5e2b912d2f7d0cc88f80 | `with _urlreq.urlopen(req, timeout=60) as resp:`：请求本地 LM Studio/模型服务端点（127.0.0.1 回环），端点来自本地配置。 |
+
+### 词典目录写位 1 条路径穿越（用户自选目录=产品语义，已附净化守卫；2.6.2 批1）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 27 | subtransjav/refine/dict_manager.py:352/406/628 | high | finding:b50deb159fa0c0bdb4967000 | 下载临时写/zip 解压写/迁移复制写三 occurrence 同锚：落位目录=词典目录，用户经原生对话框自选任意盘（D2026-1002-12 拍板点3/5），持久化本机 user_dirs.json，与 .data-root 指针同威胁模型；已附 `_ensure_safe_dict_dir` 消费面守卫（四系统根黑名单+扩展前缀还原+resolve 后前缀判定），损坏/黑名单值静默回退默认；无跨信任边界输入方，留痕维持。 |
 
 ---
 

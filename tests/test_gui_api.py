@@ -2541,3 +2541,175 @@ def test_fs_utils_atomic_write_and_backup_suffix(tmp_path):
     assert p.read_text(encoding="utf-8") == "内容"
     assert not list(tmp_path.glob("*.tmp")), "原子写不得留 tmp 残留"
     assert fs_utils.BACKUP_SUFFIX == ".bak.srt"
+
+
+# ---------------------------------------------------------------------------
+# 批1a（D2026-1002-12）：角色卡目录持久化 + 审计①校对保存收口
+# 持久化文件一律经 SUBTRANSJAV_DATA_ROOT 隔离到 tmp，绝不写真实仓库 config。
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def isolated_user_dirs(tmp_path, monkeypatch):
+    """把数据根指向 tmp（env 通道现读），user_dirs.json 隔离落盘。"""
+    root = tmp_path / "dataroot"
+    root.mkdir()
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    return root
+
+
+def test_ensure_template_dir_default_persisted_then_config(
+        gui_api_obj, isolated_user_dirs, monkeypatch):
+    """缺省目录解析（批1a 件3）：user_dirs.templates_dir → 数据根
+    config/templates 两级依次回落。"""
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.user_dirs as ud
+    from subtransjav.refine.config import default_templates_dir
+    # 未持久化 → 服务端默认目录
+    assert os.path.normcase(api_mod._ensure_template_dir(None)) == \
+        os.path.normcase(str(Path(default_templates_dir()).resolve()))
+    # 持久化后 → 持久值优先
+    d = isolated_user_dirs / "tpl"
+    d.mkdir()
+    monkeypatch.setattr(ud, "get_templates_dir", lambda: str(d))
+    monkeypatch.setattr(ud, "get_registered_dirs",
+                        lambda: [ud.normalize_key(str(d))])
+    assert os.path.normcase(api_mod._ensure_template_dir(None)) == \
+        os.path.normcase(str(d.resolve()))
+
+
+def test_ensure_template_dir_persistent_registered_dir_allowed(
+        gui_api_obj, tmp_path, monkeypatch):
+    """显式传入持久登记目录 → 放行（重启仍生效语义，件3）。"""
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.user_dirs as ud
+    d = tmp_path / "persisted_cards"
+    d.mkdir()
+    monkeypatch.setattr(ud, "get_registered_dirs",
+                        lambda: [ud.normalize_key(str(d))])
+    assert os.path.normcase(api_mod._ensure_template_dir(str(d))) == \
+        os.path.normcase(str(d.resolve()))
+
+
+def test_ensure_template_dir_session_registered_dir_still_allowed(
+        gui_api_obj, tmp_path):
+    """显式传入会话登记目录 → 放行（既有语义保留，不因持久化收窄）。"""
+    import subtransjav.webview_gui.api as api_mod
+    d = tmp_path / "session_cards"
+    d.mkdir()
+    register_session_paths([str(d)])
+    assert os.path.normcase(api_mod._ensure_template_dir(str(d))) == \
+        os.path.normcase(str(d.resolve()))
+
+
+def test_ensure_template_dir_unregistered_dir_still_rejected(
+        gui_api_obj, tmp_path, monkeypatch):
+    """四类拒绝对照：目录在白名单锚内但未登记（会话+持久均无）→ 拒绝
+    （持久化改革不放宽登记语义）。"""
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.user_dirs as ud
+    monkeypatch.setattr(ud, "get_registered_dirs", lambda: [])
+    monkeypatch.setattr(ud, "get_templates_dir", lambda: None)
+    d = tmp_path / "unregistered_cards"
+    d.mkdir()
+    with pytest.raises(ValueError):
+        api_mod._ensure_template_dir(str(d))
+    r = gui_api_obj.refine_list_templates(str(d))
+    assert r["success"] is False
+
+
+def test_refine_pick_folder_persists_and_sets_templates_dir(
+        gui_api_obj, isolated_user_dirs, monkeypatch, tmp_path):
+    """件3 e2e：refine_pick_folder('templates') → 会话登记 + 持久
+    registered_dirs + set_templates_dir；此后缺省目录跟随持久值。"""
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.user_dirs as ud
+    picked = tmp_path / "picked"
+    picked.mkdir()
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(picked)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.refine_pick_folder("templates")
+    assert r["success"] is True
+    data = ud.load()
+    assert ud.normalize_key(str(picked)) in data["registered_dirs"]
+    assert data["templates_dir"] == ud.normalize_key(str(picked))
+    assert os.path.normcase(api_mod._ensure_template_dir(None)) == \
+        ud.normalize_key(str(picked))
+
+
+# ---------------------------------------------------------------------------
+# 批1a 件5：审计①校对保存收口
+# 放行 = 动态根 ∪ 持久登记 ∪ 会话登记；"E 盘"目录全部 monkeypatch 模拟。
+# ---------------------------------------------------------------------------
+
+def test_review_save_registered_e_drive_dir_ok(gui_api_obj, monkeypatch):
+    """持久登记的"E 盘"目录内文件保存放行（不依赖真实磁盘：
+    持久登记 monkeypatch + 原子写捕获，验证裁决与落盘点）。"""
+    if os.name != "nt":
+        pytest.skip("盘符语义仅 Windows")
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.user_dirs as ud
+    fake_e = r"E:\SubJAV"
+    monkeypatch.setattr(ud, "get_registered_dirs",
+                        lambda: [ud.normalize_key(fake_e)])
+    writes: list[tuple[str, str]] = []
+    monkeypatch.setattr(api_mod, "_write_srt_atomic",
+                        lambda p, text: writes.append((p, text)))
+    blocks = [{"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "T"}]
+    r = gui_api_obj.refine_review_save_srt(
+        os.path.join(fake_e, "a.srt"), blocks)
+    assert r["success"] is True
+    assert len(writes) == 1
+    assert os.path.normcase(writes[0][0]) == \
+        os.path.normcase(os.path.join(fake_e, "a.srt")), \
+        "落盘点必须是登记目录内路径"
+
+
+def test_review_saveas_registered_e_drive_ok(gui_api_obj, monkeypatch):
+    """另存为：目标在持久登记"E 盘"目录（不存在文件）→ 直接原子写放行。"""
+    if os.name != "nt":
+        pytest.skip("盘符语义仅 Windows")
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.user_dirs as ud
+    fake_e = r"E:\SubJAV"
+    monkeypatch.setattr(ud, "get_registered_dirs",
+                        lambda: [ud.normalize_key(fake_e)])
+    writes: list[tuple[str, str]] = []
+    monkeypatch.setattr(api_mod, "_write_srt_atomic",
+                        lambda p, text: writes.append((p, text)))
+    blocks = [{"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "S"}]
+    r = gui_api_obj.refine_review_saveas_srt(
+        blocks, os.path.join(fake_e, "out.srt"))
+    assert r["success"] is True and len(writes) == 1
+
+
+def test_review_save_unregistered_outside_roots_rejected(gui_api_obj):
+    """审计①主断言：白名单外且未登记（假盘符 Q:）→ 保存拒绝。"""
+    blocks = [{"index": 1, "start_ms": 1000, "end_ms": 2000, "text": "T"}]
+    r = gui_api_obj.refine_review_save_srt("Q:/somewhere/out.srt", blocks)
+    assert r["success"] is False
+    r2 = gui_api_obj.refine_review_saveas_srt(blocks, "Q:/somewhere/new.srt")
+    assert r2["success"] is False
+
+
+def test_review_save_allowed_session_fallback_branch(gui_api_obj, monkeypatch,
+                                                     tmp_path):
+    """会话登记兜底分支：_resolve_safe_path 拒绝但路径 ∈ 会话登记 → 放行
+    （覆盖对话框/拖放登记的任意盘文件的保存路径）。"""
+    import subtransjav.webview_gui.api as api_mod
+    p = tmp_path / "s.srt"
+    monkeypatch.setattr(
+        api_mod, "SESSION_SELECTED_PATHS", {str(p.resolve())})
+
+    def _always_reject(path, extra_roots=None):
+        raise ValueError(f"路径不在允许的目录下: {path}")
+
+    monkeypatch.setattr(api_mod, "_resolve_safe_path", _always_reject)
+    assert api_mod._review_save_allowed(str(p)) == str(p.resolve())
+    # 未登记同类路径仍拒绝
+    with pytest.raises(ValueError):
+        api_mod._review_save_allowed(str(tmp_path / "other.srt"))

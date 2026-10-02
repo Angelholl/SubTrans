@@ -82,8 +82,165 @@ def _carry_download_progress(kind: str, phase: str) -> None:
 
 
 def dict_dir() -> str:
-    """数据根词典目录：``<数据根>/dict/``。"""
+    """数据根词典目录：``<数据根>/dict/``（2.6.1 批1b 起委托
+    :func:`effective_dict_dir`，未设自定义目录时行为与历史逐字节一致）。"""
+    return effective_dict_dir()
+
+
+# ---------------------------------------------------------------------------
+# 自定义词典目录（批1b D2026-1002-12 件1 + 规划员追补裁定）
+# ---------------------------------------------------------------------------
+# 进程内覆盖值（优先级①）：api 层启动时从 user_dirs.dict_dir 装载注入
+# （依赖方向裁定：dict_manager 在 refine/ 包，user_dirs 在 webview_gui/，
+# refine 不得反向 import webview_gui——选"注册器注入"而非"回调注册"：
+# set_custom_dir 只传一个 str，dict_manager 保持可独立测试，现有测试
+# 不依赖 webview_gui 即可覆盖覆盖/清除语义）。
+_CUSTOM_DICT_DIR: str | None = None
+
+# user_dirs.json 直读缓存（优先级②）：key=(文件路径, mtime)，命中即复用
+# 上次解析值。mtime 缓存理由：grammar_hint 可能在 tokenize 路径高频触达
+# dict_dir()，stat 未变即 O(stat)/次复用，避免每次 json 解析+磁盘读；
+# key 含完整路径，测试换数据根（env）天然失效不串值。
+_USER_DIRS_CACHE: dict = {"key": None, "value": None}
+
+
+def set_custom_dir(path: str | None) -> None:
+    """注入/清除进程内自定义词典目录（None=清除恢复数据根默认）。"""
+    global _CUSTOM_DICT_DIR
+    _CUSTOM_DICT_DIR = str(path) if path else None
+
+
+def get_custom_dir() -> str | None:
+    """当前注入的自定义词典目录（未设置返回 None；只读零副作用）。"""
+    return _CUSTOM_DICT_DIR
+
+
+# ---------------------------------------------------------------------------
+# 系统目录黑名单（批1b 追补②，Mimosa finding:b50deb159fa0c0bdb4967000）：
+# 用户自选任意盘目录是拍板产品语义（不收回），但"手改 user_dirs.json 指向
+# 系统目录"须拦。口径锚点对齐 webview_gui/security.py
+# ``_validate_user_directory`` 的 system_roots 段；因 refine 不得 import
+# webview_gui（依赖方向），四根常量就地定义。
+# ---------------------------------------------------------------------------
+def _system_dir_roots() -> list[str]:
+    """系统目录黑名单四根（env 可覆盖，与 security.py 同缺省）。"""
+    return [
+        os.environ.get("SystemRoot", r"C:\Windows"),  # noqa: SIM112  Windows 规范环境变量名，改大小写即行为变更
+        os.environ.get("ProgramFiles", r"C:\Program Files"),  # noqa: SIM112
+        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),  # noqa: SIM112
+        os.environ.get("ProgramData", r"C:\ProgramData"),  # noqa: SIM112
+    ]
+
+
+def _strip_extended_prefix(path: str) -> str:
+    """还原 Windows 扩展路径前缀（``\\\\?\\`` / ``\\\\?\\UNC\\``）。
+
+    口径对齐 security.py 同名助手：``Path.resolve()`` 对 ``\\\\?\\C:\\...``
+    的折叠在部分 Python 版本会畸变为盘符相对路径致前缀判定漏判逃逸，
+    统一先还原再 resolve。
+    """
+    if path.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + path[8:]
+    if path.startswith("\\\\?\\"):
+        return path[4:]
+    return path
+
+
+def _ensure_safe_dict_dir(path: str) -> str | None:
+    """词典目录净化守卫（防御纵深；命中黑名单返回 None，调用方回落）。
+
+    黑名单判定一律在 ``Path.resolve()``（strict=False）之后进行——
+    junction/符号链接、8.3 短路径、大小写变体、``\\\\?\\`` 扩展前缀都先
+    折叠/还原为真实落点，再做大小写不敏感的字符串前缀比较（normcase +
+    casefold，任何平台一致），杜绝经由链接或大小写差异绕过。
+    """
+    p = Path(_strip_extended_prefix(str(path or ""))).resolve()
+    p_key = os.path.normcase(str(p)).casefold()
+    for root in _system_dir_roots():
+        if not root:
+            continue
+        try:
+            root_key = os.path.normcase(
+                str(Path(root).resolve())).casefold()
+        except OSError:
+            continue
+        prefix = root_key if root_key.endswith(os.sep) else root_key + os.sep
+        if p_key == root_key or p_key.startswith(prefix):
+            return None
+    return str(p)
+
+
+def _user_dirs_json_dict_dir() -> str | None:
+    """直读 ``<数据根>/config/user_dirs.json`` 的 ``dict_dir`` 键（批1b
+    规划员追补裁定：跨进程单源，GUI/CLI/refine/--dict-download 统一生效）。
+
+    纯 json + paths 实现（不 import webview_gui）；文件缺失/损坏/键空/
+    非 dict 形态一律跳过返回 None（回落数据根默认）。mtime 缓存见
+    ``_USER_DIRS_CACHE`` 注释。
+    """
+    p = Path(paths.data_root()) / "config" / "user_dirs.json"
+    try:
+        mtime = p.stat().st_mtime
+    except OSError:
+        _USER_DIRS_CACHE["key"] = None
+        _USER_DIRS_CACHE["value"] = None
+        return None
+    key = (str(p), mtime)
+    if _USER_DIRS_CACHE["key"] == key:
+        return _USER_DIRS_CACHE["value"]
+    value: str | None = None
+    try:
+        import json
+        with open(p, encoding="utf-8") as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            v = raw.get("dict_dir")
+            if isinstance(v, str) and v.strip():
+                value = v.strip()
+    except (OSError, ValueError):
+        value = None
+    _USER_DIRS_CACHE["key"] = key
+    _USER_DIRS_CACHE["value"] = value
+    return value
+
+
+def effective_dict_dir() -> str:
+    """生效词典目录单源，三级优先级（批1b 追补裁定）：
+
+    ① ``_CUSTOM_DICT_DIR``（进程内覆盖，GUI 注入/测试用，过净化守卫）；
+    ② user_dirs.json ``dict_dir`` 键直读（跨进程单源，mtime 缓存，
+       过净化守卫——手改 JSON 指向系统目录与损坏 JSON 同待遇，静默
+       回退，返回值语义不变）；
+    ③ 数据根 ``dict/`` 默认（程序内派生，不过守卫）。
+
+    download/kind_dir/status 等一切落位与读取均经本函数（经 dict_dir
+    委托自动跟随），保证自定义目录下"下载-加载-状态"三链路一致。
+    """
+    if _CUSTOM_DICT_DIR:
+        guarded = _ensure_safe_dict_dir(_CUSTOM_DICT_DIR)
+        if guarded:
+            return guarded
+        # ① 命中黑名单视为无效注入（防御纵深与②一致），继续向下解析
+    persisted = _user_dirs_json_dict_dir()
+    if persisted:
+        guarded = _ensure_safe_dict_dir(persisted)
+        if guarded:
+            return guarded
+        # ② 命中黑名单：静默回退（不 log 不抛，与损坏 JSON 同待遇）
     return paths.data_subdir("dict")
+
+
+def count_dict_files(root: str) -> int:
+    """统计目录下两层级（``<root>/<install>/<file>``）的常规文件数
+    （迁移提示用；目录不存在返回 0，只读零副作用）。"""
+    base = Path(root)
+    if not base.is_dir():
+        return 0
+    n = 0
+    for kdir in base.iterdir():
+        if kdir.is_dir():
+            n += sum(1 for p in kdir.iterdir() if p.is_file())
+    return n
 
 
 def load_source_manifest() -> dict:
@@ -351,6 +508,147 @@ def download_dict(kind: str, allow_unverified: bool = False,
         raise
 
 
+# ---------------------------------------------------------------------------
+# 一键迁移（批1b D2026-1002-12 件2）：旧词典目录 → 现生效目录
+# ---------------------------------------------------------------------------
+# 进度通道裁定：复用下载进度表 _DOWNLOAD_PROGRESS（伪 kind=``__migrate__``，
+# api 层 refine_dict_download_progress 现成轮询桥零改动），phase ∈
+# copy/verify/done/failed；downloaded/total=累计字节，另带 file_index/
+# file_count/file_name 供前端"文件 x/y"文案。最小实现：字节粒度随拷贝
+# 分块推进（与下载同粒度），不新增第二套轮询字段。
+MIGRATE_PROGRESS_KIND = "__migrate__"
+
+
+def _set_migrate_progress(phase: str, downloaded: int = 0,
+                          total: int | None = None, error: str | None = None,
+                          file_index: int = 0, file_count: int = 0,
+                          file_name: str = "") -> None:
+    """整体赋值换引用写迁移进度快照（与下载进度同口径）。"""
+    _DOWNLOAD_PROGRESS[MIGRATE_PROGRESS_KIND] = {
+        "kind": MIGRATE_PROGRESS_KIND, "phase": phase,
+        "downloaded": downloaded, "total": total, "error": error,
+        "file_index": file_index, "file_count": file_count,
+        "file_name": file_name}
+
+
+def _sha256_file(path: str) -> str:
+    """流式分块 SHA256（迁移校验用：词典产物 300MB 档，不全量进内存）。"""
+    h = hashlib.sha256()
+    with open(_validated_path(path), "rb") as f:
+        while True:
+            chunk = f.read(1024 * 1024)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def migrate_dicts(source_dir: str) -> dict:
+    """把旧词典目录下各 kind 文件迁移到现生效目录（批1b 件2）。
+
+    规则（与拍板点5 一致）：
+    - 逐文件"临时名复制（1MB 分块）→ 大小+SHA256 校验 → 原子改名
+      （os.replace）"；同名同 size 跳过（可续传）；校验失败删临时重试
+      一次，再失败抛 RuntimeError 中止（不标记已迁移）；
+    - 源文件一律不删；目标目录不存在自动创建；
+    - 源目录与现生效目录相同（normcase）拒绝；源目录不存在拒绝。
+
+    返回 ``{"migrated": [...], "skipped": [...], "total_bytes": n}``；
+    任何异常经进度表 phase=failed 后照旧向上抛。
+    """
+    try:
+        return _migrate_dicts_impl(source_dir)
+    except Exception as e:  # noqa: BLE001 - 与下载链同口径：失败写进度再上抛
+        _set_migrate_progress("failed", error=str(e))
+        raise
+
+
+def _migrate_dicts_impl(source_dir: str) -> dict:
+    src_root = _validated_path(str(source_dir or ""))
+    if not src_root.is_dir():
+        raise ValueError(f"旧词典目录不存在: {src_root}")
+    dst_root = Path(effective_dict_dir()).resolve()
+    if os.path.normcase(str(src_root)) == os.path.normcase(str(dst_root)):
+        raise ValueError("源目录与当前生效词典目录相同，无需迁移")
+
+    # 迁移计划：清单各 kind 的安装子目录下全部常规文件（含 full/core
+    # 双变体与用户自解压产物；非清单 kind 的杂散子目录一并覆盖更稳妥——
+    # 仅在"目录名安全分量"约束下按 basename 拷贝，不越出目标根）；
+    # 临时残件（.part/.downloading/.extracting/.migrating）不迁移
+    _SKIP_SUFFIXES = (".part", ".downloading", ".extracting", ".migrating")
+    plan: list[tuple[Path, Path]] = []
+    for kdir in sorted(src_root.iterdir()):
+        if not kdir.is_dir():
+            continue
+        install = _safe_component(kdir.name)
+        for f in sorted(kdir.iterdir()):
+            if f.is_file() and not f.name.endswith(_SKIP_SUFFIXES):
+                plan.append((f, dst_root / install / f.name))
+    total_bytes = sum(f.stat().st_size for f, _ in plan)
+    _set_migrate_progress("copy", 0, total_bytes, file_count=len(plan))
+
+    migrated: list[str] = []
+    skipped: list[str] = []
+    done_bytes = 0
+    for idx, (src_file, dest) in enumerate(plan, start=1):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src_size = src_file.stat().st_size
+        if dest.is_file() and dest.stat().st_size == src_size:
+            skipped.append(str(dest))       # 同名同 size：断点续传语义
+            done_bytes += src_size
+            _set_migrate_progress("copy", done_bytes, total_bytes,
+                                  file_index=idx, file_count=len(plan),
+                                  file_name=src_file.name)
+            continue
+        _copy_verified(src_file, dest, done_bytes, total_bytes, idx, len(plan))
+        done_bytes += src_size
+        migrated.append(str(dest))
+        _set_migrate_progress("copy", done_bytes, total_bytes,
+                              file_index=idx, file_count=len(plan),
+                              file_name=src_file.name)
+    _set_migrate_progress("done", done_bytes, total_bytes,
+                          file_count=len(plan))
+    return {"migrated": migrated, "skipped": skipped,
+            "total_bytes": total_bytes}
+
+
+def _copy_verified(src_file: Path, dest: Path, done_bytes: int,
+                   total_bytes: int, file_index: int, file_count: int) -> None:
+    """临时名复制 + 大小/SHA256 双校验 + 原子改名；失败删临时重试一次。
+
+    字节进度按分块推进（downloaded=done_bytes+已拷字节）；校验失败
+    （源与临时件哈希不符/大小不符）删临时件重试，二次失败抛
+    RuntimeError（调用方中止整个迁移，目标不留半截产物）。
+    """
+    tmp = Path(str(dest) + ".migrating")
+    src_sha = _sha256_file(str(src_file))
+    last_err: Exception | None = None
+    for _attempt in range(2):
+        try:
+            with open(src_file, "rb") as fin, open(tmp, "wb") as fout:
+                copied = 0
+                while True:
+                    chunk = fin.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    fout.write(chunk)
+                    copied += len(chunk)
+                    _set_migrate_progress("copy", done_bytes + copied,
+                                          total_bytes, file_index=file_index,
+                                          file_count=file_count,
+                                          file_name=src_file.name)
+            if tmp.stat().st_size != src_file.stat().st_size \
+                    or _sha256_file(str(tmp)) != src_sha:
+                raise ValueError(f"复制后校验不符: {src_file.name}")
+            os.replace(str(tmp), str(dest))     # 原子改名落位
+            return
+        except (OSError, ValueError) as e:
+            last_err = e
+            _unlink_quiet(str(tmp))
+    raise RuntimeError(f"词典文件迁移失败（已重试一次）: {src_file} -> {dest}: "
+                       f"{last_err}")
+
+
 def _kind_dict_file(kind: str) -> Path:
     """某 kind 落位词典文件路径（清单缺 kind/字段非法抛异常，调用方捕获）。"""
     entry = load_source_manifest()["dicts"][kind]
@@ -414,4 +712,7 @@ def dict_status() -> dict:
             "custom_path": custom,
             "files": files,
         }
-    return {"dict_dir": dict_dir(), "dicts": dicts}
+    # 批1b 件1：dict_dir=现生效目录（自定义覆盖后即生效值），
+    # custom_dir=设置值（未设 null），effective_dir 与 dict_dir 等价显式键
+    return {"dict_dir": dict_dir(), "custom_dir": _CUSTOM_DICT_DIR,
+            "effective_dir": dict_dir(), "dicts": dicts}

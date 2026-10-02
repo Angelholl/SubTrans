@@ -32,6 +32,10 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   （累计余 5）；FROZEN_I18N_KEYS 不动（#tab-review 零 data-i18n 延续）——
   gate.check 只拦"丢失"不拦"新增"，本钉补上新增方向的机器闸；
   未来合法契约变更必须显式更新本文件快照（有意摩擦，防静默漂移）。
+  2.6.1 批 1b D2026-1002-12：词典目录设置+一键迁移，FROZEN_IDS 210→213，
+  三 id 列名=dictBrowseBtn/dictRestoreBtn/dictMigrateBtn（预算恰好用满，
+  累计余 0）；FROZEN_I18N_KEYS 不动（三键标签均 JS 态 MSG 键，R6 零
+  静态 i18n 消耗延续）。
 """
 import re
 from pathlib import Path
@@ -88,8 +92,8 @@ asrModelSel asrPythonInput asrRecList asrRefreshBtn asrStatus audioPreviewBar au
 audioPreviewError audioPreviewPlayer audioPreviewTiming browseOutputBtn clearBtn
 clearConsoleBtn consoleCollapseBtn consoleOutput dataRootBar dataRootCurrentPath
 dataRootRestoreBtn dataRootSourceTag dataRootStatus dataRootToggleBtn debugLogging
-dictActionBtn dictDesc dictDetail dictEmpty dictOpenDir dictPath dictPathRow dictPill
-dictProgress dictRows dictSelect dictStatus directionCardList directionCardS1
+dictActionBtn dictBrowseBtn dictDesc dictDetail dictEmpty dictMigrateBtn dictOpenDir dictPath dictPathRow dictPill
+dictProgress dictRestoreBtn dictRows dictSelect dictStatus directionCardList directionCardS1
 directionCardS3
 directionSource directionTarget dropzone emptyState featureStatus fileList
 fileListContainer firstRunBanner glEmptyHint

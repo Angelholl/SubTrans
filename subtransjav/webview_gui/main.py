@@ -369,6 +369,17 @@ def main():
     except Exception as e:  # noqa: BLE001 - 全容错桩：迁移失败不阻塞启动
         print(f"⚠️ [迁移] 数据迁移检查失败（忽略，继续启动）: {e}")
 
+    # ---- 内置角色卡首启 seed（批1a D2026-1002-12 件4）：frozen-only
+    #      （源码形态 no-op 防脏工作树）；仅补拷缺失文件不覆盖已改卡；
+    #      全容错，失败不阻塞启动 ----
+    try:
+        from subtransjav.refine.template_seed import seed_default_templates
+        seeded = seed_default_templates()
+        if seeded.get("seeded"):
+            print(f"✅ [seed] 内置角色卡已初始化: {seeded.get('copied')}")
+    except Exception as e:  # noqa: BLE001 - 全容错桩：seed 失败不阻塞启动
+        print(f"⚠️ [seed] 内置角色卡初始化失败（忽略，继续启动）: {e}")
+
     _auto_setup()
     _check_gui_dependencies()
 

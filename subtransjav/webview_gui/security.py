@@ -16,12 +16,18 @@ from subtransjav import paths
 REPO_ROOT = paths.app_root()
 
 
-def _resolve_safe_path(path: str) -> Path:
+def _resolve_safe_path(path: str, extra_roots=None) -> Path:
     """Resolve *path* and verify it lives under an allowed root.
 
-    Allowed roots:
-      1. The user's home directory (``Path.home()``).
-      2. The repository root (``REPO_ROOT``).
+    Allowed roots（批1a D2026-1002-12 件2 白名单改革）:
+      1. 动态根（每次调用现读，杜绝导入期快照失效）：
+         ``Path.home()`` ∪ ``paths.data_root()``；
+      2. ``REPO_ROOT``（模块常量保留：安装目录自身始终可写，≥旧版语义）；
+      3. ``extra_roots``：调用方（api.py）从 user_dirs 持久登记装载的
+         目录集——本模块保持纯函数，不直接依赖持久化存储。
+
+    锚点逃逸判定保留：锚仍用模块常量 ``REPO_ROOT``，字面锚定于仓库根
+    的路径折叠 ``..`` 后不得逃出仓库根。
 
     Raises ``ValueError`` when the path is outside every allowed root.
     """
@@ -39,17 +45,24 @@ def _resolve_safe_path(path: str) -> Path:
     if anchored and not resolved.is_relative_to(REPO_ROOT.resolve()):
         raise ValueError(f"路径不在允许的目录下: {resolved}")
 
-    try:
-        resolved.relative_to(Path.home())
-        return resolved
-    except ValueError:
-        pass
-
-    try:
-        resolved.relative_to(REPO_ROOT.resolve())
-        return resolved
-    except ValueError:
-        pass
+    # 白名单成员判定走归一化键前缀（resolve 后大小写/分隔符不敏感，
+    # 与 _validate_user_directory 的加固口径一致；POSIX 下 normcase
+    # 为 no-op，语义退化为大小写敏感前缀匹配，行为不变）。
+    roots = [Path.home(), paths.data_root(), REPO_ROOT]
+    for extra in extra_roots or []:
+        try:
+            roots.append(Path(str(extra)))
+        except (TypeError, ValueError):
+            continue
+    resolved_key = _norm_case_key(resolved)
+    for root in roots:
+        try:
+            root_key = _norm_case_key(root.resolve())
+        except OSError:
+            root_key = _norm_case_key(root)
+        prefix = root_key if root_key.endswith(os.sep) else root_key + os.sep
+        if resolved_key == root_key or resolved_key.startswith(prefix):
+            return resolved
 
     raise ValueError(f"路径不在允许的目录下: {resolved}")
 
