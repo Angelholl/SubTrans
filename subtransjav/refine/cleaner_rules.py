@@ -74,8 +74,8 @@ def resolve_data_file(
 @dataclass
 class Subtitle:
     index: int
-    start: float
-    end: float
+    start: int   # 毫秒（parse_srt 整数运算原生；批 3 修正历史 float 错标）
+    end: int
     text: str
 
 
