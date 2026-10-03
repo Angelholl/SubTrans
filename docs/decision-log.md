@@ -2758,3 +2758,16 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 **执行契约（评议员内嵌）**：A1 FTS5 冻结包可用性核验写入 TM 搜索特性批开工门（随收尾验证同通道），不设独立 spike；A2 uv 对照 diff=条件可选（仅当 owner 实际使用 uv 时跑一次作契约基线）；B1 py-spy 归档结论须自带判据原文"等待/IO 主导且 Python 侧执行时间显著小于 LLM 网络往返总时长"（非"CPU 零占用"）；B2 采样会话四要素=生产配置指纹+同源片源窗口+覆盖阶段 A/B+引擎空闲前置（缺一归档值打折）；B3 证据效力边界=仅裁决 CPU 加速类主张（pyroid/llm-autobatch/orjson/Polars），不触及 FTS5/uv/pysubs2。
 
 **执行记录**：死依赖实证=pyproject.toml:41 声明 "srt"，subtransjav/tests/tools/packaging 四域 `import srt|from srt` 零命中、SubTransJAV.spec hiddenimports 不含（主模型+评议员双重复核）；摘除随本 ID 独立小批落库（提交见 git log `Refs: D2026-1003-02`，附否定性守卫测试）；py-spy 闲时任务已建（产出按 B1/B2/B3 归档本条目）。风险跟踪：①py-spy 归档四要素齐备性；②srt 防回流守卫在位；③kkpack 复提自动升格 HRO；④release-checklist 基线数字陈旧（1601+4 vs 实测 ~1786）随 2.6.2 验证轮文档卫生更新。
+## [2026-10-03] D2026-1003-03 批A 安装器卸载器实现评议（1 HRO 采纳方案甲+四硬化全收） [已拍板·已落地]
+
+**缘起**：D2026-1003-01 拍板护栏「卸载器 HRO 审查提前至批A」。主模型批A 实现设计交 decision-critic 评议，立场=有条件支持，1 项 [HIGH_RISK_OBJECTION]+4 条硬化条件；非 [PRESSURE-OVERRIDE]。
+
+**HRO（采纳·方案甲）**：uninstall.bat「清空内容保留空目录」若按字面实现，会把现行 `rd`（不带 /s，非空目录静默失败=安全 no-op）升级为绕过一问制/锚点门槛的静默数据删除通道，致拍板⑥「删除仅经卸载器一问制」前提失效。采纳=bat 零新增删除逻辑，仅+1 行头注释「数据删除主通道=应用卸载器一问制（默认保留数据）」，并立负向钉（递归删除语汇仅限 numba_cache，%LOCALAPPDATA% 面整树删除全禁）。
+
+**四硬化（全收）**：①深度门槛（解析结果=盘符根/%WINDIR%/ProgramFiles/与 {app} 同径→拒删，先于一切提问）；②DelTree 返回值检查+失败显式提示手动路径（部分实现：进程结束不做 PascalScript taskkill，依赖 CloseApplications=yes+失败分支兜底，评议员认可为合理简化）；③锚点预检先于一问（无锚→信息框按保留处理，不弹是/否）；④{app} 来源=注册表 InstallLocation（与 R1 共用 ReadInstalledInfo，剥引号剥尾斜杠），常量展开仅兜底。
+
+**小项（全收）**：拒删/预检提示补 env 自定义数据目录指引行；锚点 9 项对齐 data_migration.py 白名单（glossary_conflict_watch.json 实位于 Temp/translation_memory/）+双向防漂移钉；量级统计仅锚点命中后执行；版本点分段比较+降级分支措辞；守卫反转注释含双决策 ID+「settings.json 系决策文档误记，实盘锚点以 config/user_settings.json、config/refine_stage_settings.json 为准」；真机卸载四例入批A DoD（docs/真机走查清单-263.md）。
+
+**落地**：1bd2029（setup.iss R1 升级检测+R2 卸载一问制+uninstall.bat 方案甲+tests/test_installer_lifecycle.py 12 钉；ISCC 6.7.3 编译冒烟 rc=0；全量 1795 passed+4 skipped；code-review 双轴零硬违规零夹带， iss 布尔表达式补括号消歧一并入库）。
+
+**风险跟踪**：①真机卸载四例 owner 执行前不随 2.6.3 发版放行；②9 锚与 data_migration 白名单防漂移钉常驻（迁移则锚迁须复议）；③盘根/深度门槛场景真机验证一次即闭环（断言已入静态钉）。
