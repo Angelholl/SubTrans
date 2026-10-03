@@ -2758,6 +2758,19 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 **执行契约（评议员内嵌）**：A1 FTS5 冻结包可用性核验写入 TM 搜索特性批开工门（随收尾验证同通道），不设独立 spike；A2 uv 对照 diff=条件可选（仅当 owner 实际使用 uv 时跑一次作契约基线）；B1 py-spy 归档结论须自带判据原文"等待/IO 主导且 Python 侧执行时间显著小于 LLM 网络往返总时长"（非"CPU 零占用"）；B2 采样会话四要素=生产配置指纹+同源片源窗口+覆盖阶段 A/B+引擎空闲前置（缺一归档值打折）；B3 证据效力边界=仅裁决 CPU 加速类主张（pyroid/llm-autobatch/orjson/Polars），不触及 FTS5/uv/pysubs2。
 
 **执行记录**：死依赖实证=pyproject.toml:41 声明 "srt"，subtransjav/tests/tools/packaging 四域 `import srt|from srt` 零命中、SubTransJAV.spec hiddenimports 不含（主模型+评议员双重复核）；摘除随本 ID 独立小批落库（提交见 git log `Refs: D2026-1003-02`，附否定性守卫测试）；py-spy 闲时任务已建（产出按 B1/B2/B3 归档本条目）。风险跟踪：①py-spy 归档四要素齐备性；②srt 防回流守卫在位；③kkpack 复提自动升格 HRO；④release-checklist 基线数字陈旧（1601+4 vs 实测 ~1786）随 2.6.2 验证轮文档卫生更新。
+
+### 【闲时补记】py-spy 单次诊断（2026-10-03 执行）
+
+**B2 四要素**：①配置指纹=profile local；s1=lmstudio/qwen3.8-27b-uncensored-joyfox-aggressive、s3=lmstudio/qwen3.6-35b-a3b-uncensored-heretic-apex；温度 local 0.1；批量 30 行/批（阶段A 54 批、阶段B 56 批+定向重试）；v2_concurrency_max=5（实际阶段A=1、阶段B=2，见偏差①）；无 draft；TM 复用+学习开启（学习 1334 对/新增 1083 条，生产默认行为）；引擎实测=阶段B 35B ctx 22272/并发 2/GPU max（生产指纹达成），阶段A 27B 沿用残留载入 ctx 16384/并发 1（见偏差①），KV 量化沿引擎侧配置未单验（lms ps 不暴露）。②片源窗口=ABF-264（E:\无字幕\提字幕\瀧本雫葉\，真实 ASR 日文 SRT 104,329B/原始 1451 条→闸门0 删 1→预合并 1442→产出 1426 条；非 Logs/9-23-2240 同源锚定片，见偏差②）。③覆盖=单次连续采样 17:33–18:09 全程横跨阶段A+阶段B+后处理，另 17:52 阶段A 中段独立 dump 单点佐证。④引擎空闲前置=17:14 核对通过（无在途跑批/无载入模型/在跑 python 均为 GUI fixture 遗留 http.server）；跑批期间同机有另一会话全量 pytest（如实记录，见偏差①）。采样会话=py-spy 0.4.2 record --format raw --idle --rate 60，附着 G:\python\python.exe **真身子进程**（.venv python.exe 为启动跳板，附着须取其子进程——后随会话复用本结论），131,164 样本/0 错误/≈36.4 分钟。
+
+**归因结果（对照 B1 判据原文"等待/IO 主导且 Python 侧执行时间显著小于 LLM 网络往返总时长"）**：131,164 样本按叶子帧自身时间分类——net_wait（httpcore 同步 read=阻塞等 LLM HTTP 响应）**99.2%**；Python 侧计算（pass_disagreement 比对/re/tm.store 等全部合计）**0.8%**（≈17s/36.4min）；子进程等待（lms CLI）≈0.0%。Top1 叶帧 `read (httpcore\_backends\sync.py:128)`=99.1%，与阶段A 中段 dump 单点互证。**判据成立：等待主导，Python 侧执行时间仅为网络等待的 1/124**——按 B3 效力边界，CPU 加速类主张（pyroid/llm-autobatch/orjson/Polars）被裁决为无的放矢（不触及 FTS5/uv/pysubs2）。
+
+**偏差登记（两项，均保守偏置不威胁结论）**：①阶段A 沿用残留载入（16384/1→管线声明并发=1）+同机 pytest CPU 负载——只会高估等待占比/膨胀 Python 段墙钟（对结论保守），代价=绝对吞吐不可比（阶段A 实测≈39s/批 vs 校准 12.1s/批；阶段B 生产指纹下≈3.3s/批 与校准 4.5s/批 同量级，反证慢因即偏差①）；②同源片源窗口不满足（锚定片 E 盘重组后路径失效，改用 ABF-264）——吞吐对比本不在 B3 效力边界内。
+
+**观察项（不判缺陷，待 owner 决定是否立项核查）**：引擎自动化对"已加载但 ctx/并发不符"的残留态沿 fail-open 沿用未触发重载（D2026-0924-03 口径1 预期 ctx 不符即重载）——生产跑批前若引擎留有错配载入将静默降速约 3 倍；建议后续批核对 ctx 检查分支，本轮不动代码。
+
+**结论行**：CPU 加速类工具链主张在可预见未来无立项价值；效率通道=上游选型+并发对齐（本诊断意外暴露的"残留载入静默降速"观察项即并发对齐面的第一个具体抓手）。profile 数据=%TEMP%\pyspy-diag-20261003\stacks.raw（65,861B，不入库）。
+
 ## [2026-10-03] D2026-1003-03 批A 安装器卸载器实现评议（1 HRO 采纳方案甲+四硬化全收） [已拍板·已落地]
 
 **缘起**：D2026-1003-01 拍板护栏「卸载器 HRO 审查提前至批A」。主模型批A 实现设计交 decision-critic 评议，立场=有条件支持，1 项 [HIGH_RISK_OBJECTION]+4 条硬化条件；非 [PRESSURE-OVERRIDE]。
