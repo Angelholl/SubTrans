@@ -1,4 +1,4 @@
-"""ASR 模型下载器（2.6.3 批B，D2026-1003-01 ② + D2026-1003-05 评议五条件）。
+"""ASR 模型下载器（2.6.3 批B，D2026-1003-01 ② + D2026-1003-06 评议五条件）。
 ================================================================================
 推荐清单（asr_env.ASR_RECOMMENDED_MODELS）驱动的大文件（3GB 档）下载引擎，
 落位数据根 ``models/asr/<model>.pt``（清单 model 字段派生文件名，路径注入面
@@ -39,7 +39,7 @@ from subtransjav import paths
 from subtransjav.refine import asr_env
 from subtransjav.refine.dict_manager import _sha256_file, _unlink_quiet
 
-# 回退提示 logger（D2026-1003-05 条件①：回退必须可见——进度 note + 日志双通道）
+# 回退提示 logger（D2026-1003-06 条件①：回退必须可见——进度 note + 日志双通道）
 logger = logging.getLogger("subtransjav.asr_downloader")
 
 # host 小名单（层3；与清单 URL 精确匹配双层并行，重定向逐跳复用本名单）

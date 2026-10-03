@@ -30,7 +30,7 @@ from pathlib import Path
 
 from subtransjav import paths
 
-# 回退提示 logger（D2026-1003-05 条件①：auto 轮换由静默升级为可见）
+# 回退提示 logger（D2026-1003-06 条件①：auto 轮换由静默升级为可见）
 _log = logging.getLogger("subtransjav.dict_manager")
 
 _DICT_SOURCES_JSON = Path(__file__).resolve().parent / "defaults" / "dict_sources.json"
@@ -92,7 +92,7 @@ def _set_download_progress(kind: str, phase: str, downloaded: int = 0,
 def _set_download_note(kind: str, note: str) -> None:
     """在当前快照上追加 note（不新增相位写入，整体赋值换引用）。
 
-    专供跨源 fallback 可见提示（D2026-1003-05 条件①）：后续 download
+    专供跨源 fallback 可见提示（D2026-1003-06 条件①）：后续 download
     相位经 _set_download_progress 粘滞继承，verify/done 相位自然清除。
     """
     snap = _DOWNLOAD_PROGRESS.get(kind)
@@ -455,7 +455,7 @@ def download_dict(kind: str, allow_unverified: bool = False,
     返回落位路径；网络失败可跨源 fallback，校验失败直接抛
     DictChecksumError 不轮换（防串改文件被"换个源洗白"）。
 
-    source（2.6.3 批B，D2026-1003-05 条件②①）：源选择 ∈ {auto, official,
+    source（2.6.3 批B，D2026-1003-06 条件②①）：源选择 ∈ {auto, official,
     mirror}，非法值按 auto。mirror 集=清单 ``source=="tuna"``；official=
     排除镜像（保留 pypi 与 cloudfront-cdn——sudachi_full 官方源就是
     cloudfront，不得只留 pypi）；official/mirror 过滤后为空显式报错。
@@ -474,7 +474,7 @@ def download_dict(kind: str, allow_unverified: bool = False,
     dest = str(_ensure_inside_dict_root(out_dir / target_name))
     member = entry.get("archive_member") or ""
 
-    # 源选择过滤（D2026-1003-05 条件②）：mirror=tuna；official=排除镜像
+    # 源选择过滤（D2026-1003-06 条件②）：mirror=tuna；official=排除镜像
     # （pypi+cloudfront-cdn 均属官方，不得只留 pypi）
     if source not in ("auto", "official", "mirror"):
         source = "auto"
@@ -535,7 +535,7 @@ def download_dict(kind: str, allow_unverified: bool = False,
                           _set_download_progress(kind, "download", n, t))
             except DictDownloadError as e:
                 last_err = e
-                # D2026-1003-05 条件①：静默轮换升级为可见——快照带 note
+                # D2026-1003-06 条件①：静默轮换升级为可见——快照带 note
                 # （后续源 download 相位粘滞继承）+ logging 同文案
                 has_next = any(x.get("sha256_verified") or allow_unverified
                                for x in pool[i + 1:])
@@ -770,7 +770,7 @@ def dict_status() -> dict:
         }
     # 批1b 件1：dict_dir=现生效目录（自定义覆盖后即生效值），
     # custom_dir=设置值（未设 null），effective_dir 与 dict_dir 等价显式键
-    # 2.6.3 批B（D2026-1003-05 条件②）：sources 摘要——前端「仅镜像」键
+    # 2.6.3 批B（D2026-1003-06 条件②）：sources 摘要——前端「仅镜像」键
     # disabled 门控（从清单推导；仅 target_name 非空的可下载 kind）
     sources_summary: dict = {}
     for kind, entry in manifest["dicts"].items():

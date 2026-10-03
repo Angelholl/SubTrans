@@ -427,7 +427,7 @@ def test_cli_dict_download_local_missing_file(monkeypatch, tmp_path, capsys):
 
 
 # ---------------------------------------------------------------------------
-# 2.6.3 批B（D2026-1003-05 条件②①）：download_dict source 三态 + note 回退提示
+# 2.6.3 批B（D2026-1003-06 条件②①）：download_dict source 三态 + note 回退提示
 # ---------------------------------------------------------------------------
 def _manifest_full(monkeypatch, sha: str) -> None:
     """把源清单 sudachi_full downloads 替换为测试用条目。"""

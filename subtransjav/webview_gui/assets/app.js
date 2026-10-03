@@ -546,7 +546,7 @@ const MSG = {
     asrPlaceHint: (cacheDir, modelsDir, fileName) =>
       `落位（文件名须为 ${fileName}）：优先放入默认缓存 ${cacheDir}（零配置），或应用数据目录 ${modelsDir}（备选）`,
     asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
-    // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-05 五条件）：ASR 下载器 + 词典
+    // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：ASR 下载器 + 词典
     // 源选择（全 JS 态键，零静态 i18n 消耗；index.html 冻结期 body 全 createElement）
     asrDownloadBtn: '下载…',
     asrDownloadTitle: '下载模型',
@@ -4427,7 +4427,7 @@ function switchTab(tabId) {
   let _dictCustomDir = null;
   let _dictNeedsMigration = false;
   let _dictOldDir = '';
-  // 2.6.3 批B（D2026-1003-05 条件②）：源摘要缓存（{kind: {has_official,
+  // 2.6.3 批B（D2026-1003-06 条件②）：源摘要缓存（{kind: {has_official,
   // has_mirror}}），「仅镜像」键 disabled 门控读取
   let _dictSourcesCache = {};
   function dictLoad() {
@@ -4567,7 +4567,7 @@ function switchTab(tabId) {
         btn.dataset.bound = '1';
         btn.addEventListener('click', () => dictDownload($('dictSelect').value, btn));
       }
-      // 源选择双按钮（2.6.3 批B，D2026-1003-05 条件②①）：JS 注入零 id
+      // 源选择双按钮（2.6.3 批B，D2026-1003-06 条件②①）：JS 注入零 id
       // （FROZEN_IDS 冻结），挂在 #dictActionBtn 同级（#dictDetail 容器），
       // class 一次创建 + 每次渲染刷状态（dataset.bound 防重挂监听）
       const row = btn.parentElement;

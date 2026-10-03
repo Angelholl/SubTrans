@@ -1,4 +1,4 @@
-"""asr_downloader 单元测试（2.6.3 批B，D2026-1003-01 ② + D2026-1003-05 五条件）。
+"""asr_downloader 单元测试（2.6.3 批B，D2026-1003-01 ② + D2026-1003-06 五条件）。
 
 零真实网络：``_http_get_asr`` / ``socket.getaddrinfo`` / ``shutil.disk_usage``
 一律 monkeypatch。URL 信任三层+两硬化、候选源集、单实例锁、磁盘预检

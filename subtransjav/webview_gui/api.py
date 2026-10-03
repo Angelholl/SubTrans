@@ -1185,7 +1185,7 @@ class TranslateAPI:
         refine_dict_download_progress 1s 轮询）；网络失败与校验失败
         分开报错（DictDownloadError / DictChecksumError）。
 
-        source（2.6.3 批B，D2026-1003-05 条件②①）：源选择 ∈ {auto,
+        source（2.6.3 批B，D2026-1003-06 条件②①）：源选择 ∈ {auto,
         official, mirror}，非法值按 auto；透传 download_dict（auto 保持
         原单参调用，既有 mock/调用方零改动兼容）。
         """

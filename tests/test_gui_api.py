@@ -2949,7 +2949,7 @@ def test_refine_asr_download_progress_endpoint(gui_api_obj, monkeypatch):
 
 
 def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
-    """source 透传（D2026-1003-05 条件②）：official/mirror 双参调用；
+    """source 透传（D2026-1003-06 条件②）：official/mirror 双参调用；
     auto/非法值保持单参调用（既有 mock 零改动兼容），非法由
     download_dict 按 auto 处理。"""
     from subtransjav.refine import dict_manager as dm
