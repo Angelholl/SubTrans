@@ -43,6 +43,7 @@ dependencies = [
     "opencc-python-reimplemented>=0.1.7",
     "psutil>=5.9",              # 进程树管理（terminate_process_tree 等核心模块）
     "sudachipy>=0.7.0,<0.8",    # 0.6.x 加载 v1 词典（20260723）Invalid header 静默失败，0.7.0 实证 LOAD_OK
+    "pysubs2>=1.8,<1.9",  # 批2 多格式导入（D2026-1003-05 画押⑤：1.9+ 需 py≥3.12 与本项目冲突，钉 <1.9）
 ]
 
 [project.optional-dependencies]

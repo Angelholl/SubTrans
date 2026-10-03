@@ -189,6 +189,8 @@ MSG = {
     #      后端侧键不入前端静态快照口径）----
     "file_type_video": "视频文件 (*.mp4;*.mkv;*.webm;*.mov;*.avi)",
     "file_type_srt": "字幕文件 (*.srt)",
+    # 批2 多格式导入（D2026-1003-05）：后端侧键（select_srt_files 对话框过滤）
+    "file_type_subtitle": "ASS/SSA/VTT 字幕 (*.ass;*.ssa;*.vtt)",
     "review_transcode_no_need": "该媒体可直接预览，无需转码",
     "review_transcode_running": "已有转码任务进行中",
     "review_transcode_failed": "转码失败，请重试或手动转换格式",

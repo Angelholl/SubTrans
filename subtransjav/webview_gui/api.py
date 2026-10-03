@@ -676,8 +676,11 @@ class TranslateAPI:
         if not windows:
             return {"success": False, "message": msg("no_active_window")}
 
+        # 批2 多格式导入（D2026-1003-05）：对话框放行 ASS/SSA/VTT，
+        # 转换在 refine 管线入口（subtitle_convert.convert_inputs）完成
         result = self._open_file_dialog(
-            (msg("file_type_srt"), msg("file_type_all")),
+            (msg("file_type_srt"), msg("file_type_subtitle"),
+             msg("file_type_all")),
             allow_multiple=True)
 
         if result and len(result) > 0:
@@ -694,6 +697,8 @@ class TranslateAPI:
         result = windows[0].create_file_dialog(FileDialog.FOLDER)
         if result and len(result) > 0:
             folder = Path(result[0])
+            # 批2 多格式导入范围外：目录收编保持 *.srt 口径（与 CLI
+            # --input-dir 同口径，ASS/VTT 仅显式选择走转换步）
             # C1（D2026-1002-10）：排除校对页备份件 *.bak.srt
             srt_files = sorted(str(f) for f in folder.glob("*.srt")
                                if not f.name.endswith(BACKUP_SUFFIX))

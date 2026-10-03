@@ -17,7 +17,8 @@ def build_parser():
     grp_input = p.add_argument_group("输入源")
     grp_input.add_argument("-i", "--input", nargs="+", default=[],
                            action="extend",
-                           help="输入 SRT 文件路径（可多个，可多次 -i 累积）")
+                           help="输入字幕文件路径（SRT；ASS/SSA/VTT 自动转换为"
+                                " SRT；可多个，可多次 -i 累积）")
     grp_input.add_argument("--input-dir", default="",
                            help="输入目录（扫描目录下所有 .srt 文件）")
     grp_input.add_argument("-r", "--recursive", action="store_true",
@@ -246,6 +247,8 @@ def _collect_input_files(args) -> list:
     files = list(args.input)
 
     if args.input_dir:
+        # 批2 多格式导入（D2026-1003-05）范围外：--input-dir 目录扫描保持
+        # *.srt 口径不变（批量收编面不放行 ASS/VTT，仅显式 -i 走转换步）。
         scanned = find_srt_files(
             directory=args.input_dir,
             recursive=args.recursive,
@@ -273,6 +276,31 @@ def _collect_input_files(args) -> list:
     return deduped
 
 
+def _convert_inputs_or_exit(files: list) -> list:
+    """批2 多格式导入接线（D2026-1003-05）：ASS/SSA/VTT → SRT 转换步。
+
+    输入清单最终确定后、进管线前调用；无可转换文件时零打印零开销直接透传。
+    显式 -i 无 .srt 后缀强制校验（config.validate 仅查文件存在），故转换层
+    的 SUPPORTED_EXTS 即放行面；转换失败（编码不可识别/解析拒绝）打印用户
+    可读错误后 exit 2，不带病进管线。
+    """
+    from .subtitle_convert import SUPPORTED_EXTS, ConvertError, convert_inputs
+
+    n_conv = sum(1 for p in files
+                 if os.path.splitext(p)[1].lower() in SUPPORTED_EXTS)
+    if not n_conv:
+        return files
+    try:
+        converted, warns = convert_inputs(files)
+    except ConvertError as e:
+        print(f"❌ 格式转换失败: {e}")
+        raise SystemExit(2) from e
+    for w in warns:
+        print(f"⚠ {w}")
+    print(f"🔄 格式转换: {n_conv} 个 ASS/VTT → SRT（{len(warns)} 警告）")
+    return converted
+
+
 def config_from_args(args):
     from .config import RefineConfig, StageConfig
 
@@ -294,6 +322,10 @@ def config_from_args(args):
                  "custom": args.custom_endpoint}
 
     input_files = _collect_input_files(args)
+
+    # 批2 多格式导入（D2026-1003-05）：转换后路径（*.conv.srt）作为管线
+    # 输入与指纹口径；conv.srt 落输入同目录永久保留（画押④）
+    input_files = _convert_inputs_or_exit(input_files)
 
     cfg = RefineConfig(
         inputs=input_files,
