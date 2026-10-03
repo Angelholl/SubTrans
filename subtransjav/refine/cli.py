@@ -548,7 +548,8 @@ def _print_where() -> str:
 
 
 def _cmd_dict_status() -> int:
-    """--dict-status：三词典状态（只读零网络）。"""
+    """--dict-status：三词典状态（只读零网络；jieba 自检会触发首次
+    初始化与 cache 写盘（%TEMP%））。"""
     from .dict_manager import dict_status
     st = dict_status()
     print(f"数据根词典目录: {st['dict_dir']}")
@@ -559,6 +560,14 @@ def _cmd_dict_status() -> int:
         if info.get("files"):
             line += f" | 文件: {', '.join(info['files'])}"
         print(line)
+    # jieba 独立自检行（D2026-1004-01）：真跑分词，供打包 smoke 做成功
+    # 语义断言；任何异常只报 FAIL 不抛——探测命令保持返回 0。
+    try:
+        import jieba
+        toks = list(jieba.cut("字幕分词自检"))
+        print(f"jieba 分词自检: OK（{len(toks)} tokens）")
+    except Exception as e:  # noqa: BLE001 - 自检失败不抛，保持 rc=0
+        print(f"jieba 分词自检: FAIL: {e}")
     return 0
 
 

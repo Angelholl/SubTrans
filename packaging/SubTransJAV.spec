@@ -45,6 +45,7 @@ hiddenimports = [
     "subtransjav.translate.providers",
     "webview.platforms.winforms",
     "clr",
+    "jieba",  # 显式钉防重构漂移（token_hint 函数内惰性 import 静态不可见）；数据文件由 pyinstaller-hooks-contrib 官方 hook-jieba.py 自动收集，勿重复 collect_data_files（D2026-1004-01）
 ]
 
 a = Analysis(

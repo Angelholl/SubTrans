@@ -22,6 +22,8 @@ AppName={#MyAppName}
 AppVersion={#version}
 DefaultDirName={autopf}\SubTransJAV
 DefaultGroupName={#MyAppName}
+; 安装器自身图标（D2026-1004-01）：相对本 .iss 所在目录解析
+SetupIconFile=..\subtransjav\webview_gui\assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible

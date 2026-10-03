@@ -44,7 +44,7 @@ jobs:
       - name: Install project + build tools
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[gui]"
+          pip install -e ".[gui,zh]"
           pip install pyinstaller
 
       - name: Build with PyInstaller (单产物，词典不进包)
@@ -79,6 +79,20 @@ jobs:
           # 去捆绑断言（D3，D2026-1001）：产物不含 system.dic（词典经引擎页按需下载）
           if (Test-Path "$root/_internal/sudachidict_core/resources/system.dic") {
             Write-Error "dist must NOT contain system.dic (词典去捆绑口径)"; exit 1
+          }
+          # jieba 打包渠道双层正向断言（D2026-1004-01 C4）：
+          # a) 产物内 jieba 词典数据文件存在（官方 hook-jieba.py 自动收集目标）
+          if (-not (Test-Path "$root/_internal/jieba/dict.txt")) {
+            Write-Error "MISSING artifact: $root/_internal/jieba/dict.txt（jieba 打包渠道失效?）"; exit 1
+          }
+          # b) 冻结 CLI --dict-status 的 jieba 自检行必须是成功语义——
+          #    仅"行存在"不算，FAIL/不可用必须让本 stage 红
+          $env:SUBTRANSJAV_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
+          $dsOut = (& "$root/subtrans-cli.exe" --dict-status 2>&1) -join "`n"
+          if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --dict-status rc=$LASTEXITCODE"; exit 1 }
+          Write-Host "$dsOut"
+          if (-not $dsOut.Contains("jieba 分词自检: OK")) {
+            Write-Error "--dict-status output missing success line 'jieba 分词自检: OK'（jieba 自检失败/不可用）"; exit 1
           }
           # 安装器断言：Inno 产物必须在位且非空壳——防 [Files] 缺 Source 行
           # 装出空壳而 CI smoke 只断言 dist 目录发现不了的事故复发（D4 发版批）
