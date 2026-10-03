@@ -739,7 +739,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -797,7 +797,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -1022,7 +1022,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }

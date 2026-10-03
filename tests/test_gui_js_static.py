@@ -1719,6 +1719,24 @@ def test_batch_d_app_modal_editor_pinned():
         assert key in keys, f"MSG 缺少批D新键: {key}"
 
 
+def test_batch_d_modal_enter_branch_excludes_editor_pinned():
+    """批D 回归钉⑤：appModal 共享 keydown 监听 Enter 分支条件必须同时
+    排除 alert 与 editor——编辑器 textarea 敲回车是换行，不得触发
+    _settle（keydown 先于 input 事件，首个回车 dirty 尚未置位会静默
+    关闭；已有 dirty 则每次回车误弹放弃确认）。_open/download/editor
+    三处同款绑定运行时只注册最先打开的一份，故逐一断言防单点回改；
+    alert/download 既有行为零变化。"""
+    src = _app_js_source()
+    conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
+    assert len(conds) == 3, \
+        f"keydown Enter 分支应恰三处（_open/download/editor），实得 {len(conds)}"
+    for cond in conds:
+        assert "AppModal._kind !== 'alert'" in cond, \
+            f"Enter 分支缺 alert 排除: {cond}"
+        assert "AppModal._kind !== 'editor'" in cond, \
+            f"Enter 分支缺 editor 排除: {cond}"
+
+
 def test_batch_d_tpl_editor_entry_and_on_save_pinned():
     """批D 新钉③：两枚入口按钮 bindDom 绑 openTplEditor 并 JS 态填文案；
     onSave 复用 tplSave（refine_save_template 四参形态函数钉保持）；
