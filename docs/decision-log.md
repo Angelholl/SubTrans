@@ -2743,3 +2743,18 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 **七条护栏（即验收门）**：2.6.2 禁夹带｜卸载器 HRO 审查提前至批A（不等收尾）｜ASR 下载器先哈希校验/源切换/失败回退再上镜像｜IA 重排后跑 FROZEN 冻结检查｜720px 弹窗补小屏响应/滚动/ESC 遮罩与未保存确认一致｜下载器仅 http/https、host 校验、拒环回/私有/保留地址。
 
 **开工指令**：按批序 A→E 开工，总原则=默认安全、变更可观测、决策日志追认。附加：异议处置=HRO-1 全采纳；无 [PRESSURE-OVERRIDE]；遗留跟踪=env 临时设置场景卸载器解析不一致（锚点拒删兜底）、镜像比对实证结果、2.6.2 重打窗口受 gui.log 判因进度约束。
+
+
+## [2026-10-03] D2026-1003-02 工具链现代化外部方案评议（uv/Ruff/Ty/kkpack/llm-autobatch/pyroid/guile/pysubs2/FTS5/orjson/Polars）[两轮评议收敛·owner 四项全同意·随本 ID 执行]
+
+**缘起**：owner 转来外部智能体"工具链现代化"方案（声称高效精简），指令与 decision-critic 两轮讨论后给看法。主模型事实核验（PyPI 成熟度实测+仓库现状对照）→评议员第 1 轮独立取证与挑战（支持主体立场+7 项补强）→第 2 轮收敛（主模型 8 项采纳+2 项推回成立，评议员终审通过并内嵌 A1/A2、B1/B2/B3 契约）。**无现行 [HIGH_RISK_OBJECTION]**；前瞻声明：kkpack 类"首运行联网装依赖"方案若复提，自动升格 HRO 强制裁定（本条目即登记）。[PRESSURE-OVERRIDE]=否。
+
+**核心证伪（三处对空开炮+成熟度硬伤）**：①项目已在用 Ruff（ci.yml:27+pyproject [tool.ruff]），无 black/flake8/isort 可"放弃"；②LLM 调用已并发（llm_client.py:539 ThreadPoolExecutor；pipeline_v2.py:1131 云端多文件 opt-in），实测瓶颈=LLM 网络延迟（21.5 分/部口径）；③TM 已是 SQLite 且为 NFKC+词界精确匹配（tm.py chunked IN），FTS5 相关性搜索非现有需求；全仓零 pandas/numpy（audio_detect 纯标准库）；安装器 full 81MB/lite 33.5MB、构建分钟级。PyPI 成熟度实测（2026-10-03）：kkpack v0.1.5（首发 2026-09-23 仅 10 天）、llm-autobatch v0.1.1（单版本，2026-02-10 后零更新）、pyroid v0.7.0（末更 2025-05-19 停滞 17 个月）、ty v0.0.84（pre-1.0）、guile v1.0.0（4 个月龄）、pysubs2 v1.9.0（2014 年起成熟，但 requires_python≥3.12 vs 本项目 ≥3.10,<3.14）。
+
+**逐件裁定**：uv=个人可用不立项（契约：uv 环境不得宣判 CI 口径结论，canonical 验证归 .venv+CI；lockfile 再评估触发=依赖解析漂移事故再现或外部贡献者出现）｜Ruff=已在用无事可做｜Ty=不换（mypy==2.3.1 硬门禁在岗无痛点，ty 尚 0.0.x，等 1.0 且 mypy 成负担再评）｜kkpack=**否决级**（信任边界迁移：owner 构建+SHA256 对照的交付物 → 用户首跑时刻 PyPI 状态；与离线/零出域场景冲突；击穿 D2026-1003-01 安装器生命周期资产 AppId/卸载守卫/升级检测；不做任何试点）｜llm-autobatch=否决（单版本零维护+微批架构与上下文连贯顺序翻译管线不匹配）｜pyroid=否决（停滞弃库信号+函数集与热点无关）｜guile=否决（三轮 UI 投入+i18n 键表+红线测试整体重写零用户收益）｜pysubs2=不换核心 SRT 链（TM 指纹字节不变式 D2026-0930-04+GBK/重编号行为+测试基线钉死），转性登记"多格式导入(ASS/VTT)"特性候选（见 roadmap）｜FTS5=留作 TM 浏览/搜索 UI 特性候选（标准库内置实测可用零依赖）｜orjson/msgspec/Polars=否决（微秒级收益 vs 秒级瓶颈；无 Pandas 替换对象）｜py-spy=划出独立诊断件（被方案误捆 pyroid；成熟工具可用）。
+
+**owner 拍板（四项全同意，2026-10-03）**：①总裁定不立项工具链更换，逐件处置如上；②授权摘除死依赖 srt（独立小批、与 2.6.2 热修提交域隔离、附否定性守卫防回流）；③roadmap 登记两特性候选+uv 契约备注（已登记）；④py-spy 单次诊断排闲时。
+
+**执行契约（评议员内嵌）**：A1 FTS5 冻结包可用性核验写入 TM 搜索特性批开工门（随收尾验证同通道），不设独立 spike；A2 uv 对照 diff=条件可选（仅当 owner 实际使用 uv 时跑一次作契约基线）；B1 py-spy 归档结论须自带判据原文"等待/IO 主导且 Python 侧执行时间显著小于 LLM 网络往返总时长"（非"CPU 零占用"）；B2 采样会话四要素=生产配置指纹+同源片源窗口+覆盖阶段 A/B+引擎空闲前置（缺一归档值打折）；B3 证据效力边界=仅裁决 CPU 加速类主张（pyroid/llm-autobatch/orjson/Polars），不触及 FTS5/uv/pysubs2。
+
+**执行记录**：死依赖实证=pyproject.toml:41 声明 "srt"，subtransjav/tests/tools/packaging 四域 `import srt|from srt` 零命中、SubTransJAV.spec hiddenimports 不含（主模型+评议员双重复核）；摘除随本 ID 独立小批落库（提交见 git log `Refs: D2026-1003-02`，附否定性守卫测试）；py-spy 闲时任务已建（产出按 B1/B2/B3 归档本条目）。风险跟踪：①py-spy 归档四要素齐备性；②srt 防回流守卫在位；③kkpack 复提自动升格 HRO；④release-checklist 基线数字陈旧（1601+4 vs 实测 ~1786）随 2.6.2 验证轮文档卫生更新。
