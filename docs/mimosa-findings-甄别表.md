@@ -37,6 +37,7 @@
 - **Seal digest（2026-10-02 2.6.2 批2/批3 复扫）**：`sha256:62cbbfac8410b316945ed981df409940ea381ca5c04b00dad4f4f62953bbc348`（批2，scan-2026-10-02T19-24-35.300Z-dee5e7279bb3）与 `sha256:f2fce83fac2dc9c3374cea6ace7b917a8551c5186a7ba5b0bece79977b68f253`（批3，scan-2026-10-02T20-00-15.609Z-b27b1dea9a5e）均 findingCount=**32**，identity 级零新增零消除；批2 4 文件（app.js 模型下拉去自动拉取/ASR 卡重整+index.html+两测试）与批3 4 文件（AI 分析区 field-col+列向覆盖/Console 占比/系统状态卡 JS 动态两行+label 中文填充+测试）未引入新发现；依赖扫描 completion=completed / matchedAdvisories=1 同前。
 - **树外签注追记（2026-10-03 本地测试包构建后）**：owner 要本地包，按发版 workflow 同款流程本地重建 `Temp/pyinstaller_dist/SubTransJAV/`（onedir 103M）→ pywebview 自带资产 `_internal/webview/js/api.js:75` code-injection **原样重现**（Stop-hook L2 复查报出，同 findingId 类，verdictEffect=none）——与 2.1.0/2.1.1/阶段1 三次既签注项同源同判据（构建产物拷贝、不入库、清理构建目录后自然消除），沿 ②树外签注 处置不另修；下次正式深扫树外构成以当次 findings.json 为准。安装器 `Temp/innoinstall/SubTransJAV-setup-2.6.2.dev0.exe`（SHA256 1108cbba…77cbb32）已交 owner 真机验收。
 - **Seal digest（2026-10-03 2.6.2 热修批复扫）**：`sha256:9f615086f69b7cf086d2138fd476dda1a9a996d7d286b3962f63f094092e8139`，findingCount=**33 = 上扫 32 + 树外签注入账 1**（scan-2026-10-03T08-52-06.784Z-3bfa1672ff14，热修 R3/R4 后）；identity 级新增 1 条＝`Temp/pyinstaller_dist/SubTransJAV/_internal/webview/js/api.js:75` code-injection（anchor:0e45e446）——上扫（b27b1dea，2026-10-02T20:00）早于本地测试包构建时点，本扫首次把上行树外签注追记的构建产物拷贝纳入深扫面，属**既签注项的预期入账非新发现**（同源同判据：pywebview 自带资产、不入库、清理构建目录后自然消除）；本批 5 文件（assets 两件 app.js/style.css+tests/test_gui_js_static.py +3 回归钉+pyproject.toml/__version__.py 版本 2.6.2.dev1）未引入新发现，仓库面 identity 与前扫零差异；依赖扫描 completion=completed / matchedAdvisories=1（离线快照 context-only）同前。
+- **Seal digest（2026-10-03 2.6.3 批B 批复扫）**：`sha256:7b80735414a2dee1f35aaef7ae354b96094f4b79d67e4c7d70827504725c1412`，findingCount=**34 = 上扫 33 + 新签注 1**（scan-2026-10-03T11-03-45.180Z-838614cbbb54，批B ASR 下载器+词典源后）；identity 级新增 1 条＝`subtransjav/refine/asr_downloader.py:217` path-traversal high（anchor:b887809d，本批新文件新代码面）——**判留痕维持**：见上新表 #28（.part 写位派生链全白名单+三层 URL 校验+symlink 守卫，静态规则不识别上游白名单链）；其余差异均为行号漂移（dict_manager :352/:406/:628→:378/:432/:684 与 api.py :1565/:1884→:1619/:1938，identity.anchor 逐一相同=既裁 #27 等项）；本批 9 文件（asr_downloader 新增/dict_manager source 参数/asr_env sources+license/api 两端点/app.js AppModal.download+词典双按钮/style.css/四测试文件）未引入其他新发现；依赖扫描 completion=completed / matchedAdvisories=1 同前。
 
 ## 三态统计（双基线并列）：旧基线（2026-09-24 首扫，26 条，历史口径）：①已修复 1 ｜ ②树外签注 3 ｜ ③留痕维持 22 ｜ 新基线（2026-09-26 复扫，24 条）：上式净减 ①中 tm_promote.py SQL 1 条与 ②中 create_shortcut.py 1 条（兑现消除，①已从扫描面消除）→ ②剩 2（Temp/build_blind_pack.py 弱随机）｜ ③ 22 不变
 
@@ -105,6 +106,12 @@
 | # | file:line | severity | findingId | 证据行与判据 |
 |---|---|---|---|---|
 | 27 | subtransjav/refine/dict_manager.py:352/406/628 | high | finding:b50deb159fa0c0bdb4967000 | 下载临时写/zip 解压写/迁移复制写三 occurrence 同锚：落位目录=词典目录，用户经原生对话框自选任意盘（D2026-1002-12 拍板点3/5），持久化本机 user_dirs.json，与 .data-root 指针同威胁模型；已附 `_ensure_safe_dict_dir` 消费面守卫（四系统根黑名单+扩展前缀还原+resolve 后前缀判定），损坏/黑名单值静默回退默认；无跨信任边界输入方，留痕维持。 |
+
+### ASR 下载器 .part 写位 1 条路径穿越（清单白名单+三层 URL 校验上游封死；2.6.3 批B）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 28 | subtransjav/refine/asr_downloader.py:217 | high | finding:b887809d9db1487d7383759338c3933b7afbaf25eb1f566e5932f83e9f5cfefe（anchor sha256:b887809d…，_open_part 的 `open(tmp,"wb")` 写位） | tmp=.part 临时件路径，派生链全白名单：落位目录=数据根 models/asr（paths.data_subdir 派生）；文件名由清单 ASR_RECOMMENDED_MODELS 的 model 字段派生且 model 参数先过条目白名单（路径注入面封死）；下载 URL 先经三层校验（https+清单 URL 规范化精确匹配+host 小名单与 getaddrinfo 全量 IP 私网/环回/保留拒绝）+重定向逐跳守卫；写前 symlink 守卫+目录真实目录判定。静态污点规则不识别上游白名单链，与 #27 同威胁模型（本地单机、无跨信任边界输入方），留痕维持。 |
 
 ---
 
