@@ -50,7 +50,13 @@ _URL_HOST_ALLOW = {
 
 
 class DictDownloadError(RuntimeError):
-    """词典下载失败（网络/源不可达/URL 不合规）。"""
+    """词典下载失败（网络/源不可达/URL 不合规）。
+
+    失败诊断字段（D2026-1004-01 C3）：``_http_get`` 失败时挂 ``diag``
+    （结构见 ``_DIAG_FIELDS``），随 failed 快照透出供 GUI/日志定位。
+    """
+
+    diag: dict | None = None
 
 
 class DictChecksumError(RuntimeError):
