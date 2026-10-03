@@ -2793,3 +2793,16 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 **owner 拍板（2026-10-03）**：更名由主模型 REST 授权代办。
 
 **执行记录（本日）**：①REST PATCH 更名即时生效（full_name=Angelholl/SubTrans，html_url 新址）；②本地 remote set-url 新址+ls-remote 复核一致；③旧 URL 实测 301→新址（stars/issues/releases/tags 全保留）；④README 渊源批（标题改 SubTrans+引用行渊源句保留 SubTransJAV 关键字+英文简介补 evolved from+声明区沿革句协调"旧名 SubTransJAV 由此而来"）+About 链接 href 改新址（显示文本按最小范围保留产品名）；⑤产品内品牌面（包名 subtransjav/安装器/数据根/AppId/CLI 入口/artifact 名）全部未动。**知情条款**：旧 slug SubTransJAV 属永久单向让渡——若被第三方注册则 301 断链、仅余搜索面污染（README 关键字桥接兜底）；后续所有 REST/发版操作一律改用新 slug（旧 slug 写接口语义不保证）。风险跟踪：①双名并存（仓库 SubTrans/产品 SubTransJAV）为常态而非过渡态；②"产品内品牌统一"已登记 roadmap 远期候选（触发=owner 点火，须含数据根/AppId/安装器名完整迁移与兼容方案，可借既有 .data-root 指针层）；③REST 旧址写操作（Release/issue 等）今后须用新址发起。
+
+
+## [2026-10-03] D2026-1003-05 2.6.4「输入侧扩展版」立项（TM 搜索 UI+ASS/VTT 多格式导入；预研入闲时） [已拍板·预研开工]
+
+**缘起**：owner 指示 D2026-1003-02 登记的两特性候选"痛点考虑在前面、提前规划，现在立项并确定插入版本"；uv 维持不立项。主模型排期方案交 decision-critic 评议：**有条件支持，无 [HIGH_RISK_OBJECTION]**，四条件 C1-C4 全采纳为批内验收门；[PRESSURE-OVERRIDE]=否。
+
+**版本裁定（owner 拍板 2026-10-03）**：两特性并入 **2.6.4「输入侧扩展版」**，三批推进——批1 TM 浏览/搜索 UI（FTS5，词库与模板页区块，只读浏览）；批2 ASS/VTT→SRT 多格式导入（统一"转 SRT 再进管线"，TM 指纹零影响）；批3 收尾发版。**排期锚点**：开工=2.6.3 批B/C/D/E 落库完成（不等真机卸载四例——那是 2.6.3 发版门非开工门）；基线从批E 收口快照起跑；2.6.3 真机阻断级问题发版前回灌。不塞 2.6.3（五批 scope 已锁）、不推 2.6.5（痛点前置）。**顺延出口**=痛感优先判据（TM 搜索无外部替代故先发；ASS/VTT 有外部转换器兜底可顺延 2.6.5，不缩水不放水）。
+
+**批内验收门（评议员 C1-C4，全采纳）**：C1 热路径——tm.py lookup_exact 每命中即 UPDATE hit_count（tm.py:291），FTS 同步禁止无列限定触发器（否则每次翻译查 TM 白付一次 FTS 写）；spike 以真实批次频率做含/不含同步面吞吐对拍，主链波动 >±5% 即改保守方案（standalone mirror+指纹判亚重建），不带病放行。C2 迁移链——FTS 面创建排 ensure_source_name_column→ensure_direction_columns 之后并入 _init_db 末端（否则旧库 DROP+RENAME 表重建碾掉 FTS 面），配"旧库→自动迁移→FTS 可用"幂等用例。C3 规格八项——GBK 探测次序｜ASS Format 行驱动解析（禁位置硬编码）｜VTT 非载荷行清单（id 行/NOTE/STYLE/REGION/内嵌时间戳标签）｜\N\h\n 三态映射｜voice span 显式裁定丢弃标签归单轨｜厘秒→毫秒**零填充**格式（0.90s→00:00:00,090）+相邻 cue 边界防重叠修正方向写死｜roll-up captions 显式忽略不报错｜不可解析 cue 逐条抢救+计数告警（吞错可见化）+**临时 SRT 生命周期与 resume 语义**——规格缺一即门未开，owner 逐项画押。C4 预研隔离——git worktree 主姿势（scratch 兜底），禁止研究提交混入批B 在途暂存区；串扰一次即冻结预研至批B 落库。
+
+**预研（owner 指示本轮纳入闲时开工）**：worktree 第二工作树+feature 分支，产出=批2 语义映射规格草稿（C3 八项）+批1 FTS5 三同步策略 spike（external-content 列限定触发器/显式双写/重建全量刷，含热路径对拍与 C1 红线判定）+批2 pysubs2<1.9 真实样本 spike（不足则合成样本明确标注）；产物留 feature 分支，2.6.4 开工日并入；全程不动批B 在途树与主 .venv（spike 用 worktree 本地 venv）。
+
+**风险跟踪**：①FTS 触发器吞热路径（C1 对拍拦截）；②旧库迁移碾 FTS 面（C2 用例拦截）；③规格漏项金样本返工（C3 画押拦截）；④预研串扰批B（C4 worktree+归属核验）；⑤2.6.4 携带未真机验证的批A 代码（发版前回灌）。
