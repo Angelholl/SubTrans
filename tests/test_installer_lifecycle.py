@@ -16,6 +16,7 @@
 """
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -231,11 +232,27 @@ def _find_iscc():
 
 @pytest.mark.skipif(_find_iscc() is None,
                     reason="未找到 Inno Setup 6 的 ISCC.exe")
-def test_isscc_compile_smoke():
+def test_isscc_compile_smoke(tmp_path):
+    """ISCC 编译冒烟：在 tmp_path 隔离台编译，不依赖仓库产物树。
+
+    为何要 stage 到临时目录：setup.iss 的 [Files] 段引用
+    ``..\\Temp\\pyinstaller_dist\\SubTransJAV\\*``，ISCC 在编译期会校验
+    通配符至少命中一个源文件；该产物树由 PyInstaller 构建产生、不在
+    仓库内，而 CI 的 windows runner 预装 Inno Setup（skipif 不跳过）
+    且 checkout 无产物树，直接对仓库内 setup.iss 编译会 rc=2 全红。
+    故将 packaging/ 复制到 tmp_path，并伪造最小产物树（两个空 exe
+    满足通配符命中），对副本编译以验证 iss 语法本身可编译。
+    """
+    stage = tmp_path / "stage"
+    shutil.copytree(REPO_ROOT / "packaging", stage / "packaging")
+    dist_dir = stage / "Temp" / "pyinstaller_dist" / "SubTransJAV"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "SubTransJAV.exe").write_bytes(b"")
+    (dist_dir / "subtrans-cli.exe").write_bytes(b"")
     proc = subprocess.run(
         [str(_find_iscc()), "/O-", "/Dversion=test-local-compile",
-         str(SETUP_ISS)],
+         str(stage / "packaging" / "setup.iss")],
         capture_output=True, text=True, errors="replace", timeout=120,
-        shell=False, cwd=REPO_ROOT)
+        shell=False, cwd=stage)
     assert proc.returncode == 0, \
         f"ISCC 编译失败 rc={proc.returncode}\n{proc.stdout}\n{proc.stderr}"
