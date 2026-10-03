@@ -473,6 +473,25 @@ def _handle_tm_commands(args):
     return False
 
 
+def _fts5_probe() -> bool:
+    """探测当前解释器 sqlite3 是否支持 FTS5 全文搜索（只读零副作用）。
+
+    2.6.4 批1 冻结包 FTS5 探测载体（D2026-1003-05 A1）：在内存库上建
+    fts5 虚拟表即可验证，不落盘、不触碰任何真实数据库。
+    """
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(":memory:")
+        try:
+            con.execute("CREATE VIRTUAL TABLE _fts5_probe USING fts5(x)")
+        finally:
+            con.close()
+        return True
+    except Exception:
+        return False
+
+
 def _print_where() -> str:
     """--where 数据路径诊断（D2026-0929-07 点 3）：一次报全，全程只读零副作用。
 
@@ -519,6 +538,7 @@ def _print_where() -> str:
         f"数据根: {data_root}（来源: {source_map[source]}）",
         f"配置目录: {CONFIG_DIR}",
         f"翻译记忆库路径: {_os.path.join(tm._DEFAULT_TM_DIR, 'tm.db')}",
+        f"FTS5 全文搜索: {'可用' if _fts5_probe() else '不可用'}",
         f"术语冲突观察路径: {glossary_conflict.default_watch_path()}",
         f"DPAPI 密钥位置: {secrets.get_store_path()}",
         f"{old_label} TM 库: {old_tm_db}（{old_exists}）",

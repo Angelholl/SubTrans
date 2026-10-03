@@ -545,3 +545,11 @@ def test_cli_where_zero_side_effects(tmp_path, monkeypatch):
     from subtransjav.refine.cli import main
     assert main(["--where"]) == 0
     assert list(tmp_path.rglob("*")) == []
+
+
+def test_cli_where_fts5_probe_line():
+    """--where 输出含 FTS5 可用性行（2.6.4 批1 冻结包探测载体，D2026-1003-05 A1）。"""
+    from subtransjav.refine import cli
+    out = cli._print_where()
+    # 宽松断言：只钉前缀行存在，不绑定可用/不可用（极旧环境 sqlite3 可能无 FTS5）
+    assert "FTS5 全文搜索:" in out
