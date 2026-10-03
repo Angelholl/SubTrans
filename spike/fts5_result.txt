@@ -1,0 +1,29 @@
+== 环境 ==
+rows=7465 cols=['id', 'content_hash', 'source_text', 'target_text', 'stage', 'char_count', 'hit_count', 'created_at', 'source_name', 'source_lang', 'target_lang'] base_size=3092480
+
+== 策略 A：external-content + 列限定触发器 ==
+build_rebuild=0.45s size=3092480 (+0B)
+query raw_avg=0.03ms hits=39
+  hotpath[A] total=10793ms per_batch=54.0ms
+
+== 策略 B/C：standalone + python NFKC 列 ==
+full_rebuild=0.17s size=3092480 (+0B)
+query raw_avg=0.01ms norm_avg=0.02ms hits=78
+B_incremental per_row=0.031ms per_batch(30 新句)=0.9ms
+  hotpath[B/C(热路径零 FTS 面)] total=11393ms per_batch=57.0ms
+
+== 基线：无 FTS ==
+  hotpath[baseline] total=10515ms per_batch=52.6ms
+
+== C1 对拍结论（对真实批耗时占比） ==
+  A        vs stageA(12.1s): 0.446%
+  A        vs stageB(3.3s): 1.635%
+  B/C      vs stageA(12.1s): 0.471%
+  B/C      vs stageB(3.3s): 1.726%
+  baseline vs stageA(12.1s): 0.435%
+  baseline vs stageB(3.3s): 1.593%
+
+== C2 演示：先建 FTS 再表重建迁移 ==
+  重建前 FTS 行=7465 重建后 COUNT=7465（external-content 表随内容表被碾，查询面已损坏需 rebuild）
+
+SPIKE_DONE

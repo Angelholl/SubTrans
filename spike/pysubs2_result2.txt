@@ -1,0 +1,14 @@
+D:\SubTrans-d264-pre\.venv-spike\Lib\site-packages\pysubs2\formats\substation.py:224: RuntimeWarning: Failed to parse layer, using default
+  warnings.warn(f"Failed to parse {f}, using default", RuntimeWarning)
+[PASS] Format 行驱动: std='标准序文本' odd='变体序文本'
+[PASS] 换行三态: 硬='硬换行\n第二行' 软='空格 和软换行\n第二行'（非空断言防假通过）
+  VTT 事件 plaintext='语音一文本'
+  VTT 事件 plaintext='<00:00:04.500>内嵌时间戳与高亮文本'
+  VTT 事件 plaintext='Roll-up 面样：定位属性应被忽略'
+[PASS] 厘秒→毫秒零填充: ,900=True ,050=True
+== SRT 产出 ==
+1
+00:00:00,900 --> 00:00:01,050
+零填充样例
+
+

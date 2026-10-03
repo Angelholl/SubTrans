@@ -1,0 +1,22 @@
+WEBVTT
+
+NOTE 这是注释块
+多行注释也不该出现
+
+STYLE
+::cue {
+  color: red;
+}
+
+REGION
+id: reg1 width:40%
+
+intro-cue-id
+00:00:01.000 --> 00:00:03.000 line:0 position:50%
+<v 佐藤>语音一文本</v>
+
+00:00:04.000 --> 00:00:06.000
+<00:00:04.500><c.yellow>内嵌时间戳与</c><v 二宫>高亮文本</v>
+
+00:00:07.000 --> 00:00:09.000 align:start
+Roll-up 面样：定位属性应被忽略
