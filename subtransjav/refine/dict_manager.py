@@ -25,6 +25,7 @@
 import hashlib
 import logging
 import os
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -64,21 +65,35 @@ _DOWNLOAD_PROGRESS: dict = {}
 
 
 def download_progress(kind: str) -> dict:
-    """某词典的下载进度快照副本（无记录返回 {}；只读零副作用）。"""
+    """某词典的下载进度快照副本（无记录返回 {}；只读零副作用）。
+
+    D2026-1004-01 C3：diag 诊断字段亦做一层浅拷贝返回（读侧持有独立
+    副本，不与写侧快照共享内层 dict）。"""
     snap = _DOWNLOAD_PROGRESS.get(kind)
-    return dict(snap) if snap else {}
+    if not snap:
+        return {}
+    out = dict(snap)
+    if "diag" in out:
+        out["diag"] = dict(out["diag"])
+    return out
 
 
 def _set_download_progress(kind: str, phase: str, downloaded: int = 0,
                            total: int | None = None,
                            error: str | None = None,
-                           note: str | None = None) -> None:
-    """整体赋值换引用写进度快照（2.6.3 批B 增可选 note：源回退可见提示）。
+                           note: str | None = None,
+                           diag: dict | None = None) -> None:
+    """整体赋值换引用写进度快照（2.6.3 批B 增可选 note：源回退可见提示；
+    D2026-1004-01 C3 增可选 diag：失败诊断字段）。
 
     note 粘滞语义：显式传入时覆盖；未传（None）且 phase=="download" 时
     继承上一快照的 note——回退提示在后续源下载相位持续可见（1s 轮询必能
     采样），verify/extract/done/failed 相位自然清除。既有进度测试语义
-    （phase 链/reset_per_source/failed 精确断言）不受扰：note 只增不扰。"""
+    （phase 链/reset_per_source/failed 精确断言）不受扰：note 只增不扰。
+
+    diag 仅在显式传入非 None 时写入快照（不无条件加键——既有测试对
+    done 快照做全等断言，加空键即破坏）；随 download_progress() 浅拷贝
+    透出。"""
     prev = _DOWNLOAD_PROGRESS.get(kind) or {}
     snap = {"kind": kind, "phase": phase, "downloaded": downloaded,
             "total": total, "error": error}
@@ -86,6 +101,8 @@ def _set_download_progress(kind: str, phase: str, downloaded: int = 0,
         note = prev.get("note") if phase == "download" else None
     if note:
         snap["note"] = note
+    if diag is not None:
+        snap["diag"] = dict(diag)
     _DOWNLOAD_PROGRESS[kind] = snap
 
 
@@ -348,6 +365,34 @@ def _check_free_space(dest_dir: str, need_bytes: int) -> None:
             f"--dict-from-file 指向其他盘的离线包）")
 
 
+# 失败诊断字段契约（D2026-1004-01 C3，段2 #6 数据来源）：网络层失败时由
+# _http_get 采集并挂 DictDownloadError.diag（download_dict 层随 failed
+# 快照透出，供 GUI/日志定位：代理坏损 vs 响应截断 vs gzip 注入等）
+_DIAG_FIELDS = ("expected_bytes", "actual_bytes", "content_encoding",
+                "part_prefix_hex", "url", "proxy", "attempts")
+
+
+class _DictGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """逐跳校验的重定向处理器（dict 链本地版，D2026-1004-01 C6/候选B1）。
+
+    不复用 asr_downloader 版（勿 import）：错误类型必须为 DictDownloadError
+    （不是 AsrDownloadError），白名单必须用本模块 _URL_HOST_ALLOW——经
+    ``_validate_url`` 同时落实 https 强制 + 固定域名白名单。
+    ``max_redirections=5``；重定向目标非 https 或域名不在白名单即拒
+    （fp.close() 后抛，防半开连接泄漏）。
+    """
+
+    max_redirections = 5
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        try:
+            _validate_url(str(newurl))
+        except DictDownloadError:
+            fp.close()
+            raise
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _http_get(url: str, dest: str, progress=None) -> None:
     """下载到 dest（流式分块落盘，.part 先写再原子改名；dest 由调用方
     约束在数据根词典目录内且父目录已建）。
@@ -358,36 +403,102 @@ def _http_get(url: str, dest: str, progress=None) -> None:
     progress 为可选回调 ``progress(downloaded_bytes, total_bytes)``
     （total 取 Content-Length 响应头，缺席为 None；逐块上报）。
 
+    D2026-1004-01 两跳状态机（候选B C8 + C6 重定向守卫，弃裸 urlopen
+    改显式 opener）：
+    - attempt#1：不显式装 ProxyHandler，经默认处理器自动挂 getproxies()
+      系统代理（行为与裸 urlopen 一致——「默认沿用系统代理」语义仅指
+      首发，记档口径）；
+    - attempt#1 网络层失败（DictDownloadError）→ 同 URL attempt#2 经
+      ``ProxyHandler({})`` 强制直连；两跳均失败抛末次异常（错误信息
+      保留末次异常原文）；
+    - 请求头带 ``Accept-Encoding: identity``（C1：防代理/gzip 注入，
+      pin 校验按落盘字节）；
+    - 重定向逐跳 https+白名单校验（_DictGuardedRedirectHandler）；
+    - Content-Length 存在且实收不符=网络层失败（消息含「预期 X 字节/
+      实收 Y 字节」），参与 attempt#2 直连重试，不与校验失败混淆。
+
     禁 shell、零新依赖（urllib 标准库）；URL 经 ``_validate_url`` 白名单
     校验（仅 https+固定域名，防清单被篡改后指内网）；socket 级超时 10s；
-    网络层失败统一抛 DictDownloadError（跨源 fallback 由调用方决定）。
+    网络层失败统一抛 DictDownloadError（跨源 fallback 由调用方决定），
+    异常实例挂 ``.diag`` 诊断字段（C3，见 _DIAG_FIELDS）。
     """
-    import urllib.request
     _validate_url(url)
-    req = urllib.request.Request(url, headers={"User-Agent": "subtransjav-dict"})
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "subtransjav-dict",
+        "Accept-Encoding": "identity"})     # C1：pin 校验按落盘字节
     tmp = dest + ".part"
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            total = None
-            try:
-                cl = resp.headers.get("Content-Length")
-                total = int(cl) if cl else None
-            except (TypeError, ValueError):
+
+    def _collect_diag(expected: int | None, actual: int, enc: str,
+                      proxy: str, attempts: int) -> dict:
+        """失败诊断字段采集（C3 七键；.part 删除前调用，读不到为 ""）。"""
+        part_hex = ""
+        try:
+            with open(tmp, "rb") as f:
+                part_hex = f.read(64).hex()
+        except OSError:
+            pass
+        return {"expected_bytes": expected, "actual_bytes": actual,
+                "content_encoding": enc, "part_prefix_hex": part_hex,
+                "url": url, "proxy": proxy, "attempts": attempts}
+
+    last_err: DictDownloadError | None = None
+    for attempt in (1, 2):
+        expected: int | None = None
+        done = 0
+        enc = ""
+        try:
+            if attempt == 1:
+                # 经默认处理器自动挂 getproxies() 系统代理（同裸 urlopen）
+                opener = urllib.request.build_opener(
+                    _DictGuardedRedirectHandler())
+            else:
+                # 空白 ProxyHandler = 强制直连（系统/环境代理坏损的兜底跳）
+                opener = urllib.request.build_opener(
+                    urllib.request.ProxyHandler({}),
+                    _DictGuardedRedirectHandler())
+            with opener.open(req, timeout=10) as resp:
                 total = None
-            done = 0
-            with open(tmp, "wb") as out:
-                while True:
-                    chunk = resp.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-                    done += len(chunk)
-                    if progress is not None:
-                        progress(done, total)
-    except Exception as e:  # noqa: BLE001 - 网络层统一转义
+                try:
+                    cl = resp.headers.get("Content-Length")
+                    total = int(cl) if cl else None
+                except (TypeError, ValueError):
+                    total = None
+                expected = total
+                enc = resp.headers.get("Content-Encoding") or ""
+                with open(tmp, "wb") as out:
+                    while True:
+                        chunk = resp.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        done += len(chunk)
+                        if progress is not None:
+                            progress(done, total)
+                if total is not None and done != total:
+                    # 响应截断/注入=网络层失败（D2026-1004-01）：
+                    # 参与 attempt#2 直连重试，绝不当作下载成功落位
+                    raise DictDownloadError(
+                        f"{url} 下载不完整：预期 {total} 字节/"
+                        f"实收 {done} 字节")
+            os.replace(tmp, dest)
+            return
+        except DictChecksumError:
+            # 防洗白裁定边界（D2026-1003-06）：校验错误绝不吞成网络错误、
+            # 绝不触发直连重试（当前不可达，防未来重构回归）
+            raise
+        except DictDownloadError as e:
+            last_err = e
+        except Exception as e:  # noqa: BLE001 - 网络层统一转义
+            last_err = DictDownloadError(f"{url} -> {type(e).__name__}: {e}")
+            last_err.__cause__ = e   # 保底链：等价原 raise ... from e
+        # 失败：.part 删除前采集诊断字段挂异常实例（C3）
+        last_err.diag = _collect_diag(expected, done, enc,
+                                      "system" if attempt == 1 else "direct",
+                                      attempt)
         _unlink_quiet(tmp)
-        raise DictDownloadError(f"{url} -> {type(e).__name__}: {e}") from e
-    os.replace(tmp, dest)
+    if last_err is None:    # pragma: no cover - 两跳必有一败，理论不可达
+        last_err = DictDownloadError(f"{url} 下载失败")
+    raise last_err
 
 
 def _unlink_quiet(path: str) -> None:
@@ -560,7 +671,10 @@ def download_dict(kind: str, allow_unverified: bool = False,
         raise DictDownloadError(
             f"词典 {kind} 无可用下载源（全部未核实且未开 --dict-allow-unverified）")
     except Exception as e:
-        _set_download_progress(kind, "failed", error=str(e))
+        # D2026-1004-01 C3：_http_get 挂的 diag（若有）随 failed 快照
+        # 透出（段2 #6 数据来源）；校验失败无 diag → 不加 diag 键
+        _set_download_progress(kind, "failed", error=str(e),
+                               diag=getattr(e, "diag", None))
         raise
 
 
