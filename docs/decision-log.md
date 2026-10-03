@@ -2784,3 +2784,12 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 **落地**：1bd2029（setup.iss R1 升级检测+R2 卸载一问制+uninstall.bat 方案甲+tests/test_installer_lifecycle.py 12 钉；ISCC 6.7.3 编译冒烟 rc=0；全量 1795 passed+4 skipped；code-review 双轴零硬违规零夹带， iss 布尔表达式补括号消歧一并入库）。
 
 **风险跟踪**：①真机卸载四例 owner 执行前不随 2.6.3 发版放行；②9 锚与 data_migration 白名单防漂移钉常驻（迁移则锚迁须复议）；③盘根/深度门槛场景真机验证一次即闭环（断言已入静态钉）。
+
+
+## [2026-10-03] D2026-1003-04 仓库更名 Angelholl/SubTransJAV→Angelholl/SubTrans（REST 代办+README 渊源批+About 链接） [已拍板·已执行]
+
+**缘起与评议**：owner 提案（仓库更名 SubTrans，README 简介注明由 SubTransJAV 项目迭代而来，其余保持不变），主模型勘探（改动面小：全仓 175 文件含名主体为包名/产品层不动；CI/release 零硬编码 slug；用户可见硬编码仓库 URL 仅 About 弹窗 1 处；GitHub 精确同名仓库 ≤19★ 无冲突阻力，新 slug 实测 404 可用）+decision-critic 评议（支持，无 [HIGH_RISK_OBJECTION]，五项补强全采纳：README 保留 SubTransJAV 关键字作搜索桥｜更名批与热修提交域分离｜先于 2.6.3 批A R1 升级检测实现完成｜旧 slug 永久让渡知情记档｜roadmap 登记产品内品牌统一远期批）。
+
+**owner 拍板（2026-10-03）**：更名由主模型 REST 授权代办。
+
+**执行记录（本日）**：①REST PATCH 更名即时生效（full_name=Angelholl/SubTrans，html_url 新址）；②本地 remote set-url 新址+ls-remote 复核一致；③旧 URL 实测 301→新址（stars/issues/releases/tags 全保留）；④README 渊源批（标题改 SubTrans+引用行渊源句保留 SubTransJAV 关键字+英文简介补 evolved from+声明区沿革句协调"旧名 SubTransJAV 由此而来"）+About 链接 href 改新址（显示文本按最小范围保留产品名）；⑤产品内品牌面（包名 subtransjav/安装器/数据根/AppId/CLI 入口/artifact 名）全部未动。**知情条款**：旧 slug SubTransJAV 属永久单向让渡——若被第三方注册则 301 断链、仅余搜索面污染（README 关键字桥接兜底）；后续所有 REST/发版操作一律改用新 slug（旧 slug 写接口语义不保证）。风险跟踪：①双名并存（仓库 SubTrans/产品 SubTransJAV）为常态而非过渡态；②"产品内品牌统一"已登记 roadmap 远期候选（触发=owner 点火，须含数据根/AppId/安装器名完整迁移与兼容方案，可借既有 .data-root 指针层）；③REST 旧址写操作（Release/issue 等）今后须用新址发起。

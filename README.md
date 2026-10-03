@@ -1,8 +1,10 @@
-# SubTransJAV
+# SubTrans
+
+> 由 SubTransJAV 项目迭代而来：原 JAV 领域专用字幕翻译工具，现为通用字幕翻译与精修工具链。
 
 自带角色卡与词典的双引擎字幕翻译与精修工具链：LLM 提示词工程 + 术语自学习（自动学习默认关闭）+ 幻觉检测 + 质量审校，日→中方向开箱即用，配套 Whisper 转写工具链使用；初始自带通用模板，动漫、GAL 等领域可自设模板与规则。
 
-A dual-engine subtitle translation & refinement toolkit with built-in persona templates and dictionaries: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review, Japanese→Chinese out of the box. Works with Whisper-based transcription toolchains; ships with a general-purpose template, and domain templates (anime, GAL, etc.) can be customized.
+A dual-engine subtitle translation & refinement toolkit (evolved from the SubTransJAV project) with built-in persona templates and dictionaries: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review, Japanese→Chinese out of the box. Works with Whisper-based transcription toolchains; ships with a general-purpose template, and domain templates (anime, GAL, etc.) can be customized.
 
 ## 下载与安装
 
@@ -320,7 +322,7 @@ See the Chinese sections above for full details.
 ## 声明
 
 - 本项目为开源字幕翻译工具，使用者须遵守所在地区法律法规。因项目历史领域背景，随仓库保留的领域示例包（`docs/examples/jav-domain/`）与模型实测章节涉及成人领域内容，是否适用请自行判断。
-- 上游转写工具：[WhisperJAV](https://github.com/meizhong986/WhisperJAV)——分工：转写归上游，翻译+精修归本仓库（项目名由此而来）。项目名称保留历史沿革，定位为通用字幕翻译项目。上游 v1.9.2+ 的运行清单（`whisperjav_run.json`）可通过 `--asr-meta` 接入本仓库双幻觉防护（转写可信度信号驱动精修侧自适应过滤）；旧版上游产物同样支持。
+- 上游转写工具：[WhisperJAV](https://github.com/meizhong986/WhisperJAV)——分工：转写归上游，翻译+精修归本仓库（旧名 SubTransJAV 由此而来）。仓库已更名 SubTrans，旧名保留历史沿革，定位为通用字幕翻译项目。上游 v1.9.2+ 的运行清单（`whisperjav_run.json`）可通过 `--asr-meta` 接入本仓库双幻觉防护（转写可信度信号驱动精修侧自适应过滤）；旧版上游产物同样支持。
 - **设计参考**：GUI 信息架构参考了 [buxuku/SmartSub](https://github.com/buxuku/SmartSub)（MIT 许可）的分层收纳思路（引擎/模型集中管理 + 主界面任务流化），仅借鉴交互理念与信息架构，未复制其代码与图形资产。
 - **非商业声明**：本项目基于个人使用设计，在 GitHub 公开仅为开源分享，未商业化、未收取任何费用。
 - **联系与整改**：如权利人认为本项目中的商标、图形、文案等内容侵犯其权益，可通过 Issue 联系，我将及时核实并整改。
