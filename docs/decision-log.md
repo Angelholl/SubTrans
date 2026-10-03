@@ -2806,3 +2806,16 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 **预研（owner 指示本轮纳入闲时开工）**：worktree 第二工作树+feature 分支，产出=批2 语义映射规格草稿（C3 八项）+批1 FTS5 三同步策略 spike（external-content 列限定触发器/显式双写/重建全量刷，含热路径对拍与 C1 红线判定）+批2 pysubs2<1.9 真实样本 spike（不足则合成样本明确标注）；产物留 feature 分支，2.6.4 开工日并入；全程不动批B 在途树与主 .venv（spike 用 worktree 本地 venv）。
 
 **风险跟踪**：①FTS 触发器吞热路径（C1 对拍拦截）；②旧库迁移碾 FTS 面（C2 用例拦截）；③规格漏项金样本返工（C3 画押拦截）；④预研串扰批B（C4 worktree+归属核验）；⑤2.6.4 携带未真机验证的批A 代码（发版前回灌）。
+
+## [2026-10-03] D2026-1003-05 批B ASR 下载器+词典源选择实现评议（五绑定条件全采纳） [已拍板·已落地]
+
+**缘起**：D2026-1003-01 批B（P2 ASR 下载能力回归+P3 词典源选择）开工前设计交 decision-critic 评议（批前评议常设），立场=**有条件支持、无 [HIGH_RISK_OBJECTION]**，给出 5 条绑定条件+攻击面盘点；主模型全采纳，无复议。
+
+**五条件与落法**：①auto/官方→镜像回退必须可见（进度 note「官方源不可达，已回退国内镜像」+logging 双通道，dict 与 ASR 两链同达）——已落地 `_set_download_note`/ASR note 粘滞；②official=排除镜像源（pypi+cloudfront-cdn）而非只留 pypi（否则 sudachi_full 仅官方空集误报）——已落地三态过滤+sudachi_full 仅镜像显式「无镜像源」错；③3GB 同步接受三道闸=单实例 model 键控锁+磁盘耗尽中途显式路径（ENOSPC→failed 相位+清 .part+明确文案）+「无取消/中断重下」可观测声明（弹窗常驻行）——已落地；预检 disk_usage 不可得反转 fail-closed（3GB 量级理由注释）；真机长下载占用项入走查清单；④URL 信任闭环=规范化精确匹配（防 host 尾点/端口变体）+空 URL 硬拒（镜像 PENDING 期旁路封死）+重定向逐跳校验（自定义 HTTPRedirectHandler，5 跳上限）——已落地 `_validate_url`/`_GuardedRedirectHandler`；⑤镜像上架唯一判据=实下载 sha256 与官方 pin 字节一致（格式转换版一律不通过）——镜像条目 PENDING（url 空+verified=False），UI 诚实禁用卡「需实测下载比对验证后才能启用，当前版本不可用」，生产清单 PENDING 条目不进 fallback 候选。
+
+**附带采纳（建议级）**：sha256 弹窗内全文可复制（clipboard+降级 title 提示）；model 参数白名单化+落位文件名仅由清单派生；symlink 拒写；入口侧陈旧 .part 清理；license 字段带「openai/whisper 上游模型卡口径」来源注记；开始键文案「开始下载」（GUI 测试发现「确定」歧义后微修）。
+
+**落地**：批B 提交（asr_downloader.py 新增/dict_manager source 三态+可见回退/asr_env sources+license/api refine_asr_download(_progress)+dict source 透传/app.js AppModal.download+ASR 项下载入口+词典双按钮/style.css/新增 test_asr_downloader.py+四测试文件追加 53 用例；FROZEN 213/189 零消耗，index.html 零改动）；全量 1848 passed+4 skipped；Mimosa 34=33+1 新签注（asr_downloader.py:217 留痕维持，甄别表 #28）；GUI 黑盒：弹窗六要素/双源卡 PENDING 态/meta/无取消声明/下载完成结果行/ESC 释放/dict 三态与禁用态全过（stub 桥，截图 %TEMP%\stj_gate\gui_test\shots\263batchB\）。
+
+**风险跟踪**：①镜像上架门=owner 实下载 3GB 比对 sha256 字节一致后翻 verified（格式转换版不通过；PENDING 可长期挂账）；②已就位徽标翻转未能在 stub 黑盒闭环（stub 夹具晚补 present 字段+IAB 输入层抖动），该分支为未改动既有逻辑，真机 C1 项覆盖；③pipeline_v2 两 quarantine 用例偶发失败族（与批B 无关）待排期。
+
