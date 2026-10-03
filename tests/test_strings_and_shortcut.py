@@ -223,15 +223,17 @@ def test_sidebar_tabs_replace_details_shell():
     改为左侧 TAB 结构——五个 TAB 按钮 id 存在且默认选中 translate；
     各 TAB 页面容器 id 存在。"""
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
-    for btn in ("tabBtnTranslate", "tabBtnEngine", "tabBtnGlossary",
-                "tabBtnGuide", "tabBtnAdvanced", "tabBtnReview"):
+    # 2.6.3 批C D2026-1003-01 P4：设置组插入 tabBtnAsrdict/tab-asrdict
+    for btn in ("tabBtnTranslate", "tabBtnEngine", "tabBtnAsrdict",
+                "tabBtnGlossary", "tabBtnGuide", "tabBtnAdvanced",
+                "tabBtnReview"):
         assert f'id="{btn}"' in html, f"index.html 缺少左侧 TAB 按钮: {btn}"
     assert re.search(
         r'<button[^>]*id="tabBtnTranslate"[^>]*class="side-tab-btn active"',
         html) or re.search(
         r'<button[^>]*class="side-tab-btn active"[^>]*id="tabBtnTranslate"',
         html), "默认选中的 TAB 必须是 tabBtnTranslate"
-    for page in ("tab-translate", "tab-engine", "tab-glossary",
+    for page in ("tab-translate", "tab-engine", "tab-asrdict", "tab-glossary",
                  "tab-guide", "tab-review", "tab-advanced"):
         assert f'id="{page}"' in html, f"index.html 缺少 TAB 页面: {page}"
     # details 折叠壳已平铺：高级设置 summary 锚不再引用
@@ -265,7 +267,12 @@ def test_html_has_no_unmarked_user_visible_chinese():
             cur_attrs = part
         elif part.startswith("</"):
             cur_attrs = ""
-        elif re.search(r"[\u4e00-\u9fff]", part) and "data-i18n" not in cur_attrs:
+        elif re.search(r"[\u4e00-\u9fff]", part) \
+                and "data-i18n" not in cur_attrs \
+                and "seg-btn" not in cur_attrs:
+            # 2.6.3 批C D2026-1003-01 P4 豁免（既有断言必要修订）：引擎页
+            # 分段控件 .seg-btn 拍板为纯中文短标签（阶段A/阶段B/兜底），
+            # 静态 i18n 键冻结零消耗，本类为唯一白名单
             leftovers.append(part.strip()[:40])
     assert not leftovers, f"index.html 存在未收编的用户可见中文: {leftovers}"
 

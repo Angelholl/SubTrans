@@ -64,7 +64,14 @@
 
                 <button type="button" class="side-tab-btn" id="tabBtnEngine"
                         data-tab="tab-engine" role="tab" aria-selected="false"
-                        data-i18n-title="tabEngine" title="引擎与模型"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabEngine">引擎与模型</span></button>
+                        data-i18n-title="tabEngine" title="API 与模型选择"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabEngine">API 与模型选择</span></button>
+                <!-- ASR 与词典 TAB（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡
+                     与词典卡自引擎页整体迁出为独立页；唯一新 i18n 键 tabAsrDict
+                     （189→190，配记=D2026-1003-01 归档段④）；图标=Lucide mic
+                     （与引擎页齿轮语义区分，同款 stroke 视觉语言） -->
+                <button type="button" class="side-tab-btn" id="tabBtnAsrdict"
+                        data-tab="tab-asrdict" role="tab" aria-selected="false"
+                        data-i18n-title="tabAsrDict" title="ASR 与词典"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span><span class="side-tab-text" data-i18n="tabAsrDict">ASR 与词典</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnGlossary"
                         data-tab="tab-glossary" role="tab" aria-selected="false"
                         data-i18n-title="tabGlossary" title="词库与模板"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="side-tab-text" data-i18n="tabGlossary">词库与模板</span></button>
@@ -183,6 +190,17 @@
             <div class="tab-page" id="tab-engine" data-testid="tab-engine">
                 <div class="block-title" data-i18n="refine_panel_title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
 
+                <!-- 分段控件（2.6.3 批C D2026-1003-01 P4 IA 重排）：LLM 配置页
+                     三段=阶段A/阶段B/兜底；纯中文短标签零静态 i18n 消耗（拍板
+                     配记 D2026-1003-01 归档段④），aria-selected 由 app.js 分段
+                     绑定循环维护；默认段=a（HTML 初始态，切页不强制复位） -->
+                <div class="seg-bar" role="tablist" aria-label="配置分段">
+                    <button type="button" class="seg-btn active" data-seg="a" aria-selected="true">阶段A</button>
+                    <button type="button" class="seg-btn" data-seg="b" aria-selected="false">阶段B</button>
+                    <button type="button" class="seg-btn" data-seg="fb" aria-selected="false">兜底</button>
+                </div>
+
+                <div class="seg-page active" data-seg-page="a">
                 <!-- 阶段A 完整行 -->
                 <div class="form-card">
                     <div class="stage-row">
@@ -217,6 +235,18 @@
                     </div>
                 </div>
 
+                <!-- 阶段A 地址（2.6.3 批C IA 重排：自接口地址卡迁入；
+                     #refineSaveEndpointsBtn 唯一保留在阶段A 段） -->
+                <div class="action-row">
+                    <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s1_endpoint_label">阶段A 地址</label>
+                    <input id="refineS1Endpoint" class="form-input compact grow"
+                           data-i18n-placeholder="s1_endpoint_placeholder" placeholder="阶段A 服务商的接口地址">
+                    <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
+                    <span id="refineEndpointStatus" class="muted"></span>
+                </div>
+                </div>
+
+                <div class="seg-page" data-seg-page="b">
                 <!-- 阶段B 完整行 -->
                 <div class="form-card">
                     <div class="stage-row">
@@ -248,6 +278,17 @@
                     </div>
                 </div>
 
+                <!-- 阶段B 地址（2.6.3 批C IA 重排：自接口地址卡迁入；保存键为
+                     class-only 孪生按钮（无 id），与主保存键绑同一 handler） -->
+                <div class="action-row">
+                    <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s3_endpoint_label">阶段B 地址</label>
+                    <input id="refineS3Endpoint" class="form-input compact grow"
+                           data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
+                    <button type="button" class="btn btn-primary btn-compact endpoint-save-twin" data-testid="endpoint-save-b"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
+                </div>
+                </div>
+
+                <div class="seg-page" data-seg-page="fb">
                 <!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->
                 <div class="form-card">
                     <label class="inline-field field-label"
@@ -273,25 +314,6 @@
                         <span class="field-btn-row"><button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
                         <button type="button" id="refineOpenCleanerDir" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button></span>
                     </label>
-                </div>
-
-                <!-- 接口地址（原 details 平铺） -->
-                <div class="stack form-card">
-                    <div class="block-title" data-i18n="endpoints_summary">接口地址（对应阶段A/B，切换服务商自动填充）</div>
-                    <div class="action-row">
-                        <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s1_endpoint_label">阶段A 地址</label>
-                        <input id="refineS1Endpoint" class="form-input compact grow"
-                               data-i18n-placeholder="s1_endpoint_placeholder" placeholder="阶段A 服务商的接口地址">
-                    </div>
-                    <div class="action-row">
-                        <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s3_endpoint_label">阶段B 地址</label>
-                        <input id="refineS3Endpoint" class="form-input compact grow"
-                               data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
-                    </div>
-                    <div class="action-row">
-                        <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
-                        <span id="refineEndpointStatus" class="muted"></span>
-                    </div>
                 </div>
 
                 <!-- 兜底与并发（原高级设置第四组迁入） -->
@@ -325,7 +347,13 @@
                         </label>
                     </div>
                 </div>
+                </div>
+            </div>
 
+            <!-- ASR 与词典页（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡与
+                 词典卡自引擎页整体迁入（注释/卡内 id/结构/顺序原样保留），
+                 上下单列相邻，两卡自带 header 不加额外 block-title -->
+            <div class="tab-page" id="tab-asrdict" data-testid="tab-asrdict">
                 <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.6.1 修订
                      D2026-1002-06 模型推荐制：删除内置下载链，改推荐清单+
                      自备落位指引）。asr_panel_title 为静态键（+1，191→192 恰达

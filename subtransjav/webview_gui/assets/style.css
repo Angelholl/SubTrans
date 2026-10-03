@@ -389,6 +389,43 @@ button:focus { outline: none; }
     min-height: 0;
 }
 
+/* ---------- 引擎页三段分段控件（2.6.3 批C D2026-1003-01 P4：IA 重排）----------
+   .seg-bar/.seg-btn/.seg-page 独立类系（机制仿 .tab-page），只增不改；
+   全量取色走 CSS 变量，暗色主题经 style.dark.css token 重定义自动兼容 */
+.seg-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: var(--space-2);
+}
+.seg-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-2);
+    font-family: inherit;
+    font-size: var(--font-sm);
+    font-weight: 500;
+    padding: 4px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background var(--dur) ease, color var(--dur) ease,
+        border-color var(--dur) ease;
+}
+.seg-btn:hover { background: var(--surface-3); color: var(--text-1); }
+.seg-btn.active {
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+    font-weight: 600;
+    border-color: var(--primary-strong);
+}
+.seg-page { display: none; }
+.seg-page.active {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
 /* ---------- 右栏：配置面板 ---------- */
 .aside {
     border-left: 1px solid var(--border);

@@ -217,8 +217,8 @@ def test_user_mode_and_novice_panel_removed():
 # v1.5 左侧 TAB 栏（SmartSub 式）：五个功能页 + 默认选中 translate
 # ---------------------------------------------------------------------------
 
-_TAB_IDS = ["tab-translate", "tab-engine", "tab-glossary", "tab-guide",
-            "tab-review", "tab-advanced"]
+_TAB_IDS = ["tab-translate", "tab-engine", "tab-asrdict", "tab-glossary",
+            "tab-guide", "tab-review", "tab-advanced"]
 
 
 def test_index_html_sidebar_tabs_structure():
@@ -982,7 +982,8 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     - ASR「重新探测」走事件委托绑 #systemSummaryCard（data-sys-action
       分流，按钮零 id），probeAsr 为唯一显式探测入口（首屏不自动探测）；
     - TM/词典行改"状态 · 路径"合并值（补 db_path / effective_dir）；
-    - id 全集 213 不变（FROZEN_IDS 契约延续）。
+    - id 全集数随 FROZEN_IDS 契约延续（2.6.3 批C D2026-1003-01 P4 显式
+      解冻 213→215：tabBtnAsrdict/tab-asrdict）。
     """
     src = _app_js_source()
     for frag in ("data-sys-row=\"roles\"", "data-sys-row=\"asr\"",
@@ -993,7 +994,7 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     assert "data-sys-row" not in html and "data-sys-action" not in html, \
         "摘要卡动态行不得新增静态锚（FROZEN_IDS 已满，行全由 JS 渲染）"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 213, f"id 全集数漂移（批3 契约 213 不变），实为 {len(ids)}"
+    assert len(ids) == 215, f"id 全集数漂移（批C 契约 215 不变），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -1279,10 +1280,14 @@ def test_review_detections_session_only_pinned():
 
 def test_review_asr_goto_programmatic_click():
     """批 3 条件 1：switchTab 在 app.js IIFE 内未挂全局（ReferenceError）——
-    ASR 引导卡跳引擎页必须走程序化 click（真实 handler 链）。"""
+    ASR 引导卡跳转必须走程序化 click（真实 handler 链）。
+
+    2.6.3 批C D2026-1003-01 P4 IA 重排随改（既有断言必要修订）：ASR 管理
+    自引擎页迁独立页 tab-asrdict，跳转锚 data-tab 同步改；80 字符
+    .click() 邻近断言保持不放宽。"""
     body = _extract_function(_review_js_source(), "_bindDetections")
-    assert 'data-tab="tab-engine"' in body, "须定位引擎页按钮"
-    assert re.search(r'data-tab="tab-engine"[\s\S]{0,80}\.click\(\)', body), \
+    assert 'data-tab="tab-asrdict"' in body, "须定位 ASR 与词典页按钮"
+    assert re.search(r'data-tab="tab-asrdict"[\s\S]{0,80}\.click\(\)', body), \
         "须程序化 click（禁止直调 switchTab）"
 
 
@@ -1550,3 +1555,73 @@ def test_dict_source_buttons_pinned():
     assert re.search(r"refine_dict_download\(kind,\s*source\s*\|\|\s*'auto'\)", dl), \
         "refine_dict_download 须透传 source（缺省 auto）"
     assert "p.note" in dl, "轮询回调缺 p.note 可见提示（评议员条件①）"
+
+
+# ---------------------------------------------------------------------------
+# 2.6.3 批C（D2026-1003-01 P4 拍板④）：IA 重排——引擎页三段分段控件
+# + ASR/词典卡迁独立页 tab-asrdict（新增钉，基线只增不减）
+# ---------------------------------------------------------------------------
+
+def test_batch_c_seg_bar_structure_pinned():
+    """批C 新钉：引擎页分段控件三按钮存在且 data-seg 值序=a/b/fb，
+    三段容器齐备；阶段A 地址行+主保存键在 A 段，阶段B 地址行+孪生
+    保存键（class-only 无 id）在 B 段；接口地址卡外壳（endpoints_summary）
+    已删除不回流。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    segs = re.findall(r'class="seg-btn[^"]*"\s+data-seg="([^"]+)"', html)
+    assert segs == ["a", "b", "fb"], f"分段按钮值序漂移: {segs}"
+    pages = re.findall(r'class="seg-page[^"]*"\s+data-seg-page="([^"]+)"', html)
+    assert pages == ["a", "b", "fb"], f"分段容器缺失或值序漂移: {pages}"
+    seg_a = _slice(html, 'data-seg-page="a"', 'data-seg-page="b"')
+    assert 'id="refineS1Endpoint"' in seg_a, "阶段A 地址行未迁入 A 段"
+    assert 'id="refineSaveEndpointsBtn"' in seg_a, "主保存键不在 A 段"
+    seg_b = _slice(html, 'data-seg-page="b"', 'data-seg-page="fb"')
+    assert 'id="refineS3Endpoint"' in seg_b, "阶段B 地址行未迁入 B 段"
+    assert "endpoint-save-twin" in seg_b, "B 段缺孪生保存按钮"
+    assert 'id="refineSaveEndpointsBtn"' not in seg_b, \
+        "孪生保存按钮不得带 id（id 冻结预算）"
+    assert "endpoints_summary" not in html, "接口地址卡外壳应随 IA 重排删除"
+
+
+def test_batch_c_asrdict_tab_order_pinned():
+    """批C 新钉：tab-asrdict 面板在 tab-engine 面板之后；ASR 卡与词典卡
+    注释整体位于 tab-asrdict 内且词典注释在 ASR 注释之后（两卡相邻）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    i_engine = html.index('id="tab-engine"')
+    i_asrdict = html.index('id="tab-asrdict"')
+    i_glossary = html.index('id="tab-glossary"')
+    assert i_engine < i_asrdict < i_glossary, "tab-asrdict 面板必须位于 tab-engine 之后、tab-glossary 之前"
+    panel = html[i_asrdict:i_glossary]
+    i_asr_comment = panel.index("<!-- ASR 模型管理")
+    i_dict_comment = panel.index("<!-- 词典管理")
+    assert i_asr_comment < i_dict_comment, \
+        "词典卡注释必须在 ASR 卡注释之后（两卡迁入次序保持）"
+
+
+def test_batch_c_msg_tabengine_renamed_pinned():
+    """批C 新钉：MSG.tabEngine 改值「API 与模型选择」、pipeline_card_hint
+    随改、唯一静态新键 tabAsrDict=「ASR 与词典」。"""
+    src = _app_js_source()
+    m = re.search(r"^\s*tabEngine: '([^']*)'", src, re.M)
+    assert m and m.group(1) == 'API 与模型选择', \
+        f"MSG.tabEngine 值漂移: {m and m.group(1)}"
+    m2 = re.search(r"^\s*pipeline_card_hint: '([^']*)'", src, re.M)
+    assert m2 and m2.group(1) == '点击前往「API 与模型选择」页修改', \
+        "MSG.pipeline_card_hint 未随改"
+    m3 = re.search(r"^\s*tabAsrDict: '([^']*)'", src, re.M)
+    assert m3 and m3.group(1) == 'ASR 与词典', "MSG 缺 tabAsrDict 静态新键"
+
+
+def test_batch_c_review_goto_asrdict_pinned():
+    """批C 新钉：review.js ASR 跳转锚定位 tab-asrdict，文案键随改。"""
+    src = _review_js_source()
+    assert 'data-tab="tab-asrdict"' in src, "review.js 跳转锚未改 tab-asrdict"
+    assert "review_asr_goto: '前往 ASR 与词典页'" in src, \
+        "review_asr_goto 文案未随改"
+    assert "API 与模型选择页" in src, "review_asr_card 缺「API 与模型选择页」表述"
+
+
+def _slice(text: str, start: str, end: str) -> str:
+    i = text.index(start)
+    j = text.index(end, i)
+    return text[i:j]

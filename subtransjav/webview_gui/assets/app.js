@@ -232,7 +232,8 @@ const MSG = {
     // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
     tabTranslate: '字幕翻译',
     tabReview: '校对',
-    tabEngine: '引擎与模型',
+    tabEngine: 'API 与模型选择',
+    tabAsrDict: 'ASR 与词典',
     tabGlossary: '词库与模板',
     tabGuide: '质量与建议',
     tabAdvanced: '高级参数',
@@ -385,7 +386,7 @@ const MSG = {
     chip_resumable: '可续传',
     pipeline_mirror_model: '阶段A 模型',
     pipeline_mirror_conc: '并行',
-    pipeline_card_hint: '点击前往「引擎与模型」页修改',
+    pipeline_card_hint: '点击前往「API 与模型选择」页修改',
 
     // ---- 右栏系统状态摘要卡（D2026-1001 批3；strings.py 特批 2 键镜像 + JS-only 标签）----
     sys_summary_title: '系统状态',
@@ -4126,8 +4127,11 @@ function switchTab(tabId) {
 
     $('refreshFallbackModels').addEventListener('click', refreshFallbackModels);
 
-    const epSaveBtn = $('refineSaveEndpointsBtn');
-    if (epSaveBtn) epSaveBtn.addEventListener('click', saveStageEndpoints);
+    // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：接口地址行迁段后，保存键拆为
+    // 主键（#refineSaveEndpointsBtn，阶段A 段，携带状态 span）与阶段B 段
+    // class-only 孪生按钮（无 id，零 id 预算消耗），两者绑同一 handler
+    document.querySelectorAll('#refineSaveEndpointsBtn, .endpoint-save-twin')
+      .forEach(b => b.addEventListener('click', saveStageEndpoints));
 
     // v1.5 翻译服务快捷下拉绑定（tab-translate 页）
     const quickProv = $('refineServiceQuick');
@@ -4160,6 +4164,23 @@ function switchTab(tabId) {
     // v1.5 左侧 TAB 栏绑定（SmartSub 式功能选择）
     document.querySelectorAll('.side-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：引擎页三段分段控件
+    // （阶段A/阶段B/兜底）——class 切换 .seg-page 显隐并同步 aria-selected；
+    // 无 data-tab 不入上方侧栏绑定循环；默认段=a（HTML 初始态，
+    // 切到引擎页时不强制复位，实现取最简）
+    document.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const seg = btn.dataset.seg;
+        document.querySelectorAll('.seg-btn').forEach(b => {
+          const on = b.dataset.seg === seg;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        document.querySelectorAll('.seg-page').forEach(p =>
+          p.classList.toggle('active', p.dataset.segPage === seg));
+      });
     });
 
     const glAddBtn = $('refineGlAdd');
