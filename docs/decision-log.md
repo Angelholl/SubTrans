@@ -2713,3 +2713,25 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 ### 【2026-10-03 补记】遗留②③④清零轮（owner 指令"本轮不留遗留"，遗留①改登记为片源待触发）
 
 ②**伪真值一致率轴已跑**（pseudo_truth.py，族加权投票：qwen 3 席/anime/lv2 2 席/gal，区间聚类+相似 0.75 阈；[UNVERIFIABLE] 不入主判）：七片均值 gal 65.4% ≈ qwen_wseg 65.2% > anime 54.6% > qwen_ten/f02_ten 52.2% > xxl 45.4% > bal 36.0%——weifu 断言②（xxl 逐行准）文本维度不获支持，其优势收敛为时间轴+提速两轴；断言⑤补记=gal 行控全池唯一恒定（max_dur 恒 4.10-4.18s）证实"拖尾极少"。③**F02/GAL1 条件格已跑**（14/14 rc=0；F02 mimk268 首败=瞬时 Temp 竞态，重试即过）：F02 覆盖 44.8%（vs F06 48.1）漂移全池最低 1.05%，两轮方向一致维持备选位；GAL1（jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame，--qwen-model-id 本地目录接线）覆盖 39.7% 但行控/洁净度冠军（max_dur 恒 4.2s/重复率 2.0%/标记 0），登记"求净单遍"候选不改默认。④**HF 缓存双层收编完成**：8 模型实体移至活跃根 G:\HuggingFace_Cache\hub\、嵌套 hub\hub 删除、xxl Models junction 重挂、FE/snapshot/junction 三探针全过（教训追加：Git Bash 双引号 `\\$var` 不展开，cmd/变量组合改 Python os/shutil）。①噪声片型：owner 拍板片源缺席待触发（发现即纳入补充测试）。**README 上游转写推荐段已按两轮结论重写**（默认维持+备选+按片开关①提速②求净+时间轴备注+不推荐名单+gal 模型条目）。裁决不变：F06 维持。
+
+
+## [2026-10-03] D2026-1003-01 真机验收六项反馈方案（安装器生命周期/ASR 下载回归/词典源选择/IA 重排/角色卡弹窗） [已三轮讨论·待 owner 拍板后新会话开工]
+
+**缘起**：owner 安装 2.6.2.dev0 本地测试包真机验收，提出六项反馈（R1 安装器检测已装=自动更新语义/R2 卸载询问删数据/R3 ASR 探测长 URL 撑爆卡片+要国内/海外双源下载（参照 SmartSub）/R4 词典下拉空白真机 bug+下载无源选择/R5 API 和模型独立 TAB+ASR 与字典整合一页/R6 角色卡编辑改弹窗+翻译方向设置迁入）。主模型三路勘探+设计师规格（第 1 轮）+评议员评议（第 2 轮，1 HRO）+修订终审（第 3 轮，放行）。**评议员 1 项 [HIGH_RISK_OBJECTION]（P1 卸载删数据：目标解析与应用 data_root() 不等价+翻转 D2026-0929-07 守卫未列追认）已四条全收采纳**；非 [PRESSURE-OVERRIDE]。
+
+### 方案要点（终审通过稿）
+
+- **P1 安装器生命周期（R1/R2）**：升级=InitializeSetup 读注册表已装版本与 /Dversion 比较+原地升级提示（数据保留，UsePreviousAppDir 默认已开）+CloseApplications=yes；卸载=InitializeUninstall 询问"是否删除本地数据"，Code 段删数据根——**HRO 四条约束**：①Code 复刻应用四级解析（GetEnv('SUBTRANSJAV_DATA_ROOT')→.data-root 指针→frozen 默认）弹窗逐级显示并标明实际生效者；②锚点硬门槛（user_dirs.json/settings.json/tm.db/api_keys.bin 任一存在才可删，无锚拒删+明示手动路径）；③弹窗列删除量级清单（TM/词典/ASR 模型 GB/api_keys 提示）；④D2026-0929-07（iss 绝不触 LOCALAPPDATA 守卫）与 D2026-1002-06（不内置下载链）双反转并列追认。uninstall.bat 口径对齐（保留空目录删除语义）。
+- **P2 ASR 下载能力回归+错位修（R3）**：错位修=推荐行来源分类徽标（海外源/国内源）替代长 URL+URL 悬停/展开详情+word-break:break-all 兜底（.media-source-path 先例）；新建 ASR 下载器 whisper-large-v2 先行（清单已有 sha256 pin）双源=azureedge 官方+hf-mirror 镜像，落位数据根 models/asr，进度复用既有通道，SmartSub 式下载弹窗（AppModal kind='download'：两源单选卡+全宽开始下载）；域名白名单改 **URL 级精确匹配**（azureedge 具体文件/hf-mirror 具体路径），"国内加速源"上架前置=发布前实下载一次比对 sha256 字节一致；qwen 多文件维持"规划中·自备"不动（单文件下载不变式 decision-log:2405）。**翻转 D2026-1002-06"不内置下载链"拍板，随本 ID 追认（owner 主动要下载源选择为翻转信号）**。
+- **P3 词典空白修+源选择（R4）**：空白判因首件=catch 吞错可见化（app.js:4149 .catch(()=>{}) 改写 dictStatus）+owner 真机 gui.log（%LOCALAPPDATA%\SubTransJAV\Logs）判因；词典下载加 source 参数（auto=现官方→镜像 fallback 语义/仅官方/仅镜像），"仅镜像"失败=显式报错不轮换（对齐 dict_manager:466 现行语义）；"仅官方"按钮并置 CN 可达性提示（pythonhosted CN 常不可达）；sudachi_full 单源 CloudFront 标注暂无镜像+离线导入指引；下载源弹窗与 P2 复用同一 kind='download' 组件。
+- **P4 IA 重排（R5，设计师 A 案）**：tab-engine 不换 id 改名「API 与模型选择」（保 pipelineCard 点击/review.js ASR 跳转双锚），顶部三段分段控件（阶段A/阶段B/兜底）+全宽表单（否掉左列表——三槽位过空），接口地址卡并回各槽位；新建 tab-asrdict「ASR 与词典」（ASR 卡+词典卡 id 随迁，上下单列）；FROZEN_IDS 213→215、静态 i18n 189→190（tabAsrDict）、分组钉 quality=[engine,asrdict,glossary,advanced] 显式解冻、review.js 跳转锚随改、test_asr_card 单按钮钉放宽。
+- **P5 角色卡编辑弹窗（R6）**：AppModal kind='editor'+.modal-lg（720px/92vw/88vh）；内容=标题行（阶段下拉+重载）+路径行+大 textarea（flex:1 min240 Consolas）+「翻译方向与角色卡」组自高级参数迁入（原位删组留指引+打开编辑器按钮）+保存主按钮；dirty 关闭守卫复用批4 模式；词库与模板页原编辑区收缩为一行入口。
+- **发版切分 A（推荐待拍板）**：2.6.2 先发=仅追补两个 BUG 修（R3 错位修+R4 空白可见化）重打测试包（重打须 owner gui.log 判因完成+重跑 GUI 黑盒门），其余全部进 2.6.3；批序 2.6.3=批A 安装器→批B ASR 下载器+词典源选择→批C IA 重排→批D 角色卡弹窗→批E 收尾。
+
+### 待 owner 拍板六点
+
+1. 发版切分 A（推荐）/B（全做完发 2.6.2）；2. ASR 下载能力回归=翻转 D2026-1002-06 追认；3. 词典源形态=双按钮+缺省自动（否三态）；4. tab-engine 改名保 id 方案（A 案）；5. qwen 维持"规划中·自备"；6. 卸载确认一问制（列表化量级+锚点门槛已内嵌）。
+
+### 评议员终审与风险跟踪
+
+终审放行（条件闭环）；残余登记=启动脚本临时 env 场景卸载器读不到→锚点拒删兜底（可接受）。风险跟踪：①P2 双源上架前 sha256 实证结果留档；②2.6.2 重打窗口受 gui.log 判因约束；③P4 分组钉解冻随批日志配记；④词典空白若 gui.log 判因为后端 manifest 异常则 P3 追加后端修。**开工载体=新会话**（交接文档 %TEMP%\handoff-subtransjav-20261003.md）。
