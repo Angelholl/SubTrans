@@ -2881,3 +2881,7 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 
 **设计师条件核账**：C1-C11 全落（含两测试硬约束：seg 钉重写为 stage-group 守卫+中文豁免 seg-btn→stage-group-title；i18n 双钉 189→187）；三条施工陷阱全中（「下载源」JS 态 MSG/pill 四态表/ASR 行 keyrow 落点）；五项 owner 授权定夺全按定案执行。遗留观察（不阻塞）：hint 文案较原型缩水（未含约 137MB/镜像指引，规格仅钉「保留」记偏差）；Standards 4 条 judgement call（_setPath 纯转发/_set 与 _setStatPath 骨架重复/DICT_KINDS.find 三处重复/dictShowStatus 约 90 行三职责）记技术债待段后小批。**2.6.5 剩余=批4 收尾发版**（CHANGELOG/roadmap/走查清单 265/checklist 基线数/发版门②真机门 owner 动作）。
 
+### 【测试包追记 2026-10-04】setup-2.6.5.dev0.exe 已交 owner 真机实测
+
+owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中文断言码页坑（jieba 双层断言实际全过：日志实证 dict.txt 在位+「jieba 分词自检: OK（3 tokens）」，败在 PS 按 OEM 码页解码 UTF-8 输出致 Contains 失配）——修 2e03fad＝Console OutputEncoding 钉 UTF-8+断言改 ASCII 骨架正则 `jieba[^\r\n]*: OK`（FAIL 行不含 ": OK" 成功语义仍唯一）；重构建 run 37150298734 success。产物 setup-2.6.5.dev0.exe 50,817,175B sha256 68D8464A…DC1A2 与 SHA256SUMS 核对一致（较 2.6.4 包 +14.5MB=jieba 词典体量旁证），302 签名 URL 无凭据直下落位 owner Downloads。配套《真机走查清单-265测试版》（3b234dc）=发版门②词典下载两态+六项修复逐项+回归抽查。**结构门④首次实战：smoke 双层断言在真实构建上验证通过（jieba 渠道修复 CI 可证闭环）**。
+
