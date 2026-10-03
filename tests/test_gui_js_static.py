@@ -1625,3 +1625,137 @@ def _slice(text: str, start: str, end: str) -> str:
     i = text.index(start)
     j = text.index(end, i)
     return text[i:j]
+
+
+# ---------------------------------------------------------------------------
+# 2.6.3 批D（D2026-1003-01 P5）：角色卡编辑器弹窗（AppModal.editor + vault
+# 节点搬迁）。FROZEN_IDS=215 / FROZEN_I18N_KEYS=189 零变更（vault 内既有
+# id/data-i18n 原样保留，新锚全部 class+data-testid 承载，文案走 MSG JS 态
+# 新键）——本批零解冻，两冻结钉（test_ui_phase3_redlines）零改动保持绿。
+# ---------------------------------------------------------------------------
+
+_BATCH_D_VAULT_IDS = (
+    "refineTemplateStage", "refineTemplateReload", "refineTemplateSave",
+    "refineTemplateStatus", "refineTemplateText", "refineTplLoadedPath",
+    "directionSource", "directionTarget", "directionCardS1",
+    "directionCardS3", "directionCardList",
+)
+
+
+def test_batch_d_tpl_editor_vault_structure_pinned():
+    """批D 新钉①：词库页 .tpl-editor-vault 隐藏容器存在且含全部既有 frozen
+    编辑器 id（refineTemplate*/refineTplLoadedPath/direction*/datalist）与
+    direction 组标题；两枚一行入口（class+data-testid 承载零 id）+入口状态
+    span；高级参数页原位留指引行且 direction 组已不在高级页。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'class="tpl-editor-vault" hidden' in html, "缺 .tpl-editor-vault 隐藏容器"
+    start = html.index('class="tpl-editor-vault"')
+    end = html.index('id="tab-guide"', start)
+    vault = html[start:end]
+    for dom_id in _BATCH_D_VAULT_IDS:
+        assert f'id="{dom_id}"' in vault, f"vault 缺既有 frozen id: {dom_id}"
+    assert 'data-i18n="tpl_editor_summary"' in vault, "vault 缺编辑区标题键"
+    assert 'data-i18n="direction_block_title"' in vault, \
+        "direction 组标题未随组迁入 vault"
+    # 两枚入口按钮：class 同名承载（词库页+高级参数页），零 id
+    assert html.count("tpl-editor-entry-btn") == 2, "编辑器入口应恰两枚"
+    for tid in ("tpl-editor-entry-row", "tpl-editor-entry",
+                "tpl-entry-status", "tpl-entry-hint",
+                "tpl-editor-entry-adv", "direction-moved-hint"):
+        assert f'data-testid="{tid}"' in html, f"缺批D新锚 data-testid: {tid}"
+    for btn in re.findall(r'<button[^>]*tpl-editor-entry-btn[^>]*>', html):
+        assert ' id="' not in btn, "入口按钮不得携带 id（FROZEN_IDS 冻结）"
+    # 高级页切片：指引行在位、direction 组已迁出、入口按钮在位
+    adv = html[html.index('id="tab-advanced"'):html.index('id="tab-review"')]
+    assert "翻译方向与角色卡设置已并入角色卡编辑器" in adv, "高级页缺指引行"
+    assert 'data-testid="tpl-editor-entry-adv"' in adv, "高级页缺入口按钮"
+    for dom_id in ("directionSource", "directionTarget", "directionCardS1",
+                   "directionCardS3", "directionCardList"):
+        assert f'id="{dom_id}"' not in adv, f"direction 组未迁出高级页: {dom_id}"
+
+
+def test_batch_d_app_modal_editor_pinned():
+    """批D 新钉②：AppModal.editor 定义在位——.modal-lg 大卡、modal-editor
+    body、节点搬入（appendChild）/搬回（_editorStash 原序复位）、textarea
+    dirty 监听（_edDirty）；_settle 编辑器分支（保存中 no-op 同 _dlRunning
+    先例 + dirty 走 _editorDiscardGuard）；守卫经 AppModal.confirm 确认；
+    保存收口（editorRunSave 成功清脏自动关闭/失败弹窗保持）。"""
+    src = _app_js_source()
+    body = _extract_function(src, "editor")
+    assert "modal-lg" in body, "编辑器打开必须挂 .modal-lg 大卡"
+    assert "modal-editor-body" in body, "body 必须挂 .modal-editor-body"
+    assert "_editorUnstash" in body, "节点必须按原序搬入 modal-body"
+    assert "MSG.tplEditorTitle" in body, "弹窗标题必须走 MSG 新键"
+    unstash = _extract_function(src, "_editorUnstash")
+    assert "editor-ta-wrap" in unstash and "appendChild" in unstash, \
+        "textarea 必须在搬入时包 .editor-ta-wrap 弹性层"
+    assert "refineTemplateSave" in body and "editorRunSave" in body, \
+        "保存键必须走弹窗感知路径"
+    assert "refineTemplateReload" in body and \
+        "refineTemplateStage" in body and "editorRunStageChange" in body, \
+        "重载/切阶段必须走弹窗感知路径"
+    assert "addEventListener('input'" in body, "textarea 缺 dirty input 监听"
+    stash = _extract_function(src, "_editorStash")
+    assert "appendChild" in stash, "关闭必须把节点按原序 append 回 vault"
+    settle = _extract_function(src, "_settle")
+    assert "this._kind === 'editor' && this._edSaving" in settle, \
+        "保存进行中 _settle 必须 no-op（同 _dlRunning 先例）"
+    assert "this._editorDiscardGuard()" in settle, \
+        "dirty 关闭必须走放弃确认守卫"
+    guard = _extract_function(src, "_editorDiscardGuard")
+    assert "MSG.tplEditorDirtyConfirm" in guard, \
+        "放弃守卫必须经确认弹窗（_editorConfirmWhileOpen）"
+    confirm_open = _extract_function(src, "_editorConfirmWhileOpen")
+    assert "AppModal.confirm" in confirm_open and "MSG.ui_cancel" not in confirm_open, \
+        "守卫确认必须复用 AppModal.confirm 单例"
+    run_save = _extract_function(src, "editorRunSave")
+    assert "_edSaving" in run_save, "保存进行中必须置 _edSaving"
+    assert "MSG.tplEditorSaveOk" in run_save and "MSG.tplEditorSaveFailed" in run_save, \
+        "保存结果文案键缺失"
+    assert "this._settle(false)" in run_save, "保存成功必须自动关闭"
+    keys = _js_msg_keys()
+    for key in ("tplOpenEditor", "tplEditorTitle", "tplEditorDirtyConfirm",
+                "tplEditorSaveOk", "tplEditorSaveFailed"):
+        assert key in keys, f"MSG 缺少批D新键: {key}"
+
+
+def test_batch_d_tpl_editor_entry_and_on_save_pinned():
+    """批D 新钉③：两枚入口按钮 bindDom 绑 openTplEditor 并 JS 态填文案；
+    onSave 复用 tplSave（refine_save_template 四参形态函数钉保持）；
+    onStageChange 走原链路（reload=tplRefreshSelect / change=tplLoad）。"""
+    src = _app_js_source()
+    bind = _extract_function(src, "bindDom")
+    assert "tpl-editor-entry-btn" in bind and "MSG.tplOpenEditor" in bind, \
+        "bindDom 缺编辑器入口绑定与文案填充"
+    assert "openTplEditor" in bind, "入口必须绑定 openTplEditor"
+    opener = _extract_function(src, "openTplEditor")
+    assert "AppModal.editor(" in opener, "入口必须打开 AppModal.editor"
+    assert "onSave: tplSave" in opener, "onSave 必须复用 tplSave"
+    assert "tplRefreshSelect(true)" in opener and "tplLoad()" in opener, \
+        "onStageChange 必须走原加载链路"
+    save = _extract_function(src, "tplSave")
+    assert "refine_save_template(" in save and "isStageTag ? null : idx" in save, \
+        "refine_save_template 四参形态函数钉必须保持"
+    assert "{ ok:" in save and "message:" in save, \
+        "tplSave 必须返回 {ok, message} 供模态收口"
+
+
+def test_batch_d_css_modal_lg_pinned():
+    """批D 新钉④：style.css .modal-lg（min(720px, 92vw)/88vh）+ 编辑器
+    body 弹性布局（flex column/overflow auto）+ .editor-ta-wrap（240px
+    下限）+ 弹窗内 .tpl-goto-btn 隐藏（跳转语义在弹窗内冗余）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.modal-card\.modal-lg \{[^}]*\}", css)
+    assert m, "缺 .modal-card.modal-lg 规则"
+    assert "min(720px, 92vw)" in m.group(0) and "88vh" in m.group(0), \
+        ".modal-lg 尺寸数值漂移"
+    m2 = re.search(r"\.modal-card\.modal-lg \.modal-body \{[^}]*\}", css)
+    assert m2, "缺编辑器 body 规则"
+    assert "flex-direction: column;" in m2.group(0) and "overflow: auto;" in m2.group(0) \
+        and "min-height: 0;" in m2.group(0), "编辑器 body 弹性布局不完整"
+    m3 = re.search(r"\.editor-ta-wrap \{[^}]*\}", css)
+    assert m3 and "min-height: 240px" in m3.group(0), "缺 .editor-ta-wrap 240px 下限"
+    assert re.search(r"\.modal-body \.tpl-goto-btn \{[^}]*display: none;", css), \
+        "弹窗内 .tpl-goto-btn 必须隐藏"
+    assert re.search(r"@media \(max-width: 768px\)[\s\S]*\.modal-card\.modal-lg",
+                     css), "缺小屏响应微调"

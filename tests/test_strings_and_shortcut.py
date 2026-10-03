@@ -269,10 +269,14 @@ def test_html_has_no_unmarked_user_visible_chinese():
             cur_attrs = ""
         elif re.search(r"[\u4e00-\u9fff]", part) \
                 and "data-i18n" not in cur_attrs \
-                and "seg-btn" not in cur_attrs:
+                and "seg-btn" not in cur_attrs \
+                and "direction-moved-hint" not in cur_attrs:
             # 2.6.3 批C D2026-1003-01 P4 豁免（既有断言必要修订）：引擎页
             # 分段控件 .seg-btn 拍板为纯中文短标签（阶段A/阶段B/兜底），
             # 静态 i18n 键冻结零消耗，本类为唯一白名单
+            # 2.6.3 批D D2026-1003-01 P5 随批豁免：高级参数页指引行
+            # direction-moved-hint 纯中文静态行（同 seg-btn 先例，拍板配记
+            # D2026-1003-01 归档段④；静态 i18n 键冻结零消耗）
             leftovers.append(part.strip()[:40])
     assert not leftovers, f"index.html 存在未收编的用户可见中文: {leftovers}"
 
