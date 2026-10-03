@@ -113,6 +113,12 @@
 |---|---|---|---|---|
 | 28 | subtransjav/refine/asr_downloader.py:217 | high | finding:b887809d9db1487d7383759338c3933b7afbaf25eb1f566e5932f83e9f5cfefe（anchor sha256:b887809d…，_open_part 的 `open(tmp,"wb")` 写位） | tmp=.part 临时件路径，派生链全白名单：落位目录=数据根 models/asr（paths.data_subdir 派生）；文件名由清单 ASR_RECOMMENDED_MODELS 的 model 字段派生且 model 参数先过条目白名单（路径注入面封死）；下载 URL 先经三层校验（https+清单 URL 规范化精确匹配+host 小名单与 getaddrinfo 全量 IP 私网/环回/保留拒绝）+重定向逐跳守卫；写前 symlink 守卫+目录真实目录判定。静态污点规则不识别上游白名单链，与 #27 同威胁模型（本地单机、无跨信任边界输入方），留痕维持。 |
 
+### 多格式导入 conv.srt 写位 1 条路径穿越（操作者输入信任模型；2.6.4 批2）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 29 | subtransjav/refine/subtitle_convert.py:141 | high | finding:c86cea32cfe8dfacba098141（anchor sha256:11933a66…，convert_file 的 `open(srt_path,"w")` 写位） | srt_path=`path.with_name(path.name+".conv.srt")`——产物与输入同目录同名派生，**不构造任何父目录引用**；输入路径来自操作者本人 CLI `-i` / GUI 原生文件对话框（本地单机，无跨信任边界不可信输入方），`-i` 任意路径历来即产品语义（与 #27 词典目录同威胁模型）。硬化尝试记录：L2 复查挂旗后尝试四种守卫变体（入口 os.pardir 拒绝/resolve+包含校验/最终 resolve/整文件 Write 重投）均被 Write 期静态模式拦截（行号 141→146→11→153→8 无规律漂移，同一 open 构造在首轮建文件时通过），判定为候选期模式误报循环；按留痕维持处置，若未来引入不可信输入方（如远端推送转换）须先补守卫再接线。另本扫既签注入账 2 条：#28（批B 文件首入深扫面）+Temp/release-263 构建产物 api.js（既签注类，瞬态不入库）。 |
+
 ---
 
 **留痕维持总判据**：本项目为本地单机工具链（CLI + 本地 webview 回环），上述路径/URL 全部来自操作者本人 CLI 参数、程序内常量或本地配置文件派生，不存在跨信任边界的不可信输入方；边界加固以守卫脚本（tools/guard_banned_paths.py，D10）+ 敏感路径名单制承接（decision-log :139 契约）。
