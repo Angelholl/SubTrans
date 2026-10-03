@@ -24,6 +24,7 @@ import hashlib
 import os
 import sqlite3
 import time
+import unicodedata
 from pathlib import Path
 
 from subtransjav import paths
@@ -45,6 +46,15 @@ def _normalize(text: str) -> str:
     """归一化：去首尾空白、合并连续空白"""
     import re
     return re.sub(r"\s+", " ", (text or "").strip())
+
+
+def _fts_norm(text: str) -> str:
+    """FTS 归一列口径（2.6.4 批1 策略 B 真双口径）：NFKC + casefold。
+
+    全角/半角、大小写差异在入库与查询两端同时抹平（python 端计算，
+    纯 SQL 触发器做不到——策略 A 被否的硬伤即此）。
+    """
+    return unicodedata.normalize("NFKC", (text or "")).casefold()
 
 
 def _simhash(text: str) -> str:
@@ -133,6 +143,11 @@ def ensure_direction_columns(db_path: str) -> bool:
                 ON tm_entries(content_hash);
             CREATE INDEX IF NOT EXISTS idx_tm_chars
                 ON tm_entries(char_count);
+            -- 2.6.4 批1 策略 B（C2 义务，D2026-1003-05）：表重建连带重建
+            -- FTS 面——DROP+RENAME 后 AUTOINCREMENT 重排 id，旧 tm_fts
+            -- rowid 失连且行数可能碰巧相等（计数陈旧检测漏报），必须显式
+            -- 删面；随后 _init_db 末端的 _ensure_fts 全量刷回。
+            DROP TABLE IF EXISTS tm_fts;
         """)
         conn.commit()
         return True
@@ -154,6 +169,9 @@ class TranslationMemory:
         self.target_lang = target_lang
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
         self._conn: sqlite3.Connection | None = None
+        # 2.6.4 批1 策略 B：FTS 面可用性标志（_ensure_fts 探测 FTS5 后置位；
+        # False 时 store 零双写降级、search 显式报错）
+        self._fts_ok = False
         self._init_db()
 
     def _langs(self, source_lang: str | None,
@@ -196,6 +214,61 @@ class TranslationMemory:
         ensure_source_name_column(self.db_path)
         # 2.1：唯一约束升维表重建迁移（幂等；旧库打开即自动迁移）
         ensure_direction_columns(self.db_path)
+        # 2.6.4 批1（D2026-1003-05）：FTS 面保障——必须排迁移链末端
+        # （表重建迁移之后），旧库打开即自动建面/重建（C2 义务闭环）
+        self._ensure_fts()
+
+    def _ensure_fts(self):
+        """FTS 面保障（2.6.4 批1 策略 B）：幂等建表 + 陈旧全量重建。
+
+        - 陈旧判定 = COUNT(tm_entries) != COUNT(tm_fts)：策略 B 无触发器，
+          面由 store/store_batch 显式双写维护，面外直改（如 tools 清洗）
+          以行数漂移暴露；一致则跳过，动作幂等（重入不炸）；
+        - 全量刷成本 7.4k 行 ≈0.17s（预研实测，D2026-1003-05）；
+        - FTS5 不可用（裁剪版 sqlite）→ _fts_ok=False 静默降级：store
+          热路径零受损，search 抛 OperationalError 显式可见。
+        """
+        conn = self._get_conn()
+        try:
+            conn.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS tm_fts USING fts5"
+                "(source_text, target_text, norm_source, norm_target)")
+        except sqlite3.OperationalError:
+            self._fts_ok = False
+            return
+        self._fts_ok = True
+        entry_count = conn.execute(
+            "SELECT COUNT(*) FROM tm_entries").fetchone()[0]
+        fts_count = conn.execute("SELECT COUNT(*) FROM tm_fts").fetchone()[0]
+        if entry_count == fts_count:
+            return
+        conn.execute("DROP TABLE IF EXISTS tm_fts")
+        conn.execute(
+            "CREATE VIRTUAL TABLE tm_fts USING fts5"
+            "(source_text, target_text, norm_source, norm_target)")
+        rows = conn.execute(
+            "SELECT id, source_text, target_text FROM tm_entries").fetchall()
+        conn.executemany(
+            "INSERT INTO tm_fts(rowid, source_text, target_text, "
+            "norm_source, norm_target) VALUES (?, ?, ?, ?, ?)",
+            [(r[0], r[1], r[2], _fts_norm(r[1]), _fts_norm(r[2]))
+             for r in rows])
+        conn.commit()
+
+    def _fts_double_write(self, conn: sqlite3.Connection,
+                          rows: list) -> None:
+        """策略 B 显式双写：与 tm_entries 写入同连接同事务（调用方 commit 前）。
+
+        rows = [(id, source_text, target_text), ...]；INSERT OR REPLACE
+        同时覆盖 store 的 INSERT 分支（新行）与 UPDATE 分支（覆盖重写，
+        norm 列按新值重算）——FTS 面与内容表逐行对齐（rowid=id）。
+        """
+        if not self._fts_ok or not rows:
+            return
+        conn.executemany(
+            "INSERT OR REPLACE INTO tm_fts(rowid, source_text, target_text, "
+            "norm_source, norm_target) VALUES (?, ?, ?, ?, ?)",
+            [(rid, s, t, _fts_norm(s), _fts_norm(t)) for rid, s, t in rows])
 
     def close(self):
         if self._conn:
@@ -241,6 +314,8 @@ class TranslationMemory:
             (h, src, tgt, stage, len(src), time.time(), source_name,
              source_lang, target_lang))
         if cur.rowcount == 1:
+            # 策略 B 显式双写（2.6.4 批1）：同连接同事务写 FTS 面
+            self._fts_double_write(conn, [(cur.lastrowid, src, tgt)])
             conn.commit()
             return True
         conn.execute(
@@ -250,6 +325,15 @@ class TranslationMemory:
             "AND target_lang=?",
             (src, tgt, len(src), source_name, h, stage, source_lang,
              target_lang))
+        # 策略 B 显式双写：UPDATE 分支按 rowid 重写 FTS 行（norm 重算）；
+        # 同连接 SELECT 可见本事务未提交变更，取回重写行的 id
+        row = conn.execute(
+            "SELECT id, source_text, target_text FROM tm_entries "
+            "WHERE content_hash=? AND stage=? AND source_lang=? "
+            "AND target_lang=?",
+            (h, stage, source_lang, target_lang)).fetchone()
+        if row:
+            self._fts_double_write(conn, [row])
         conn.commit()
         return False
 
@@ -262,6 +346,9 @@ class TranslationMemory:
         source_name 为本批统一来源标识（srt 文件名 stem），写入每个条目。
         source_lang/target_lang None 回落实例缺省（v2_learn 学习链经此
         落库，D2026-0930-05 批内缺陷修复的接线受益点）。
+
+        FTS 双写（2.6.4 批1 策略 B）经逐条 store() 同事务继承，本函数
+        零额外写路径（审计点仅 store 一处）。
         """
         source_lang, target_lang = self._langs(source_lang, target_lang)
         added = 0
@@ -426,13 +513,60 @@ class TranslationMemory:
         }
 
     def clear(self, stage: int | None = None):
-        """清空记忆库。stage=None 清空全部。"""
+        """清空记忆库。stage=None 清空全部。
+
+        FTS 面（2.6.4 批1 策略 B）同事务连带清理：先于 tm_entries 删面
+        （stage 定向删需在内容行删除前取 rowid 集合），保证删后会话内
+        search 即刻一致（否则陈旧面要等重开库由 _ensure_fts 重建）。
+        """
         conn = self._get_conn()
+        if self._fts_ok:
+            if stage is not None:
+                conn.execute(
+                    "DELETE FROM tm_fts WHERE rowid IN "
+                    "(SELECT id FROM tm_entries WHERE stage=?)", (stage,))
+            else:
+                conn.execute("DELETE FROM tm_fts")
         if stage is not None:
             conn.execute("DELETE FROM tm_entries WHERE stage=?", (stage,))
         else:
             conn.execute("DELETE FROM tm_entries")
         conn.commit()
+
+    def search(self, query: str, limit: int = 50) -> list[dict]:
+        """FTS5 BM25 只读搜索（2.6.4 批1，策略 B 双口径）。返回
+        [{id, source_text, target_text, stage, hit_count, created_at}]，
+        按 BM25 rank 升序（相关度降序）。
+
+        - 查询词经 NFKC+casefold 归一后 MATCH：全角查询命中半角内容、
+          大写查询命中小写内容（norm_source/norm_target 归一列承担），
+          原样口径由原文列同时承担（双口径）；
+        - 词间 AND：TM 搜索定位"已有译文"而非浏览相似句，多词 AND
+          命中=全词覆盖，精确度优于 OR（LIMIT 截断下相关命中不被稀释；
+          单词查询二者等价）；
+        - MATCH 语法串安全：按空白切词、每词双引号包裹、词内双引号
+          转义为 ""（FTS5 引号短语语法），杜绝列过滤（xxx: yyy）与
+          布尔运算符注入；值全部 ? 参数化，零字符串拼接值；
+        - 只读：无任何写语句（不更新 hit_count、不建面不重建）；
+        - limit 钳制 [1, 200]。
+        """
+        terms = _fts_norm(query).split()
+        if not terms:
+            return []
+        limit = max(1, min(int(limit), 200))
+        match_expr = " AND ".join(
+            '"' + t.replace('"', '""') + '"' for t in terms)
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT e.id, e.source_text, e.target_text, e.stage, "
+            "e.hit_count, e.created_at "
+            "FROM tm_fts f JOIN tm_entries e ON e.id = f.rowid "
+            "WHERE tm_fts MATCH ? ORDER BY rank LIMIT ?",
+            (match_expr, limit)).fetchall()
+        return [
+            {"id": r[0], "source_text": r[1], "target_text": r[2],
+             "stage": r[3], "hit_count": r[4], "created_at": r[5]}
+            for r in rows]
 
     def export_csv(self, path: str, stage: int | None = None):
         """导出为 CSV（2.1 起末尾追加 source_lang/target_lang 两列）"""

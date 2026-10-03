@@ -3378,6 +3378,28 @@ class TranslateAPI:
             _log_exc("tm_get_stats")
             return {"success": False, "error": str(e)}
 
+    def tm_search(self, query: str = "", limit: int = 50,
+                  db_path: str = None) -> dict[str, Any]:
+        """FTS 搜索翻译记忆库（2.6.4 批1 只读面，D2026-1003-05 策略 B）。
+
+        镜像 tm_get_stats 的 db 路径解析与错误信封（success/error，读侧
+        零写路径）；query 为空返回空结果集不报错（前端空态展示）。
+        """
+        try:
+            from subtransjav.refine.tm import TranslationMemory
+            if db_path:
+                db_path = str(_resolve_safe_path(db_path))
+            tm = TranslationMemory(db_path) if db_path else TranslationMemory()
+            try:
+                results = tm.search(str(query or ""), limit=limit)
+                return {"success": True, "results": results,
+                        "count": len(results)}
+            finally:
+                tm.close()
+        except Exception as e:
+            _log_exc("tm_search")
+            return {"success": False, "error": str(e)}
+
     def tm_clear(self, stage: int = None, db_path: str = None) -> dict[str, Any]:
         """清空翻译记忆库。
 

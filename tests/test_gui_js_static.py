@@ -1550,3 +1550,59 @@ def test_dict_source_buttons_pinned():
     assert re.search(r"refine_dict_download\(kind,\s*source\s*\|\|\s*'auto'\)", dl), \
         "refine_dict_download 须透传 source（缺省 auto）"
     assert "p.note" in dl, "轮询回调缺 p.note 可见提示（评议员条件①）"
+
+
+# ---------------------------------------------------------------------------
+# 2.6.4 批1（D2026-1003-05 策略 B）：词库页 TM 只读搜索区块静态钉
+# （index.html 冻结零改动：全 createElement 注入，零新增静态 id/data-i18n；
+# 结果渲染全 textContent 免注入；空结果与错误态界面可见）
+# ---------------------------------------------------------------------------
+
+def test_tm_search_block_injection_pinned():
+    """TM 搜索区块：createElement 整块注入（零静态锚）+ MSG JS 态文案 +
+    回车与按钮双触发 + tm_search 只读桥。"""
+    src = _app_js_source()
+    body = _extract_function(src, "ensure")
+    assert "createElement('div')" in body, "TM 区块必须 createElement 注入"
+    assert "createElement('input')" in body and "createElement('button')" \
+        in body and "createElement('table')" in body, \
+        "输入框/搜索按钮/结果表注入缺失"
+    assert "tm-search-block" in body, "区块定位 class 缺失（防重复注入依据）"
+    assert "querySelector('.tm-search-block')" in body, \
+        "缺哨兵判定（重复打开词库页会重复注入）"
+    for key in ("MSG.tmSearchTitle", "MSG.tmSearchPlaceholder",
+                "MSG.tmSearchBtn", "MSG.tmSearchColSource",
+                "MSG.tmSearchColTarget", "MSG.tmSearchColStage",
+                "MSG.tmSearchColHits"):
+        assert key in body, f"TM 区块缺少 JS 态文案键: {key}"
+    assert "addEventListener('keydown'" in body and \
+        "e.key === 'Enter'" in body and "addEventListener('click'" in body, \
+        "回车与按钮双触发缺失"
+    # 空结果态载体：empty-guide 由 ensure 预建（MSG.tmSearchEmpty 文案），
+    # run 按结果切换 display（空态界面可见）
+    assert "MSG.tmSearchEmpty" in body, "空结果态文案键缺失（ensure 预建）"
+    # 零静态锚：index.html 不得新增 TM 搜索 id/data-i18n（FROZEN_IDS 冻结）
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "tm-search" not in html, \
+        "index.html 出现 TM 搜索锚（冻结期必须全 JS 注入）"
+    assert "tmSearch" not in re.sub(r"const MSG = \{.*?\n\};", "", html,
+                                    flags=re.S)
+
+
+def test_tm_search_render_and_error_visible_pinned():
+    """结果渲染全 textContent（禁 innerHTML）+ 空态/失败态界面可见 +
+    查询中按钮禁用。"""
+    src = _app_js_source()
+    body = _extract_function(src, "run")
+    assert "window.pywebview.api.tm_search(" in body, "tm_search 桥调用缺失"
+    assert "innerHTML" not in body, "结果渲染禁 innerHTML（查询词/库内容为外部输入）"
+    assert "td.textContent" in body, "单元格必须 textContent 渲染"
+    assert "MSG.tmSearchFailed" in body and "r.error" in body, \
+        "失败态必须可见（success=False 透出后端错误）"
+    assert "empty.style.display = ''" in body, "空结果态必须可切换为可见"
+    assert "MSG.tmSearchCount" in body, "命中计数必须回显"
+    assert "btn.disabled = true" in body, "查询中按钮必须禁用"
+    assert "btn.disabled = false" in body, "finally 必须恢复按钮"
+    # 注入钩子：switchTab 打开词库页时懒注入
+    hook = _extract_function(src, "switchTab")
+    assert "TmSearch.ensure()" in hook, "switchTab 缺 TM 搜索区块懒注入"
