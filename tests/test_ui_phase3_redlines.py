@@ -41,6 +41,11 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   model_refresh_hint）——空态占位改 JS 态键 model_list_empty_hint，零
   静态消耗；快照 192→189；FROZEN_IDS 不动（ASR 卡重整 id 零增减，
   文案全 JS 态键 asr_env_undetected/asr_entry_hint）。
+  2.6.3 批C D2026-1003-01 P4：IA 重排批，FROZEN_IDS 213→215
+  （tabBtnAsrdict/tab-asrdict），i18n 键集 -endpoints_summary
+  +tabAsrDict 实测净值 189（接口地址卡外壳随重排删除，拆两行地址迁入
+  分段；指令所记 189→190 与仓库事实冲突，以全等断言自洽为准），
+  分组钉 quality 组序插入 tab-asrdict——配记=D2026-1003-01 拍板归档段④。
 """
 import re
 from pathlib import Path
@@ -59,10 +64,23 @@ def _slice_between(text: str, start: str, end: str) -> str:
 
 
 def test_batch1_stage_cards_no_inline_width():
-    """钉①（C3 域）：阶段A 完整行→接口地址区之间的三卡无内联宽度。"""
-    block = _slice_between(HTML, "<!-- 阶段A 完整行 -->", "<!-- 接口地址")
-    assert 'style="min-width' not in block, "三卡区间残留内联 min-width（批1 收编遗漏）"
-    assert 'style="width' not in block, "三卡区间残留内联 width（批1 收编遗漏）"
+    """钉①（C3 域）：阶段A/阶段B/兜底档位三卡无内联宽度。
+
+    2.6.3 批C D2026-1003-01 P4 IA 重排随改（既有断言必要修订）：接口地址
+    卡外壳删除、两行地址迁入分段段内（其 label 合法携带内联
+    min-width:var(--w-endpoint-label)，原「阶段A→接口地址」切片锚失义），
+    故改按卡注释逐卡切片；断言本体（两禁内联形态）不变。
+    """
+    for start, end in (
+        ("<!-- 阶段A 完整行 -->", "<!-- 阶段A 地址"),
+        ("<!-- 阶段B 完整行 -->", "<!-- 阶段B 地址"),
+        ("<!-- 兜底档位", "<!-- 兜底与并发"),
+    ):
+        block = _slice_between(HTML, start, end)
+        assert 'style="min-width' not in block, \
+            f"{start} 起卡内残留内联 min-width（批1 收编遗漏）"
+        assert 'style="width' not in block, \
+            f"{start} 起卡内残留内联 width（批1 收编遗漏）"
 
 
 def test_batch2_glossary_tables_carry_gl_table():
@@ -133,7 +151,7 @@ reviewListWrap reviewLocateBtn reviewPager reviewProgressFill
 reviewSaveAsBtn reviewSaveBtn reviewSearchInput reviewStatusBar
 reviewStatusDot reviewStatusLabel reviewTranscodeBtn statusDot statusLabel
 sysSummaryDataRoot sysSummaryDict sysSummaryTm sysSummaryVersion systemSummaryCard
-tab-advanced tab-engine tab-glossary tab-guide tab-review tab-translate tabBtnAdvanced tabBtnEngine
+tab-advanced tab-asrdict tab-engine tab-glossary tab-guide tab-review tab-translate tabBtnAdvanced tabBtnAsrdict tabBtnEngine
 tabBtnGlossary tabBtnGuide tabBtnReview tabBtnTranslate themeBtn themeMenu themeStylesheet
 videoReviewPlayer
 """.split())
@@ -151,7 +169,7 @@ ctx_placeholder ctx_title data_root_change_btn data_root_restore_btn data_root_t
 dict_empty_cta dict_empty_guide dict_open_dir dict_select_label dict_panel_title
 direction_block_title direction_card_fallback_hint
 direction_card_placeholder direction_card_s1_label direction_card_s3_label
-direction_hint direction_label direction_title doc_title empty_hint endpoints_summary
+direction_hint direction_label direction_title doc_title empty_hint
 fallback_local_label fallback_local_title fallback_model_label fallback_no_auto
 feat_context_review feat_fallback feat_glossary_learn feat_report feat_tm
 feature_status_title footer_brand force_resume_label force_resume_title gl1_label
@@ -173,7 +191,7 @@ save_key_title save_to_source_dir sc_ctrl_o sc_ctrl_r sc_escape sc_f1 serviceQui
 serviceQuickHintLocal serviceQuickLabel sf_default sf_off sf_strict sf_title
 shortcuts_title source_filter_label source_header stage_a_label stage_b_label start_btn
 status_idle stop_btn synopsis_label synopsis_title sys_summary_title sys_summary_version
-tabAdvanced tabEngine tabGlossary tabGuide tabReview tabTranslate templates_dir_label
+tabAdvanced tabAsrDict tabEngine tabGlossary tabGuide tabReview tabTranslate templates_dir_label
 templates_dir_placeholder test_stage_btn test_stage_title th_source th_target theme_dark
 theme_default theme_label tm_db_label tm_db_placeholder tm_enable_label tm_enable_title
 tm_threshold_label tm_threshold_placeholder tm_threshold_title tpl_editor_summary
@@ -230,8 +248,8 @@ def test_nav_grouping_pinned():
     """导航三分结构钉（批 1 立钉、批 2a 随批更新）：组标题与按钮顺序显式冻结。
 
     工作区组=字幕翻译/校对（批 2a D2026-1002-09 占位转正为
-    .side-tab-btn#tabBtnReview）/质量与建议；设置组=引擎与模型/
-    词库与模板/高级参数。
+    .side-tab-btn#tabBtnReview）/质量与建议；设置组=API 与模型选择/
+    ASR 与词典（2.6.3 批C D2026-1003-01 P4 插入）/词库与模板/高级参数。
     """
     m = re.search(r'<nav class="rail-nav".*?</nav>', HTML, re.S)
     assert m, "未找到 rail-nav 导航块"
@@ -250,7 +268,8 @@ def test_nav_grouping_pinned():
         f"导航分组标题顺序漂移：{list(groups.keys())}"
     assert groups["nav_group_workspace"] == ["tab-translate", "tab-review", "tab-guide"], \
         f"工作区组 data-tab 顺序漂移：{groups['nav_group_workspace']}"
-    assert groups["nav_group_quality"] == ["tab-engine", "tab-glossary", "tab-advanced"], \
+    assert groups["nav_group_quality"] == \
+        ["tab-engine", "tab-asrdict", "tab-glossary", "tab-advanced"], \
         f"设置组 data-tab 顺序漂移：{groups['nav_group_quality']}"
     # 批 2a（D2026-1002-09）：占位项已转正——nav-item-placeholder 必须消失，
     # 校对项为 .side-tab-btn#tabBtnReview[data-tab=tab-review]（预算表程序落 id）

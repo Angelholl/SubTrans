@@ -389,6 +389,43 @@ button:focus { outline: none; }
     min-height: 0;
 }
 
+/* ---------- 引擎页三段分段控件（2.6.3 批C D2026-1003-01 P4：IA 重排）----------
+   .seg-bar/.seg-btn/.seg-page 独立类系（机制仿 .tab-page），只增不改；
+   全量取色走 CSS 变量，暗色主题经 style.dark.css token 重定义自动兼容 */
+.seg-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: var(--space-2);
+}
+.seg-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-2);
+    font-family: inherit;
+    font-size: var(--font-sm);
+    font-weight: 500;
+    padding: 4px 14px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: background var(--dur) ease, color var(--dur) ease,
+        border-color var(--dur) ease;
+}
+.seg-btn:hover { background: var(--surface-3); color: var(--text-1); }
+.seg-btn.active {
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+    font-weight: 600;
+    border-color: var(--primary-strong);
+}
+.seg-page { display: none; }
+.seg-page.active {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
 /* ---------- 右栏：配置面板 ---------- */
 .aside {
     border-left: 1px solid var(--border);
@@ -2139,3 +2176,31 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .dl-result { margin-top: var(--space-3); font-size: 13px; word-break: break-all; }
 .dl-result-ok { color: var(--status-ok); }
 .dl-result-err { color: var(--status-err); }
+
+/* ============================================================
+   2.6.3 批D（D2026-1003-01 P5）：角色卡编辑器模态（AppModal.editor）
+   .modal-lg 大卡 + 弹性编辑区（textarea 自适应滚动）+ vault 内跳转键隐藏
+   （跳转语义在弹窗内冗余）；CSS 变量取色暗色兼容
+   ============================================================ */
+.modal-card.modal-lg {
+    max-width: min(720px, 92vw);
+    width: 92vw;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+}
+.modal-card.modal-lg .modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.editor-ta-wrap { flex: 1; min-height: 240px; display: flex; }
+.editor-ta-wrap textarea { width: 100%; height: 100%; resize: vertical; }
+.modal-body .tpl-goto-btn { display: none; }
+@media (max-width: 768px) {
+    .modal-card.modal-lg { width: 96vw; max-height: 92vh; }
+    .editor-ta-wrap { min-height: 180px; }
+}

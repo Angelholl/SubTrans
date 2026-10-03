@@ -51,8 +51,8 @@ const REVIEW_MSG = {
     review_det_no_save: '判定标记仅本会话内生效，不落盘',
     review_asr_card: 'ASR 语音对照为可选能力（依赖本机自备 whisper，非必需）：'
         + '推荐 whisper-large-v2，自备落位 ~/.cache/whisper 或数据根 models/asr，'
-        + '配好后可在引擎与模型页启用 ASR 验证。',
-    review_asr_goto: '前往引擎与模型页',
+        + '配好后可在 API 与模型选择页旁的「ASR 与词典」页启用 ASR 验证。',
+    review_asr_goto: '前往 ASR 与词典页',
     // ---- 批 4（D2026-1002-12）：审计④载入 dirty 守卫 ----
     review_load_dirty_confirm: '当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？',
 };
@@ -1115,7 +1115,9 @@ const ReviewUI = {
             // switchTab 在 app.js IIFE 内未挂全局（D2026-1002-11 裁定）——
             // 程序化 click 走真实 handler 链
             goto.addEventListener('click', () => {
-                const b = document.querySelector('.side-tab-btn[data-tab="tab-engine"]');
+                // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：ASR 管理迁独立页
+                // tab-asrdict，跳转锚随改
+                const b = document.querySelector('.side-tab-btn[data-tab="tab-asrdict"]');
                 if (b) { b.click(); }
             });
         }

@@ -167,6 +167,13 @@ const MSG = {
     tpl_loaded_path: p => `📄 当前加载：${p}`,
     tpl_dir_empty_hint: '⚠ 角色卡目录为空，保存将新建默认文件',
     tpl_dir_empty_datalist: '（角色卡目录为空，将使用内置默认卡）',
+    // 2.6.3 批D（D2026-1003-01 P5）：角色卡编辑器模态（AppModal.editor）JS 态键
+    // （HTML 零新增 data-i18n，FROZEN_I18N_KEYS 零变更）
+    tplOpenEditor: '打开编辑器',
+    tplEditorTitle: '角色卡编辑器',
+    tplEditorDirtyConfirm: '有未保存修改，放弃并关闭？',
+    tplEditorSaveOk: '已保存',
+    tplEditorSaveFailed: '保存失败',
 
     // ---- 全局词库 ----
     gl_summary: '全局词库编辑',
@@ -218,7 +225,6 @@ const MSG = {
     adv_group_fallback_concurrency: '兜底与并发',
 
     // ---- 接口地址 / 启动 ----
-    endpoints_summary: '接口地址（对应阶段A/B，切换服务商自动填充）',
     s1_endpoint_label: '阶段A 地址',
     s1_endpoint_placeholder: '阶段A 服务商的接口地址',
     s3_endpoint_label: '阶段B 地址',
@@ -232,7 +238,8 @@ const MSG = {
     // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
     tabTranslate: '字幕翻译',
     tabReview: '校对',
-    tabEngine: '引擎与模型',
+    tabEngine: 'API 与模型选择',
+    tabAsrDict: 'ASR 与词典',
     tabGlossary: '词库与模板',
     tabGuide: '质量与建议',
     tabAdvanced: '高级参数',
@@ -385,7 +392,7 @@ const MSG = {
     chip_resumable: '可续传',
     pipeline_mirror_model: '阶段A 模型',
     pipeline_mirror_conc: '并行',
-    pipeline_card_hint: '点击前往「引擎与模型」页修改',
+    pipeline_card_hint: '点击前往「API 与模型选择」页修改',
 
     // ---- 右栏系统状态摘要卡（D2026-1001 批3；strings.py 特批 2 键镜像 + JS-only 标签）----
     sys_summary_title: '系统状态',
@@ -680,12 +687,23 @@ const AppModal = {
     _kind: null,
     _resolve: null,
     _dlRunning: false,   // 2.6.3 批B：download 模态下载进行中（onStart Promise 未 settle）
+    _edDirty: false,     // 2.6.3 批D：编辑器有未保存修改（textarea input 置位）
+    _edSaving: false,    // 批D：保存进行中（onSave Promise 未 settle，禁止关闭）
+    _edConfirming: false,// 批D：放弃确认弹窗进行中（防守卫递归）
+    _edOpts: null,       // 批D：editor(opts) 暂存（onSave/onStageChange/onDiscard/onClose）
 
     _settle(value) {
         if (!this._busy) return;
         // 2.6.3 批B：下载进行中 ESC/遮罩点击/取消键全部 no-op（无取消语义，
         // 评议员条件①；完成/失败后 _dlRunning 复位，关闭键恢复可用）
         if (this._kind === 'download' && this._dlRunning) return;
+        // 2.6.3 批D：编辑器保存进行中禁止关闭（同 _dlRunning 先例）；
+        // 有未保存修改先走放弃确认守卫（确认后经 _settle 正式结算）
+        if (this._kind === 'editor' && this._edSaving) return;
+        if (this._kind === 'editor' && this._edDirty && !this._edConfirming) {
+            this._editorDiscardGuard();
+            return;
+        }
         this._busy = false;
         this._kind = null;
         const resolve = this._resolve;
@@ -735,7 +753,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -793,7 +811,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -969,6 +987,261 @@ const AppModal = {
         return new Promise((resolve) => {
             this._resolve = (value) => { closeResolve(); resolve(value); };
         });
+    },
+
+    // ============================================================
+    // 编辑器模态（2.6.3 批D，D2026-1003-01 P5）：角色卡编辑器整体迁入。
+    // 节点搬迁模式：vault（.tpl-editor-vault，hidden 常驻）内既有节点按
+    // 原序 appendChild 进 modal-body（textarea 包一层 .editor-ta-wrap
+    // 弹性层），关闭/确认放弃时逐个 append 回 vault——appendChild 即复位，
+    // 幂等可逆（FROZEN_IDS 零变更：vault 与其内 id/data-i18n 全部原样）。
+    // 复用 dataset.bound 一次性监听（遮罩/取消/ESC→_settle）；modal-card
+    // 打开加 .modal-lg、body 加 .modal-editor-body，关闭自清理（download
+    // 同款自管 body 模式，防污染后续 alert/confirm/prompt）。
+    // dirty 守卫：textarea input 置 _edDirty；_settle 编辑器分支——有未
+    // 保存修改先经 AppModal.confirm 确认（confirm 与编辑器共用单例骨架：
+    // 先收起编辑器——节点搬回 vault 保状态+_busy=false——再弹确认）。
+    // opts = {title, onSave(stage, text)->Promise<{ok,message}>,
+    //         onStageChange(stage, mode)->Promise, onDiscard?, onClose?}
+    // ============================================================
+    editor(opts) {
+        if (this._busy) return Promise.resolve(false);      // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve(false);           // 骨架缺席兜底
+        if (!document.querySelector('.tpl-editor-vault')) return Promise.resolve(false);
+        const o = opts || {};
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = o.title || MSG.tplEditorTitle;
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';   // .modal-card .modal-body 默认 pre-wrap
+        body.classList.add('modal-editor-body');
+        const card = root.querySelector('.modal-card');
+        if (card) card.classList.add('modal-lg');
+        input.style.display = 'none';
+        okBtn.style.display = 'none';       // 确认语义由 vault 内保存键承载
+        okBtn.textContent = '';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                if (e.target === root) AppModal._settle(AppModal._cancelValue());
+            });
+            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
+            document.addEventListener('keydown', (e) => {
+                if (!AppModal._busy) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
+                }
+            });
+        }
+        // —— 节点搬入：vault → modal-body（原序；textarea 包弹性层）——
+        this._editorUnstash();
+        // —— textarea dirty 一次性监听（搬入搬出不卸载）——
+        const ta = document.getElementById('refineTemplateText');
+        if (ta && !ta.dataset.edDirtyBound) {
+            ta.dataset.edDirtyBound = '1';
+            ta.addEventListener('input', () => { AppModal._edDirty = true; });
+        }
+        // —— vault 内保存/重载/切阶段键：弹窗感知路径一次性绑定（原
+        // bindDom 直绑移除，见 bindDom 批D 注记）——
+        const saveBtn = document.getElementById('refineTemplateSave');
+        if (saveBtn && !saveBtn.dataset.edSaveBound) {
+            saveBtn.dataset.edSaveBound = '1';
+            saveBtn.addEventListener('click', () => AppModal.editorRunSave());
+        }
+        const reloadBtn = document.getElementById('refineTemplateReload');
+        if (reloadBtn && !reloadBtn.dataset.edReloadBound) {
+            reloadBtn.dataset.edReloadBound = '1';
+            reloadBtn.addEventListener('click', () => AppModal.editorRunStageChange('reload'));
+        }
+        const stageSel = document.getElementById('refineTemplateStage');
+        if (stageSel && !stageSel.dataset.edStageBound) {
+            stageSel.dataset.edStageBound = '1';
+            stageSel.addEventListener('change', () => AppModal.editorRunStageChange('change'));
+        }
+        this._edOpts = o;
+        this._busy = true;
+        this._kind = 'editor';
+        this._edDirty = false;
+        this._edSaving = false;
+        this._edConfirming = false;
+        root.style.display = 'flex';
+        if (ta) ta.focus();
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                this._editorTeardown();
+                if (typeof o.onClose === 'function') o.onClose();
+                resolve(value);
+            };
+        });
+    },
+
+    // 节点搬回 vault（关闭/确认前收起）：modal-body 子节点逐个 append 回
+    // vault 原序复位（textarea 自弹性层拆出）；vault 原 hidden 保留，
+    // 节点回 vault 即随容器隐藏——vault hidden ↔ 弹窗互斥
+    _editorStash() {
+        const vault = document.querySelector('.tpl-editor-vault');
+        const body = document.querySelector('#appModal .modal-body');
+        if (!vault || !body) return;
+        Array.prototype.slice.call(body.childNodes).forEach((n) => {
+            if (n.nodeType === 1 && n.classList.contains('editor-ta-wrap')) {
+                while (n.firstChild) vault.appendChild(n.firstChild);
+            } else {
+                vault.appendChild(n);
+            }
+        });
+        while (body.firstChild) body.removeChild(body.firstChild);   // 残余包装层
+    },
+
+    // 节点搬入 modal-body（vault → 弹窗；原序；textarea 包 .editor-ta-wrap）
+    _editorUnstash() {
+        const vault = document.querySelector('.tpl-editor-vault');
+        const body = document.querySelector('#appModal .modal-body');
+        if (!vault || !body) return;
+        Array.prototype.slice.call(vault.childNodes).forEach((n) => {
+            if (n.nodeType === 1 && n.id === 'refineTemplateText') {
+                const wrap = document.createElement('div');
+                wrap.className = 'editor-ta-wrap';
+                wrap.appendChild(n);
+                body.appendChild(wrap);
+            } else {
+                body.appendChild(n);
+            }
+        });
+    },
+
+    // 编辑器开态确认弹窗（与 confirm 共用单例骨架）：先收起编辑器（节点
+    // 搬回 vault hidden 保状态 + _busy=false 放行 confirm），取消=原样恢复
+    // （_busy/_kind/_resolve/display/节点全部还原）；确认=保持收起态由调用
+    // 方收尾（关闭结算或放行原动作）
+    _editorConfirmWhileOpen(msg) {
+        const edResolve = this._resolve;    // confirm 会覆写 _resolve，先持有
+        const root = document.getElementById('appModal');
+        const okBtn = root && root.querySelector('.modal-ok');
+        this._edConfirming = true;
+        this._editorStash();
+        if (root) root.style.display = 'none';
+        this._busy = false;
+        if (okBtn) okBtn.style.display = '';    // confirm 需要 OK 键（编辑器开态隐藏）
+        return AppModal.confirm(msg).then((ok) => {
+            this._busy = true;
+            this._kind = 'editor';
+            this._resolve = edResolve;
+            this._edConfirming = false;
+            if (okBtn) okBtn.style.display = 'none';
+            if (ok) return true;
+            if (root) root.style.display = 'flex';
+            this._editorUnstash();
+            return false;
+        });
+    },
+
+    // dirty 关闭守卫：未保存修改先确认——取消=弹窗与编辑状态原样保留；
+    // 确认=真放弃（脏复位+正式结算+onDiscard 按当前阶段重载丢编辑）
+    _editorDiscardGuard() {
+        this._editorConfirmWhileOpen(MSG.tplEditorDirtyConfirm).then((ok) => {
+            if (!ok) return;
+            this._edDirty = false;
+            this._settle(false);            // 正式结算（_resolve 收尾 teardown+onClose）
+            const o = this._edOpts || {};
+            if (typeof o.onDiscard === 'function') {
+                try { o.onDiscard(); } catch (e) { /* 重载失败静默 */ }
+            }
+        });
+    },
+
+    // 保存主键（vault 内 #refineTemplateSave）弹窗感知路径：onSave 进行中
+    // 禁止关闭（_edSaving 同 _dlRunning 先例）；成功=清脏+status/入口摘要
+    // 写已保存+自动关闭；失败=status 写失败文案、弹窗保持
+    async editorRunSave() {
+        if (this._edSaving || this._edConfirming) return;
+        const o = this._edOpts || {};
+        if (typeof o.onSave !== 'function') return;
+        this._edSaving = true;
+        const cancelBtn = document.querySelector('#appModal .modal-cancel');
+        if (cancelBtn) cancelBtn.disabled = true;
+        const stage = (document.getElementById('refineTemplateStage') || {}).value;
+        const text = (document.getElementById('refineTemplateText') || {}).value;
+        let ok = false, message = '';
+        try {
+            const res = await Promise.resolve(o.onSave(stage, text));
+            ok = !!(res && res.ok);
+            message = (res && res.message) || '';
+        } catch (e) {
+            ok = false;
+            message = e && e.message ? e.message : String(e);
+        }
+        this._edSaving = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        const st = document.getElementById('refineTemplateStatus');
+        if (st) {
+            st.style.color = ok ? 'var(--status-ok)' : 'var(--status-err)';
+            st.textContent = (ok ? MSG.tplEditorSaveOk : MSG.tplEditorSaveFailed)
+                + (message ? '：' + message : '');
+        }
+        const entrySt = document.querySelector('[data-testid="tpl-entry-status"]');
+        if (entrySt) {
+            entrySt.style.color = ok ? 'var(--status-ok)' : 'var(--status-err)';
+            entrySt.textContent = (ok ? MSG.tplEditorSaveOk : MSG.tplEditorSaveFailed)
+                + (message ? '：' + message : '');
+        }
+        if (ok) {
+            this._edDirty = false;
+            this._settle(false);            // 自动关闭（_resolve 收尾搬回节点）
+        }
+    },
+
+    // 重载/切阶段（弹窗感知）：有未保存修改先同款确认，放行后执行原动作
+    // （reload=列目录+按选中加载；change=按当前选中加载，语义同原绑定）
+    editorRunStageChange(mode) {
+        if (this._edSaving || this._edConfirming) return;
+        const o = this._edOpts || {};
+        const run = () => {
+            const stage = (document.getElementById('refineTemplateStage') || {}).value;
+            Promise.resolve(typeof o.onStageChange === 'function'
+                ? o.onStageChange(stage, mode) : null).catch(() => {});
+        };
+        if (this._edDirty) {
+            this._editorConfirmWhileOpen(MSG.tplEditorDirtyConfirm).then((ok) => {
+                if (!ok) return;
+                this._edDirty = false;
+                const root = document.getElementById('appModal');
+                if (root) root.style.display = 'flex';   // 放行后恢复弹窗与节点
+                this._editorUnstash();
+                run();
+            });
+            return;
+        }
+        run();
+    },
+
+    // 关闭收尾（_resolve 包装内调用）：节点搬回 vault + 骨架默认态恢复
+    // （download 同款自清理：_open 不重置 okBtn.display/whiteSpace，防污染
+    // 后续 alert/confirm/prompt）
+    _editorTeardown() {
+        this._editorStash();
+        const root = document.getElementById('appModal');
+        if (root) {
+            const card = root.querySelector('.modal-card');
+            if (card) card.classList.remove('modal-lg');
+            const body = root.querySelector('.modal-body');
+            if (body) {
+                body.classList.remove('modal-editor-body');
+                body.style.whiteSpace = '';
+            }
+            const okBtn = root.querySelector('.modal-ok');
+            if (okBtn) okBtn.style.display = '';
+        }
+        this._edSaving = false;
+        this._edConfirming = false;
     }
 };
 
@@ -2908,33 +3181,54 @@ function switchTab(tabId) {
     tplLoad();
   }
 
-  async function tplSave() {
-    const idx = ($('refineTemplateStage') || {}).value;
-    const st = $('refineTemplateStatus');
+  // 2.6.3 批D（D2026-1003-01 P5）：tplSave 改为 AppModal.editor 的 onSave
+  // 实现（入参 (stage, text) 由模态传入，缺省回落 DOM 现值；返回
+  // {ok, message} 供模态收口：成功清脏+自动关闭，失败弹窗保持）。
+  // refine_save_template 四参形态（isStageTag ? null : idx）保持函数钉不变；
+  // 保存后按显式卡路径动态提示回落语义（原提示逻辑保留，随 message 回传，
+  // 由模态统一写 #refineTemplateStatus 与入口摘要）。
+  async function tplSave(stage, text) {
+    const idx = (stage != null && stage !== '') ? stage
+      : (($('refineTemplateStage') || {}).value);
     const isStageTag = idx === 'A' || idx === 'B';
+    const ta = $('refineTemplateText');
+    const bodyText = (text != null) ? text : ((ta || {}).value || '');
+    let r = null;
     try {
-      const r = await pywebview.api.refine_save_template(
-        idx, $('refineTemplateText').value,
+      r = await pywebview.api.refine_save_template(
+        idx, bodyText,
         $('refineTemplatesDir') ? $('refineTemplatesDir').value : null,
         isStageTag ? null : idx);
-      if (st) {
-        if (r.success) {
-          // 2.5.0 修复D：保存后按显式卡路径状态动态提示回落语义
-          const savedName = (r.path || '').split(/[\\/]/).pop() || '';
-          const c1 = (($('directionCardS1') || {}).value || '').trim();
-          const c3 = (($('directionCardS3') || {}).value || '').trim();
-          const sameName = [c1, c3].some(v =>
-            v && (v.split(/[\\/]/).pop() || '') === savedName);
-          const hint = sameName ? MSG.tpl_save_hint_explicit
-            : (!c1 && !c3) ? MSG.tpl_save_hint_auto : '';
-          st.style.color = 'var(--status-ok)';
-          st.textContent = MSG.tpl_saved(r.path) + (hint ? ' ' + hint : '');
-        } else {
-          st.style.color = 'var(--status-err)';
-          st.textContent = '❌ ' + r.error;
-        }
-      }
-    } catch (e) { if (st) st.textContent = '❌ ' + e; }
+    } catch (e) {
+      r = { success: false, error: String(e) };
+    }
+    if (r && r.success) {
+      const savedName = (r.path || '').split(/[\\/]/).pop() || '';
+      const c1 = (($('directionCardS1') || {}).value || '').trim();
+      const c3 = (($('directionCardS3') || {}).value || '').trim();
+      const sameName = [c1, c3].some(v =>
+        v && (v.split(/[\\/]/).pop() || '') === savedName);
+      const hint = sameName ? MSG.tpl_save_hint_explicit
+        : (!c1 && !c3) ? MSG.tpl_save_hint_auto : '';
+      return { ok: true, message: (r.path || '') + (hint ? ' ' + hint : '') };
+    }
+    return { ok: false, message: (r && r.error) || MSG.unknownError };
+  }
+
+  // 2.6.3 批D：编辑器入口（词库页+高级参数页两枚 .tpl-editor-entry-btn）——
+  // 先列目录+按选中加载（高级页直达时下拉可能尚未初始化），再迁节点开模态。
+  // 弹窗内「重新加载/切阶段」经 onStageChange 走原链路（reload=tplRefreshSelect
+  // 列目录+加载；change=tplLoad 按当前选中加载，语义同原 bindDom 直绑）。
+  async function openTplEditor() {
+    if (AppModal._busy) return;
+    await tplRefreshSelect(true);
+    AppModal.editor({
+      title: MSG.tplEditorTitle,
+      onSave: tplSave,
+      onStageChange: (stage, mode) =>
+        (mode === 'reload' ? tplRefreshSelect(true) : tplLoad()),
+      onDiscard: () => { tplLoad(); }   // 放弃=按当前阶段重载（丢未保存修改）
+    });
   }
 
   async function pickDir() {
@@ -4255,8 +4549,11 @@ function switchTab(tabId) {
 
     $('refreshFallbackModels').addEventListener('click', refreshFallbackModels);
 
-    const epSaveBtn = $('refineSaveEndpointsBtn');
-    if (epSaveBtn) epSaveBtn.addEventListener('click', saveStageEndpoints);
+    // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：接口地址行迁段后，保存键拆为
+    // 主键（#refineSaveEndpointsBtn，阶段A 段，携带状态 span）与阶段B 段
+    // class-only 孪生按钮（无 id，零 id 预算消耗），两者绑同一 handler
+    document.querySelectorAll('#refineSaveEndpointsBtn, .endpoint-save-twin')
+      .forEach(b => b.addEventListener('click', saveStageEndpoints));
 
     // v1.5 翻译服务快捷下拉绑定（tab-translate 页）
     const quickProv = $('refineServiceQuick');
@@ -4289,6 +4586,23 @@ function switchTab(tabId) {
     // v1.5 左侧 TAB 栏绑定（SmartSub 式功能选择）
     document.querySelectorAll('.side-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：引擎页三段分段控件
+    // （阶段A/阶段B/兜底）——class 切换 .seg-page 显隐并同步 aria-selected；
+    // 无 data-tab 不入上方侧栏绑定循环；默认段=a（HTML 初始态，
+    // 切到引擎页时不强制复位，实现取最简）
+    document.querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const seg = btn.dataset.seg;
+        document.querySelectorAll('.seg-btn').forEach(b => {
+          const on = b.dataset.seg === seg;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        document.querySelectorAll('.seg-page').forEach(p =>
+          p.classList.toggle('active', p.dataset.segPage === seg));
+      });
     });
 
     const glAddBtn = $('refineGlAdd');
@@ -4325,12 +4639,19 @@ function switchTab(tabId) {
     const glSaveBtn = $('refineGlSave');
     if (glSaveBtn) glSaveBtn.addEventListener('click', glSave);
 
-    const tStage = $('refineTemplateStage');
-    if (tStage) tStage.addEventListener('change', tplLoad);
-    const tReload = $('refineTemplateReload');
-    if (tReload) tReload.addEventListener('click', () => tplRefreshSelect(true));
-    const tSave = $('refineTemplateSave');
-    if (tSave) tSave.addEventListener('click', tplSave);
+    // 2.6.3 批D（D2026-1003-01 P5）：编辑器整体迁入 AppModal.editor 模态——
+    // 保存（#refineTemplateSave）/重新加载（#refineTemplateReload）/切阶段
+    // （#refineTemplateStage change）改由 editor() 开态一次性绑定弹窗感知
+    // 路径（脏确认守卫 + _edSaving 保存中禁关闭），原 bindDom 直绑
+    // tplLoad / tplRefreshSelect(true) / tplSave 移除（既有绑定必要随改）。
+    // 编辑器入口两枚（词库页+高级参数页）：class 承载零 id，文案 JS 态填充；
+    // 入口行提示 span 复用既有键 tpl_explicit_card_hint（JS 态写入零静态消耗）
+    document.querySelectorAll('.tpl-editor-entry-btn').forEach((b) => {
+      b.textContent = MSG.tplOpenEditor;
+      b.addEventListener('click', openTplEditor);
+    });
+    const tplEntryHint = document.querySelector('[data-testid="tpl-entry-hint"]');
+    if (tplEntryHint) tplEntryHint.textContent = MSG.tpl_explicit_card_hint;
     const pickBtn = $('refinePickDirBtn');
     if (pickBtn) pickBtn.addEventListener('click', pickDir);
 
