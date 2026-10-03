@@ -424,3 +424,125 @@ def test_cli_dict_download_local_missing_file(monkeypatch, tmp_path, capsys):
                    "--dict-from-file", str(tmp_path / "nope.whl")])
     assert rc == 1
     assert "下载失败" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# 2.6.3 批B（D2026-1003-05 条件②①）：download_dict source 三态 + note 回退提示
+# ---------------------------------------------------------------------------
+def _manifest_full(monkeypatch, sha: str) -> None:
+    """把源清单 sudachi_full downloads 替换为测试用条目。"""
+    base = dm.load_source_manifest()
+    full = {**base["dicts"]["sudachi_full"], "downloads": [
+        {"source": "cloudfront-cdn",
+         "url": "https://d2ej7fkh96fzlu.cloudfront.net/full.zip",
+         "sha256": sha, "sha256_verified": True}]}
+    monkeypatch.setattr(dm, "load_source_manifest", lambda: {
+        **base, "dicts": {**base["dicts"], "sudachi_full": full}})
+
+
+def test_download_dict_source_official_keeps_cloudfront(monkeypatch, tmp_path):
+    """评议员条件②核心用例：official=排除镜像而非只留 pypi——sudachi_full
+    官方源就是 cloudfront-cdn，official 模式不得空集。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    zbuf = _fake_wheel(member="system_full.dic")
+    sha = hashlib.sha256(zbuf).hexdigest()
+    _manifest_full(monkeypatch, sha)
+    calls = []
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None:
+                        (calls.append(url), Path(dest).write_bytes(zbuf)))
+    target = dm.download_dict("sudachi_full", source="official")
+    assert Path(target).is_file()
+    assert calls == ["https://d2ej7fkh96fzlu.cloudfront.net/full.zip"]
+
+
+def test_download_dict_source_mirror_full_no_mirror(monkeypatch, tmp_path):
+    """真实清单事实：sudachi_full 官方 CDN 单源，mirror 模式显式报错。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    with pytest.raises(dm.DictDownloadError, match="无镜像源"):
+        dm.download_dict("sudachi_full", source="mirror")
+
+
+def test_download_dict_source_official_and_mirror_split(monkeypatch, tmp_path):
+    """sudachi 双源分流：official 只走 pypi（排除 tuna）；mirror 只走 tuna。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": sha, "sha256_verified": True}])
+    calls = []
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None:
+                        (calls.append(url), Path(dest).write_bytes(wheel)))
+    assert Path(dm.download_dict("sudachi", source="official")).is_file()
+    assert calls == ["https://files.pythonhosted.org/a.whl"]
+    calls.clear()
+    assert Path(dm.download_dict("sudachi", source="mirror")).is_file()
+    assert calls == ["https://pypi.tuna.tsinghua.edu.cn/b.whl"]
+
+
+def test_download_dict_fallback_note_visible(monkeypatch, tmp_path):
+    """评议员条件①：auto 轮换由静默升级为可见——镜像源下载期间快照带
+    粘滞 note（1s 轮询必能采样）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": sha, "sha256_verified": True}])
+    seen = {}
+
+    def _flaky(url, dest, progress=None):
+        if "tuna" not in url:
+            raise dm.DictDownloadError("连接超时")
+
+        def _p(n, t):
+            progress(n, t)
+            seen["snap"] = dm.download_progress("sudachi")
+
+        _p(5, 7)
+        Path(dest).write_bytes(wheel)
+
+    monkeypatch.setattr(dm, "_http_get", _flaky)
+    assert Path(dm.download_dict("sudachi")).is_file()
+    assert seen["snap"].get("note") == "官方源不可达，已回退镜像源"
+
+
+def test_download_dict_invalid_source_falls_back_auto(monkeypatch, tmp_path):
+    """非法 source 按 auto（顺序全取：pypi 失败轮换 tuna 成功）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": sha, "sha256_verified": True}])
+    calls = []
+
+    def _flaky(url, dest, progress=None):
+        calls.append(url)
+        if "tuna" not in url:
+            raise dm.DictDownloadError("连接超时")
+        Path(dest).write_bytes(wheel)
+
+    monkeypatch.setattr(dm, "_http_get", _flaky)
+    assert Path(dm.download_dict("sudachi", source="bogus")).is_file()
+    assert calls == ["https://files.pythonhosted.org/a.whl",
+                     "https://pypi.tuna.tsinghua.edu.cn/b.whl"]
+
+
+def test_dict_status_sources_summary(monkeypatch, tmp_path):
+    """sources 摘要键：从清单推导，仅 target_name 非空 kind（追加式，不删
+    既有断言——test_dict_status_structure 不受扰）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    st = dm.dict_status()
+    s = st["sources"]
+    assert s["sudachi"] == {"has_official": True, "has_mirror": True}
+    assert s["sudachi_full"] == {"has_official": True, "has_mirror": False}
+    assert "jieba" not in s and "english_rules" not in s

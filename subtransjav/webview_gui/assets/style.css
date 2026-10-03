@@ -2113,3 +2113,29 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     .main { padding: 20px 20px 28px; }
     .aside { padding: 20px var(--space-4) var(--space-5); }
 }
+
+/* ============================================================
+   2.6.3 批B（D2026-1003-01 ②）：AppModal.download 源选择/进度样式
+   （JS createElement 注入零 id，index.html 冻结；CSS 变量取色暗色兼容）
+   ============================================================ */
+.dl-src-list { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.dl-src-card { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.dl-src-card:hover { border-color: var(--primary); }
+.dl-src-card.dl-src-selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+.dl-src-card.dl-src-disabled { opacity: .55; cursor: not-allowed; background: var(--surface-2); }
+.dl-src-hint { flex-basis: 100%; font-size: 12px; }
+.dl-meta-row { display: flex; gap: var(--space-2); font-size: 13px; word-break: break-all; margin-bottom: 4px; }
+.dl-meta-label { color: var(--text-muted); flex-shrink: 0; }
+.dl-copyable { cursor: copy; }
+.dl-copyable:hover { color: var(--primary); }
+.dl-notice { font-size: 12px; margin: var(--space-2) 0; }
+.modal-dl-start { width: 100%; margin-top: var(--space-3); }
+.dl-progress { margin-top: var(--space-3); }
+.dl-progress-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.dl-progress-fill { height: 100%; width: 0; background: var(--primary); transition: width .2s ease; }
+.dl-progress-bar.indeterminate .dl-progress-fill { width: 30%; animation: dl-indeterminate 1.2s infinite linear; }
+@keyframes dl-indeterminate { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+.dl-progress-text { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.dl-result { margin-top: var(--space-3); font-size: 13px; word-break: break-all; }
+.dl-result-ok { color: var(--status-ok); }
+.dl-result-err { color: var(--status-err); }

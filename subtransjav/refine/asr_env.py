@@ -13,6 +13,8 @@ settings ``asr_python``（调用方传入）> 实测默认
 （ASR_RECOMMENDED_MODELS）只给 url/bytes/sha256 等元信息由用户自备；
 resolve_model_dir 保证"探测枚举"与"运行加载"同序（缓存 ~/.cache/whisper
 原生加载点优先，其次数据根 models/asr/ 经 --model-dir 传入）。
+2.6.3 批B（D2026-1003-01 ②）：镜像上架门=实下载字节级 sha256 与官方 pin
+一致（格式转换版一律不通过），经 D2026-1003-01 拍板②。
 
 零出域声明：本模块无任何网络上传面；转写全程本地。
 """
@@ -57,6 +59,22 @@ ASR_RECOMMENDED_MODELS: list[dict] = [
                 "81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56effd0b6a"
                 "73e524/large-v2.pt"),
         "support": "available",
+        # 2.6.3 批B（D2026-1003-01 ②）：多源元信息。mirror 条目 PENDING：
+        # url/sha256 留空 + verified=False（下载器候选只收 verified==True，
+        # 空 URL 硬拒不下；上架门=实下载 sha256 与官方 pin 字节级一致）
+        "license": "MIT（openai/whisper 上游模型卡口径）",
+        "sources": [
+            {"source": "official", "label": "官方源",
+             "url": ("https://openaipublic.azureedge.net/main/whisper/models/"
+                     "81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56effd"
+                     "0b6a73e524/large-v2.pt"),
+             "sha256": ("81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56e"
+                        "ffd0b6a73e524"),
+             "verified": True},
+            {"source": "mirror", "label": "国内加速源",
+             "url": "", "sha256": "", "verified": False,
+             "note": "需实测下载比对验证后才能启用，当前版本不可用"},
+        ],
     },
     {
         "name": "qwen3-asr-1.7b",

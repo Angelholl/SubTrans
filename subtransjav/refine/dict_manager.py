@@ -23,11 +23,15 @@
 """
 
 import hashlib
+import logging
 import os
 import zipfile
 from pathlib import Path
 
 from subtransjav import paths
+
+# 回退提示 logger（D2026-1003-05 条件①：auto 轮换由静默升级为可见）
+_log = logging.getLogger("subtransjav.dict_manager")
 
 _DICT_SOURCES_JSON = Path(__file__).resolve().parent / "defaults" / "dict_sources.json"
 
@@ -67,11 +71,33 @@ def download_progress(kind: str) -> dict:
 
 def _set_download_progress(kind: str, phase: str, downloaded: int = 0,
                            total: int | None = None,
-                           error: str | None = None) -> None:
-    """整体赋值换引用写进度快照。"""
-    _DOWNLOAD_PROGRESS[kind] = {"kind": kind, "phase": phase,
-                                "downloaded": downloaded, "total": total,
-                                "error": error}
+                           error: str | None = None,
+                           note: str | None = None) -> None:
+    """整体赋值换引用写进度快照（2.6.3 批B 增可选 note：源回退可见提示）。
+
+    note 粘滞语义：显式传入时覆盖；未传（None）且 phase=="download" 时
+    继承上一快照的 note——回退提示在后续源下载相位持续可见（1s 轮询必能
+    采样），verify/extract/done/failed 相位自然清除。既有进度测试语义
+    （phase 链/reset_per_source/failed 精确断言）不受扰：note 只增不扰。"""
+    prev = _DOWNLOAD_PROGRESS.get(kind) or {}
+    snap = {"kind": kind, "phase": phase, "downloaded": downloaded,
+            "total": total, "error": error}
+    if note is None:
+        note = prev.get("note") if phase == "download" else None
+    if note:
+        snap["note"] = note
+    _DOWNLOAD_PROGRESS[kind] = snap
+
+
+def _set_download_note(kind: str, note: str) -> None:
+    """在当前快照上追加 note（不新增相位写入，整体赋值换引用）。
+
+    专供跨源 fallback 可见提示（D2026-1003-05 条件①）：后续 download
+    相位经 _set_download_progress 粘滞继承，verify/done 相位自然清除。
+    """
+    snap = _DOWNLOAD_PROGRESS.get(kind)
+    if snap is not None:
+        _DOWNLOAD_PROGRESS[kind] = {**snap, "note": note}
 
 
 def _carry_download_progress(kind: str, phase: str) -> None:
@@ -421,13 +447,20 @@ def _extract_dic(archive_path: str, member_suffix: str,
 
 
 def download_dict(kind: str, allow_unverified: bool = False,
-                  local_file: str = "") -> str:
+                  local_file: str = "", source: str = "auto") -> str:
     """下载（或本地导入）词典到数据根 ``dict/<install_dir>/<target_name>``。
 
     local_file 非空=离线导入：wheel 按源清单哈希校验（不匹配即拒），
     已解压 .dic 直接落位（用户自行解压的产物，落位时提示无哈希可校）。
     返回落位路径；网络失败可跨源 fallback，校验失败直接抛
     DictChecksumError 不轮换（防串改文件被"换个源洗白"）。
+
+    source（2.6.3 批B，D2026-1003-05 条件②①）：源选择 ∈ {auto, official,
+    mirror}，非法值按 auto。mirror 集=清单 ``source=="tuna"``；official=
+    排除镜像（保留 pypi 与 cloudfront-cdn——sudachi_full 官方源就是
+    cloudfront，不得只留 pypi）；official/mirror 过滤后为空显式报错。
+    auto 静默轮换升级为可见：官方源网络失败且有下一源时进度快照带
+    note 提示（1s 轮询透出）。
     """
     entry = load_source_manifest()["dicts"].get(kind)
     if entry is None:
@@ -440,6 +473,22 @@ def download_dict(kind: str, allow_unverified: bool = False,
     out_dir.mkdir(parents=True, exist_ok=True)
     dest = str(_ensure_inside_dict_root(out_dir / target_name))
     member = entry.get("archive_member") or ""
+
+    # 源选择过滤（D2026-1003-05 条件②）：mirror=tuna；official=排除镜像
+    # （pypi+cloudfront-cdn 均属官方，不得只留 pypi）
+    if source not in ("auto", "official", "mirror"):
+        source = "auto"
+    all_downloads = list(entry.get("downloads", []))
+    if source == "mirror":
+        pool = [d for d in all_downloads if d.get("source") == "tuna"]
+        if not pool:
+            raise DictDownloadError(f"词典 {kind} 无镜像源（官方 CDN 单源）")
+    elif source == "official":
+        pool = [d for d in all_downloads if d.get("source") != "tuna"]
+        if not pool:
+            raise DictDownloadError(f"词典 {kind} 无官方源")
+    else:
+        pool = all_downloads
 
     # 2.1 第四批（owner 验收反馈）：全程写进度状态供 GUI 轮询——
     # 任何异常 phase=failed+error 后照旧向上抛（api 层语义不变）
@@ -467,7 +516,7 @@ def download_dict(kind: str, allow_unverified: bool = False,
             return dest
 
         last_err: Exception | None = None
-        for d in entry.get("downloads", []):
+        for i, d in enumerate(pool):
             if not d.get("sha256_verified") and not allow_unverified:
                 continue
             url = d.get("url") or ""
@@ -486,6 +535,13 @@ def download_dict(kind: str, allow_unverified: bool = False,
                           _set_download_progress(kind, "download", n, t))
             except DictDownloadError as e:
                 last_err = e
+                # D2026-1003-05 条件①：静默轮换升级为可见——快照带 note
+                # （后续源 download 相位粘滞继承）+ logging 同文案
+                has_next = any(x.get("sha256_verified") or allow_unverified
+                               for x in pool[i + 1:])
+                if has_next:
+                    _set_download_note(kind, "官方源不可达，已回退镜像源")
+                    _log.info("词典 %s 官方源不可达，已回退镜像源", kind)
                 continue            # 网络失败 → 试下一源
             _carry_download_progress(kind, "verify")
             if _sha256_of(tmp) != d.get("sha256"):
@@ -714,5 +770,17 @@ def dict_status() -> dict:
         }
     # 批1b 件1：dict_dir=现生效目录（自定义覆盖后即生效值），
     # custom_dir=设置值（未设 null），effective_dir 与 dict_dir 等价显式键
+    # 2.6.3 批B（D2026-1003-05 条件②）：sources 摘要——前端「仅镜像」键
+    # disabled 门控（从清单推导；仅 target_name 非空的可下载 kind）
+    sources_summary: dict = {}
+    for kind, entry in manifest["dicts"].items():
+        if not (entry.get("target_name") or ""):
+            continue
+        dl = entry.get("downloads") or []
+        sources_summary[kind] = {
+            "has_official": any(d.get("source") != "tuna" for d in dl),
+            "has_mirror": any(d.get("source") == "tuna" for d in dl),
+        }
     return {"dict_dir": dict_dir(), "custom_dir": _CUSTOM_DICT_DIR,
-            "effective_dir": dict_dir(), "dicts": dicts}
+            "effective_dir": dict_dir(), "dicts": dicts,
+            "sources": sources_summary}

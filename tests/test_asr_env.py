@@ -193,6 +193,26 @@ def test_recommended_models_shape():
     assert "url" not in q and "bytes" not in q and "sha256" not in q
 
 
+def test_recommended_models_sources_and_license():
+    """2.6.3 批B（D2026-1003-01 ②）：whisper 条目增 license/sources 双源——
+    official verified 且 url/sha256 与条目 pin 原样一致；mirror PENDING
+    （url/sha256 留空 + verified=False + note）。qwen 条目不动。"""
+    w = next(e for e in asr_env.ASR_RECOMMENDED_MODELS
+             if e["name"] == "whisper-large-v2")
+    assert w["license"] == "MIT（openai/whisper 上游模型卡口径）"
+    srcs = w["sources"]
+    assert [s["source"] for s in srcs] == ["official", "mirror"]
+    off, mir = srcs
+    assert off["label"] == "官方源" and off["verified"] is True
+    assert off["url"] == w["url"] and off["sha256"] == w["sha256"]
+    assert mir["label"] == "国内加速源" and mir["verified"] is False
+    assert mir["url"] == "" and mir["sha256"] == ""
+    assert mir["note"] == "需实测下载比对验证后才能启用，当前版本不可用"
+    q = next(e for e in asr_env.ASR_RECOMMENDED_MODELS
+             if e["name"] == "qwen3-asr-1.7b")
+    assert "sources" not in q and "license" not in q
+
+
 def test_resolve_model_dir_cache_hit_returns_none(monkeypatch, tmp_path):
     """缓存命中→None（原生加载点优先，不传旗标）。"""
     cache = tmp_path / "cache"

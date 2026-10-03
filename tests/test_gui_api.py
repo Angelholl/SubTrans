@@ -2885,3 +2885,96 @@ def test_review_transcode_inflight_lock(gui_api_obj, monkeypatch, tmp_path):
     r = gui_api_obj.refine_review_start_transcode(str(media))
     assert r["success"] is True
     assert key not in api_mod._REVIEW_TRANSCODE_INFLIGHT
+
+
+# ---------------------------------------------------------------------------
+# 2.6.3 批B（D2026-1003-01 ②）：ASR 下载器端点 + source 透传 + sources 摘要
+# ---------------------------------------------------------------------------
+def test_refine_asr_download_invalid_model_and_source(gui_api_obj):
+    """model 白名单（support=="available"）与 source 白名单硬拒。"""
+    got = gui_api_obj.refine_asr_download("nope")
+    assert got["success"] is False and "未知或不可下载" in got["error"]
+    got2 = gui_api_obj.refine_asr_download("qwen3-asr-1.7b")    # planned 不可下
+    assert got2["success"] is False and "未知或不可下载" in got2["error"]
+    got3 = gui_api_obj.refine_asr_download("whisper-large-v2", "bogus")
+    assert got3["success"] is False and "非法下载源" in got3["error"]
+
+
+def test_refine_asr_download_success_and_failure(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    from subtransjav.refine import asr_downloader as ad
+    rec = {}
+
+    def _fake(model, source="auto"):
+        rec["args"] = (model, source)
+        return str(tmp_path / "large-v2.pt")
+
+    monkeypatch.setattr(ad, "download_asr_model", _fake)
+    got = gui_api_obj.refine_asr_download("whisper-large-v2", "mirror")
+    assert got["success"] is True
+    assert got["path"] == str(tmp_path / "large-v2.pt")
+    assert rec["args"] == ("whisper-large-v2", "mirror")
+
+    def _busy(model, source="auto"):
+        raise ad.AsrDownloadError("该模型已有下载进行中")
+
+    monkeypatch.setattr(ad, "download_asr_model", _busy)
+    got2 = gui_api_obj.refine_asr_download("whisper-large-v2")
+    assert got2["success"] is False and "已有下载进行中" in got2["error"]
+
+    def _checksum(model, source="auto"):
+        raise ad.AsrChecksumError("SHA256 校验失败，已拒绝落位")
+
+    monkeypatch.setattr(ad, "download_asr_model", _checksum)
+    got3 = gui_api_obj.refine_asr_download("whisper-large-v2")
+    assert got3["success"] is False and "SHA256" in got3["error"]
+
+
+def test_refine_asr_download_progress_endpoint(gui_api_obj, monkeypatch):
+    """进度端点形状：success + 快照同形透传（含 note 可见提示）；无记录
+    success + 空。"""
+    from subtransjav.refine import asr_downloader as ad
+    monkeypatch.setattr(ad, "_ASR_DOWNLOAD_PROGRESS", {
+        "whisper-large-v2": {
+            "kind": "whisper-large-v2", "phase": "download",
+            "downloaded": 5, "total": 10, "error": None,
+            "note": "官方源不可达，已回退国内镜像"}})
+    got = gui_api_obj.refine_asr_download_progress("whisper-large-v2")
+    assert got["success"] is True
+    assert got["phase"] == "download"
+    assert got["downloaded"] == 5 and got["total"] == 10
+    assert got["note"] == "官方源不可达，已回退国内镜像"
+    empty = gui_api_obj.refine_asr_download_progress("nope")
+    assert empty == {"success": True}
+
+
+def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
+    """source 透传（D2026-1003-05 条件②）：official/mirror 双参调用；
+    auto/非法值保持单参调用（既有 mock 零改动兼容），非法由
+    download_dict 按 auto 处理。"""
+    from subtransjav.refine import dict_manager as dm
+    rec = {}
+
+    def _fake(kind, *args, **kwargs):
+        rec["source"] = kwargs.get("source", "auto")
+        return "x"
+
+    monkeypatch.setattr(dm, "download_dict", _fake)
+    assert gui_api_obj.refine_dict_download("sudachi")["success"] is True
+    assert rec["source"] == "auto"
+    assert gui_api_obj.refine_dict_download("sudachi", "official")["success"] is True
+    assert rec["source"] == "official"
+    assert gui_api_obj.refine_dict_download("sudachi", "mirror")["success"] is True
+    assert rec["source"] == "mirror"
+    assert gui_api_obj.refine_dict_download("sudachi", "bogus")["success"] is True
+    assert rec["source"] == "auto"
+
+
+def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
+    """dict_status 增 sources 摘要键（追加式，既有 shape 断言不删）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    got = gui_api_obj.refine_dict_status()
+    assert got["success"] is True
+    assert got["sources"]["sudachi_full"]["has_mirror"] is False
+    assert got["sources"]["sudachi"]["has_mirror"] is True
+    assert got["sources"]["sudachi"]["has_official"] is True

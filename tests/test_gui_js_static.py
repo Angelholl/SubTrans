@@ -1486,3 +1486,67 @@ def test_asr_rec_detail_css_pinned():
     assert m, "style.css 缺 .asr-rec-detail 规则"
     assert "word-break: break-all" in m.group(0), \
         ".asr-rec-detail 缺 word-break: break-all"
+
+
+# ---------------------------------------------------------------------------
+# 2.6.3 批B（D2026-1003-01 ② + D2026-1003-05 五条件）：ASR 下载器 + 词典源
+# 选择（index.html 冻结零改动——所有新 UI 全 JS createElement 注入，class/
+# dataset 承载，零新增 id/data-i18n；FROZEN_IDS=213 / i18n=189 既有钉零改动）
+# ---------------------------------------------------------------------------
+def test_app_modal_download_pinned():
+    """AppModal.download：radio 源卡+全宽开始键+busy 防护（下载中 ESC/
+    遮罩/取消键 no-op）+sha copyable+无取消声明文案在位。"""
+    src = _app_js_source()
+    body = _extract_function(src, "download")
+    assert "createElement('label')" in body, "源卡须 createElement 注入"
+    assert "createElement('input')" in body, "radio 须 createElement 注入"
+    assert "dl-src-card" in body and "dl-src-disabled" in body, "源卡/禁用灰态 class 缺失"
+    assert "modal-dl-start" in body, "全宽开始键 class 缺失"
+    assert "this._dlRunning" in body, "busy 防护标志缺失"
+    assert "navigator.clipboard.writeText" in body, "copyable 复制链缺失"
+    assert "MSG.ui_copied" in body, "「已复制」轻提示缺失"
+    assert "MSG.ui_copy_manual" in body, "clipboard 不可用手动复制提示缺失"
+    settle = _extract_function(src, "_settle")
+    assert "this._kind === 'download' && this._dlRunning" in settle, \
+        "下载进行中 _settle 必须 no-op（无取消语义，评议员条件①）"
+    keys = _js_msg_keys()
+    for key in ("asrDlNoCancel", "asrDlDone", "asrDlFailed", "ui_copied",
+                "ui_copy_manual"):
+        assert key in keys, f"MSG 缺少批B新键: {key}"
+
+
+def test_asr_rec_download_entry_pinned():
+    """ASR 推荐项下载入口：details 展开区「下载…」→ AppModal.download →
+    refine_asr_download + 1s 轮询 + settle 后 asrRefresh；PENDING 镜像
+    （!verified）前端同口径禁用。"""
+    src = _app_js_source()
+    body = _extract_function(src, "asrRenderRecList")
+    assert "MSG.asrDownloadBtn" in body, "下载按钮文案键缺失"
+    assert "asrDownloadModal(rec)" in body, "下载模态调用缺失"
+    dl = _extract_function(src, "asrDownloadModal")
+    assert "refine_asr_download(" in dl, "下载桥调用缺失"
+    assert "refine_asr_download_progress(" in dl, "进度轮询桥缺失"
+    assert "setInterval" in dl, "1s 轮询缺失"
+    assert "asrRefresh()" in dl, "settle 后刷新推荐清单缺失"
+    assert "!s.verified" in dl, "PENDING 镜像禁用判定缺失"
+    assert "MSG.srcMirrorPendingHint" in dl, "禁用卡 hint 文案键缺失"
+    assert "MSG.asrDlNoCancel" in dl, "无取消声明文案缺失"
+    assert "MSG.dictFallbackNotice" in dl, "回退提示文案键缺失"
+
+
+def test_dict_source_buttons_pinned():
+    """词典源双按钮：JS 注入零 id + CN 可达性 title + 无镜像禁用逻辑 +
+    dictDownload source 透传 + p.note 可见提示。"""
+    src = _app_js_source()
+    body = _extract_function(src, "dictRenderDetail")
+    assert "dict-src-official" in body and "dict-src-mirror" in body, \
+        "双按钮 class 注入缺失"
+    assert "MSG.dictSrcOfficialOnly" in body and "MSG.dictSrcMirrorOnly" in body, \
+        "双按钮文案键缺失"
+    assert "MSG.dictSrcOfficialHint" in body, "官方源 CN 可达性 title 缺失"
+    assert "has_mirror" in body, "无镜像禁用判定缺失"
+    assert "MSG.dictSrcMirrorlessHint" in body, "无镜像禁用 title 文案缺失"
+    dl = _extract_function(src, "dictDownload")
+    assert re.search(r"refine_dict_download\(kind,\s*source\s*\|\|\s*'auto'\)", dl), \
+        "refine_dict_download 须透传 source（缺省 auto）"
+    assert "p.note" in dl, "轮询回调缺 p.note 可见提示（评议员条件①）"

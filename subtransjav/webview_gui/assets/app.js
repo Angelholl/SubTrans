@@ -480,6 +480,9 @@ const MSG = {
     // 2.4.0 批1/批2（JS 态键，不入 data-i18n 快照）：自制模态按钮 + 首启引导
     ui_ok: '确定',
     ui_cancel: '取消',
+    // 2.6.3 批B：AppModal.download 复制轻提示（clipboard 不可用时降级 title 提示）
+    ui_copied: '已复制',
+    ui_copy_manual: '无法自动复制，请长按/手动选择复制',
     first_run_guide: '首次使用：点击「添加文件」导入 .srt 字幕，或直接拖入文件开始翻译。',
     // 2.5.0 修复批（JS 态键）：词典 full 变体/云分析确认/角色卡跳转与回落提示
     dict_sudachi_full_label: '日语词典·完整版（sudachi full）',
@@ -543,6 +546,26 @@ const MSG = {
     asrPlaceHint: (cacheDir, modelsDir, fileName) =>
       `落位（文件名须为 ${fileName}）：优先放入默认缓存 ${cacheDir}（零配置），或应用数据目录 ${modelsDir}（备选）`,
     asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
+    // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-05 五条件）：ASR 下载器 + 词典
+    // 源选择（全 JS 态键，零静态 i18n 消耗；index.html 冻结期 body 全 createElement）
+    asrDownloadBtn: '下载…',
+    asrDownloadTitle: '下载模型',
+    asrDlMetaSource: '来源',
+    asrDlMetaSize: '大小',
+    asrDlMetaSha: 'sha256',
+    asrDlMetaLicense: '许可证',
+    asrDlNoCancel: '下载不支持暂停/取消；中途关闭应用即中断，重新下载将从零开始',
+    asrDlStart: '开始下载',
+    asrDlDone: '下载完成',
+    asrDlFailed: '下载失败',
+    srcOfficialLabel: '官方源',
+    srcMirrorLabel: '国内加速源',
+    srcMirrorPendingHint: '需实测下载比对验证后才能启用，当前版本不可用',
+    dictSrcOfficialOnly: '仅官方',
+    dictSrcMirrorOnly: '仅镜像',
+    dictSrcOfficialHint: 'pythonhosted 官方源在中国大陆常不可达，失败请用「下载」（自动源）',
+    dictSrcMirrorlessHint: '该词典暂无镜像源（官方 CDN 单源）；可用 CLI --dict-from-file 离线导入',
+    dictFallbackNotice: '官方源不可达，已回退镜像源',
     // 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档
     aggregateWindowLabel: '跨片窗口',
     aggregateWindow7: '7 天',
@@ -642,9 +665,13 @@ const AppModal = {
     _busy: false,        // 硬性条款①：打开中守卫——单例，防 F5 连按/glAdd 双击叠加
     _kind: null,
     _resolve: null,
+    _dlRunning: false,   // 2.6.3 批B：download 模态下载进行中（onStart Promise 未 settle）
 
     _settle(value) {
         if (!this._busy) return;
+        // 2.6.3 批B：下载进行中 ESC/遮罩点击/取消键全部 no-op（无取消语义，
+        // 评议员条件①；完成/失败后 _dlRunning 复位，关闭键恢复可用）
+        if (this._kind === 'download' && this._dlRunning) return;
         this._busy = false;
         this._kind = null;
         const resolve = this._resolve;
@@ -710,7 +737,225 @@ const AppModal = {
 
     alert(title, body) { return this._open('alert', title, body); },
     confirm(title, body, opts) { return this._open('confirm', title, body, undefined, opts); },
-    prompt(title, body, def) { return this._open('prompt', title, body, def); }
+    prompt(title, body, def) { return this._open('prompt', title, body, def); },
+
+    // ============================================================
+    // download 模态（2.6.3 批B，D2026-1003-01 ②）：源单选卡+meta 行+无取消
+    // 声明+全宽开始键+进度区一体化。复用 #appModal 骨架（title/关闭键），
+    // body 内容全 createElement 注入（FROZEN_IDS 冻结：零新增 id/data-i18n）。
+    // 不走 _open 三分支（alert/confirm/prompt 行为零变化），但复用其
+    // dataset.bound 一次性监听绑定（遮罩/取消/ESC→_settle，_settle 内
+    // _dlRunning 守卫承载"下载中 no-op"）。
+    // opts = {title, sources:[{key,label,hint,disabled}],
+    //         meta:[{label,value,copyable}], notice,
+    //         onStart(sourceKey, update)->Promise<{ok,message}>, onClose?}
+    // update(snap) 为进度区渲染回调（snap={phase,downloaded,total,note}）。
+    // ============================================================
+    download(opts) {
+        if (this._busy) return Promise.resolve(false);      // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve(false);           // 骨架缺席兜底
+        const o = opts || {};
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = o.title || '';
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';   // .modal-card .modal-body 默认 pre-wrap，布局需正常折行
+        input.style.display = 'none';
+        okBtn.style.display = 'none';       // download 只留关闭键（确认语义由开始键承载）
+        okBtn.textContent = '';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                if (e.target === root) AppModal._settle(AppModal._cancelValue());
+            });
+            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
+            document.addEventListener('keydown', (e) => {
+                if (!AppModal._busy) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
+                }
+            });
+        }
+
+        // —— 源单选卡（label+radio；disabled 卡灰态，radio 默认选第一个非禁用）——
+        const sources = o.sources || [];
+        const srcBox = document.createElement('div');
+        srcBox.className = 'dl-src-list';
+        const radios = [];
+        sources.forEach((s) => {
+            const card = document.createElement('label');
+            card.className = 'dl-src-card' + (s.disabled ? ' dl-src-disabled' : '');
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'dl-src-choice';
+            radio.value = String(s.key || '');
+            if (s.disabled) radio.disabled = true;
+            const txt = document.createElement('span');
+            txt.className = 'dl-src-label';
+            txt.textContent = s.label || s.key || '';
+            card.appendChild(radio);
+            card.appendChild(txt);
+            if (s.hint) {
+                const hint = document.createElement('span');
+                hint.className = 'dl-src-hint muted';
+                hint.textContent = s.hint;
+                card.appendChild(hint);
+            }
+            radio.addEventListener('change', () => {
+                radios.forEach((r) => r.closest('.dl-src-card')
+                  .classList.toggle('dl-src-selected', r.checked));
+            });
+            srcBox.appendChild(card);
+            radios.push(radio);
+        });
+        body.appendChild(srcBox);
+        const firstEnabled = radios.find((r) => !r.disabled);
+        if (firstEnabled) {
+            firstEnabled.checked = true;
+            firstEnabled.closest('.dl-src-card').classList.add('dl-src-selected');
+        }
+
+        // —— meta 行表（copyable 行点击复制+「已复制」轻提示）——
+        (o.meta || []).forEach((m) => {
+            const row = document.createElement('div');
+            row.className = 'dl-meta-row';
+            const lab = document.createElement('span');
+            lab.className = 'dl-meta-label';
+            lab.textContent = (m.label || '') + (m.label ? '：' : '');
+            const val = document.createElement('span');
+            val.textContent = m.value == null ? '' : String(m.value);
+            row.appendChild(lab);
+            row.appendChild(val);
+            if (m.copyable && m.value) {
+                val.className = 'dl-copyable';
+                val.title = String(m.value);
+                val.addEventListener('click', () => {
+                    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                        val.title = MSG.ui_copy_manual;     // clipboard 不可用：title 提示手动复制
+                        return;
+                    }
+                    navigator.clipboard.writeText(String(m.value)).then(() => {
+                        val.textContent = MSG.ui_copied;
+                        setTimeout(() => { val.textContent = String(m.value); }, 1200);
+                    }).catch(() => { val.title = MSG.ui_copy_manual; });
+                });
+            }
+            body.appendChild(row);
+        });
+
+        // —— 无取消声明（无取消语义成文）——
+        if (o.notice) {
+            const note = document.createElement('div');
+            note.className = 'dl-notice muted';
+            note.textContent = o.notice;
+            body.appendChild(note);
+        }
+
+        // —— 全宽开始键 + 进度区（bar/fill/text 三件套，class 独立 .dl-progress-*）+ 结果行 ——
+        const startBtn = document.createElement('button');
+        startBtn.type = 'button';
+        startBtn.className = 'btn btn-primary modal-dl-start';
+        startBtn.textContent = MSG.asrDlStart;
+        if (!firstEnabled) startBtn.disabled = true;        // 全 disabled → 开始禁用
+        body.appendChild(startBtn);
+        const prog = document.createElement('div');
+        prog.className = 'dl-progress';
+        prog.style.display = 'none';
+        const bar = document.createElement('div');
+        bar.className = 'dl-progress-bar';
+        const fill = document.createElement('div');
+        fill.className = 'dl-progress-fill';
+        bar.appendChild(fill);
+        const text = document.createElement('div');
+        text.className = 'dl-progress-text';
+        prog.appendChild(bar);
+        prog.appendChild(text);
+        body.appendChild(prog);
+        const result = document.createElement('div');
+        result.className = 'dl-result';
+        result.style.display = 'none';
+        body.appendChild(result);
+        const fmtMB = (n) => (n / 1048576).toFixed(1);
+
+        startBtn.addEventListener('click', () => {
+            if (this._dlRunning) return;
+            const sel = radios.find((r) => r.checked && !r.disabled);
+            if (!sel || typeof o.onStart !== 'function') return;
+            this._dlRunning = true;
+            startBtn.disabled = true;
+            cancelBtn.disabled = true;      // 下载中关闭键不可用（完成/失败后恢复）
+            prog.style.display = '';
+            fill.style.width = '';
+            bar.classList.add('indeterminate');
+            text.textContent = '';
+            result.style.display = 'none';
+            let poller = null;
+            const stopPoll = () => { if (poller) { clearInterval(poller); poller = null; } };
+            const render = (snap) => {
+                snap = snap || {};
+                if (snap.phase === 'download' && snap.total) {
+                    bar.classList.remove('indeterminate');
+                    fill.style.width =
+                      Math.min(100, Math.round((snap.downloaded || 0) / snap.total * 100)) + '%';
+                    text.textContent = `${fmtMB(snap.downloaded || 0)}/${fmtMB(snap.total)}MB`;
+                } else {
+                    fill.style.width = '';
+                    bar.classList.add('indeterminate');
+                    text.textContent = snap.phase === 'verify' ? MSG.dict_verify
+                      : MSG.dict_downloading;
+                }
+                if (snap.note) text.textContent += '｜' + snap.note;   // 回退可见提示（条件①）
+            };
+            Promise.resolve()
+              .then(() => o.onStart(sel.value, render))
+              .then((res) => {
+                  stopPoll();
+                  this._dlRunning = false;
+                  prog.style.display = 'none';
+                  const ok = !!(res && res.ok);
+                  result.style.display = '';
+                  result.className = 'dl-result ' + (ok ? 'dl-result-ok' : 'dl-result-err');
+                  result.textContent = (ok ? MSG.asrDlDone : MSG.asrDlFailed)
+                    + '：' + ((res && res.message) || '');
+                  cancelBtn.disabled = false;   // 关闭键恢复可用
+              })
+              .catch((e) => {
+                  stopPoll();
+                  this._dlRunning = false;
+                  prog.style.display = 'none';
+                  result.style.display = '';
+                  result.className = 'dl-result dl-result-err';
+                  result.textContent = MSG.asrDlFailed + '：'
+                    + (e && e.message ? e.message : String(e));
+                  cancelBtn.disabled = false;
+              });
+        });
+
+        // 收口：关闭时恢复骨架默认态（_open 不重置 okBtn.display/whiteSpace，
+        // download 自清理防污染后续 alert/confirm/prompt）
+        const closeResolve = () => {
+            okBtn.style.display = '';
+            body.style.whiteSpace = '';
+            if (typeof o.onClose === 'function') o.onClose();
+        };
+        this._busy = true;
+        this._kind = 'download';
+        this._dlRunning = false;
+        root.style.display = 'flex';
+        startBtn.focus();
+        return new Promise((resolve) => {
+            this._resolve = (value) => { closeResolve(); resolve(value); };
+        });
+    }
 };
 
 // ============================================================
@@ -3617,6 +3862,9 @@ function switchTab(tabId) {
       const hint = (rec.support === 'available' && cacheDir)
         ? '。' + MSG.asrPlaceHint(cacheDir, modelsDir,
                                   (rec.model || rec.name) + '.pt') : '';
+      // 2.6.3 批B：available 且未就位且清单带 sources → 展开区提供下载入口
+      const canDl = rec.support === 'available' && !rec.present
+        && Array.isArray(rec.sources) && rec.sources.length > 0;
       // 长 URL/sha256 折叠进展开详情，summary 行只留摘要（防撑爆卡片）
       const item = document.createElement('details');
       item.className = 'asr-rec-item';
@@ -3625,7 +3873,7 @@ function switchTab(tabId) {
       sum.textContent = rec.name + '：' + badge + size + srcPart + hint;
       if (rec.url) sum.title = rec.url;
       item.appendChild(sum);
-      if (rec.url || rec.sha256) {
+      if (rec.url || rec.sha256 || canDl) {
         const detail = document.createElement('div');
         detail.className = 'asr-rec-detail muted';
         if (rec.url) {
@@ -3638,9 +3886,91 @@ function switchTab(tabId) {
           fpRow.textContent = 'sha256：' + rec.sha256;
           detail.appendChild(fpRow);
         }
+        // 下载入口（AppModal.download 源选择模态；热修 details 结构内零 id）
+        if (canDl) {
+          const actions = document.createElement('div');
+          actions.className = 'asr-rec-actions';
+          const dlBtn = document.createElement('button');
+          dlBtn.type = 'button';
+          dlBtn.className = 'btn btn-ghost btn-sm';
+          dlBtn.textContent = MSG.asrDownloadBtn;
+          dlBtn.addEventListener('click', () => asrDownloadModal(rec));
+          actions.appendChild(dlBtn);
+          detail.appendChild(actions);
+        }
         item.appendChild(detail);
       }
       box.appendChild(item);
+    });
+  }
+
+  // 2.6.3 批B（D2026-1003-01 ②）：ASR 模型下载模态（AppModal.download 调用方）。
+  // 源卡 disabled=后端 s.disabled 或未 verified（PENDING 镜像永不上候选，
+  // 与下载器 verified==True 候选集一致）；onStart 桥 refine_asr_download +
+  // 1s setInterval 轮询 refine_asr_download_progress 刷进度区（模态单例，
+  // owned 语义简化）；settle 后 asrRefresh() 刷新推荐清单（徽标翻转）。
+  function asrDownloadModal(rec) {
+    const srcLabel = (s) => (s.source === 'official' ? MSG.srcOfficialLabel
+      : MSG.srcMirrorLabel);
+    const sources = (rec.sources || []).map((s) => {
+      const disabled = !!s.disabled || !s.verified;
+      return {
+        key: s.source,
+        label: srcLabel(s),
+        hint: disabled ? (s.note || MSG.srcMirrorPendingHint) : '',
+        disabled: disabled,
+      };
+    });
+    let lastBytes = 0;
+    let sawFallbackNote = false;
+    const meta = [
+      { label: MSG.asrDlMetaSource, value: sources.length
+        ? (sources.find((s) => !s.disabled) || sources[0]).label : '' },
+      { label: MSG.asrDlMetaSize, value: rec.bytes ? fmtGB(rec.bytes) : '' },
+      { label: MSG.asrDlMetaSha, value: rec.sha256 || '', copyable: true },
+      { label: MSG.asrDlMetaLicense, value: rec.license || '' },
+    ];
+    AppModal.download({
+      title: MSG.asrDownloadTitle + '：' + rec.name,
+      sources: sources,
+      meta: meta,
+      notice: MSG.asrDlNoCancel,
+      onStart: async (key, render) => {
+        const api = window.pywebview && window.pywebview.api;
+        if (!api || !api.refine_asr_download) {
+          return { ok: false, message: MSG.unknown };
+        }
+        const poll = setInterval(async () => {
+          try {
+            const p = await api.refine_asr_download_progress(rec.name);
+            if (p && p.success && p.phase) {
+              if (typeof p.downloaded === 'number' && p.downloaded > 0) {
+                lastBytes = p.downloaded;
+              }
+              if (p.note) sawFallbackNote = true;
+              render(p);
+            }
+          } catch (e) { /* 进度轮询失败不干扰主流程 */ }
+        }, 1000);
+        try {
+          const r = await api.refine_asr_download(rec.name, key);
+          if (r && r.success) {
+            try {
+              const f = await api.refine_asr_download_progress(rec.name);
+              if (f && f.success) render(f);
+            } catch (e) { /* ignore */ }
+            const extra = sawFallbackNote ? '，' + MSG.dictFallbackNotice : '';
+            return { ok: true,
+                     message: `${r.path}（${fmtGB(lastBytes || rec.bytes || 0)}${extra}）` };
+          }
+          return { ok: false, message: (r && r.error) || MSG.unknown };
+        } catch (e) {
+          return { ok: false, message: String(e) };
+        } finally {
+          clearInterval(poll);
+          asrRefresh();     // settle 后刷新推荐清单（已就位徽标翻转）
+        }
+      },
     });
   }
 
@@ -4097,6 +4427,9 @@ function switchTab(tabId) {
   let _dictCustomDir = null;
   let _dictNeedsMigration = false;
   let _dictOldDir = '';
+  // 2.6.3 批B（D2026-1003-05 条件②）：源摘要缓存（{kind: {has_official,
+  // has_mirror}}），「仅镜像」键 disabled 门控读取
+  let _dictSourcesCache = {};
   function dictLoad() {
     const box = $('dictRows');
     if (!box || !window.pywebview || !pywebview.api ||
@@ -4110,6 +4443,7 @@ function switchTab(tabId) {
       _dictStatusCache = (r && r.dicts) || {};
       _dictDirCache = (r && r.effective_dir) || (r && r.dict_dir) || '';
       _dictCustomDir = (r && r.custom_dir) || null;
+      _dictSourcesCache = (r && r.sources) || {};
       // 空态引导条（C2 修正）：条件=sudachi 未安装——english_rules 规则级
       // 恒 available（dict_manager.py 实证），"三词典全未安装"不可达
       const sudachiInfo = _dictStatusCache.sudachi || {};
@@ -4233,10 +4567,53 @@ function switchTab(tabId) {
         btn.dataset.bound = '1';
         btn.addEventListener('click', () => dictDownload($('dictSelect').value, btn));
       }
+      // 源选择双按钮（2.6.3 批B，D2026-1003-05 条件②①）：JS 注入零 id
+      // （FROZEN_IDS 冻结），挂在 #dictActionBtn 同级（#dictDetail 容器），
+      // class 一次创建 + 每次渲染刷状态（dataset.bound 防重挂监听）
+      const row = btn.parentElement;
+      if (row && dlItem.downloadable) {
+        let offBtn = row.querySelector('.dict-src-official');
+        if (!offBtn) {
+          offBtn = document.createElement('button');
+          offBtn.type = 'button';
+          offBtn.className = 'btn btn-ghost btn-compact dict-src-official';
+          offBtn.textContent = MSG.dictSrcOfficialOnly;
+          offBtn.title = MSG.dictSrcOfficialHint;   // CN 可达性提示
+          offBtn.addEventListener('click', () =>
+            dictDownload($('dictSelect').value, offBtn, 'official'));
+          row.insertBefore(offBtn, btn);
+        }
+        let mirBtn = row.querySelector('.dict-src-mirror');
+        if (!mirBtn) {
+          mirBtn = document.createElement('button');
+          mirBtn.type = 'button';
+          mirBtn.className = 'btn btn-ghost btn-compact dict-src-mirror';
+          mirBtn.textContent = MSG.dictSrcMirrorOnly;
+          mirBtn.addEventListener('click', () =>
+            dictDownload($('dictSelect').value, mirBtn, 'mirror'));
+          row.insertBefore(mirBtn, offBtn);
+        }
+        offBtn.style.display = '';
+        mirBtn.style.display = '';
+        // 无镜像 kind（sudachi_full=官方 CDN 单源）→ disabled + 离线导入指引
+        const srcInfo = _dictSourcesCache[kind] || {};
+        const hasMirror = srcInfo.has_mirror !== false;
+        mirBtn.disabled = !hasMirror;
+        mirBtn.title = hasMirror ? '' : MSG.dictSrcMirrorlessHint;
+      } else if (row) {
+        // 不可下载 kind：双按钮一并隐藏
+        const offBtn = row.querySelector('.dict-src-official');
+        const mirBtn = row.querySelector('.dict-src-mirror');
+        if (offBtn) offBtn.style.display = 'none';
+        if (mirBtn) mirBtn.style.display = 'none';
+      }
     }
   }
-  async function dictDownload(kind, btn) {
+  async function dictDownload(kind, btn, source) {
     const st = $('dictStatus');
+    // 终态按钮文案（2.6.3 批B）：双按钮路径恢复各自标签，主按钮恢复「下载」
+    const doneLabel = source === 'official' ? MSG.dictSrcOfficialOnly
+      : source === 'mirror' ? MSG.dictSrcMirrorOnly : MSG.dict_download;
     // 进度迁移（2.3.1 批1）：实时进度显示在详情区独立进度条 #dictProgress，
     // #dictStatus 降级为终态行+错误兜底（轮询中的 MB 文本不再写 #dictStatus）
     const prog = $('dictProgress');
@@ -4282,6 +4659,9 @@ function switchTab(tabId) {
         const sel = $('dictSelect');
         const owned = !sel || sel.value === kind;
         renderProgress(p.phase, p.downloaded || 0, p.total, owned);
+        // 回退可见提示（2.6.3 批B 评议员条件①）：auto 轮换不再静默，
+        // note 写 #dictStatus（后端快照粘滞字段，轮询必能采样）
+        if (p.note && owned && st) st.textContent = p.note;
         if (!owned) return;
         if (p.phase === 'download') {
           if (btn) btn.textContent = MSG.dict_downloading;   // 纯文案，百分比迁移至进度条
@@ -4293,7 +4673,8 @@ function switchTab(tabId) {
       } catch (e) { /* 进度轮询失败不干扰主流程 */ }
     }, 1000);
     try {
-      const r = await pywebview.api.refine_dict_download(kind);
+      // 源透传（2.6.3 批B）：undefined/非法由后端按 auto 处理
+      const r = await pywebview.api.refine_dict_download(kind, source || 'auto');
       if (r && r.success) {
         // 终态大小以 done 快照为准（轮询最后一拍可能滞后）
         try {
@@ -4316,7 +4697,7 @@ function switchTab(tabId) {
       if (!sel || sel.value === kind) {
         // 终态与当前选中词典一致才直改按钮；不一致交由 dictLoad()→
         // dictRenderDetail() 重刷详情区对齐（重渲染不触碰静态进度条）
-        if (btn) { btn.disabled = false; btn.textContent = MSG.dict_download; }
+        if (btn) { btn.disabled = false; btn.textContent = doneLabel; }
       }
       dictLoad();
     }

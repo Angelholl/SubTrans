@@ -1178,12 +1178,16 @@ class TranslateAPI:
             _log_exc("refine_dict_status")
             return {"success": False, "error": str(e)}
 
-    def refine_dict_download(self, kind: str) -> dict[str, Any]:
+    def refine_dict_download(self, kind: str, source: str = "auto") -> dict[str, Any]:
         """显式下载词典（2.1；当前仅 sudachi；SHA256 不符拒绝落位）。
 
         同步执行（下载几十 MB 级 wheel，GUI 侧按钮转下载中态，进度经
         refine_dict_download_progress 1s 轮询）；网络失败与校验失败
         分开报错（DictDownloadError / DictChecksumError）。
+
+        source（2.6.3 批B，D2026-1003-05 条件②①）：源选择 ∈ {auto,
+        official, mirror}，非法值按 auto；透传 download_dict（auto 保持
+        原单参调用，既有 mock/调用方零改动兼容）。
         """
         try:
             from subtransjav.refine.dict_manager import (
@@ -1195,7 +1199,9 @@ class TranslateAPI:
                 # 2.5.0 修复A：kind 兼容三联——硬拒放开为双词典 kind 白名单
                 return {"success": False,
                         "error": msg("dict_kind_unsupported")}
-            path = download_dict(kind)
+            path = (download_dict(kind, source=source)
+                    if source in ("official", "mirror")
+                    else download_dict(kind))   # auto 保持单参调用（既有 mock 零改动兼容）
             return {"success": True, "path": path}
         except DictDownloadError as e:
             return {"success": False,
@@ -1219,6 +1225,54 @@ class TranslateAPI:
             return {"success": True, **download_progress(kind)}
         except Exception as e:
             _log_exc("refine_dict_download_progress")
+            return {"success": False, "error": str(e)}
+
+    def refine_asr_download(self, model: str, source: str = "auto") -> dict[str, Any]:
+        """显式下载推荐 ASR 模型（2.6.3 批B，D2026-1003-01 ②）。
+
+        model 白名单=推荐清单中 support=="available" 的 name；source ∈
+        {auto, official, mirror}（镜像 PENDING 时 mirror 显式报"暂无可用
+        镜像源"）。同步执行（3GB 档大文件，GUI 侧经 refine_asr_download_
+        progress 1s 轮询）；AsrDownloadError/AsrChecksumError 统一转
+        success=False + error（校验失败为后者的子类，一并覆盖）。
+        """
+        try:
+            from subtransjav.refine import asr_env
+            from subtransjav.refine.asr_downloader import (
+                AsrChecksumError,
+                AsrDownloadError,
+                download_asr_model,
+            )
+            ok_models = {str(e.get("name"))
+                         for e in asr_env.ASR_RECOMMENDED_MODELS
+                         if e.get("support") == "available"}
+            if str(model or "") not in ok_models:
+                return {"success": False,
+                        "error": f"未知或不可下载的 ASR 模型: {model}"}
+            if source not in ("auto", "official", "mirror"):
+                return {"success": False, "error": f"非法下载源: {source}"}
+            path = download_asr_model(str(model), source)
+            return {"success": True, "path": path}
+        except AsrChecksumError as e:
+            return {"success": False, "error": str(e)}
+        except AsrDownloadError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            _log_exc("refine_asr_download")
+            return {"success": False, "error": str(e)}
+
+    def refine_asr_download_progress(self, model: str) -> dict[str, Any]:
+        """ASR 模型下载进度快照（2.6.3 批B；只读零副作用）。
+
+        快照结构与词典下载进度同形：phase ∈ download/verify/done/failed，
+        可选 note=源回退可见提示（评议员条件①）。"""
+        try:
+            from subtransjav.refine.asr_downloader import (
+                asr_download_progress,
+            )
+            return {"success": True, **asr_download_progress(str(model))}
+        except Exception as e:
+            _log_exc("refine_asr_download_progress")
             return {"success": False, "error": str(e)}
 
     def refine_pick_dict_dir(self) -> dict[str, Any]:
