@@ -2861,3 +2861,13 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 
 **风险跟踪追加**：⑥大文件直连重试为全量重下（sudachi_full 137MB）成本观测；⑦候选B bounded 未复现仍须带 identity 二分证据闭账；⑧③a 干净网络实证不可 CI 证，以 C10 留档形态兜底。**开工契约**=本条正文+追记+本节（C1-C10 终审版+设计 C1-C11+三条精确化+三条陷阱）为唯一施工依据，段1 首件=候选A 归属算法规格+C3 诊断契约先行。
 
+### 【段1 落库追记 2026-10-04】审查采纳轨迹+候选B 闭账+口径回写
+
+**段1 施工与验证**：worktree D:/SubTrans-d265-seg1（feature/d265-dict-chain，merge-base=32856ea）三路 coding 并行（文件面互斥）；验证链全过=ruff（CI 同口径 subtransjav tests）零违规→定向 34+22+3 passed→**全量 1898 passed+6 skipped（基线 1887+4 只增）**→冒烟（--help/--where FTS5 可用/--dict-status 实测「jieba 分词自检: OK（3 tokens）」/convert_file 真转时间轴断言过）→Mimosa worktree 首扫 27（新路径基线；改动面 dict_manager×3/subtitle_convert×1/cli×1 均为既有留痕族行号漂移，identity 零新增）。CI ruff 扫描面外 8 处系 main 既有 spike/ 遗留（0c9d1f9 入库），本批不动守范围纪律。
+
+**code-review 双轴（基点 32856ea，push 前硬门）采纳轨迹**：Standards 1 硬违规＝`last_err.diag` 赋值破 mypy 基线门（attr-defined）→**已修**（DictDownloadError 类级 `diag: dict | None = None` 声明，mypy 基线门复验 0 外）；judgement call 3 条驳回留档：①subtitle 候选裸 dict 不提 TypedDict（dropped_details 契约本就是松散 dict，段2 GUI 消费时再议）②`_DIAG_FIELDS` 非摆设（C3 点名契约常量+测试断言引用）③jieba 自检入 `_cmd_dict_status`（C4 点名落位）。Spec 4 条：C8 闭账证据→本节下方留档；C10 ③a 执行人/证据留档＝批4 收尾义务非本批；`test_http_get_default_progress_none_streaming` 精确→单调＝C8 契约原文指令（「另两个改单调递增+终态不变量」）非 scope creep；VTT 空 cue 用例＝无害外延收（基线只增）。
+
+**候选B 闭账记录（C8 未复现分支，观察项就此闭账）**：有界复现＝worktree venv 流式三测 50 清空循环+4 进程负载下 20 循环全零失败（累计 73 次未再现，含登记时 3 次）；根因二分＝测试 seam 由 monkeypatch `urllib.request.urlopen` 迁 `build_opener` 桩工厂+模块级 `_REAL_BUILD_OPENER` identity 断言（补丁失效/泄漏立即红灯，封死"走真实网络"类时序根因的无诊断复发）；断言加固＝精确序列保留一例（最确定 fixture）+另两例改单调递增+终态不变量。
+
+**口径回写两条**：①C3 诊断 `proxy` 字段取值定稿 **"system"/"direct"**（较 on/off 判别力更强，段2 #6 消费按此）；②守卫拦截（302 非白名单）计入网络层失败参与直连重试＝经裁定接受（同 URL 有界重试、attempt#2 同守卫再拦，「绝不跟随非白名单重定向」不变量与 sha256 兜底均保持）。
+

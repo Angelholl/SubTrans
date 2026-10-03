@@ -1,17 +1,25 @@
 """dict_manager 词典管理单元测试（2.1 基建，D2026-0930-03 ②④）。
 
-零真实网络：urlopen 一律 monkeypatch；哈希用当次构造内容现算。
+零真实网络：D2026-1004-01 候选B 后下载链走显式 build_opener（不再用裸
+urlopen），网络桩统一 monkeypatch ``urllib.request.build_opener``；
+模块级 ``_REAL_BUILD_OPENER`` 兜底 identity 断言防补丁泄漏走真实网络
+（单次时序 flake 头号嫌疑）。哈希用当次构造内容现算。
 """
 import hashlib
 import io
 import sys
 import types
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
 import pytest
 
 from subtransjav.refine import dict_manager as dm
+
+# 打补丁前的真身（模块导入期捕获；测试内断言 build_opener 已被替换）
+_REAL_BUILD_OPENER = urllib.request.build_opener
 
 
 # ---------------------------------------------------------------------------
@@ -196,14 +204,58 @@ class _StreamResponse:
         return False
 
 
+def _patch_build_opener(monkeypatch, responder, poison_proxies=False):
+    """统一新 seam（D2026-1004-01 候选B C8）：下载链已弃裸 urlopen 改显式
+    build_opener，流式测试统一打桩 build_opener。
+
+    返回 ``(handlers_seen, open_calls)``：前者按序记录每次 build_opener
+    收到的 handlers（供两跳状态机断言），后者记录真正发起的 open 请求
+    （供"恰 N 次 fetch"断言）。
+
+    桩工厂模拟真实 build_opener 的代理语义：未显式传 ProxyHandler 的
+    attempt 视为系统代理跳（poison_proxies=True 时经 getproxies() 取毒
+    代理——测试需另行 monkeypatch getproxies）；显式 ProxyHandler 则取
+    其 proxies。代理非空的 attempt open 即抛 URLError（模拟代理坏损）。
+    """
+    handlers_seen = []
+    open_calls = []
+
+    def _factory(*handlers):
+        handlers_seen.append(handlers)
+        explicit = next((h for h in handlers
+                         if isinstance(h, urllib.request.ProxyHandler)),
+                        None)
+        if explicit is not None:
+            proxies = explicit.proxies
+        elif poison_proxies:
+            proxies = urllib.request.getproxies()
+        else:
+            proxies = {}
+
+        def _open(req, timeout=10):
+            open_calls.append(req)
+            if proxies:
+                raise urllib.error.URLError(f"代理不可达: {proxies}")
+            return responder(req)
+
+        return types.SimpleNamespace(open=_open)
+
+    monkeypatch.setattr(urllib.request, "build_opener", _factory)
+    return handlers_seen, open_calls
+
+
 def test_http_get_progress_callback_chunks(monkeypatch, tmp_path):
-    """分块 read + Content-Length → progress 回调序列 (n, total) 单调递增。"""
+    """分块 read + Content-Length → progress 回调精确序列 (n, total)。
+
+    D2026-1004-01 候选B：seam 由 urlopen 迁移至显式 build_opener；开头
+    identity 断言确认补丁生效（防补丁泄漏走真实网络）。"""
     payload = b"abcdefgh" * 2                       # 16 字节，chunk 4 → 4 块
     seen = []
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda req, timeout=10: _StreamResponse(payload, chunk=4,
-                                                total=len(payload)))
+    _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(payload, chunk=4, total=len(payload)))
+    assert urllib.request.build_opener is not _REAL_BUILD_OPENER, \
+        "build_opener 补丁未生效（会走真实网络）"
     dest = str(tmp_path / "x.whl")
     dm._http_get("https://files.pythonhosted.org/x.whl", dest,
                  progress=lambda n, t: seen.append((n, t)))
@@ -212,30 +264,183 @@ def test_http_get_progress_callback_chunks(monkeypatch, tmp_path):
 
 
 def test_http_get_progress_total_unknown(monkeypatch, tmp_path):
-    """无 Content-Length：total=None 仍逐块回调，落位字节完整。"""
+    """无 Content-Length：total=None 仍逐块回调（候选B 后改不变量断言：
+    单调递增 + 终态 (N, None) + 落盘字节完整）。"""
     payload = b"0123456789"
     seen = []
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda req, timeout=10: _StreamResponse(payload, chunk=5, total=None))
+    _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(payload, chunk=5, total=None))
     dest = str(tmp_path / "x.whl")
     dm._http_get("https://files.pythonhosted.org/x.whl", dest,
                  progress=lambda n, t: seen.append((n, t)))
     assert Path(dest).read_bytes() == payload
-    assert seen == [(5, None), (10, None)]
+    ns = [n for n, _ in seen]
+    assert ns == sorted(ns) and len(set(ns)) == len(ns), \
+        "downloaded 计数必须严格单调递增"
+    assert seen[-1] == (len(payload), None), "终态不变量 (N, total)"
+    assert all(t is None for _, t in seen)
 
 
 def test_http_get_default_progress_none_streaming(tmp_path, monkeypatch):
     """2.5.0 修复A：progress 缺省 None 也统一流式落盘（1MB 分块直写盘、
     不全量进内存），仅不上报进度；落位字节完整、无 .part 残留。"""
     payload = b"abcdefgh" * 2
-    monkeypatch.setattr(
-        "urllib.request.urlopen",
-        lambda req, timeout=10: _StreamResponse(payload, chunk=5, total=16))
+    _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(payload, chunk=5, total=len(payload)))
     dest = str(tmp_path / "x.whl")
     dm._http_get("https://files.pythonhosted.org/x.whl", dest)
     assert Path(dest).read_bytes() == payload
     assert not Path(dest + ".part").exists()
+
+
+def test_http_get_sends_accept_encoding_identity(monkeypatch, tmp_path):
+    """D2026-1004-01 C1：请求头带 Accept-Encoding: identity（防代理/gzip
+    注入，pin 校验按落盘字节）。"""
+    captured = {}
+
+    def _responder(req):
+        # urllib 对 header 键做首词归一（如 Accept-encoding），
+        # 侧写时保留原始键、断言时统一小写比对
+        captured["headers"] = dict(req.headers)
+        return _StreamResponse(b"ok", chunk=64, total=2)
+
+    _patch_build_opener(monkeypatch, _responder)
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    hdrs = {k.lower(): v for k, v in captured["headers"].items()}
+    assert hdrs.get("accept-encoding") == "identity"
+
+
+def test_http_get_content_length_mismatch_is_network_error(monkeypatch,
+                                                           tmp_path):
+    """D2026-1004-01：声明 Content-Length 与实收不符=网络层失败——
+    DictDownloadError 且消息含「预期/实收」字样；.part 已清、dest 未落位。"""
+    payload = b"x" * 50
+    _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(payload, chunk=64, total=100))
+    dest = str(tmp_path / "x.whl")
+    with pytest.raises(dm.DictDownloadError) as ei:
+        dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    assert "预期 100 字节" in str(ei.value)
+    assert "实收 50 字节" in str(ei.value)
+    assert not Path(dest).exists()
+    assert not Path(dest + ".part").exists()
+
+
+def test_http_get_poison_proxy_falls_back_direct(monkeypatch, tmp_path):
+    """D2026-1004-01 候选B C8：毒代理坏损 → attempt#1（系统代理，语义
+    仅指首发）失败、attempt#2 强制直连成功——build_opener 恰 2 次，第 2
+    次 handlers 含空 ProxyHandler，两跳均含 _DictGuardedRedirectHandler。"""
+    payload = b"PROXY-FALLBACK"
+    monkeypatch.setattr(urllib.request, "getproxies",
+                        lambda: {"https": "http://127.0.0.1:1"})
+    handlers_seen, open_calls = _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(payload, chunk=64, total=len(payload)),
+        poison_proxies=True)
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    assert Path(dest).read_bytes() == payload
+    assert len(handlers_seen) == 2, "build_opener 恰调 2 次（两跳）"
+    assert len(open_calls) == 2
+    first, second = handlers_seen
+    # attempt#1 不显式装 ProxyHandler（系统代理经默认处理器挂载）
+    assert not any(isinstance(h, urllib.request.ProxyHandler)
+                   for h in first)
+    # attempt#2 显式空 ProxyHandler（proxies=={}）= 强制直连
+    ph2 = [h for h in second if isinstance(h, urllib.request.ProxyHandler)]
+    assert len(ph2) == 1 and ph2[0].proxies == {}
+    # 两跳均挂逐跳守卫 handler（C6 集成面）
+    for handlers in (first, second):
+        assert any(isinstance(h, dm._DictGuardedRedirectHandler)
+                   for h in handlers)
+
+
+def test_checksum_mismatch_never_retried(monkeypatch, tmp_path):
+    """D2026-1004-01 C2（防洗白，D2026-1003-06 边界）：清单 pin 错 →
+    DictChecksumError 且底层 fetch 恰 1 次——无直连重试、无换源轮换；
+    双源变体：第 1 源校验失败后第 2 源零请求、异常上抛不被吞。"""
+    wheel = _fake_wheel()
+    # 单源清单：fetch 恰 1 次（attempt#1 成功即止，无直连重试跳）
+    handlers_seen, open_calls = _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(wheel, chunk=64, total=len(wheel)))
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": "0" * 64, "sha256_verified": True}])
+    with pytest.raises(dm.DictChecksumError):
+        dm.download_dict("sudachi")
+    assert len(open_calls) == 1
+    assert len(handlers_seen) == 1
+
+    # 双源变体：第 1 源校验失败 → 换新桩重新计数，仍恰 1 次 fetch
+    handlers_seen, open_calls = _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(wheel, chunk=64, total=len(wheel)))
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": "0" * 64, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": "0" * 64, "sha256_verified": True}])
+    with pytest.raises(dm.DictChecksumError):
+        dm.download_dict("sudachi")
+    assert len(open_calls) == 1, "校验失败不得换源再 fetch"
+    assert len(handlers_seen) == 1, "校验失败不得触发直连重试跳"
+
+
+def test_dict_redirect_guard_blocks_nonwhitelist():
+    """D2026-1004-01 C6：_DictGuardedRedirectHandler 逐跳守卫——302 目标
+    非 https 或域名不在白名单 → DictDownloadError（fp 先关闭）；白名单内
+    目标放行。（集成面由 poison-proxy 测试的两跳 handlers 断言覆盖）"""
+    handler = dm._DictGuardedRedirectHandler()
+
+    class _FP:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    req = urllib.request.Request("https://files.pythonhosted.org/a.whl")
+    for bad in ("http://files.pythonhosted.org/a.whl",        # 降级 http
+                "https://evil.example/a.whl"):                # 非白名单 host
+        fp = _FP()
+        with pytest.raises(dm.DictDownloadError):
+            handler.redirect_request(req, fp, 302, "Found", {}, bad)
+        assert fp.closed, "拒绝前必须先关闭半开连接"
+    good = handler.redirect_request(req, _FP(), 302, "Found", {},
+                                    "https://pypi.org/b.whl")
+    assert isinstance(good, urllib.request.Request)
+    assert good.full_url == "https://pypi.org/b.whl"
+
+
+def test_failed_snapshot_carries_diag(monkeypatch, tmp_path):
+    """D2026-1004-01 C3：CL 不符走完 download_dict → phase=failed 且快照
+    带 diag（_DIAG_FIELDS 七键齐全；proxy ∈ {system, direct}、attempts
+    ∈ {1, 2}）；.part 残留已清。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": "1" * 64, "sha256_verified": True}])
+    _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(b"x" * 50, chunk=64, total=100))
+    with pytest.raises(dm.DictDownloadError):
+        dm.download_dict("sudachi")
+    snap = dm.download_progress("sudachi")
+    assert snap["phase"] == "failed"
+    diag = snap["diag"]
+    assert set(diag) == set(dm._DIAG_FIELDS)
+    assert diag["expected_bytes"] == 100
+    assert diag["actual_bytes"] == 50
+    assert diag["proxy"] in {"system", "direct"}
+    assert diag["attempts"] in {1, 2}
+    assert "pythonhosted" in diag["url"]
+    assert not list((tmp_path / "dict" / "sudachi").glob("*.part"))
 
 
 def test_download_dict_progress_phase_chain(monkeypatch, tmp_path):

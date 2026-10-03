@@ -98,3 +98,26 @@
 - CLI：config_from_args 输入收集后插转换步（N=0 零噪音；ConvertError→exit 2 不带病进管线）；显式 -i 无 .srt 后缀强制（实证），零放行政动；--input-dir 目录扫描保持 *.srt 范围外；
 - GUI：select_srt_files 对话框加 file_type_subtitle 过滤；strings.py 后端键表加该键（不在 app.js 静态 i18n 冻结集内，无解冻面）；
 - 已知收敛：规格第 8 项"坏行行号+原文进告警清单"实现收敛为"剔除计数"（pysubs2 静默吞坏行，行号需前置逐行预洗，+15 行改动面）——单人用户按"计数可见"够用，需要行号明细时小版本补。→ **已认领：2.6.5 段1⑤（D2026-1004-01 追记 2026-10-04），行号语义=源文件物理行号，告警含原文摘录+上限聚合。**
+
+## 2.6.5 段1⑤ 坏行行号明细——归属算法规格（D2026-1004-01 正式复评 C7，2026-10-04）
+
+**范围钉死**：仅「剔除空事件（dropped_empty）」升级为行号+原文明细；相邻重叠顺延/标签剥除维持纯计数（规格第 8 项原文即"坏行行号"，不扩面）。
+
+**预洗（pysubs2 解析前，同一份 `_decode` 后文本）**：
+- ASS/SSA：逐行扫描，记录 `[Events]` 段内最近一条 `Format:` 行并解析列名→下标映射（**Format 行驱动，禁位置硬编码**=规格第 2 项同源纪律；Format 缺失时该文件候选退化为"仅记行号+原文"）；对每条 `Dialogue:` 行（忽略大小写、容忍前导空白）按映射 `split(",", maxsplit=N-1)` 提取 Start/End（`H:MM:SS.cc`→毫秒）与 Text 原文，记 `(物理行号, start_ms, end_ms, text)`。
+- VTT：以含 `-->` 的时间轴行开块，块内后续非空行 join 为 text，记 `(时间轴行物理行号, start_ms, end_ms, text)`。
+- 时间戳解析失败的候选只记 `(行号, text)`，不参与 ts 匹配。
+- 预洗切行用 `splitlines()`（统一吃 CRLF/CR/LF），**行号=1-based 物理行号**（与编辑器行号一致）。
+
+**归属（对每个 dropped_empty 事件 ev）**：
+1. 候选集过滤 start==ev.start 且 end==ev.end；恰 1 条→命中（行号+原文摘录）。
+2. 多条（重复时间戳）→按 text 归一化（strip）过滤后恰 1 条→命中；否则「行号未定」。
+3. 零命中→「行号未定」。
+- ev 侧比对文本取 pysubs2 事件原始 text 字段（转义态）strip；空对空在步骤 2 命中。
+
+**告警文案（后端自由文本，CLI 逐行打印，GUI 零改动沿管线日志）**：
+- 命中条目：`第 L 行「原文摘录」`，摘录=候选 text strip 后截断 ≤40 字符加「…」；
+- 上限聚合：明细最多前 10 条，超出收尾`（等 N 处）`；部分未定收尾`（其中 K 处行号未定）`；全部未定→维持旧纯计数文案 `剔除空事件（坏行抢救）×N`。
+- 返回 dict 增 `dropped_details: list[dict]`（`line`/`text`/`resolved` 三键，结构化留未来 GUI 消费，本批 CLI 不打印结构化字段）。
+
+**三 fixture（tests/test_subtitle_convert.py）**：①SSA V4 字段序变体（`Format: Marked,Start,End,…`）空文本 Dialogue→行号正确；②utf-8-sig BOM+CRLF→行号与编辑器一致；③重复时间戳（同 start/end 一空一非空→text 消歧命中；双空→「行号未定」降级）。

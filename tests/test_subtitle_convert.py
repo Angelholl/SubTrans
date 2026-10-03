@@ -103,6 +103,10 @@ class TestVttTimestampTagStrip:
 
 class TestEmptyEventDrop:
     def test_bad_dialogue_line_dropped_and_counted(self, tmp_path):
+        """畸形坏行（预洗时间戳解析失败）→ 候选不参与 ts 匹配，行号未定，
+        告警退回纯计数兜底文案、dropped_details 记 resolved=False。
+        2.6.5 段1⑤ 行号明细特性的预期行为变更：可解析坏行才升级为
+        「第 L 行「摘录」」明细（见 TestBadLineDetail* 各用例）。"""
         from subtransjav.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "bad.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:20.00,0:00:22.00,Default,,0,0,0,,正常行前\n"
@@ -111,6 +115,8 @@ class TestEmptyEventDrop:
         res = convert_file(str(p))
         assert res["dropped_empty"] == 1
         assert any("剔除空事件（坏行抢救）×1" in w for w in res["warnings"])
+        assert res["dropped_details"] == [
+            {"line": None, "text": "", "resolved": False}]
         # 解析期 RuntimeWarning 进告警清单（吞错可见化）
         assert any("解析警告" in w for w in res["warnings"])
         out = Path(res["srt_path"]).read_text(encoding="utf-8")
@@ -118,6 +124,143 @@ class TestEmptyEventDrop:
         # 空事件零残留：产出仅 2 个 cue 时间轴行
         timeline = [ln for ln in out.splitlines() if "-->" in ln]
         assert len(timeline) == 2
+
+
+# ── ③' 坏行行号明细（2.6.5 段1⑤，D2026-1004-01 正式复评 C7） ─────────
+# 预洗行号=1-based 物理行号；_HDR 占 1-8 行、_EVFMT 占第 9 行，首个 Dialogue=第 10 行
+_HDR_LINES = [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour,"
+    " OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX,"
+    " ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL,"
+    " MarginR, MarginV, Encoding",
+    "Style: Default,Microsoft YaHei,20,&H00FFFFFF,&H000000FF,&H00000000,"
+    "&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1",
+    "",
+    "[Events]",
+]
+
+
+class TestBadLineDetailAss:
+    def test_ssa_v4_field_order_variant(self, tmp_path):
+        """fixture①：SSA V4 字段序变体（Marked, Start, End, ...）空文本
+        Dialogue → Format 行驱动列映射（禁位置硬编码），行号正确。"""
+        from subtransjav.refine.subtitle_convert import convert_file
+        lines = [
+            "[Script Info]",
+            "ScriptType: v4.00",
+            "",
+            "[V4 Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour,"
+            " OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut,"
+            " ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow,"
+            " Alignment, MarginL, MarginR, MarginV, Encoding",
+            "Style: Default,Microsoft YaHei,20,&H00FFFFFF,&H000000FF,"
+            "&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1",
+            "",
+            "[Events]",
+            "Format: Marked, Start, End, Style, Name, MarginL, MarginR,"
+            " MarginV, Effect, Text",                                      # 行 9
+            "Dialogue: Marked=0,0:00:10.00,0:00:12.00,Default,,0,0,0,,",   # 行 10 坏行
+            "Dialogue: Marked=0,0:00:13.00,0:00:14.00,Default,,0,0,0,,"
+            "SSA字段序样例",                                                # 行 11
+        ]
+        p = _write(tmp_path / "ssa.ssa", "\n".join(lines) + "\n")
+        res = convert_file(str(p))
+        assert res["dropped_empty"] == 1
+        assert res["dropped_details"] == [
+            {"line": 10, "text": "", "resolved": True}]
+        assert "剔除空事件（坏行抢救）×1：第 10 行「」" in res["warnings"]
+
+    def test_utf8sig_crlf_line_numbers_match_editor(self, tmp_path):
+        """fixture②：utf-8-sig BOM + CRLF → 行号与编辑器一致（1-based 物理行号）。"""
+        from subtransjav.refine.subtitle_convert import convert_file
+        lines = _HDR_LINES + [
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR,"
+            " MarginV, Effect, Text",                                       # 行 9
+            "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,第一行",     # 行 10
+            "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,",           # 行 11 坏行
+            "Dialogue: 0,0:00:05.00,0:00:06.00,Default,,0,0,0,,第三行",     # 行 12
+        ]
+        p = _write(tmp_path / "bomcrlf.ass", "\r\n".join(lines) + "\r\n",
+                   encoding="utf-8-sig")
+        res = convert_file(str(p))
+        assert res["dropped_empty"] == 1
+        assert res["dropped_details"] == [
+            {"line": 11, "text": "", "resolved": True}]
+        assert any("第 11 行「」" in w for w in res["warnings"])
+
+    def test_vtt_empty_cue_block_resolved_to_timeline_line(self, tmp_path):
+        """VTT 补充：空 cue 块归属到 --> 时间轴行物理行号（块内无非空行）。"""
+        from subtransjav.refine.subtitle_convert import convert_file
+        p = _write(tmp_path / "bad.vtt", (
+            "WEBVTT\n"
+            "\n"
+            "00:00:01.000 --> 00:00:03.000\n"
+            "正常行\n"
+            "\n"
+            "00:00:05.000 --> 00:00:06.000\n"
+            "\n"
+        ))
+        res = convert_file(str(p))
+        assert res["dropped_empty"] == 1
+        assert res["dropped_details"] == [
+            {"line": 6, "text": "", "resolved": True}]
+        assert any("第 6 行「」" in w for w in res["warnings"])
+
+
+class TestDuplicateTimestampDisambiguation:
+    def test_same_ts_one_empty_one_text_resolved_by_text(self, tmp_path):
+        """fixture③a：重复时间戳一空一非空 → text strip 消歧命中空行。"""
+        from subtransjav.refine.subtitle_convert import convert_file
+        p = _write(tmp_path / "dup1.ass", _HDR + _EVFMT
+                   + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,\n"
+                   + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,非空消歧\n")
+        res = convert_file(str(p))
+        assert res["dropped_empty"] == 1
+        assert res["dropped_details"] == [
+            {"line": 10, "text": "", "resolved": True}]
+        assert any("第 10 行「」" in w and "行号未定" not in w
+                   for w in res["warnings"])
+
+    def test_same_ts_both_empty_unresolved_fallback(self, tmp_path):
+        """fixture③b：双空（重复时间戳均空文本）→ 消歧失败行号未定，
+        全部未定退回旧纯计数文案兜底（规格归属规则 2/3）。"""
+        from subtransjav.refine.subtitle_convert import convert_file
+        p = _write(tmp_path / "dup2.ass", _HDR + _EVFMT
+                   + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,\n"
+                   + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,\n")
+        res = convert_file(str(p))
+        assert res["dropped_empty"] == 2
+        assert all(d["line"] is None and d["resolved"] is False
+                   for d in res["dropped_details"])
+        assert any(w == "剔除空事件（坏行抢救）×2" for w in res["warnings"])
+
+
+class TestDetailAggregationLimit:
+    def test_over_ten_bad_lines_capped_with_total_suffix(self, tmp_path):
+        """上限聚合：>10 条坏行 → 明细只取前 10 条，收尾「等 N 处」，
+        全部命中无「行号未定」收尾。"""
+        from subtransjav.refine.subtitle_convert import convert_file
+        bad = [f"Dialogue: 0,0:00:{10 + i:02d}.00,0:00:{10 + i:02d}.05,"
+               f"Default,,0,0,0,," for i in range(12)]       # 行 10-21，坏行 12 条
+        p = _write(tmp_path / "many.ass",
+                   _HDR + _EVFMT + "".join(ln + "\n" for ln in bad))
+        res = convert_file(str(p))
+        assert res["dropped_empty"] == 12
+        assert len(res["dropped_details"]) == 12
+        assert all(d["resolved"] and d["line"] == 10 + i
+                   for i, d in enumerate(res["dropped_details"]))
+        msg = next(w for w in res["warnings"] if "坏行抢救" in w)
+        assert msg.startswith("剔除空事件（坏行抢救）×12：")
+        for i in range(10):                                  # 明细只含前 10 条
+            assert f"第 {10 + i} 行「」" in msg
+        assert "第 20 行" not in msg and "第 21 行" not in msg
+        assert "（等 12 处）" in msg
+        assert "行号未定" not in msg
 
 
 # ── ④ 相邻 cue 重叠顺延 ──────────────────────────────────────────────
