@@ -454,15 +454,34 @@ const MSG = {
     dict_download_done: '下载完成',
     dict_download_failed: '下载失败',
     dict_load_failed: '词典状态加载失败',
-    // 词典管理 B2 案（批3 解冻键 6 个）：空态引导/CTA/下拉标签/内置态 pill/
-    // 打开目录/重新下载（dict_status_builtin、dict_redownload 为 JS 态键，
-    // 不静态落 data-i18n——R6，快照只收 HTML 静态键）
-    dict_empty_guide: '尚未下载日语词典数据，语法提示不可用',
-    dict_empty_cta: '去下载日语词典',
+    // 词典管理 B2 案（批3 解冻键 6 个）：空态引导/CTA 已随 2.6.5 段2
+    // （D2026-1004-01 #4）删除——空态语义由下方新 JS 态键承接（零静态
+    // data-i18n 消耗，R6 快照只收 HTML 静态键）
     dict_select_label: '选择词典查看详情',
     dict_status_builtin: '内置',
     dict_open_dir: '打开文件夹',
     dict_redownload: '重新下载',
+    // 2.6.5 段2（D2026-1004-01 #4/#5/#6）新 JS 态键：pill 未安装专用态/
+    // hint 条/四 kind chip/收单操作行前缀/失败人话映射/诊断网格字段标签
+    // （全 JS 态填充，禁 index.html 静态中文）
+    dict_status_not_installed: '未安装',
+    dict_install_hint: '该词典未安装——下载后语法提示可用',
+    dict_sudachi_full_chip_title: '与日语二选一',
+    dict_download_source: '下载源',
+    dict_fail_checksum: '文件校验不符，下载不完整或源文件异常',
+    dict_fail_network: '网络不可达或代理拦截（已尝试直连重试）',
+    dict_diag_summary: '技术详情',
+    dict_diag_copy: '复制',
+    dict_diag_selected: '已全选',
+    dict_diag_expected_bytes: '预期字节',
+    dict_diag_actual_bytes: '实际字节',
+    dict_diag_encoding: 'Content-Encoding',
+    dict_diag_part_hex: '响应前缀(.part 前64B)',
+    dict_diag_url: '来源 URL',
+    dict_diag_proxy: '代理',
+    dict_diag_proxy_system: '系统代理',
+    dict_diag_proxy_direct: '直连',
+    dict_diag_attempts: '尝试次数',
     // 批1b 件1/件2（D2026-1002-12）：词典目录设置 + 一键迁移（JS 态键，
     // 不静态落 data-i18n——R6，静态键快照零消耗）
     dict_migrate_btn: '迁移旧词典',
@@ -1792,37 +1811,58 @@ const SystemSummary = {
         // 批3 扩展（D2026-1002-12）：角色卡/ASR 两行动态渲染（FROZEN_IDS 已满，
         // 行与控件零新增静态 id，经 data-sys-row 定位）
         this._ensureDynamicRows();
+        // 2.6.5 段2（D2026-1004-01 #2 两行式改版）：版本入标题行 stat 槽；
+        // TM/词典统计值升 keyrow 右 stat 槽，路径值独立成行完整折行；
+        // 悬停 title 全文兜底移除（折行后不再截断，无需悬停）
         this._set('sysSummaryVersion', async () => {
             const r = await pywebview.api.get_version();
             return (r && r.success) ? r.version : null;
         });
-        this._set('sysSummaryDataRoot', async () => {
+        this._setPath('sysSummaryDataRoot', async () => {
             const r = await pywebview.api.refine_get_data_root();
             return (r && r.success && r.data_root) ? r.data_root : null;
-        }, true);
-        this._set('sysSummaryTm', async () => {
+        });
+        this._setStatPath('sysSummaryTm', async () => {
             const r = await pywebview.api.tm_get_stats();
             if (!r || !r.success) return null;
-            const total = r.total || 0, hits = r.total_hits || 0;
-            // 批3 扩展（D2026-1002-12）+ 收口件①：改"状态 · 路径"合并值——
-            // 行标签已是"翻译记忆库"（静态键），值内不再拼 tm_enable_label
-            // 前缀防重复（收口前显示"翻译记忆库 | 翻译记忆库 0 条·…"）
-            return `${total} 条 · 命中 ${hits} 次 · ${r.db_path || '—'}`;
-        }, true);
-        this._set('sysSummaryDict', async () => {
+            // 收口件①延续：行标签已是"翻译记忆库"（静态键），stat 槽只放
+            // 统计值，不拼 tm_enable_label 前缀防重复
+            return {
+                stat: `${r.total || 0} 条 · 命中 ${r.total_hits || 0} 次`,
+                val: r.db_path || '—'
+            };
+        });
+        this._setStatPath('sysSummaryDict', async () => {
             const r = await pywebview.api.refine_dict_status();
             if (!r || !r.success || !r.dicts) return null;
+            // 修复A：分母取 DICT_KINDS 桥接值（防 manifest 增 kind 时前端漂移/漏改）
             const kinds = Object.values(r.dicts);
             const ok = kinds.filter(d => d && d.available).length;
-            // 修复A：分母取 DICT_KINDS 桥接值（防 manifest 增 kind 时前端漂移/漏改）
-            // 批3 扩展（D2026-1002-12）：合并值补 effective_dir
             const total = window.AppDictKindsCount || kinds.length;
-            return `${ok}/${total} ${MSG.dict_status_available} · ${r.effective_dir || '—'}`;
-        }, true);
+            return {
+                stat: `${ok}/${total} ${MSG.dict_status_available}`,
+                val: r.effective_dir || '—'
+            };
+        });
         this._loadRoles();
     },
 
-    async _set(id, fn, ellipsis) {
+    // 2.6.5 段2（D2026-1004-01 #2 折行策略红线）：路径值安全写入——按
+    // 分隔符拆分、TextNode + <wbr> 安全 DOM 构建（overflow-wrap:anywhere
+    // 兜底 + 分隔符处优先断行）；禁 innerHTML、禁 U+200B（wbr 不入剪贴板）
+    _setPathValue(el, text) {
+        el.textContent = '';
+        const parts = String(text).split(/([\\/]+)/);
+        parts.forEach((part, i) => {
+            el.appendChild(document.createTextNode(part));
+            // 奇数位=分隔符（捕获组），其后插 wbr 提供优先断点
+            if (i % 2 === 1 && i < parts.length - 1) {
+                el.appendChild(document.createElement('wbr'));
+            }
+        });
+    },
+
+    async _set(id, fn) {
         const el = document.getElementById(id);
         if (!el) return;
         let text = MSG.sys_summary_unavailable;
@@ -1832,74 +1872,110 @@ const SystemSummary = {
         } catch (e) {
             console.warn('SystemSummary[' + id + ']:', e);
         }
-        el.textContent = text;
-        el.title = ellipsis ? text : '';
+        this._setPathValue(el, text);
+    },
+
+    // 2.6.5 段2（D2026-1004-01 #2）：纯路径行（无 stat 槽）——数据保存目录
+    async _setPath(id, fn) {
+        await this._set(id, fn);
+    },
+
+    // 2.6.5 段2（D2026-1004-01 #2）：stat+路径双槽行——fn 返回 {stat, val}，
+    // 统计值写 keyrow 右 stat 槽（mono 11px），路径写全宽值行；降级时
+    // stat 清空、值行显示"不可用"
+    async _setStatPath(id, fn) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const row = el.closest('.sys-summary-row');
+        const stat = row ? row.querySelector('.sys-summary-stat') : null;
+        let valText = MSG.sys_summary_unavailable;
+        let statText = '';
+        try {
+            const v = await fn();
+            if (v && typeof v === 'object') {
+                valText = v.val || MSG.sys_summary_unavailable;
+                statText = v.stat || '';
+            }
+        } catch (e) {
+            console.warn('SystemSummary[' + id + ']:', e);
+        }
+        this._setPathValue(el, valText);
+        if (stat) stat.textContent = statText;
     },
 
     // 批3 扩展（D2026-1002-12）：角色卡行 + ASR 行动态渲染——
     // 行样式复用 .sys-summary-row，标签复用既有静态键文案（JS 态取值，
     // 不挂 data-i18n：applyI18n 首屏已跑完，动态节点收不到）；
-    // ASR 行尾「重新探测」小按钮不带 id，事件委托绑在卡上（见 bindDom）
+    // 2.6.5 段2（D2026-1004-01 #2）：两行式改版——角色卡统计值（N 张）
+    // 升 keyrow 右 stat 槽、路径独立值行；ASR 探测按钮与 .sys-summary-stat
+    // 同处 keyrow（弱化语义 val-muted 迁 stat，该行不再用 val）；
+    // ASR 行「重新探测」小按钮不带 id，事件委托绑在卡上（见 bindDom）
     _ensureDynamicRows() {
         const card = document.getElementById('systemSummaryCard');
         if (!card || card.querySelector('[data-sys-row="roles"]')) return;
         const roles = document.createElement('div');
         roles.className = 'sys-summary-row';
         roles.dataset.sysRow = 'roles';
-        roles.innerHTML = '<span class="sys-summary-key"></span>'
-            + '<span class="sys-summary-val"></span>';
+        roles.innerHTML = '<div class="sys-summary-keyrow">'
+            + '<span class="sys-summary-key"></span>'
+            + '<span class="sys-summary-stat"></span></div>'
+            + '<div class="sys-summary-val"></div>';
         roles.querySelector('.sys-summary-key').textContent
             = MSG.templates_dir_label;
         card.appendChild(roles);
         const asr = document.createElement('div');
         asr.className = 'sys-summary-row';
         asr.dataset.sysRow = 'asr';
-        asr.innerHTML = '<span class="sys-summary-key"></span>'
-            + '<span class="sys-summary-val val-muted"></span>'
+        asr.innerHTML = '<div class="sys-summary-keyrow">'
+            + '<span class="sys-summary-key"></span>'
+            + '<span class="sys-summary-stat val-muted"></span>'
             + '<button type="button" class="btn btn-ghost btn-compact"'
-            + ' data-sys-action="asr-probe"></button>';
+            + ' data-sys-action="asr-probe"></button></div>';
         asr.querySelector('.sys-summary-key').textContent = MSG.asr_panel_title;
         asr.querySelector('button').textContent = MSG.asrRefreshBtn;
         card.appendChild(asr);
-        asr.querySelector('.sys-summary-val').textContent
+        asr.querySelector('.sys-summary-stat').textContent
             = MSG.sys_asr_undetected;
     },
 
     // 批3 扩展（D2026-1002-12）：角色卡目录行（复用 refine_list_templates，
-    // 只读零写路径）；值="<目录> · N 张"，pkg_fallback 标注内置回落；
-    // 长路径走 .sys-summary-val 既有省略 + title 悬停全文
+    // 只读零写路径）；统计值="N 张"+pkg_fallback 标注内置回落（stat 槽），
+    // 目录独立值行 wbr 折行（悬停 title 兜底随折行策略移除）
     async _loadRoles() {
-        const val = document.querySelector(
-            '#systemSummaryCard [data-sys-row="roles"] .sys-summary-val');
+        const row = document.querySelector(
+            '#systemSummaryCard [data-sys-row="roles"]');
+        if (!row) return;
+        const val = row.querySelector('.sys-summary-val');
+        const stat = row.querySelector('.sys-summary-stat');
         if (!val) return;
         let text = MSG.sys_summary_unavailable;
+        let statText = '';
         try {
             const r = await pywebview.api.refine_list_templates(null);
             if (r && r.success) {
                 const tag = r.pkg_fallback ? `（${MSG.sys_roles_fallback}）` : '';
-                text = `${r.dir || '—'} · ${MSG.sys_roles_count((r.files || []).length)}${tag}`;
+                statText = `${MSG.sys_roles_count((r.files || []).length)}${tag}`;
+                text = r.dir || '—';
             }
         } catch (e) {
             console.warn('SystemSummary[roles]:', e);
         }
-        val.textContent = text;
-        val.title = text;
+        this._setPathValue(val, text);
+        if (stat) stat.textContent = statText;
     },
 
     // 批3 扩展（D2026-1002-12）：ASR 行显式探测（首屏不自动探测——上游
     // selfcheck 慢，避免卡首屏）；成功="就绪 · 已存模型名/未配置"，
-    // 失败透出原因（复用 asr 相关既有键文案）
+    // 失败透出原因（复用 asr 相关既有键文案）。
+    // 2.6.5 段2（D2026-1004-01 #2）：探测结果改写 keyrow 右 stat 槽
     async probeAsr() {
         const row = document.querySelector(
             '#systemSummaryCard [data-sys-row="asr"]');
         if (!row) return;
-        const val = row.querySelector('.sys-summary-val');
+        const stat = row.querySelector('.sys-summary-stat');
         const btn = row.querySelector('[data-sys-action="asr-probe"]');
         if (btn) btn.disabled = true;
-        if (val) {
-            val.textContent = '…';
-            val.title = '';
-        }
+        if (stat) stat.textContent = '…';
         try {
             const r = await pywebview.api.refine_asr_status();
             let text;
@@ -1909,22 +1985,16 @@ const SystemSummary = {
                 text = MSG.sys_asr_ready(
                     r.model_present && r.saved_model
                         ? r.saved_model : MSG.sys_asr_unconfigured);
-                if (val) val.classList.remove('val-muted');
+                if (stat) stat.classList.remove('val-muted');
             } else {
                 text = MSG.asrProbeFail(r.reason || '');
             }
-            if (val) {
-                val.textContent = text;
-                val.title = text;
-            }
+            if (stat) stat.textContent = text;
         } catch (e) {
             // 收口件②：异常分支不走裸 e.message，与失败分支同口径包 asrProbeFail
             const text = MSG.asrProbeFail(
                 (e && e.message) || MSG.unknown);
-            if (val) {
-                val.textContent = text;
-                val.title = text;
-            }
+            if (stat) stat.textContent = text;
         } finally {
             if (btn) btn.disabled = false;
         }
@@ -4588,22 +4658,8 @@ function switchTab(tabId) {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：引擎页三段分段控件
-    // （阶段A/阶段B/兜底）——class 切换 .seg-page 显隐并同步 aria-selected；
-    // 无 data-tab 不入上方侧栏绑定循环；默认段=a（HTML 初始态，
-    // 切到引擎页时不强制复位，实现取最简）
-    document.querySelectorAll('.seg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const seg = btn.dataset.seg;
-        document.querySelectorAll('.seg-btn').forEach(b => {
-          const on = b.dataset.seg === seg;
-          b.classList.toggle('active', on);
-          b.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-        document.querySelectorAll('.seg-page').forEach(p =>
-          p.classList.toggle('active', p.dataset.segPage === seg));
-      });
-    });
+    // 2.6.5 段2（D2026-1004-01 #3）：引擎页 seg 分段控件已删除（三段改
+    // stage-group 纵向堆叠，纯 CSS 布局零 JS 绑定），原绑定循环一并移除
 
     const glAddBtn = $('refineGlAdd');
     if (glAddBtn) glAddBtn.addEventListener('click', glAdd);
@@ -4872,6 +4928,10 @@ function switchTab(tabId) {
   // 词典状态缓存（B2 案批3）：dictLoad 拉取后写入，dictSelect change 复渲染读取
   let _dictStatusCache = {};
   let _dictDirCache = '';
+  // 下载中词典占位（2.6.5 段2 D2026-1004-01 #5「下载中禁整行」收口：
+  // code-review 发现下载中切词典→dictRenderDetail 重渲染复位共享操作行，
+  // 可对另一 kind 并发发起下载——以模块级占位在渲染与入口双端钉死）
+  let _dictBusyKind = null;
   // 批1b 件1/件2：自定义词典目录态（custom_dir=设置值|null；
   // needs_migration/old_dir=选新目录后由 refine_pick_dict_dir 返回的迁移提示）
   let _dictCustomDir = null;
@@ -4880,6 +4940,182 @@ function switchTab(tabId) {
   // 2.6.3 批B（D2026-1003-06 条件②）：源摘要缓存（{kind: {has_official,
   // has_mirror}}），「仅镜像」键 disabled 门控读取
   let _dictSourcesCache = {};
+  // 2.6.5 段2（D2026-1004-01 #4）：四 kind 摘要行展示序=日语·中文·英文·
+  // 完整版（owner 定夺，独立于 DICT_KINDS 数组序）
+  const DICT_KIND_DISPLAY_ORDER = ['sudachi', 'jieba', 'english_rules',
+    'sudachi_full'];
+  // 四 kind 状态摘要行（空态三件套①）：全 createElement 零静态 id；实心点=
+  // 已装（--ok）/空心=未装（--text-3）/内置 english_rules=primary 点；
+  // 完整版 chip title「与日语二选一」；点击 chip→切 #dictSelect 并刷新详情
+  function _dictEnsureKindRow() {
+    const box = $('dictRows');
+    if (!box || box.querySelector('.dict-kind-row')) return;
+    const row = document.createElement('div');
+    row.className = 'dict-kind-row';
+    DICT_KIND_DISPLAY_ORDER.forEach(kind => {
+      const item = DICT_KINDS.find(k => k.kind === kind) || {};
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'dict-kind-chip';
+      chip.dataset.kind = kind;
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(item.label || kind));
+      if (kind === 'sudachi_full') chip.title = MSG.dict_sudachi_full_chip_title;
+      chip.addEventListener('click', () => {
+        const sel = $('dictSelect');
+        if (sel && sel.value !== kind) {
+          sel.value = kind;
+          _dictRefreshKindRow();
+          _dictRefreshHint();              // 与下拉 change 同路径：hint 显隐随词典切换
+          dictRenderDetail();
+        }
+      });
+      row.appendChild(chip);
+    });
+    box.insertBefore(row, box.firstChild);
+  }
+  // chip 状态刷新：active=当前选中词典；on/builtin=安装态（点色）
+  function _dictRefreshKindRow() {
+    const row = document.querySelector('#dictRows .dict-kind-row');
+    const sel = $('dictSelect');
+    if (!row || !sel) return;
+    row.querySelectorAll('.dict-kind-chip').forEach(chip => {
+      const kind = chip.dataset.kind;
+      const info = _dictStatusCache[kind] || {};
+      chip.classList.toggle('active', sel.value === kind);
+      chip.classList.toggle('on',
+        !!(info.available && kind !== 'english_rules'));
+      chip.classList.toggle('builtin', kind === 'english_rules');
+    });
+  }
+  // warn-soft 提示条（空态三件套②，空态三件套承载原 #dictEmpty 后果语义）
+  function _dictEnsureHint() {
+    const box = $('dictRows');
+    if (!box || box.querySelector('.dict-install-hint')) return;
+    const hint = document.createElement('div');
+    hint.className = 'dict-install-hint';
+    hint.style.display = 'none';
+    hint.textContent = MSG.dict_install_hint;
+    const kindRow = box.querySelector('.dict-kind-row');
+    if (kindRow) box.insertBefore(hint, kindRow.nextSibling);
+    else box.insertBefore(hint, box.firstChild);
+  }
+  // hint 条显隐：仅当前选中 kind downloadable&&!available 时显示
+  function _dictRefreshHint() {
+    const box = $('dictRows');
+    const hint = box ? box.querySelector('.dict-install-hint') : null;
+    const sel = $('dictSelect');
+    if (!hint || !sel) return;
+    const kind = sel.value;
+    const item = DICT_KINDS.find(k => k.kind === kind) || {};
+    const info = _dictStatusCache[kind] || {};
+    hint.style.display = (item.downloadable && !info.available) ? '' : 'none';
+  }
+  // 2.6.5 段2（D2026-1004-01 #6）：失败一行人话映射——校验失败/网络失败
+  // 短句（诊断数据来自后端 failed 快照 diag 字段，段1 已落契约），磁盘/
+  // 未知沿用原文；技术串下沉 details 诊断网格
+  function dictFailureText(error, diag) {
+    if (/SHA256/.test(error)) return MSG.dict_fail_checksum;
+    if (diag && (diag.url || diag.attempts)) return MSG.dict_fail_network;
+    return error || MSG.dict_download_failed;
+  }
+  // 状态行统一出口：isErr=true 加 status-err 红 + 技术详情 <details> 网格
+  // （重渲染前清空旧 details；诊断值一律 TextNode 禁 innerHTML；URL 行带
+  // 复制键，file:// clipboard 被拒降级为点击全选该值）
+  function dictShowStatus(st, text, isErr, diag) {
+    if (!st) return;
+    st.textContent = text || '';
+    st.classList.toggle('status-err', !!isErr);
+    const card = st.parentElement;
+    if (card) {
+      const old = card.querySelector('.dict-diag');
+      if (old) old.remove();
+    }
+    if (!isErr || !diag || typeof diag !== 'object') return;
+    const details = document.createElement('details');
+    details.className = 'dict-diag';
+    const summary = document.createElement('summary');
+    const chev = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    chev.setAttribute('viewBox', '0 0 24 24');
+    chev.setAttribute('width', '14');
+    chev.setAttribute('height', '14');
+    chev.setAttribute('fill', 'none');
+    chev.setAttribute('stroke', 'currentColor');
+    chev.setAttribute('stroke-width', '2');
+    chev.setAttribute('stroke-linecap', 'round');
+    chev.setAttribute('stroke-linejoin', 'round');
+    chev.setAttribute('aria-hidden', 'true');
+    const chevPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    chevPath.setAttribute('d', 'm9 18 6-6-6-6');
+    chev.appendChild(chevPath);
+    summary.appendChild(chev);
+    summary.appendChild(document.createTextNode(MSG.dict_diag_summary));
+    details.appendChild(summary);
+    const grid = document.createElement('div');
+    grid.className = 'dict-diag-grid';
+    // 字段按存在性逐行降级（proxy 取值=段1 定稿 "system"/"direct"）
+    const addRow = (label, value) => {
+      const k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = label;
+      const v = document.createElement('span');
+      v.className = 'v';
+      v.textContent = value;
+      grid.appendChild(k);
+      grid.appendChild(v);
+      return v;
+    };
+    const defined = (x) => x !== undefined && x !== null && x !== '';
+    if (defined(diag.expected_bytes))
+      addRow(MSG.dict_diag_expected_bytes, String(diag.expected_bytes));
+    if (defined(diag.actual_bytes))
+      addRow(MSG.dict_diag_actual_bytes, String(diag.actual_bytes));
+    if (defined(diag.content_encoding))
+      addRow(MSG.dict_diag_encoding, String(diag.content_encoding));
+    if (defined(diag.part_prefix_hex))
+      addRow(MSG.dict_diag_part_hex, String(diag.part_prefix_hex));
+    if (defined(diag.url)) {
+      const v = addRow(MSG.dict_diag_url, String(diag.url));
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'copy';
+      copy.textContent = MSG.dict_diag_copy;
+      copy.addEventListener('click', () => {
+        const flash = (t) => {
+          copy.textContent = t;
+          setTimeout(() => { copy.textContent = MSG.dict_diag_copy; }, 1500);
+        };
+        const selectAll = () => {
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(v);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } catch (e) { /* ignore */ }
+          flash(MSG.dict_diag_selected);
+        };
+        try {
+          navigator.clipboard.writeText(String(diag.url)).then(
+            () => flash(MSG.ui_copied), selectAll);
+        } catch (e) {
+          selectAll();
+        }
+      });
+      v.appendChild(copy);
+    }
+    if (defined(diag.proxy))
+      addRow(MSG.dict_diag_proxy,
+        diag.proxy === 'system' ? MSG.dict_diag_proxy_system
+          : diag.proxy === 'direct' ? MSG.dict_diag_proxy_direct
+            : String(diag.proxy));
+    if (defined(diag.attempts))
+      addRow(MSG.dict_diag_attempts, String(diag.attempts));
+    details.appendChild(grid);
+    if (card) card.insertBefore(details, st.nextSibling);
+  }
   function dictLoad() {
     const box = $('dictRows');
     if (!box || !window.pywebview || !pywebview.api ||
@@ -4887,44 +5123,43 @@ function switchTab(tabId) {
     pywebview.api.refine_dict_status().then(r => {
       if (!r || !r.success) {
         const st = $('dictStatus');
-        if (st) st.textContent = `${MSG.dict_load_failed}${r && r.error ? '：' + r.error : ''}`;
+        // 2.6.5 段2（D2026-1004-01 #6）：加载失败也红（status-err）
+        if (st) dictShowStatus(st,
+          `${MSG.dict_load_failed}${r && r.error ? '：' + r.error : ''}`,
+          true, null);
         return;
       }
       _dictStatusCache = (r && r.dicts) || {};
       _dictDirCache = (r && r.effective_dir) || (r && r.dict_dir) || '';
       _dictCustomDir = (r && r.custom_dir) || null;
       _dictSourcesCache = (r && r.sources) || {};
-      // 空态引导条（C2 修正）：条件=sudachi 未安装——english_rules 规则级
-      // 恒 available（dict_manager.py 实证），"三词典全未安装"不可达
-      const sudachiInfo = _dictStatusCache.sudachi || {};
-      const empty = $('dictEmpty');
-      if (empty) empty.style.display = sudachiInfo.available ? 'none' : '';
-      // 下拉填充（label=词典名+可用态），change→详情刷新（静态骨架只填充不建行）
+      // 2.6.5 段2（D2026-1004-01 #4）：#dictEmpty 空态引导条已删（C2 决议
+      // 反转记档，FROZEN_IDS 215→214 显式解冻）——空态语义由四 kind 摘要
+      // 行 + pill-warning「未安装」+ warn-soft hint 条承接
+      _dictEnsureKindRow();
+      // 下拉填充（label=词典名，可用性由状态行/chip 承载去重复），
+      // change→详情刷新（静态骨架只填充不建行）
       const sel = $('dictSelect');
       if (sel) {
         sel.innerHTML = '';
         DICT_KINDS.forEach(item => {
-          const info = _dictStatusCache[item.kind] || {};
           const opt = document.createElement('option');
           opt.value = item.kind;
-          opt.textContent = `${item.label}（${info.available ? MSG.dict_status_available : MSG.dict_status_unavailable}）`;
+          opt.textContent = item.label;
           sel.appendChild(opt);
         });
         if (!sel.dataset.bound) {          // 一次性绑定，数据经缓存读取防陈旧闭包
           sel.dataset.bound = '1';
-          sel.addEventListener('change', dictRenderDetail);
+          sel.addEventListener('change', () => {
+            _dictRefreshKindRow();
+            _dictRefreshHint();            // 黑盒缺陷#1 修复：切词典须同步 hint 显隐
+            dictRenderDetail();            // （否则 downloadable→非 downloadable 残留误导文案）
+          });
         }
       }
-      // 空态 CTA（一次性绑定）：自动选中 sudachi 并触发下载
-      if (empty && !empty.dataset.bound) {
-        empty.dataset.bound = '1';
-        const cta = empty.querySelector('button');
-        if (cta) cta.addEventListener('click', () => {
-          if (sel) sel.value = 'sudachi';
-          dictRenderDetail();
-          dictDownload('sudachi', $('dictActionBtn'));
-        });
-      }
+      _dictEnsureHint();
+      _dictRefreshKindRow();
+      _dictRefreshHint();
       // 打开文件夹（R3：复用现成 openDir(path)→open_output_folder 链，零新 API）
       const openBtn = $('dictOpenDir');
       if (openBtn && !openBtn.dataset.bound) {
@@ -4954,7 +5189,9 @@ function switchTab(tabId) {
       dictRenderDetail();
     }).catch((e) => {
       const st = $('dictStatus');
-      if (st) st.textContent = MSG.dict_load_failed + '：' + String(e);
+      // 2.6.5 段2（D2026-1004-01 #6）：加载异常也红（status-err）
+      if (st) dictShowStatus(st, MSG.dict_load_failed + '：' + String(e),
+        true, null);
     });
   }
   function dictRenderDetail() {
@@ -4965,18 +5202,25 @@ function switchTab(tabId) {
     const info = _dictStatusCache[kind] || {};
     const item = DICT_KINDS.find(k => k.kind === kind) || {};
     detail.style.display = '';
-    // 状态 pill 三态：可用/不可用/内置（english_rules 规则级恒可用→内置）
+    // 状态 pill 四态（2.6.5 段2 D2026-1004-01 定表）：available&&english_rules
+    // →「内置」/available→「可用」/!available&&downloadable→新 JS 态键
+    // 「未安装」+pill-warning（删 inline style hack）/其余→「不可用」
+    // （jieba 未装落此格）
     const pill = $('dictPill');
     if (pill) {
+      const dlItem0 = DICT_KINDS.find(k => k.kind === kind) || {};
       if (info.available) {
-        pill.textContent = kind === 'english_rules' ? MSG.dict_status_builtin : MSG.dict_status_available;
+        pill.textContent = kind === 'english_rules'
+          ? MSG.dict_status_builtin : MSG.dict_status_available;
         pill.className = 'pill pill-success';
-        pill.style.color = '';
+      } else if (dlItem0.downloadable) {
+        pill.textContent = MSG.dict_status_not_installed;
+        pill.className = 'pill pill-warning';
       } else {
         pill.textContent = MSG.dict_status_unavailable;
         pill.className = 'pill';
-        pill.style.color = 'var(--text-muted)';
       }
+      pill.style.color = '';
     }
     const desc = $('dictDesc');
     if (desc) {
@@ -5018,10 +5262,20 @@ function switchTab(tabId) {
         btn.addEventListener('click', () => dictDownload($('dictSelect').value, btn));
       }
       // 源选择双按钮（2.6.3 批B，D2026-1003-06 条件②①）：JS 注入零 id
-      // （FROZEN_IDS 冻结），挂在 #dictActionBtn 同级（#dictDetail 容器），
-      // class 一次创建 + 每次渲染刷状态（dataset.bound 防重挂监听）
+      // （FROZEN_IDS 冻结）。2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：
+      // #dictActionBtn 已静态入 .dict-action-row 包裹层（无内层 group），
+      // 注入序修正为 官方│镜像（原 镜像│官方）；行首「下载源」前缀标签走
+      // JS 态 MSG（禁 index.html 静态中文）；无操作 kind 整行隐藏不留空行
       const row = btn.parentElement;
       if (row && dlItem.downloadable) {
+        row.style.display = '';
+        let srcLabel = row.querySelector('.dict-src-label');
+        if (!srcLabel) {
+          srcLabel = document.createElement('span');
+          srcLabel.className = 'dict-src-label';
+          srcLabel.textContent = MSG.dict_download_source;
+          row.insertBefore(srcLabel, row.firstChild);
+        }
         let offBtn = row.querySelector('.dict-src-official');
         if (!offBtn) {
           offBtn = document.createElement('button');
@@ -5041,7 +5295,7 @@ function switchTab(tabId) {
           mirBtn.textContent = MSG.dictSrcMirrorOnly;
           mirBtn.addEventListener('click', () =>
             dictDownload($('dictSelect').value, mirBtn, 'mirror'));
-          row.insertBefore(mirBtn, offBtn);
+          row.insertBefore(mirBtn, btn);   // 插入序=官方│镜像│主下载键
         }
         offBtn.style.display = '';
         mirBtn.style.display = '';
@@ -5050,17 +5304,30 @@ function switchTab(tabId) {
         const hasMirror = srcInfo.has_mirror !== false;
         mirBtn.disabled = !hasMirror;
         mirBtn.title = hasMirror ? '' : MSG.dictSrcMirrorlessHint;
+        // 下载中禁整行（跨 kind 切换洞收口，见 _dictBusyKind 注）：任一词典
+        // 下载进行中，无论当前选中谁，整行三键禁用+is-busy——切走的用户看到
+        // 禁用态，切回下载中的 kind 也不会误读为可重入；终态由 finally 的
+        // dictLoad() 重渲染自然解除
+        if (_dictBusyKind) {
+          row.classList.add('is-busy');
+          btn.disabled = true;
+          offBtn.disabled = true;
+          mirBtn.disabled = true;
+        } else {
+          row.classList.remove('is-busy');
+        }
       } else if (row) {
-        // 不可下载 kind：双按钮一并隐藏
-        const offBtn = row.querySelector('.dict-src-official');
-        const mirBtn = row.querySelector('.dict-src-mirror');
-        if (offBtn) offBtn.style.display = 'none';
-        if (mirBtn) mirBtn.style.display = 'none';
+        // 无操作 kind（jieba/english_rules，无下载按钮/无源组）：整行隐藏
+        row.style.display = 'none';
       }
     }
   }
   async function dictDownload(kind, btn, source) {
     const st = $('dictStatus');
+    // 下载中占位（D2026-1004-01 #5 跨 kind 并发洞收口）：已有下载进行中
+    // 直接拒绝重入（按钮禁用态是第一道，此处兜底防编程态/竞态双击）
+    if (_dictBusyKind) return;
+    _dictBusyKind = kind;
     // 终态按钮文案（2.6.3 批B）：双按钮路径恢复各自标签，主按钮恢复「下载」
     const doneLabel = source === 'official' ? MSG.dictSrcOfficialOnly
       : source === 'mirror' ? MSG.dictSrcMirrorOnly : MSG.dict_download;
@@ -5091,8 +5358,17 @@ function switchTab(tabId) {
         if (text) text.textContent = prefix + label;
       }
     };
+    // 下载中禁整行（2.6.5 段2 D2026-1004-01 #5）：三键 setDisabled + 行
+    // .is-busy（disabled 态走 --surface-3 底，非仅 opacity）
+    const actionRow = btn ? btn.parentElement : null;
+    const srcBtns = actionRow
+      ? [actionRow.querySelector('.dict-src-official'),
+         actionRow.querySelector('.dict-src-mirror')]
+      : [];
+    if (actionRow) actionRow.classList.add('is-busy');
+    srcBtns.forEach((b) => { if (b) b.disabled = true; });
     if (btn) { btn.disabled = true; btn.textContent = MSG.dict_downloading; }
-    if (st) st.textContent = '';
+    if (st) dictShowStatus(st, '', false, null);
     let poller = null;
     let lastBytes = 0;
     const stopPoll = () => { if (poller) { clearInterval(poller); poller = null; } };
@@ -5133,16 +5409,32 @@ function switchTab(tabId) {
               f.downloaded > 0) lastBytes = f.downloaded;
         } catch (e) { /* ignore */ }
       }
+      // 2.6.5 段2（D2026-1004-01 #6）：失败时一行人话（红）+ 技术串下沉
+      // details 诊断网格——diag 取自后端 failed 快照（refine_dict_download_
+      // progress 轮询桥，phase=failed 时携带段1 落库的七字段契约）
+      let diag = null;
+      if (!(r && r.success)) {
+        try {
+          const f = await pywebview.api.refine_dict_download_progress(kind);
+          if (f && f.success && f.phase === 'failed' && f.diag) diag = f.diag;
+        } catch (e) { /* 诊断快照获取失败不掩盖主错误 */ }
+      }
       if (st) {
-        st.textContent = (r && r.success)
-          ? `${MSG.dict_download_done}：${r.path}（${fmtMB(lastBytes)}MB）`
-          : `${MSG.dict_download_failed}：${(r && r.error) || ''}`;
+        dictShowStatus(st,
+          (r && r.success)
+            ? `${MSG.dict_download_done}：${r.path}（${fmtMB(lastBytes)}MB）`
+            : dictFailureText(`${(r && r.error) || ''}`, diag),
+          !(r && r.success), diag);
       }
     } catch (e) {
-      if (st) st.textContent = String(e);
+      // 异常路径=未知错误：一行人话沿用原文（红），无诊断网格
+      if (st) dictShowStatus(st, dictFailureText(String(e), null), true, null);
     } finally {
       stopPoll();                       // 防重复 poller 泄漏
       showProgress(false);              // 隐藏统一放 finally（覆盖成功/失败/异常三路径含 catch）
+      _dictBusyKind = null;             // 先清占位再 dictLoad()：重渲染据此解除整行禁用
+      if (actionRow) actionRow.classList.remove('is-busy');
+      srcBtns.forEach((b) => { if (b) b.disabled = false; });
       const sel = $('dictSelect');
       if (!sel || sel.value === kind) {
         // 终态与当前选中词典一致才直改按钮；不一致交由 dictLoad()→

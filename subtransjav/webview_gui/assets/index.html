@@ -190,17 +190,13 @@
             <div class="tab-page" id="tab-engine" data-testid="tab-engine">
                 <div class="block-title" data-i18n="refine_panel_title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
 
-                <!-- 分段控件（2.6.3 批C D2026-1003-01 P4 IA 重排）：LLM 配置页
-                     三段=阶段A/阶段B/兜底；纯中文短标签零静态 i18n 消耗（拍板
-                     配记 D2026-1003-01 归档段④），aria-selected 由 app.js 分段
-                     绑定循环维护；默认段=a（HTML 初始态，切页不强制复位） -->
-                <div class="seg-bar" role="tablist" aria-label="配置分段">
-                    <button type="button" class="seg-btn active" data-seg="a" aria-selected="true">阶段A</button>
-                    <button type="button" class="seg-btn" data-seg="b" aria-selected="false">阶段B</button>
-                    <button type="button" class="seg-btn" data-seg="fb" aria-selected="false">兜底</button>
-                </div>
-
-                <div class="seg-page active" data-seg-page="a">
+                <!-- 2.6.5 段2（D2026-1004-01 #3）：引擎页去 seg 外壳——原三段
+                     分段控件（D2026-1003-01 P4）改纵向堆叠组 stage-group
+                     （阶段A→阶段B→兜底），组头纯中文零 i18n 键（中文豁免
+                     名单 seg-btn→stage-group-title）；页首标题与段内结构/
+                     顺序零改动 -->
+                <section class="stage-group">
+                    <div class="stage-group-title">阶段A · 净语+翻译</div>
                 <!-- 阶段A 完整行 -->
                 <div class="form-card">
                     <div class="stage-row">
@@ -244,9 +240,10 @@
                     <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
                     <span id="refineEndpointStatus" class="muted"></span>
                 </div>
-                </div>
+                </section>
 
-                <div class="seg-page" data-seg-page="b">
+                <section class="stage-group">
+                    <div class="stage-group-title">阶段B · 审校+抛光</div>
                 <!-- 阶段B 完整行 -->
                 <div class="form-card">
                     <div class="stage-row">
@@ -286,9 +283,10 @@
                            data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
                     <button type="button" class="btn btn-primary btn-compact endpoint-save-twin" data-testid="endpoint-save-b"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
                 </div>
-                </div>
+                </section>
 
-                <div class="seg-page" data-seg-page="fb">
+                <section class="stage-group">
+                    <div class="stage-group-title">兜底与容错</div>
                 <!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->
                 <div class="form-card">
                     <label class="inline-field field-label"
@@ -347,7 +345,7 @@
                         </label>
                     </div>
                 </div>
-                </div>
+                </section>
             </div>
 
             <!-- ASR 与词典页（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡与
@@ -391,15 +389,14 @@
                 </div>
 
                 <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
-                     空态引导条（sudachi 未装时显示）→ 词典下拉 → 详情区，JS 只填充不建行；
+                     2.6.5 段2（D2026-1004-01 #4/#5）：空态引导条 #dictEmpty 显式删除
+                     （FROZEN_IDS 215→214 / FROZEN_I18N_KEYS 189→187 双重钉），空态
+                     语义由 JS 注入的四 kind 摘要行 + pill-warning「未安装」+ warn-soft
+                     hint 条承接；词典下拉 → 详情区，JS 只填充不建行；
                      dict_redownload/dict_status_builtin 为 JS 态键，不落 data-i18n（R6）） -->
                 <div class="form-card" data-testid="dict-panel">
                     <div class="form-card-header" data-i18n="dict_panel_title">词典管理（日/中/英）</div>
                     <div id="dictRows" style="display:flex; flex-direction:column; gap:8px;">
-                        <div id="dictEmpty" style="display:none;" class="dict-empty">
-                            <span class="muted" data-i18n="dict_empty_guide">尚未下载日语词典数据，语法提示不可用</span>
-                            <button type="button" class="btn btn-primary btn-compact" data-i18n="dict_empty_cta">去下载日语词典</button>
-                        </div>
                         <label class="field-label" data-i18n="dict_select_label">选择词典查看详情</label>
                         <select id="dictSelect" class="form-select compact" style="width:100%;"></select>
                         <div id="dictDetail" style="display:none;" class="dict-detail">
@@ -423,7 +420,13 @@
                                 <div class="progress-bar"><div class="progress-fill"></div></div>
                                 <span class="progress-text"></span>
                             </div>
-                            <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
+                            <!-- 2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：
+                                 #dictActionBtn 静态入 .dict-action-row（官方│镜像
+                                 双源键 JS 注入，插入序=官方│镜像；「下载源」前缀
+                                 标签走 JS 态 MSG，禁 index.html 静态中文） -->
+                            <div class="dict-action-row">
+                                <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
+                            </div>
                         </div>
                     </div>
                     <div id="dictStatus" class="muted" style="margin-top:6px; min-height:1em;"></div>
@@ -952,24 +955,35 @@
                 </span>
             </div>
 
-            <!-- 卡4：系统状态摘要（D2026-1001 批3 owner 拍板 A 案；只读现成接口，逐项降级） -->
+            <!-- 卡4：系统状态摘要（D2026-1001 批3 owner 拍板 A 案；只读现成接口，逐项降级。
+                 2.6.5 段2 D2026-1004-01 #2 两行式改版：版本入标题行（id 保留仅移动，
+                 sys_summary_version 键随行保留使 FROZEN_I18N_KEYS 恰 189→187）、
+                 TM/词典统计升 keyrow 右 stat 槽、路径值行全宽 wbr 折行、行间 hairline） -->
             <div class="panel-card" id="systemSummaryCard">
-                <div class="block-title" data-i18n="sys_summary_title">系统状态</div>
-                <div class="sys-summary-row">
+                <div class="sys-summary-title-row">
+                    <div class="block-title" data-i18n="sys_summary_title">系统状态</div>
                     <span class="sys-summary-key" data-i18n="sys_summary_version">版本</span>
-                    <span class="sys-summary-val" id="sysSummaryVersion">—</span>
+                    <span class="sys-summary-stat" id="sysSummaryVersion">—</span>
                 </div>
                 <div class="sys-summary-row">
-                    <span class="sys-summary-key" data-i18n="data_root_title">数据保存目录</span>
-                    <span class="sys-summary-val" id="sysSummaryDataRoot">—</span>
+                    <div class="sys-summary-keyrow">
+                        <span class="sys-summary-key" data-i18n="data_root_title">数据保存目录</span>
+                    </div>
+                    <div class="sys-summary-val" id="sysSummaryDataRoot">—</div>
                 </div>
                 <div class="sys-summary-row">
-                    <span class="sys-summary-key" data-i18n="tm_enable_label">翻译记忆库</span>
-                    <span class="sys-summary-val" id="sysSummaryTm">—</span>
+                    <div class="sys-summary-keyrow">
+                        <span class="sys-summary-key" data-i18n="tm_enable_label">翻译记忆库</span>
+                        <span class="sys-summary-stat"></span>
+                    </div>
+                    <div class="sys-summary-val" id="sysSummaryTm">—</div>
                 </div>
                 <div class="sys-summary-row">
-                    <span class="sys-summary-key" data-i18n="dict_panel_title">词典管理（日/中/英）</span>
-                    <span class="sys-summary-val" id="sysSummaryDict">—</span>
+                    <div class="sys-summary-keyrow">
+                        <span class="sys-summary-key" data-i18n="dict_panel_title">词典管理（日/中/英）</span>
+                        <span class="sys-summary-stat"></span>
+                    </div>
+                    <div class="sys-summary-val" id="sysSummaryDict">—</div>
                 </div>
             </div>
 

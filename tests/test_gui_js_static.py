@@ -883,12 +883,16 @@ def test_refresh_button_state_restore_uses_innerhtml():
     assert re.search(r"const old = btn\.textContent", src) is None, \
         "存在 textContent 保存按钮旧值（恢复时会丢内联 SVG）"
     # 词典卡 B2 案（D2026-1001 批3）：.dict-row 行渲染已废——骨架 id 静态落
-    # index.html（见 FROZEN_IDS），JS 只填充下拉与详情区，不再动态建行
+    # index.html（见 FROZEN_IDS），JS 只填充下拉与详情区，不再动态建行。
+    # 2.6.5 段2（D2026-1004-01 #4）：#dictEmpty 空态引导条显式删除
+    # （FROZEN_IDS 215→214），骨架 id 清单同步去 dictEmpty
     assert "dict-row" not in src, "词典行 .dict-row 模板残留（B2 案已废行渲染）"
     html = INDEX_HTML.read_text(encoding="utf-8")
-    for val_id in ("dictEmpty", "dictSelect", "dictDetail", "dictPill", "dictDesc",
+    for val_id in ("dictSelect", "dictDetail", "dictPill", "dictDesc",
                    "dictPathRow", "dictPath", "dictOpenDir", "dictActionBtn"):
         assert f'id="{val_id}"' in html, f"词典卡 B2 骨架缺少：{val_id}"
+    assert 'id="dictEmpty"' not in html, \
+        "#dictEmpty 空态引导条应随 2.6.5 段2 删除（D2026-1004-01 #4）"
     assert 'row.style.cssText' not in src, "词典行不得再用 inline style 布局（压住网格规则）"
 
 
@@ -897,7 +901,12 @@ def test_refresh_button_state_restore_uses_innerhtml():
 # ---------------------------------------------------------------------------
 
 def test_system_summary_card_structure_and_degradation():
-    """摘要卡四数据行在位；SystemSummary 每接口独立 try/catch（单点失败不拖垮右栏）。"""
+    """摘要卡四数据行在位；SystemSummary 每接口独立 try/catch（单点失败不拖垮右栏）。
+
+    2.6.5 段2（D2026-1004-01 #2）：截窗 2400→3600——两行式改版后 load()
+    注释与 stat/path 双槽辅助加长，首个 per-call catch 后移，逐接口降级
+    守卫语义不变（既有断言必要修订，按任务书注明决策号）。
+    """
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'id="systemSummaryCard"' in html
     for val_id in ("sysSummaryVersion", "sysSummaryDataRoot", "sysSummaryTm", "sysSummaryDict"):
@@ -907,7 +916,7 @@ def test_system_summary_card_structure_and_degradation():
         assert api in src, f"摘要卡未接入 {api}"
     # 降级：SystemSummary 段内必须存在 per-call catch（截取段落内判定）
     start = src.index("const SystemSummary")
-    seg = src[start:start + 2400]
+    seg = src[start:start + 3600]
     assert "catch" in seg, "SystemSummary 缺少逐接口降级 catch"
 
 
@@ -994,7 +1003,9 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     assert "data-sys-row" not in html and "data-sys-action" not in html, \
         "摘要卡动态行不得新增静态锚（FROZEN_IDS 已满，行全由 JS 渲染）"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 215, f"id 全集数漂移（批C 契约 215 不变），实为 {len(ids)}"
+    # 2.6.5 段2（D2026-1004-01 #4，B3 显式解冻）：#dictEmpty 删除，
+    # FROZEN_IDS 215→214 重钉
+    assert len(ids) == 214, f"id 全集数漂移（段2 解冻后契约 214 不变），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -1541,7 +1552,10 @@ def test_asr_rec_download_entry_pinned():
 
 def test_dict_source_buttons_pinned():
     """词典源双按钮：JS 注入零 id + CN 可达性 title + 无镜像禁用逻辑 +
-    dictDownload source 透传 + p.note 可见提示。"""
+    dictDownload source 透传 + p.note 可见提示。
+    2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：#dictActionBtn 静态入
+    .dict-action-row 包裹层、注入序=官方│镜像（insertBefore 目标修正）、
+    下载中禁整行（is-busy + 双源键 disabled）。"""
     src = _app_js_source()
     body = _extract_function(src, "dictRenderDetail")
     assert "dict-src-official" in body and "dict-src-mirror" in body, \
@@ -1551,10 +1565,21 @@ def test_dict_source_buttons_pinned():
     assert "MSG.dictSrcOfficialHint" in body, "官方源 CN 可达性 title 缺失"
     assert "has_mirror" in body, "无镜像禁用判定缺失"
     assert "MSG.dictSrcMirrorlessHint" in body, "无镜像禁用 title 文案缺失"
+    assert "row.insertBefore(offBtn, btn)" in body \
+        and "row.insertBefore(mirBtn, btn)" in body, \
+        "源键插入序须为 官方│镜像（D2026-1004-01 #5 修正）"
+    assert "MSG.dict_download_source" in body, "「下载源」前缀标签须 JS 态 MSG"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<div class="dict-action-row">.*?</div>', html, re.S)
+    assert m and 'id="dictActionBtn"' in m.group(0), \
+        "#dictActionBtn 须静态入 .dict-action-row 包裹层"
     dl = _extract_function(src, "dictDownload")
     assert re.search(r"refine_dict_download\(kind,\s*source\s*\|\|\s*'auto'\)", dl), \
         "refine_dict_download 须透传 source（缺省 auto）"
     assert "p.note" in dl, "轮询回调缺 p.note 可见提示（评议员条件①）"
+    assert "is-busy" in dl, "下载中缺整行 is-busy 禁用态（D2026-1004-01 #5）"
+    assert "dict-src-official" in dl and "dict-src-mirror" in dl, \
+        "下载中须禁双源键（三键 setDisabled）"
 
 
 # ---------------------------------------------------------------------------
@@ -1614,28 +1639,44 @@ def test_tm_search_render_and_error_visible_pinned():
 
 
 # 2.6.3 批C（D2026-1003-01 P4 拍板④）：IA 重排——引擎页三段分段控件
-# + ASR/词典卡迁独立页 tab-asrdict（新增钉，基线只增不减）
+# 2.6.5 段2（D2026-1004-01 #3）改写：seg 外壳删除，原分段结构钉重写为
+# 纵向堆叠组守卫（endpoints_summary 断言保留）；ASR/词典卡迁独立页
+# tab-asrdict（新增钉，基线只增不减）
 # ---------------------------------------------------------------------------
 
-def test_batch_c_seg_bar_structure_pinned():
-    """批C 新钉：引擎页分段控件三按钮存在且 data-seg 值序=a/b/fb，
-    三段容器齐备；阶段A 地址行+主保存键在 A 段，阶段B 地址行+孪生
-    保存键（class-only 无 id）在 B 段；接口地址卡外壳（endpoints_summary）
-    已删除不回流。"""
+def test_batch_c_engine_stage_groups_pinned():
+    """批C IA 重排守卫（2.6.5 段2 D2026-1004-01 #3 重写为堆叠组守卫）：
+    原引擎页 seg 分段控件（.seg-bar/.seg-btn/.seg-page）已删除，改
+    .stage-group 纵向堆叠组（阶段A→阶段B→兜底），组头纯中文零 i18n 键；
+    阶段A 地址行+主保存键在 A 组，阶段B 地址行+孪生保存键（class-only
+    无 id）在 B 组；接口地址卡外壳（endpoints_summary）已删除不回流。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    segs = re.findall(r'class="seg-btn[^"]*"\s+data-seg="([^"]+)"', html)
-    assert segs == ["a", "b", "fb"], f"分段按钮值序漂移: {segs}"
-    pages = re.findall(r'class="seg-page[^"]*"\s+data-seg-page="([^"]+)"', html)
-    assert pages == ["a", "b", "fb"], f"分段容器缺失或值序漂移: {pages}"
-    seg_a = _slice(html, 'data-seg-page="a"', 'data-seg-page="b"')
-    assert 'id="refineS1Endpoint"' in seg_a, "阶段A 地址行未迁入 A 段"
-    assert 'id="refineSaveEndpointsBtn"' in seg_a, "主保存键不在 A 段"
-    seg_b = _slice(html, 'data-seg-page="b"', 'data-seg-page="fb"')
-    assert 'id="refineS3Endpoint"' in seg_b, "阶段B 地址行未迁入 B 段"
-    assert "endpoint-save-twin" in seg_b, "B 段缺孪生保存按钮"
-    assert 'id="refineSaveEndpointsBtn"' not in seg_b, \
+    for gone in ('class="seg-bar', 'class="seg-btn', 'class="seg-page',
+                 'data-seg=', 'data-seg-page='):
+        assert gone not in html, f"seg 外壳残留: {gone}"
+    assert html.count('class="stage-group"') == 3, "引擎页须恰 3 组 stage-group"
+    titles = re.findall(r'class="stage-group-title">([^<]+)<', html)
+    assert titles == ["阶段A · 净语+翻译", "阶段B · 审校+抛光", "兜底与容错"], \
+        f"堆叠组组头漂移: {titles}"
+    grp_a = _slice(html, '阶段A · 净语+翻译', '阶段B · 审校+抛光')
+    assert 'id="refineS1Endpoint"' in grp_a, "阶段A 地址行未迁入 A 组"
+    assert 'id="refineSaveEndpointsBtn"' in grp_a, "主保存键不在 A 组"
+    grp_b = _slice(html, '阶段B · 审校+抛光', '兜底与容错')
+    assert 'id="refineS3Endpoint"' in grp_b, "阶段B 地址行未迁入 B 组"
+    assert "endpoint-save-twin" in grp_b, "B 组缺孪生保存按钮"
+    assert 'id="refineSaveEndpointsBtn"' not in grp_b, \
         "孪生保存按钮不得带 id（id 冻结预算）"
     assert "endpoints_summary" not in html, "接口地址卡外壳应随 IA 重排删除"
+    # 去外壳后 JS 绑定循环一并移除（stage-group 为纯 CSS 布局零 JS）
+    src = _app_js_source()
+    assert ".seg-btn" not in src and ".seg-page" not in src, \
+        "app.js 残留 seg 绑定（D2026-1004-01 #3 已删）"
+    # CSS：.stage-group 规则在位、.seg-* 规则删净
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert ".stage-group {" in css and ".stage-group-title" in css, \
+        "style.css 缺 .stage-group 规则组"
+    assert ".seg-btn" not in css and ".seg-page" not in css, \
+        "style.css 残留 .seg-* 规则"
 
 
 def test_batch_c_asrdict_tab_order_pinned():

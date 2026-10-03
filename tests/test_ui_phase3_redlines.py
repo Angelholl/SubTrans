@@ -46,6 +46,10 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   +tabAsrDict 实测净值 189（接口地址卡外壳随重排删除，拆两行地址迁入
   分段；指令所记 189→190 与仓库事实冲突，以全等断言自洽为准），
   分组钉 quality 组序插入 tab-asrdict——配记=D2026-1003-01 拍板归档段④。
+  2.6.5 段2 D2026-1004-01 #4（B3 显式解冻+双重钉，C5）：#dictEmpty
+  空态引导条删除，FROZEN_IDS 215→214；dict_empty_guide/dict_empty_cta
+  两静态键随删，FROZEN_I18N_KEYS 189→187（空态语义改 JS 态键承接，
+  零新增静态 id/data-i18n）。
 """
 import re
 from pathlib import Path
@@ -115,7 +119,7 @@ asrModelSel asrPythonInput asrRecList asrRefreshBtn asrStatus audioPreviewBar au
 audioPreviewError audioPreviewPlayer audioPreviewTiming browseOutputBtn clearBtn
 clearConsoleBtn consoleCollapseBtn consoleOutput dataRootBar dataRootCurrentPath
 dataRootRestoreBtn dataRootSourceTag dataRootStatus dataRootToggleBtn debugLogging
-dictActionBtn dictBrowseBtn dictDesc dictDetail dictEmpty dictMigrateBtn dictOpenDir dictPath dictPathRow dictPill
+dictActionBtn dictBrowseBtn dictDesc dictDetail dictMigrateBtn dictOpenDir dictPath dictPathRow dictPill
 dictProgress dictRestoreBtn dictRows dictSelect dictStatus directionCardList directionCardS1
 directionCardS3
 directionSource directionTarget dropzone emptyState featureStatus fileList
@@ -166,7 +170,7 @@ batchFixBtn batch_cloud_label batch_local_label browse_btn browse_dots cleaner_d
 cleaner_dir_placeholder clear_btn clear_console close_btn collapse_toggle
 concurrency_label concurrency_title console_collapse console_header ctx_label
 ctx_placeholder ctx_title data_root_change_btn data_root_restore_btn data_root_title
-dict_empty_cta dict_empty_guide dict_open_dir dict_select_label dict_panel_title
+dict_open_dir dict_select_label dict_panel_title
 direction_block_title direction_card_fallback_hint
 direction_card_placeholder direction_card_s1_label direction_card_s3_label
 direction_hint direction_label direction_title doc_title empty_hint

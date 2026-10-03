@@ -389,41 +389,28 @@ button:focus { outline: none; }
     min-height: 0;
 }
 
-/* ---------- 引擎页三段分段控件（2.6.3 批C D2026-1003-01 P4：IA 重排）----------
-   .seg-bar/.seg-btn/.seg-page 独立类系（机制仿 .tab-page），只增不改；
+/* ---------- 引擎页纵向堆叠组（2.6.5 段2 D2026-1004-01 #3：去 seg 外壳）----------
+   三组 .stage-group 直接铺开（阶段A→阶段B→兜底），组头纯中文零 i18n 键；
    全量取色走 CSS 变量，暗色主题经 style.dark.css token 重定义自动兼容 */
-.seg-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: var(--space-2);
-}
-.seg-btn {
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text-2);
-    font-family: inherit;
-    font-size: var(--font-sm);
-    font-weight: 500;
-    padding: 4px 14px;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-    transition: background var(--dur) ease, color var(--dur) ease,
-        border-color var(--dur) ease;
-}
-.seg-btn:hover { background: var(--surface-3); color: var(--text-1); }
-.seg-btn.active {
-    background: var(--primary-soft);
-    color: var(--primary-strong);
-    font-weight: 600;
-    border-color: var(--primary-strong);
-}
-.seg-page { display: none; }
-.seg-page.active {
+.stage-group {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    gap: 10px;
+}
+.stage-group + .stage-group { margin-top: var(--space-1); }
+.stage-group-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text-2);
+}
+.stage-group-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 /* ---------- 右栏：配置面板 ---------- */
@@ -957,29 +944,49 @@ input[type="checkbox"] {
    批3 摘要卡入列后贴底目标移交末卡（仅一个 margin-top:auto，多卡 auto 会均分间隙） */
 #systemSummaryCard { margin-top: auto; }
 
-/* 系统状态摘要卡（D2026-1001 批3）：key/val 两列，数据目录长路径省略+悬停全文 */
-.sys-summary-row {
+/* 系统状态摘要卡（D2026-1001 批3；2.6.5 段2 D2026-1004-01 #2 两行式改版）：
+   标题行（标题+版本 stat）/ keyrow（key 左 + stat 右）/ 全宽路径值行
+   （overflow-wrap:anywhere 折行，分隔符断行由 JS 注入 <wbr> 优先） */
+.sys-summary-title-row {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    padding: 5px 0;
-    font-size: var(--font-xs);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.sys-summary-title-row .block-title { flex: 1; }
+.sys-summary-stat {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    margin-left: auto;
+    white-space: nowrap;
+}
+.sys-summary-row {
+    padding: 7px 0;
     min-width: 0;
 }
 .sys-summary-row + .sys-summary-row { border-top: 1px solid var(--border); }
-.sys-summary-key { flex: none; color: var(--text-3); }
-.sys-summary-val {
-    flex: 1;
+.sys-summary-keyrow {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
     min-width: 0;
-    color: var(--text-1);
-    font-family: var(--font-mono);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-align: right;
 }
-/* 批3 扩展（D2026-1002-12）：ASR 行"未探测"默认态弱化（探测成功后 JS 移除） */
-.sys-summary-val.val-muted { color: var(--text-3); }
+.sys-summary-key { flex: none; font-size: var(--font-xs); color: var(--text-3); }
+.sys-summary-val {
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    line-height: 1.5;
+    color: var(--text-1);
+    overflow-wrap: anywhere;
+    word-break: normal;
+    user-select: text;
+}
+/* 批3 扩展（D2026-1002-12）：ASR 行"未探测"默认态弱化（探测成功后 JS 移除；
+   2.6.5 段2 弱化语义自 .sys-summary-val 迁 stat 槽——ASR 行不再用 val） */
+.sys-summary-stat.val-muted { color: var(--text-3); }
 .pipeline-mirror {
     font-size: var(--font-sm);
     color: var(--text-1);
@@ -994,16 +1001,11 @@ input[type="checkbox"] {
 }
 .footnote { font-size: var(--font-xs); color: var(--text-3); }
 
-/* 词典管理 B2 案（D2026-1001 批3）：#dictRows 吃满卡片宽；空态引导条 +
-   详情区纵向布局（行渲染 .dict-row 已废，JS 只填充静态骨架） */
+/* 词典管理 B2 案（D2026-1001 批3）：#dictRows 吃满卡片宽；详情区纵向布局
+   （行渲染 .dict-row 已废，JS 只填充静态骨架）。2.6.5 段2（D2026-1004-01
+   #4/#5）：空态引导条 #dictEmpty 删除，语义由四 kind 摘要行 + pill-warning
+   + warn-soft hint 条承接；详情路径改完整折行（去 ellipsis 截断） */
 #dictRows { width: 100%; }
-#dictRows .dict-empty {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-}
 #dictRows .dict-detail {
     display: flex;
     flex-direction: column;
@@ -1011,12 +1013,124 @@ input[type="checkbox"] {
 }
 #dictRows .dict-detail .muted {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 #dictRows .dict-detail .pill { white-space: nowrap; }
+
+/* 四 kind 状态摘要行（#4 空态三件套①）：实心点=已装（--ok）/空心=未装
+   （--text-3）/内置 english_rules=primary 点；active=当前选中词典 */
+.dict-kind-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dict-kind-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 11px;
+    color: var(--text-2);
+    cursor: pointer;
+    font-family: inherit;
+}
+.dict-kind-chip .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-3);
+    box-sizing: border-box;
+    flex: none;
+}
+.dict-kind-chip.on .dot { background: var(--ok); border-color: var(--ok); }
+.dict-kind-chip.builtin .dot { background: var(--primary); border-color: var(--primary); }
+.dict-kind-chip.active {
+    border-color: var(--primary-border);
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+}
+
+/* warn-soft 提示条（#4 空态三件套②，仅 downloadable&&!available 显示） */
+.dict-install-hint {
+    background: var(--warn-soft);
+    color: var(--status-warn);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    font-size: var(--font-xs);
+    line-height: 1.55;
+}
+
+/* 收单操作行（#5 路线1）：官方│镜像 边框合并（左/右圆角 + margin-left:-1px
+   消双线）+ 主下载键 margin-left:auto 靠右；下载中 .is-busy 禁整行 */
+.dict-action-row { display: flex; align-items: center; margin-top: 4px; }
+.dict-action-row .dict-src-label {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    margin-right: 8px;
+}
+.dict-action-row .dict-src-official { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.dict-action-row .dict-src-mirror {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-left: -1px;
+}
+.dict-action-row #dictActionBtn { margin-left: auto; }
+.dict-action-row .btn:disabled {
+    background: var(--surface-3);
+    color: var(--text-3);
+    opacity: 1;
+}
+
+/* #6 失败信息 + 原生 details 技术详情网格（诊断值全 mono 折行，
+   窄栏下 118px 标签列仍可读） */
+.dict-diag { margin-top: 4px; }
+.dict-diag > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    list-style: none;
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    width: max-content;
+}
+.dict-diag > summary::-webkit-details-marker { display: none; }
+.dict-diag > summary:hover { color: var(--text-1); }
+.dict-diag > summary svg { transition: transform var(--dur) ease; }
+.dict-diag[open] > summary svg { transform: rotate(90deg); }
+.dict-diag-grid {
+    display: grid;
+    grid-template-columns: 118px minmax(0, 1fr);
+    gap: 4px 10px;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    max-height: 180px;
+    overflow: auto;
+}
+.dict-diag-grid .k { font-size: 11px; color: var(--text-3); }
+.dict-diag-grid .v {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-1);
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+.dict-diag-grid .v .copy {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-2);
+    border-radius: 6px;
+    font-size: 10px;
+    padding: 1px 6px;
+    cursor: pointer;
+    font-family: inherit;
+    margin-left: 6px;
+}
 .status-err { color: var(--danger); }
 .hint-warn { color: var(--status-warn); }
+/* #6：失败一行人话 + 下载成功长路径文案完整折行（承接路径行折行口径） */
+#dictStatus { overflow-wrap: anywhere; }
 
 /* ASR 推荐清单：折叠详情行（完整 URL/sha256 移入展开区，长串断行防撑爆） */
 .asr-rec-item summary {
