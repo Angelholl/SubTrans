@@ -2825,3 +2825,21 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 
 **风险跟踪**：①镜像上架门=owner 实下载 3GB 比对 sha256 字节一致后翻 verified（格式转换版不通过；PENDING 可长期挂账）；②已就位徽标翻转未能在 stub 黑盒闭环（stub 夹具晚补 present 字段+IAB 输入层抖动），该分支为未改动既有逻辑，真机 C1 项覆盖；③pipeline_v2 两 quarantine 用例偶发失败族（与批B 无关）待排期。
 
+## [2026-10-04] D2026-1004-01 2.6.5「词典链与 UX 修复版」立项——真机六项反馈两轮讨论终审放行（jieba 渠道/下载链加固/安装器图标/状态卡重设计/引擎页去外壳/词典页入口收敛） [终审放行·待开工]
+
+**缘起**：owner 真机走查 2.6.3 提出六项反馈：#1 安装包图标与应用不一致｜#2 系统状态卡路径截断遮挡｜#3 引擎页阶段A 子页大量留白｜#4+#5 词典页多个下载入口冗余（顶部空态引导条与详情区主按钮冲突，owner 定向"保留一个"）｜#6 所有词典下载 SHA256 校验失败+中文词典无下载渠道（问"没有还是不支持"）。owner 授权"方案+评议员+设计师两轮讨论定夺，定不了的最后报 owner"。**程序注记**：decision-critic/design-expert 专用子智能体通道本轮连续模型请求失败，三轮评议与设计均由通用智能体以同角色替代执行（均实证读取仓库核实）；后续如专用通道恢复可补正式复评。
+
+**关键事实链（三轮均亲核）**：v2.6.4 tag 已推远程（72ae14f→68ed60c）且已发布、main 前进 2.6.5.dev0（c64cf2c）——owner 原问"归 2.6.5 还是并入 2.6.4"因 2.6.4 落地不可回撤而**事实性定为 2.6.5 快发**（不重演 2.6.2→2.6.3 并轨）。成因坐实：release.yml 装 `.[gui]` 无 zh+spec hiddenimports 无 jieba+ci.yml 仅 `[dev]`（jieba 正向单测 CI 恒 skip）→安装包用户中文分词恒"不可用"（2.3.0 词典去捆绑起潜伏四版本）；dict_manager._http_get（:351-390）裸 urlopen 无 Accept-Encoding/无完整性校验/1MB 分块静默短读窗口+校验失败不轮换（:547-551，D2026-1003-06 防洗白裁定）——真机三源齐失败高先验指向 owner 本机 v2rayN 代理出口；#dictEmpty（index.html:399/app.js:4900/test_gui_js_static.py:889）+dict_empty_* 两键+C2 决议（D2026-1001-03）在案；FROZEN_IDS 现值 215。
+
+**评议轨迹与 HRO 采纳**：预评（替代评议员）HRO=jieba 单改 release.yml 无效→采纳为安装四件套并经终审修正；一轮（设计师出 UI 方案+评议员复核 v2）HRO=发版门未定义→采纳三层发版门；另采纳：校验失败自动轮换源降级搁置（与 D2026-1003-06 冲突）、直连不默认化（保企业代理用户）、smoke 双层断言（find_spec 不证 dict.txt 落位、token_hint 吞异常静默降级是潜伏机制）；二轮（终审）**放行、无新 HRO**，补 B1-B4 绑定澄清；设计师确认方案与全部修订无冲突。
+
+**决议内容**：
+- **段1（词典链+安装器，先行开工，从 main HEAD worktree+本地 venv `pip install -e ".[dev,gui,zh]"`）**：①jieba 渠道修复＝release.yml 改装 `.[gui,zh]`+spec hiddenimports 钉 jieba（数据收集靠 hooks-contrib 官方 hook，不重复 collect_data_files）+frozen smoke 双层断言（`_internal/jieba/dict.txt` 存在**且** frozen 真跑 jieba.cut() 经 --dict-status 自检行）+ci.yml 加 `[zh]` 解正向单测 skip；②下载链加固＝请求头 `Accept-Encoding: identity`+Content-Length 完整性校验（实际==total，.part 删除前统计，短读归网络层失败）+**网络层失败**同 URL 直连重试一次（默认沿用系统代理；**校验失败 DictChecksumError 绝不重试**，与防洗白裁定同构）+诊断日志/GUI failed 快照判别字段（预期实际字节/Content-Encoding/.part 前 64 字节 hex/来源 URL/代理直连标记）；③setup.iss 加 SetupIconFile；④回归测试四件（直连重试/校验失败不重试/截断完整性/请求头存在）。**B1（终审绑定）**：守卫 opener 组合 `_GuardedRedirectHandler` 须覆盖首发（系统代理）与直连重试全部尝试——现状 dict 链裸 urlopen 无逐跳守卫（守卫仅在 asr_downloader），本批一并补齐 D2026-1003-06 条件④欠账。
+- **段2（UI 三项+#6，紧接段1，设计师方案已定稿）**：#2 状态卡两行式完整路径（版本入标题行/TM 词典统计升键行右侧 11px mono/路径值 word-break 折行/行间 hairline/高度增量约 +72px，右栏 747→820px<默认窗 918px 单屏守住；不采用折叠/展开；全 token 取色暗色自动适配）；#3 引擎页去外壳纵向堆叠 A→B→兜底（组头纯中文零 i18n 键+hairline 分隔、不做吸顶默认窗零滚动、seg DOM/CSS/JS 绑定一并清除、页首标题文案本批不动锁范围）；#4/#5 删 #dictEmpty 空态引导条（FROZEN_IDS **B3：纯减法走显式解冻登记+基线 215→214 重钉**+dict_empty_* 静态键清理+C2 决议反转记档；新增 DOM 全走 createElement+JS 态键零新增静态 id/data-i18n）+空态三件套（pill-warning「未安装」+warn-soft 提示条+四 kind 状态摘要行含点击联动）+收单操作行（segmented 源组仅官方│仅镜像靠左+主下载键靠右）；#6 失败信息一行人话（status-err 红，顺带修失败无红）+原生 `<details>` 技术详情网格（字段按存在性降级，依赖段1 后端字段契约；URL 行复制键；「复制全部诊断」不做，gui.log 已全量）。
+- **发版门三层（钉入本记档）**：①结构门（CI 可证不依赖 owner）＝jieba smoke 双层断言+直连重试/不重试/完整性单测全绿；②真机门（owner 配合动作，发版前完成或书面放弃）＝owner 关系统代理（或修 v2rayN）后 GUI 词典下载端到端成功一次；③降级出口（②达不成时三条件同时满足才准发）＝a) 直连重试对镜像源任一干净网络实证+b) 已知问题文案含代理环境可能失败说明与 CLI 离线导入命令（**B2**：按真实 CLI 面书写 `--dict-download sudachi --dict-from-file <wheel>`，完整版 sudachi_full 本轮无 CLI 离线导入入口须如实注明）+c) owner 书面接受带已知问题发版。
+- **配套**：CHANGELOG [2.6.5] 按 修复/界面 分组；roadmap 2.6.5 占位同步；真机走查清单新编 265 份（jieba 正向分词提示/词典下载端到端两态/安装器图标目检/UI 三项黑盒截图）；release-checklist 基线数更新为实跑（现文档 1601+4 已陈旧）；"校验失败自动轮换源"搁置，复议触发＝诊断数据齐全且排除客户端环境因素；执行边界＝GUI 词典离线导入入口不进本版、验证链 ruff→定向→全量→冒烟→Mimosa 深扫比基线收口、提交逐文件点名 Conventional Commits+verify:+Refs: D2026-1004-01。
+
+**owner 侧知悉/动作清单**：①真机门动作（关代理重试词典下载）发版前须完成或书面放弃；②陈旧 worktree D:/SubTrans-d264-pre（2cdba2d 已完全合并入 main，终审实证）可删；③2.6.4 包内无 jieba 为既成事实，其走查时勿误判新回归（2.6.5 修复在途）；④③出口 c) 书面接受仅在②未达成时需要。
+
+**风险跟踪**：①无 Content-Length 截断/强制压缩由 SHA256 层显式拦截不重试＝已知残留（**B4**），诊断字段保证可判别；②③a 仅证直连通路可用、不证代理环境自动回退会触发，故只作②的降级出口非等价物；③CI 打包环境 jieba cache 写入行为随 smoke 真跑暴露，异常即结构门拦截；④镜像上架门（D2026-1003-06 遗留①）与本批直连重试正交，持续挂账；⑤2.6.5 段1 开工与主检出并发会话活动并存，worktree+逐文件点名+归属核验纪律照旧。
+
