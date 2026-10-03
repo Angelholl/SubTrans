@@ -981,6 +981,19 @@ input[type="checkbox"] {
 .status-err { color: var(--danger); }
 .hint-warn { color: var(--status-warn); }
 
+/* ASR 推荐清单：折叠详情行（完整 URL/sha256 移入展开区，长串断行防撑爆） */
+.asr-rec-item summary {
+    cursor: pointer;
+    color: var(--text-2);
+}
+.asr-rec-detail {
+    font-size: var(--font-xs);
+    line-height: 1.6;
+    color: var(--text-2);
+    word-break: break-all;
+    padding: 2px 0 0 var(--space-3);
+}
+
 .group-title {
     font-size: var(--font-sm);
     font-weight: 600;

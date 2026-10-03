@@ -538,6 +538,8 @@ const MSG = {
     asrPresent: '已就位',
     asrMissing: '未就位',
     asrPlanned: '规划中·自备',
+    asrSrcOverseas: '海外源',
+    asrSrcDomestic: '国内源',
     asrPlaceHint: (cacheDir, modelsDir, fileName) =>
       `落位（文件名须为 ${fileName}）：优先放入默认缓存 ${cacheDir}（零配置），或应用数据目录 ${modelsDir}（备选）`,
     asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
@@ -3605,20 +3607,40 @@ function switchTab(tabId) {
     title.className = 'muted';
     box.appendChild(title);
     items.forEach((rec) => {
-      const row = document.createElement('div');
       const badge = rec.present
         ? MSG.asrPresent
         : (rec.support === 'planned' ? MSG.asrPlanned : MSG.asrMissing);
       const size = rec.bytes ? '｜' + fmtGB(rec.bytes) : '';
-      const url = rec.url
-        ? '｜来源：' + rec.url : '';
-      const fp = rec.sha256 ? '｜sha256:' + rec.sha256 : '';
+      const srcPart = rec.url
+        ? '｜来源：' + (rec.url.indexOf('hf-mirror.com') !== -1
+          ? MSG.asrSrcDomestic : MSG.asrSrcOverseas) : '';
       const hint = (rec.support === 'available' && cacheDir)
         ? '。' + MSG.asrPlaceHint(cacheDir, modelsDir,
                                   (rec.model || rec.name) + '.pt') : '';
-      row.textContent = rec.name + '：' + badge + size + url + fp + hint;
-      row.className = 'muted';
-      box.appendChild(row);
+      // 长 URL/sha256 折叠进展开详情，summary 行只留摘要（防撑爆卡片）
+      const item = document.createElement('details');
+      item.className = 'asr-rec-item';
+      const sum = document.createElement('summary');
+      sum.className = 'muted';
+      sum.textContent = rec.name + '：' + badge + size + srcPart + hint;
+      if (rec.url) sum.title = rec.url;
+      item.appendChild(sum);
+      if (rec.url || rec.sha256) {
+        const detail = document.createElement('div');
+        detail.className = 'asr-rec-detail muted';
+        if (rec.url) {
+          const urlRow = document.createElement('div');
+          urlRow.textContent = '来源：' + rec.url;
+          detail.appendChild(urlRow);
+        }
+        if (rec.sha256) {
+          const fpRow = document.createElement('div');
+          fpRow.textContent = 'sha256：' + rec.sha256;
+          detail.appendChild(fpRow);
+        }
+        item.appendChild(detail);
+      }
+      box.appendChild(item);
     });
   }
 
@@ -4146,7 +4168,10 @@ function switchTab(tabId) {
         migBtn.addEventListener('click', () => dictMigrate());
       }
       dictRenderDetail();
-    }).catch(() => {});
+    }).catch((e) => {
+      const st = $('dictStatus');
+      if (st) st.textContent = MSG.dict_load_failed + '：' + String(e);
+    });
   }
   function dictRenderDetail() {
     const detail = $('dictDetail');

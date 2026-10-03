@@ -1446,3 +1446,43 @@ def test_batch2_new_msg_keys_pinned():
         assert key in keys, f"MSG 缺少批2新键: {key}"
         m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
         assert m and m.group(1), f"MSG 键 {key} 文案为空"
+
+
+# ---------------------------------------------------------------------------
+# 2.6.2 热修：R3 ASR 推荐项长 URL 撑爆卡片 + R4 词典状态加载失败吞错
+# ---------------------------------------------------------------------------
+
+def test_asr_render_rec_list_details_fold_pinned():
+    """R3 回归钉：ASR 推荐项折叠为 details/summary，完整 URL 与 sha256
+    移入展开详情（.asr-rec-detail），summary 行只留来源分类文案
+    （hf-mirror.com=国内源，否则海外源），title 悬停可见完整 URL。"""
+    body = _extract_function(_app_js_source(), "asrRenderRecList")
+    assert "createElement('details')" in body, "推荐项必须折叠为 <details>"
+    assert "createElement('summary')" in body, "缺少 summary 摘要行"
+    assert "asr-rec-detail" in body, "展开详情容器缺失"
+    for key in ("MSG.asrSrcOverseas", "MSG.asrSrcDomestic"):
+        assert key in body, f"summary 来源分类缺少 {key}"
+    assert "hf-mirror.com" in body, "来源分类规则（hf-mirror.com=国内源）缺失"
+    assert re.search(r"\.title\s*=\s*[^;]*rec\.url", body), \
+        "summary 必须挂 title=完整 URL（悬停可见）"
+
+
+def test_dict_load_failure_not_swallowed_pinned():
+    """R4 回归钉：dictLoad 链尾 catch 不得静默吞错，须回写 #dictStatus
+    失败文案（与 then 分支 dict_load_failed 同口径）。"""
+    body = _extract_function(_app_js_source(), "dictLoad")
+    assert re.search(r"catch\s*\(\s*\)\s*=>\s*\{\s*\}", body) is None, \
+        "dictLoad 链尾残留空 catch（吞错导致 #dictStatus 空白）"
+    assert ".catch(" in body, "dictLoad 必须保留 catch 链"
+    assert body.count("MSG.dict_load_failed") >= 2, \
+        "catch 回调必须回写 dictStatus 失败文案（MSG.dict_load_failed）"
+
+
+def test_asr_rec_detail_css_pinned():
+    """R3 配套 CSS：.asr-rec-detail 规则块在位且含长串断行
+    （word-break: break-all，先例 .media-source-path）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.asr-rec-detail \{[^}]*\}", css)
+    assert m, "style.css 缺 .asr-rec-detail 规则"
+    assert "word-break: break-all" in m.group(0), \
+        ".asr-rec-detail 缺 word-break: break-all"
