@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-aside="316">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D2026-1004-01 段2 UI 复审核正原型</title>
+<style>
+/* tokens 逐字取自 assets/style.css :19-115 + style.dark.css */
+:root{
+  --bg:#F3F4F6; --surface:#FFFFFF; --surface-2:#F9FAFB; --surface-3:#F3F4F6;
+  --border:#E5E7EB; --border-strong:#D1D5DB;
+  --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+  --primary:#3B82F6; --primary-strong:#2563EB; --primary-soft:#EFF6FF; --primary-border:#BFDBFE;
+  --ok:#10B981; --ok-soft:#ECFDF5; --warn:#F59E0B; --warn-soft:#FFFBEB;
+  --danger:#DC2626; --danger-soft:#FEF2F2; --danger-border:#FECACA;
+  --status-warn:#B26A00;
+  --radius-sm:8px; --radius:12px; --radius-pill:999px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --font:14px; --font-sm:13px; --font-xs:12px;
+  --font-mono:"Cascadia Code",Consolas,"JetBrains Mono",monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --space-1:4px; --space-3:12px; --space-4:16px; --space-5:24px;
+  --h-ctl:36px; --h-ctl-sm:30px; --dur:.15s;
+}
+[data-theme="dark"]{
+  --bg:#0B0F17; --surface:#141821; --surface-2:#1A202B; --surface-3:#1F2530;
+  --border:#262D3B; --border-strong:#333C4D;
+  --text-1:#E5E7EB; --text-2:#9CA3AF; --text-3:#6B7280;
+  --primary:#60A5FA; --primary-strong:#3B82F6; --primary-soft:rgba(59,130,246,.14); --primary-border:rgba(96,165,250,.35);
+  --ok:#34D399; --ok-soft:rgba(16,185,129,.12); --warn:#FBBF24; --warn-soft:rgba(245,158,11,.12);
+  --danger:#F87171; --danger-soft:rgba(239,68,68,.12); --danger-border:rgba(248,113,113,.35);
+  --status-warn:var(--warn);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:var(--font)}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text-1)}
+.topbar{display:flex;gap:8px;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+.topbar b{font-size:var(--font-sm)}
+.spacer{flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:var(--h-ctl);padding:0 14px;font-size:var(--font-sm);font-weight:550;border-radius:9px;border:1px solid transparent;background:transparent;color:var(--text-1);cursor:pointer;white-space:nowrap;transition:all var(--dur) ease;font-family:inherit}
+.btn-secondary{background:var(--surface);border-color:var(--border-strong)}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-ghost{background:transparent;color:var(--text-2)}
+.btn-ghost:hover{background:var(--surface-3);color:var(--text-1)}
+.btn-compact{min-height:var(--h-ctl-sm);padding:0 10px;font-size:var(--font-xs);border-radius:var(--radius-sm)}
+.workbench{display:grid;grid-template-columns:64px minmax(0,1fr) 316px;height:calc(100vh - 53px)}
+[data-aside="300"] .workbench{grid-template-columns:64px minmax(0,1fr) 300px}
+.rail{background:var(--surface-2);border-right:1px solid var(--border)}
+.main{overflow-y:auto;padding:20px}
+.aside{background:var(--bg);border-left:1px solid var(--border);overflow-y:auto;padding:var(--space-5) 20px 28px;display:flex;flex-direction:column;gap:14px}
+.col{display:flex;flex-direction:column;gap:var(--space-4)}
+.panel-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:var(--space-4)}
+.block-title{font-size:var(--font);font-weight:600;color:var(--text-1)}
+.form-card{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:var(--space-3) 14px;min-height:62px}
+.muted{font-size:var(--font-sm);color:var(--text-2)}
+.mono{font-family:var(--font-mono)}
+.form-input{min-height:var(--h-ctl);padding:0 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-1);font-family:inherit;font-size:var(--font-sm)}
+.form-select{min-height:var(--h-ctl);padding:0 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-1);font-family:inherit;font-size:var(--font-sm)}
+.section-note{font-size:10px;color:var(--text-3);letter-spacing:.02em;margin-bottom:6px;font-family:var(--font-mono)}
+/* ===== #2 系统状态卡（两行式；校正点：wrap 策略） ===== */
+.sys-summary-title-row{display:flex;align-items:baseline;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.sys-summary-title-row .block-title{flex:1}
+.sys-summary-stat{font-family:var(--font-mono);font-size:11px;color:var(--text-2);margin-left:auto;white-space:nowrap}
+.sys-summary-row{padding:7px 0;min-width:0}
+.sys-summary-row + .sys-summary-row{border-top:1px solid var(--border)}
+.sys-summary-keyrow{display:flex;align-items:baseline;gap:10px;min-width:0}
+.sys-summary-key{flex:none;font-size:var(--font-xs);color:var(--text-3)}
+/* 校正：word-break:break-all 改为 overflow-wrap:anywhere（分隔符由 <wbr> 优先断行） */
+.sys-summary-val{margin-top:2px;font-family:var(--font-mono);font-size:var(--font-xs);line-height:1.5;color:var(--text-1);overflow-wrap:anywhere;word-break:normal;user-select:text}
+/* ===== #3 引擎页纵向堆叠组头 ===== */
+.stage-group{display:flex;flex-direction:column;gap:10px}
+.stage-group + .stage-group{margin-top:var(--space-1)}
+.stage-group-title{display:flex;align-items:center;gap:10px;font-size:var(--font-sm);font-weight:600;color:var(--text-2)}
+.stage-group-title::after{content:"";flex:1;height:1px;background:var(--border)}
+/* ===== #4/#5 词典页 ===== */
+.dict-kind-row{display:flex;flex-wrap:wrap;gap:6px}
+.dict-kind-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface);font-size:11px;color:var(--text-2);cursor:pointer;font-family:inherit}
+.dict-kind-chip .dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--text-3);box-sizing:border-box;flex:none}
+.dict-kind-chip.on .dot{background:var(--ok);border-color:var(--ok)}
+.dict-kind-chip.builtin .dot{background:var(--primary);border-color:var(--primary)}
+.dict-kind-chip.active{border-color:var(--primary-border);background:var(--primary-soft);color:var(--primary-strong)}
+.dict-install-hint{background:var(--warn-soft);color:var(--status-warn);border-radius:var(--radius-sm);padding:7px 10px;font-size:var(--font-xs);line-height:1.55}
+.dict-detail{display:flex;flex-direction:column;gap:6px}
+.dict-detail .path-row{display:flex;align-items:center;gap:8px;min-width:0}
+.dict-detail .path-row .grow{flex:1;min-width:0;overflow-wrap:anywhere;font-family:var(--font-mono);font-size:var(--font-xs);color:var(--text-2)}
+.dict-action-row{display:flex;align-items:center;margin-top:4px}
+/* 边框合并式：官方(左) 镜像(右, margin-left:-1px 消双线)；主键 margin-left:auto 靠右 */
+.dict-action-row .dict-src-official{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.dict-action-row .dict-src-mirror{border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin-left:-1px}
+.dict-action-row #dictActionBtn{margin-left:auto}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:var(--radius-pill);background:var(--primary-soft);color:var(--primary-strong);font-size:11px;font-weight:600;line-height:1.6;white-space:nowrap}
+.pill-success{background:var(--ok-soft);color:var(--ok)}
+.pill-warning{background:var(--warn-soft);color:var(--warn)}
+/* ===== #6 失败信息 + 原生 details 诊断网格 ===== */
+.dict-status{font-size:var(--font-sm);color:var(--text-1);margin-top:6px;min-height:1em}
+.dict-status.is-err{color:var(--danger)}
+.dict-diag{margin-top:4px}
+.dict-diag > summary{display:flex;align-items:center;gap:6px;cursor:pointer;list-style:none;font-size:var(--font-xs);color:var(--text-2);width:max-content}
+.dict-diag > summary::-webkit-details-marker{display:none}
+.dict-diag > summary:hover{color:var(--text-1)}
+.dict-diag > summary svg{transition:transform var(--dur) ease}
+.dict-diag[open] > summary svg{transform:rotate(90deg)}
+.dict-diag-grid{display:grid;grid-template-columns:118px minmax(0,1fr);gap:4px 10px;margin-top:6px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:180px;overflow:auto}
+.dict-diag-grid .k{font-size:11px;color:var(--text-3)}
+.dict-diag-grid .v{font-family:var(--font-mono);font-size:11px;color:var(--text-1);overflow-wrap:anywhere;word-break:normal}
+.dict-diag-grid .v .copy{border:1px solid var(--border-strong);background:var(--surface);color:var(--text-2);border-radius:6px;font-size:10px;padding:1px 6px;cursor:pointer;font-family:inherit;margin-left:6px}
+.progress-bar{height:8px;border-radius:var(--radius-pill);background:var(--surface-3);overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;width:62%;background:var(--primary)}
+.progress-text{font-size:11px;color:var(--text-2);font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <b>D2026-1004-01 段2 复审核正原型</b>
+  <span class="muted" style="font-size:11px">#2 状态卡 · #3 引擎组头 · #4/#5 词典页 · #6 诊断</span>
+  <span class="spacer"></span>
+  <button class="btn btn-secondary btn-compact" onclick="var d=document.documentElement;d.dataset.aside=d.dataset.aside==='316'?'300':'316';this.textContent='右栏 '+d.dataset.aside+'px'">右栏 316px</button>
+  <button class="btn btn-secondary btn-compact" onclick="var d=document.documentElement,isD=d.dataset.theme==='dark';d.dataset.theme=isD?'light':'dark';this.textContent=isD?'深色':'浅色'">深色</button>
+</div>
+<div class="workbench">
+  <nav class="rail"></nav>
+  <main class="main">
+    <div class="col">
+      <div class="block-title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
+      <section class="stage-group">
+        <div class="stage-group-title"><span>阶段A 净语+翻译（日译中）</span></div>
+        <div class="form-card">
+          <label class="muted"><input type="checkbox" checked> 阶段A 净语+翻译（日译中）</label>
+          <select class="form-select" style="min-width:138px"><option>本地 LM Studio</option></select>
+          <select class="form-select" style="flex:1"><option>qwen2.5-14b-instruct</option></select>
+          <button class="btn btn-secondary btn-compact">测试</button>
+        </div>
+        <div class="form-card">
+          <span class="muted" style="min-width:70px">阶段A 地址</span>
+          <input class="form-input" style="flex:1" value="http://127.0.0.1:1234/v1">
+          <button class="btn btn-primary btn-compact">保存接口配置</button>
+        </div>
+      </section>
+      <section class="stage-group">
+        <div class="stage-group-title"><span>阶段B 审校+抛光（中文）</span></div>
+        <div class="form-card">
+          <label class="muted"><input type="checkbox" checked> 阶段B 审校+抛光（中文）</label>
+          <select class="form-select" style="min-width:138px"><option>本地 LM Studio</option></select>
+          <select class="form-select" style="flex:1"><option>qwen2.5-32b</option></select>
+          <button class="btn btn-secondary btn-compact">测试</button>
+        </div>
+        <div class="form-card">
+          <span class="muted" style="min-width:70px">阶段B 地址</span>
+          <input class="form-input" style="flex:1" value="http://127.0.0.1:1234/v1">
+          <button class="btn btn-primary btn-compact">保存接口配置</button>
+        </div>
+      </section>
+      <section class="stage-group">
+        <div class="stage-group-title"><span>兜底</span></div>
+        <div class="form-card">
+          <label class="muted">兜底档位 <select class="form-select"><option>本地·严格</option></select></label>
+          <label class="muted">上下文窗口 <input class="form-input" style="width:92px" value="16384"></label>
+        </div>
+        <div class="form-card">
+          <span class="muted">兜底与并发</span>
+          <label class="muted">接管模型 <select class="form-select"><option>不自动兜底</option></select></label>
+          <label class="muted">并行 <select class="form-select" style="width:60px"><option>1</option></select></label>
+        </div>
+      </section>
+    </div>
+  </main>
+  <aside class="aside">
+    <div class="panel-card"><div class="block-title">运行控制</div></div>
+    <div class="panel-card"><div class="block-title">输出目录</div></div>
+    <div class="panel-card">
+      <div class="sys-summary-title-row"><div class="block-title">系统状态</div><span class="sys-summary-stat">v2.6.5</span></div>
+      <div class="sys-summary-row">
+        <div class="sys-summary-keyrow"><span class="sys-summary-key">数据保存目录</span><span class="sys-summary-stat">可写</span></div>
+        <div class="sys-summary-val mono">C:\Users\57850\<wbr>AppData\Roaming\<wbr>SubTransJAV\<wbr>data</div>
+      </div>
+      <div class="sys-summary-row">
+        <div class="sys-summary-keyrow"><span class="sys-summary-key">翻译记忆库</span><span class="sys-summary-stat">1284 条 · 命中 37 次</span></div>
+        <div class="sys-summary-val mono">C:\Users\57850\<wbr>AppData\Roaming\<wbr>SubTransJAV\<wbr>data\tm\subtransjav.sqlite3</div>
+      </div>
+      <div class="sys-summary-row">
+        <div class="sys-summary-keyrow"><span class="sys-summary-key">词典管理（日/中/英）</span><span class="sys-summary-stat">2/4 可用</span></div>
+        <div class="sys-summary-val mono">C:\Users\57850\<wbr>AppData\Roaming\<wbr>SubTransJAV\<wbr>data\dict</div>
+      </div>
+      <div class="sys-summary-row">
+        <div class="sys-summary-keyrow"><span class="sys-summary-key">角色卡目录</span><span class="sys-summary-stat">6 张</span></div>
+        <div class="sys-summary-val mono">C:\Users\57850\<wbr>AppData\Roaming\<wbr>SubTransJAV\<wbr>data\templates</div>
+      </div>
+      <div class="sys-summary-row">
+        <div class="sys-summary-keyrow"><span class="sys-summary-key">ASR 模型</span><span class="sys-summary-stat">就绪 · faster-whisper-v3</span></div>
+      </div>
+    </div>
+  </aside>
+</div>
+<main style="padding:20px;max-width:760px;display:flex;flex-direction:column;gap:var(--space-4)">
+  <div class="section-note">// 词典页演示（与上方主题/右栏宽度按钮联动）</div>
+  <div class="panel-card">
+    <div class="block-title" style="margin-bottom:8px">词典管理（日/中/英）</div>
+    <div class="col" style="gap:8px">
+      <!-- 空态三件套①：四 kind 状态摘要行（实心=已装/空心=未装/primary=内置；点击联动下拉） -->
+      <div class="dict-kind-row">
+        <button type="button" class="dict-kind-chip active"><span class="dot"></span>日语</button>
+        <button type="button" class="dict-kind-chip on"><span class="dot"></span>中文</button>
+        <button type="button" class="dict-kind-chip builtin"><span class="dot"></span>英文</button>
+        <button type="button" class="dict-kind-chip"><span class="dot"></span>完整版</button>
+      </div>
+      <!-- 空态三件套②：warn-soft 提示条（条件=sudachi 未装，承载原 #dictEmpty 语义） -->
+      <div class="dict-install-hint">尚未下载日语词典数据，语法提示不可用。首次使用需联网下载约 137MB；企业/代理网络可改用「仅镜像」源。</div>
+      <label class="muted" style="font-size:12px">选择词典查看详情</label>
+      <!-- 校正：下拉 option 只留词典名（可用性已由状态行承载，去重复） -->
+      <select class="form-select" style="width:100%">
+        <option>日语（sudachi）</option><option>日语词典·完整版（sudachi full）</option>
+        <option>中文（jieba）</option><option>英文（规则级）</option>
+      </select>
+      <div class="dict-detail">
+        <!-- 空态三件套③：pill-warning 未安装 -->
+        <div><span class="pill pill-warning">未安装</span></div>
+        <div class="muted" style="font-size:12px">日语形态素分析词典（语法提示分词用；默认不随安装包附带）</div>
+        <div class="path-row">
+          <span class="grow">C:\Users\57850\AppData\Roaming\SubTransJAV\data\dict</span>
+          <button class="btn btn-ghost btn-compact">打开文件夹</button>
+        </div>
+        <!-- 下载中态：独立进度块（与操作行正交，不被源组样式污染） -->
+        <div>
+          <div class="progress-bar"><div class="progress-fill"></div></div>
+          <span class="progress-text">sudachi 68.3/137.0MB</span>
+        </div>
+        <!-- #5 收单操作行：官方|镜像 边框合并(左) + 主下载键 margin-left:auto(右) -->
+        <div class="dict-action-row">
+          <button class="btn btn-ghost btn-compact dict-src-official">仅官方</button>
+          <button class="btn btn-ghost btn-compact dict-src-mirror">仅镜像</button>
+          <button class="btn btn-primary btn-compact" id="dictActionBtn">下载</button>
+        </div>
+      </div>
+      <!-- #6 失败：一行人话(is-err 红) + 原生 details 诊断网格（窄栏 300px 下 118px 列仍可读） -->
+      <div class="dict-status is-err">下载校验失败：文件 SHA256 与预期不符，已保留 .part 供排查。</div>
+      <details class="dict-diag">
+        <summary>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          技术详情
+        </summary>
+        <div class="dict-diag-grid">
+          <span class="k">预期字节</span><span class="v">143654912</span>
+          <span class="k">实际字节</span><span class="v">143650816</span>
+          <span class="k">Content-Encoding</span><span class="v">gzip</span>
+          <span class="k">响应前缀(.part 前64B)</span><span class="v">1f8b0800000000000003edbd6b6f1bc7b5c6fb9d5f8574021c20686c5d5a7d8f0d6f2c43b2e548b6253bb2655bb62cc9962d59b2244bb2</span>
+          <span class="k">来源 URL</span><span class="v">https://github.com/WorksApplications/SudachiDict/releases/download/v20240409/sudachi-dictionary-20240409-core.zip<button class="copy">复制</button></span>
+          <span class="k">SHA256 预期</span><span class="v">9f2c1e...c1a4</span>
+          <span class="k">SHA256 实际</span><span class="v">3b71a4...0d9e</span>
+        </div>
+      </details>
+    </div>
+  </div>
+  <!-- 无操作态（jieba / english_rules，downloadable=false）：.dict-action-row 整行隐藏，不留空行 -->
+  <div class="panel-card">
+    <div class="block-title" style="margin-bottom:8px">无操作态示例（jieba，downloadable=false）</div>
+    <div class="dict-detail">
+      <div><span class="pill pill-success">内置</span></div>
+      <div class="muted" style="font-size:12px">中文分词（pip 安装 [zh] 组件后自动启用；缺失时静默降级）—— 无下载按钮/无源组，操作行整行 display:none</div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

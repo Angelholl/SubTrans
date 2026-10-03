@@ -2849,3 +2849,15 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 
 **批结构与程序注记**：段1 保持"词典链+安装器"名不改、追加⑤⑥两件，版本名「词典链与 UX 修复版」不变（候选A 属导入链明细补全、候选B 属测试加固，均在修复版伞内）；发版门三层不因本追记变动（候选A 随段1 验证链、候选B 闭账随段1 收口）。decision-critic 正式通道切换后复核仍 Model request failed（累计第 6 次），本追记按 owner 直接指示+既有替代评议轨道执行；正式复评通道恢复后随首轮正式评议一并覆盖（含本追记两候选）。
 
+### 【正式复评终审 2026-10-04】decision-critic/design-expert 通道恢复——正式两轮完成，封盘
+
+专用通道（切换 deepseek 调用）修复后补做正式两轮：第一轮双方独立复评，第二轮主模型逐条裁决回传、双方终审确认。**评议员：支持封盘**（第一轮有条件放行+2 HRO；第二轮确认条件闭环，[PRESSURE-OVERRIDE]=否）。**设计师：终审通过**（第一轮有条件通过 C1-C11 无返工；第二轮确认+3 条施工陷阱）。此前替代评议轨道就此闭环。
+
+**评议员两 HRO（主模型全采纳，封盘）**：**HRO-1 直连重试语义歧义**——原文「默认沿用系统代理」若覆盖重试则发版门②③落空；钉两跳状态机=attempt#1 系统代理（getproxies()）/attempt#2 强制直连（ProxyHandler({})+守卫），诊断 `proxy=on/off` 区分，单测毒代理断言 #2 直连成功且未装 ProxyHandler；「默认沿用系统代理」明确仅指首发。**HRO-2 异常边界契约**——_http_get :387 无条件重包 DictDownloadError，完整性校验用错异常类会击穿防洗白裁定；钉死=Content-Length 实际≠total→DictDownloadError（可重试）/SHA256 不符→DictChecksumError（绝不重试）+`except DictChecksumError: raise` 兜底+防洗白测试断言"SHA256 不符→urlopen 恰一次"；并采论证：短读+伪造 Content-Length 不构成洗白通道（内容仍须过 SHA256）。
+
+**评议员 C1-C10 终审版（全采纳）+三条措辞精确化**：C1/C2=上两 HRO；C3 诊断字段契约先行（_DIAG_FIELDS 五字段**含 proxy 标记**、承载=download_progress 快照扩 dict 非字符串拼接、段1 首件出单测、段2 只消费）；C4 smoke 断言独立自检行"jieba 分词自检: OK"**成功语义**（非行存在）+--dict-status"只读零网络"口径更正；C5 FROZEN_IDS 215→214 **且** FROZEN_I18N_KEYS 189→187 双重钉；**C6 精确化**：attempt#1 亦弃裸 urlopen（改 build_opener(_GuardedRedirectHandler())，默认挂 ProxyHandler 行为不变），守卫复用须换 **DictDownloadError+dict 白名单 _URL_HOST_ALLOW**（非照搬 ASR 版），302 非白名单重定向两 attempt 均须拦；C7 候选A 开工首件=归属算法一页规格入 d264 草案（同一 decode 后文本预洗/时间戳+原文反查/SSA Format 行驱动）+三 fixture（SSA 字段序/BOM+CRLF/续行+重复时间戳），不可靠降级"计数+示例标注行号未定"；C8 候选B 先 urlopen identity 二分（判补丁泄漏 vs 序列漂移）再定断言取舍，保留用例维持精确序列；C9 worktree=D:/SubTrans-d265-seg1、分支=feature/d265-dict-chain、merge-base=开工时 main HEAD、同冻结文件串扰一次即冻结本批；C10 门②发版窗口前 7 天未落实且未书面放弃→明确不发版（合法状态），③a 执行人/证据形态留档（[UNVERIFIABLE] 以留档兜底）。环境注记：COLLECT 只收 a.datas，hiddenimports 加 jieba 不重复落盘勿误报。
+
+**设计师 C1-C11（全采纳）+五项 owner 授权定夺+三条施工陷阱**：关键收口=两处定稿遗漏测试硬约束（test_gui_js_static.py::test_batch_c_seg_bar_structure_pinned 重写为堆叠组守卫保留 endpoints_summary 断言；中文豁免名单 **seg-btn→stage-group-title**）+折行策略校正（**overflow-wrap:anywhere+分隔符后 `<wbr>`**，禁 break-all/U+200B——`<wbr>` 不入剪贴板）+高度口径改写（典型 +45~75px/80+ 字符长路径最大 +150px，长路径下右栏内部滚动可接受、主列三分区红线不受影响）+JS 落法陷阱（.dict-src-group 与现有 insertBefore 不兼容→**路线1**：#dictDetail 静态包 .dict-action-row、无内层 group、相邻兄弟合并边框、插入序修正为 官方│镜像）+六状态覆盖清单（下载中禁整行/迁移键不动/jieba·english 隐整行/ASR 探测写 stat/加载失败也红/成功长路径折行）。五项定夺（owner 授权）：长路径滚动接受；状态行序=日语·中文·英文·完整版+完整版 chip title「与日语二选一」；pill 新 JS 态键 dict_status_not_installed「未安装」专用（「不可用」保留通用口径）；hint bar 保留；URL 复制键做+file:// clipboard 被拒时降级点击全选。三条施工陷阱：「下载源」前缀必须 JS 态 MSG（禁 index.html 静态中文）；pill 四态映射定表（available+english_rules→内置/available→可用/!available+downloadable→未安装/!available+!downloadable→不可用）；ASR 动态行探测按钮与 stat 同处 keyrow。**交付原型**：docs/design/d265-批1-UI复审原型.html（静态校验过；渲染级走查随段2 黑盒补做 125%/150%/820 三态）。
+
+**风险跟踪追加**：⑥大文件直连重试为全量重下（sudachi_full 137MB）成本观测；⑦候选B bounded 未复现仍须带 identity 二分证据闭账；⑧③a 干净网络实证不可 CI 证，以 C10 留档形态兜底。**开工契约**=本条正文+追记+本节（C1-C10 终审版+设计 C1-C11+三条精确化+三条陷阱）为唯一施工依据，段1 首件=候选A 归属算法规格+C3 诊断契约先行。
+
