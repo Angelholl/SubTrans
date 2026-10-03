@@ -218,7 +218,6 @@ const MSG = {
     adv_group_fallback_concurrency: '兜底与并发',
 
     // ---- 接口地址 / 启动 ----
-    endpoints_summary: '接口地址（对应阶段A/B，切换服务商自动填充）',
     s1_endpoint_label: '阶段A 地址',
     s1_endpoint_placeholder: '阶段A 服务商的接口地址',
     s3_endpoint_label: '阶段B 地址',

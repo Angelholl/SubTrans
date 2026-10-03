@@ -407,7 +407,7 @@ button:focus { outline: none; }
     font-size: var(--font-sm);
     font-weight: 500;
     padding: 4px 14px;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     cursor: pointer;
     transition: background var(--dur) ease, color var(--dur) ease,
         border-color var(--dur) ease;
