@@ -86,12 +86,17 @@ jobs:
             Write-Error "MISSING artifact: $root/_internal/jieba/dict.txt（jieba 打包渠道失效?）"; exit 1
           }
           # b) 冻结 CLI --dict-status 的 jieba 自检行必须是成功语义——
-          #    仅"行存在"不算，FAIL/不可用必须让本 stage 红
+          #    仅"行存在"不算，FAIL/不可用必须让本 stage 红。
+          #    中文断言先钉 UTF-8 输出解码（PYTHONUTF8=1 下子进程写 UTF-8，
+          #    PS 默认按控制台 OEM 码页解码会把中文比对变乱码——run 37149808709 实证）
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $env:SUBTRANSJAV_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
           $dsOut = (& "$root/subtrans-cli.exe" --dict-status 2>&1) -join "`n"
           if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --dict-status rc=$LASTEXITCODE"; exit 1 }
           Write-Host "$dsOut"
-          if (-not $dsOut.Contains("jieba 分词自检: OK")) {
+          # 断言用 ASCII 骨架正则（jieba…: OK）——对残留码页漂移免疫；
+          # FAIL 行不含 ": OK"，成功语义仍然唯一
+          if ($dsOut -notmatch 'jieba[^\r\n]*: OK') {
             Write-Error "--dict-status output missing success line 'jieba 分词自检: OK'（jieba 自检失败/不可用）"; exit 1
           }
           # 安装器断言：Inno 产物必须在位且非空壳——防 [Files] 缺 Source 行
