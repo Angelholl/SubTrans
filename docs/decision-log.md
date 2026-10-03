@@ -2871,3 +2871,13 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 
 **口径回写两条**：①C3 诊断 `proxy` 字段取值定稿 **"system"/"direct"**（较 on/off 判别力更强，段2 #6 消费按此）；②守卫拦截（302 非白名单）计入网络层失败参与直连重试＝经裁定接受（同 URL 有界重试、attempt#2 同守卫再拦，「绝不跟随非白名单重定向」不变量与 sha256 兜底均保持）。
 
+### 【段2 落库追记 2026-10-04】UI 三项+#6 全落地——黑盒五点全过+两缺陷随批修
+
+**施工与验证**：段1 合并后主检出空闲，段2 直做主检出；coding 委派五块一次落位（#2 状态卡两行式/#3 引擎页去外壳/#4+#5 词典入口收敛/#6 失败信息+三测试文件双钉）；验证=定向三文件 135 passed+node --check→code-review 双轴（基点 11105cb：Standards 零硬违规、4 条 judgement call 记技术债；Spec 1 实质洞见下）→**全量 1900 passed+4 skipped**（段1 后 1898+6 只增；skip 差额=jieba 正向单测转实跑+段2 净增 2）→推送 060d6a9；CI：段1 11105cb success、段2 060d6a9 success。
+
+**黑盒（IAB+stub 桥五点，截图留档 %TEMP%\stj_gate\gui_test\）**：T1 状态卡两行式（版本入标题行/统计升键行/路径 wbr 折行断点落分隔符后）PASS；T2 引擎页去外壳三组纵向+组头 hairline+页首标题未动 PASS；T3 词典页（无引导条/四 chip 展示序 日语·中文·英文·完整版/warn-soft hint/pill「未安装」warning/收单操作行 下载源+官方│镜像+主键右）PASS；T4 失败态（红人话映射「文件校验不符，下载不完整或源文件异常」+details 七字段网格 Content-Encoding: gzip 实证+URL 复制键）PASS；T5 窄窗 820（rail 64+aside 300 断点/chips 两行换行/网格可读无溢出）PASS。过程三次桩保真度修正（pywebviewready 须 window+document 双派发/refine_dict_download 须阻塞形返/进度快照须带 success 字段＝真实 api 层语义），均非应用缺陷；IAB 输入层会话劣化以新标签页重置处置（既有教训复验）。
+
+**缺陷两笔随批修（均回归 PASS）**：①hint 切词典不刷新＝change 监听与 chip 点击均漏调 _dictRefreshHint，jieba（不可下载）态残留「下载后可用」误导文案（黑盒 T3b 发现）——双路径补调；②跨 kind 并发洞（code-review Spec 轴发现）＝下载中切词典→dictRenderDetail 重渲染复位共享操作行，可对另一 kind 并发发起下载，违设计师「下载中禁整行」条件——修=模块级 `_dictBusyKind` 占位三端钉死（dictDownload 入口守卫/dictRenderDetail 渲染端整行禁用/finally 先清占位再 dictLoad），黑盒回归：1.6s 窗口内切走再切回主按钮 disabled、失败终态恢复 enabled。
+
+**设计师条件核账**：C1-C11 全落（含两测试硬约束：seg 钉重写为 stage-group 守卫+中文豁免 seg-btn→stage-group-title；i18n 双钉 189→187）；三条施工陷阱全中（「下载源」JS 态 MSG/pill 四态表/ASR 行 keyrow 落点）；五项 owner 授权定夺全按定案执行。遗留观察（不阻塞）：hint 文案较原型缩水（未含约 137MB/镜像指引，规格仅钉「保留」记偏差）；Standards 4 条 judgement call（_setPath 纯转发/_set 与 _setStatPath 骨架重复/DICT_KINDS.find 三处重复/dictShowStatus 约 90 行三职责）记技术债待段后小批。**2.6.5 剩余=批4 收尾发版**（CHANGELOG/roadmap/走查清单 265/checklist 基线数/发版门②真机门 owner 动作）。
+
