@@ -3,7 +3,7 @@
 夹具：
 - "pip 旧根"  tmp/legacy：tm.db（数行）+ conflict watch json(.bak) +
   api_keys.bin（secrets 真实加密一笔测试密钥）+ user_settings.json；
-- "frozen 新根" tmp/localappdata/SubTransJAV：monkeypatch LOCALAPPDATA +
+- "frozen 新根" tmp/localappdata/SubTrans：monkeypatch LOCALAPPDATA +
   sys.frozen（沿 tests/test_paths.py 口径）。
 
 旧根发现经 SUBTRANSJAV_LEGACY_ROOT 显式指定（data_migration._discover_legacy_root
@@ -36,7 +36,7 @@ def roots(monkeypatch, tmp_path):
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
-    return legacy, lac / "SubTransJAV"
+    return legacy, lac / "SubTrans"
 
 
 def _make_legacy(legacy: Path) -> None:

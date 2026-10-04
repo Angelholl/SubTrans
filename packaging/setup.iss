@@ -1,6 +1,6 @@
 ; Inno Setup 6 script for SubTransJAV (D2026-0929-05 P2/07 定案)
 ; 版本号可由命令行覆盖：iscc /Dversion=1.2.3 packaging/setup.iss
-; [Files] 源路径相对本脚本：../Temp/pyinstaller_dist/SubTransJAV/*，
+; [Files] 源路径相对本脚本：../Temp/pyinstaller_dist/SubTrans/*，
 ;         与 CI 中 `pyinstaller --distpath Temp/pyinstaller_dist` 的产物对齐。
 ; 词典去捆绑（D3，D2026-1001）：单安装器单产物，不再捆日语词典
 ;   （system.dic ~208MB）——语法提示运行时自动降级，词典经 GUI 引擎页 /
@@ -13,14 +13,14 @@
 #ifndef suffix
 #define suffix ""
 #endif
-#define MyAppExeName "SubTransJAV.exe"
+#define MyAppExeName "SubTrans.exe"
 
 [Setup]
 ; AppId 固定 GUID：卸载/升级识别口径，永不变更
 AppId={{8F3A5C1E-6B2D-4E9A-9C47-1D0B5A7E2F31}
 AppName={#MyAppName}
 AppVersion={#version}
-DefaultDirName={autopf}\SubTransJAV
+DefaultDirName={autopf}\SubTrans
 DefaultGroupName={#MyAppName}
 ; 安装器自身图标（D2026-1004-01）：相对本 .iss 所在目录解析
 SetupIconFile=..\subtransjav\webview_gui\assets\icon.ico
@@ -48,7 +48,7 @@ Name: full; Description: 标准安装
 
 [Files]
 ; onedir 全量递归打包（含 _internal）；Excludes 作双保险——spec 已无条件剔除词典数据（D3 去捆绑口径）
-Source: "..\Temp\pyinstaller_dist\SubTransJAV\*"; DestDir: "{app}"; Excludes: "system.dic"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\Temp\pyinstaller_dist\SubTrans\*"; DestDir: "{app}"; Excludes: "system.dic"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -56,6 +56,11 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+
+; 旧品牌开始菜单组清理（D2026-1004-04 批1）：对不存在路径无害空操作。
+; 红线：任务栏钉扎快捷方式（Quick Launch\User Pinned\TaskBar）永不清理，卸载也不碰。
+[InstallDelete]
+Name: "{commonprograms}\SubTransJAV"; Type: filesandordirs
 
 ; 守卫反转记录：D2026-0929-07 原守卫（卸载永不删除任何用户数据）经
 ; D2026-1003-01 拍板⑥追认反转：数据删除仅经 InitializeUninstall 一问制
@@ -233,7 +238,7 @@ end;
 // R2 数据根四级解析（与 subtransjav/paths.py data_root() 对齐，仅安装器口径）：
 // 1) 环境变量 SUBTRANSJAV_DATA_ROOT（非空才生效）；
 // 2) 指针文件 .data-root（frozen 下固定在 exe 同目录 = {app}，单行绝对路径）；
-// 3) frozen 默认 %LOCALAPPDATA%\SubTransJAV；LOCALAPPDATA 缺失回退家目录
+// 3) frozen 默认 %LOCALAPPDATA%\SubTrans；LOCALAPPDATA 缺失回退家目录
 //    （paths.py 同级写法 = os.environ.get('LOCALAPPDATA') or Path.home()，
 //    此处 Path.home() 对应 %USERPROFILE%）。
 function ResolveDataRoot(const appLoc: String; var srcLabel: String): String;
@@ -273,7 +278,7 @@ begin
     env := GetEnv('USERPROFILE');
   if env <> '' then
   begin
-    Result := env + '\SubTransJAV';
+    Result := env + '\SubTrans';
     srcLabel := '默认位置';
   end;
 end;

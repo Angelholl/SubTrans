@@ -1,6 +1,6 @@
 """批0 钉测试：GUI windowed 路径子进程统一 CREATE_NO_WINDOW。
 
-PyInstaller windowed（packaging/SubTransJAV.spec console=False）下，
+PyInstaller windowed（packaging/SubTrans.spec console=False）下，
 GUI 进程内未设 creationflags 的 subprocess.run/Popen 在 Windows 上会闪
 黑框。本文件钉死三条约束：
 

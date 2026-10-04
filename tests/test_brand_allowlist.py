@@ -22,24 +22,26 @@ _BINARY_EXTS = {
 }
 
 # 旧品牌词 SubTransJAV 保留白名单（每项一行理由；路径以 / 分隔，跨平台比较）：
+# D2026-1004-04 批1 后重算：spec 改名/dist 目录/产物 exe 名/安装目录/数据根
+# 默认/AUMID/Documents 输出均已切 SubTrans，品牌串清空条目已删；剩余为
+# 历史文档、注释级残留与旧品牌清理锚。
 ALLOWLIST = frozenset({
-    # ---- CI/打包链（第 2 层禁区分辨率：spec 名、dist 目录、产物 exe 名、注释级残留）----
-    ".github/workflows/release.yml",       # 行1注释历史定案号 + SubTransJAV.spec 禁区名 + dist 目录 Temp/pyinstaller_dist/SubTransJAV + 产物 SubTransJAV.exe（随 spec 名）
-    "packaging/SubTransJAV.spec",          # spec 文件名本身即禁区：PyInstaller 产物名/CI 引用绑死，第 2 层迁移
-    "packaging/setup.iss",                 # 禁区四项：MyAppExeName 绑 spec 产物、DefaultDirName、[Files] Source dist 路径、数据根 %LOCALAPPDATA%\SubTransJAV（ResolveDataRoot 默认位）；另 :1/:3 注释级残留
-    "packaging/entry_gui.py",              # 模块 docstring 注释级残留（第 2 层随 spec 名一并处置）
-    "pyproject.toml",                      # 顶部注释与 description 历史口径；entry points 用小写包名 subtransjav（第 2 层）
-    # ---- 用户/历史文档（渊源句、历史沿革、走查记录，不改史）----
-    "README.md",                           # 渊源句（"由 SubTransJAV 项目迭代而来"/evolved from）+ 数据根路径 %LOCALAPPDATA%\SubTransJAV 口径
-    "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV）
+    # ---- CI/打包链（批1 后残余：历史注释 + 旧开始菜单组清理锚）----
+    ".github/workflows/release.yml",       # 行1历史注释（发布定案号，不改史）；spec 名/dist 目录/产物 exe 名已随批1 改 SubTrans
+    "packaging/setup.iss",                 # :1 历史注释 + [InstallDelete] 旧开始菜单组 {commonprograms}\SubTransJAV 清理锚（对不存在路径无害空操作）；AppId GUID/env 名禁区不动
+    "pyproject.toml",                      # 顶部注释与 description 历史口径；entry points 用小写包名 subtransjav（批3 收敛）
+    # ---- 用户/历史文档（渊源句、历史沿革、走查记录，不改史；README/手册批3 收敛）----
+    "README.md",                           # 渊源句（"由 SubTransJAV 项目迭代而来"/evolved from）+ 数据根路径历史口径（批3 收敛）
+    "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV）（批3 收敛）
     "LICENSE",                             # 版权署名 The SubTransJAV Project Authors（法律文本不改）
-    "docs/使用与维护手册.md",               # 标题渊源口径（第 2 层文档批处理）
+    "docs/使用与维护手册.md",               # 标题渊源口径（批3 收敛）
     "docs/decision-log.md",                # 决策历史记录，永不改写
     "docs/roadmap.md",                     # 历史规划文档
     "docs/B2-门②语料基线-20260926.md",     # 历史走查记录（树外归档绝对路径）
     "docs/design/UI-REDESIGN-HANDOFF.md",  # 历史设计交接文档
     "docs/design/ZCODE-MIGRATION-NOTES.md",  # 历史迁移笔记
     "docs/design/d1d4-批清单.md",          # 历史设计批清单
+    "docs/design/d270-批1-批清单.md",      # 本批批清单（同提交入库，先例 d1d4-批清单；决策引文/禁区表引用旧品牌串，历史文档不改）
     "docs/design/d265-批1-UI复审原型.html",  # 历史设计原型快照
     "docs/design/redesign-prototype.html",  # 历史设计原型快照
     "docs/design/ui-phase2-真机走查清单.md",  # 历史走查记录
@@ -48,10 +50,9 @@ ALLOWLIST = frozenset({
     "docs/模型测试两轮交接.md",             # 历史交接文档
     "docs/mimosa-findings-甄别表.md",       # 历史安全审查记录
     "docs/examples/direction-packs/README.txt",  # 方向包示例说明（历史口径句）
-    # ---- 运行时禁区（数据根路径 / env 名 / AUMID / Documents 输出目录 / 包名）----
-    "subtransjav/paths.py",                # 数据根 frozen 默认 %LOCALAPPDATA%\SubTransJAV（代码 Path(base)/"SubTransJAV" + docstring），第 2 层
-    "subtransjav/webview_gui/api.py",      # Documents 输出目录 <Documents>/SubTransJAV/output（用户既有数据路径，改则断链）+ docstring
-    "subtransjav/webview_gui/main.py",     # AUMID 'SubTransJAV.Translate.GUI.v1'（开始菜单钉扎标识，改则丢钉扎）+ docstring
+    # ---- 运行时/源码注释级残留（数据根默认/AUMID/Documents 输出已随 D2026-1004-04 切 SubTrans，剩 docstring 注释级；env 名全大写不入本钉口径）----
+    "subtransjav/webview_gui/api.py",      # 模块 docstring :2 注释级残留（Documents 输出已改 SubTrans）
+    "subtransjav/webview_gui/main.py",     # 模块 docstring :2 注释级残留（AUMID 已改为 Angelholl.SubTrans.GUI 模块常量）
     "subtransjav/__init__.py",             # 包 docstring 注释级残留（第 2 层随包名 subtransjav 口径）
     "subtransjav/__version__.py",          # 包 docstring 注释级残留
     "subtransjav/refine/__init__.py",      # 包 docstring 注释级残留
@@ -59,28 +60,22 @@ ALLOWLIST = frozenset({
     "subtransjav/utils/__init__.py",       # 包 docstring 注释级残留
     "subtransjav/utils/console.py",        # docstring 注释级残留
     "subtransjav/utils/process_manager.py",  # docstring 注释级残留
-    "subtransjav/utils/subprocess_flags.py",  # docstring 引用 spec 名 SubTransJAV.spec（禁区）
     # ---- 前端注释级残留（用户不可见；未提交工作树段只读不碰）----
     "subtransjav/webview_gui/assets/app.js",        # 文件头注释 "SubTransJAV GUI 前端控制器"（注释级，非显示文案）
     "subtransjav/webview_gui/assets/style.css",     # 文件头注释（注释级；本文件另有未提交 ASR 行改动，本层不碰）
     "subtransjav/webview_gui/assets/style.dark.css",  # 文件头注释（注释级）
-    # ---- 测试内路径/产物名断言（随第 2 层迁移才同步）----
-    "tests/test_paths.py",                 # 数据根默认路径断言 Path.home()/"SubTransJAV" 等
-    "tests/test_data_migration.py",        # 旧根迁移夹具 SubTransJAV 数据根
-    "tests/test_dict_dir_and_migrate.py",  # frozen exe 名 SubTransJAV.exe 夹具（随 spec 名）
-    "tests/test_installer_lifecycle.py",   # setup.iss [Files] Source dist 路径断言（禁区）
-    "tests/test_media_path.py",            # 本机仓库绝对路径 D:/SubTransJAV 夹具
-    "tests/test_subprocess_no_window.py",  # docstring 引用 spec 名 SubTransJAV.spec
+    # ---- 测试（本机路径，allowlist 明文保护）----
+    "tests/test_media_path.py",            # 本机仓库绝对路径 D:/SubTransJAV 夹具（禁区）
     # ---- 工具脚本（本机绝对路径/历史输出文案，非产品代码）----
     "spike/fts5_spike.py",                 # 本机绝对路径 D:/SubTransJAV/Temp/...（spike 脚本）
     "tools/bench_refine.py",               # 基准脚本 print 历史口径
     "tools/model_matrix_run.py",           # 本机仓库绝对路径 D:\SubTransJAV
     "tools/spike_review_video.py",         # spike 窗口标题（工具脚本）
-    # ---- bat 残留（数据根/Documents 路径段）----
-    "uninstall.bat",                       # 数据根 %LOCALAPPDATA%\subtransjav 清理行 + Documents 提示 文档\SubTransJAV\output（路径不动）
+    # ---- bat 残留（旧品牌清理锚）----
+    "uninstall.bat",                       # LNK6 旧桌面快捷方式 SubTransJAV.lnk 清理锚（D2026-1004-04 新增；任务栏钉扎 Quick Launch\User Pinned\TaskBar 红线永不清理）；小写 %LOCALAPPDATA%\subtransjav 缓存目录清理行不匹配本钉
 })
 
-# 本测试文件自身因白名单引用 packaging/SubTransJAV.spec 文件名字符串而含品牌词，
+# 本测试文件自身因白名单理由字符串引用旧品牌词而含品牌词，
 # 显式自排除（tracked 前后行为一致），不入白名单集合。
 _SELF = "tests/test_brand_allowlist.py"
 

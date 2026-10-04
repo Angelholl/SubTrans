@@ -625,7 +625,7 @@ def test_data_guide_sentinel_path_source_form_is_repo_root():
 
 def test_data_guide_sentinel_path_frozen_is_exe_dir(monkeypatch, tmp_path):
     """frozen 形态：哨兵落 exe 同目录（与数据根解耦，防改根后再弹）。"""
-    exe = tmp_path / "app" / "SubTransJAV.exe"
+    exe = tmp_path / "app" / "SubTrans.exe"
     exe.parent.mkdir(parents=True)
     monkeypatch.setattr(paths, "is_frozen", lambda: True)
     monkeypatch.setattr(sys, "executable", str(exe))
@@ -643,7 +643,7 @@ def test_should_show_data_guide_frozen_gate(
     assert r["success"] is True and r["show"] is False
     assert r["reason"] == "not-frozen"
     # frozen + 无哨兵 → show=True
-    exe = tmp_path / "app" / "SubTransJAV.exe"
+    exe = tmp_path / "app" / "SubTrans.exe"
     exe.parent.mkdir(parents=True)
     monkeypatch.setattr(paths, "is_frozen", lambda: True)
     monkeypatch.setattr(sys, "executable", str(exe))

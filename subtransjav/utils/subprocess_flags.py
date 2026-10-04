@@ -1,6 +1,6 @@
 """子进程窗口标志单一来源（批0：windowed 打包防黑框）。
 
-PyInstaller windowed（packaging/SubTransJAV.spec console=False）下，
+PyInstaller windowed（packaging/SubTrans.spec console=False）下，
 GUI 进程内未设 creationflags 的 subprocess.run/Popen 在 Windows 上会闪
 黑框。本模块把 CREATE_NO_WINDOW 收敛为全仓单一来源：
 

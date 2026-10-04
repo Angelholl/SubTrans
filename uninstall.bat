@@ -13,6 +13,7 @@ set "LNK2=%USERPROFILE%\Desktop\净语翻译.lnk"
 set "LNK3=%USERPROFILE%\Desktop\净语翻译 · WhisperJAV Translate.lnk"
 set "LNK4=%USERPROFILE%\Desktop\WhisperJAV Translate.lnk"
 set "LNK5=%USERPROFILE%\Desktop\wjtranslate-gui.lnk"
+set "LNK6=%USERPROFILE%\Desktop\SubTransJAV.lnk"
 
 if exist "%LNK1%" (
     del /f /q "%LNK1%" 2>nul
@@ -68,6 +69,16 @@ if exist "%LNK5%" (
 ) else (
     echo [WARN] 本来就不存在，跳过: "%LNK5%"
 )
+if exist "%LNK6%" (
+    del /f /q "%LNK6%" 2>nul
+    if exist "%LNK6%" (
+        echo [WARN] 删除失败，请手动删除: "%LNK6%"
+    ) else (
+        echo [DONE] 已删除: "%LNK6%"
+    )
+) else (
+    echo [WARN] 本来就不存在，跳过: "%LNK6%"
+)
 
 echo.
 echo 开始清理本地缓存...
@@ -88,7 +99,7 @@ echo.
 echo =====================================================
 echo  备份提醒：以下数据不会被本脚本删除
 echo =====================================================
-echo  [1] 翻译成果目录: 文档\SubTransJAV\output
+echo  [1] 翻译成果目录: 文档\SubTrans\output
 echo      卸载不会删除翻译成果，如需处理请自行操作。
 echo  [2] 项目内数据: config\api_keys.bin
 echo      服务商密钥库，删除安装文件夹前如需保留请先备份。

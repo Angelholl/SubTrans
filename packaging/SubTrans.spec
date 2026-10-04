@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for SubTransJAV (onedir).
+"""PyInstaller spec for SubTrans (onedir).
 
 布局约定（PyInstaller 6.x，onedir，contents_directory 默认 _internal）：
-- 运行时 sys._MEIPASS 指向 <dist>/SubTransJAV/_internal；
+- 运行时 sys._MEIPASS 指向 <dist>/SubTrans/_internal；
 - webview_gui.main.get_asset_path 的 frozen 分支按
   sys._MEIPASS/webview_gui_assets/<相对路径> 找资源，故 assets 目录
   的 datas 目标名固定为 "webview_gui_assets"（建后须实测核对布局）；
@@ -12,7 +12,7 @@
 禁 UPX（D2026-0929-07 点 9：upx=False，避免误压缩损坏 DLL/运行时）。
 
 2.0.0 双 EXE（owner 反馈：GUI 启动有 CMD 黑框）：
-- SubTransJAV.exe：console=False（windowed 子系统，启动无黑框），
+- SubTrans.exe：console=False（windowed 子系统，启动无黑框），
   入口 packaging/entry_gui.py；
 - subtrans-cli.exe：console=True（命令行保留完整控制台语义），
   入口 packaging/entry_cli.py（薄委托 refine.cli.main）。
@@ -95,7 +95,7 @@ exe_gui = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="SubTransJAV",
+    name="SubTrans",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -136,5 +136,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="SubTransJAV",
+    name="SubTrans",
 )

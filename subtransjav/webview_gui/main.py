@@ -29,6 +29,10 @@ from subtransjav import paths  # noqa: E402  frozen 判定单一来源
 from subtransjav.utils.process_manager import spawn_refine_cli  # noqa: E402  spawn 单一收敛点
 from subtransjav.webview_gui.strings import msg  # noqa: E402  文案表零依赖
 
+# AUMID 永不变更、版本号禁止入值（版本入值=每次升级换身份，任务栏钉扎/
+# 通知设置作废）——D2026-1004-04
+AUMID = "Angelholl.SubTrans.GUI"
+
 
 def _deps_ok():
     """检查 GUI 核心依赖是否可导入"""
@@ -404,7 +408,7 @@ def main():
         try:
             import ctypes
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-                'SubTransJAV.Translate.GUI.v1')
+                AUMID)
         except Exception as e:
             print(msg("appusermodelid_failed", e=e))
 

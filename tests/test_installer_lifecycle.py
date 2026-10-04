@@ -236,7 +236,7 @@ def test_isscc_compile_smoke(tmp_path):
     """ISCC 编译冒烟：在 tmp_path 隔离台编译，不依赖仓库产物树。
 
     为何要 stage 到临时目录：setup.iss 的 [Files] 段引用
-    ``..\\Temp\\pyinstaller_dist\\SubTransJAV\\*``，ISCC 在编译期会校验
+    ``..\\Temp\\pyinstaller_dist\\SubTrans\\*``，ISCC 在编译期会校验
     通配符至少命中一个源文件；该产物树由 PyInstaller 构建产生、不在
     仓库内，而 CI 的 windows runner 预装 Inno Setup（skipif 不跳过）
     且 checkout 无产物树，直接对仓库内 setup.iss 编译会 rc=2 全红。
@@ -245,9 +245,9 @@ def test_isscc_compile_smoke(tmp_path):
     """
     stage = tmp_path / "stage"
     shutil.copytree(REPO_ROOT / "packaging", stage / "packaging")
-    dist_dir = stage / "Temp" / "pyinstaller_dist" / "SubTransJAV"
+    dist_dir = stage / "Temp" / "pyinstaller_dist" / "SubTrans"
     dist_dir.mkdir(parents=True)
-    (dist_dir / "SubTransJAV.exe").write_bytes(b"")
+    (dist_dir / "SubTrans.exe").write_bytes(b"")
     (dist_dir / "subtrans-cli.exe").write_bytes(b"")
     proc = subprocess.run(
         [str(_find_iscc()), "/O-", "/Dversion=test-local-compile",

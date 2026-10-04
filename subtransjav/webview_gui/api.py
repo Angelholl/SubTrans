@@ -201,11 +201,11 @@ def _get_documents_dir() -> Path:
 
 
 def _compute_default_output_dir() -> Path:
-    """Default output dir: <Documents>/SubTransJAV/output."""
+    """Default output dir: <Documents>/SubTrans/output."""
     base = _get_documents_dir()
     if base.name.lower() != "documents" or not base.exists():
         base = Path.home()
-    p = base / "SubTransJAV" / "output"
+    p = base / "SubTrans" / "output"
     p.mkdir(parents=True, exist_ok=True)
     return p
 

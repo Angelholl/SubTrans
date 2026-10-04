@@ -78,7 +78,7 @@ def data_root() -> Path:
 
     1. 环境变量 ``SUBTRANSJAV_DATA_ROOT``（非空才生效）；
     2. pointer 文件 ``.data-root``（单行绝对路径；不存在/为空/非法则忽略）；
-    3. frozen → ``%LOCALAPPDATA%\\SubTransJAV``（LOCALAPPDATA 缺失回退家目录，
+    3. frozen → ``%LOCALAPPDATA%\\SubTrans``（LOCALAPPDATA 缺失回退家目录，
        不抛异常）；
     4. 否则 = app_root()（源码形态，行为与现状逐字节一致）。
 
@@ -92,7 +92,7 @@ def data_root() -> Path:
         return Path(pointer)
     if is_frozen():
         base = os.environ.get("LOCALAPPDATA") or str(Path.home())
-        return Path(base) / "SubTransJAV"
+        return Path(base) / "SubTrans"
     return app_root()
 
 

@@ -36,14 +36,14 @@ def test_data_root_env_blank_ignored(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", "   ")
-    assert paths.data_root() == Path(tmp_path) / "SubTransJAV"
+    assert paths.data_root() == Path(tmp_path) / "SubTrans"
 
 
 def test_data_root_frozen_uses_localappdata(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert paths.data_root() == Path(tmp_path) / "SubTransJAV"
+    assert paths.data_root() == Path(tmp_path) / "SubTrans"
     assert paths.data_root_source() == "frozen-default"
 
 
@@ -52,7 +52,7 @@ def test_data_root_frozen_localappdata_missing_falls_back_home(monkeypatch):
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
     # LOCALAPPDATA 缺失回退家目录，不抛异常
-    assert paths.data_root() == Path.home() / "SubTransJAV"
+    assert paths.data_root() == Path.home() / "SubTrans"
 
 
 def test_data_root_source_form_is_repo_root(monkeypatch):
@@ -101,8 +101,8 @@ def test_migration_state_migrated_with_sentinel(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
-    (tmp_path / "SubTransJAV").mkdir()
-    (tmp_path / "SubTransJAV" / paths.MIGRATION_SENTINEL).write_text("", encoding="utf-8")
+    (tmp_path / "SubTrans").mkdir()
+    (tmp_path / "SubTrans" / paths.MIGRATION_SENTINEL).write_text("", encoding="utf-8")
     assert paths.migration_state() == "migrated"
 
 
@@ -225,7 +225,7 @@ def test_set_pointer_write_failure(pointer_tmp):
 
 
 def test_frozen_pointer_lives_next_to_executable(monkeypatch, tmp_path):
-    exe = tmp_path / "SubTransJAV.exe"
+    exe = tmp_path / "SubTrans.exe"
     exe.write_bytes(b"")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe))

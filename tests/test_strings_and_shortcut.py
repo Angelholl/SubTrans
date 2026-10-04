@@ -112,6 +112,49 @@ def test_sentinel_prefixes_kept_english_in_api():
 
 
 # ---------------------------------------------------------------------------
+# AUMID 值级钉（D2026-1004-04 批1：品牌第 2 层，任务栏分组/通知身份）
+# ---------------------------------------------------------------------------
+
+def test_main_aumid_pinned_value_and_call_site():
+    """main.AUMID 常量 == "Angelholl.SubTrans.GUI" 且调用点传该常量。
+
+    为何不直接 import main 做值断言：main.py 在模块 import 期即执行
+    ``setup_console()``（重配 stdout/stderr 编码并注入 PYTHONUTF8=1 等进程级
+    副作用），测试进程引入无关状态污染；故改用源码 AST 断言——模块级常量
+    定义值 + ``SetCurrentProcessExplicitAppUserModelID`` 唯一调用点的传参
+    必须引用该常量名（抗字面量回退与重构漂移）。纪律：AUMID 永不变更、
+    版本号禁止入值（版本入值=每次升级换身份，钉扎/通知设置作废）。
+    """
+    import ast
+
+    src = (WEBVIEW_GUI_DIR / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    # 模块级 AUMID 常量定义（唯一且值钉死）
+    defs = [
+        node.value.value for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "AUMID"
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    ]
+    assert defs == ["Angelholl.SubTrans.GUI"], f"AUMID 常量定义漂移: {defs}"
+    # 调用点：唯一，且传参为 AUMID 常量名（防回退成内联字面量）
+    calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "SetCurrentProcessExplicitAppUserModelID"
+    ]
+    assert len(calls) == 1, \
+        f"SetCurrentProcessExplicitAppUserModelID 调用点应唯一，实得 {len(calls)}"
+    call_args = calls[0].args
+    assert len(call_args) == 1 and isinstance(call_args[0], ast.Name) \
+        and call_args[0].id == "AUMID", "调用点必须传 AUMID 常量（禁止内联字面量）"
+
+
+# ---------------------------------------------------------------------------
 # W2 i18n 双表同步钉：index.html data-i18n* 引用的键必须都在 app.js MSG 中
 # ---------------------------------------------------------------------------
 
