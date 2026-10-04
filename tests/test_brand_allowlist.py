@@ -126,7 +126,7 @@ def test_brand_subtransjav_only_in_allowlist():
     missing = sorted(ALLOWLIST - hits)
     assert not unexpected, (
         "发现白名单外的旧品牌词 SubTransJAV（品牌漂移），"
-        f"请改为 SubTrans 或补白名单并注释理由：\n" + "\n".join(unexpected)
+        "请改为 SubTrans 或补白名单并注释理由：\n" + "\n".join(unexpected)
     )
     assert not missing, (
         "白名单条目已不再含 SubTransJAV，请从白名单移除（保持钉的精度）：\n"
