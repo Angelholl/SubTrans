@@ -2895,3 +2895,27 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **四、决策日志字段**：异议=上述 HRO；主模型最终决定=**采纳（方案 A）**；条件已闭环（allowlist 钉 43 定向绿/半统一态声明/2.7.0 联动清单/roadmap 回写/INFO_GAP 以 owner 真机反馈原文"直连和代理下载没问题"留痕闭合）；[PRESSURE-OVERRIDE]=否。**后续风险跟踪**：①真机升级走查（2.6.x→2.6.5 覆盖装核 Add/Remove 显示名/开始菜单组/桌面快捷方式无残留/安装目录未变/数据根完好）；②release.yml 过滤器与 setup.iss:32 同源改动随测试包重构建验证；③半统一态观感是否触发二次点火；④allowlist 白名单须随 2.7.0 第 2 层落地同步收窄；⑤老用户桌面旧 SubTransJAV.lnk 不再被卸载脚本清理（历史遗留，2.7.0 清理列表）。
 
+## [2026-10-04] [D2026-1004-03] v2.7.0 立项：品牌统一第 2 层 + A′ 复审收尾版（三批结构） [已拍板]
+
+**一、决策背景**：2.6.5（2026-10-04 发布）落地品牌统一第 1 层后，D2026-1004-02 挂账的第 2 层联动清单（spec/dist 目录名+DefaultDirName+AUMID+test_isscc_compile_smoke+历史遗留 lnk 清理）触发到达；A′ UX 复审清单（D2026-0927-05 :1387，随轨道 B 落地逐条重审）触发源已随 2.6.0 发布到达；账面待勘误（roadmap 2.6.4 节仍标"⬜ 预研中"，实际 v2.6.4 已 2026-10-03 发布）与工作树小件（.pytest-brand/、.pytest-asrfix/ basetemp 残留）收口。主模型立项 2.7.0 三批结构并送 decision-critic 评议（agent 复议通道）。
+
+**二、critic 评议结论（原立场=有条件支持，无 [HIGH_RISK_OBJECTION]）**：证据核验成立——AppId 固定 GUID（packaging/setup.iss:19-20/:74-77）+ 数据根独立于安装目录（.data-root 指针 setup.iss:235/:254，数据根 %LOCALAPPDATA% 属第 3 层）双保险，批1 不触用户数据。产出五条件（C1 升级兼容分析硬性门/C2 文件级清单五联动链/C3 exe 目标名钉死/C4 批2 枚举禁写 ±2/C5 真机升级走查）+ 八备注（R1-R8）。
+
+**三、owner 终选（原文）**：「当前项目 0 start，默认不考虑存量用户的问题」。据此：
+- C1 硬性开工门**按前提降级消解**：不做存量升级兼容分析、不做迁移策略二选一；批1 走全新安装口径（DefaultDirName 直改 {autopf}\SubTrans，AppId GUID 照旧不动）；孤儿 exe/存量静默失效/强制迁移/真机升级走查（C5）与合并走查（R3）全部豁免，release notes 不写迁移说明；owner 自身机器走干净卸载重装验证。
+- R1 裁定：tests/test_brand_allowlist.py:52 paths.py「第 2 层」标注按第 3 层口径修正措辞（docstring 级，纳入批1 范围）。
+- R6 裁定：批3 不解耦先行，随 2.7.0 常规批次。
+- 版本节奏：main 由 2.6.6.dev0 前进 2.7.0.dev0（立项即改，循 2.2.1→2.3.0 先例；pyproject.toml+__version__.py 三常量，test_version_consistency 3 钉绿）。
+- 其余采纳：C2（allowlist 收窄/测试断言同步/禁区表固化）、C3（GUI exe 目标名批清单钉死）、C4（先枚举落盘，11 或 13 以 UI 实测 title 属性定、禁写 ±2）、R4（.gitignore 记 /.pytest-*/ 或 basetemp 统一指已忽略 Temp/ 二选一）、R5（2.6.4 勘误限状态行，不删出处句）。
+
+**四、critic 异议记录与采纳情况**：原异议=有条件支持五条件；主模型最终决定=**部分采纳**（C2/C3/C4/R4/R5 采纳为执行要求；C1 按 owner 前提撤销、C5 豁免；R6 裁定不解耦）。**critic 保留异议（执行层面服从，已封盘）**：在不改 AppId 的现架构下，2.7.0 对 2.6.x 存量用户是可见可升级版本，「0 start」是验证与文档口径的豁免、非机制隔离——存量升级实际行为（UsePreviousAppDir 沿用旧目录+孤儿 SubTransJAV.exe+旧钉扎失效）将无验证地交给真实用户承担。是否 [PRESSURE-OVERRIDE]=否（owner 显式产品范围前提，属条件撤销而非隐患消除，随风险跟踪①挂账）。
+
+**五、批清单要点**
+
+- **批1 品牌统一第 2 层（全新安装口径）**：spec/dist 目录名（packaging/SubTransJAV.spec :52 COLLECT/:98 EXE 名；GUI exe 目标名批清单显式钉死并同步 release.yml:52/:67/:69/:120-125/:166、setup.iss:16/:51/:54-55/:58）；DefaultDirName {autopf}\SubTrans（setup.iss:23）；AUMID 变更（subtransjav/webview_gui/main.py:402-406，新值批清单钉死，notes 说明钉扎影响，任务栏钉扎不追清理）；test_isscc_compile_smoke 联动（tests/test_installer_lifecycle.py:235-258 伪造 dist 树同步）；历史遗留 lnk 清理（uninstall.bat 增清桌面 SubTransJAV.lnk）。**禁区表**：AppId GUID、paths.py 运行时数据根默认、api.py Documents 输出目录、pyproject.toml:76-78 entry points、subtrans-cli.exe 名、README 渊源句、CHANGELOG/LICENSE 历史句、tests/test_media_path.py 本机路径夹具。**联动链**：test_brand_allowlist.py ALLOWLIST 同步收窄（D2026-1004-02 风险④承接）+test_dict_dir_and_migrate.py:628/:646、test_paths.py:228、test_strings_and_shortcut.py:97 核对、test_subprocess_no_window.py:3 docstring；R1 措辞修正入本批。**开工门=批清单（文件级清单+禁区表）二级评议**。
+- **批2 A′ 复审重审**：先落盘逐项枚举（11 或 13 以 UI 实测定，已知 13=11+2 对应 glossary_learn/conflict_block 两无 title 控件）；逐条裁决改写/维持/入候选池；边界沿用「禁概念改名」「只改 tooltip 不改 label」除非显式重拍（若改术语，test_pipeline_v2.py:1283 等值级钉同批同步）；新增键走解冻提案（静态键 cap 200）+DOM id 二级评议；6 项已改写 tooltip 双侧同值钉保持。
+- **批3 docs 勾账+小件**：roadmap 2.6.4 状态勘误（限状态行）；.pytest-brand/、.pytest-asrfix/ 残留删除+.gitignore 兜底（R4 二选一）；随常规批次不解耦。
+- **发版**：v2.7.0、release/2.7.0 分支制；发布后 main 前进 2.7.1.dev0（滚动 dev 号纪律 D2026-1001-02）；owner 干净卸载重装验证替代真机升级走查；Mimosa 基线 36 零新增与 GUI 变更验证照常。
+
+**六、后续风险跟踪**：①存量用户升级路径（AppId 不变使 2.6.x 用户可见可升；预期行为=沿用旧目录+新 exe 与孤儿 exe 并存+旧钉扎失效）无验证无说明——重开触发=owner 立场转「1 start」或真实用户升级反馈到达，届时按原 C1 重启（升级兼容分析+迁移策略二选一+真机升级走查+release notes 迁移说明）；②D2026-1004-02 风险①（2.6.5 真机升级走查）未完成记录，因本前提一并豁免，随①触发重启；③allowlist 收窄漏项则钉变红，批1 清单强制项；④SmartScreen/AV 排除以新 exe 名重新判定，沿用 README/手册 FAQ-10 指引；⑤全新安装口径下 CI smoke 覆盖新名产物、owner 真机净装门 PASS。
+
