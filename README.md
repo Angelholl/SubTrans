@@ -8,8 +8,8 @@ A dual-engine subtitle translation & refinement toolkit (evolved from the SubTra
 
 ## 下载与安装
 
-- **EXE 安装包**（推荐普通用户）：随正式版发布提供，请到 [Releases](../../releases) 页下载；系统要求与安装步骤见下方[安装](#安装)。
-- **源码 / pip 方式**：见下方[安装](#安装)（`首次安装.bat` 一键脚本或 `pip install -e ".[gui]"`）。
+- **EXE 安装包（主推）**：普通用户只需读本节——到 [Releases](../../releases) 页下载安装包（`SubTrans-setup-*.exe`）双击安装即可；系统要求与安装步骤见下方[安装](#安装) ①。
+- 进阶 / 开发者：源码（`首次安装.bat`）或 pip 方式安装，见下方[安装](#安装) ②③。
 
 本文档以中文为主体；英文用户可直接跳转 [English Quickstart](#english-quickstart)。
 
@@ -49,30 +49,30 @@ A dual-engine subtitle translation & refinement toolkit (evolved from the SubTra
 
 ### EXE 分发（Windows 安装包）
 
-- onedir 打包 + Inno Setup 安装器，数据根位于 `%LOCALAPPDATA%\SubTransJAV`；**卸载不删除用户数据**（词库/TM/配置/产物均保留）。
+- onedir 打包 + Inno Setup 安装器，数据根位于 `%LOCALAPPDATA%\SubTrans`；**卸载不删除用户数据**（词库/TM/配置/产物均保留）。
 - 安装器内置 WebView2 检测与引导（GUI 运行时依赖）。
 - 首发版本**未做代码签名**：首次运行可能触发 SmartScreen 提示（点「更多信息 → 仍要运行」），建议下载后核对发布页提供的 SHA256 校验值自行验证安装包完整性。
 
 ### 路径与数据根
 
 - 环境变量 `SUBTRANSJAV_DATA_ROOT` 优先级最高，可整体重定位数据根（词库/TM/配置/产物锚点）。
-- `subtransjav-refine --where` 一次性诊断当前全部路径锚点（只读零副作用），排障首选。
+- `subtrans-cli.exe --where`（EXE 版位于安装目录；pip/源码版为 `subtransjav-refine --where`）一次性诊断当前全部路径锚点（只读零副作用），排障首选。
 - **pip / 源码用户零感知**：数据位置不变（仍在仓库根），行为与 1.4 完全一致。
 - EXE 首发迁移三段式：旧数据自动迁入新数据根 → 迁移前自动备份至数据根 `backups/` → 迁移失败自动回退旧路径，详见[从 1.4 升级到 2.0](#从-14-升级到-20)。
 
 ## 安装
 
-三种方式并列，按你的身份选择其一：
+普通用户只需读 ①（主推方式）；②③ 面向进阶与开发者（想修改代码/自定义构建请 fork 本仓库自行构建，见本章末「进阶与开发」）。
 
-### ① EXE 安装包（推荐普通用户）
+### ① EXE 安装包（主推·普通用户）
 
-到 [Releases](../../releases) 下载安装包（随 2.0.0 正式发布提供）。系统要求：Windows 10/11；WebView2 由安装器自动检测并引导安装。安装即用，无需 Python 环境。
+到 [Releases](../../releases) 下载安装包（`SubTrans-setup-*.exe`，随各正式版发布提供）。系统要求：Windows 10/11；WebView2 由安装器自动检测并引导安装。安装即用，无需 Python 环境。
 
-### ② 首次安装.bat（源码用户）
+### ② 进阶｜首次安装.bat（源码方式）
 
 克隆仓库后双击运行 `首次安装.bat`，需要 Python 3.10+。脚本完成依赖安装与入口注册。
 
-### ③ pip 安装（开发者）
+### ③ 开发者｜pip 安装
 
 要求 Python 3.10–3.13。
 
@@ -88,6 +88,8 @@ pip install -e ".[gui]"
 python -m subtransjav.refine.cli --dict-download sudachi          :: core 版
 python -m subtransjav.refine.cli --dict-download sudachi_full     :: 完整版（约 137MB zip，CDN 单源）
 ```
+
+> **进阶与开发**：想修改代码或自定义构建的进阶用户，请 fork 本仓库（[Angelholl/SubTrans](https://github.com/Angelholl/SubTrans)）后按上文 ②③ 自行构建；EXE 安装包用户无需使用源码与 pip 方式。
 
 ## LM Studio 配置指引（本地模型，普通用户视角）
 
@@ -111,11 +113,11 @@ EXE 安装包只解决**程序本体**的安装；翻译所用的本地模型需
 :: GUI
 subtransjav-gui
 
-:: CLI 全流程（单文件）
-subtransjav-refine -i 字幕.srt --profile local --s1-provider lmstudio --s1-model <模型名> --s3-provider lmstudio --s3-model <模型名>
+:: CLI 全流程（单文件）——EXE 用户运行安装目录内的 subtrans-cli.exe（下例以默认安装路径为例）；pip/源码用户将命令替换为 subtransjav-refine
+& "C:\Program Files\SubTrans\subtrans-cli.exe" -i 字幕.srt --profile local --s1-provider lmstudio --s1-model <模型名> --s3-provider lmstudio --s3-model <模型名>
 
 :: CLI 批量（目录递归）
-subtransjav-refine --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
+& "C:\Program Files\SubTrans\subtrans-cli.exe" --input-dir "字幕目录" -r --filter-pattern "*.srt" --exclude "*_final_cn.srt" "*_refine_*" --profile local --lmstudio-endpoint http://localhost:1234/v1
 ```
 
 GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留选文件、输出目录、翻译服务快捷下拉、开始/停止与进度）、**校对**（视频+字幕并排人工复核）、**质量与建议**（含 AI 质量分析）；「设置」：**引擎与模型**、**词库与模板**、**高级参数**。初始安装即默认参数，全部高级定制在对应页内调整。
@@ -231,11 +233,11 @@ SRT 输入
 长任务中断后可续跑，复用已完成的阶段A 产物，不重复计算：
 
 ```bat
-:: 指纹（输入/配置/词库/TM）校验通过才复用：
-subtransjav-refine -i 字幕.srt ... --resume
+:: 指纹（输入/配置/词库/TM）校验通过才复用（EXE 用户运行安装目录内的 subtrans-cli.exe；pip/源码用户替换为 subtransjav-refine）：
+& "C:\Program Files\SubTrans\subtrans-cli.exe" -i 字幕.srt ... --resume
 
 :: 指纹不匹配仍强制复用旧产物（自行承担错位风险）：
-subtransjav-refine -i 字幕.srt ... --resume --force-resume
+& "C:\Program Files\SubTrans\subtrans-cli.exe" -i 字幕.srt ... --resume --force-resume
 ```
 
 任务成功后断点产物（`*_manifest.json`、`*_refine_A.srt`）自动清理；`--force` 为忽略产物整任务重跑（覆盖前自动备份）。
@@ -267,7 +269,7 @@ subtransjav-refine -i 字幕.srt ... --resume --force-resume
 - **提示模型未指定？** `lmstudio` / `ollama` / `siliconflow` / `custom` 需经 `--s1-model` / `--s3-model` 指定模型名。
 - **云端密钥放哪？** 三级解析：CLI/GUI 传参 > 环境变量 > GUI 保存（DPAPI 加密存储）；本地服务无需密钥。
 - **只想看执行计划、不实际调用？** 加 `--dry-run`。
-- **我的数据（词库/TM/配置）在哪？** 运行 `subtransjav-refine --where` 一次报全当前全部路径锚点；EXE 版默认在 `%LOCALAPPDATA%\SubTransJAV`，pip 版在仓库根。
+- **我的数据（词库/TM/配置）在哪？** 运行安装目录内的 `subtrans-cli.exe --where`（pip/源码版为 `subtransjav-refine --where`）一次报全当前全部路径锚点；EXE 版默认在 `%LOCALAPPDATA%\SubTrans`，pip 版在仓库根。
 - **升级到 2.0 后配置还在吗？** EXE 版：首次启动自动迁移旧配置与词库/TM（迁移前自动备份，失败自动回退），无需手动操作；pip 版：数据位置不变，配置原样保留。
 - **杀毒软件报毒怎么办？** 首发安装包未做代码签名，部分杀软可能误报。请从官方 Releases 下载并核对发布页提供的 SHA256 校验值；确认一致后可将安装包/安装目录加入杀软白名单。
 - **想回退到旧版本要注意什么？** 先执行 `--tm-export` 导出翻译记忆库（2.0 的 TM/数据结构升级后，旧版本可能无法直接读取新库），再卸载/回装旧版。
@@ -294,18 +296,18 @@ pip install -e ".[gui]"
 ### Quick Start
 
 1. Install [LM Studio](https://lmstudio.ai/), download a model, and start its local server (default `http://localhost:1234/v1`). Local models are **not** bundled — you must provide your own.
-2. Launch the GUI (`subtransjav-gui`) and pick the provider/model in the 引擎与模型 (Engine & Model) tab, or use the CLI:
+2. Launch the GUI (`subtransjav-gui`) and pick the provider/model in the 引擎与模型 (Engine & Model) tab, or use the CLI (`subtrans-cli.exe` inside the EXE install directory; pip/source users: `subtransjav-refine`):
 
 ```bat
-subtransjav-refine -i subs.srt --profile local --s1-provider lmstudio --s1-model <model> --s3-provider lmstudio --s3-model <model>
+& "C:\Program Files\SubTrans\subtrans-cli.exe" -i subs.srt --profile local --s1-provider lmstudio --s1-model <model> --s3-provider lmstudio --s3-model <model>
 ```
 
 The GUI is Chinese-oriented; the refine pipeline currently targets Japanese → Chinese; other target languages are not adapted yet.
 
 ### Data Location
 
-- EXE install: `%LOCALAPPDATA%\SubTransJAV`; pip/source: repository root (unchanged since 1.4).
-- Override everything with the `SUBTRANSJAV_DATA_ROOT` environment variable; run `subtransjav-refine --where` to print all resolved path anchors (read-only diagnostics).
+- EXE install: `%LOCALAPPDATA%\SubTrans`; pip/source: repository root (unchanged since 1.4).
+- Override everything with the `SUBTRANSJAV_DATA_ROOT` environment variable; run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtransjav-refine --where`) to print all resolved path anchors (read-only diagnostics).
 
 ### Migration (1.4 → 2.0)
 

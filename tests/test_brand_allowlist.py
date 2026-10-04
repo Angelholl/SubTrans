@@ -29,12 +29,12 @@ ALLOWLIST = frozenset({
     # ---- CI/打包链（批1 后残余：历史注释 + 旧开始菜单组清理锚）----
     ".github/workflows/release.yml",       # 行1历史注释（发布定案号，不改史）；spec 名/dist 目录/产物 exe 名已随批1 改 SubTrans
     "packaging/setup.iss",                 # :1 历史注释 + [InstallDelete] 旧开始菜单组 {commonprograms}\SubTransJAV 清理锚（对不存在路径无害空操作）；AppId GUID/env 名禁区不动
-    "pyproject.toml",                      # 顶部注释与 description 历史口径；entry points 用小写包名 subtransjav（批3 收敛）
-    # ---- 用户/历史文档（渊源句、历史沿革、走查记录，不改史；README/手册批3 收敛）----
-    "README.md",                           # 渊源句（"由 SubTransJAV 项目迭代而来"/evolved from）+ 数据根路径历史口径（批3 收敛）
-    "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV）（批3 收敛）
+    "pyproject.toml",                      # 顶部注释 pip install -e 为 dev/构建形态真实口径（D2026-1004-04 C1 保留）；entry points 用小写包名 subtransjav（保持现状）
+    # ---- 用户/历史文档（渊源句、历史沿革、走查记录，不改史；README/手册已随批3 收敛正文）----
+    "README.md",                           # 渊源句（"由 SubTransJAV 项目迭代而来"/evolved from + 上游渊源句"旧名 SubTransJAV 由此而来"）；数据根路径已随批3 切 %LOCALAPPDATA%\SubTrans
+    "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；新版本记录随发版 SOP 定版）
     "LICENSE",                             # 版权署名 The SubTransJAV Project Authors（法律文本不改）
-    "docs/使用与维护手册.md",               # 标题渊源口径（批3 收敛）
+    "docs/使用与维护手册.md",               # 标题渊源口径（历史文档标题；批3 收敛正文与数据根口径后仍保留）
     "docs/decision-log.md",                # 决策历史记录，永不改写
     "docs/roadmap.md",                     # 历史规划文档
     "docs/B2-门②语料基线-20260926.md",     # 历史走查记录（树外归档绝对路径）
