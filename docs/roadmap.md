@@ -116,12 +116,13 @@
 - ✅ **2.6.1 已发布（2026-10-02，tag v2.6.1→release/2.6.1 头 68f13e1，Release id 401896944：setup-2.6.1.exe 33,764,476B 哈希核过 3347b7d8+SHA256SUMS；notes 只写本版）**
 - ⬜ **2.6.1 工作区重整+校对视图（2026-10-02 立项，D2026-1002-07；owner 四点反馈：质量与建议提到工作区/新增校对 TAB 视频字幕对照 SmartSub 式可选向/布局美观度对标 SmartSub 重整/校对组件规划已答=ffmpeg 既有依赖即可、ASR 仅批 3 可选联动）**——critic 有条件支持无 HRO 全采纳，批 1 开工门=决议归档。批 1 UI 基建：静态键 cap 192→200 解冻提案（首件，耗 2-4 个）+导航三分（工作区=字幕翻译/校对/质量与建议；设置=引擎与模型/词库与模板/高级参数，nav_group_quality 改字不加键）+间距 token 化（只增不改）+质量与建议页来源条折叠+布局变体统一+视觉三小件（✅ 已落库，见 d261 批清单）。批 2a 校对容器：播放器 spike 首件（file:// 直播+timeupdate/currentTime 精度+seek+10ms 补偿实证=验收口径）+右栏全隐迷你状态条（三 id 归属批 2a 评议定；✅ 归属+UI 规格已定案 D2026-1002-08=独立四 id reviewStatusBar/Dot/Label/Fill+makeStatusManager 工厂+翻译侧零改动，条件②已闭环，id 总额仍待批 2a 预算表逐段预演 ≤9）+SRT 编码嗅探（BOM→utf-8→gbk）+ffprobe 三态+手动转码临时预览+跳转入队接口空实现（{timestamp,label,source}+契约钉）+id 预算分段列名目标 ≤10。批 2b 校对编辑：双向联动五要点+行内编辑+保存（重编号确认+另存为/备份）；200-800 行不虚拟化。批 3 联动增强：对照链/AI 分析疑点段进校对视图+校对页 ASR 可选入口（承诺件）。设计红线：单一编辑器实现/状态单行/列表播放器同真源/新文案全 JS 态 MSG 键；程序分界=静态键 cap 走解冻提案、DOM id 走预算表+二级评议。
 
-## 2.7.0 —— 品牌统一第 2 层+A′ 复审收尾版（D2026-1004-03 立项）⬜（已立项归档；开工待 owner「开工」令；main 已前进 2.7.0.dev0）
+## 2.7.0 —— 品牌统一第 2 层+数据根统一+A′ 复审收尾版（D2026-1004-03 立项+D2026-1004-04 终选扩容）⬜（批1 开工门已过；main=2.7.0.dev0）
 
-- **批1 品牌统一第 2 层（全新安装口径，owner 前提「0 start 不考虑存量用户」，D2026-1004-02 既定挂账）**：spec/dist 目录名+GUI exe 目标名（批清单钉死）+DefaultDirName {autopf}\SubTrans+AUMID+历史遗留 lnk 清理；禁区表（AppId GUID/数据根/Documents 输出/entry points/subtrans-cli.exe 名/README 渊源句）与五条联动链（brand allowlist 收窄+测试夹具同步）见决策日志；开工门=批清单（文件级清单+禁区表）二级评议。存量升级路径风险挂决策日志风险跟踪①。
-- **批2 A′ UX 复审清单逐项重审**（触发源已随 2.6.0 到达）：先逐项枚举 11 或 13 落盘（UI 实测 title 属性定，禁写 ±2）→逐条裁决改写/维持/入候选池；新增键走解冻提案（静态键 cap 200）。
-- **批3 docs 勾账+小件**：roadmap 2.6.4 节状态勘误（限状态行）+.pytest-* 残留清理+.gitignore 兜底（R4 二选一）。
-- 发版：release/2.7.0 分支制；owner 干净卸载重装验证替代真机升级走查。
+- **批1 品牌统一第 2 层+数据根统一（全新安装口径，D2026-1004-04 拍板）**：GUI exe→SubTrans.exe+spec 改名 SubTrans.spec（docstring 全清）+DefaultDirName {autopf}\SubTrans+**数据根/Documents 输出统一 SubTrans（直接改默认值无迁移代码，owner 0 start 豁免原文入档）**+AUMID→Angelholl.SubTrans.GUI（常量+值级钉，永不变更纪律）+[InstallDelete]+uninstall.bat LNK6+Documents 提示串；批清单=docs/design/d270-批1-批清单.md（二级评议通过，C1-C5 已回写）；禁区表（AppId GUID/env 名/CLI 名/dev 运行时行为/numba 小写缓存目录等）；批1 首提交后 release workflow_dispatch 先行验证。
+- **批2 A′ UX 复审清单逐项重审**（触发源已随 2.6.0 到达）：先逐项枚举 11 或 13 落盘（UI 实测 title 属性定，禁写 ±2）→逐条裁决改写/维持/入候选池（**判定 rubric 三层+第 0 道事实门，tooltip 长度阈值 120 字=D2026-1004-04 输入常量**）；新增键走解冻提案（静态键 cap 200）；**jieba 文案缺陷（app.js:446 "pip 安装 [zh] 组件"对 EXE 用户失真）随批修**。
+- **批3 docs 勾账+文档级收敛（B 方案，D2026-1004-04）**：roadmap 2.6.4 节状态勘误（限状态行）+.pytest-* 残留清理+.gitignore 兜底；**README/手册主推 EXE 单一安装方式+保留三形态说明+开发者 fork 指引（代码零删改）**；命令引用 subtransjav-refine→安装目录 subtrans-cli.exe 语境；README/手册 %LOCALAPPDATA%\SubTransJAV 口径随数据根更名同步。
+- 挂起：CI 腿收敛（8→4）=deferred 候选未拍板不进 2.7（D2026-1004-04 ⑥）。
+- 发版：release/2.7.0 分支制；owner 真机全新下载首启验证（--where 新数据根+无迁移提示+任务栏分组）。
 
 ## 2.6.5 —— 词典链与 UX 修复版 ✅ 已发布（2026-10-04，tag v2.6.5→830ac23 release/2.6.5，Release id 402920447：SubTrans-setup-2.6.5.exe 50,816,598B sha256 AD5F9A77…87A02 核对一致+SHA256SUMS；notes 只写本版；CI 全绿+Mimosa 36 零新增 seal 9cc727ed；真机门② owner 真机 PASS"直连和代理下载没问题"）
 

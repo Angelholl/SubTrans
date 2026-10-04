@@ -2919,3 +2919,13 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **六、后续风险跟踪**：①存量用户升级路径（AppId 不变使 2.6.x 用户可见可升；预期行为=沿用旧目录+新 exe 与孤儿 exe 并存+旧钉扎失效）无验证无说明——重开触发=owner 立场转「1 start」或真实用户升级反馈到达，届时按原 C1 重启（升级兼容分析+迁移策略二选一+真机升级走查+release notes 迁移说明）；②D2026-1004-02 风险①（2.6.5 真机升级走查）未完成记录，因本前提一并豁免，随①触发重启；③allowlist 收窄漏项则钉变红，批1 清单强制项；④SmartScreen/AV 排除以新 exe 名重新判定，沿用 README/手册 FAQ-10 指引；⑤全新安装口径下 CI smoke 覆盖新名产物、owner 真机净装门 PASS。
 
+## [2026-10-04] [D2026-1004-04] v2.7.0 终选：产品形态文档级收敛（B）+数据根统一+批1 扩容开工 [已拍板·批1 开工门通过]
+
+**一、原决策（owner 终选原文「那选b，开工」，按先例=全按推荐执行）**：①产品形态精简=**B 文档级收敛**（主模型在评议员 C1 证实"深度代码精简不可行且收益薄"后撤回原批1 精简方案，降级为文档级：README/手册主推 EXE+保留三形态说明+开发者 fork 指引，代码零删改，_auto_setup/首次安装.bat 保留服务 fork 用户；文档编辑与批3 勾账合并一次通行）——owner 前置表态「如果pip和cli是必须得，那精简就没意义，不如保持现状让未来的用户自己选择」为降级依据；②**数据根/Documents 更名 SubTransJAV→SubTrans**：直接改默认值、不写任何迁移/重定向代码、release notes 不写迁移说明（owner 豁免原文：「项目0start所以不需要考虑任何存量用户，我每次测试都是全新下载测试，所以任何对升级或者迁移的疑虑都不需要，默认是全新项目即可」）；③GUI exe→SubTrans.exe；AUMID→**Angelholl.SubTrans.GUI**（纪律：永不变更、版本号禁止入值；提为 main.py 模块常量+import 级钉）；④[InstallDelete] 清旧开始菜单组+uninstall.bat 补清 SubTransJAV.lnk+Documents 提示串同步；**任务栏钉扎快捷方式永不清理红线入档**；⑤tooltip 长度阈值 120 字（批2 A′ 复审输入常量）；⑥CI 腿收敛未获明确拍板，挂起不进 2.7（deferred 候选）；⑦jieba 文案缺陷（app.js:446）挂批2。批序维持 D2026-1004-03 原三批，批1 扩容=品牌第 2 层+数据根统一。
+
+**二、critic 异议与闭环记录**：①原 [HIGH_RISK_OBJECTION]（数据根/Documents 更名=对外接口+48 小时翻禁区）——主模型驳回，证据=owner 豁免原文命中预设驳回条件，禁区翻动升格为终选菜单显式项；评议员复议一次（新取证 data_migration._discover_legacy_root 挂 EXE 安装目录与数据根默认值无耦合，无自我迁移误报）无新反例，**封口服从**；附带有利事实=数据根改名后卸载清理不再触碰数据根，更贴合 setup.iss:62-65 既有口径。②深度精简→文档级收敛修订：支持（与其 C1 dev 行为不可删+R2 代码触面重叠薄一致）。③批1 二级评议（开工门）：**有条件支持通过**，C1-C3 补漏（uninstall.bat:79 Documents 提示串入原子单元/allowlist 增删双侧清单化/spec+entry_gui docstring 残留显式裁决=全清）+C4 建议（AUMID 常量提取，采纳）+C5 顺手（setup.iss 注释同步）+R1（console.py:227 小写 numba 缓存目录=刻意保留勿顺手改，入禁区）+R3（批1 首提交后即触发 release workflow_dispatch 全链验证）。C1-C5 已全部回写 docs/design/d270-批1-批清单.md。
+
+**三、批1 执行要点**：六触点原子单元（paths.py frozen 默认/setup.iss:276 ResolveDataRoot/api.py Documents 输出/test_paths 夹具/test_data_migration 夹具/allowlist）+uninstall.bat 提示串=七触点同提交；spec 文件重命名+EXE/COLLECT name+docstring 全清；release.yml 六处同步；AUMID 常量+值级钉；[InstallDelete]+LNK6；allowlist 双侧手术（增 d270 批清单自身/删清空条目/改注）；禁区表（AppId GUID/env 名 SUBTRANSJAV_DATA_ROOT/.data-root/entry points/CLI 名/dev 运行时行为/README 手册批3 承接/numba 小写缓存目录/data_migration 逻辑）。验收=全量基线只增+Mimosa 36 零新增+test_isscc_compile_smoke+owner 真机全新下载首启（--where 新根+无迁移提示+任务栏分组）。
+
+**四、后续风险跟踪**：①批1 首提交后 release workflow_dispatch 先行全链验证（spec 改名为唯一首次变红点）；②d270 批清单提交即触发 allowlist 新命中，须同提交双侧处理；③0 start→1 start 或真实升级反馈到达时，数据根/Documents 更名的存量升级分析随 D2026-1004-03 六①机制重启（含 AUMID 变更旧钉扎失效、旧数据根孤儿目录）；④CI 收敛 deferred 候选需独立议题重开；⑤README/手册中 %LOCALAPPDATA%\SubTransJAV 口径连带由批3 承接；⑥tooltip 阈值 120 字为批2 开工门引用常量。
+
