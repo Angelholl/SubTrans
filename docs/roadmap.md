@@ -116,11 +116,16 @@
 - ✅ **2.6.1 已发布（2026-10-02，tag v2.6.1→release/2.6.1 头 68f13e1，Release id 401896944：setup-2.6.1.exe 33,764,476B 哈希核过 3347b7d8+SHA256SUMS；notes 只写本版）**
 - ⬜ **2.6.1 工作区重整+校对视图（2026-10-02 立项，D2026-1002-07；owner 四点反馈：质量与建议提到工作区/新增校对 TAB 视频字幕对照 SmartSub 式可选向/布局美观度对标 SmartSub 重整/校对组件规划已答=ffmpeg 既有依赖即可、ASR 仅批 3 可选联动）**——critic 有条件支持无 HRO 全采纳，批 1 开工门=决议归档。批 1 UI 基建：静态键 cap 192→200 解冻提案（首件，耗 2-4 个）+导航三分（工作区=字幕翻译/校对/质量与建议；设置=引擎与模型/词库与模板/高级参数，nav_group_quality 改字不加键）+间距 token 化（只增不改）+质量与建议页来源条折叠+布局变体统一+视觉三小件（✅ 已落库，见 d261 批清单）。批 2a 校对容器：播放器 spike 首件（file:// 直播+timeupdate/currentTime 精度+seek+10ms 补偿实证=验收口径）+右栏全隐迷你状态条（三 id 归属批 2a 评议定；✅ 归属+UI 规格已定案 D2026-1002-08=独立四 id reviewStatusBar/Dot/Label/Fill+makeStatusManager 工厂+翻译侧零改动，条件②已闭环，id 总额仍待批 2a 预算表逐段预演 ≤9）+SRT 编码嗅探（BOM→utf-8→gbk）+ffprobe 三态+手动转码临时预览+跳转入队接口空实现（{timestamp,label,source}+契约钉）+id 预算分段列名目标 ≤10。批 2b 校对编辑：双向联动五要点+行内编辑+保存（重编号确认+另存为/备份）；200-800 行不虚拟化。批 3 联动增强：对照链/AI 分析疑点段进校对视图+校对页 ASR 可选入口（承诺件）。设计红线：单一编辑器实现/状态单行/列表播放器同真源/新文案全 JS 态 MSG 键；程序分界=静态键 cap 走解冻提案、DOM id 走预算表+二级评议。
 
-## 2.7.1 —— 安装版 ASR 探测修复（D2026-1005-01 立项）⬜（owner 拍板「这一点计入 2.7.1 的修复」；开工门=批清单二级评议）
+## 2.7.1 —— 安装版 ASR 探测修复+模型管理面板 ✅ 已落库（2026-10-05，3512533，基线 1930+4）⬜ 待发版（owner 令后走 release/2.7.1 分支制）
 
-- **背景**：2.7.0 真机首现「上游 ASR 不可用」两级原因——①安装版无 subtransjav 包可导入（上游 python `-m` 报 ModuleNotFoundError，selfcheck 模块找不到；spec 只打包 assets/defaults，开发态 cwd 有源码包故未暴露）；②ffmpeg 在 whisperJAV conda env 内部（Library\bin），app 进程 PATH 不可见。已临时解决：subtransjav 包复制进安装目录（68 文件核对一致）+用户 PATH 追加 D:\whisperJAV\Library\bin。
-- **修复三件**：①asr_runner 随包按路径直调（runner 仅依赖 stdlib+whisper 懒加载，可自包含分发；探测命令改脚本路径形态，-m 形态保留为 dev 回退）；②ffmpeg 探测泛化：候选=app 进程 PATH→上游 env 自带目录（<上游 python 目录>/Library/bin、Scripts、同级目录）→抽片 subprocess 显式传 ffmpeg 绝对路径（不再依赖 app PATH）；③探测失败原因分类透出（模块缺失/whisper 导入失败/ffmpeg 缺失分列，stderr tail 进诊断）。
-- **上游多样性边界**：OpenAI whisper API 兼容环境（WhisperJAV 系/conda env 自带 ffmpeg/系统 PATH 有 ffmpeg）全覆盖；faster-whisper/CT2 系 API 不兼容——探测如实报「whisper 导入失败」不假阳性，适配器挂候选池不进 2.7.1。
+- **件1 探测修复三件（D2026-1005-01）**：asr_runner 随包（spec datas 单文件+定位函数 frozen/dev 双形态+脚本直调优先 -m dev-only 回退）+**secrets.py 劫持修复**（脚本直调 sys.path[0]=refine 目录劫持标准库 secrets 致 whisper 导入链炸——sys.path 自清+双回归钉）/ffmpeg 泛化（PATH→上游 env Library\bin 等候选→抽片显式绝对路径）/失败三分类 triage+stderr tail。
+- **件2 红绿灯+提示归一**：状态行三色点（复用词典 dot 范式零新增 id）/删 asr_entry_hint 行+asrRecList 折叠区（失配文案「项目不内置下载」消灭）/删 qwen disabled 占位。
+- **件3 模型管理面板**：AppModal kind='models' 720px（路径栏/未适配 banner/三档分组折叠/速度精度五格点阵·静态评定/推荐★/变体展开/行内进度+增量 MB/s/诊断网格/三态双门控/_settle models 独立分支关面板不阻塞下载）。
+- **件4 三落位探测+缓存**：whisper 缓存→数据目录→**HF hub cache（HF_HUB_CACHE→HF_HOME/hub→默认三级 env 链；文件族识别 ct2/transformers；限深限时 fail-soft）**；下拉合并去重来源标注；磁盘级快照缓存（config/asr_probe_cache.json，TTL 10 分钟，.gitignore 兜底）+首启空闲探测+总预算 90s。
+- **件5 数据层+硬门槛**：ASR_RECOMMENDED_MODELS 2→6 条扩 tier/desc/spec/backend/variants/verified；**tiny/base 顺手核验通过（openaipublic 实下载 sha256 比对，verified=True 可一键下载）；small/medium verified=False 禁下载仅「自备」说明（owner 硬门槛）；large-v2 sha64 位顺修**。
+- **件6 文档**：README 首启后台探测提示句；手册 2.5 章重写。
+- **实现期抓出并修复**：runner secrets 劫持（黑盒前本机实测）+fmtGB 闭包不可见（RefineUI IIFE 内定义、AppModal 顶层不可见致面板渲染中断——models 闭包本地版修复）。黑盒 PASS（真实探测数据注入 stub：红绿灯/面板三档/三态 chip 双门控/路径栏/banner）。
+- 待 owner 真机：全新安装包验证（runner 随包+红绿灯+面板+large-v2/tiny/base 下载+G 盘 HF 路径 title+下载中关面板后台继续）。
 
 ## 2.7.0 —— 品牌统一第 2 层+数据根统一+复审收尾+行为清零版 ✅ 已发布（2026-10-05，tag v2.7.0→cb46341 release/2.7.0 分支制，Release id 403129217：SubTrans-setup-2.7.0.exe 50,813,596B sha256 826BE5C0…D1DFE5 与 SHA256SUMS 核对一致；构建 run 37218792098 绿；notes 只写本版+钉扎重固定行动提示；发版链 Mimosa 36 零新增 seal 5c3ec2d6；main 前进 2.7.1.dev0=第 8 步）
 

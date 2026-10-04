@@ -2941,3 +2941,5 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **五、风险跟踪**：①临时方案的安装目录源码包副本卸载器不清理（owner 知情接受，2.7.1 正式修复落地后可删）；②用户 PATH 的 whisperJAV Library\bin 为全局暴露（DLL 搜索序 PATH 最低优先，冲突风险低；2.7.1 ②落地后可移除）；③本缺陷未进 2.7.0 notes（发现于发布后）。
 
+**六、执行追记（2026-10-05，2.7.1 落库 3512533）**：owner 设计定稿（AppModal 720px 面板/首启空闲探测+README 提示/点阵静态评定/MVP 只核验 large-v2+硬门槛「未核验档位禁止可点击下载」/红绿灯并入状态行/版本梯队 2.7.1→2.7.2→2.8.0→2.9.0→2.10 锁序）→design-expert 方案（8 关键决策+组件规格）→二级评议通过（C1-C5：i18n 口径勘正 JS 态键不受 cap 200/件1 三坑/HF env 三级链对接 owner G 盘/models kind 守卫隔离/黑盒分层）。实现六件全落（黑盒 PASS：红绿灯三色/面板三档分组/三态 chip 双门控/路径栏/banner，真实探测数据注入 stub）；**实现期抓出并修复两个真 bug**：①runner 脚本直调被 refine/secrets.py 劫持标准库 secrets（sys.path[0]=脚本目录致 whisper 导入链炸；sys.path 自清+双回归钉——副产物发现包装反模式）；②fmtGB 定义在 RefineUI IIFE 闭包内而 AppModal 顶层不可见（面板渲染中断；models 闭包本地版修复）。tiny/base 顺手核验通过转可下载（openaipublic 实下载 sha256 比对）。基线 1909+4→**1930+4**；Mimosa 36 零新增 seal cf11cb77；黑盒证据存会话工件。待发版（owner 从 GitHub 下载测试）。
+
