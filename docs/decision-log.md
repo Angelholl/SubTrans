@@ -2929,3 +2929,15 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **四、后续风险跟踪**：①批1 首提交后 release workflow_dispatch 先行全链验证（spec 改名为唯一首次变红点）；②d270 批清单提交即触发 allowlist 新命中，须同提交双侧处理；③0 start→1 start 或真实升级反馈到达时，数据根/Documents 更名的存量升级分析随 D2026-1004-03 六①机制重启（含 AUMID 变更旧钉扎失效、旧数据根孤儿目录）；④CI 收敛 deferred 候选需独立议题重开；⑤README/手册中 %LOCALAPPDATA%\SubTransJAV 口径连带由批3 承接；⑥tooltip 阈值 120 字为批2 开工门引用常量。
 
+## [2026-10-05] [D2026-1005-01] v2.7.0 真机 ASR 探测双缺陷诊断+临时方案+2.7.1 修复立项 [已拍板]
+
+**一、决策背景**：v2.7.0 发布后 owner 真机首现「上游 ASR 不可用」（媒体重点对照卡），两级原因诊断确证（本机实测取证）：①安装版无 subtransjav 包可导入——上游 python `-m subtransjav.refine.asr_runner` 在安装目录报 ModuleNotFoundError（spec 只打包 assets/defaults 数据，源码包不随包；开发态 cwd=仓库根有源码包故从未暴露，2.6.0 引入对照链以来安装形态皆有此缺陷，因对照默认关闭首现于本版）；②ffmpeg 位于 whisperJAV conda env 内部（D:\whisperJAV\Library\bin），app 进程 PATH 不可见（用户 PATH 原无任何 ffmpeg 条目）。上游环境本体经实测完全正常（python 3.10.18+whisper 20250625+large-v2.pt 模型缓存均在）。
+
+**二、owner 拍板（原文）**：「我先本地临时用，同时这一点计入2.7.1的修复，并且要考虑如果上游是其他类似的whisper项目是否也会存在这种问题」。
+
+**三、已执行临时方案**：①subtransjav 包复制进安装目录（D:\SubTrans\subtransjav，68 文件两侧核对一致）——selfcheck 导入链恢复；②用户 PATH 追加 D:\whisperJAV\Library\bin（PowerShell SetEnvironmentVariable，354→追加后安全长度；shutil.which 实测解析 ffmpeg 成功）——需重启 GUI 生效。
+
+**四、2.7.1 修复立项（roadmap 已登记）**：①asr_runner 随包按路径直调（runner 仅依赖 stdlib+whisper 懒加载，可自包含分发；-m 形态保留 dev 回退）；②ffmpeg 探测泛化（候选=app PATH→上游 env 自带目录 Library\bin/Scripts/同级→抽片 subprocess 显式传绝对路径）——**上游多样性回应**：conda 系 env 自带 ffmpeg 的 whisper 项目全覆盖；faster-whisper/CT2 系 API 不兼容会如实报「whisper 导入失败」不假阳性，适配器挂候选池；③探测失败原因分类透出（模块缺失/whisper 导入失败/ffmpeg 缺失分列+stderr tail）。开工门=批清单二级评议。
+
+**五、风险跟踪**：①临时方案的安装目录源码包副本卸载器不清理（owner 知情接受，2.7.1 正式修复落地后可删）；②用户 PATH 的 whisperJAV Library\bin 为全局暴露（DLL 搜索序 PATH 最低优先，冲突风险低；2.7.1 ②落地后可移除）；③本缺陷未进 2.7.0 notes（发现于发布后）。
+
