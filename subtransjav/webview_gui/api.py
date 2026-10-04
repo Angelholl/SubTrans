@@ -416,7 +416,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
     # tm_learn_gate 默认 True 与 TM 勾选语义重叠，GUI 不设开关，
     # 保持 CLI --no-tm-learn-gate 通道）
     if options.get("glossary_learn"):
+        # 双闸门 AND 语义：GUI 勾选「学习词库」= 两闸同开（--glossary-learn
+        # 外层闸 + --auto-glossary 内层闸）；不勾 = 两闸皆缺省 False，默认
+        # 行为零变化。auto_glossary 刻意不入产物指纹（见 manifest.py）。
         args.append("--glossary-learn")
+        args.append("--auto-glossary")
     if options.get("glossary_conflict_block"):
         args.append("--glossary-conflict-block")
 

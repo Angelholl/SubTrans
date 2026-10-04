@@ -715,6 +715,13 @@ def _inject_stage_a_assists(cfg: RefineConfig, entries: list, todo: list,
                     threshold=cfg.tm_fuzzy_threshold)
                 if hits:
                     refs[e["index"]] = hits[0][1]
+                    # 批4 件2①（verbose 消费点）：逐条命中明细仅在
+                    # cfg.verbose 时打印；缺省输出逐字节不变
+                    if cfg.verbose:
+                        print(f"   [VERBOSE] TM 命中 #{e['index']}: "
+                              f"{(e['text'] or '').strip()[:40]} -> "
+                              f"{hits[0][1][:40]}"
+                              f"（相似度 {hits[0][2]:.2f}）")
             if refs:
                 print(f"   💬 TM 模糊参考注入: {len(refs)}/{len(todo)} 条"
                       f"（阈值 {cfg.tm_fuzzy_threshold}，仅供参考）")
@@ -1259,8 +1266,14 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         print(f"\n🔹 [v2] 终稿已存在，跳过：{Path(out_final_path).name}")
         _remove_tmp_dir(tmp_dir)    # 无事可做：顺手清掉刚建的临时工作区
         emitter.emit("phase_started", phase="final", file=fname)
+        _t_final_reuse = time.perf_counter()
         emitter.emit("phase_finished", phase="final", file=fname, payload={
             "entries": 0, "degraded_count": 0, "reused": True})
+        # 批4 件2③（verbose 消费点）：阶段耗时仅在 cfg.verbose 时打印；
+        # perf_counter 计时变量为局部新增，phase 事件 payload 一字不动
+        if cfg.verbose:
+            print(f"   [VERBOSE] 阶段final 耗时 "
+                  f"{time.perf_counter() - _t_final_reuse:.1f}s（产物复用）")
         return out_final_path
     if force:
         _backup_existing_outputs(out_dir, stem, collector=collector,
@@ -1392,6 +1405,19 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         orig_entries, cfg, source_name=fname, tighten=tighten,
         samples_limit=_GATE0_REPORT_SAMPLE_CAP,
         tighten_entry_predicate=tight_pred)
+    # 批4 件2②（verbose 消费点）：闸门0 判定明细——仅 cfg.verbose 时打印
+    # 逐类删除计数与隔离样本数（数据现成于 gate0_stats，不进纯函数内部）；
+    # 缺省输出逐字节不变
+    if cfg.verbose:
+        print(f"   [VERBOSE] 闸门0: 检出 {gate0_stats.get('detected_total', 0)}"
+              f" 删 {gate0_stats.get('deleted', 0)}"
+              f"（档位 {gate0_stats.get('mode')}）")
+        for _g0_label, _g0_cnt in (gate0_stats.get("categories") or {}).items():
+            print(f"   [VERBOSE] 闸门0 [{_g0_label}] 检出 "
+                  f"{_g0_cnt.get('detected', 0)} 删 {_g0_cnt.get('deleted', 0)}")
+        _g0_quarantine = gate0_stats.get("quarantine_candidates") or []
+        if _g0_quarantine:
+            print(f"   [VERBOSE] 闸门0 隔离候选样本 {len(_g0_quarantine)} 条")
     # H5：候选原始下标 → 条目编号 对齐表（隔离区回捞用；候选仅保险阀
     # 降级路径非空。D1 后 noise_left_empty 恒 0，不再需要计数类条目编号
     # 集合，原 gate0_noise_indexes 一并移除）
@@ -1464,6 +1490,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
     try:
         # ---- 阶段A（--resume 时可复用上次已完成产物）----
         reused_a = False
+        _t_a = None          # 批4 件2③：阶段A 耗时计时起点（复用路径为 None）
         a_result = None
         a_rec = manifest.stages.get("A")
         if (cfg.resume and manifest_trusted and a_rec is not None
@@ -1487,6 +1514,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     exact_hits={})
                 reused_a = True       # 清单中阶段A记录沿用，不改写
         if not reused_a:
+            _t_a = time.perf_counter()
             emitter.emit("phase_started", phase="A", file=fname)
             manifest.mark_running("A")
             save_manifest(m_path, manifest)
@@ -1511,6 +1539,8 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
             "entries": len(a_result.entries),
             "degraded_count": len(a_result.failed),
             "reused": reused_a})
+        if cfg.verbose and _t_a is not None:
+            print(f"   [VERBOSE] 阶段A 耗时 {time.perf_counter() - _t_a:.1f}s")
 
         # ---- 兜底规则层（strict/lenient）----
         a_entries, validator_warnings, clean_merged, flagged_indexes, clean_stats, \
@@ -1520,6 +1550,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
 
         # ---- 阶段B ----
         a_for_b = _wrap_as_result(a_entries, a_result)
+        _t_b = time.perf_counter()
         emitter.emit("phase_started", phase="B", file=fname)
         manifest.mark_running("B")
         save_manifest(m_path, manifest)
@@ -1549,6 +1580,8 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         emitter.emit("phase_finished", phase="B", file=fname, payload={
             "entries": len(final_entries), "degraded_count": n_kept,
             "reused": False})
+        if cfg.verbose:
+            print(f"   [VERBOSE] 阶段B 耗时 {time.perf_counter() - _t_b:.1f}s")
 
         # ---- v1.2.2 D1 术语冲突观察（终稿生成后计算；一次遍历两用）----
         # 冲突清单供 CSV/报告【术语冲突观察】小节；逐术语统计供
@@ -1569,6 +1602,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                           for c in (conflict_data or {}).get("conflicts") or []}
 
         # ---- final 终稿落盘 ----
+        _t_final = time.perf_counter()
         emitter.emit("phase_started", phase="final", file=fname)
         _atomic_write_text(out_final_path, build_srt(final_entries))
         print(f"   ✅ 完成 -> {Path(out_final_path).name} "
@@ -1581,6 +1615,9 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         emitter.emit("phase_finished", phase="final", file=fname, payload={
             "entries": len(final_entries), "degraded_count": n_kept,
             "reused": False})
+        if cfg.verbose:
+            print(f"   [VERBOSE] 阶段final 耗时 "
+                  f"{time.perf_counter() - _t_final:.1f}s")
 
         # ---- TM 自学习（存阶段1 日→中 翻译对；终稿优先）----
         # 分歧采集提前到学习之前（collect_disagreement 纯读无副作用，

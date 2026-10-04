@@ -203,13 +203,18 @@ def test_build_refine_args_no_force_resume_by_default():
 
 
 def test_build_refine_args_glossary_learn_flag():
+    # 批4 件1：GUI 勾选「学习词库」= 双闸同开（外层 --glossary-learn +
+    # 内层 --auto-glossary 同时拼装）
     args = _build_refine_args({"inputs": ["a.srt"], "glossary_learn": True})
     assert "--glossary-learn" in args
+    assert "--auto-glossary" in args
 
 
 def test_build_refine_args_glossary_learn_absent_by_default():
+    # 缺省（不勾）= 两旗标皆无，默认行为零变化
     args = _build_refine_args({"inputs": ["a.srt"]})
     assert "--glossary-learn" not in args
+    assert "--auto-glossary" not in args
 
 
 def test_build_refine_args_glossary_conflict_block_flag():

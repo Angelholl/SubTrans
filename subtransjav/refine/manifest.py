@@ -386,6 +386,9 @@ _CONFIG_FIELDS = (
     # 两者都改变后续产物内容，必须参与指纹
     "glossary_conflict_block",
     "glossary_learn_enabled",
+    # 批4（2.7.0，评议 C4）：auto_glossary 刻意不入指纹（与
+    # glossary_learn_enabled 双闸 AND；独立传 --auto-glossary 时内层闸挡
+    # 学习、产物不变，无需指纹化）
     # v1.3.0 D2 终选（D2026-0925-01 补充裁决）：最高优先覆盖词表路径
     # 改变送入提示词的词条集合，必须参与指纹（空串=不启用，合法）
     "glossary_override_path",

@@ -1915,6 +1915,88 @@ def test_gate0_off_sends_hallucination_to_llm(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# 批4（2.7.0）件2：verbose 消费点（capsys 钉）——缺省零 [VERBOSE] 行，
+# 开 verbose 才出现诊断明细；缺省输出逐字节不变
+# ---------------------------------------------------------------------------
+
+class _FuzzyTM:
+    """仅实现 lookup_fuzzy 的假 TM（批4 件2① 命中明细钉）。"""
+
+    def __init__(self, hits):
+        self.hits = hits
+
+    def lookup_fuzzy(self, source, stage=0, threshold=0.8,
+                     source_lang=None, target_lang=None):
+        return self.hits.get(source, [])
+
+
+def test_verbose_tm_fuzzy_hits_logged(tmp_path, capsys):
+    """件2①：verbose=True 时逐条打印 TM 模糊命中明细（[VERBOSE] 前缀，
+    源句片段+TM 译片段+相似度），注入行为本身不变。"""
+    cfg = _make_cfg(tmp_path)
+    cfg.tm_fuzzy_inject = True
+    cfg.tm_fuzzy_threshold = 0.9
+    cfg.verbose = True
+    todo = _entries("こんにちは")
+    tm = _FuzzyTM({"こんにちは": [("こんにちは", "你好", 0.95)]})
+
+    out = pv._inject_stage_a_assists(cfg, todo, todo, tm)
+
+    captured = capsys.readouterr()
+    assert "[VERBOSE] TM 命中" in captured.out
+    assert "你好" in captured.out
+    assert "0.95" in captured.out
+    assert out[0]["text"].startswith("【参考译文】你好")
+
+
+def test_verbose_tm_fuzzy_hits_silent_by_default(tmp_path, capsys):
+    """件2①：缺省（verbose=False）零 [VERBOSE] 行，注入行为不变。"""
+    cfg = _make_cfg(tmp_path)
+    cfg.tm_fuzzy_inject = True
+    todo = _entries("こんにちは")
+    tm = _FuzzyTM({"こんにちは": [("こんにちは", "你好", 0.95)]})
+
+    out = pv._inject_stage_a_assists(cfg, todo, todo, tm)
+
+    captured = capsys.readouterr()
+    assert "[VERBOSE]" not in captured.out
+    assert out[0]["text"].startswith("【参考译文】你好")
+
+
+def test_verbose_gate0_and_phase_timing_logged(tmp_path, monkeypatch, capsys):
+    """件2②③：verbose=True 跑最小管线——出现 [VERBOSE] 闸门0 逐类删除
+    明细与阶段 A/B/final 耗时行；phase 事件 payload 不受影响（既有
+    gate0 payload 契约钉另测）。"""
+    cfg = _make_cfg(tmp_path)
+    cfg.verbose = True
+    in_srt = _write_gate0_srt(tmp_path)
+    fake = FakeClient()
+    _wire_gate0_e2e(tmp_path, monkeypatch, fake)
+
+    pv._run_single_v2(cfg, str(in_srt))
+
+    out = capsys.readouterr().out
+    assert "[VERBOSE] 闸门0" in out
+    assert "纯标点行" in out                    # 逐类删除计数
+    assert "[VERBOSE] 阶段A 耗时" in out
+    assert "[VERBOSE] 阶段B 耗时" in out
+    assert "[VERBOSE] 阶段final 耗时" in out
+
+
+def test_no_verbose_by_default(tmp_path, monkeypatch, capsys):
+    """缺省（verbose=False）：整条管线零 [VERBOSE] 行（缺省输出逐字节
+    不变的自证钉）。"""
+    cfg = _make_cfg(tmp_path)
+    in_srt = _write_gate0_srt(tmp_path)
+    fake = FakeClient()
+    _wire_gate0_e2e(tmp_path, monkeypatch, fake)
+
+    pv._run_single_v2(cfg, str(in_srt))
+
+    assert "[VERBOSE]" not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
 # D5：TM 指纹不得被命中簿记（hit_count 自增 / WAL 回放）击穿
 # ---------------------------------------------------------------------------
 

@@ -120,9 +120,10 @@
 
 - **批1 品牌统一第 2 层+数据根统一（全新安装口径，D2026-1004-04 拍板）**：GUI exe→SubTrans.exe+spec 改名 SubTrans.spec（docstring 全清）+DefaultDirName {autopf}\SubTrans+**数据根/Documents 输出统一 SubTrans（直接改默认值无迁移代码，owner 0 start 豁免原文入档）**+AUMID→Angelholl.SubTrans.GUI（常量+值级钉，永不变更纪律）+[InstallDelete]+uninstall.bat LNK6+Documents 提示串；批清单=docs/design/d270-批1-批清单.md（二级评议通过，C1-C5 已回写）；禁区表（AppId GUID/env 名/CLI 名/dev 运行时行为/numba 小写缓存目录等）；批1 首提交后 release workflow_dispatch 先行验证。
 - **批2 A′ UX 复审清单逐项重审** ✅ 已落库（D2026-1004-04 批序第二批；批清单=docs/design/d270-批2-批清单.md 二级评议通过 C1-C3）：枚举收口=A′ 6 项+横幅事实核对全一致维持+非 A′ 带 title 9 项（历史"11 项"名单未留存、以全仓双源勘探为唯一基准，映射留痕 C1）；改写 4 项=fallback_local（事实修正=失败行级接管）+profile 两级化+dict_jieba_desc（EXE 捆绑语义）+direction_title 双源漂移（strings.py"指令卡"→"角色卡"）；全复用既有键零新键零 id，基线 1902+4→1905+4（+3 钉：双键结构钉+direction 三源同值钉）；**挂起上报两行为缺陷**（①auto_glossary 外层闸缺 GUI 拼装通道=学习写入配置层全局不触发；②--verbose 旗标 refine 包无消费点——均 CLI/GUI 通吃，文案随行为修，owner 拍板后另批）；候选池=direction 两级化/conflict_block+gl1+gl2 补 title（解冻提案）。黑盒：jieba 描述新文案渲染+高级参数 tooltip 运行态全过（stub 桥环境；主题切换依赖后端链未验=零主题改动不适用）。
-- **批3 docs 勾账+文档级收敛（B 方案，D2026-1004-04）**：roadmap 2.6.4 节状态勘误（限状态行）+.pytest-* 残留清理+.gitignore 兜底；**README/手册主推 EXE 单一安装方式+保留三形态说明+开发者 fork 指引（代码零删改）**；命令引用 subtransjav-refine→安装目录 subtrans-cli.exe 语境；README/手册 %LOCALAPPDATA%\SubTransJAV 口径随数据根更名同步。
+- **批3 docs 勾账+文档级收敛（B 方案，D2026-1004-04）** ✅ 已落库（229bf8b）：roadmap 2.6.4 节状态勘误（限状态行）+.pytest-* 残留清理+.gitignore `/.pytest-*/` 兜底；**README/手册主推 EXE 单一安装方式+保留三形态说明+开发者 fork 指引（代码零删改）**；用户导向命令引用切安装目录 subtrans-cli.exe 语境（pip 语境保留）；README/手册 %LOCALAPPDATA%\SubTransJAV 口径随数据根更名同步；手册 1.1/1.2 标题纠正旧世代定位。
+- **批4 行为修复（本版问题清零，owner 拍板「这版本发现了就是版本修」）** ✅ 已落库：①学习闸接线——GUI 勾选学习词库同拼 --glossary-learn+--auto-glossary（api.py，双闸 AND 语义；auto_glossary 刻意不入指纹注释固化 manifest.py）；②--verbose 接通三诊断消费点（TM 模糊注入逐条命中/闸门0 判定明细/A·B·final·复用四处阶段耗时，[VERBOSE] 前缀+cfg.verbose 门控+stderr 既有通道，缺省输出逐字节不变，phase payload/事件协议/产物字节三面零触碰）；批清单=docs/design/d270-批4-批清单.md（二级评议 C1-C4 回写）；基线 1905+4→**1909+4**（+4 钉）；verbose 真跑冒烟+学习闸端到端（glossary_learned.csv 增量）归 owner 真机走查。
 - 挂起：CI 腿收敛（8→4）=deferred 候选未拍板不进 2.7（D2026-1004-04 ⑥）。
-- 发版：release/2.7.0 分支制；owner 真机全新下载首启验证（--where 新数据根+无迁移提示+任务栏分组）。
+- 发版：release/2.7.0 分支制；owner 真机全新下载首启验证（--where 新数据根+无迁移提示+任务栏分组+学习闸端到端+[VERBOSE] 冒烟）。
 
 ## 2.6.5 —— 词典链与 UX 修复版 ✅ 已发布（2026-10-04，tag v2.6.5→830ac23 release/2.6.5，Release id 402920447：SubTrans-setup-2.6.5.exe 50,816,598B sha256 AD5F9A77…87A02 核对一致+SHA256SUMS；notes 只写本版；CI 全绿+Mimosa 36 零新增 seal 9cc727ed；真机门② owner 真机 PASS"直连和代理下载没问题"）
 
