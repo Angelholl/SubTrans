@@ -161,3 +161,4 @@
 - 容器查询治本方案：不主动引入；触发=真机清单 F 节 DPI 探针实测异常再评估（decision-log:1939）
 - 审计积压 4 项挂起（2026-10-01 复核维持挂起，decision-log:1395；D2026-1001-03 收编）：v2_outputs "done" payload 消费端核查（触发=新增/改动消费端或结构时先核查）/ premerge_max_gap_s 移出指纹（触发=任一指纹/断点/恢复路径改动立项时先出兼容分析，无方案不得动指纹哈希面）/ tools 一次性脚本债务（笼统挂起）/ _pid_alive AccessDenied（psutil 硬依赖不可达，笼统挂起）
 - 首文件抽检历史观测（v1.3.0 时代，decision-log:1082）：考点=别停/クリ/部長で 误切；后续多轮实测无复发记录，触发=同类误切再现时复核
+- test_effective_dir_blacklist_falls_back windows 腿 flake 观测（2026-10-05，批4 CI 首现）：windows-3.13 单腿 AssertionError（tmp 路径竞速类），同 commit attempt 2 自愈全绿；本地 3.12 五连绿；与 2.6.5 候选B flake 同模式；**复发两次即升格为钉测试竞速修复专项，不逐次重跑**
