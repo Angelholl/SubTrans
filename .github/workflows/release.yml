@@ -85,6 +85,12 @@ jobs:
           if (-not (Test-Path "$root/_internal/jieba/dict.txt")) {
             Write-Error "MISSING artifact: $root/_internal/jieba/dict.txt（jieba 打包渠道失效?）"; exit 1
           }
+          # asr_runner 随包存在断言（2.7.1 件1 D2026-1005-01，评议 R6 与
+          # jieba 同款防打包漂移）：frozen 探测/转写走脚本路径直调，
+          # 落点须与 asr_env._runner_script_path() frozen 分支一致
+          if (-not (Test-Path "$root/_internal/subtransjav/refine/asr_runner.py")) {
+            Write-Error "MISSING artifact: $root/_internal/subtransjav/refine/asr_runner.py（asr_runner 随包失效?）"; exit 1
+          }
           # b) 冻结 CLI --dict-status 的 jieba 自检行必须是成功语义——
           #    仅"行存在"不算，FAIL/不可用必须让本 stage 红。
           #    中文断言先钉 UTF-8 输出解码（PYTHONUTF8=1 下子进程写 UTF-8，

@@ -2600,13 +2600,27 @@ class TranslateAPI:
             return {"running": False, "phase": "failed", "done": 0,
                     "total": 0, "last_line": "", "error": str(e)}
 
-    def refine_asr_status(self) -> dict[str, Any]:
+    def _asr_probe_cache_path(self) -> str:
+        """探测快照落点（tests 可 monkeypatch；fail-soft 返回 "" 禁用缓存）。"""
+        try:
+            from subtransjav.refine import asr_env
+            return asr_env.probe_cache_path()
+        except Exception:
+            return ""
+
+    def refine_asr_status(self, force: bool = False) -> dict[str, Any]:
         """零写路径探测＋已存 ASR 选择回显（设置 KV asr_model/asr_python）。
 
         2.6.1 修订（D2026-1002-06，模型推荐制）：新增 recommended（推荐
         清单逐条 present/path/expected_path）、models_dir/cache_dir（两处
         落位绝对路径）、crosscheck_enabled（设置 KV 回显）——下载链已删，
-        前端只展示"自备落位指引"。既有键全保留。"""
+        前端只展示"自备落位指引"。既有键全保留。
+        2.7.1（D2026-1005-01 承接批，评议 R5）：探测结果磁盘级快照缓存
+        （数据根 config/asr_probe_cache.json，TTL 10 分钟）——非 force 且
+        快照在龄→立即返回快照（probe_cached=True）；force（「重新探测」
+        按钮）或超龄/缺失→同步探测并写回快照。models_hf=HF hub cache
+        第 3 落位枚举（面板「需适配」来源）；triage/stderr_tail/ffmpeg_path
+        三分类诊断透出。"""
         try:
             asr_python = ""
             asr_model = ""
@@ -2621,7 +2635,16 @@ class TranslateAPI:
             except Exception:
                 pass
             from subtransjav.refine import asr_env
-            r = asr_env.probe_asr_env(asr_python_setting=asr_python)
+            cache_path = self._asr_probe_cache_path()
+            r: dict[str, Any] | None = None
+            probe_cached = False
+            if not force and cache_path:
+                r = asr_env.load_probe_cache(cache_path)
+                probe_cached = r is not None
+            if r is None:
+                r = asr_env.probe_asr_env(asr_python_setting=asr_python)
+                if cache_path:
+                    asr_env.save_probe_cache(r, cache_path)
             by_name = {m.get("name"): m for m in (r.get("models") or [])}
             recommended: list[dict[str, Any]] = []
             for entry in asr_env.ASR_RECOMMENDED_MODELS:
@@ -2638,6 +2661,8 @@ class TranslateAPI:
             r["models_dir"] = asr_env.ASR_MODELS_ROOT
             r["cache_dir"] = asr_env.ASR_CACHE_DIR
             r["crosscheck_enabled"] = crosscheck_enabled
+            r["probe_cached"] = probe_cached
+            r["probe_cache_path"] = cache_path
             r["success"] = True
             r["saved_model"] = asr_model
             r["saved_python"] = asr_python

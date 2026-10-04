@@ -50,6 +50,11 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   空态引导条删除，FROZEN_IDS 215→214；dict_empty_guide/dict_empty_cta
   两静态键随删，FROZEN_I18N_KEYS 189→187（空态语义改 JS 态键承接，
   零新增静态 id/data-i18n）。
+  2.7.1 D2026-1005-01 承接批：#asrRecList 推荐清单折叠区删除（模型管理
+  能力迁 AppModal models 面板），FROZEN_IDS 214→213；模型管理入口按钮走
+  .asr-models-btn class 锚+data-testid（零新增 id），asrEnvStatus 内三色
+  状态点由 JS 注入 span（零新增 id）；FROZEN_I18N_KEYS 187 不动（说明行/
+  折叠区均无静态键，模型管理面板全 JS 态键）。
 """
 import re
 from pathlib import Path
@@ -115,7 +120,7 @@ def test_r2_rhythm_tokens_frozen():
 FROZEN_IDS = frozenset(
     """
     aboutModal aboutVersion aggregateWindowSel aiModelInput aiProviderSel appModal addFilesBtn addFolderBtn asrCrosscheckToggle asrEnvStatus
-asrModelSel asrPythonInput asrRecList asrRefreshBtn asrStatus audioPreviewBar audioPreviewCloseBtn
+asrModelSel asrPythonInput asrRefreshBtn asrStatus audioPreviewBar audioPreviewCloseBtn
 audioPreviewError audioPreviewPlayer audioPreviewTiming browseOutputBtn clearBtn
 clearConsoleBtn consoleCollapseBtn consoleOutput dataRootBar dataRootCurrentPath
 dataRootRestoreBtn dataRootSourceTag dataRootStatus dataRootToggleBtn debugLogging

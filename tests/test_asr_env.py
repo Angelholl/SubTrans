@@ -131,6 +131,8 @@ def test_slice_clips_caps_and_cleans(monkeypatch, tmp_path):
 
 def test_slice_clips_no_ffmpeg_degrades(monkeypatch, tmp_path):
     monkeypatch.setattr(asr_env.shutil, "which", lambda n: None)
+    # 2.7.1 件1：候选目录扫描同读（防真机上游 env 目录恰好带 ffmpeg.exe 干扰）
+    monkeypatch.setattr(asr_env, "_candidate_ffmpeg_dirs", lambda p: [])
     r = asr_env.slice_clips(str(tmp_path / "m.mp4"), ["T1"])
     assert r["ok"] is False and "ffmpeg" in r["error"]
 
@@ -176,8 +178,11 @@ def test_asr_runner_import_chain_stdlib_only():
 # ---------------------------------------------------------------------------
 
 def test_recommended_models_shape():
-    """whisper 条目带 url/bytes/sha256（available）；qwen 条目 planned 无下载字段。"""
-    assert len(asr_env.ASR_RECOMMENDED_MODELS) == 2
+    """whisper 条目带 url/bytes/sha256（available）；qwen 条目 planned 无下载字段。
+
+    2.7.1：清单扩至 6 条（tiny/base/small/medium/large-v2/qwen3），whisper
+    条目带 tier/desc/spec/backend/variants 面板元数据。"""
+    assert len(asr_env.ASR_RECOMMENDED_MODELS) == 6
     w = next(e for e in asr_env.ASR_RECOMMENDED_MODELS
              if e["name"] == "whisper-large-v2")
     assert w["support"] == "available"
@@ -432,3 +437,355 @@ def test_analyze_injects_crosscheck_block_additively():
     assert "媒体重点对照（本地 ASR 重转写，非真值，仅供漏听/" in user
     assert "媒体对照内容ABC" in user
     # 空缺省：字节不变（回归既有 3 块口径由 test_quality_advisor 覆盖）
+
+
+# ---------------------------------------------------------------------------
+# 2.7.1（D2026-1005-01 承接批）：runner 定位/脚本直调、ffmpeg 泛化、探测
+# 三分类 triage、HF hub 三级 env 链、探测总预算、快照缓存、面板元数据
+# ---------------------------------------------------------------------------
+
+def test_runner_script_path_dev(monkeypatch):
+    """dev 形态：包内同目录 asr_runner.py 直取。"""
+    import sys
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    p = asr_env._runner_script_path()
+    assert p and Path(p).is_file() and Path(p).name == "asr_runner.py"
+
+
+def test_runner_script_path_frozen_internal(monkeypatch, tmp_path):
+    """frozen：exe 同目录 _internal/subtransjav/refine/asr_runner.py 命中。"""
+    import sys
+    exe = tmp_path / "SubTrans.exe"
+    exe.write_bytes(b"")
+    runner = (tmp_path / "_internal" / "subtransjav" / "refine"
+              / "asr_runner.py")
+    runner.parent.mkdir(parents=True)
+    runner.write_text("# runner", encoding="utf-8")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(exe), raising=False)
+    assert asr_env._runner_script_path() == str(runner)
+
+
+def test_runner_script_path_frozen_fallback_and_miss(monkeypatch, tmp_path):
+    """frozen 回退：_internal 缺失→exe 同目录；都无→空串。"""
+    import sys
+    exe = tmp_path / "SubTrans.exe"
+    exe.write_bytes(b"")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(exe), raising=False)
+    assert asr_env._runner_script_path() == ""
+    fb = tmp_path / "asr_runner.py"
+    fb.write_text("# runner", encoding="utf-8")
+    assert asr_env._runner_script_path() == str(fb)
+
+
+def test_runner_command_script_direct_and_dev_fallback(monkeypatch):
+    """脚本直调形态优先；定位失败回退 -m（dev-only，frozen 数据根无包）。"""
+    monkeypatch.setattr(asr_env, "_runner_script_path",
+                        lambda: "C:/r/asr_runner.py")
+    cmd = asr_env._runner_command("py.exe", "--selfcheck", "--model", "m")
+    assert cmd == ["py.exe", "C:/r/asr_runner.py", "--selfcheck",
+                   "--model", "m"]
+    monkeypatch.setattr(asr_env, "_runner_script_path", lambda: "")
+    cmd2 = asr_env._runner_command("py.exe", "--audio", "a.wav")
+    assert cmd2[:3] == ["py.exe", "-m", "subtransjav.refine.asr_runner"]
+
+
+def test_probe_selfcheck_uses_runner_script_path(monkeypatch, tmp_path):
+    """探测命令走脚本路径直调形态（无 -m 段）。"""
+    monkeypatch.setattr(asr_env, "_runner_script_path",
+                        lambda: str(tmp_path / "asr_runner.py"))
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "p.exe"))
+    (tmp_path / "p.exe").write_text("", encoding="utf-8")
+    monkeypatch.setattr(asr_env.shutil, "which", lambda n: None)
+    seen = {}
+
+    def _fake_run(cmd, **kw):
+        seen["cmd"] = cmd
+        return SimpleNamespace(returncode=0, stdout=json.dumps(
+            {"ok": True, "info": {"whisper_version": "3.1",
+                                  "model_present": True}}), stderr="")
+
+    monkeypatch.setattr(asr_env.subprocess, "run", _fake_run)
+    asr_env.probe_asr_env()
+    assert seen["cmd"][1] == str(tmp_path / "asr_runner.py")
+    assert "-m" not in seen["cmd"]
+
+
+def test_candidate_ffmpeg_dirs_layouts(tmp_path):
+    """候选目录：Library/bin、Scripts、python 目录、其父目录（去重）。"""
+    py = tmp_path / "env" / "python.exe"
+    (py.parent / "Library" / "bin").mkdir(parents=True)
+    (py.parent / "Scripts").mkdir(parents=True)
+    py.write_text("", encoding="utf-8")
+    dirs = asr_env._candidate_ffmpeg_dirs(str(py))
+    assert dirs == [str(py.parent / "Library" / "bin"),
+                    str(py.parent / "Scripts"), str(py.parent),
+                    str(tmp_path)]
+    assert asr_env._candidate_ffmpeg_dirs("") == []
+
+
+def test_resolve_ffmpeg_scans_upstream_dirs(monkeypatch, tmp_path):
+    """PATH 缺失时逐候选目录探测 ffmpeg.exe（Library/bin 先命中）。"""
+    py = tmp_path / "env" / "python.exe"
+    bin_dir = py.parent / "Library" / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "ffmpeg.exe").write_bytes(b"")
+    py.write_text("", encoding="utf-8")
+    monkeypatch.setattr(asr_env.shutil, "which", lambda n: None)
+    assert asr_env.resolve_ffmpeg(str(py)) == str(bin_dir / "ffmpeg.exe")
+
+
+def test_probe_triage_ok_and_ffmpeg_missing(monkeypatch, tmp_path):
+    """selfcheck 通过：ffmpeg 有→triage=ok；无→ffmpeg-missing。"""
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "p.exe"))
+    (tmp_path / "p.exe").write_text("", encoding="utf-8")
+    monkeypatch.setattr(asr_env, "ASR_CACHE_DIR", str(tmp_path / "c"))
+    monkeypatch.setattr(asr_env, "ASR_MODELS_ROOT", str(tmp_path / "r"))
+    monkeypatch.setattr(asr_env.subprocess, "run", lambda cmd, **kw: (
+        SimpleNamespace(returncode=0, stdout=json.dumps(
+            {"ok": True, "info": {"whisper_version": "3.1",
+                                  "model_present": True}}), stderr="")))
+    monkeypatch.setattr(asr_env.shutil, "which", lambda n: str(tmp_path / "ff"))
+    r = asr_env.probe_asr_env()
+    assert r["triage"] == "ok" and r["ffmpeg"] is True
+    monkeypatch.setattr(asr_env.shutil, "which", lambda n: None)
+    monkeypatch.setattr(asr_env, "_candidate_ffmpeg_dirs", lambda p: [])
+    r2 = asr_env.probe_asr_env()
+    assert r2["triage"] == "ffmpeg-missing" and r2["ffmpeg"] is False
+
+
+def test_probe_triage_whisper_import_failed_and_stderr_tail(monkeypatch,
+                                                            tmp_path):
+    """whisper 导入失败三分类 + stderr tail 截断透出。"""
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "p.exe"))
+    (tmp_path / "p.exe").write_text("", encoding="utf-8")
+    monkeypatch.setattr(asr_env.shutil, "which", lambda n: None)
+    monkeypatch.setattr(asr_env.subprocess, "run", lambda cmd, **kw: (
+        SimpleNamespace(returncode=1, stdout=json.dumps(
+            {"ok": False,
+             "error": "whisper 导入失败: No module named 'whisper'"},
+             ensure_ascii=False),
+            stderr="x" * 500)))
+    r = asr_env.probe_asr_env()
+    assert r["triage"] == "whisper-import-failed"
+    assert len(r["stderr_tail"]) == 200 and r["stderr_tail"] == "x" * 200
+
+
+def test_probe_triage_module_missing_and_python_unavailable(monkeypatch,
+                                                            tmp_path):
+    """其他模块缺失→module-missing；spawn 失败→python-unavailable。"""
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "p.exe"))
+    (tmp_path / "p.exe").write_text("", encoding="utf-8")
+    monkeypatch.setattr(asr_env.shutil, "which", lambda n: None)
+
+    def _raise_oserror(cmd, **kw):
+        raise OSError("spawn fail")
+
+    monkeypatch.setattr(asr_env.subprocess, "run", _raise_oserror)
+    r = asr_env.probe_asr_env()
+    assert r["triage"] == "python-unavailable"
+
+    monkeypatch.setattr(asr_env.subprocess, "run", lambda cmd, **kw: (
+        SimpleNamespace(returncode=1, stdout=json.dumps(
+            {"ok": False,
+             "error": "ModuleNotFoundError: No module named 'numpy'"}),
+            stderr="")))
+    r2 = asr_env.probe_asr_env()
+    assert r2["triage"] == "module-missing"
+
+
+def test_probe_total_budget_stops_loop(monkeypatch, tmp_path):
+    """探测总预算 90s：超时即止按已得结果返回（不再 spawn 子进程）。"""
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "p.exe"))
+    (tmp_path / "p.exe").write_text("", encoding="utf-8")
+    monkeypatch.setattr(asr_env, "_PROBE_TOTAL_BUDGET_S", -1.0)
+
+    def _fail_run(cmd, **kw):
+        raise AssertionError("超预算后不得再 spawn 子进程")
+
+    monkeypatch.setattr(asr_env.subprocess, "run", _fail_run)
+    r = asr_env.probe_asr_env()
+    assert r["available"] is False
+
+
+def _make_hf_repo(root, repo, files):
+    snap = root / ("models--" + repo.replace("/", "--")) / "snapshots" / "abc"
+    snap.mkdir(parents=True)
+    for name, size in files.items():
+        (snap / name).write_bytes(b"0" * size)
+    return snap
+
+
+def test_hf_hub_env_chain(monkeypatch, tmp_path):
+    """HF hub cache 三级 env 链：HF_HUB_CACHE→HF_HOME/hub→默认家目录。"""
+    import os
+    monkeypatch.delenv("HF_HUB_CACHE", raising=False)
+    monkeypatch.delenv("HF_HOME", raising=False)
+    d1 = tmp_path / "a"
+    d1.mkdir()
+    monkeypatch.setenv("HF_HUB_CACHE", str(d1))
+    assert asr_env.hf_hub_cache_dir() == d1
+    monkeypatch.delenv("HF_HUB_CACHE")
+    d2 = tmp_path / "b"
+    d2.mkdir()
+    monkeypatch.setenv("HF_HOME", str(d2))
+    assert asr_env.hf_hub_cache_dir() == d2 / "hub"
+    monkeypatch.delenv("HF_HOME")
+    default = (Path(os.path.expanduser("~")) / ".cache" / "huggingface"
+               / "hub")
+    assert asr_env.hf_hub_cache_dir() == default
+
+
+def test_hf_hub_enumeration_families_and_failsoft(monkeypatch, tmp_path):
+    """文件族识别：ct2/transformers 收录，无关目录跳过；限时/缺目录 fail-soft。"""
+    hub = tmp_path / "hub"
+    _make_hf_repo(hub, "Org/CT2Model", {"model.bin": 10,
+                                        "tokenizer.json": 2,
+                                        "vocabulary.txt": 1})
+    _make_hf_repo(hub, "Org/PTModel", {"model.safetensors": 20})
+    _make_hf_repo(hub, "Org/Empty", {"README.md": 1})
+    monkeypatch.setenv("HF_HUB_CACHE", str(hub))
+    out = asr_env.enumerate_hf_hub_models(budget_s=5)
+    got = {e["name"]: e for e in out}
+    assert set(got) == {"Org/CT2Model", "Org/PTModel"}
+    assert got["Org/CT2Model"]["format"] == "ct2"
+    assert got["Org/CT2Model"]["bytes"] == 13
+    assert got["Org/PTModel"]["format"] == "transformers"
+    assert got["Org/PTModel"]["source"] == "hf-hub"
+    assert got["Org/CT2Model"]["backend_state"] == "adapter-needed"
+    # 限时归零→空（fail-soft）
+    assert asr_env.enumerate_hf_hub_models(budget_s=0) == []
+    # 目录不存在→空
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "nope"))
+    assert asr_env.enumerate_hf_hub_models() == []
+
+
+def test_three_sources_merge_dedupe(monkeypatch, tmp_path):
+    """三落位合并去重：同名校验序 whisper-cache>data-root；HF 单列。"""
+    cache = tmp_path / "cache"
+    root = tmp_path / "root"
+    cache.mkdir()
+    root.mkdir()
+    (cache / "large-v2.pt").write_bytes(b"x" * asr_env._MODEL_MIN_BYTES)
+    (root / "large-v2.pt").write_bytes(
+        b"x" * (asr_env._MODEL_MIN_BYTES + 1))
+    (root / "tiny.pt").write_bytes(b"x" * asr_env._MODEL_MIN_BYTES)
+    monkeypatch.setattr(asr_env, "ASR_CACHE_DIR", str(cache))
+    monkeypatch.setattr(asr_env, "ASR_MODELS_ROOT", str(root))
+    cat = asr_env.enumerate_models_three_sources()
+    by_name = {m["name"]: m for m in cat["whisper"]}
+    assert set(by_name) == {"large-v2", "tiny"}
+    assert by_name["large-v2"]["source"] == "whisper-cache"
+    assert by_name["tiny"]["source"] == "data-root"
+
+
+def test_probe_cache_roundtrip_and_ttl(tmp_path):
+    """探测快照：落盘往返/超龄失效/损坏 fail-soft。"""
+    path = str(tmp_path / "asr_probe_cache.json")
+    assert asr_env.load_probe_cache(path) is None
+    assert asr_env.save_probe_cache({"available": True}, path) is True
+    assert asr_env.load_probe_cache(path) == {"available": True}
+    assert asr_env.load_probe_cache(path, max_age_s=-1) is None   # 超龄
+    Path(path).write_text("{broken", encoding="utf-8")
+    assert asr_env.load_probe_cache(path) is None
+
+
+def test_recommended_models_panel_metadata():
+    """面板元数据钉：tier/desc/spec/backend/variants + verified 硬门槛。"""
+    entries = {e["name"]: e for e in asr_env.ASR_RECOMMENDED_MODELS}
+    tiers = {e["tier"] for e in asr_env.ASR_RECOMMENDED_MODELS
+             if e["name"] != "qwen3-asr-1.7b"}
+    assert tiers == {"fast", "balanced", "precise"}
+    for e in entries.values():
+        assert e["desc"] and e["spec"] and e["backend"]
+        if e["backend"]["state"] != "planned":
+            assert e["variants"], e["name"]
+        assert 1 <= e["spec"]["speed"] <= 5
+        assert 1 <= e["spec"]["precision"] <= 5
+    # verified 硬门槛：tiny/base 实测核验=True；small/medium 未核验=False
+    assert entries["whisper-tiny"]["verified"] is True
+    assert entries["whisper-base"]["verified"] is True
+    assert entries["whisper-large-v2"]["verified"] is True
+    assert entries["whisper-small"]["verified"] is False
+    assert entries["whisper-medium"]["verified"] is False
+    assert "url" not in entries["whisper-small"]
+    assert entries["whisper-large-v2"]["spec"]["recommend"] is True
+    assert entries["whisper-large-v2"]["tier"] == "precise"
+    # 三态双门控：whisper 系 ready，qwen3 planned
+    assert entries["whisper-tiny"]["backend"]["state"] == "ready"
+    assert entries["qwen3-asr-1.7b"]["backend"]["state"] == "planned"
+    assert entries["qwen3-asr-1.7b"]["backend"]["type"] == "qwen3-asr-hf"
+
+
+def test_runner_direct_call_no_stdlib_hijack():
+    """2.7.1 热修回归钉①（指定差分）：venv python（无 whisper）直调 runner
+    脚本——预期失败="No module named 'whisper'"，而非 "No module named
+    'subtransjav'"（secrets.py 劫持消除的可区分失败面）。"""
+    import subprocess
+    import sys as _sys
+    runner = Path(asr_env.__file__).parent / "asr_runner.py"
+    proc = subprocess.run(
+        [_sys.executable, str(runner), "--selfcheck", "--model", "large-v2"],
+        capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+        cwd=str(Path(asr_env.__file__).parent))
+    lines = [ln for ln in (proc.stdout or "").splitlines()
+             if ln.strip().startswith("{")]
+    assert lines, f"runner 无 JSON 输出: {proc.stdout!r} {proc.stderr!r}"
+    payload = json.loads(lines[-1])
+    assert payload["ok"] is False
+    assert "No module named 'whisper'" in payload["error"]
+    assert "subtransjav" not in payload["error"],         "secrets.py 仍劫持标准库导入链（sys.path 自清失效）"
+
+
+def test_runner_direct_call_secrets_resolves_stdlib(tmp_path):
+    """2.7.1 热修回归钉②（机制差分，本机实测复现布局）：脚本目录含与标准库
+    同名 secrets.py + PYTHONPATH 注入 fake whisper（__version__=所引 secrets
+    模块路径）——直调 runner 后 secrets 必须解析到标准库而非脚本目录影子
+    （未修复时 sys.path[0]=脚本目录，影子先命中→version 指向影子文件）。"""
+    import os
+    import shutil
+    import subprocess
+    import sys as _sys
+    real_runner = Path(asr_env.__file__).parent / "asr_runner.py"
+    dir_a = tmp_path / "A"          # 脚本目录（含毒化 secrets 影子）
+    dir_b = tmp_path / "B"          # fake whisper（经 PYTHONPATH 注入）
+    dir_a.mkdir()
+    dir_b.mkdir()
+    shutil.copy(real_runner, dir_a / "asr_runner.py")
+    (dir_a / "secrets.py").write_text(
+        "from subtransjav import paths\n", encoding="utf-8")
+    (dir_b / "whisper.py").write_text(
+        "import secrets\n__version__ = secrets.__file__\n",
+        encoding="utf-8")
+    env = dict(os.environ, PYTHONPATH=str(dir_b))
+    proc = subprocess.run(
+        [_sys.executable, str(dir_a / "asr_runner.py"),
+         "--selfcheck", "--model", "large-v2"],
+        capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+        env=env, cwd=str(tmp_path))
+    lines = [ln for ln in (proc.stdout or "").splitlines()
+             if ln.strip().startswith("{")]
+    assert lines, f"runner 无 JSON 输出: {proc.stdout!r} {proc.stderr!r}"
+    payload = json.loads(lines[-1])
+    assert payload["ok"] is True, payload
+    ver = payload["info"]["whisper_version"]
+    assert Path(ver).name == "secrets.py"
+    assert dir_a not in Path(ver).resolve().parents,         f"secrets 仍被脚本目录影子劫持: {ver}"
+
+
+def test_recommended_models_tiny_base_verified_pins():
+    """tiny/base 官方资产元数据实测核验（2026-10-05 实下载 sha256 字节级
+    比对通过；sha256=URL 段=whisper 上游 _MODELS pin，与 large-v2 同标准）。"""
+    entries = {e["name"]: e for e in asr_env.ASR_RECOMMENDED_MODELS}
+    t = entries["whisper-tiny"]
+    assert t["bytes"] == 75572083
+    assert t["sha256"] == ("65147644a518d12f04e32d6f3b26facc3f8dd46e5390"
+                           "956a9424a650c0ce22b9")
+    assert t["url"].endswith("/tiny.pt")
+    assert t["sources"][0]["verified"] is True
+    assert t["sources"][0]["sha256"] == t["sha256"]
+    b = entries["whisper-base"]
+    assert b["bytes"] == 145262807
+    assert b["sha256"] == ("ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f"
+                           "668f8b0e6c6326e34e")

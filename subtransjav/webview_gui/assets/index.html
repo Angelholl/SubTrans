@@ -354,29 +354,25 @@
                  词典卡自引擎页整体迁入（注释/卡内 id/结构/顺序原样保留），
                  上下单列相邻，两卡自带 header 不加额外 block-title -->
             <div class="tab-page" id="tab-asrdict" data-testid="tab-asrdict">
-                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.6.1 修订
-                     D2026-1002-06 模型推荐制：删除内置下载链，改推荐清单+
-                     自备落位指引）。asr_panel_title 为静态键（+1，191→192 恰达
-                     cap）。
-                     批2 重整（D2026-1002-12 拍板点1，仅重排入口与文案，不加执行
-                     能力）：header 行（标题+重新探测）→ 状态行（asrEnvStatus 空态
-                     asr_env_undetected）→ 说明行（asr_entry_hint）→ 模型行
-                     （asrModelSel 空态占位 asrSelectPlaceholder + asrStatus）→
-                     开关行（asrCrosscheckToggle + asrPythonInput）→ 推荐清单。
-                     文案全 JS 态填充（bindDom），HTML 不留英文占位（静态钉
-                     禁硬编码英文按钮/开关文案残留）；id 零增减，说明行无
-                     独立 id（class 锚 .asr-entry-hint，id 预算余 0） -->
+                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.7.1 重整
+                     D2026-1005-01 承接批：删说明独立行（asr_entry 提示并入
+                     asrCrosscheckToggle 的 title 悬停）、删推荐清单折叠区
+                     （模型管理能力迁 AppModal models 面板；入口按钮走
+                     .asr-models-btn class 锚，零新增 id）。asrEnvStatus 状态行
+                     前置三色状态点由 JS 注入（.status-dot.asr-dot，复用既有
+                     状态点类，零新增 id/静态键）。
+                     结构序：header 行（标题+模型管理+重新探测）→ 状态行
+                     （asrEnvStatus）→ 模型行 → 开关行；文案全 JS 态填充
+                     （bindDom），HTML 不留英文占位 -->
                 <div class="form-card">
                     <div class="action-row">
                         <div class="form-card-header" data-i18n="asr_panel_title">ASR 模型（媒体重点对照）</div>
+                        <button type="button" class="btn btn-secondary btn-compact asr-models-btn" data-testid="asr-models-btn"><span></span></button>
                         <button type="button" id="asrRefreshBtn" class="btn btn-compact"><span></span></button>
                     </div>
                     <div class="section-content">
                         <div class="action-row">
                             <span id="asrEnvStatus" class="muted"></span>
-                        </div>
-                        <div class="action-row" style="margin-top:6px;">
-                            <span class="muted asr-entry-hint"></span>
                         </div>
                         <div class="field-row" style="margin-top:6px;">
                             <select id="asrModelSel" class="form-select compact" style="width:auto;"><option value="" disabled selected></option></select>
@@ -386,7 +382,6 @@
                             <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
                             <input id="asrPythonInput" class="form-input compact" style="width:auto; flex:1;">
                         </div>
-                        <div id="asrRecList" style="margin-top:6px; display:flex; flex-direction:column; gap:4px;"></div>
                     </div>
                 </div>
 

@@ -35,6 +35,11 @@ datas = [
     # （整目录递归拷贝，已覆盖 defaults/templates/**——通用角色卡随包内回落链走）
     (os.path.join(SPECPATH, "..", "subtransjav", "refine", "defaults"),
      os.path.join("subtransjav", "refine", "defaults")),
+    # asr_runner.py 单文件随包（2.7.1 件1 D2026-1005-01：frozen 上游
+    # python 脚本路径直调 asr_runner，不再依赖 -m 数据根包形态）；
+    # 落点与 asr_env._runner_script_path() frozen 分支逐字节一致
+    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "asr_runner.py"),
+     os.path.join("subtransjav", "refine", "asr_runner.py")),
 ]
 # 词典数据不进包（D3 去捆绑 D2026-1001）：sudachidict_core（system.dic 约
 # 208MB）不再随安装器分发，语法提示运行时 Dictionary() 失败走既有

@@ -661,6 +661,9 @@ def test_refine_asr_status_recommended_and_crosscheck(gui_api_obj, tmp_path,
                             "path": "C:/cache/large-v2.pt", "bytes": 3}]}
 
     monkeypatch.setattr(asr_env, "probe_asr_env", _fake_probe)
+    # 2.7.1：探测快照缓存路径隔离（防写真实数据根）
+    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
+                        lambda: str(tmp_path / "asr_probe_cache.json"))
     r = gui_api_obj.refine_asr_status()
     assert r["success"] is True
     recs = {e["name"]: e for e in r["recommended"]}
@@ -686,6 +689,8 @@ def test_refine_asr_status_crosscheck_default_false(gui_api_obj, tmp_path,
                         lambda: str(path))
     monkeypatch.setattr(asr_env, "probe_asr_env",
                         lambda asr_python_setting="": {"models": []})
+    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
+                        lambda: str(tmp_path / "asr_probe_cache.json"))
     r = gui_api_obj.refine_asr_status()
     assert r["success"] is True
     assert r["crosscheck_enabled"] is False
@@ -2983,3 +2988,66 @@ def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
     assert got["sources"]["sudachi_full"]["has_mirror"] is False
     assert got["sources"]["sudachi"]["has_mirror"] is True
     assert got["sources"]["sudachi"]["has_official"] is True
+
+
+# ---------------------------------------------------------------------------
+# 2.7.1（D2026-1005-01 承接批，评议 R5）：refine_asr_status 探测快照缓存
+# + 三落位枚举/三分类透出（models_hf/triage/probe_cached）
+# ---------------------------------------------------------------------------
+
+def test_refine_asr_status_probe_cache_roundtrip(gui_api_obj, tmp_path,
+                                                 monkeypatch):
+    """非 force 读快照立即返回（probe_cached=True）并回填 decorations；
+    force=True 绕过缓存重新探测；超龄缓存不命中。"""
+    from subtransjav.refine import asr_env
+    cache = tmp_path / "asr_probe_cache.json"
+    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
+                        lambda: str(cache))
+    calls = []
+    real_probe = asr_env.probe_asr_env
+
+    def _probe(asr_python_setting=""):
+        calls.append(1)
+        return real_probe(asr_python_setting="")
+
+    monkeypatch.setattr(asr_env, "probe_asr_env", _probe)
+    r1 = gui_api_obj.refine_asr_status()
+    assert r1["success"] is True and r1["probe_cached"] is False
+    assert len(calls) == 1
+    assert cache.is_file()
+    r2 = gui_api_obj.refine_asr_status()
+    assert r2["success"] is True and r2["probe_cached"] is True
+    assert len(calls) == 1                       # 快照命中，不再探测
+    assert r2["models_dir"] == asr_env.ASR_MODELS_ROOT
+    assert r2["crosscheck_enabled"] is False
+    r3 = gui_api_obj.refine_asr_status(force=True)
+    assert r3["probe_cached"] is False and len(calls) == 2
+    # 超龄失效
+    data = json.loads(cache.read_text(encoding="utf-8"))
+    data["timestamp"] -= 601
+    cache.write_text(json.dumps(data), encoding="utf-8")
+    r4 = gui_api_obj.refine_asr_status()
+    assert r4["probe_cached"] is False and len(calls) == 3
+
+
+def test_refine_asr_status_passthrough_triage_and_hf(gui_api_obj, tmp_path,
+                                                     monkeypatch):
+    """probe 结果的 triage/stderr_tail/models_hf/ffmpeg_path 原样透出。"""
+    from subtransjav.refine import asr_env
+
+    def _probe(asr_python_setting=""):
+        return {"available": False, "reason": "x", "models": [],
+                "models_hf": [{"name": "Org/m", "source": "hf-hub",
+                               "path": "p", "bytes": 1,
+                               "format": "ct2",
+                               "backend_state": "adapter-needed"}],
+                "ffmpeg": False, "ffmpeg_path": "",
+                "triage": "module-missing", "stderr_tail": "tail..."}
+    monkeypatch.setattr(asr_env, "probe_asr_env", _probe)
+    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
+                        lambda: str(tmp_path / "asr_probe_cache.json"))
+    r = gui_api_obj.refine_asr_status()
+    assert r["triage"] == "module-missing"
+    assert r["stderr_tail"] == "tail..."
+    assert r["models_hf"][0]["backend_state"] == "adapter-needed"
+    assert r["ffmpeg_path"] == ""

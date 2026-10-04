@@ -10,6 +10,7 @@ A dual-engine subtitle translation & refinement toolkit (evolved from the SubTra
 
 - **EXE 安装包（主推）**：普通用户只需读本节——到 [Releases](../../releases) 页下载安装包（`SubTrans-setup-*.exe`）双击安装即可；系统要求与安装步骤见下方[安装](#安装) ①。
 - 进阶 / 开发者：源码（`首次安装.bat`）或 pip 方式安装，见下方[安装](#安装) ②③。
+- 首次启动后应用会在后台自动检测上游 ASR 环境（短暂启动一次 Python 子进程，通常数秒）；检测期间不影响正常翻译操作，结果稍后显示在引擎页。
 
 本文档以中文为主体；英文用户可直接跳转 [English Quickstart](#english-quickstart)。
 

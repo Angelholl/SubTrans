@@ -27,6 +27,17 @@ import json
 import os
 import sys
 
+# 2.7.1 热修（本机实测复现）：脚本直调形态下 sys.path[0]=脚本所在目录
+# （refine/），目录内 secrets.py 与标准库 secrets 同名——上游 whisper 导入
+# 链的 `import secrets` 被劫持（refine/secrets.py 顶部 `from subtransjav
+# import paths` 在上游 env 无包必炸 → "No module named 'subtransjav'"）。
+# runner 自包含、不依赖其自身所在目录任何内容，把该目录从 sys.path 移除
+# （仅用 os/sys，C3 顶部标准库导入图钉不变）；-m/包形态导入时该目录本就
+# 不在 sys.path（或移除无害），行为不变。
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path[:] = [p for p in sys.path
+               if os.path.abspath(p or os.getcwd()) != _here]
+
 
 def _selfcheck(model: str, model_dir: str = "") -> int:
     info: dict = {"python": sys.version.split()[0], "cwd": os.getcwd()}

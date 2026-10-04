@@ -1004,8 +1004,9 @@ def test_batch3_system_summary_dynamic_rows_pinned():
         "摘要卡动态行不得新增静态锚（FROZEN_IDS 已满，行全由 JS 渲染）"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
     # 2.6.5 段2（D2026-1004-01 #4，B3 显式解冻）：#dictEmpty 删除，
-    # FROZEN_IDS 215→214 重钉
-    assert len(ids) == 214, f"id 全集数漂移（段2 解冻后契约 214 不变），实为 {len(ids)}"
+    # FROZEN_IDS 215→214 重钉；2.7.1（D2026-1005-01）：#asrRecList 删除，
+    # FROZEN_IDS 214→213（模型管理入口走 class 锚零新增 id）
+    assert len(ids) == 213, f"id 全集数漂移（2.7.1 解冻后契约 213 不变），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -1037,9 +1038,9 @@ def test_batch3_system_summary_dynamic_rows_pinned():
 
 
 def test_batch4_existing_anchors_no_regression():
-    """④既有锚不回归：.asr-entry-hint 与 AI 分析区四锚保留。"""
+    """④既有锚不回归：AI 分析区四锚保留（.asr-entry-hint 说明行已随
+    2.7.1 D2026-1005-01 删除，说明并入开关 title；见 ASR 面板批测试）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    assert 'class="muted asr-entry-hint"' in html, ".asr-entry-hint 锚回归"
     for dom_id in ("refineAiAnalyzeBtn", "refineAiAnalyzeStatus",
                    "refineAiResult", "refineBatchFixBtn"):
         assert f'id="{dom_id}"' in html, f"AI 分析区锚点丢失: {dom_id}"
@@ -1430,23 +1431,26 @@ def test_asr_card_restructured_no_hardcoded_english():
     card = html[start:end]
     for banned in ("Re-detect", "Media crosscheck", "upstream python"):
         assert banned not in card, f"ASR 卡残留硬编码英文: {banned}"
-    # 结构序：header 行（含按钮）→ asrEnvStatus → .asr-entry-hint →
-    # asrModelSel → asrCrosscheckToggle → asrRecList（id 全集不变，仅重排）
-    anchors = ['data-i18n="asr_panel_title"', 'id="asrRefreshBtn"',
-               'id="asrEnvStatus"', 'class="muted asr-entry-hint"',
+    # 结构序（2.7.1 D2026-1005-01）：header 行（标题+模型管理+重新探测）→
+    # asrEnvStatus → asrModelSel → asrCrosscheckToggle（说明行/推荐清单
+    # 折叠区已删：说明并入开关 title、模型管理迁 AppModal models 面板）
+    anchors = ['data-i18n="asr_panel_title"',
+               'class="btn btn-secondary btn-compact asr-models-btn"',
+               'id="asrRefreshBtn"', 'id="asrEnvStatus"',
                'id="asrModelSel"', 'id="asrStatus"',
-               'id="asrCrosscheckToggle"', 'id="asrPythonInput"',
-               'id="asrRecList"']
+               'id="asrCrosscheckToggle"', 'id="asrPythonInput"']
     pos = [card.index(a) for a in anchors]
-    assert pos == sorted(pos), "ASR 卡结构序漂移（header→状态→说明→模型→开关→推荐）"
-    # 无执行按钮：卡内 button 仅 asrRefreshBtn 一个
-    assert len(re.findall(r"<button\b", card)) == 1, \
-        "ASR 卡只允许「重新探测」一个按钮（不加执行能力）"
+    assert pos == sorted(pos), "ASR 卡结构序漂移（header→模型管理→探测→状态→模型→开关）"
+    assert 'data-testid="asr-models-btn"' in card, "模型管理入口 data-testid 缺失"
+    # 按钮口径：模型管理 + 重新探测 两个（2.7.1）
+    assert len(re.findall(r"<button\b", card)) == 2, \
+        "ASR 卡按钮=模型管理+重新探测两个（2.7.1 口径）"
     # JS 态文案填充钉 + asrSaved 保存成功门控
     bind = _extract_function(_app_js_source(), "bindDom")
     for frag in ("MSG.asrRefreshBtn", "MSG.asr_env_undetected",
-                 "MSG.asr_entry_hint", "MSG.asrSelectPlaceholder",
-                 "MSG.asrCrosscheckLabel", "MSG.asrPythonPlaceholder"):
+                 "MSG.asrModelsBtn", "MSG.asrSelectPlaceholder",
+                 "MSG.asrCrosscheckLabel", "MSG.asrCrosscheckTitle",
+                 "MSG.asrPythonPlaceholder"):
         assert frag in bind, f"bindDom 缺 ASR 卡 JS 态文案填充: {frag}"
     assert bind.count("MSG.asrSaved") == 3 and \
         bind.count("r.success ? MSG.asrSaved") == 3, \
@@ -1457,31 +1461,16 @@ def test_batch2_new_msg_keys_pinned():
     """批2 新增 JS 态 MSG 键存在（全中文文案，零静态 i18n 消耗）。"""
     src = _app_js_source()
     keys = _js_msg_keys()
-    for key in ("model_list_empty_hint", "asr_env_undetected",
-                "asr_entry_hint"):
+    for key in ("model_list_empty_hint", "asr_env_undetected"):
         assert key in keys, f"MSG 缺少批2新键: {key}"
         m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
         assert m and m.group(1), f"MSG 键 {key} 文案为空"
+    assert "asr_entry_hint" not in keys, "说明行独立键应随 2.7.1 删除（并入 asrCrosscheckTitle）"
 
 
 # ---------------------------------------------------------------------------
 # 2.6.2 热修：R3 ASR 推荐项长 URL 撑爆卡片 + R4 词典状态加载失败吞错
 # ---------------------------------------------------------------------------
-
-def test_asr_render_rec_list_details_fold_pinned():
-    """R3 回归钉：ASR 推荐项折叠为 details/summary，完整 URL 与 sha256
-    移入展开详情（.asr-rec-detail），summary 行只留来源分类文案
-    （hf-mirror.com=国内源，否则海外源），title 悬停可见完整 URL。"""
-    body = _extract_function(_app_js_source(), "asrRenderRecList")
-    assert "createElement('details')" in body, "推荐项必须折叠为 <details>"
-    assert "createElement('summary')" in body, "缺少 summary 摘要行"
-    assert "asr-rec-detail" in body, "展开详情容器缺失"
-    for key in ("MSG.asrSrcOverseas", "MSG.asrSrcDomestic"):
-        assert key in body, f"summary 来源分类缺少 {key}"
-    assert "hf-mirror.com" in body, "来源分类规则（hf-mirror.com=国内源）缺失"
-    assert re.search(r"\.title\s*=\s*[^;]*rec\.url", body), \
-        "summary 必须挂 title=完整 URL（悬停可见）"
-
 
 def test_dict_load_failure_not_swallowed_pinned():
     """R4 回归钉：dictLoad 链尾 catch 不得静默吞错，须回写 #dictStatus
@@ -1492,16 +1481,6 @@ def test_dict_load_failure_not_swallowed_pinned():
     assert ".catch(" in body, "dictLoad 必须保留 catch 链"
     assert body.count("MSG.dict_load_failed") >= 2, \
         "catch 回调必须回写 dictStatus 失败文案（MSG.dict_load_failed）"
-
-
-def test_asr_rec_detail_css_pinned():
-    """R3 配套 CSS：.asr-rec-detail 规则块在位且含长串断行
-    （word-break: break-all，先例 .media-source-path）。"""
-    css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    m = re.search(r"\.asr-rec-detail \{[^}]*\}", css)
-    assert m, "style.css 缺 .asr-rec-detail 规则"
-    assert "word-break: break-all" in m.group(0), \
-        ".asr-rec-detail 缺 word-break: break-all"
 
 
 # ---------------------------------------------------------------------------
@@ -1526,28 +1505,99 @@ def test_app_modal_download_pinned():
     assert "this._kind === 'download' && this._dlRunning" in settle, \
         "下载进行中 _settle 必须 no-op（无取消语义，评议员条件①）"
     keys = _js_msg_keys()
-    for key in ("asrDlNoCancel", "asrDlDone", "asrDlFailed", "ui_copied",
+    # 2.7.1：asrDlNoCancel 随旧源选择模态调用链删除（面板下载可关面板，
+    # 无"不支持取消"声明语义）；AppModal.download 方法体键保留
+    for key in ("asrDlStart", "asrDlDone", "asrDlFailed", "ui_copied",
                 "ui_copy_manual"):
         assert key in keys, f"MSG 缺少批B新键: {key}"
 
 
-def test_asr_rec_download_entry_pinned():
-    """ASR 推荐项下载入口：details 展开区「下载…」→ AppModal.download →
-    refine_asr_download + 1s 轮询 + settle 后 asrRefresh；PENDING 镜像
-    （!verified）前端同口径禁用。"""
+def test_asr_models_panel_pinned():
+    """2.7.1 件3（D2026-1005-01）：模型管理面板（AppModal kind='models'）。
+
+    复用 #appModal 骨架 + .modal-lg；body 全 createElement（零 id/data-i18n）；
+    评议 C3 守卫隔离：_settle 的 no-op 分支只命中 download kind，models
+    关闭永不阻塞；下载行内进度复用 .dl-progress-*、诊断网格复用
+    .dict-diag-grid；三态双门控 + verified 硬门槛（未核验禁下载）；
+    重开面板经 refine_asr_download_progress 恢复轮询。"""
     src = _app_js_source()
-    body = _extract_function(src, "asrRenderRecList")
-    assert "MSG.asrDownloadBtn" in body, "下载按钮文案键缺失"
-    assert "asrDownloadModal(rec)" in body, "下载模态调用缺失"
-    dl = _extract_function(src, "asrDownloadModal")
-    assert "refine_asr_download(" in dl, "下载桥调用缺失"
-    assert "refine_asr_download_progress(" in dl, "进度轮询桥缺失"
-    assert "setInterval" in dl, "1s 轮询缺失"
-    assert "asrRefresh()" in dl, "settle 后刷新推荐清单缺失"
-    assert "!s.verified" in dl, "PENDING 镜像禁用判定缺失"
-    assert "MSG.srcMirrorPendingHint" in dl, "禁用卡 hint 文案键缺失"
-    assert "MSG.asrDlNoCancel" in dl, "无取消声明文案缺失"
-    assert "MSG.dictFallbackNotice" in dl, "回退提示文案键缺失"
+    assert "models(opts)" in src, "AppModal.models 缺失"
+    body = _extract_function(src, "models")
+    assert "mp-body" in body and "modal-lg" in body, "骨架扩宽/样式类缺失"
+    assert "createElement" in body, "面板须 createElement 注入"
+    assert "mp-tier" in body, "三档分组缺失"
+    assert "mp-chip-ready" in body and "mp-chip-adapter" in body         and "mp-chip-planned" in body, "三态 chip 缺失"
+    assert "mp-dot" in body and "filled" in body, "五格点阵缺失"
+    assert "dl-progress-bar" in body, "行内进度须复用 .dl-progress-*"
+    assert "dict-diag-grid" in body, "失败诊断网格须复用 .dict-diag-grid"
+    assert "refine_asr_download(" in body, "下载桥调用缺失"
+    assert "refine_asr_download_progress(" in body, "进度快照桥缺失"
+    assert "startPolling" in body, "重开恢复轮询缺失"
+    assert "MB/s" in body, "前端增量 MB/s 计算缺失"
+    assert "entry.verified !== true" in body, "verified 硬门槛缺失"
+    assert "MSG.mpAdapterTitle" in body and "MSG.mpUnverifiedTitle" in body         and "MSG.mpPlannedTitle" in body, "三态禁用 tooltip 文案缺失"
+    assert "MSG.mpUnadaptedBanner" in body, "未适配 banner 缺失"
+    assert "MSG.mpPathWhisper" in body and "MSG.mpPathData" in body,         "路径栏两行缺失"
+    # C3：_settle 不含 models 分支（关闭永不阻塞）
+    settle = _extract_function(src, "_settle")
+    assert "_kind === 'models'" not in settle,         "models kind 不得进 _settle 阻塞守卫（评议 C3）"
+    # 入口链：bindDom 绑 .asr-models-btn → asrOpenModelsPanel → AppModal.models
+    bind = _extract_function(src, "bindDom")
+    assert "asrOpenModelsPanel()" in bind, "面板入口绑定缺失"
+    openfn = _extract_function(src, "asrOpenModelsPanel")
+    assert "AppModal.models(" in openfn, "面板打开调用缺失"
+    assert "MSG.mpNeedProbe" in openfn, "无探测结果引导缺失"
+
+def test_asr_d271_msg_keys_pinned():
+    """2.7.1 新增 JS 态 MSG 键定向断言（评议 C1：JS 态键不受静态 cap 200
+    约束，由本测试守护）；红绿灯/下拉来源标注/三态文案/死键清理同钉。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    new_keys = (
+        "asrProbeUpstreamOk", "asrCrosscheckTitle", "asrModelsBtn",
+        "mpTitle", "mpPathWhisper", "mpPathData", "mpOpenDir",
+        "mpUnadaptedBanner", "mpTierFast", "mpTierBalanced", "mpTierPrecise",
+        "mpSpeedLabel", "mpPrecisionLabel", "mpSpecNote", "mpStateReady",
+        "mpStateAdapter", "mpStatePlanned", "mpUnverifiedTitle",
+        "mpAdapterTitle", "mpPlannedTitle", "mpVariantsLabel", "mpNeedProbe",
+    )
+    for key in new_keys:
+        assert key in keys, f"MSG 缺少 2.7.1 新键: {key}"
+    # 死键清理钉：旧键随调用链删除
+    for dead in ("asr_entry_hint", "asrRecTitle", "asrPresent", "asrMissing",
+                 "asrPlanned", "asrSrcOverseas", "asrSrcDomestic",
+                 "asrPlaceHint", "asrDownloadTitle", "asrDlNoCancel"):
+        assert dead not in keys, f"2.7.1 死键残留: {dead}"
+    # 红绿灯：三色点注入 + 三态映射（asrApplyEnvStatus）
+    fn = _extract_function(src, "asrApplyEnvStatus")
+    assert "status-dot asr-dot" in fn, "状态点 class 缺失"
+    assert "dot-ok" in fn and "dot-warn" in fn and "dot-err" in fn,         "三色点映射缺失"
+    assert "ffmpeg-missing" in fn and "python-unavailable" in fn,         "triage 映射缺失（whisper-import-failed/module-missing 归红档 else 分支）"
+    # 下拉：来源标注 + 完整路径 title + qwen 占位删除
+    refresh = _extract_function(src, "asrRefresh")
+    assert "ASR_SOURCE_LABELS" in refresh, "下拉来源标注缺失"
+    assert "o.title = m.path" in refresh, "option title=完整路径缺失"
+    assert "__qwen__" not in src, "qwen disabled 占位应已删除"
+    assert "force === true" in refresh, "force 绕过缓存参数缺失"
+    # 首启空闲探测 + ASR 页懒探测钩子
+    assert "refine_asr_status()" in src, "首启后台探测缺失"
+    assert "__asrTabHook" in src, "ASR 页懒探测钩子缺失"
+
+
+def test_asr_d271_residue_pinned():
+    """grep 自证钉：删除面残留=0（推荐清单折叠区/入口说明行/旧下载模态）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    src = _app_js_source()
+    for banned in ("asrRecList", "asr-entry-hint", "asr-rec-item",
+                   "asr-rec-detail", "asr-rec-actions"):
+        assert banned not in html, f"index.html 残留: {banned}"
+        assert banned not in src, f"app.js 残留: {banned}"
+        assert banned not in css, f"style.css 残留: {banned}"
+    # 2.7.1 组件样式族在位（.mp-*），三色点扩展在位
+    assert ".mp-tier" in css and ".mp-chip-ready" in css, ".mp-* 样式缺失"
+    assert ".mp-dot.filled" in css, "点阵样式缺失"
+    assert ".status-dot.dot-ok" in css and ".status-dot.dot-err" in css,         "三色点样式缺失"
 
 
 def test_dict_source_buttons_pinned():
@@ -1820,12 +1870,13 @@ def test_batch_d_modal_enter_branch_excludes_editor_pinned():
     排除 alert 与 editor——编辑器 textarea 敲回车是换行，不得触发
     _settle（keydown 先于 input 事件，首个回车 dirty 尚未置位会静默
     关闭；已有 dirty 则每次回车误弹放弃确认）。_open/download/editor
-    三处同款绑定运行时只注册最先打开的一份，故逐一断言防单点回改；
-    alert/download 既有行为零变化。"""
+    四处同款绑定运行时只注册最先打开的一份，故逐一断言防单点回改；
+    alert/download 既有行为零变化。2.7.1：models 面板同款绑定（Enter=关闭，
+    面板无文本输入语义）。"""
     src = _app_js_source()
     conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
-    assert len(conds) == 3, \
-        f"keydown Enter 分支应恰三处（_open/download/editor），实得 {len(conds)}"
+    assert len(conds) == 4, \
+        f"keydown Enter 分支应恰四处（_open/download/editor/models），实得 {len(conds)}"
     for cond in conds:
         assert "AppModal._kind !== 'alert'" in cond, \
             f"Enter 分支缺 alert 排除: {cond}"

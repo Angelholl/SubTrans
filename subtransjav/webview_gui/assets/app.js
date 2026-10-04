@@ -556,33 +556,46 @@ const MSG = {
     asrProbeReady: (ver, m) => `上游 ASR 就绪（whisper ${ver}｜模型缓存 ${m}）`,
     asrProbeNoModel: '模型缓存缺失（可自备推荐模型）',
     asrProbeFail: e => `上游 ASR 不可用：${e}`,
+    // 2.7.1（D2026-1005-01 承接批）：红绿灯🟡档文案（上游通但缺模型/缺 ffmpeg）
+    asrProbeUpstreamOk: '上游环境可达；模型或 ffmpeg 有缺口——打开「模型管理」查看/补齐',
     asrSelectPlaceholder: '选择 ASR 模型（媒体重点对照用）',
     asrSaved: '已保存 ASR 模型选择',
     // 批2（D2026-1002-12 拍板点1）：ASR 卡重整空态/说明文案（JS 态零静态键）
     asr_env_undetected: '未探测——点击「重新探测」检测本机 ASR 环境',
-    asr_entry_hint: '用于翻译完成后对媒体切片做本地重转写重点对照；须自备上游 Python 环境，未配置不影响正常翻译。',
     asrCrosscheckNote: n => `；本地转写 ${n} 段对照`,
-    // 2.6.1 修订（D2026-1002-06，模型推荐制）：删下载文案，改推荐清单/
-    // 自备落位指引/验证开关（JS 态零静态键消耗）
+    // 2.6.1 修订（D2026-1002-06，模型推荐制）；2.7.1：入口说明独立行删除
+    // （asr_entry 系提示并入开关 title 悬停，asrCrosscheckTitle）
     asrCrosscheckLabel: '启用媒体重点对照（本地切片重转写验证）',
-    asrRecTitle: '推荐模型（项目不内置下载，按提示自备落位）',
-    asrPresent: '已就位',
-    asrMissing: '未就位',
-    asrPlanned: '规划中·自备',
-    asrSrcOverseas: '海外源',
-    asrSrcDomestic: '国内源',
-    asrPlaceHint: (cacheDir, modelsDir, fileName) =>
-      `落位（文件名须为 ${fileName}）：优先放入默认缓存 ${cacheDir}（零配置），或应用数据目录 ${modelsDir}（备选）`,
+    asrCrosscheckTitle: '用于翻译完成后对媒体切片做本地重转写重点对照；须自备上游 Python 环境，未配置不影响正常翻译。',
     asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
+    // 2.7.1 模型管理面板（D2026-1005-01 承接批，AppModal kind='models'；
+    // 全 JS 态键不受静态 cap 200 约束，由 test_gui_js_static 定向断言守护）
+    asrModelsBtn: '模型管理',
+    mpTitle: 'ASR 模型管理',
+    mpPathWhisper: 'Whisper 默认缓存',
+    mpPathData: '应用模型目录',
+    mpOpenDir: '打开文件夹',
+    mpUnadaptedBanner: n => `检测到 ${n} 个 HF hub 模型尚未适配当前后端（CT2/transformers 布局）；适配器上线（2.8.0）后此处可直接选用。`,
+    mpTierFast: '快速档 · 内存 ≤2GB',
+    mpTierBalanced: '均衡档',
+    mpTierPrecise: '高精档 · 内存 ≥8GB',
+    mpSpeedLabel: '速度',
+    mpPrecisionLabel: '精度',
+    mpSpecNote: '推荐参考：静态评定，非实测',
+    mpStateReady: '可用',
+    mpStateAdapter: '需适配',
+    mpStatePlanned: '规划中',
+    mpUnverifiedTitle: '下载元数据未核验：请自备落位（2.7.2 逐档开放下载）',
+    mpAdapterTitle: '后端未适配（仅展示）',
+    mpPlannedTitle: '规划中（2.9.0 适配器上线后可用）',
+    mpVariantsLabel: '变体',
+    mpNeedProbe: '暂无探测结果——请先点击「重新探测」',
     // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：ASR 下载器 + 词典
     // 源选择（全 JS 态键，零静态 i18n 消耗；index.html 冻结期 body 全 createElement）
+    // 2.7.1：下载标题/元信息行键随旧源选择模态链删除
+    // （面板下载行内化）；asrDlStart/asrDlDone/asrDlFailed/asrDlNoCancel 为
+    // AppModal.download 方法体内引用+定向钉，保留
     asrDownloadBtn: '下载…',
-    asrDownloadTitle: '下载模型',
-    asrDlMetaSource: '来源',
-    asrDlMetaSize: '大小',
-    asrDlMetaSha: 'sha256',
-    asrDlMetaLicense: '许可证',
-    asrDlNoCancel: '下载不支持暂停/取消；中途关闭应用即中断，重新下载将从零开始',
     asrDlStart: '开始下载',
     asrDlDone: '下载完成',
     asrDlFailed: '下载失败',
@@ -716,7 +729,9 @@ const AppModal = {
     _settle(value) {
         if (!this._busy) return;
         // 2.6.3 批B：下载进行中 ESC/遮罩点击/取消键全部 no-op（无取消语义，
-        // 评议员条件①；完成/失败后 _dlRunning 复位，关闭键恢复可用）
+        // 评议员条件①；完成/失败后 _dlRunning 复位，关闭键恢复可用）。
+        // 2.7.1 评议 C3：该 no-op 分支仅命中 download kind——models kind
+        // 不复用 _dlRunning 布尔，关闭永不阻塞（下载后台继续）。
         if (this._kind === 'download' && this._dlRunning) return;
         // 2.6.3 批D：编辑器保存进行中禁止关闭（同 _dlRunning 先例）；
         // 有未保存修改先走放弃确认守卫（确认后经 _settle 正式结算）
@@ -1263,6 +1278,382 @@ const AppModal = {
         }
         this._edSaving = false;
         this._edConfirming = false;
+    },
+
+    // ============================================================
+    // 模型管理模态（2.7.1 件3，D2026-1005-01 承接批）：AppModal kind='models'，
+    // 720px .modal-lg（复用编辑器同款骨架扩宽）。body 全 createElement 注入
+    // （全 class+data-testid，零新增 id/data-i18n）。
+    // _settle 守卫隔离（评议 C3）：models kind 不复用 _dlRunning 布尔——
+    // _settle 的 no-op 分支仅命中 download kind，models 关闭永不阻塞；
+    // 下载由后端同步桥承载（关面板不终止），重开面板经
+    // refine_asr_download_progress 快照恢复显示（进程内 _ASR_DOWNLOAD_PROGRESS）。
+    // 布局：路径栏→未适配 banner→三档分组（档间可折叠）→模型行
+    // （名称+描述+速度/精度五格点阵·静态评定+大小+下载按钮+推荐★）→
+    // 变体行内展开→下载行内进度（.dl-progress-* 复用+前端增量 MB/s）→
+    // 失败诊断网格（.dict-diag-grid 复用）。
+    // 三态双门控：backend_state ready=绿 chip 可下载/adapter-needed=琥珀
+    // 禁用+不入下拉/planned=灰禁用；verified==False 额外禁下载（件5 硬门槛）。
+    // opts = {probe: <refine_asr_status 结果>, onFinished?: 下载收尾回调}
+    // ============================================================
+    models(opts) {
+        if (this._busy) return Promise.resolve(false);      // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve(false);           // 骨架缺席兜底
+        const o = opts || {};
+        const probe = o.probe || {};
+        const api = window.pywebview && window.pywebview.api;
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = MSG.mpTitle;
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';
+        body.classList.add('mp-body');
+        const card = root.querySelector('.modal-card');
+        if (card) card.classList.add('modal-lg');
+        input.style.display = 'none';
+        okBtn.style.display = 'none';       // 关闭语义由取消键承载
+        okBtn.textContent = '';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                if (e.target === root) AppModal._settle(AppModal._cancelValue());
+            });
+            cancelBtn.addEventListener('click', () =>
+                AppModal._settle(AppModal._cancelValue()));
+            document.addEventListener('keydown', (e) => {
+                if (!AppModal._busy) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert'
+                           && AppModal._kind !== 'editor') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                }
+            });
+        }
+
+        // —— 轮询登记表（关面板统一清理；进度数据在 _ASR_DOWNLOAD_PROGRESS）——
+        const polls = {};
+        const stopAllPolls = () => {
+            Object.keys(polls).forEach((k) => {
+                clearInterval(polls[k]);
+                delete polls[k];
+            });
+        };
+
+        const fmtMB = (n) => (n / 1048576).toFixed(1);
+        // fmtGB 本地版：模块级同名函数在 RefineUI IIFE 闭包内（:4730），
+        // AppModal 顶层对象不可见（黑盒抓缺陷：ReferenceError 中断面板渲染）
+        const fmtGB = (n) => Math.round(n / 1073741824 * 10) / 10 + 'GB';
+        const el = (tag, cls, text) => {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text != null) n.textContent = text;
+            return n;
+        };
+
+        // —— 路径栏（whisper 缓存+应用数据目录两行，各带「打开文件夹」）——
+        const pathBox = el('div', 'mp-paths');
+        [
+            [MSG.mpPathWhisper, probe.cache_dir || ''],
+            [MSG.mpPathData, probe.models_dir || ''],
+        ].forEach(([label, dir]) => {
+            const row = el('div', 'mp-path-row');
+            row.appendChild(el('span', 'mp-path-label', label));
+            const p = el('span', 'mp-path-val', dir);
+            p.title = dir;
+            row.appendChild(p);
+            const btn = el('button', 'btn btn-ghost btn-compact mp-path-open',
+                           MSG.mpOpenDir);
+            btn.type = 'button';
+            btn.addEventListener('click', () => {
+                if (typeof openDir === 'function') openDir(dir);
+            });
+            row.appendChild(btn);
+            pathBox.appendChild(row);
+        });
+        body.appendChild(pathBox);
+
+        // —— 未适配 banner（探测到 N 个未适配模型时显示；全面板唯一长文案位）——
+        const hf = probe.models_hf || [];
+        if (hf.length) {
+            body.appendChild(el('div', 'mp-banner hint-warn',
+                                MSG.mpUnadaptedBanner(hf.length)));
+        }
+
+        // —— 模型行构造（三态双门控；下载行内进度+MB/s 增量；失败诊断网格）——
+        const rowBind = {};     // name -> {startPolling, setPresent}
+        const renderModelRow = (entry) => {
+            const state = (entry.backend && entry.backend.state) || 'planned';
+            const row = el('div', 'mp-row mp-row-' + state);
+            row.dataset.mpModel = entry.name;
+            // 名称行：名称+推荐★（内联 Lucide star，色 --warn）+三态 chip
+            const head = el('div', 'mp-row-head');
+            head.appendChild(el('span', 'mp-row-name', entry.name));
+            if (entry.spec && entry.spec.recommend) {
+                const star = el('span', 'mp-star');
+                star.title = MSG.mpSpecNote;
+                star.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13"'
+                    + ' fill="var(--warn)" stroke="var(--warn)" stroke-width="1"'
+                    + ' stroke-linecap="round" stroke-linejoin="round"'
+                    + ' aria-hidden="true"><polygon points="12 2 15.09 8.26 22'
+                    + ' 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2'
+                    + ' 9.27 8.91 8.26 12 2"/></svg>';
+                head.appendChild(star);
+            }
+            const chipCls = state === 'ready' ? 'mp-chip-ready'
+                : (state === 'adapter-needed' ? 'mp-chip-adapter'
+                   : 'mp-chip-planned');
+            const chipLabel = state === 'ready' ? MSG.mpStateReady
+                : (state === 'adapter-needed' ? MSG.mpStateAdapter
+                   : MSG.mpStatePlanned);
+            head.appendChild(el('span', 'mp-chip ' + chipCls, chipLabel));
+            if (entry.present) head.appendChild(el('span', 'mp-present',
+                                                   '✓ ' + MSG.mpStateReady));
+            row.appendChild(head);
+            if (entry.desc) row.appendChild(el('div', 'mp-row-desc',
+                                               entry.desc));
+            // 五格点阵（静态评定，标注非实测）：速度+精度两行
+            const spec = entry.spec || {};
+            const matrix = el('div', 'mp-dots-wrap');
+            [['mpSpeedLabel', spec.speed], ['mpPrecisionLabel', spec.precision]]
+              .forEach(([key, val]) => {
+                const line = el('div', 'mp-dots-row');
+                line.appendChild(el('span', 'mp-dots-label', MSG[key]));
+                const dots = el('span', 'mp-dots');
+                dots.dataset.mpSpecNote = MSG.mpSpecNote;
+                for (let i = 1; i <= 5; i++) {
+                    dots.appendChild(el('span', 'mp-dot'
+                        + (i <= (val || 0) ? ' filled' : '')));
+                }
+                line.appendChild(dots);
+                matrix.appendChild(line);
+            });
+            row.appendChild(matrix);
+            // 元信息行：大小+变体行内展开
+            const meta = el('div', 'mp-row-meta');
+            if (entry.bytes) meta.appendChild(el('span', 'mp-size',
+                                                 fmtGB(entry.bytes)));
+            const variants = entry.variants || [];
+            if (variants.length) {
+                const det = el('details', 'mp-variants');
+                det.appendChild(el('summary', 'mp-variants-summary',
+                                   MSG.mpVariantsLabel + '（'
+                                   + variants.length + '）'));
+                variants.forEach((v) => {
+                    const vRow = el('div', 'mp-variant-row');
+                    vRow.appendChild(el('span', 'mp-variant-name', v.name));
+                    const vOk = v.state === 'ready';
+                    vRow.appendChild(el('span',
+                        'mp-chip ' + (vOk ? 'mp-chip-ready'
+                                          : 'mp-chip-adapter'),
+                        (vOk ? '✓ ' : '') + (vOk ? MSG.mpStateReady
+                                                 : MSG.mpStateAdapter)));
+                    if (v.note) vRow.title = v.note;
+                    det.appendChild(vRow);
+                });
+                meta.appendChild(det);
+            }
+            row.appendChild(meta);
+            // 下载行内进度（复用 .dl-progress-*）+ 失败诊断网格
+            const prog = el('div', 'dl-progress mp-progress');
+            prog.style.display = 'none';
+            const bar = el('div', 'dl-progress-bar');
+            const fill = el('div', 'dl-progress-fill');
+            bar.appendChild(fill);
+            const text = el('div', 'dl-progress-text');
+            prog.appendChild(bar);
+            prog.appendChild(text);
+            row.appendChild(prog);
+            const diag = el('div', 'dict-diag-grid mp-diag');
+            diag.style.display = 'none';
+            const showDiag = (r) => {
+                diag.textContent = '';
+                const items = [
+                    ['错误', (r && (r.error || r.message)) || ''],
+                    ['模型', entry.name],
+                    ['来源', (probe.python_source && probe.python) || ''],
+                ];
+                items.forEach(([k, v]) => {
+                    if (!v) return;
+                    diag.appendChild(el('span', 'k', k));
+                    diag.appendChild(el('span', 'v', String(v)));
+                });
+                diag.style.display = diag.children.length ? '' : 'none';
+            };
+            row.appendChild(diag);
+            // 下载按钮（三态双门控+verified 硬门槛）
+            const actions = el('div', 'mp-row-actions');
+            const dlBtn = el('button', 'btn btn-secondary btn-compact mp-dl-btn',
+                             MSG.asrDownloadBtn);
+            dlBtn.type = 'button';
+            let dlRunning = false;
+            const startPolling = () => {
+                prog.style.display = '';
+                let lastBytes = 0;
+                let lastT = 0;
+                const poll = setInterval(async () => {
+                    if (!api || !api.refine_asr_download_progress) return;
+                    try {
+                        const p = await api
+                          .refine_asr_download_progress(entry.model
+                                                        || entry.name);
+                        if (!(p && p.success && p.phase)) return;
+                        if (p.phase === 'download' && p.total) {
+                            bar.classList.remove('indeterminate');
+                            const dl = p.downloaded || 0;
+                            fill.style.width = Math.min(100, Math.round(
+                                dl / p.total * 100)) + '%';
+                            let speed = '';
+                            if (lastT && dl >= lastBytes) {
+                                const dt = (Date.now() - lastT) / 1000;
+                                if (dt > 0) {
+                                    speed = '｜' + ((dl - lastBytes)
+                                        / 1048576 / dt).toFixed(1) + 'MB/s';
+                                }
+                            }
+                            lastBytes = dl;
+                            lastT = Date.now();
+                            text.textContent = fmtMB(dl) + '/'
+                                + fmtMB(p.total) + 'MB' + speed
+                                + (p.note ? '｜' + p.note : '');
+                        } else if (p.phase === 'verify') {
+                            bar.classList.add('indeterminate');
+                            text.textContent = MSG.dict_verify
+                                + (p.note ? '｜' + p.note : '');
+                        } else if (p.phase === 'done') {
+                            bar.classList.remove('indeterminate');
+                            fill.style.width = '100%';
+                            text.textContent = MSG.asrDlDone;
+                        } else if (p.phase === 'failed') {
+                            bar.classList.add('indeterminate');
+                            text.textContent = MSG.asrDlFailed
+                                + (p.error ? '：' + p.error : '');
+                            showDiag(p);
+                        }
+                    } catch (e) { /* 进度轮询失败不干扰主流程 */ }
+                }, 1000);
+                polls[entry.name] = poll;
+            };
+            const finishOk = () => {
+                dlRunning = false;
+                prog.style.display = 'none';
+                dlBtn.style.display = 'none';
+                if (!entry.present) {
+                    entry.present = true;
+                    head.appendChild(el('span', 'mp-present',
+                                        '✓ ' + MSG.mpStateReady));
+                }
+                if (typeof o.onFinished === 'function') o.onFinished();
+            };
+            const finishFail = (r) => {
+                dlRunning = false;
+                if (dlBtn) dlBtn.disabled = false;
+                bar.classList.add('indeterminate');
+                text.textContent = MSG.asrDlFailed + '：'
+                    + ((r && (r.error || r.message)) || MSG.unknown);
+                showDiag(r);
+                if (typeof o.onFinished === 'function') o.onFinished();
+            };
+            dlBtn.addEventListener('click', () => {
+                if (dlRunning || !api || !api.refine_asr_download) return;
+                dlRunning = true;
+                dlBtn.disabled = true;
+                startPolling();
+                api.refine_asr_download(entry.model || entry.name, 'auto')
+                  .then((r) => {
+                      const p = polls[entry.name];
+                      if (p) { clearInterval(p); delete polls[entry.name]; }
+                      if (r && r.success) finishOk(); else finishFail(r);
+                  })
+                  .catch((e) => {
+                      const p = polls[entry.name];
+                      if (p) { clearInterval(p); delete polls[entry.name]; }
+                      finishFail(e);
+                  });
+            });
+            if (entry.present) {
+                dlBtn.style.display = 'none';       // 已就位：无下载入口
+            } else if (state === 'planned') {
+                dlBtn.disabled = true;
+                dlBtn.title = MSG.mpPlannedTitle;
+            } else if (state !== 'ready') {
+                dlBtn.disabled = true;
+                dlBtn.title = MSG.mpAdapterTitle;
+            } else if (entry.verified !== true) {
+                dlBtn.disabled = true;              // 件5 硬门槛：未核验禁下载
+                dlBtn.title = MSG.mpUnverifiedTitle;
+            }
+            actions.appendChild(dlBtn);
+            row.appendChild(actions);
+            rowBind[entry.name] = { startPolling };
+            return row;
+        };
+
+        // —— 三档分组（档间可折叠 details；分组=分页等效，owner 拍板）——
+        const TIERS = [
+            ['fast', MSG.mpTierFast],
+            ['balanced', MSG.mpTierBalanced],
+            ['precise', MSG.mpTierPrecise],
+        ];
+        const recs = probe.recommended || [];
+        let rowsBuilt = 0;
+        TIERS.forEach(([tier, label]) => {
+            const items = recs.filter((e) => (e.tier || '') === tier);
+            if (!items.length) return;
+            const det = el('details', 'mp-tier');
+            det.open = true;
+            const sum = el('summary', 'mp-tier-head');
+            sum.appendChild(el('span', 'mp-tier-name', label));
+            det.appendChild(sum);
+            items.forEach((entry) => {
+                det.appendChild(renderModelRow(entry));
+                rowsBuilt++;
+            });
+            body.appendChild(det);
+        });
+        if (!rowsBuilt) {
+            body.appendChild(el('div', 'muted', MSG.mpNeedProbe));
+        }
+
+        // —— 重开恢复：逐条查下载进度快照，下载中/校验中→恢复轮询显示 ——
+        if (api && api.refine_asr_download_progress) {
+            recs.forEach((entry) => {
+                const bind = rowBind[entry.name];
+                if (!bind) return;
+                api.refine_asr_download_progress(
+                    entry.model || entry.name).then((p) => {
+                    if (p && p.success
+                            && (p.phase === 'download'
+                                || p.phase === 'verify')) {
+                        bind.startPolling();
+                    }
+                }).catch(() => { /* 恢复失败静默（下次轮询自愈） */ });
+            });
+        }
+
+        // 收口：关面板恢复骨架默认态（modal-lg/mp-body 自清理）+轮询清理；
+        // 下载本身由后端桥承载，关面板不终止（评议 C3 隔离的关键语义）
+        this._busy = true;
+        this._kind = 'models';
+        root.style.display = 'flex';
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                stopAllPolls();
+                const card2 = root.querySelector('.modal-card');
+                if (card2) card2.classList.remove('modal-lg');
+                const body2 = root.querySelector('.modal-body');
+                if (body2) body2.classList.remove('mp-body');
+                if (okBtn) okBtn.style.display = '';
+                resolve(value);
+            };
+        });
     }
 };
 
@@ -2654,6 +3045,11 @@ function switchTab(tabId) {
     // 整块（index.html 冻结零改动；失败不阻断切页，对齐上方钩子姿势）
     if (tabId === 'tab-glossary' && typeof TmSearch === 'object') {
         try { TmSearch.ensure(); } catch (e) { /* 初始化失败不阻断切页 */ }
+    }
+    // ASR 卡懒探测（2.7.1 D2026-1005-01）：首次打开 ASR 与词典页时读探测
+    // 快照立即渲染（快照由首启空闲探测回填；强制刷新走「重新探测」按钮）
+    if (tabId === 'tab-asrdict' && typeof window.__asrTabHook === 'function') {
+        try { window.__asrTabHook(); } catch (e) { /* 初始化失败不阻断切页 */ }
     }
 }
 
@@ -4338,156 +4734,70 @@ function switchTab(tabId) {
     return Math.round(bytes / 1073741824 * 10) / 10 + 'GB';
   }
 
-  function asrRenderRecList(items, cacheDir, modelsDir) {
-    const box = $('asrRecList');
-    if (!box) return;
-    box.innerHTML = '';
-    if (!items || !items.length) return;
-    const title = document.createElement('div');
-    title.textContent = MSG.asrRecTitle;
-    title.className = 'muted';
-    box.appendChild(title);
-    items.forEach((rec) => {
-      const badge = rec.present
-        ? MSG.asrPresent
-        : (rec.support === 'planned' ? MSG.asrPlanned : MSG.asrMissing);
-      const size = rec.bytes ? '｜' + fmtGB(rec.bytes) : '';
-      const srcPart = rec.url
-        ? '｜来源：' + (rec.url.indexOf('hf-mirror.com') !== -1
-          ? MSG.asrSrcDomestic : MSG.asrSrcOverseas) : '';
-      const hint = (rec.support === 'available' && cacheDir)
-        ? '。' + MSG.asrPlaceHint(cacheDir, modelsDir,
-                                  (rec.model || rec.name) + '.pt') : '';
-      // 2.6.3 批B：available 且未就位且清单带 sources → 展开区提供下载入口
-      const canDl = rec.support === 'available' && !rec.present
-        && Array.isArray(rec.sources) && rec.sources.length > 0;
-      // 长 URL/sha256 折叠进展开详情，summary 行只留摘要（防撑爆卡片）
-      const item = document.createElement('details');
-      item.className = 'asr-rec-item';
-      const sum = document.createElement('summary');
-      sum.className = 'muted';
-      sum.textContent = rec.name + '：' + badge + size + srcPart + hint;
-      if (rec.url) sum.title = rec.url;
-      item.appendChild(sum);
-      if (rec.url || rec.sha256 || canDl) {
-        const detail = document.createElement('div');
-        detail.className = 'asr-rec-detail muted';
-        if (rec.url) {
-          const urlRow = document.createElement('div');
-          urlRow.textContent = '来源：' + rec.url;
-          detail.appendChild(urlRow);
-        }
-        if (rec.sha256) {
-          const fpRow = document.createElement('div');
-          fpRow.textContent = 'sha256：' + rec.sha256;
-          detail.appendChild(fpRow);
-        }
-        // 下载入口（AppModal.download 源选择模态；热修 details 结构内零 id）
-        if (canDl) {
-          const actions = document.createElement('div');
-          actions.className = 'asr-rec-actions';
-          const dlBtn = document.createElement('button');
-          dlBtn.type = 'button';
-          dlBtn.className = 'btn btn-ghost btn-sm';
-          dlBtn.textContent = MSG.asrDownloadBtn;
-          dlBtn.addEventListener('click', () => asrDownloadModal(rec));
-          actions.appendChild(dlBtn);
-          detail.appendChild(actions);
-        }
-        item.appendChild(detail);
-      }
-      box.appendChild(item);
+  // 2.7.1 红绿灯（D2026-1005-01 承接批件2）：三色状态点前置注入 asrEnvStatus
+  // （span.status-dot.asr-dot，复用既有状态点 class，零新增 id）。
+  // 🟢=available；🟡=上游通但缺模型/缺 ffmpeg（triage ok/ffmpeg-missing）；
+  // 🔴=不可用（python 不可达/模块缺失/whisper 导入失败）。探测结果单一来源：
+  // 红绿灯/面板/下拉共用同一 probe 对象（评议 R4，禁双份维护）。
+  function asrApplyEnvStatus(r) {
+    const el = $('asrEnvStatus');
+    if (!el) return;
+    el.textContent = '';
+    const triage = (r && r.triage) || 'python-unavailable';
+    let cls = 'dot-err';
+    let text = MSG.asrProbeFail((r && r.reason) || '');
+    if (r && r.available) {
+      cls = 'dot-ok';
+      text = MSG.asrProbeReady(r.whisper_version || '?',
+        r.model_present ? (r.saved_model || 'large-v2')
+          : MSG.asrProbeNoModel);
+    } else if (triage === 'ok' || triage === 'ffmpeg-missing') {
+      cls = 'dot-warn';
+      text = MSG.asrProbeUpstreamOk;
+    }
+    const dot = document.createElement('span');
+    dot.className = 'status-dot asr-dot ' + cls;
+    el.appendChild(dot);
+    el.appendChild(document.createTextNode(text));
+  }
+
+  // 2.7.1 件4：下拉来源标注（「<名>（<来源>）」，title=完整路径）
+  const ASR_SOURCE_LABELS = {
+    'whisper-cache': 'whisper 缓存',
+    'data-root': '应用数据',
+    'hf-hub': 'HF hub',
+  };
+
+  // 模型管理面板数据源（asrRefresh 回填；asrOpenModelsPanel 消费）
+  let lastAsrProbe = null;
+
+  // 2.7.1 件3：模型管理面板入口（AppModal kind='models'）。数据=最近一次
+  // 探测结果（单一来源）；下载语义全量复用 asr_downloader 桥（面板行内
+  // 进度，替代原 AppModal.download 源选择模态调用链）。
+  function asrOpenModelsPanel() {
+    if (!lastAsrProbe) {
+      asrStatus(MSG.mpNeedProbe);
+      return;
+    }
+    AppModal.models({
+      probe: lastAsrProbe,
+      onFinished: () => asrRefresh(true),   // 下载收尾后强制刷新（徽标/红绿灯翻转）
     });
   }
 
-  // 2.6.3 批B（D2026-1003-01 ②）：ASR 模型下载模态（AppModal.download 调用方）。
-  // 源卡 disabled=后端 s.disabled 或未 verified（PENDING 镜像永不上候选，
-  // 与下载器 verified==True 候选集一致）；onStart 桥 refine_asr_download +
-  // 1s setInterval 轮询 refine_asr_download_progress 刷进度区（模态单例，
-  // owned 语义简化）；settle 后 asrRefresh() 刷新推荐清单（徽标翻转）。
-  function asrDownloadModal(rec) {
-    const srcLabel = (s) => (s.source === 'official' ? MSG.srcOfficialLabel
-      : MSG.srcMirrorLabel);
-    const sources = (rec.sources || []).map((s) => {
-      const disabled = !!s.disabled || !s.verified;
-      return {
-        key: s.source,
-        label: srcLabel(s),
-        hint: disabled ? (s.note || MSG.srcMirrorPendingHint) : '',
-        disabled: disabled,
-      };
-    });
-    let lastBytes = 0;
-    let sawFallbackNote = false;
-    const meta = [
-      { label: MSG.asrDlMetaSource, value: sources.length
-        ? (sources.find((s) => !s.disabled) || sources[0]).label : '' },
-      { label: MSG.asrDlMetaSize, value: rec.bytes ? fmtGB(rec.bytes) : '' },
-      { label: MSG.asrDlMetaSha, value: rec.sha256 || '', copyable: true },
-      { label: MSG.asrDlMetaLicense, value: rec.license || '' },
-    ];
-    AppModal.download({
-      title: MSG.asrDownloadTitle + '：' + rec.name,
-      sources: sources,
-      meta: meta,
-      notice: MSG.asrDlNoCancel,
-      onStart: async (key, render) => {
-        const api = window.pywebview && window.pywebview.api;
-        if (!api || !api.refine_asr_download) {
-          return { ok: false, message: MSG.unknown };
-        }
-        const poll = setInterval(async () => {
-          try {
-            const p = await api.refine_asr_download_progress(rec.name);
-            if (p && p.success && p.phase) {
-              if (typeof p.downloaded === 'number' && p.downloaded > 0) {
-                lastBytes = p.downloaded;
-              }
-              if (p.note) sawFallbackNote = true;
-              render(p);
-            }
-          } catch (e) { /* 进度轮询失败不干扰主流程 */ }
-        }, 1000);
-        try {
-          const r = await api.refine_asr_download(rec.name, key);
-          if (r && r.success) {
-            try {
-              const f = await api.refine_asr_download_progress(rec.name);
-              if (f && f.success) render(f);
-            } catch (e) { /* ignore */ }
-            const extra = sawFallbackNote ? '，' + MSG.dictFallbackNotice : '';
-            return { ok: true,
-                     message: `${r.path}（${fmtGB(lastBytes || rec.bytes || 0)}${extra}）` };
-          }
-          return { ok: false, message: (r && r.error) || MSG.unknown };
-        } catch (e) {
-          return { ok: false, message: String(e) };
-        } finally {
-          clearInterval(poll);
-          asrRefresh();     // settle 后刷新推荐清单（已就位徽标翻转）
-        }
-      },
-    });
-  }
-
-  function asrRefresh() {
+  function asrRefresh(force) {
     if (!window.pywebview || !window.pywebview.api) return;
     const env = $('asrEnvStatus');
     if (env) env.textContent = '…';
-    window.pywebview.api.refine_asr_status().then((r) => {
+    // force=true（「重新探测」按钮/下载收尾）→ 绕过快照缓存同步重探；
+    // 缺省（首开 ASR 页/后台预热）→ 优先读磁盘快照立即返回（TTL 10 分钟）。
+    window.pywebview.api.refine_asr_status(force === true).then((r) => {
       if (!r || !r.success) {
         asrStatus((r && r.error) || MSG.unknown);
         return;
       }
-      const envEl = $('asrEnvStatus');
-      if (envEl) {
-        envEl.textContent = r.available
-          ? MSG.asrProbeReady(r.whisper_version || '?',
-                              r.model_present
-                                ? (r.saved_model || 'large-v2')
-                                : MSG.asrProbeNoModel)
-          : MSG.asrProbeFail(r.reason || '');
-      }
+      lastAsrProbe = r;
+      asrApplyEnvStatus(r);
       const sel = $('asrModelSel');
       if (!sel) return;
       sel.innerHTML = '';
@@ -4498,28 +4808,32 @@ function switchTab(tabId) {
         o.textContent = MSG.asrSelectPlaceholder;
         sel.appendChild(o);
       }
+      // 三落位合并去重结果（后端已按 whisper-cache>data-root 校验序去重，
+      // 只收 whisper 系 ready 项；HF hub 条目不进下拉——需适配，走面板）
       models.forEach((m) => {
         const o = document.createElement('option');
         o.value = m.name;
-        o.textContent = m.name + '（' + fmtGB(m.bytes) + '）';
+        const src = ASR_SOURCE_LABELS[m.source] || '';
+        o.textContent = m.name + (src ? '（' + src + '）' : '');
+        o.title = m.path || '';
         sel.appendChild(o);
       });
-      const q = document.createElement('option');
-      q.value = '__qwen__';
-      q.disabled = true;
-      q.textContent = 'qwen3-asr-1.7b（' + MSG.asrPlanned + '）';
-      sel.appendChild(q);
       const saved = r.saved_model || '';
       if (saved && models.some(m => m.name === saved)) sel.value = saved;
-      // 推荐清单 + 验证开关 + 上游 Python 回填（2.6.1 修订）
-      asrRenderRecList(r.recommended || [],
-                       r.cache_dir || '', r.models_dir || '');
       const tgl = $('asrCrosscheckToggle');
       if (tgl) tgl.checked = !!r.crosscheck_enabled;
       const pyInp = $('asrPythonInput');
       if (pyInp) pyInp.value = r.saved_python || '';
     }).catch((e) => asrStatus(String(e)));
   }
+
+  // ASR 卡懒探测钩子（switchTab 首开 tab-asrdict 触发一次；缓存秒回，
+  // 强制刷新走「重新探测」按钮）
+  window.__asrTabHook = () => {
+    if (window.__asrTabHookDone) return;
+    window.__asrTabHookDone = true;
+    asrRefresh(false);
+  };
 
   function aiBtnState(btn, statusText) {
     if (statusText) {
@@ -4758,12 +5072,17 @@ function switchTab(tabId) {
     if (asrBtn) {
       const t = asrBtn.querySelector('span');
       if (t) t.textContent = MSG.asrRefreshBtn;
-      asrBtn.addEventListener('click', () => asrRefresh());
+      asrBtn.addEventListener('click', () => asrRefresh(true));   // 强制刷新（绕过快照缓存）
     }
     const asrEnv = $('asrEnvStatus');
     if (asrEnv) asrEnv.textContent = MSG.asr_env_undetected;
-    const asrHint = document.querySelector('.asr-entry-hint');
-    if (asrHint) asrHint.textContent = MSG.asr_entry_hint;
+    // 2.7.1：模型管理面板入口（.asr-models-btn class 锚，零新增 id）
+    const asrModelsBtn = document.querySelector('.asr-models-btn');
+    if (asrModelsBtn) {
+      const t = asrModelsBtn.querySelector('span');
+      if (t) t.textContent = MSG.asrModelsBtn;
+      asrModelsBtn.addEventListener('click', () => asrOpenModelsPanel());
+    }
     const asrSelPh = $('asrModelSel');
     if (asrSelPh) {
       const ph = asrSelPh.querySelector('option[value=""]');
@@ -4785,6 +5104,8 @@ function switchTab(tabId) {
       const lbl = asrTgl.parentElement
         ? asrTgl.parentElement.querySelector('span') : null;
       if (lbl) lbl.textContent = MSG.asrCrosscheckLabel;
+      // 2.7.1：入口说明独立行删除，说明文案并入开关 title 悬停
+      asrTgl.title = MSG.asrCrosscheckTitle;
       asrTgl.addEventListener('change', async () => {
         if (!window.pywebview || !window.pywebview.api) return;
         try {
@@ -4816,7 +5137,6 @@ function switchTab(tabId) {
     const asrSel = $('asrModelSel');
     if (asrSel) asrSel.addEventListener('change', async () => {
       if (!window.pywebview || !window.pywebview.api) return;
-      if (asrSel.value === '__qwen__') return;      // 占位项不持久化
       try {
         const r = await window.pywebview.api.refine_save_stage_settings(
           null, null, { asr_model: asrSel.value });
@@ -5679,6 +5999,17 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
 
     // Initialize feature status indicators
     await FeatureStatus.init();
+
+    // 2.7.1 首启空闲探测（D2026-1005-01 承接批，README 提示句口径）：后台
+    // 触发一次 refine_asr_status 回填探测快照缓存（短暂启动一次 Python
+    // 子进程，通常数秒；不阻塞首屏，结果稍后显示在 ASR 卡/模型管理面板）
+    setTimeout(() => {
+        try {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.refine_asr_status();
+            }
+        } catch (e) { /* 后台预热失败静默（显式探测按钮兜底） */ }
+    }, 3000);
 });
 
 // Feature status management

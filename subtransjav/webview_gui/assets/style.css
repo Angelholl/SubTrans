@@ -1129,21 +1129,147 @@ input[type="checkbox"] {
 }
 .status-err { color: var(--danger); }
 .hint-warn { color: var(--status-warn); }
-/* #6：失败一行人话 + 下载成功长路径文案完整折行（承接路径行折行口径） */
-#dictStatus { overflow-wrap: anywhere; }
 
-/* ASR 推荐清单：折叠详情行（完整 URL/sha256 移入展开区，长串断行防撑爆） */
-.asr-rec-item summary {
-    cursor: pointer;
-    color: var(--text-2);
+/* ============================================================
+   2.7.1 模型管理面板（D2026-1005-01 承接批，AppModal kind='models'）：
+   .mp-* 组件族。全引用既有 token（--text-1/2/3、--border、--surface-2/3、
+   --primary、--warn、--ok、--danger、--radius-sm、pill 语义），深色主题
+   零新增色值；下载进度复用 .dl-progress-*、诊断网格复用 .dict-diag-grid；
+   无删除类图标（推荐星标为内联 Lucide star SVG）。
+   ============================================================ */
+.mp-body { overflow: auto; max-height: 70vh; }
+
+/* 路径栏：whisper 缓存 + 应用数据目录两行，各带「打开文件夹」 */
+.mp-paths {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    margin-bottom: 10px;
 }
-.asr-rec-detail {
+.mp-path-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mp-path-label { font-size: var(--font-xs); color: var(--text-3); flex: none; }
+.mp-path-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.mp-path-open { flex: none; }
+
+/* 未适配 banner（全面板唯一长文案位） */
+.mp-banner {
     font-size: var(--font-xs);
     line-height: 1.6;
-    color: var(--text-2);
-    word-break: break-all;
-    padding: 2px 0 0 var(--space-3);
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    margin-bottom: 10px;
 }
+
+/* 三档分组（details 可折叠=分页等效） */
+.mp-tier {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+    background: var(--surface);
+}
+.mp-tier > summary { cursor: pointer; }
+.mp-tier > summary::-webkit-summary-marker { display: none; }
+.mp-tier-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    list-style: none;
+}
+.mp-tier-name {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text-1);
+}
+
+/* 模型行 */
+.mp-row {
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.mp-row-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mp-row-name { font-weight: 600; color: var(--text-1); font-size: var(--font-sm); }
+.mp-star { display: inline-flex; align-items: center; }
+.mp-row-desc { font-size: var(--font-xs); color: var(--text-2); }
+.mp-row-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mp-size { font-size: var(--font-xs); color: var(--text-3); font-family: var(--font-mono); }
+.mp-row-actions { display: flex; justify-content: flex-end; }
+
+/* 三态 chip（pill 语义：ready 绿/adapter 琥珀/planned 灰） */
+.mp-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.6;
+    flex: none;
+}
+.mp-chip-ready   { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.mp-chip-adapter { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.mp-chip-planned { background: var(--surface-3); color: var(--text-3); }
+.mp-present { font-size: var(--font-xs); color: var(--ok); }
+
+/* 速度/精度五格点阵（4px 圆点 5 格；filled=--primary/empty=--surface-3） */
+.mp-dots-wrap { display: flex; flex-direction: column; gap: 2px; }
+.mp-dots-row { display: flex; align-items: center; gap: 6px; }
+.mp-dots-label { font-size: var(--font-xs); color: var(--text-3); flex: none; }
+.mp-dots { display: inline-flex; align-items: center; gap: 3px; }
+.mp-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    flex: none;
+}
+.mp-dot.filled { background: var(--primary); }
+
+/* 变体行内展开 */
+.mp-variants { min-width: 0; }
+.mp-variants-summary {
+    cursor: pointer;
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    list-style: none;
+}
+.mp-variants-summary::-webkit-details-marker { display: none; }
+.mp-variants-summary:hover { color: var(--text-1); }
+.mp-variant-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0 0 10px;
+    font-size: var(--font-xs);
+    color: var(--text-2);
+}
+.mp-variant-name { min-width: 0; overflow-wrap: anywhere; }
+
+/* 行内下载进度（进度条/文本复用 .dl-progress-*） */
+.mp-progress { margin-top: 2px; }
+
+/* 失败诊断网格（复用 .dict-diag-grid 布局，容器边距微调） */
+.mp-diag { max-height: 120px; }
+/* #6：失败一行人话 + 下载成功长路径文案完整折行（承接路径行折行口径） */
+#dictStatus { overflow-wrap: anywhere; }
 
 .group-title {
     font-size: var(--font-sm);
@@ -1674,6 +1800,11 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 .status-dot.dot-idle    { background: var(--border-strong); }
 .status-dot.dot-running { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+/* 2.7.1 ASR 红绿灯三色点（D2026-1005-01）：🟢就绪/🟡部分就绪/🔴不可用；
+   全引用既有 token 零新增色值，复用 .status-dot 通用类（零新增 id） */
+.status-dot.dot-ok      { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.status-dot.dot-warn    { background: var(--warn); }
+.status-dot.dot-err     { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
 
 .status-label {
     font-size: var(--font-xs);
