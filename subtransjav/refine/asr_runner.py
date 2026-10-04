@@ -38,6 +38,16 @@ _here = os.path.dirname(os.path.abspath(__file__))
 sys.path[:] = [p for p in sys.path
                if os.path.abspath(p or os.getcwd()) != _here]
 
+# CI win runner（cp1252 缺省）print 中文 JSON 崩 UnicodeEncodeError：
+# runner 的 stdout/stderr 契约是纯 ASCII 安全的 JSON+上游可读文本，强制
+# UTF-8 重裹（仅用 sys，标准库导入图钉不变）。错误文本（含中文注释引用）
+# 也经此通道安全输出。
+for _stream_name in ("stdout", "stderr"):
+    _stream = getattr(sys, _stream_name)
+    if (hasattr(_stream, "reconfigure")
+            and getattr(_stream, "encoding", "").lower() not in ("utf-8", "utf8")):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 def _selfcheck(model: str, model_dir: str = "") -> int:
     info: dict = {"python": sys.version.split()[0], "cwd": os.getcwd()}
