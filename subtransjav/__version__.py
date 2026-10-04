@@ -4,16 +4,16 @@
 # PEP 440 compliant version for pip/wheel
 # main 常驻滚动 dev 号（D2026-1001-03 第⑧项，PEP 440 语义 2.6.2.dev0<2.6.2），
 # 发布版走 release 分支 bump；发布后 main 前进到下一 dev 号=即时检查点
-__version__ = "2.6.5"
+__version__ = "2.6.6.dev0"
 
 # Human-readable version for display in UI
-__version_display__ = "2.6.5"
+__version_display__ = "2.6.6.dev0"
 
 # Version metadata
 __version_info__ = {
     "major": 2,
     "minor": 6,
-    "patch": 5,
-    "release": "final",
+    "patch": 6,
+    "release": "dev",
     "architecture": "refine-standalone"
 }
