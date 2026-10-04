@@ -337,6 +337,9 @@ def test_html_has_no_unmarked_user_visible_chinese():
 _ADVANCED_REWRITE_TITLE_KEYS = (
     "adaptive_thresholds_title", "tm_enable_title",
     "tm_threshold_title", "resume_title", "force_resume_title",
+    # 2.7.0 批2（D2026-1004-04）：fallback_local/profile 两键两级句式改写，
+    # 补双侧同值钉（app.js MSG ↔ index.html 内联 title，基线 +2）
+    "fallback_local_title", "profile_title",
 )
 _ADVANCED_NOTICE_KEY = "advanced_settings_notice"
 _ADVANCED_NOTICE_TEXT = "以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。"
@@ -429,6 +432,22 @@ def test_simplified_tooltip_sync_and_text(key, expected):
     # 单行通俗句式：无换行、无「技术细节：」段
     assert "\n" not in js_value
     assert "技术细节" not in js_value
+
+
+# ---------------------------------------------------------------------------
+# 2.7.0 批2（D2026-1004-04）：direction_title 三源同值钉
+# 本批修正 strings.py 镜像"指令卡"→"角色卡"的双源漂移；补 strings.py MSG ↔
+# app.js MSG 值级同值钉防再漂移（app.js ↔ index.html 侧由既有
+# test_html_i18n_keys_exist_in_js_msg 键级覆盖 + 下方直接断言补齐，基线 +1）。
+# ---------------------------------------------------------------------------
+
+def test_direction_title_value_sync_across_sources():
+    """direction_title：strings.py 镜像、app.js MSG、index.html 内联三源逐字节一致。"""
+    py_value = MSG["direction_title"]
+    js_value = _js_msg_value("direction_title")
+    html_value = _html_inline_title("direction_title")
+    assert py_value == js_value, "direction_title: strings.py 镜像与 app.js MSG 值不一致"
+    assert html_value == js_value, "direction_title: index.html 内联 title 与 app.js MSG 值不一致"
 
 
 # ---------------------------------------------------------------------------
