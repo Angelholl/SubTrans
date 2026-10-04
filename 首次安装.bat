@@ -1,6 +1,6 @@
 @echo off
 rem =====================================================
-rem  SubTransJAV - 首次安装脚本
+rem  SubTrans - 首次安装脚本
 rem  安装完成后请使用桌面快捷方式启动
 rem =====================================================
 setlocal
@@ -39,7 +39,7 @@ exit /b 1
 
 :done
 echo.
-echo [DONE] 安装完成！请使用桌面"SubTransJAV"快捷方式启动程序。
+echo [DONE] 安装完成！请使用桌面"SubTrans"快捷方式启动程序。
 rem 创建桌面快捷方式（幂等：重复执行覆盖旧快捷方式；失败不中断安装）
 if exist "%~dp0create_shortcut.py" (
     "%PY%" "%~dp0create_shortcut.py"

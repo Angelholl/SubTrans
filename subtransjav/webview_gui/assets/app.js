@@ -71,7 +71,7 @@ const MSG = {
     // ============================================================
 
     // ---- 顶栏 / 主题 ----
-    doc_title: '净语翻译 · SubTransJAV Translate',
+    doc_title: '净语翻译 · SubTrans Translate',
     app_header_title: '净语翻译 · SRT',
     main_subtitle: '一站式 AI 字幕翻译与校对',
     nav_group_workspace: '工作区',
@@ -261,13 +261,13 @@ const MSG = {
     // ---- 控制台 / 页脚 ----
     console_header: 'Console',
     clear_console: 'Clear',
-    footer_brand: '净语翻译 · SubTransJAV Translate |',
+    footer_brand: '净语翻译 · SubTrans Translate |',
     about_link: '关于',
 
     // ---- About 模态 ----
     about_title: '关于',
     about_intro: '简介',
-    about_intro_text: 'SubTransJAV 是一款 .srt 字幕翻译与精修桌面工具，支持本地与云端双引擎推理。' +
+    about_intro_text: 'SubTrans 是一款 .srt 字幕翻译与精修桌面工具，支持本地与云端双引擎推理。' +
         '自带通用角色卡与三语词典，日→中为主，可经翻译方向参数化切换中→英、英→中。' +
         '采用 v2 两阶段流水线：阶段A 净语+翻译（一次调用完成文本清洗与翻译）→ ' +
         '阶段B 审校+抛光（对照原文审核、补译、润色）。',
@@ -281,7 +281,7 @@ const MSG = {
     sc_ctrl_r: 'Ctrl+R - 开始翻译',
     sc_escape: 'Escape - 取消/关闭对话框',
     sc_f1: 'F1 - 显示本对话框',
-    project_home_link: 'SubTransJAV 项目主页',
+    project_home_link: 'SubTrans 项目主页',
     close_btn: '关闭',
 
     // ---- 动态文案收编（原表外内联中文）----
@@ -399,9 +399,11 @@ const MSG = {
     sys_summary_unavailable: '不可用',
     sys_summary_version: '版本',
     // 批3 扩展（D2026-1002-12）：角色卡行 + ASR 行动态渲染所需键（全 JS 态，
-    // 零静态 i18n 消耗；标签复用 templates_dir_label / asr_panel_title 既有键）
+    // 零静态 i18n 消耗；角色卡标签复用 templates_dir_label，ASR 行用短标签
+    // sys_asr_row_label 防溢出，全称经行级 title 悬停呈现——D2026-1004-01 段2 追回）
     sys_roles_count: n => `${n} 张`,
     sys_roles_fallback: '内置回落',
+    sys_asr_row_label: 'ASR 模型',
     sys_asr_undetected: '未探测',
     sys_asr_unconfigured: '未配置',
     sys_asr_ready: m => `就绪 · ${m}`,
@@ -1931,7 +1933,8 @@ const SystemSummary = {
             + '<span class="sys-summary-stat val-muted"></span>'
             + '<button type="button" class="btn btn-ghost btn-compact"'
             + ' data-sys-action="asr-probe"></button></div>';
-        asr.querySelector('.sys-summary-key').textContent = MSG.asr_panel_title;
+        asr.querySelector('.sys-summary-key').textContent = MSG.sys_asr_row_label;
+        asr.title = MSG.asr_panel_title;
         asr.querySelector('button').textContent = MSG.asrRefreshBtn;
         card.appendChild(asr);
         asr.querySelector('.sys-summary-stat').textContent
@@ -5601,7 +5604,7 @@ function switchTab(tabId) {
 // Initialization
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('SubTransJAV GUI initialized');
+    console.log('SubTrans GUI initialized');
 
     // i18n：先把 MSG 文案注入 data-i18n* 标记的元素
     applyI18n();

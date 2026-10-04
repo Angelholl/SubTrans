@@ -969,7 +969,7 @@ input[type="checkbox"] {
 .sys-summary-row + .sys-summary-row { border-top: 1px solid var(--border); }
 .sys-summary-keyrow {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
     min-width: 0;
 }

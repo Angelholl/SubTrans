@@ -6,7 +6,7 @@
 ;   （system.dic ~208MB）——语法提示运行时自动降级，词典经 GUI 引擎页 /
 ;   CLI --dict-download 按需下载；可选 /Dsuffix 追加到安装器文件名。
 
-#define MyAppName "SubTransJAV"
+#define MyAppName "SubTrans"
 #ifndef version
 #define version "0.0.0-dev"
 #endif
@@ -29,7 +29,7 @@ SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
 OutputDir=..\Temp\innoinstall
-OutputBaseFilename=SubTransJAV-setup-{#version}{#suffix}
+OutputBaseFilename=SubTrans-setup-{#version}{#suffix}
 PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 ; 关停运行中实例防文件占用，D2026-1003-01 批A
@@ -395,7 +395,7 @@ begin
   if not WebView2Installed() then
   begin
     if MsgBox(
-        '检测到系统未安装 Microsoft WebView2 Runtime（SubTransJAV 界面运行所必需）。' + #13#10 +
+        '检测到系统未安装 Microsoft WebView2 Runtime（SubTrans 界面运行所必需）。' + #13#10 +
         '是否打开官方下载页面安装后再继续？', mbConfirmation, MB_YESNO) = IDYES then
     begin
       ShellExec('open', WebView2DlUrl, '', '', SW_SHOW, ewNoWait, RC);
@@ -407,11 +407,11 @@ begin
   begin
     // CompareVersion(old, new)：-1=升级 0=同版 1=降级，与消息语义对齐
     case CompareVersion(ver, '{#version}') of
-      -1: body := '检测到已安装 SubTransJAV ' + ver + '（' + loc + '）。' +
+      -1: body := '检测到已安装 SubTrans ' + ver + '（' + loc + '）。' +
                   '本次将原地更新到 {#version}。';
-       0: body := '检测到已安装 SubTransJAV ' + ver + '（' + loc + '）。' +
+       0: body := '检测到已安装 SubTrans ' + ver + '（' + loc + '）。' +
                   '本次将重新安装/修复 {#version}。';
-       1: body := '警告：本次将把 SubTransJAV 从 ' + ver +
+       1: body := '警告：本次将把 SubTrans 从 ' + ver +
                   ' 回退到较低版本 {#version}。';
     end;
     body := body + #13#10 + '本地数据（翻译记忆库/词典/设置/角色卡）完整保留。';

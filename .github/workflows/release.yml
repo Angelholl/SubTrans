@@ -101,9 +101,9 @@ jobs:
           }
           # 安装器断言：Inno 产物必须在位且非空壳——防 [Files] 缺 Source 行
           # 装出空壳而 CI smoke 只断言 dist 目录发现不了的事故复发（D4 发版批）
-          $installers = @(Get-ChildItem "Temp/innoinstall" -Filter "SubTransJAV-setup-*.exe" -ErrorAction SilentlyContinue)
+          $installers = @(Get-ChildItem "Temp/innoinstall" -Filter "SubTrans-setup-*.exe" -ErrorAction SilentlyContinue)
           if ($installers.Count -eq 0) {
-            Write-Error "MISSING installer: no SubTransJAV-setup-*.exe in Temp/innoinstall"; exit 1
+            Write-Error "MISSING installer: no SubTrans-setup-*.exe in Temp/innoinstall"; exit 1
           }
           foreach ($ins in $installers) {
             if ($ins.Length -lt 20MB) {
@@ -152,7 +152,7 @@ jobs:
         shell: pwsh
         run: |
           $out = "Temp/innoinstall"
-          Get-ChildItem $out -Filter "SubTransJAV-setup-*.exe" | ForEach-Object {
+          Get-ChildItem $out -Filter "SubTrans-setup-*.exe" | ForEach-Object {
             $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
             "$h  $($_.Name)"
           } | Set-Content "$out/SHA256SUMS.txt"
@@ -161,7 +161,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SubTransJAV-${{ env.VERSION }}
+          name: SubTrans-${{ env.VERSION }}
           path: |
             Temp/pyinstaller_dist/SubTransJAV/**
             Temp/innoinstall/*.exe

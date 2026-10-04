@@ -52,8 +52,8 @@ MSG = {
     "webview2_check_failed": "警告：无法检查 WebView2 运行时状态：{e}",
 
     # ---- CLI 帮助 / 自举（main.py）----
-    "app_title": "净语翻译 · SubTransJAV Translate",
-    "cli_description": "净语翻译 · SubTransJAV 桌面 GUI"
+    "app_title": "净语翻译 · SubTrans Translate",
+    "cli_description": "净语翻译 · SubTrans 桌面 GUI"
                        "（两阶段字幕流水线：阶段A 净语+翻译 → 阶段B 审校+抛光）",
     "cli_help_debug": "以调试模式启动 WebView（可打开开发者工具）",
     "cli_help_version": "打印程序版本号后退出",

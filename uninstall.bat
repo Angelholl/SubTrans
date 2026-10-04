@@ -1,6 +1,6 @@
 @echo off
 rem =====================================================
-rem  SubTransJAV - 卸载脚本
+rem  SubTrans - 卸载脚本
 rem  仅清理桌面快捷方式与缓存，不会删除安装文件夹本身
 rem =====================================================
 rem 数据删除主通道=应用卸载器一问制（默认保留数据）；本脚本仅清快捷方式与缓存，不清理数据根内容。
@@ -8,7 +8,7 @@ setlocal
 cd /d "%~dp0"
 
 echo 开始清理桌面快捷方式...
-set "LNK1=%USERPROFILE%\Desktop\SubTransJAV.lnk"
+set "LNK1=%USERPROFILE%\Desktop\SubTrans.lnk"
 set "LNK2=%USERPROFILE%\Desktop\净语翻译.lnk"
 set "LNK3=%USERPROFILE%\Desktop\净语翻译 · WhisperJAV Translate.lnk"
 set "LNK4=%USERPROFILE%\Desktop\WhisperJAV Translate.lnk"

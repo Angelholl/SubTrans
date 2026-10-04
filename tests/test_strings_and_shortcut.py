@@ -484,8 +484,8 @@ def test_bat_quotes_paths_for_spaces(bat_text):
 
 
 def test_bat_done_hint_matches_actual_shortcut_name(bat_text):
-    """完成提示与 create_shortcut.py 实际创建的 SubTransJAV.lnk 一致。"""
-    assert '桌面"SubTransJAV"快捷方式' in bat_text
+    """完成提示与 create_shortcut.py 实际创建的 SubTrans.lnk 一致。"""
+    assert '桌面"SubTrans"快捷方式' in bat_text
 
 
 @pytest.mark.skipif(
@@ -497,7 +497,7 @@ def test_create_shortcut_avoids_execv_and_sets_workdir():
     assert "os.execv(" not in src                  # Windows 空格路径缺陷（不再调用）
     assert "subprocess.call([sys.executable] + sys.argv)" in src
     assert "shortcut.WorkingDirectory = str(project_root)" in src
-    assert 'desktop / "SubTransJAV.lnk"' in src     # 幂等：固定名覆盖保存
+    assert 'desktop / "SubTrans.lnk"' in src     # 幂等：固定名覆盖保存
     assert "shortcut.save()" in src
 
 
@@ -531,7 +531,7 @@ def test_uninstall_bat_is_gbk_decodable(uninstall_bat_text):
 
 
 def test_uninstall_bat_covers_all_desktop_shortcuts(uninstall_bat_text):
-    assert "SubTransJAV.lnk" in uninstall_bat_text
+    assert "SubTrans.lnk" in uninstall_bat_text
     for name in LEGACY_LNK_NAMES:
         assert name in uninstall_bat_text, f"缺少历史遗留快捷方式名: {name}"
 

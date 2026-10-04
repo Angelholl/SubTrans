@@ -2885,3 +2885,13 @@ Q4 程序化 click（原方案作废）｜Q1 对照链侧范围确凿化登记�
 
 owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中文断言码页坑（jieba 双层断言实际全过：日志实证 dict.txt 在位+「jieba 分词自检: OK（3 tokens）」，败在 PS 按 OEM 码页解码 UTF-8 输出致 Contains 失配）——修 2e03fad＝Console OutputEncoding 钉 UTF-8+断言改 ASCII 骨架正则 `jieba[^\r\n]*: OK`（FAIL 行不含 ": OK" 成功语义仍唯一）；重构建 run 37150298734 success。产物 setup-2.6.5.dev0.exe 50,817,175B sha256 68D8464A…DC1A2 与 SHA256SUMS 核对一致（较 2.6.4 包 +14.5MB=jieba 词典体量旁证），302 签名 URL 无凭据直下落位 owner Downloads。配套《真机走查清单-265测试版》（3b234dc）=发版门②词典下载两态+六项修复逐项+回归抽查。**结构门④首次实战：smoke 双层断言在真实构建上验证通过（jieba 渠道修复 CI 可证闭环）**。
 
+## [2026-10-04] D2026-1004-02 产品品牌统一第 1 层落地（owner 点火） [已拍板·已落地]
+
+**一、原决策（品牌统一分层拍板）**：owner 2026-10-04 真机测 setup-2.6.5.dev0 测试包后点火："软件包名称没有随项目名称变，做一次全面内审要和现有的项目名称 SubTrans 统一。"主模型提出分层方案：第 1 层（用户可见低风险：安装器产物名/AppName/弹窗/GUI 显示名/bat 快捷方式，2.6.5 发版前改）；第 2 层（半深中风险：spec/dist 目录名+DefaultDirName+AUMID，2.7.0）；第 3 层（深高风险：包名 subtransjav、数据根，不改）；第 4 层 docs 保留 README 渊源句。显式反转 D2026-1003-04"双名并存=常态"，第 1 层统一即日生效。
+
+**二、decision-critic 异议与核验**：结论=有条件支持（第 1 层进 2.6.5）+1 [HIGH_RISK_OBJECTION]。核验证实：升级链只认 AppId 固定 GUID 与产物文件名/AppName 无关（setup.iss:19-20,75,99,101-104），第 1 层改名不破坏升级链成立。HRO=对外接口（pyproject.toml:76-78 entry points `subtransjav-refine/gui` 是 pip 发布的真实命令接口非显示串）未定兼容策略+内审清单可证不完整（漏 api.py:204-208 输出目录 `<Documents>\SubTransJAV`、漏 tracked 文件 uninstall.bat/首次安装.bat/create_shortcut.py 及"新快捷方式清不掉"断链）+过度声明修正（test_installer_lifecycle 无品牌字断言无需联动，真正联动面是 test_strings_and_shortcut）。
+
+**三、主模型最终决定：[HRO 采纳，走方案 A（最小完整），两条附加条件全闭环]**：①CLI entry points 与 argparse prog 名**保持不变**（消除"调用名≠帮助名"矛盾），CLI 命令名整体归入第 3 层"本批不统一清单"（理由=对外技术接口、README/手册 14 处命令引用、收益低于风险；远期改走别名 deprecation 通道另专项）；②bat 三件快捷方式与品牌词纳入第 1 层同批（消除断链），api.py 输出目录显式归"不改清单"（老用户既有输出位置）；③第 1 层文件级清单=setup.iss（:32 产物名+:9 AppName+:398,410-414 弹窗文案；**禁区=:16 MyAppExeName/:23 DefaultDirName/:51 Source/:19-20 GUID**）+release.yml（:104,106,155 过滤器+:164 artifact 名；**禁区=:67,125 dist 路径**）+strings.py app_title/cli_description+index.html 6 处+app.js i18n 文案+bat 三件。**附加采纳**：品牌 allowlist 钉测试（tests/test_brand_allowlist.py，tracked 文件 SubTransJAV 出现集合==显式白名单 49 条目逐项带保留理由，防漂移）；"公开半统一态"声明（安装目录/exe/数据根/AUMID 旧名 vs 安装器产物/快捷方式/显示名新名，向 owner 明示）；2.7.0 挂第 2 层联动清单（spec/dist+DefaultDirName+AUMID+test_isscc_compile_smoke+release.yml:67,125+历史遗留 lnk 清理）；roadmap 候选标"已点火、分层执行中"；262/263 旧清单不回改。
+
+**四、决策日志字段**：异议=上述 HRO；主模型最终决定=**采纳（方案 A）**；条件已闭环（allowlist 钉 43 定向绿/半统一态声明/2.7.0 联动清单/roadmap 回写/INFO_GAP 以 owner 真机反馈原文"直连和代理下载没问题"留痕闭合）；[PRESSURE-OVERRIDE]=否。**后续风险跟踪**：①真机升级走查（2.6.x→2.6.5 覆盖装核 Add/Remove 显示名/开始菜单组/桌面快捷方式无残留/安装目录未变/数据根完好）；②release.yml 过滤器与 setup.iss:32 同源改动随测试包重构建验证；③半统一态观感是否触发二次点火；④allowlist 白名单须随 2.7.0 第 2 层落地同步收窄；⑤老用户桌面旧 SubTransJAV.lnk 不再被卸载脚本清理（历史遗留，2.7.0 清理列表）。
+
