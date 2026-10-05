@@ -585,7 +585,7 @@ const MSG = {
     mpStateReady: '可用',
     mpStateAdapter: '需适配',
     mpStatePlanned: '规划中',
-    mpUnverifiedTitle: '下载元数据未核验：请自备落位（2.7.2 逐档开放下载）',
+    mpUnverifiedTitle: '下载元数据未核验：请自备落位',
     mpAdapterTitle: '后端未适配（仅展示）',
     mpPlannedTitle: '规划中（2.9.0 适配器上线后可用）',
     mpVariantsLabel: '变体',

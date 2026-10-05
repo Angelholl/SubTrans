@@ -703,13 +703,13 @@ def test_recommended_models_panel_metadata():
             assert e["variants"], e["name"]
         assert 1 <= e["spec"]["speed"] <= 5
         assert 1 <= e["spec"]["precision"] <= 5
-    # verified 硬门槛：tiny/base 实测核验=True；small/medium 未核验=False
+    # verified 硬门槛：五档 .pt（tiny/base/small/medium/large-v2）实测
+    # 核验全通过（2026-10-05 官方源实下载 sha256 字节级比对）
     assert entries["whisper-tiny"]["verified"] is True
     assert entries["whisper-base"]["verified"] is True
     assert entries["whisper-large-v2"]["verified"] is True
-    assert entries["whisper-small"]["verified"] is False
-    assert entries["whisper-medium"]["verified"] is False
-    assert "url" not in entries["whisper-small"]
+    assert entries["whisper-small"]["verified"] is True
+    assert entries["whisper-medium"]["verified"] is True
     assert entries["whisper-large-v2"]["spec"]["recommend"] is True
     assert entries["whisper-large-v2"]["tier"] == "precise"
     # 三态双门控：whisper 系 ready，qwen3 planned
@@ -789,3 +789,24 @@ def test_recommended_models_tiny_base_verified_pins():
     assert b["bytes"] == 145262807
     assert b["sha256"] == ("ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f"
                            "668f8b0e6c6326e34e")
+
+
+def test_recommended_models_small_medium_verified_pins():
+    """small/medium 官方资产元数据实测核验（2026-10-05 实下载 sha256 字节级
+    比对通过；sha256=URL 段=whisper 上游 _MODELS pin，与 tiny/base 同标准；
+    至此五档 .pt 全核验）。"""
+    entries = {e["name"]: e for e in asr_env.ASR_RECOMMENDED_MODELS}
+    s = entries["whisper-small"]
+    assert s["bytes"] == 483617219
+    assert s["sha256"] == ("9ecf779972d90ba49c06d968637d720dd632c55bbf19d"
+                           "441fb42bf17a411e794")
+    assert s["url"].endswith("/small.pt")
+    assert s["sources"][0]["verified"] is True
+    assert s["sources"][0]["sha256"] == s["sha256"]
+    m = entries["whisper-medium"]
+    assert m["bytes"] == 1528008539
+    assert m["sha256"] == ("345ae4da62f9b3d59415adc60127b97c714f32e89e93"
+                           "6602e85993674d08dcb1")
+    assert m["url"].endswith("/medium.pt")
+    assert m["sources"][0]["verified"] is True
+    assert m["sources"][0]["sha256"] == m["sha256"]

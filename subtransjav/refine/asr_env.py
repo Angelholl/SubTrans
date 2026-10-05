@@ -67,10 +67,11 @@ ASR_CACHE_DIR = os.path.normpath(
 # spec{speed/precision 五格点阵·静态人工评定非实测, recommend, mem_min}+
 # backend{type,state}（三态双门控单一来源：ready 可下载可选用/
 # adapter-needed 展示数据/planned 规划中）+variants（行内变体展开）。
-# verified 硬门槛：未核验档位禁止可点击下载（2.7.1 件5）——tiny/base 已
-# 实测下载（2026-10-05，官方 openaipublic 资产）字节级 sha256 核验通过
-# （sha256=URL 段=whisper 上游 _MODELS pin，与 large-v2 同标准）；
-# small/medium 未核验（url/sha256 留空，2.7.2 逐档核验转可用）。
+# verified 硬门槛：未核验档位禁止可点击下载（2.7.1 件5）——tiny/base/
+# small/medium 已实测下载（2026-10-05，官方 openaipublic 资产）字节级
+# sha256 核验通过（sha256=URL 段=whisper 上游 _MODELS pin，与 large-v2
+# 同标准），五档 .pt（tiny/base/small/medium/large-v2）全核验；
+# qwen3 仍 planned 不变。
 # large-v2 字面量自 dict_manager._ASR_DOWNLOADS 迁移（url/bytes/sha256
 # 实测核算值原样保留）；qwen3-asr-1.7b=规划中（HF 多文件目录布局，
 # 启动前置=HF 布局核实+加载 smoke+二级评议）。
@@ -150,9 +151,24 @@ ASR_RECOMMENDED_MODELS: list[dict] = [
         "spec": {"speed": 3, "precision": 3, "recommend": False,
                  "mem_min": 2},
         "backend": {"type": "openai-whisper-api", "state": "ready"},
-        "verified": False,
+        "verified": True,
+        "bytes": 483617219,
+        "sha256": ("9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42"
+                   "bf17a411e794"),
+        "url": ("https://openaipublic.azureedge.net/main/whisper/models/"
+                "9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf1"
+                "7a411e794/small.pt"),
         "support": "available",
         "license": "MIT（openai/whisper 上游模型卡口径）",
+        "sources": [
+            {"source": "official", "label": "官方源",
+             "url": ("https://openaipublic.azureedge.net/main/whisper/"
+                     "models/9ecf779972d90ba49c06d968637d720dd632c55bbf"
+                     "19d441fb42bf17a411e794/small.pt"),
+             "sha256": ("9ecf779972d90ba49c06d968637d720dd632c55bbf19d4"
+                        "41fb42bf17a411e794"),
+             "verified": True},
+        ],
         "variants": [
             {"name": "原版 .pt", "state": "ready"},
             {"name": "q5_0 量化", "state": "adapter-needed",
@@ -168,9 +184,24 @@ ASR_RECOMMENDED_MODELS: list[dict] = [
         "spec": {"speed": 2, "precision": 4, "recommend": False,
                  "mem_min": 5},
         "backend": {"type": "openai-whisper-api", "state": "ready"},
-        "verified": False,
+        "verified": True,
+        "bytes": 1528008539,
+        "sha256": ("345ae4da62f9b3d59415adc60127b97c714f32e89e936602e859"
+                   "93674d08dcb1"),
+        "url": ("https://openaipublic.azureedge.net/main/whisper/models/"
+                "345ae4da62f9b3d59415adc60127b97c714f32e89e936602e859936"
+                "74d08dcb1/medium.pt"),
         "support": "available",
         "license": "MIT（openai/whisper 上游模型卡口径）",
+        "sources": [
+            {"source": "official", "label": "官方源",
+             "url": ("https://openaipublic.azureedge.net/main/whisper/"
+                     "models/345ae4da62f9b3d59415adc60127b97c714f32e8"
+                     "9e936602e85993674d08dcb1/medium.pt"),
+             "sha256": ("345ae4da62f9b3d59415adc60127b97c714f32e89e93"
+                        "6602e85993674d08dcb1"),
+             "verified": True},
+        ],
         "variants": [
             {"name": "原版 .pt", "state": "ready"},
             {"name": "q5_0 量化", "state": "adapter-needed",

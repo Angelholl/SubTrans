@@ -2999,8 +2999,13 @@ def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
 def test_refine_asr_status_probe_cache_roundtrip(gui_api_obj, tmp_path,
                                                  monkeypatch):
     """非 force 读快照立即返回（probe_cached=True）并回填 decorations；
-    force=True 绕过缓存重新探测；超龄缓存不命中。"""
+    force=True 绕过缓存重新探测；超龄缓存不命中。
+    设置存储隔离到 tmp：本机真实 refine_stage_settings.json 可能含
+    media_crosscheck_enabled="1" 等用户态（2026-10-05 真机污染案例，
+    crosscheck 断言不得依赖本机文件）。"""
     from subtransjav.refine import asr_env
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(tmp_path / "refine_stage_settings.json"))
     cache = tmp_path / "asr_probe_cache.json"
     monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
                         lambda: str(cache))
@@ -3033,8 +3038,11 @@ def test_refine_asr_status_probe_cache_roundtrip(gui_api_obj, tmp_path,
 
 def test_refine_asr_status_passthrough_triage_and_hf(gui_api_obj, tmp_path,
                                                      monkeypatch):
-    """probe 结果的 triage/stderr_tail/models_hf/ffmpeg_path 原样透出。"""
+    """probe 结果的 triage/stderr_tail/models_hf/ffmpeg_path 原样透出。
+    设置存储隔离到 tmp（同 2026-10-05 本机设置态污染案例，防复发）。"""
     from subtransjav.refine import asr_env
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(tmp_path / "refine_stage_settings.json"))
 
     def _probe(asr_python_setting=""):
         return {"available": False, "reason": "x", "models": [],
