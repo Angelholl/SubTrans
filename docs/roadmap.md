@@ -122,10 +122,10 @@
 - ⬜ **件2 下载镜像提速（sudachi_full 单源破局+ASR 加速源坐实）**：HF 镜像通道（owner 上传 137MB zip+large-v2 3GB，Apache-2.0/MIT 许可声明留档，原样字节副本）；dict_sources.json mirror 源 sha256 沿用既有 pin 零放宽+URL 钉 /resolve/<commit-sha>/；`_URL_HOST_ALLOW` 域名集=实测 hf-mirror 重定向链后定（HRO 收窄：禁预设写死，白名单外域名回评议）；**点亮门=生产代码路径（_http_get+逐跳守卫）实下载 sha256 比对一致**；auto 链镜像优先（仅 sudachi_full，失败轮换回 cloudfront；core 维持 pypi→tuna 不动）；未点亮前 GUI 口径不虚亮。
 - ⬜ **件3 ASR 状态三口径对齐+下载缓解引导**：下拉空保存值占位项「未选择（点选即保存）」（消灭单选项假选中）+红绿灯去硬编码 'large-v2' 兜底+摘要卡口径统一（同键族 5 消费点全查：三 UI+asr_runner/quality_advisor 降级缺省）；新增 i18n 键 app.js MSG 与 strings.py 双表同步；系统代理两跳自动+--dict-from-file 离线导入引导文案；GUI 黑盒空/存两态钉。
 
-## 2.7.2 —— 字幕入口修复（ASS/SSA/VTT 导入点亮）+ASR 模型元数据核验版 ⬜（进行中；字幕件 D2026-1005-02 立项）
+## 2.7.2 —— 字幕入口修复（ASS/SSA/VTT 导入点亮）+ASR 模型元数据核验版 ✅ 已发布（2026-10-05，tag v2.7.2→b8abcfa release/2.7.2 分支制，Release id 403549433：SubTrans-setup-2.7.2.exe 50,839,755B sha256 69264DF8…E9C1 与 SHA256SUMS 核对一致+公开 URL 回读下载复验一致；构建 run 37285101270 绿（smoke 全链）；notes 只写本版；main 前进 2.7.3.dev0；发版期 windows-3.13 腿 flake 一次（test_effective_dir_blacklist_falls_back，同 commit 重跑自愈，横切观察项第 2 例））
 
 - ✅ **件1 字幕入口点亮（D2026-1005-02，fix 非 feat）✅ 已落库（2026-10-05，381cf5c+a1c1952 推送 main；黑盒 T1-T3 PASS+补修复验；基线 1930+4→1937+4；Mimosa 36 零新增 seal 9e835baf；code-review 两轴过）**：2.6.4 承诺兑现+对话框回归修复（2.6.4 起「添加文件」被非法 filter 串整体封死连 .srt 也不可用，2.7.1 真机走查暴露）——strings.py filter 改合法写法 `ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)`（pywebview 描述段不容斜杠）+拖拽白名单与前端二层过滤放开 .ass/.ssa/.vtt+拖拽文案去 .srt 硬编码（addedViaDrop/skippedNonSrt）+source_header 标题改值（追认项可单项回退）+目录收编保持 *.srt 增「有 ASS 无 SRT」分支提示（no_srt_in_folder 改值）；测试三层钉（精确值钉改合法串/parse_file_type 直测钉断言返回值——daily CI 无 gui extra 恒 skip 由 gui-probe 与本地实跑/全腿静态钉描述段无斜杠）；**输出口径维持 SRT**（保 ASS 格式另立项）；发行说明按「2.6.4 承诺兑现+回归修复」口径。详见 decision-log D2026-1005-02。
-- ⬜ **件2 ASR 下载元数据逐档核验（d271-asr-批清单 版本梯队表）**：tiny/base/small/medium 下载元数据逐档核验+sha256 补全，核验一档转一档（tiny/base 已于 2.7.1 顺手核验通过转可下载）。
+- ✅ **件2 ASR 下载元数据逐档核验（d271-asr-批清单 版本梯队表）✅ 已落库（2026-10-05，31c30d3；openaipublic 实下载 sha256 字节级核验：small 483,617,219B/9ecf7799…e794、medium 1,528,008,539B/345ae4da…dcb1——medium 首下 404 教训=URL 段必须取自上游 whisper/_MODELS 表记忆哈希不可信；五档 .pt 全核验转可下载，qwen3 仍 planned；配套 test_gui_api 两处设置存储隔离防本机态污染，owner config 只读未动）**：tiny/base/small/medium 下载元数据逐档核验+sha256 补全，核验一档转一档（tiny/base 已于 2.7.1 顺手核验通过转可下载）。
 
 ## 2.7.1 —— 安装版 ASR 探测修复+模型管理面板 ✅ 已发布（2026-10-05，tag v2.7.1→87f0002 release/2.7.1 分支制，Release id 403198677：SubTrans-setup-2.7.1.exe 50,828,884B sha256 01769C01…77B56 与 SHA256SUMS 核对一致；构建 run 37232463479 绿（含 UTF-8 热修重建）；notes 只写本版；main=2.7.2.dev0=f41e836+1126df4；owner 从 GitHub 下载真机测试中）
 
