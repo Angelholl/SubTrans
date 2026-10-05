@@ -116,6 +116,11 @@
 - ✅ **2.6.1 已发布（2026-10-02，tag v2.6.1→release/2.6.1 头 68f13e1，Release id 401896944：setup-2.6.1.exe 33,764,476B 哈希核过 3347b7d8+SHA256SUMS；notes 只写本版）**
 - ⬜ **2.6.1 工作区重整+校对视图（2026-10-02 立项，D2026-1002-07；owner 四点反馈：质量与建议提到工作区/新增校对 TAB 视频字幕对照 SmartSub 式可选向/布局美观度对标 SmartSub 重整/校对组件规划已答=ffmpeg 既有依赖即可、ASR 仅批 3 可选联动）**——critic 有条件支持无 HRO 全采纳，批 1 开工门=决议归档。批 1 UI 基建：静态键 cap 192→200 解冻提案（首件，耗 2-4 个）+导航三分（工作区=字幕翻译/校对/质量与建议；设置=引擎与模型/词库与模板/高级参数，nav_group_quality 改字不加键）+间距 token 化（只增不改）+质量与建议页来源条折叠+布局变体统一+视觉三小件（✅ 已落库，见 d261 批清单）。批 2a 校对容器：播放器 spike 首件（file:// 直播+timeupdate/currentTime 精度+seek+10ms 补偿实证=验收口径）+右栏全隐迷你状态条（三 id 归属批 2a 评议定；✅ 归属+UI 规格已定案 D2026-1002-08=独立四 id reviewStatusBar/Dot/Label/Fill+makeStatusManager 工厂+翻译侧零改动，条件②已闭环，id 总额仍待批 2a 预算表逐段预演 ≤9）+SRT 编码嗅探（BOM→utf-8→gbk）+ffprobe 三态+手动转码临时预览+跳转入队接口空实现（{timestamp,label,source}+契约钉）+id 预算分段列名目标 ≤10。批 2b 校对编辑：双向联动五要点+行内编辑+保存（重编号确认+另存为/备份）；200-800 行不虚拟化。批 3 联动增强：对照链/AI 分析疑点段进校对视图+校对页 ASR 可选入口（承诺件）。设计红线：单一编辑器实现/状态单行/列表播放器同真源/新文案全 JS 态 MSG 键；程序分界=静态键 cap 走解冻提案、DOM id 走预算表+二级评议。
 
+## 2.7.2 —— 字幕入口修复（ASS/SSA/VTT 导入点亮）+ASR 模型元数据核验版 ⬜（进行中；字幕件 D2026-1005-02 立项）
+
+- ⬜ **件1 字幕入口点亮（D2026-1005-02，fix 非 feat）**：2.6.4 承诺兑现+对话框回归修复（2.6.4 起「添加文件」被非法 filter 串整体封死连 .srt 也不可用，2.7.1 真机走查暴露）——strings.py filter 改合法写法 `ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)`（pywebview 描述段不容斜杠）+拖拽白名单与前端二层过滤放开 .ass/.ssa/.vtt+拖拽文案去 .srt 硬编码（addedViaDrop/skippedNonSrt）+source_header 标题改值（追认项可单项回退）+目录收编保持 *.srt 增「有 ASS 无 SRT」分支提示（no_srt_in_folder 改值）；测试三层钉（精确值钉改合法串/parse_file_type 直测钉断言返回值——daily CI 无 gui extra 恒 skip 由 gui-probe 与本地实跑/全腿静态钉描述段无斜杠）；**输出口径维持 SRT**（保 ASS 格式另立项）；发行说明按「2.6.4 承诺兑现+回归修复」口径。详见 decision-log D2026-1005-02。
+- ⬜ **件2 ASR 下载元数据逐档核验（d271-asr-批清单 版本梯队表）**：tiny/base/small/medium 下载元数据逐档核验+sha256 补全，核验一档转一档（tiny/base 已于 2.7.1 顺手核验通过转可下载）。
+
 ## 2.7.1 —— 安装版 ASR 探测修复+模型管理面板 ✅ 已发布（2026-10-05，tag v2.7.1→87f0002 release/2.7.1 分支制，Release id 403198677：SubTrans-setup-2.7.1.exe 50,828,884B sha256 01769C01…77B56 与 SHA256SUMS 核对一致；构建 run 37232463479 绿（含 UTF-8 热修重建）；notes 只写本版；main=2.7.2.dev0=f41e836+1126df4；owner 从 GitHub 下载真机测试中）
 
 - **件1 探测修复三件（D2026-1005-01）**：asr_runner 随包（spec datas 单文件+定位函数 frozen/dev 双形态+脚本直调优先 -m dev-only 回退）+**secrets.py 劫持修复**（脚本直调 sys.path[0]=refine 目录劫持标准库 secrets 致 whisper 导入链炸——sys.path 自清+双回归钉）/ffmpeg 泛化（PATH→上游 env Library\bin 等候选→抽片显式绝对路径）/失败三分类 triage+stderr tail。

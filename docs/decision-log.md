@@ -2943,3 +2943,27 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **六、执行追记（2026-10-05，2.7.1 落库 3512533）**：owner 设计定稿（AppModal 720px 面板/首启空闲探测+README 提示/点阵静态评定/MVP 只核验 large-v2+硬门槛「未核验档位禁止可点击下载」/红绿灯并入状态行/版本梯队 2.7.1→2.7.2→2.8.0→2.9.0→2.10 锁序）→design-expert 方案（8 关键决策+组件规格）→二级评议通过（C1-C5：i18n 口径勘正 JS 态键不受 cap 200/件1 三坑/HF env 三级链对接 owner G 盘/models kind 守卫隔离/黑盒分层）。实现六件全落（黑盒 PASS：红绿灯三色/面板三档分组/三态 chip 双门控/路径栏/banner，真实探测数据注入 stub）；**实现期抓出并修复两个真 bug**：①runner 脚本直调被 refine/secrets.py 劫持标准库 secrets（sys.path[0]=脚本目录致 whisper 导入链炸；sys.path 自清+双回归钉——副产物发现包装反模式）；②fmtGB 定义在 RefineUI IIFE 闭包内而 AppModal 顶层不可见（面板渲染中断；models 闭包本地版修复）。tiny/base 顺手核验通过转可下载（openaipublic 实下载 sha256 比对）。基线 1909+4→**1930+4**；Mimosa 36 零新增 seal cf11cb77；黑盒证据存会话工件。待发版（owner 从 GitHub 下载测试）。
 
+## [2026-10-05] [D2026-1005-02] ASS/SSA/VTT 入口点亮+版本定档（2.7.2 patch：2.6.4 兑现+对话框回归修复） [已拍板·待开工]
+
+**一、决策背景**：2.6.4（提交 18c3fd5）交付 ASS/SSA/VTT→SRT 多格式导入本体（subtitle_convert.py+CLI 接线+18 用例，发行说明已承诺「文件选择对话框与命令行 -i 直收」），但 GUI 唯一入口被 strings.py:193 `"ASS/SSA/VTT 字幕 (*.ass;*.ssa;*.vtt)"` 一行非法 filter 串封死：pywebview 6.2.1 parse_file_type（webview/util.py:160-165，描述段正则 `^([\w ]+)` 不容斜杠）抛 ValueError，create_file_dialog 整体失败——**2.6.4 起「添加文件」按钮连 .srt 也不可用，属核心功能回归**（2.7.1 真机走查暴露）。拖拽链（main.py:205 白名单+app.js:1762 二层过滤）、目录收编（api.py:707 glob *.srt）亦不含 ASS。
+
+**二、owner 拍板（2026-10-05）**：
+1. 定性 **fix 非 feat**：2.6.4 已交付并承诺，本次=修通入口+口径统一（唯一例外项：拖拽放开 .ass 属补全新增能力，见三.C4）。
+2. 版本 **2.7.2 patch**：与已登记的 ASR 模型下载元数据核验并列双修复项；不挤占 2.8.0（CT2 已锁定）。
+3. 范围边界 C：目录收编保持 *.srt 不放开；输出口径维持 SRT（不保 ASS 原格式/样式）；上述边界向 owner 明示。
+4. **owner 补充语境**（追认依据）：确认「无 ASS 交付需求」——SRT 输出边界对 owner 工作流成立（ffmpeg 烧录直接吃 SRT）；新信号「翻译完视频压制同时烧录字幕的需求」**登记为独立候选需求**（不混入本决策，触发另行立项）。
+
+**三、评议结论（critic 有条件支持，无 HRO）**：四条件全部采纳闭环——
+- **C1 版本口径（已闭环）**：2.7.2 按 patch 发行，发行说明以「2.6.4 承诺兑现+对话框回归修复」口径表述，不把拖拽支持当头牌新功能；roadmap 补 2.7.2 小节并列双修复项。
+- **C2 测试落位（已闭环）**：直测钉并入 tests/test_gui_api.py（gui 标记+importorskip 惯用法），断言 parse_file_type 返回元组 == `('ASS SSA VTT 字幕', '*.ass;*.ssa;*.vtt')`；另加全腿可跑静态钉（注册串描述段无 `/`）；提交信息如实标注 daily CI 两腿均无 pywebview（安装串 `.[dev,zh]` 不含 gui extra）故 skip，实跑面=月级 gui-probe（windows，`.[dev,gui]`，headless import webview 已实证）+本地 dev，**不宣称 CI 全腿守护**。B 方案（daily windows 腿装 gui extra）提示为可选另案，未点火。
+- **C3 范围边界的 UX 回补（已闭环）**：目录收编维持 *.srt；api.py select_srt_folder 增「目录含 .ass/.ssa/.vtt 而无 .srt」分支提示；strings.py no_srt_in_folder 改值明示「仅收 .srt，ASS/SSA/VTT 请用添加文件」；app.js:28 addedViaDrop/:30 skippedNonSrt 两行文案去 .srt 硬编码同步修正。
+- **C4 owner 追认（按追认处理）**：source_header 改值（index.html:129+app.js:86 两处，既有键改值不触键冻结——红线钉 test_ui_phase3_redlines.py:201 与 test_gui_js_static.py 均只钉键集不钉值）与拖拽放开两项，owner 未表异议，按二.4 语境追认留痕；完成通知中明示两项可单项回退。改值属冻结域内文案变更，随本次黑盒复拍留证。
+
+**四、实现要点（待 coding，改动面 6-7 文件）**：①strings.py:193 → `"ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)"`（parse_file_type 6.2.1 实测解析通过）；②main.py:205 白名单放行 .ass/.ssa/.vtt；③app.js:1762 二层过滤放开同名后缀+:28/:30 文案修正+:86 source_header 改值；④index.html:129 source_header 默认文同步；⑤api.py select_srt_folder 增提示分支+strings.py no_srt_in_folder 改值；⑥tests/test_subtitle_convert.py TestGuiFiletypePin 改钉合法新串；⑦tests/test_gui_api.py 增 parse_file_type 直测钉（断言返回值元组）+全腿静态钉（描述段无 `/`）。
+
+**五、验证与基线**：测试基线 1930 passed+4 skipped 只增不减（含改 1 现测+新增用例）；ruff 绿；改动收口后按验证链五环（静态→定向→全量→冒烟→Mimosa 安全深扫与基线比对）+真机走查三条 GUI 路径（对话框/拖拽/文件夹）与 CLI 一条；GUI 改动提交信息按惯例标注真机/黑盒验证状态。
+
+**六、风险跟踪**：①直测钉在 daily CI 恒 skip，pywebview 升级正则漂移时由 gui-probe/本地先行发现，处理窗口数天——已知接受；②source_header 改文案影响 phase3 黑盒截图基线，随本次复拍；③目录收编边界提示为新增 UX，owner 真机反馈为验收依据，若反馈不满可单项回退（不改收编范围，仅文案/提示可调）；④压制烧录需求已登记独立候选，触发另行立项，**不随本决策实施**。
+
+**七、异议记录**：critic 曾提出——patch 语义瑕疵（拖拽放开属 minor 级新增能力，以兑现口径化解）、「gate windows 腿」前提错误（daily CI 两腿均无 pywebview）、目录收编静默排除需 UX 回补、app.js 两行文案遗漏、直测钉应断言返回值内容。主模型全部采纳转化，无驳回。无 [PRESSURE-OVERRIDE]。
+
