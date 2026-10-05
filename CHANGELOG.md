@@ -2,6 +2,17 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.7.2] - 2026-10-05
+
+### 修复
+
+- **「添加文件」对话框报错**：修复点击「添加文件」时报 `is not a valid file filter` 错误、文件选择窗口无法打开的问题（2.6.4 起引入，期间只能通过拖拽方式添加文件）。
+
+### 新增
+
+- **ASS/SSA/VTT 字幕入口**：「添加文件」与拖拽现均支持 ASS/SSA/VTT 字幕，自动转换为 SRT 进入翻译流程（输出仍为 SRT）；「添加文件夹」仍仅收 SRT，文件夹内存在 ASS/SSA/VTT 字幕时会提示改用「添加文件」逐个选择。
+- **whisper small/medium 开放下载**：两档模型经官方源实测核验（SHA256 字节级校验），模型管理面板内可直接下载；至此五档 whisper 模型（tiny/base/small/medium/large-v2）全部可一键下载。
+
 ## [2.7.1] - 2026-10-05
 
 ### 修复
