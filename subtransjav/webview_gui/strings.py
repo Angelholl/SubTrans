@@ -18,7 +18,9 @@ MSG = {
     "no_active_window": "无活动窗口",
     "no_folder_selected": "未选择文件夹",
     "no_files_selected": "未选择文件",
-    "no_srt_in_folder": "所选文件夹中未找到 .srt 字幕",
+    "no_srt_in_folder": "所选文件夹中未找到 .srt 字幕（目录添加仅收 .srt；ASS/SSA/VTT 请用「添加文件」选择）",
+    # 2.7.2 件1（D2026-1005-02）：目录无 .srt 但检测到 ASS/SSA/VTT 时的针对性提示
+    "no_srt_but_subtitle_in_folder": "检测到 ASS/SSA/VTT 字幕，目录添加仅收 .srt，请用「添加文件」逐个选择",
     "folder_opened": "文件夹已打开",
     "cannot_open_folder": "无法打开文件夹：{e}",
 
@@ -190,7 +192,9 @@ MSG = {
     "file_type_video": "视频文件 (*.mp4;*.mkv;*.webm;*.mov;*.avi)",
     "file_type_srt": "字幕文件 (*.srt)",
     # 批2 多格式导入（D2026-1003-05）：后端侧键（select_srt_files 对话框过滤）
-    "file_type_subtitle": "ASS/SSA/VTT 字幕 (*.ass;*.ssa;*.vtt)",
+    # 2.7.2 件1（D2026-1005-02）：描述段去 `/`——pywebview parse_file_type
+    # 描述段正则 `^([\w ]+)` 不容斜杠，旧串致 create_file_dialog 整体 ValueError
+    "file_type_subtitle": "ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)",
     "review_transcode_no_need": "该媒体可直接预览，无需转码",
     "review_transcode_running": "已有转码任务进行中",
     "review_transcode_failed": "转码失败，请重试或手动转换格式",

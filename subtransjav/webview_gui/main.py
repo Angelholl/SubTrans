@@ -201,8 +201,10 @@ def on_drop_event(e):
     paths = []
     # 2.6.1 批 2a（D2026-1002-09）：放宽至视频后缀供校对页消费；
     # 非 tab-review 激活时由 ReviewUI.onDroppedFiles 原样转发
-    # FileListManager.addDroppedFiles（对非 .srt 本就静默跳过），翻译页行为零变化
-    allowed_exts = ('.srt', '.mp4', '.mkv', '.webm', '.mov', '.avi')
+    # FileListManager.addDroppedFiles（对非字幕本就静默跳过），翻译页行为零变化
+    # 2.7.2 件1（D2026-1005-02）：字幕后缀放开至 .ass/.ssa/.vtt（与对话框口径一致）
+    allowed_exts = ('.srt', '.ass', '.ssa', '.vtt',
+                    '.mp4', '.mkv', '.webm', '.mov', '.avi')
     for file in files:
         full_path = file.get('pywebviewFullPath')
         if full_path and str(full_path).lower().endswith(allowed_exts):

@@ -371,7 +371,19 @@ class TestCliWiring:
 class TestGuiFiletypePin:
     def test_file_type_subtitle_key_registered(self):
         from subtransjav.webview_gui.strings import MSG
-        assert MSG["file_type_subtitle"] == "ASS/SSA/VTT 字幕 (*.ass;*.ssa;*.vtt)"
+        # 2.7.2 件1（D2026-1005-02）：描述段去 `/`（pywebview parse_file_type
+        # 描述段正则不容斜杠，旧串致对话框整体挂死）
+        assert MSG["file_type_subtitle"] == "ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)"
+
+    def test_file_type_subtitle_description_no_slash(self):
+        """静态钉（D2026-1005-02 C2，daily CI 两腿可跑）：注册值描述段不得含 `/`。
+
+        pywebview 6.2.1 parse_file_type 描述段正则 ``^([\\w ]+)`` 不容 `/`，
+        含斜杠即 ValueError → create_file_dialog 整体失败。
+        """
+        from subtransjav.webview_gui.strings import MSG
+        desc = MSG["file_type_subtitle"].split("(", 1)[0].strip()
+        assert "/" not in desc, f"file_type_subtitle 描述段含非法 `/`: {desc!r}"
 
     def test_select_srt_files_dialog_includes_subtitle_type(self):
         src = (Path(__file__).resolve().parents[1] / "subtransjav"

@@ -25,10 +25,10 @@ const MSG = {
 
     // 文件列表
     usingSourceOutput: '未获取默认输出目录，已切换为「保存到字幕同目录」',
-    addedViaDrop: n => `✓ 已通过拖放添加 ${n} 个 .srt 文件`,
+    addedViaDrop: n => `✓ 已通过拖放添加 ${n} 个字幕文件`,
     skippedDuplicates: n => `ℹ 跳过 ${n} 个重复文件`,
-    skippedNonSrt: n => `ℹ 跳过 ${n} 个非 .srt 文件`,
-    addedFiles: n => `已添加 ${n} 个 .srt 文件`,
+    skippedNonSrt: n => `ℹ 跳过 ${n} 个不支持的文件（仅支持 .srt/.ass/.ssa/.vtt）`,
+    addedFiles: n => `已添加 ${n} 个字幕文件`,
     addedFilesFromFolder: n => `已从文件夹添加 ${n} 个 .srt 文件`,
     fileSelectError: '文件选择出错',
     folderSelectError: '文件夹选择出错',
@@ -83,7 +83,7 @@ const MSG = {
     theme_dark: '暗色主题',
 
     // ---- Source 区 / 文件按钮 ----
-    source_header: 'Source（.srt 字幕）',
+    source_header: 'Source（.srt / .ass / .ssa / .vtt 字幕）',
     no_files_selected: '暂未选择文件',
     empty_hint: '点击上方按钮或拖入文件开始',
     add_files: '添加文件',
@@ -285,7 +285,7 @@ const MSG = {
     close_btn: '关闭',
 
     // ---- 动态文案收编（原表外内联中文）----
-    no_files_hint: '请先在上方 Source 区添加 .srt 字幕文件。',
+    no_files_hint: '请先在上方 Source 区添加字幕文件（支持 .srt/.ass/.ssa/.vtt）。',
     resumable_found: n => `🔄 检测到可恢复 ${n} 个（将复用已完成阶段）`,
     still_running: secs => `（仍在运行，最近活动 ${secs}s 前）`,
     risk_suffix: n => `｜风险 ${n}`,
@@ -380,7 +380,7 @@ const MSG = {
     aiDone: 'AI 分析完成，建议仅供人工裁决',
     aiFailed: m => `AI 分析失败：${m}`,
     gui_initialized: '净语翻译 GUI 已初始化',
-    gui_usage_hint: '在上方 Source 区添加 .srt 字幕后点击「开始净语翻译」',
+    gui_usage_hint: '在上方 Source 区添加字幕后点击「开始净语翻译」',
 
     // ---- 快速试听 / 媒体来源（D2026-0929-09 视听对比第二阶段）----
     preview_play_btn: '试听',
@@ -511,7 +511,7 @@ const MSG = {
     // 2.6.3 批B：AppModal.download 复制轻提示（clipboard 不可用时降级 title 提示）
     ui_copied: '已复制',
     ui_copy_manual: '无法自动复制，请长按/手动选择复制',
-    first_run_guide: '首次使用：点击「添加文件」导入 .srt 字幕，或直接拖入文件开始翻译。',
+    first_run_guide: '首次使用：点击「添加文件」导入字幕（支持 .srt/.ass/.ssa/.vtt），或直接拖入文件开始翻译。',
     // 2.5.0 修复批（JS 态键）：词典 full 变体/云分析确认/角色卡跳转与回落提示
     dict_sudachi_full_label: '日语词典·完整版（sudachi full）',
     dict_sudachi_full_desc: '完整版词典数据（语法提示分词用，与 core 版二选一即可；官方 CDN 单源直链，点下方按钮下载）',
@@ -1748,7 +1748,8 @@ const FileListManager = {
         });
     },
 
-    // Method called by Python DOM event handler with full file paths (.srt only)
+    // Method called by Python DOM event handler with full file paths
+    // (.srt/.ass/.ssa/.vtt only，2.7.2 件1 与对话框口径一致)
     addDroppedFiles(paths) {
         if (!Array.isArray(paths) || paths.length === 0) {
             return;
@@ -1757,9 +1758,11 @@ const FileListManager = {
         let addedCount = 0;
         let duplicates = 0;
         let skipped = 0;
+        const allowedSubtitleExts = ['.srt', '.ass', '.ssa', '.vtt'];
 
         paths.forEach(path => {
-            if (!String(path).toLowerCase().endsWith('.srt')) {
+            const p = String(path).toLowerCase();
+            if (!allowedSubtitleExts.some(ext => p.endsWith(ext))) {
                 skipped++;
                 return;
             }

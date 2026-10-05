@@ -8,6 +8,7 @@
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -3051,3 +3052,138 @@ def test_refine_asr_status_passthrough_triage_and_hf(gui_api_obj, tmp_path,
     assert r["stderr_tail"] == "tail..."
     assert r["models_hf"][0]["backend_state"] == "adapter-needed"
     assert r["ffmpeg_path"] == ""
+
+
+# ---------------------------------------------------------------------------
+# 2.7.2 件1（D2026-1005-02）：字幕入口点亮——对话框 filter 直测钉 /
+# select_srt_folder 提示分支 / on_drop_event 白名单放开
+# ---------------------------------------------------------------------------
+
+def test_file_type_subtitle_filter_parse_pin():
+    """直测钉（C2）：新 filter 串必须被 pywebview parse_file_type 解析为预期元组。
+
+    旧串描述段含 `/`（"ASS/SSA/VTT"）被 parse_file_type 正则拒绝抛
+    ValueError → create_file_dialog 整体失败（「添加文件」按钮挂死）。
+    断言返回值元组内容，不只断言不抛。
+    实跑面=gui-probe/本地（daily CI 两腿无 pywebview，importorskip 跳过）。
+    """
+    from webview.util import parse_file_type
+
+    from subtransjav.webview_gui.strings import MSG
+    assert parse_file_type(MSG["file_type_subtitle"]) == \
+        ("ASS SSA VTT 字幕", "*.ass;*.ssa;*.vtt")
+
+
+def test_select_srt_folder_subtitle_only_hint_branch(gui_api_obj, monkeypatch, tmp_path):
+    """2.7.2 件1：目录只有 ASS/SSA/VTT 无 .srt → 针对性提示分支（复用 message 通道）。"""
+    import subtransjav.webview_gui.api as api_mod
+    from subtransjav.webview_gui.strings import msg
+    (tmp_path / "a.ass").write_text("x", encoding="utf-8")
+    (tmp_path / "b.vtt").write_text("x", encoding="utf-8")
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is False
+    assert r["message"] == msg("no_srt_but_subtitle_in_folder")
+
+
+def test_select_srt_folder_srt_regression(gui_api_obj, monkeypatch, tmp_path):
+    """回归钉：目录含 .srt 时行为与改动前一致（收编 .srt，不受新分支影响）。"""
+    (tmp_path / "a.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "a.ass").write_text("x", encoding="utf-8")
+    import subtransjav.webview_gui.api as api_mod
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is True
+    assert str(tmp_path / "a.srt") in r["paths"]
+    assert str(tmp_path / "a.ass") not in r["paths"]
+
+
+def test_select_srt_folder_empty_keeps_no_srt_channel(gui_api_obj, monkeypatch, tmp_path):
+    """目录既无 .srt 也无 ASS/SSA/VTT → 走原 no_srt_in_folder 通道不变。"""
+    import subtransjav.webview_gui.api as api_mod
+    from subtransjav.webview_gui.strings import msg
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is False
+    assert r["message"] == msg("no_srt_in_folder")
+
+
+def test_on_drop_event_subtitle_exts_whitelist(gui_api_obj, monkeypatch):
+    """2.7.2 件1：拖拽白名单放行 .ass/.ssa/.vtt（.srt 原路径不变），.txt 拒收。"""
+    import webview
+
+    from subtransjav.webview_gui.main import on_drop_event
+
+    scripts = []
+
+    class FakeWin:
+        @staticmethod
+        def evaluate_js(script):
+            scripts.append(script)
+
+    # on_drop_event 内延迟 import webview 取同一模块对象，patch 其 windows 即可
+    monkeypatch.setattr(webview, "windows", [FakeWin()])
+    event = {"dataTransfer": {"files": [
+        {"pywebviewFullPath": "D:/x/a.srt"},
+        {"pywebviewFullPath": "D:/x/b.ass"},
+        {"pywebviewFullPath": "D:/x/c.ssa"},
+        {"pywebviewFullPath": "D:/x/d.vtt"},
+        {"pywebviewFullPath": "D:/x/e.txt"},
+    ]}}
+    on_drop_event(event)
+    assert len(scripts) == 1, "放行文件应汇聚为一次 ReviewUI 转发"
+    for name in ("a.srt", "b.ass", "c.ssa", "d.vtt"):
+        assert name in scripts[0], f"{name} 应被放行"
+    assert "e.txt" not in scripts[0], ".txt 必须被拒收"
+
+
+def test_select_srt_folder_subtitle_exts_pinned_to_drop_whitelist():
+    """防漂移钉（code-review 跟进）：api.py select_srt_folder 的字幕后缀元组
+    与 main.py on_drop_event allowed_exts 的字幕后缀一致。
+
+    全链 4 处字面量（main.py allowed_exts / app.js allowedSubtitleExts /
+    api.py 提示分支元组 / strings.py filter 串）中 api.py 元组此前唯一无守护；
+    源码文本提取判定（沿用 test_gui_js_static 静态钉惯例）。api 元组不含 .srt
+    属刻意设计（.srt 由 glob 收编），故比对对象=main 放行集字幕子集去 .srt。
+    """
+    root = Path(__file__).resolve().parents[1]
+    api_src = (root / "subtransjav" / "webview_gui" / "api.py").read_text(encoding="utf-8")
+    main_src = (root / "subtransjav" / "webview_gui" / "main.py").read_text(encoding="utf-8")
+
+    body = api_src.split("def select_srt_folder", 1)[1] \
+                  .split("def scan_srt_folder", 1)[0]
+    m = re.search(r"suffix\.lower\(\) in \(([^)]*)\)", body)
+    assert m, "api.py select_srt_folder 未找到字幕后缀元组"
+    api_exts = set(re.findall(r'"(\.[a-z0-9]+)"', m.group(1)))
+    assert api_exts, "api.py 字幕后缀元组解析为空"
+
+    m2 = re.search(r"allowed_exts\s*=\s*\(([^)]*)\)", main_src)
+    assert m2, "main.py 未找到 allowed_exts 元组"
+    main_exts = set(re.findall(r"'(\.[a-z0-9]+)'", m2.group(1)))
+    assert main_exts, "main.py allowed_exts 解析为空"
+
+    assert api_exts == {".ass", ".ssa", ".vtt"}, \
+        f"select_srt_folder 字幕后缀漂移: {sorted(api_exts)}"
+    subtitle_subset = main_exts & {".srt", ".ass", ".ssa", ".vtt"}
+    assert subtitle_subset == {".srt", ".ass", ".ssa", ".vtt"}, \
+        f"main.py 放行集字幕子集漂移: {sorted(subtitle_subset)}"
+    assert api_exts == subtitle_subset - {".srt"}, \
+        "api.py 目录提示后缀与 main.py 拖放白名单字幕后缀不一致（防漂移）"

@@ -1183,7 +1183,8 @@ def test_review_video_exts_consistent():
 
     main.py on_drop_event 的 allowed_exts（放行集，含 .srt）与
     review.js REVIEW_VIDEO_EXTS（JS 视频分流集）按后缀集合比对：
-    JS 视频后缀 ⊆ main.py 放行集，且放行集去掉 .srt 后恰等于
+    JS 视频后缀 ⊆ main.py 放行集，且放行集去掉 .srt 与字幕后缀
+    （.ass/.ssa/.vtt，2.7.2 件1 D2026-1005-02 拖拽放开）后恰等于
     JS 视频集（防三处字面量——含 strings.py file_type_video
     过滤器文案——漂移）。
     """
@@ -1201,8 +1202,11 @@ def test_review_video_exts_consistent():
     assert js_video <= main_exts, \
         f"JS 视频后缀超出 main.py 拖拽放行集: {sorted(js_video - main_exts)}"
     assert ".srt" in main_exts, "main.py 放行集必须含 .srt（翻译页原路径）"
-    assert main_exts - {".srt"} == js_video, \
-        "main.py 放行集（去 .srt）与 JS 视频集不相等（后缀漂移）"
+    subtitle_exts = {".ass", ".ssa", ".vtt"}
+    assert subtitle_exts <= main_exts, \
+        "main.py 放行集必须含 .ass/.ssa/.vtt（2.7.2 件1 拖拽放开）"
+    assert main_exts - {".srt"} - subtitle_exts == js_video, \
+        "main.py 放行集（去 .srt 与字幕后缀）与 JS 视频集不相等（后缀漂移）"
 
 
 # ---------------------------------------------------------------------------

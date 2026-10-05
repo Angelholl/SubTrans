@@ -709,6 +709,13 @@ class TranslateAPI:
             if srt_files:
                 register_session_paths(srt_files)
                 return {"success": True, "paths": srt_files, "folder": result[0]}
+            # 2.7.2 件1（D2026-1005-02）：目录无 .srt 但检测到 ASS/SSA/VTT 时
+            # 给出针对性提示（目录收编口径仍为 *.srt，不放开；复用 message 通道）
+            subtitle_files = [f for f in folder.glob("*")
+                              if f.suffix.lower() in (".ass", ".ssa", ".vtt")]
+            if subtitle_files:
+                return {"success": False,
+                        "message": msg("no_srt_but_subtitle_in_folder")}
             return {"success": False, "message": msg("no_srt_in_folder")}
         return {"success": False, "message": msg("no_folder_selected")}
 
