@@ -344,3 +344,88 @@ class TestDictionaryFailureDegradation:
             assert isinstance(out, str)
         finally:
             gh._tokenize_cached.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Test: release_tokenizer（2.7.3 件① 词典替换 WinError 5 自锁修复）
+# ---------------------------------------------------------------------------
+
+class TestReleaseTokenizer:
+    """release_tokenizer：单例+缓存释放、after_release 锁内回调、可重建。"""
+
+    @staticmethod
+    def _install_fake_sudachipy(monkeypatch):
+        """注入可工作的 fake sudachipy（参照 TestDictionaryFailureDegradation
+        的 monkeypatch 手法），返回 (Dictionary 类, Tokenizer 类)。"""
+        import sys
+        import types
+
+        from subtransjav.refine import grammar_hint as gh
+
+        class _FakeTok:
+            def tokenize(self, text):
+                return [f"tok:{text}"]
+
+        class _FakeDictionary:
+            def __init__(self, dict=""):
+                pass
+
+            def create(self):
+                return _FakeTok()
+
+        fake = types.ModuleType("sudachipy")
+        fake.Dictionary = _FakeDictionary  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "sudachipy", fake)
+        monkeypatch.setattr(gh, "_tokenizer_instance", None)
+        monkeypatch.setattr(gh, "_sudachi_available", None)
+        gh._tokenize_cached.cache_clear()
+        return _FakeDictionary, _FakeTok
+
+    def test_release_clears_singleton_and_cache(self, monkeypatch):
+        from subtransjav.refine import grammar_hint as gh
+        self._install_fake_sudachipy(monkeypatch)
+
+        # 预置：实例已建、缓存已有条目
+        assert gh._tokenize_cached("猫") == ["tok:猫"]
+        assert gh._tokenize_cached.cache_info().currsize == 1
+        assert gh._tokenizer_instance is not None
+
+        gh.release_tokenizer()
+
+        assert gh._tokenizer_instance is None
+        assert gh._sudachi_available is None
+        assert gh._tokenize_cached.cache_info().currsize == 0
+
+    def test_after_release_called_within_init_lock(self):
+        """after_release 必须在仍持 _init_lock 的区间内被调。"""
+        from subtransjav.refine import grammar_hint as gh
+        observed = {}
+
+        def _probe():
+            # 仍持 _init_lock ⇒ 非阻塞尝试获取必失败
+            # （threading.Lock 不可重入：同线程已持锁再 acquire 即 False）
+            got = gh._init_lock.acquire(blocking=False)
+            if got:     # pragma: no cover - 仅在未持锁（缺陷）时走到
+                gh._init_lock.release()
+            observed["held"] = not got
+
+        gh.release_tokenizer(after_release=_probe)
+        assert observed["held"] is True
+
+    def test_rebuild_after_release(self, monkeypatch):
+        """释放后 _get_tokenizer 能重建实例，与既有「直置 None」清法语义
+        兼容（参照 TestThreadSafety 的手工清法）：_tokenize_cached 随即
+        走重建实例正常分词。"""
+        from subtransjav.refine import grammar_hint as gh
+        _, fake_tok = self._install_fake_sudachipy(monkeypatch)
+
+        # 预置实例后释放
+        gh._tokenize_cached("犬")
+        assert gh._tokenizer_instance is not None
+        gh.release_tokenizer()
+        assert gh._tokenizer_instance is None
+
+        tok = gh._get_tokenizer()
+        assert tok is not None
+        assert gh._sudachi_available is True
+        assert gh._tokenize_cached("猫") == ["tok:猫"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
 
@@ -81,6 +82,44 @@ def _tokenize_cached(text: str):
         return None
     with _tokenize_lock:    # 同一 Tok 实例并发 tokenize 会 Already borrowed
         return list(tok.tokenize(text))
+
+
+def release_tokenizer(
+    after_release: Callable[[], Any] | None = None,
+) -> None:
+    """尽力释放进程级分词器单例及其分词缓存（2.7.3 件①）。
+
+    词典下载/替换（dict_manager._extract_dic）覆盖旧 .dic 前调用：
+    Windows 下单例 mmap 词典文件进程存活期不释放，``os.replace``
+    必 PermissionError（WinError 5）。语义为「尽力释放」——正在
+    tokenize 的线程可能仍持旧实例；下次 :func:`_get_tokenizer`
+    自然重建。
+
+    线程安全约定：全程持 ``_init_lock``；锁内先置空单例与可用性
+    标记（并发探测线程随即在锁外阻塞等待重建），再按固定锁序
+    （恒为 _init_lock → _tokenize_lock，严禁反向嵌套）取
+    ``_tokenize_lock`` 清空 lru_cache。``after_release`` 为可调用
+    对象时在**仍持 _init_lock 的区间内**调用（置于 cache_clear
+    之后）——保证调用方在回调内做 os.replace 重试的窗口期，不会
+    有并发线程经 _get_tokenizer 重建实例重新 mmap 旧词典文件。
+
+    注意：持 _init_lock 期间严禁调用 _get_tokenizer /
+    is_grammar_hint_available（threading.Lock 不可重入，自死锁）。
+
+    Parameters
+    ----------
+    after_release : Callable[[], Any] | None
+        释放完成后、仍在 _init_lock 保护区间内执行的回调（如
+        dict_manager 的 os.replace 重试闭包）。非可调用对象静默忽略。
+    """
+    global _tokenizer_instance, _sudachi_available
+    with _init_lock:
+        _tokenizer_instance = None
+        _sudachi_available = None
+        with _tokenize_lock:    # 锁序恒为 _init_lock → _tokenize_lock
+            _tokenize_cached.cache_clear()
+        if callable(after_release):
+            after_release()
 
 
 # ---------------------------------------------------------------------------
