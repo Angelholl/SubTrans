@@ -2005,3 +2005,81 @@ def test_asr_status_three_view_alignment_pinned():
     assert "dict_install_hint" in keys, "MSG 缺 dict_install_hint 键"
     assert "两跳" in src and "--dict-from-file" in src and "切换镜像" in src, \
         "dict_install_hint 缺下载缓解引导（两跳自动/镜像切换/离线导入）"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件⑥（D2026-1006-01）：P1 启动缺陷修复——顶层 refreshPipelineMirror
+# 引用 Refine UI IIFE 私有 $ 导致两条启动链整体中断
+# ---------------------------------------------------------------------------
+
+def test_startup_chain_not_killed_by_scope_leak():
+    """件⑥回归钉：顶层函数不得引用 IIFE 私有 $（词法作用域按定义位置解析）。
+
+    人工推演（启动炸链场景）：refreshPipelineMirror 定义在顶层（:6082），
+    函数体内 $('refineS1Model') 按词法作用域解析——顶层无 $ 定义（$ 是
+    Refine UI IIFE 内私有函数），无论从哪调用都抛 ReferenceError：
+    - 链A（DOMContentLoaded）：:6055 调用即炸 → 其后的 change 绑定、
+      pipelineCard 绑定、MSG.gui_initialized 完成提示全部不可达；
+    - 链B（pywebviewready）：await __refineLoadRemote → IIFE 内 loadRemote
+      调用同一函数同样炸 → await reject → FeatureStatus.init()（语法徽章）
+      与 3s ASR 预热全被跳过。
+    修复=两处改 document.getElementById(...)（顶层合法 API，语义不变）。
+    """
+    source = _app_js_source()
+
+    # 断言1 钉根因：refreshPipelineMirror 函数体不再含 $('，改走
+    # document.getElementById（pipelineMirrorLine 镜像载体 + 两配置项读取）
+    body = _extract_function(source, "refreshPipelineMirror")
+    assert "$('" not in body, \
+        "refreshPipelineMirror 顶层函数体内不得引用 IIFE 私有 $（D2026-1006-01 件⑥）"
+    assert "document.getElementById('pipelineMirrorLine')" in body, \
+        "镜像载体读取应保留 document.getElementById('pipelineMirrorLine')"
+    assert "document.getElementById('refineS1Model')" in body, \
+        "模型值必须经 document.getElementById('refineS1Model') 读取"
+    assert "document.getElementById('refineConcurrency')" in body, \
+        "并发值必须经 document.getElementById('refineConcurrency') 读取"
+
+    # 断言2 钉作用域审计：全文件 $(' 的出现必须全部落在 Refine UI IIFE
+    # 区间内（从含 window.__refineUI 哨兵的行到其后第一个列首 })(); 行）。
+    # 等价判据：全文件出现总数 == 区间内出现总数（且 >0 自证提取有效）——
+    # 任何顶层（或非 Refine IIFE 区间）新增 $(' 引用都会使总数 > 区间数。
+    sentinel = source.index("window.__refineUI")
+    end_m = re.search(r"^\}\)\(\);", source[sentinel:], re.M)
+    assert end_m, "未找到 Refine UI IIFE 终点（列首 })();）"
+    iife_seg = source[sentinel:sentinel + end_m.start()]
+    total = source.count("$('")
+    inner = iife_seg.count("$('")
+    assert total > 0, "自证失败：未提取到任何 $(' 出现（判据失效）"
+    assert total == inner, (
+        "顶层不得引用 IIFE 私有 $（D2026-1006-01 件⑥）："
+        f"全文件 $(' 出现 {total} 处，Refine UI IIFE 区间内仅 {inner} 处，"
+        "区间外存在词法作用域致死引用"
+    )
+
+    # 断言3 钉链A 可达：顶层 DOMContentLoaded 回调内 refreshPipelineMirror()
+    # 调用必须位于 MSG.gui_initialized 之前且同区间——镜像调用不再是
+    # 区间末尾的致死点（其后仍有完成提示、控件绑定等可达语句）
+    m = re.search(
+        r"^document\.addEventListener\('DOMContentLoaded'[\s\S]*\Z",
+        source, re.M)
+    assert m, "未找到顶层 DOMContentLoaded 注册"
+    chain_a = m.group(0)
+    assert "refreshPipelineMirror()" in chain_a, \
+        "链A 必须保留镜像调用 refreshPipelineMirror()"
+    assert "MSG.gui_initialized" in chain_a, \
+        "链A 必须保留初始化完成提示"
+    assert chain_a.index("refreshPipelineMirror()") \
+        < chain_a.index("MSG.gui_initialized"), \
+        "镜像调用必须位于 MSG.gui_initialized 之前（同一可达区间，链A 不得在镜像处中断）"
+
+    # 断言4 钉链B 完整：pywebviewready 回调内 FeatureStatus.init（语法徽章）
+    # 与 setTimeout 3000 ASR 预热（refine_asr_status）必须保留——await
+    # __refineLoadRemote 异常不再吞掉后续初始化
+    m = re.search(r"window\.addEventListener\('pywebviewready'[\s\S]*\Z",
+                  source)
+    assert m, "未找到 pywebviewready 注册"
+    chain_b = m.group(0)
+    assert "FeatureStatus.init" in chain_b, \
+        "pywebviewready 链必须调用 FeatureStatus.init（语法徽章初始化）"
+    assert "refine_asr_status" in chain_b and "3000" in chain_b, \
+        "pywebviewready 链必须保留 setTimeout 3000 ASR 预热（refine_asr_status）"

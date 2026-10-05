@@ -6082,8 +6082,8 @@ function RunControlsInit() {
 function refreshPipelineMirror() {
     const line = document.getElementById('pipelineMirrorLine');
     if (!line) return;
-    const model = (($('refineS1Model') || {}).value || '').trim() || '—';
-    const conc = (($('refineConcurrency') || {}).value || '').trim() || '1';
+    const model = ((document.getElementById('refineS1Model') || {}).value || '').trim() || '—';
+    const conc = ((document.getElementById('refineConcurrency') || {}).value || '').trim() || '1';
     line.textContent = `${MSG.pipeline_mirror_model}：${model}　·　${MSG.pipeline_mirror_conc} ${conc}`;
 }
 
