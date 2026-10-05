@@ -2971,7 +2971,7 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **九、发版追记（2026-10-05，v2.7.2 已发布）**：owner 终选改道两步——①中途曾拍板「直接发版 v2.7.1.1（四段 hotfix 号）」，主模型完成四段号工具链核验（release.yml tag 解析纯字符串透传/一致性钉取前三段/PEP 440 合法，可行未用）；②随即改道「修复合并 2.7.2 一起发，件2 ASR small/medium 核验做完即发版」=回归原梯队，终态与评议 C1 口径一致，未破例。件2 核验实测：small 483,617,219B/9ecf7799…e794、medium 1,528,008,539B/345ae4da…dcb1（openaipublic 实下载，sha256=URL 段=上游 _MODELS pin 三重一致；**medium 首下 404 BlobNotFound——记忆哈希后半段错误，教训=模型 URL 段必须取自上游源码 _MODELS 表**）；五档 .pt 全核验转可下载。配套：test_gui_api 两处设置存储隔离（owner 真机 16:10 写入 crosscheck 开关致 roundtrip 环境态红，git stash 往返实锤非本次引入；用户 config 全程只读）。发版链：release/2.7.2 分支 b8abcfa（bump final+CHANGELOG [2.7.2]）→tag v2.7.2→构建 run 37285101270 绿→Release id 403549433 双资产 201→回读哈希+公开 URL 下载复验全 MATCH（setup 50,839,755B sha256 69264DF8…E9C1）。发版期事件：①windows-3.13 腿 test_effective_dir_blacklist_falls_back flake 一次（同 commit 重跑自愈，横切观察项第 2 例）；②并发会话同窗提交 be92481（D2026-1005-03 立项）与本案 docs 勾账无冲突。main 前进 2.7.3.dev0（与并发立项 2.7.3 编号恰合）。
 
-## [2026-10-05] [D2026-1005-03] 2.7.3 立项：词典链自锁修复+下载镜像提速+ASR 状态口径对齐（真机走查三件） [已拍板·待开工（开工门=正式 critic 补评）]
+## [2026-10-05] [D2026-1005-03] 2.7.3 立项：词典链自锁修复+下载镜像提速+ASR 状态口径对齐（真机走查三件） [已拍板·开工门已收口（见 D2026-1005-05）]
 
 **一、决策背景**：owner 2026-10-05 全新安装模拟普通用户真机走查三发现（本会话代码诊断实证）——①**词典下载 WinError 5 自锁**：grammar_hint.py:29-62 分词器进程级单例（`Dictionary(dict=...)` mmap 词典文件进程存活期永不释放；api.py:613 功能探测亦触发懒加载），dict_manager.py:562 `_extract_dic` 末 os.replace 覆盖旧 dic 时同进程持锁必 PermissionError，失败路径无临时件清理（实测残留 .extracting 202MB+.downloading 77MB）且异常裸奔；②**直连下载慢=完整版单源**：sudachi_full 137MB=CloudFront CDN 单源（dict_sources.json：PyPI 无 full wheel 仅 9KB 壳包/tuna 无此 CDN 镜像），core 双源但 auto 仅网络失败才轮换 tuna（慢而不断不切换），ASR large-v2「国内加速源」=PENDING 空条目（asr_env.py:240 verified=False 不可用），GUI「仅镜像」按钮对 full disabled（owner 误读为代理问题；代理实为两跳自动：attempt#1 系统代理→attempt#2 强制直连，dict_manager.py:403-493）；③**ASR 状态三口径分叉**：红绿灯 app.js:4754-4756 硬编码兜底显示 'large-v2'（判 model_present）/下拉 app.js:4824-4825 空保存值不设选中但单选项 select 浏览器默认显第一项=假选中（仅手动 change 持久化 :5140）/摘要卡 app.js:2382-2384 判 model_present&&saved_model——功能零影响（asr_model 空→CLI 不带 --asr-model→运行器降级缺省 large-v2，quality_advisor.py:322）。
 
@@ -2983,7 +2983,7 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **五、验证与基线**：基线 1938+4（31c30d3）只增不减；ruff+mypy 基线零漂移；GUI 变更=黑盒必跑（三口径空/存两态一致性+下载失败人话提示+点亮后仅镜像全链），提交信息标注 GUI 验证状态；三件合计 ≥3 文件→push 前 code-review 技能与三查合并；Mimosa 深扫与基线 36 比对零新增放行。
 
-## [2026-10-05] [D2026-1005-04] 2.7.3 增件立项：件④ 收编智能过滤+件⑤ 词典下载停止（owner 真机反馈两案） [已拍板·待开工（随 D2026-1005-03 开工门一并补评）]
+## [2026-10-05] [D2026-1005-04] 2.7.3 增件立项：件④ 收编智能过滤+件⑤ 词典下载停止（owner 真机反馈两案） [已拍板·开工门已收口（见 D2026-1005-05）]
 
 **一、决策背景**：owner 真机走查 2.7.2 期间两反馈——①「添加文件夹把所有 srt 都收进去了，实际 .merged.whisperjav 后缀才是产成品；其他项目的产成品带其他后缀如何识别，还是保持现状一刀切？讨论给我个方案」；②「下载旁边应添加停止按钮，直连速度过慢时可主动停止去切换代理」（词典管理卡 sudachi full 137MB 下载中无停止手段）。
 
@@ -2999,3 +2999,15 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **六、风险跟踪**：①正则误伤（自制文件名含 pass1/词形）——可见化提示+单文件添加可恢复，接受；②停止时序竞态——会话 ID 绑定+过渡兜底双保险；③_dictBusyKind 前端互斥弱——后端会话绑定补强；④停止中无限挂——超时兜底强制收口；⑤_dictBusyKind 跨 kind 行为与件③口径对齐时的回归——黑盒覆盖。
 
+
+## [2026-10-05] [D2026-1005-05] 2.7.3 开工门补评：两 HRO 采纳拍板，修改后放行（D2026-1005-03/04 一并收口） [已拍板·执行完毕]
+
+**一、补评背景**：decision-critic 开工门补评两连挂（累计 5 次 Model request failed），按 D2026-1004-263 先例由 general-purpose 替代评议执行，逐件审查五件勘探落点与实现方案，产出 2 HRO+7 条件。**结论：修改后放行**。
+
+**二、拍板**：**HRO-1（件⑤ 同 kind 新旧下载共存三竞态）＝采纳**：按「同 kind 后端真互斥」收口——旧下载线程未退出时后端拒绝新下载（单一活跃下载者，终态快照会话门控与临时件隔离随之天然满足）；stopped 快照仅由持会话下载线程在检查点收口时写；stop 端点只置 Event 不乐观写 stopped。**HRO-2（件② 镜像标识规则缺失，tuna 字面量三处硬编码）＝采纳**：dict_sources.json downloads[] 泛化 `"role":"mirror"` 旗标，镜像池/official 池/has_mirror 三处改按 role 判定（tuna 条目补 role 保持现行为），official 池=非 mirror；GUI「仅镜像」键门控叠加 verified——未点亮保持禁用=不虚亮。**其余 6 条盲区条件全采纳为编码硬条件**：①锁序三条（reset 全程持 _init_lock 且 replace 重试同锁内完成/禁持锁再入/_init_lock→_tokenize_lock 固定顺序）；②PermissionError 窄域+对冲措辞（仅二次重试仍败才占用话术，保留原始 strerror，杀毒/只读入文案）；③停止兜底显式常数（opener timeout 10s+2 拍轮询）+Event 检查点四处（attempt 头/1MB 分块/4MB 解压块/源循环头）；④件④三正则末尾锚定、_MARKER_RE 仅取 pass1|pass2 分支防误杀 merged 产成品；⑤停止信号专用异常三处显式透传；⑥ASR 下拉占位项空 value+change 忽略空值。
+
+**三、白名单实测记录（HRO-①前置，2026-10-05 生产形态 GET 直连路由 4/4 采样）**：hf-mirror.com `/resolve/` 链——无 Range 普通 GET→302→`cas-bridge.xethub.hf.co`（终跳直连可达，64KB 取样成功）；Range GET→hf-mirror 本域 206 直服；代理出口路由→308→huggingface.co（**不入围**：attempt#1 失败自动降 attempt#2 直连，禁放行被墙源站）。**白名单定案新增 `hf-mirror.com`+`cas-bridge.xethub.hf.co` 两域**（观测实证非预设）；点亮实测若现新域→扩面回评议。
+
+**四、执行追记（本会话全量收口）**：五件全落地——件① release_tokenizer+窄域重试+残件 try/finally；件② role 泛化+镜像占位条目（verified=false 不入池，URL 留空待 owner 填 /resolve/<commit-sha>/）+方向感知回退 note+manifest note；件③ 红绿灯去假兜底+下拉 JS 占位+change 空值守卫+引导文案三点（扩既有 dict_install_hint 键）；件④ 三黑名单谓词 batch.is_pipeline_intermediate+一致性钉+CLI 契约钉+第四分支 folder_all_skipped_pipeline+scan skipped_count；件⑤ 会话注册表互斥+DictDownloadStopped 四检查点三透传+stopped 快照+四态 UI（主键原位变停止复用 stop_btn 键+btn-danger，DICT_STOP_GRACE_MS=10000+2000 显式常数）。**基线 1938+4→1973+4 只增**（净增 35 条：五件回归钉+review 修复钉）；ruff/mypy 零漂移；冒烟 --help/模块导入过；Mimosa 36 零新增（seal acf7a8c5）。**code-review 两轴（Standards/Spec）无硬伤**，3 低危触碰修复随批：①worker.start() 挪进注册表锁内（堵登记→start 窗口双下载竞态）；②dictRequestStop 加 _dictBusyKind===kind 守卫（跨 kind 停止不误入过渡）；③镜像池加 url 非空门（占位条目即使误置 verified 也不入池）。**GUI 黑盒 7 测试点全过（GUI 已验证）**：ASR 空/存两态三口径一致（空=未选择/占位选中，存=large-v2 三处一致且持久化）、混合目录收编 2 跳过 4（merged 保留）两行 console、全滤光第四分支人话、停止四态全链（下载中红色停止键+pill 禁用→停止中过渡禁连点→已停止 note+pill 解锁+残件零残留）、失败人话红字、sudachi full 仅镜像禁用不虚亮、https-only 守卫拒绝人话。**后端 strings.py 键预算微调**：实际 +3（folder_all_skipped_pipeline/dict_download_busy/asrModel 双键入后端表），dict_download_busy 系 HRO-1 互斥拒新下载提示，超出原「2 键」估算属评审采纳项衍生，frontend folderSkippedPipeline/dict_stop 三键按双表约定落 app.js。**主行改值口径说明**：addedFilesFromFolder 键文案不改（避免破坏既有翻译），值语义改为收编净数——与归档「改值」意图一致。**知悉项**：①core「可用」徽章在 harness 进程外删文件后不回退（进程内缓存态，非支持流程，未改）；②全量首跑 test_file_parallel_disabled_for_local_providers 单败复跑绿（flake，横切观察项第 3 例）；③IAB 输入层会话劣化新标签页重置（既有教训再证）。**点亮待办（owner）**：HF 上传 137MB 原样字节副本（sha256 同 pin eb6d0220…71e，Apache-2.0 许可声明留档）+large-v2 3GB 同渠道→填 /resolve/<commit-sha>/ 直链→生产路径（_http_get+逐跳守卫）实下载 sha256 比对→转 sha256_verified=true 点亮（可跨版本窗口）；点亮实测现白名单外域名→扩面回评议。
+
+**五、决议影响**：D2026-1005-03/04 全部条件收口完毕；2.7.3 五件待 owner 真机走查后按发版 SOP 排期。
