@@ -2325,6 +2325,18 @@ const ConsoleManager = {
 //   _reportedRiskCount 旧字段删除）/ 错误 / 心跳超时告警 / 完成摘要。
 // 上限 200 行，DOM 与内部数组同裁（无全量保留需求，导出走 ConsoleManager）。
 // ============================================================
+// 心跳超时判定单点：优先消费后端 snapshot 已算好的 heartbeat_stale；
+// 仅当该键为 undefined（旧后端兼容）才回退本地 age>阈值 判定
+// （阈值取后端 heartbeat_stale_s，缺省 45s ≈ 2.25×心跳间隔 20s）。
+function heartbeatIsStale(status) {
+    if (status.heartbeat_stale !== undefined) {
+        return status.heartbeat_stale === true;
+    }
+    const staleS = (typeof status.heartbeat_stale_s === 'number')
+        ? status.heartbeat_stale_s : 45;
+    return status.heartbeat_age != null && status.heartbeat_age > staleS;
+}
+
 const ActivityStream = {
     _MAX_LINES: 200,
     _rows: [],
@@ -2419,10 +2431,8 @@ const ActivityStream = {
         }
 
         // 心跳超时：进入超时态打一行黄色告警，恢复（不超时）重置告警态
-        const staleS = (typeof status.heartbeat_stale_s === 'number')
-            ? status.heartbeat_stale_s : 45;
-        const stale = status.status === 'running' &&
-            status.heartbeat_age != null && status.heartbeat_age > staleS;
+        // （判定单点 heartbeatIsStale：优先后端 heartbeat_stale，旧后端回退本地算）
+        const stale = status.status === 'running' && heartbeatIsStale(status);
         if (stale && !this._heartbeatAlerted) {
             this._heartbeatAlerted = true;
             this._add(MSG.activity_heartbeat_stale(
@@ -3030,11 +3040,9 @@ const TranslatorManager = {
                     text = text ? `${text} · ${status.current_file}` : status.current_file;
                 }
                 // 心跳超时且仍在运行：追加最近活动提示
-                // （阈值来自后端配置 heartbeat_stale_s 分层解析结果，缺省 45s ≈ 2.25×心跳间隔 20s）
-                const staleS = (typeof status.heartbeat_stale_s === 'number')
-                    ? status.heartbeat_stale_s : 45;
-                if (status.status === 'running' &&
-                    status.heartbeat_age != null && status.heartbeat_age > staleS) {
+                // （判定单点 heartbeatIsStale：优先后端 heartbeat_stale，
+                // 旧后端回退本地算；秒数显示仍用 heartbeat_age）
+                if (status.status === 'running' && heartbeatIsStale(status)) {
                     const secs = Math.round(status.heartbeat_age);
                     text = `${text || MSG.running}${MSG.still_running(secs)}`;
                 }

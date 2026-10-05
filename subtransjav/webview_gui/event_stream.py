@@ -30,7 +30,10 @@ RISKS_SNAPSHOT = 50
 # 心跳超时默认阈值（秒；≈2.25×心跳间隔 20s，可由 RefineConfig.heartbeat_stale_s 覆盖后构造传入）
 HEARTBEAT_STALE_S_DEFAULT = 45.0
 
-# 阶段标签归一：事件 phase 短标签 → strings.MSG 键（未知值原样透传）
+# 阶段标签归一：事件 phase 短标签 → strings.MSG 键（未知值原样透传）。
+# 取值来源："1"/"s1" 为管线旧称阶段1(净语)，"3"/"s3" 为阶段3(审校)——
+# 即 pipeline_v2 新称 phase=A/B/final 与旧数字标签并存的归一层；
+# "2" 为历史 text 模式阶段2 的 phase 取值。
 _STAGE_LABEL_KEYS = {
     "a": "stage_a",
     "1": "stage_a",
@@ -59,6 +62,24 @@ def stage_label(phase) -> str:
 
 def _join(*parts: str) -> str:
     return " ".join(p for p in parts if p)
+
+
+def _to_int(value):
+    """安全转 int；None/非数值返回 None（事件 payload 数值容错单点）。"""
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _progress_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """phase_progress payload 字段归一（新键优先，旧键回退）。"""
+    return {
+        "done": payload.get("done", payload.get("lines_done")),
+        "total": payload.get("total", payload.get("lines_total")),
+        "batch": payload.get("batch", payload.get("batch_no")),
+        "batch_total": payload.get("batch_total"),
+    }
 
 
 def _extract_message(payload: dict[str, Any]) -> str:
@@ -90,10 +111,11 @@ def format_event_line(event: dict[str, Any]) -> str | None:
         return (_join(msg("ev_tag"), phase, msg("ev_phase_started"))
                 if phase else _join(msg("ev_tag"), msg("ev_phase_started_generic")))
     if etype == "phase_progress":
-        done = payload.get("done", payload.get("lines_done"))
-        total = payload.get("total", payload.get("lines_total"))
-        batch = payload.get("batch", payload.get("batch_no"))
-        batch_total = payload.get("batch_total")
+        f = _progress_fields(payload)
+        done = f["done"]
+        total = f["total"]
+        batch = f["batch"]
+        batch_total = f["batch_total"]
         if batch is not None and batch_total:
             core = msg("ev_batch", done=batch, total=batch_total)
         elif done is not None and total:
@@ -118,11 +140,11 @@ def format_event_line(event: dict[str, Any]) -> str | None:
         # 批 8a（D2026-1006-01）：闸门0 摘要人话行。字段取自
         # v2_outputs._build_gate0_report payload：detected_total（检出）、
         # deleted（处置/删除）、total（原始行数）→ 净语 = total - deleted。
-        try:
-            detected = int(payload.get("detected_total") or 0)
-            deleted = int(payload.get("deleted") or 0)
-            total = int(payload.get("total") or 0)
-        except (TypeError, ValueError):
+        # 任一数值转换失败 → 三值全部归 0（与原 try/except 全有或全无语义一致）
+        detected = _to_int(payload.get("detected_total") or 0)
+        deleted = _to_int(payload.get("deleted") or 0)
+        total = _to_int(payload.get("total") or 0)
+        if detected is None or deleted is None or total is None:
             detected = deleted = total = 0
         return _join(msg("ev_tag"), msg(
             "ev_gate0", file=event.get("file") or "",
@@ -275,30 +297,26 @@ class EventStreamParser:
         elif etype == "phase_progress":
             if phase:
                 self.current_stage = phase
-            done = payload.get("done", payload.get("lines_done"))
-            total = payload.get("total", payload.get("lines_total"))
-            batch = payload.get("batch", payload.get("batch_no"))
-            batch_total = payload.get("batch_total")
-            try:
-                if total is not None:
-                    self.lines_total = int(total)
-                if done is not None:
-                    self.lines_done = int(done)
-            except (TypeError, ValueError):
-                pass
-            try:
-                if batch is not None:
-                    self.batch_done = int(batch)
-                if batch_total is not None:
-                    self.batch_total = int(batch_total)
-            except (TypeError, ValueError):
-                pass
+            f = _progress_fields(payload)
+            done = _to_int(f["done"])
+            total = _to_int(f["total"])
+            batch = _to_int(f["batch"])
+            batch_total = _to_int(f["batch_total"])
+            # 转换失败（None）不动原值，保持旧语义
+            if total is not None:
+                self.lines_total = total
+            if done is not None:
+                self.lines_done = done
+            if batch is not None:
+                self.batch_done = batch
+            if batch_total is not None:
+                self.batch_total = batch_total
             self._refresh_progress_text()
         elif etype in ("warning", "degraded"):
             self._add_risk(event)
         elif etype == "error":
-            msg = _extract_message(payload)
-            self.error = msg
+            err_text = _extract_message(payload)
+            self.error = err_text
             self._add_risk(event)
         elif etype == "task_finished":
             self.task_summary = dict(payload)
@@ -306,10 +324,7 @@ class EventStreamParser:
                 self.untranslated_majority = True
         elif etype == "task_started":
             # 批 8a：payload.files 为文件总数（int，非清单），记录期望总数
-            try:
-                files_expected = int(payload.get("files") or 0)
-            except (TypeError, ValueError):
-                files_expected = 0
+            files_expected = _to_int(payload.get("files")) or 0
             self.files_total_expected = max(0, files_expected)
 
         # --- per-file 状态旁路（批 2a 建，批 8a 扩 failed 态）---

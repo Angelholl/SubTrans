@@ -1174,6 +1174,8 @@ class TranslateAPI:
             "heartbeat_age": snap.get('heartbeat_age'),
             "heartbeat_stale_s": float(
                 snap.get('heartbeat_stale_s') or HEARTBEAT_STALE_S_DEFAULT),
+            # 后端已算好的心跳超时判定（app.js 单点消费；旧 snapshot 缺键时 False）
+            "heartbeat_stale": bool(snap.get('heartbeat_stale', False)),
             "degraded": risk_count > 0 or majority,
             "warning_level": warning_level,
             "ndjson_mode": bool(snap.get('ndjson_mode')),
