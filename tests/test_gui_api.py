@@ -6,6 +6,7 @@
   规避 ``__init__`` 的副作用（Documents 建目录 / atexit 注册）；
 - URL/endpoint 守卫入口在发起任何网络请求之前即短路，无网络副作用。
 """
+import io
 import json
 import os
 import re
@@ -24,6 +25,7 @@ pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试", exc_type=ImportError)
 
+from subtransjav.refine.events import EventEmitter  # noqa: E402
 from subtransjav.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
     REPO_ROOT,
     SESSION_SELECTED_PATHS,
@@ -31,6 +33,7 @@ from subtransjav.webview_gui.api import (  # noqa: E402  须在 importorskip 之
     _build_refine_args,
     register_session_paths,
 )
+from subtransjav.webview_gui.event_stream import EventStreamParser  # noqa: E402
 
 
 @pytest.fixture()
@@ -2109,6 +2112,137 @@ def test_get_translation_status_files_status_empty_when_no_parser(gui_api_obj):
     api = _manual_state_api(gui_api_obj)
     status = api.get_translation_status()
     assert status["files_status"] == {}
+
+
+# ---------------------------------------------------------------------------
+# 批 8a（D2026-1006-01）：_pump_stdout 闸门 + gui.log 全量落盘 +
+# get_translation_status files 口径 / task_summary 透出
+# ---------------------------------------------------------------------------
+
+def _pump_lines(gui_api_obj, lines):
+    """构造假 proc 逐行喂 _pump_stdout，返回排干的日志队列内容。"""
+    api = _manual_state_api(gui_api_obj)
+    api._translate_parser = EventStreamParser()
+    proc = SimpleNamespace(stdout=iter(lines), wait=lambda: None)
+    api._pump_stdout(proc)
+    logs = []
+    while not api._translate_log_queue.empty():
+        logs.append(api._translate_log_queue.get_nowait())
+    return logs
+
+
+def _emit_event_lines(*events) -> list[str]:
+    """用 EventEmitter 生成真实 NDJSON 事件行列表（含行尾换行）。"""
+    buf = io.StringIO()
+    em = EventEmitter(stream=buf, task_id="t")
+    for ev in events:
+        em.emit(*ev[0], **ev[1])
+    return buf.getvalue().splitlines(keepends=True)
+
+
+def test_pump_stdout_heartbeat_not_enqueued(gui_api_obj):
+    """心跳事件行被闸门丢弃：队列无裸 JSON（批 8a P0 缺陷钉）。"""
+    lines = _emit_event_lines((("heartbeat",), {"payload": {"elapsed_s": 1}}))
+    assert _pump_lines(gui_api_obj, lines) == []
+
+
+def test_pump_stdout_gate0_summary_human_line_enqueued(gui_api_obj):
+    """gate0_summary 入队恰一条人话行（非 JSON）。"""
+    lines = _emit_event_lines(
+        (("gate0_summary",),
+         {"phase": "gate0", "file": "ep01.srt",
+          "payload": {"detected_total": 12, "deleted": 5, "total": 300}}),
+    )
+    logs = _pump_lines(gui_api_obj, lines)
+    assert len(logs) == 1
+    assert not logs[0].lstrip().startswith("{")
+    assert logs[0] == "[事件] 闸门0 ep01.srt：检出 12 · 处置 5 · 净语 295"
+
+
+def test_pump_stdout_non_event_line_passthrough(gui_api_obj):
+    """非事件行（遗留文本）原样入队。"""
+    logs = _pump_lines(gui_api_obj, ["Translating 42 lines\n"])
+    assert logs == ["Translating 42 lines\n"]
+
+
+def test_pump_stdout_logs_enqueued_lines_to_gui_log(gui_api_obj, monkeypatch):
+    """入队行全量落盘：logger.info 收到 strip 行尾换行的行
+    （事件人话行与非事件行均落盘；心跳不入队故也不落盘）。"""
+    import subtransjav.webview_gui.api as api_mod
+
+    records: list = []
+
+    class _FakeLogger:
+        def info(self, message: str) -> None:
+            records.append(message)
+
+    monkeypatch.setattr(api_mod, "_log", _FakeLogger())
+    lines = _emit_event_lines(
+        (("task_started",), {"payload": {"files": 2}}),
+    ) + ["plain legacy line\n"]
+    logs = _pump_lines(gui_api_obj, lines)
+    assert logs == ["[事件] 任务开始", "plain legacy line\n"]
+    assert records == ["[事件] 任务开始", "plain legacy line"]
+
+
+def _status_api_with_parser(gui_api_obj):
+    """伪造 parser 聚合状态：task_started(files=3) + 1 完成 + 1 失败。"""
+    api = _manual_state_api(gui_api_obj)
+    buf = io.StringIO()
+    em = EventEmitter(stream=buf, task_id="t")
+    em.emit("task_started", payload={"files": 3, "profile": "default"})
+    em.emit("phase_started", phase="A", file="ep01.srt")
+    em.emit("phase_finished", phase="final", file="ep01.srt")
+    em.emit("error", file="ep03.srt", payload={"reason": "x"})
+    parser = EventStreamParser()
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            parser.feed(line)
+    api._translate_parser = parser
+    return api
+
+
+def test_get_translation_status_files_completed_and_total(gui_api_obj):
+    """files_completed 数 done 态、files_total 取 max(已知文件数, 期望总数)，
+    不再把 snapshot 的行数 total 当文件数（批 8a 缺陷①②钉）。"""
+    status = _status_api_with_parser(gui_api_obj).get_translation_status()
+    assert status["files_completed"] == 1
+    assert status["files_total"] == 3    # len(files)=2，expected=3 → 3
+    assert status["files_status"] == {"ep01.srt": "done",
+                                      "ep03.srt": "failed"}
+
+
+def test_get_translation_status_files_total_falls_back_to_known_files(gui_api_obj):
+    """无 task_started（期望总数 0）时 files_total 回退已知文件数。"""
+    api = _manual_state_api(gui_api_obj)
+    buf = io.StringIO()
+    em = EventEmitter(stream=buf, task_id="t")
+    em.emit("phase_finished", phase="final", file="ep01.srt")
+    parser = EventStreamParser()
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            parser.feed(line)
+    api._translate_parser = parser
+    status = api.get_translation_status()
+    assert status["files_completed"] == 1
+    assert status["files_total"] == 1
+
+
+def test_get_translation_status_passes_task_summary(gui_api_obj):
+    """snapshot 的 task_summary 经新键透出（批 8a 完成摘要透出钉）。"""
+    api = _manual_state_api(gui_api_obj)
+    buf = io.StringIO()
+    em = EventEmitter(stream=buf, task_id="t")
+    em.emit("task_finished", payload={"status": "ok", "files_ok": 2,
+                                      "files_failed": 0})
+    parser = EventStreamParser()
+    for line in buf.getvalue().splitlines():
+        if line.strip():
+            parser.feed(line)
+    api._translate_parser = parser
+    status = api.get_translation_status()
+    assert status["task_summary"] == {"status": "ok", "files_ok": 2,
+                                      "files_failed": 0}
 
 
 # ---------------------------------------------------------------------------

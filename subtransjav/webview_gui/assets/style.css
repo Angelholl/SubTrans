@@ -688,6 +688,9 @@ button:focus { outline: none; }
 .chip-running   { background: var(--primary-soft); color: var(--primary-strong); }
 .chip-done      { background: var(--ok-soft); color: var(--ok); }
 .chip-resumable { background: var(--warn-soft); color: var(--warn); }
+/* 2.7.3 件⑧批 8b：failed 第四态（后端 files_status 四态，批 8a 透出）；
+   令牌驱动，暗色主题经 --danger/--danger-soft 覆盖自动适配 */
+.chip-failed    { background: var(--danger-soft); color: var(--danger); }
 
 .file-item .file-remove-btn {
     border: none;
@@ -740,6 +743,40 @@ button:focus { outline: none; }
 .console-line.warning { color: var(--cl-warn); }
 .console-line.error   { color: var(--cl-err); }
 .console-line.command { color: var(--cl-dim); font-weight: 500; }
+
+/* 2.7.3 件⑧批 8b：结构化活动流（Console 面板内、原始日志上方）
+   行着色复用 .console-line 类系（info/success/warning/error）；
+   容器配色走 --console-*/--cl-* 令牌，暗色主题自动适配。
+   固定上限高度+独立滚动：不挤压原始日志区的 flex 分配 */
+.console-activity-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+.console-activity-title {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--text-2);
+}
+.console-activity {
+    flex-shrink: 0;
+    max-height: 140px;
+    overflow-y: auto;
+    background: var(--console-bg);
+    border: 1px solid var(--console-border);
+    border-radius: var(--radius-sm);
+    color: var(--console-text);
+    font-family: var(--font-mono);
+    font-size: var(--font-xs);
+    padding: var(--space-2) 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.console-activity .console-line { margin-bottom: 1px; }
+.console-activity:empty { display: none; }
 
 /* 折叠行为（.console-section 族，app.js toggle .collapsed）
    A案 批1（R1）：Console 保底高度 + 上限——max-height 钉死防 flex:1

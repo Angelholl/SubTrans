@@ -175,9 +175,19 @@
                             <button type="button" class="btn btn-ghost btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
                                 Clear
                             </button>
+                            <!-- 2.7.3 件⑧批 8b：导出/复制按钮（i18n 冻结，零 data-i18n，文案 JS 填） -->
+                            <button type="button" class="btn btn-ghost btn-sm" id="exportConsoleBtn"></button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="copyConsoleBtn"></button>
                         </div>
                     </div>
                     <div class="section-content">
+                        <!-- 2.7.3 件⑧批 8b：结构化活动流（原始日志上方，行全由 JS 渲染）；
+                             头部=活动流标题+「原始日志」折叠开关，均零 data-i18n -->
+                        <div class="console-activity-header">
+                            <span class="console-activity-title"></span>
+                            <button type="button" class="btn btn-ghost btn-sm" id="rawLogToggleBtn" aria-expanded="false"></button>
+                        </div>
+                        <div class="console-activity" id="consoleActivity"></div>
                         <div class="console-output" id="consoleOutput" data-testid="console">
                             <div class="console-line" data-i18n="ready">Ready.</div>
                         </div>

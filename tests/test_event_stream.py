@@ -470,3 +470,93 @@ def test_snapshot_files_key_returns_copy():
     snap["files"]["inject.srt"] = "x"
     assert parser.files == {"ep01.srt": "running"}
     assert parser.snapshot()["files"] == {"ep01.srt": "running"}
+
+
+# ---------------------------------------------------------------------------
+# 批 8a（D2026-1006-01）：gate0_summary 人话行 / task_started 期望总数 /
+# files failed 态
+# ---------------------------------------------------------------------------
+
+def test_format_event_line_gate0_summary_human_line():
+    """gate0_summary 格式化成人话行：file + 检出/处置/净语三数值。
+
+    净语 = payload.total（原始行数）- payload.deleted（删除数）；
+    字段名以 v2_outputs._build_gate0_report payload 为准。
+    """
+    line = format_event_line({
+        "type": "gate0_summary", "phase": "gate0", "file": "ep01.srt",
+        "payload": {"detected_total": 12, "deleted": 5, "total": 300},
+    })
+    assert line == "[事件] 闸门0 ep01.srt：检出 12 · 处置 5 · 净语 295"
+
+
+def test_format_event_line_gate0_summary_without_file():
+    """无 file 字段的 gate0_summary 不悬空（文件名位为空）。"""
+    line = format_event_line({
+        "type": "gate0_summary", "payload": {"detected_total": 1,
+                                             "deleted": 0, "total": 10},
+    })
+    assert line == "[事件] 闸门0 ：检出 1 · 处置 0 · 净语 10"
+
+
+def test_format_event_line_heartbeat_still_none_batch8a():
+    """heartbeat 人话行保持 None（闸门丢弃依据；基线只增不减）。"""
+    assert format_event_line({"type": "heartbeat",
+                              "payload": {"elapsed_s": 1}}) is None
+
+
+def test_task_started_records_files_total_expected():
+    """task_started payload.files 为文件总数（int，pipeline_v2.py:1089），
+    记入 files_total_expected，任务一开始 files 期望总数即为真总数。"""
+    parser = _make_parser_with_events(
+        (("task_started",),
+         {"payload": {"files": 3, "profile": "default"}}),
+    )
+    snap = parser.snapshot()
+    assert snap["files_total_expected"] == 3
+    assert snap["files"] == {}    # 数量方案不灌 files dict
+
+
+def test_task_started_bad_files_payload_tolerated():
+    """files 非法（非数值）时容错保持 0，不抛异常。"""
+    parser = _make_parser_with_events(
+        (("task_started",), {"payload": {"files": "many"}}),
+    )
+    assert parser.snapshot()["files_total_expected"] == 0
+
+
+def test_error_event_marks_file_failed():
+    """文件级 error（phase_started 之前发生）→ files 置 failed。"""
+    parser = _make_parser_with_events(
+        (("phase_started",), {"phase": "A", "file": "ep01.srt"}),
+        (("error",), {"file": "ep02.srt", "payload": {"reason": "boom"}}),
+    )
+    assert parser.snapshot()["files"] == {
+        "ep01.srt": "running", "ep02.srt": "failed"}
+
+
+def test_failed_file_not_overwritten_by_phase_started():
+    """failed 为终态：后续 phase_started 不得覆盖为 running。"""
+    parser = _make_parser_with_events(
+        (("error",), {"file": "ep01.srt", "payload": {"reason": "boom"}}),
+        (("phase_started",), {"phase": "A", "file": "ep01.srt"}),
+    )
+    assert parser.snapshot()["files"]["ep01.srt"] == "failed"
+
+
+def test_done_file_not_overwritten_by_phase_started_batch8a():
+    """done 同为终态：final 完成后再来 phase_started 保持 done。"""
+    parser = _make_parser_with_events(
+        (("phase_finished",), {"phase": "final", "file": "ep01.srt"}),
+        (("phase_started",), {"phase": "A", "file": "ep01.srt"}),
+    )
+    assert parser.snapshot()["files"]["ep01.srt"] == "done"
+
+
+def test_error_then_final_phase_finished_still_done():
+    """failed 后若仍收到 final phase_finished（防御路径）→ done 正常置位。"""
+    parser = _make_parser_with_events(
+        (("error",), {"file": "ep01.srt", "payload": {"reason": "boom"}}),
+        (("phase_finished",), {"phase": "final", "file": "ep01.srt"}),
+    )
+    assert parser.snapshot()["files"]["ep01.srt"] == "done"

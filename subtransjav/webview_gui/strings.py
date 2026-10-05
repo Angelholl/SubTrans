@@ -175,6 +175,9 @@ MSG = {
     "ev_warning": "⚠ 警告：{e}",
     "ev_degraded": "⚠ 降级：{e}",
     "ev_error": "✗ 错误：{e}",
+    # 批 8a（D2026-1006-01）：闸门0 摘要人话行（后端侧键，本批不入 app.js
+    # 镜像；前端活动流消费时再随批同步双表）
+    "ev_gate0": "闸门0 {file}：检出 {detected} · 处置 {deleted} · 净语 {net}",
     "processing": "处理中",
     "progress_text": "已翻译约 {done}/{total} 行（{label}）",
 

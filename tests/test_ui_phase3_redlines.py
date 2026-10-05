@@ -55,6 +55,10 @@ R1 DOM 恒定 / R2 节奏禁区 / R3 契约恒空的机器化落点：
   .asr-models-btn class 锚+data-testid（零新增 id），asrEnvStatus 内三色
   状态点由 JS 注入 span（零新增 id）；FROZEN_I18N_KEYS 187 不动（说明行/
   折叠区均无静态键，模型管理面板全 JS 态键）。
+  2.7.3 件⑧批 8b（D2026-1006-01）：Console 结构化活动流批，FROZEN_IDS
+  213→217（consoleActivity/rawLogToggleBtn/exportConsoleBtn/copyConsoleBtn
+  四 id，全部零 data-i18n——文案 JS 态 MSG 键承接）；FROZEN_I18N_KEYS 187
+  不动。
 """
 import re
 from pathlib import Path
@@ -122,12 +126,12 @@ FROZEN_IDS = frozenset(
     aboutModal aboutVersion aggregateWindowSel aiModelInput aiProviderSel appModal addFilesBtn addFolderBtn asrCrosscheckToggle asrEnvStatus
 asrModelSel asrPythonInput asrRefreshBtn asrStatus audioPreviewBar audioPreviewCloseBtn
 audioPreviewError audioPreviewPlayer audioPreviewTiming browseOutputBtn clearBtn
-clearConsoleBtn consoleCollapseBtn consoleOutput dataRootBar dataRootCurrentPath
+clearConsoleBtn consoleCollapseBtn consoleActivity consoleOutput copyConsoleBtn dataRootBar dataRootCurrentPath
 dataRootRestoreBtn dataRootSourceTag dataRootStatus dataRootToggleBtn debugLogging
 dictActionBtn dictBrowseBtn dictDesc dictDetail dictMigrateBtn dictOpenDir dictPath dictPathRow dictPill
 dictProgress dictRestoreBtn dictRows dictSelect dictStatus directionCardList directionCardS1
 directionCardS3
-directionSource directionTarget dropzone emptyState featureStatus fileList
+directionSource directionTarget dropzone emptyState exportConsoleBtn featureStatus fileList
 fileListContainer firstRunBanner glEmptyHint
 glLearnedEmpty glLearnedMore glLearnedReloadBtn glLearnedStats glLearnedStatus
 glLearnedTable glTabGlossary grammarHintBadge guideCompanions guideConclusions
@@ -154,7 +158,7 @@ refineSourceFilter refineStartBtn refineTemplateReload refineTemplateSave
 refineTemplateStage refineTemplateStatus refineTemplateText refineTemplatesDir
 refineTemplatesDirShow refineTestS1 refineTestS1Status refineTestS3 refineTestS3Status
 refineTmDb refineTmEnable refineTmThreshold refineTplLoadedPath refineV2Ctx
-refreshFallbackModels removeSelectedBtn resumeToggle reviewAsrBtn reviewDetList
+rawLogToggleBtn refreshFallbackModels removeSelectedBtn resumeToggle reviewAsrBtn reviewDetList
 reviewDetLoadBtn reviewDetectionsWrap reviewDropzone
 reviewListWrap reviewLocateBtn reviewPager reviewProgressFill
 reviewSaveAsBtn reviewSaveBtn reviewSearchInput reviewStatusBar

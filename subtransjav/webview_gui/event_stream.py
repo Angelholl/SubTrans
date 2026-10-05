@@ -114,6 +114,19 @@ def format_event_line(event: dict[str, Any]) -> str | None:
         return f"{msg('ev_tag')} {msg('ev_error', e=_extract_message(payload))}"
     if etype == "task_finished":
         return _join(msg("ev_tag"), msg("ev_task_finished"))
+    if etype == "gate0_summary":
+        # 批 8a（D2026-1006-01）：闸门0 摘要人话行。字段取自
+        # v2_outputs._build_gate0_report payload：detected_total（检出）、
+        # deleted（处置/删除）、total（原始行数）→ 净语 = total - deleted。
+        try:
+            detected = int(payload.get("detected_total") or 0)
+            deleted = int(payload.get("deleted") or 0)
+            total = int(payload.get("total") or 0)
+        except (TypeError, ValueError):
+            detected = deleted = total = 0
+        return _join(msg("ev_tag"), msg(
+            "ev_gate0", file=event.get("file") or "",
+            detected=detected, deleted=deleted, net=max(0, total - deleted)))
     return None    # heartbeat 及未知类型不输出
 
 
@@ -213,9 +226,14 @@ class EventStreamParser:
         self.batch_total = 0
         self.risks: list[dict[str, Any]] = []
         self.risk_count = 0
-        # per-file 三态 chip 归组（批 2a）：fname → "running"/"done"，
-        # 由 phase_started/phase_finished 事件旁路维护（见 _feed_event 末尾）
+        # per-file 四态 chip 归组（批 2a 建，批 8a 扩）：fname →
+        # "pending"/"running"/"done"/"failed"，由 task_started /
+        # phase_started / phase_finished / error 事件旁路维护
+        # （见 _feed_event 末尾）
         self.files: dict[str, str] = {}
+        # 批 8a：task_started payload 的 files 为文件总数（int，
+        # pipeline_v2.py:1089），任务一开始即得真总数
+        self.files_total_expected: int = 0
         self.error: str | None = None
         self.task_summary: dict[str, Any] | None = None
         self.last_event_ts: float | None = None
@@ -286,15 +304,28 @@ class EventStreamParser:
             self.task_summary = dict(payload)
             if payload.get("untranslated_majority"):
                 self.untranslated_majority = True
+        elif etype == "task_started":
+            # 批 8a：payload.files 为文件总数（int，非清单），记录期望总数
+            try:
+                files_expected = int(payload.get("files") or 0)
+            except (TypeError, ValueError):
+                files_expected = 0
+            self.files_total_expected = max(0, files_expected)
 
-        # --- per-file 状态旁路（批 2a，只增不改）---
+        # --- per-file 状态旁路（批 2a 建，批 8a 扩 failed 态）---
         # pipeline_v2 逐文件发 phase_started/phase_finished（file=basename），
         # phase 实际取值 A → B → final（pipeline_v2.py:1488/1521/1570）。
         # final 为末阶段（含终稿落盘与"终稿已存在跳过"路径 1259-1260），
         # 其 phase_finished 视为该文件全部完成。
         ev_file = event.get("file")
-        if etype == "phase_started" and ev_file:
-            self.files[ev_file] = "running"
+        if etype == "error" and ev_file:
+            # 批 8a：文件级 error（pipeline_v2 单文件隔离路径，发生在该文件
+            # phase_started 之前）→ failed 态
+            self.files[ev_file] = "failed"
+        elif etype == "phase_started" and ev_file:
+            # failed/done 为终态：不被后续 phase_started 覆盖为 running
+            if self.files.get(ev_file) not in ("failed", "done"):
+                self.files[ev_file] = "running"
         elif etype == "phase_finished" and ev_file:
             if str(event.get("phase") or "").strip().lower() == "final":
                 self.files[ev_file] = "done"
@@ -399,4 +430,5 @@ class EventStreamParser:
                 "ndjson_mode": self.ndjson_mode,
                 "untranslated_majority": self.untranslated_majority,
                 "files": dict(self.files),
+                "files_total_expected": self.files_total_expected,
             }

@@ -868,7 +868,6 @@ class TranslateAPI:
             self._translate_log_queue: queue.Queue = queue.Queue()
             self._translate_thread: threading.Thread | None = None
             self._translate_files_total = 0
-            self._translate_files_completed = 0
             self._translate_current_file = None
             self._translate_lines_total = 0
             self._translate_lines_done = 0
@@ -919,7 +918,6 @@ class TranslateAPI:
                 break
 
         self._translate_files_total = 0
-        self._translate_files_completed = 0
         self._translate_current_file = None
         self._translate_lines_total = 0
         self._translate_lines_done = 0
@@ -1018,8 +1016,11 @@ class TranslateAPI:
     def _pump_stdout(self, proc: subprocess.Popen):
         """stdout 守护线程：NDJSON 事件解析 + 人类可读行入日志队列。
 
-        - 事件行格式化成 "[事件] 阶段B 批次 3/10" 风格（心跳不落日志防刷屏）；
-        - 非事件行原样入日志队列，并由解析器的遗留兼容层提取进度/错误。
+        - 事件行格式化成 "[事件] 阶段B 批次 3/10" 风格；format 结果为 None
+          的事件（心跳等）丢弃不入队，防裸 JSON 漏进日志队列；
+        - 非事件行原样入日志队列，并由解析器的遗留兼容层提取进度/错误；
+        - 每条入队行 strip 行尾换行后全量落盘 gui.log（D2026-1006-01 D4：
+          全量保留；心跳行不入队故也不落盘）。
         """
         parser = self._translate_parser or EventStreamParser()
         try:
@@ -1029,8 +1030,14 @@ class TranslateAPI:
                 except Exception:
                     _log_exc("_pump_stdout.feed")
                     event = None
-                text = format_event_line(event) if event else None
-                self._translate_log_queue.put(text if text is not None else line)
+                if event is not None:
+                    text = format_event_line(event)
+                    if text is not None:
+                        _log.info(text.rstrip("\n"))
+                        self._translate_log_queue.put(text)
+                else:
+                    _log.info(line.rstrip("\n"))
+                    self._translate_log_queue.put(line)
         except Exception as e:
             _log_exc("_pump_stdout")
             self._translate_log_queue.put(f"\n[ERROR] {e}\n")
@@ -1143,13 +1150,20 @@ class TranslateAPI:
 
         risk_count = int(snap.get('risk_count') or 0)
         majority = bool(snap.get('untranslated_majority'))
+        # 批 8a（D2026-1006-01）：files 口径改由 snapshot 的 per-file 状态
+        # 驱动——completed 数 done 态文件，total 取 max(已知文件数,
+        # task_started 上报的期望总数)；旧 _translate_files_completed
+        # 字段（恒 0 死字段）删除。
+        files_status = dict(snap.get('files') or {})
+        files_total_expected = int(snap.get('files_total_expected') or 0)
 
         return {
             "status": self._translate_status,
             "progress": int(snap.get('progress') or 0),
             "current_file": snap.get('current_file'),
-            "files_completed": getattr(self, '_translate_files_completed', 0),
-            "files_total": int(snap.get('total') or 0),
+            "files_completed": sum(
+                1 for st in files_status.values() if st == "done"),
+            "files_total": max(len(files_status), files_total_expected),
             "has_logs": not self._translate_log_queue.empty(),
             "error": self._translate_error or snap.get('error'),
             # --- NDJSON 事件流扩展键（保留全部旧键） ---
@@ -1163,7 +1177,8 @@ class TranslateAPI:
             "degraded": risk_count > 0 or majority,
             "warning_level": warning_level,
             "ndjson_mode": bool(snap.get('ndjson_mode')),
-            "files_status": snap.get('files', {}),
+            "files_status": files_status,
+            "task_summary": snap.get('task_summary'),
         }
 
     def get_translation_logs(self) -> list[str]:

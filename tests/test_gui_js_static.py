@@ -1005,8 +1005,11 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
     # 2.6.5 段2（D2026-1004-01 #4，B3 显式解冻）：#dictEmpty 删除，
     # FROZEN_IDS 215→214 重钉；2.7.1（D2026-1005-01）：#asrRecList 删除，
-    # FROZEN_IDS 214→213（模型管理入口走 class 锚零新增 id）
-    assert len(ids) == 213, f"id 全集数漂移（2.7.1 解冻后契约 213 不变），实为 {len(ids)}"
+    # FROZEN_IDS 214→213（模型管理入口走 class 锚零新增 id）；
+    # 2.7.3 件⑧批 8b（D2026-1006-01）：Console 活动流批显式解冻 213→217
+    # （consoleActivity/rawLogToggleBtn/exportConsoleBtn/copyConsoleBtn，
+    # 全部零 data-i18n，文案 JS 态 MSG 键承接）
+    assert len(ids) == 217, f"id 全集数漂移（2.7.3 批8b 解冻后契约 217 不变），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -2127,3 +2130,103 @@ def test_status_polling_fetch_logs_decoupled_from_status_bridge():
     assert "catch" in body, "status 桥必须保留 try/catch"
     assert body.index("this.fetchLogs()") > body.index("catch"), \
         "fetchLogs 必须位于 catch 之后（原始日志通道与 status 桥解耦）"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件⑧批 8b（D2026-1006-01）：Console 结构化活动流 + 显示层 500 行
+# 环形裁剪（定版 D4：裁剪仅显示层）+ 原始日志折叠默认收起并持久化。
+# 后端批 8a 前置：get_translation_status 透出 files_status 四态
+# （pending/running/done/failed）与 task_summary（task_finished payload）。
+# ---------------------------------------------------------------------------
+
+def _console_manager_region(source: str) -> str:
+    """ConsoleManager 为对象字面量（非函数），_extract_function 不可用——
+    按「const ConsoleManager = {」到「const ActivityStream = {」切片。"""
+    return _slice_source(
+        source, "const ConsoleManager = {", "const ActivityStream = {")
+
+
+def _activity_stream_region(source: str) -> str:
+    """ActivityStream 区间：到其后 Progress Management 段头注释为止。"""
+    return _slice_source(
+        source, "const ActivityStream = {",
+        "// Progress Management (progress bar inside the refine panel)")
+
+
+def _slice_source(text: str, start: str, end: str) -> str:
+    i = text.index(start)
+    j = text.index(end, i)
+    return text[i:j]
+
+
+def test_batch_8b_activity_stream_and_console_trim_pinned():
+    """批 8b 回归钉：活动流差分打点接线、显示层裁剪、折叠持久化四线齐钉。
+
+    人工推演（D2026-1006-01 件⑧批 8b）：
+    - 长任务下 Console DOM 无界增长（每秒 appendRaw）会拖垮渲染——裁剪
+      只裁 DOM 不动会话内全量 `_lines`（导出/复制仍取全量）；
+    - 风险增量打点自 TranslatorManager 迁入 ActivityStream（旧
+      _reportedRiskCount 段删除，Console 区不再重复打风险行）；
+    - 原始日志默认收起（定版 D4）并经 localStorage 键持久化，无记录时
+      init 写入默认值。
+    """
+    source = _app_js_source()
+
+    # 断言1 钉活动流存在与接线：const ActivityStream 定义存在，且
+    # startStatusPolling 每拍调用 ActivityStream.update(
+    assert "const ActivityStream" in source, "app.js 缺少 ActivityStream 定义"
+    polling = _extract_function(source, "startStatusPolling")
+    assert "ActivityStream.update(" in polling, \
+        "startStatusPolling 必须每拍调用 ActivityStream.update(status)"
+    # 风险打点迁移钉：轮询区间不再含旧计数段（迁入 ActivityStream 后
+    # 该标识只允许出现在其定义区注释里）
+    assert "_reportedRiskCount" not in polling, \
+        "startStatusPolling 旧风险打点段应已迁出（_reportedRiskCount 残留）"
+    assert "_riskCount" in _activity_stream_region(source), \
+        "ActivityStream 区间应承接风险增量计数（_riskCount）"
+
+    # 断言2 钉显示层裁剪（定版 D4：只裁 DOM 不动 _lines）：
+    # ConsoleManager 区间含 500 上限常量 + removeChild/firstChild 组合，
+    # 且 _lines 由 log 与 appendRaw 双入口 push（会话内全量保留）
+    cm = _console_manager_region(source)
+    assert "_MAX_DOM_LINES: 500" in cm, "ConsoleManager 缺 500 行显示层上限"
+    assert "removeChild" in cm and "firstChild" in cm, \
+        "裁剪应从最旧行开始移除（removeChild(firstChild) 组合）"
+    assert cm.count("this._lines.push") >= 2, \
+        "_lines 必须由 log 与 appendRaw 逐行 push（会话内全量保留）"
+    assert "this._lines = []" in cm, "clear() 必须同步清空 _lines"
+
+    # 断言3 钉导出/复制：全量数组导出（Blob）与 clipboard 降级链
+    # （源码匹配用 \\n：app.js 字面量为 join('\n')，Python 串需转义反斜杠）
+    assert "join('\\n')" in cm and "Blob" in cm, \
+        "导出必须取 _lines 全量（join 后包 Blob，而非裁剪后的 DOM 残行）"
+    assert "subtrans-console-" in cm, "导出文件名前缀缺失"
+    assert "writeText" in cm and "execCommand('copy')" in cm, \
+        "复制必须先 clipboard API 后 textarea+execCommand 降级"
+
+    # 断言4 钉原始日志折叠持久化：localStorage 键 + 默认收起写入
+    # （定版 D4：无记录时默认收起并落盘，而非只读）
+    assert "subtrans_rawlog_collapsed" in cm, "折叠持久化键缺失"
+    assert "localStorage.getItem" in cm and "localStorage.setItem" in cm, \
+        "折叠态必须读且写 localStorage"
+    assert "rawLogToggleBtn" in cm, "原始日志折叠开关未接线"
+
+    # 断言5 钉 i18n 冻结：四个新 DOM 锚存在且全部零 data-i18n（文案
+    # 由 JS init 时以 MSG 填充）；活动流行载体存在
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for dom_id in ("consoleActivity", "rawLogToggleBtn",
+                   "exportConsoleBtn", "copyConsoleBtn"):
+        assert f'id="{dom_id}"' in html, f"index.html 缺少锚点: {dom_id}"
+    for dom_id in ("consoleActivity", "rawLogToggleBtn",
+                   "exportConsoleBtn", "copyConsoleBtn"):
+        m = re.search(rf'<[^>]*id="{dom_id}"[^>]*>', html)
+        assert m and "data-i18n" not in m.group(0), \
+            f"{dom_id} 不得携带 data-i18n（i18n 键冻结中，文案 JS 态承接）"
+
+    # 断言6 钉新任务新流：startTranslation 成功分支清空活动流
+    start_body = _extract_function(source, "startTranslation")
+    assert "ActivityStream.reset()" in start_body, \
+        "startTranslation 成功分支必须清空活动流（新任务新流）"
+    assert start_body.index("ActivityStream.reset()") \
+        < start_body.index("this.startStatusPolling()"), \
+        "活动流清空必须位于轮询启动之前（旧流残行不进新任务）"

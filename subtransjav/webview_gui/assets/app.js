@@ -387,10 +387,12 @@ const MSG = {
     preview_play_btn: '试听',
 
     // ---- 文件列表三态 chip / 流水线镜像（D2026-0930-09 批2）----
+    // 批 8b：chip 增第四态 failed（后端 files_status 四态，批 8a 透出）
     chip_pending: '等待中',
     chip_running: '翻译中',
     chip_done: '已完成',
     chip_resumable: '可续传',
+    chip_failed: '失败',
     pipeline_mirror_model: '阶段A 模型',
     pipeline_mirror_conc: '并行',
     pipeline_card_hint: '点击前往「API 与模型选择」页修改',
@@ -510,6 +512,24 @@ const MSG = {
     // 控制台折叠
     console_collapse: '折叠控制台',
     console_expand: '展开控制台',
+    // 2.7.3 件⑧批 8b（D2026-1006-01）：Console 结构化活动流 + 显示层裁剪
+    // （全部 JS 态键，不入 data-i18n 快照——index.html 零新增 data-i18n）
+    activity_title: '活动流',
+    raw_log_toggle: '原始日志',
+    export_log: '导出日志',
+    copy_log: '复制日志',
+    activity_stage_start: stage => `▶ ${stage} 开始`,
+    activity_file_done: f => `✓ ${f} 完成`,
+    activity_file_failed: f => `✗ ${f} 失败`,
+    activity_risk_file: (f, phase, m) => `⚠ ${f}（${phase}）：${m}`,
+    activity_risk: (phase, m) => `⚠（${phase}）：${m}`,
+    activity_error: m => `✗ ${m}`,
+    activity_heartbeat_stale: s => `心跳超时 ${s} 秒，进程仍在运行…`,
+    // task_finished payload 字段（pipeline_v2.py _finish_task）：
+    // files_ok/files_degraded/files_failed/risk_count/status（success|partial|failed）
+    activity_summary: (ok, deg, fail, n) =>
+        `任务完成：成功 ${ok} · 降级 ${deg} · 失败 ${fail} · 风险 ${n}`,
+    activity_summary_status: s => `（${s}）`,
     // 词库页区块折叠按钮（2.1.1 owner 痛点批：单键双向文案，展开/折叠态通用）
     collapse_toggle: '折叠/展开',
     // 2.4.0 批1/批2（JS 态键，不入 data-i18n 快照）：自制模态按钮 + 首启引导
@@ -1886,13 +1906,15 @@ const FileListManager = {
         return item;
     },
 
-    // ---- 三态 chip（D2026-0930-09 批2）：pending/running/done/resumable ----
+    // ---- chip 态映射（D2026-0930-09 批2 三态；批 8b 增 failed 第四态：
+    //      后端 files_status 四态 pending/running/done/failed，批 8a 透出）----
     chipClass(state) {
         return {
             pending: 'chip-pending',
             running: 'chip-running',
             done: 'chip-done',
-            resumable: 'chip-resumable'
+            resumable: 'chip-resumable',
+            failed: 'chip-failed'
         }[state] || 'chip-pending';
     },
 
@@ -1901,7 +1923,8 @@ const FileListManager = {
             pending: MSG.chip_pending,
             running: MSG.chip_running,
             done: MSG.chip_done,
-            resumable: MSG.chip_resumable
+            resumable: MSG.chip_resumable,
+            failed: MSG.chip_failed
         }[state] || MSG.chip_pending;
     },
 
@@ -1911,14 +1934,17 @@ const FileListManager = {
         this.updateChips();
     },
 
-    // files_status 映射（basename -> state）：只更新命中的文件，不回退其他项
+    // files_status 映射（basename -> state）：只更新命中的文件，不回退其他项。
+    // 批 8a 口径补充：backend pending（phase_started 前的初始态）视为无态——
+    // 命中不写入，文件 chip 保持现状（默认即为 pending 等待灰，视觉等价，
+    // 且不覆盖断点恢复探测已打上的 resumable 态）
     applyStates(map) {
         if (!map) return;
         const base = p => p.split(/[\\/]/).pop();
         let touched = false;
         AppState.selectedFiles.forEach(p => {
             const st = map[base(p)];
-            if (st && this.itemStates[p] !== st) {
+            if (st && st !== 'pending' && this.itemStates[p] !== st) {
                 this.itemStates[p] = st;
                 touched = true;
             }
@@ -2113,8 +2139,13 @@ const FileListManager = {
 
 // ============================================================
 // Console Management
+// 2.7.3 件⑧批 8b（D2026-1006-01）：显示层 500 行环形裁剪 + 会话内全量
+// `_lines`（定版 D4：裁剪仅显示层，导出/复制走全量数组）
 // ============================================================
 const ConsoleManager = {
+    _lines: [],
+    _MAX_DOM_LINES: 500,
+
     init() {
         document.getElementById('clearConsoleBtn').addEventListener('click', () => this.clear());
 
@@ -2132,15 +2163,70 @@ const ConsoleManager = {
                 collapseBtn.setAttribute('aria-label', MSG[key]);
             });
         }
+
+        // 导出/复制按钮（i18n 冻结：文案 JS 填，HTML 零 data-i18n）
+        const exportBtn = document.getElementById('exportConsoleBtn');
+        if (exportBtn) {
+            exportBtn.textContent = MSG.export_log;
+            exportBtn.addEventListener('click', () => this.exportLog());
+        }
+        const copyBtn = document.getElementById('copyConsoleBtn');
+        if (copyBtn) {
+            copyBtn.textContent = MSG.copy_log;
+            copyBtn.addEventListener('click', () => this.copyLog(copyBtn));
+        }
+
+        this._initRawLogToggle();
     },
 
-    log(message, type = 'info') {
-        const output = document.getElementById('consoleOutput');
-        const line = document.createElement('div');
-        line.className = `console-line ${type}`;
-        line.textContent = message;
-        output.appendChild(line);
+    // ---- 原始日志折叠（默认收起 + localStorage 持久化，定版 D4）----
+    _RAWLOG_KEY: 'subtrans_rawlog_collapsed',
 
+    _initRawLogToggle() {
+        const toggle = document.getElementById('rawLogToggleBtn');
+        const output = document.getElementById('consoleOutput');
+        if (!toggle || !output) return;
+        toggle.textContent = MSG.raw_log_toggle;
+
+        const apply = collapsed => {
+            output.style.display = collapsed ? 'none' : '';
+            toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            toggle.setAttribute('title', MSG.raw_log_toggle);
+        };
+        const persist = collapsed => {
+            try {
+                localStorage.setItem(this._RAWLOG_KEY, collapsed ? '1' : '0');
+            } catch (e) { /* localStorage 不可用（隐私模式等）：仅本次会话生效 */ }
+        };
+
+        let collapsed;
+        try {
+            collapsed = localStorage.getItem(this._RAWLOG_KEY);
+        } catch (e) { collapsed = null; }
+        if (collapsed === null) {
+            // 无历史记录：默认收起并落盘（定版 D4）
+            collapsed = '1';
+            persist(true);
+        }
+        apply(collapsed === '1');
+
+        toggle.addEventListener('click', () => {
+            const next = output.style.display !== 'none';
+            persist(next);
+            apply(next);
+        });
+    },
+
+    // ---- 会话内全量行缓冲 + 显示层裁剪 ----
+
+    _trimDom(output) {
+        // 只裁 DOM 不动 _lines（定版 D4）：超出 500 行从最旧开始移除
+        while (output.children.length > this._MAX_DOM_LINES) {
+            output.removeChild(output.firstChild);
+        }
+    },
+
+    _scrollBottom(output) {
         requestAnimationFrame(() => {
             if (output) {
                 output.scrollTop = output.scrollHeight;
@@ -2148,9 +2234,21 @@ const ConsoleManager = {
         });
     },
 
+    log(message, type = 'info') {
+        const output = document.getElementById('consoleOutput');
+        this._lines.push(message);
+        const line = document.createElement('div');
+        line.className = `console-line ${type}`;
+        line.textContent = message;
+        output.appendChild(line);
+        this._trimDom(output);
+        this._scrollBottom(output);
+    },
+
     clear() {
         const output = document.getElementById('consoleOutput');
         output.innerHTML = `<div class="console-line">${MSG.ready}</div>`;
+        this._lines = [];
     },
 
     appendRaw(text) {
@@ -2161,17 +2259,191 @@ const ConsoleManager = {
         lines.forEach((line, index) => {
             if (index === lines.length - 1 && line === '') return;
 
+            this._lines.push(line || ' ');
             const lineEl = document.createElement('div');
             lineEl.className = 'console-line';
             lineEl.textContent = line || ' ';
             output.appendChild(lineEl);
         });
+        this._trimDom(output);
+        this._scrollBottom(output);
+    },
 
-        requestAnimationFrame(() => {
-            if (output) {
-                output.scrollTop = output.scrollHeight;
+    // ---- 导出 / 复制（空内容静默忽略）----
+
+    exportLog() {
+        if (this._lines.length === 0) return;
+        const stamp = new Date();
+        const p = n => String(n).padStart(2, '0');
+        const name = `subtrans-console-${stamp.getFullYear()}${p(stamp.getMonth() + 1)}${p(stamp.getDate())}-${p(stamp.getHours())}${p(stamp.getMinutes())}${p(stamp.getSeconds())}.log`;
+        const blob = new Blob([this._lines.join('\n')],
+            { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    },
+
+    copyLog(btn) {
+        if (this._lines.length === 0) return;
+        const text = this._lines.join('\n');
+        const flash = () => {
+            btn.textContent = MSG.ui_copied;
+            setTimeout(() => { btn.textContent = MSG.copy_log; }, 1500);
+        };
+        const fallback = () => {
+            // clipboard API 不可用/被拒：textarea + execCommand 降级
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                ta.remove();
+                if (ok) flash();
+            } catch (e) { /* 两条复制通路都失败：静默（剪贴板非关键路径） */ }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(flash).catch(fallback);
+        } else {
+            fallback();
+        }
+    }
+};
+
+// ============================================================
+// Activity Stream（2.7.3 件⑧批 8b：Console 面板内、原始日志上方的
+// 结构化活动流）。由 TranslatorManager.startStatusPolling 每拍喂
+// get_translation_status 快照，内部差分打点：
+//   阶段开始 / 文件完成与失败 / 风险增量（自 TranslatorManager 迁移，
+//   _reportedRiskCount 旧字段删除）/ 错误 / 心跳超时告警 / 完成摘要。
+// 上限 200 行，DOM 与内部数组同裁（无全量保留需求，导出走 ConsoleManager）。
+// ============================================================
+const ActivityStream = {
+    _MAX_LINES: 200,
+    _rows: [],
+    _last: null,            // 首拍基线标记（null=尚未初始化，不回放历史）
+    _fileStates: {},        // 上次 files_status 快照
+    _riskCount: 0,          // 原 TranslatorManager._reportedRiskCount 迁移至此
+    _lastError: null,
+    _heartbeatAlerted: false,
+    _summaryShown: false,
+    _stage: null,
+
+    // 新任务新流：startTranslation 成功分支调用，清空活动流与差分状态
+    reset() {
+        this._rows = [];
+        this._last = null;
+        this._fileStates = {};
+        this._riskCount = 0;
+        this._lastError = null;
+        this._heartbeatAlerted = false;
+        this._summaryShown = false;
+        this._stage = null;
+        const el = document.getElementById('consoleActivity');
+        if (el) el.innerHTML = '';
+    },
+
+    _add(text, cls) {
+        this._rows.push(text);
+        const el = document.getElementById('consoleActivity');
+        if (el) {
+            const line = document.createElement('div');
+            line.className = `console-line ${cls || 'info'}`;
+            line.textContent = text;
+            el.appendChild(line);
+            // DOM 与内部数组同裁
+            while (this._rows.length > this._MAX_LINES) {
+                this._rows.shift();
+                if (el.firstChild) el.removeChild(el.firstChild);
             }
-        });
+            el.scrollTop = el.scrollHeight;
+        }
+    },
+
+    update(status) {
+        if (!status) return;
+
+        // 阶段开始：current_stage 变化且非空（阶段名用后端原文）
+        if (status.current_stage && status.current_stage !== this._stage) {
+            this._stage = status.current_stage;
+            this._add(MSG.activity_stage_start(status.current_stage), 'info');
+        }
+
+        // 文件完成/失败：对比上次 files_status 快照；首拍只建基线不回放历史；
+        // running 新出现不打点（避免刷屏）；pending 视为无变化
+        if (status.files_status) {
+            if (this._last !== null) {
+                Object.keys(status.files_status).forEach(f => {
+                    const st = status.files_status[f];
+                    const prev = this._fileStates[f];
+                    if (st === 'done' && prev !== 'done') {
+                        this._add(MSG.activity_file_done(f), 'success');
+                    } else if (st === 'failed' && prev !== 'failed') {
+                        this._add(MSG.activity_file_failed(f), 'error');
+                    }
+                });
+            }
+            this._fileStates = Object.assign({}, status.files_status);
+        }
+
+        // 风险增量（自 startStatusPolling 迁移，行文案带文件归属）
+        const reported = this._riskCount || 0;
+        if ((status.risk_count || 0) > reported) {
+            const risks = status.risks || [];
+            const fresh = risks.slice(
+                Math.max(0, risks.length - (status.risk_count - reported)));
+            fresh.forEach(r => {
+                const msg = (r && (r.message || r.type)) || MSG.risk_word;
+                const phase = (r && r.phase) || MSG.risk_word;
+                if (r && r.file) {
+                    this._add(MSG.activity_risk_file(r.file, phase, msg),
+                        'warning');
+                } else {
+                    this._add(MSG.activity_risk(phase, msg), 'warning');
+                }
+            });
+            this._riskCount = status.risk_count;
+        }
+
+        // 错误：与上次不同才打（去重）
+        if (status.error && status.error !== this._lastError) {
+            this._lastError = status.error;
+            this._add(MSG.activity_error(status.error), 'error');
+        }
+
+        // 心跳超时：进入超时态打一行黄色告警，恢复（不超时）重置告警态
+        const staleS = (typeof status.heartbeat_stale_s === 'number')
+            ? status.heartbeat_stale_s : 45;
+        const stale = status.status === 'running' &&
+            status.heartbeat_age != null && status.heartbeat_age > staleS;
+        if (stale && !this._heartbeatAlerted) {
+            this._heartbeatAlerted = true;
+            this._add(MSG.activity_heartbeat_stale(
+                Math.round(status.heartbeat_age)), 'warning');
+        } else if (!stale) {
+            this._heartbeatAlerted = false;
+        }
+
+        // 完成摘要：task_summary（task_finished payload）非空且未打过 →
+        // 绿色摘要行；status 字段（success/partial/failed）存在则加后缀
+        const ts = status.task_summary;
+        if (ts && !this._summaryShown) {
+            this._summaryShown = true;
+            const suffix = ts.status
+                ? MSG.activity_summary_status(ts.status) : '';
+            this._add(MSG.activity_summary(
+                ts.files_ok || 0, ts.files_degraded || 0,
+                ts.files_failed || 0, ts.risk_count || 0) + suffix, 'success');
+        }
+
+        this._last = status;
     }
 };
 
@@ -2699,6 +2971,9 @@ const TranslatorManager = {
             }
 
             if (result.success) {
+                // 新任务新流：清空结构化活动流与差分状态（2.7.3 件⑧批 8b）
+                try { ActivityStream.reset(); }
+                catch (e) { console.warn('activity stream reset failed:', e); }
                 // 显示链生命线先行：轮询启动不受打点异常影响（D2026-1006-01 件⑦）
                 this.startStatusPolling();
                 try {
@@ -2732,7 +3007,6 @@ const TranslatorManager = {
 
     _finish(statusText) {
         this.stopStatusPolling();
-        this._reportedRiskCount = 0;
         this.state.isRunning = false;
         AppState.isRunning = false;
         FileListManager.updateButtons();
@@ -2744,7 +3018,6 @@ const TranslatorManager = {
     // ---- Status polling ----
 
     startStatusPolling() {
-        this._reportedRiskCount = 0;
         this.statusInterval = setInterval(async () => {
             try {
                 const status = await pywebview.api.get_translation_status();
@@ -2776,19 +3049,12 @@ const TranslatorManager = {
                     FileListManager.applyStates(status.files_status);
                 }
 
-                // 风险明细：仅在数量增长时把新增条目追加到控制台
-                const reported = this._reportedRiskCount || 0;
-                if (status.risk_count > reported) {
-                    const risks = status.risks || [];
-                    const fresh = risks.slice(
-                        Math.max(0, risks.length - (status.risk_count - reported)));
-                    fresh.forEach(r => {
-                        const where = r.phase ? `（${r.phase}）` : '';
-                        ConsoleManager.log(
-                            `⚠️ ${where}${r.message || r.type || MSG.risk_word}`, 'warning');
-                    });
-                    this._reportedRiskCount = status.risk_count;
-                }
+                // 结构化活动流（2.7.3 件⑧批 8b）：差分打点（阶段/文件/风险/
+                // 错误/心跳/摘要）。风险打点已整体迁入 ActivityStream（Translator
+                // 侧旧计数段删除）；防弹包裹，打点异常不拖垮 status 桥（件⑦
+                // 显示链生命线口径）
+                try { ActivityStream.update(status); }
+                catch (e) { console.warn('activity stream update failed:', e); }
 
                 if (status.progress !== undefined && status.progress > 0) {
                     ProgressManager.setIndeterminate(false);
