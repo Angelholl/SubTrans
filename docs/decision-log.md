@@ -2967,3 +2967,5 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **七、异议记录**：critic 曾提出——patch 语义瑕疵（拖拽放开属 minor 级新增能力，以兑现口径化解）、「gate windows 腿」前提错误（daily CI 两腿均无 pywebview）、目录收编静默排除需 UX 回补、app.js 两行文案遗漏、直测钉应断言返回值内容。主模型全部采纳转化，无驳回。无 [PRESSURE-OVERRIDE]。
 
+**八、执行追记（2026-10-05，落库 381cf5c+a1c1952）**：实现三批——①coding 主批 8 文件（strings/api/main/app.js/index.html+三测试文件，test_gui_js_static 后缀一致性钉按「新增字幕子集断言+等式适配」最小改）；②黑盒验证（stub 桥+真浏览器 IAB）T1 标题渲染/T2 对话框回包三格式进列表+开始翻译启用/T3 目录提示分支透出全 PASS，**抓出评议清单外同源遗漏 4 处**（addedFiles 对话框文案+no_files_hint/gui_usage_hint/first_run_guide 引导文案的 .srt 硬编码）随批补修（键值改，零新增前端键）；③code-review 两轴（Standards 零硬违例/Spec 逐项兑现）唯一 judgement call=api.py 后缀元组防漂移钉，已补（test_gui_api 173 passed）。测试基线 1930+4→**1937+4**（+7）；Mimosa deep 全程 4 次 36 零新增（终 seal 9e835baf）；黑盒拖拽物理动作 IAB 运行时不支持（行为由单测+静态钉双覆盖）；C2 提交信息已如实标注 daily CI skip 口径。CI 观察与 owner 真机走查（对话框/拖拽/文件夹三 GUI 路径+CLI）挂账待收。
+

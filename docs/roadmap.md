@@ -118,7 +118,7 @@
 
 ## 2.7.2 —— 字幕入口修复（ASS/SSA/VTT 导入点亮）+ASR 模型元数据核验版 ⬜（进行中；字幕件 D2026-1005-02 立项）
 
-- ⬜ **件1 字幕入口点亮（D2026-1005-02，fix 非 feat）**：2.6.4 承诺兑现+对话框回归修复（2.6.4 起「添加文件」被非法 filter 串整体封死连 .srt 也不可用，2.7.1 真机走查暴露）——strings.py filter 改合法写法 `ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)`（pywebview 描述段不容斜杠）+拖拽白名单与前端二层过滤放开 .ass/.ssa/.vtt+拖拽文案去 .srt 硬编码（addedViaDrop/skippedNonSrt）+source_header 标题改值（追认项可单项回退）+目录收编保持 *.srt 增「有 ASS 无 SRT」分支提示（no_srt_in_folder 改值）；测试三层钉（精确值钉改合法串/parse_file_type 直测钉断言返回值——daily CI 无 gui extra 恒 skip 由 gui-probe 与本地实跑/全腿静态钉描述段无斜杠）；**输出口径维持 SRT**（保 ASS 格式另立项）；发行说明按「2.6.4 承诺兑现+回归修复」口径。详见 decision-log D2026-1005-02。
+- ✅ **件1 字幕入口点亮（D2026-1005-02，fix 非 feat）✅ 已落库（2026-10-05，381cf5c+a1c1952 推送 main；黑盒 T1-T3 PASS+补修复验；基线 1930+4→1937+4；Mimosa 36 零新增 seal 9e835baf；code-review 两轴过）**：2.6.4 承诺兑现+对话框回归修复（2.6.4 起「添加文件」被非法 filter 串整体封死连 .srt 也不可用，2.7.1 真机走查暴露）——strings.py filter 改合法写法 `ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)`（pywebview 描述段不容斜杠）+拖拽白名单与前端二层过滤放开 .ass/.ssa/.vtt+拖拽文案去 .srt 硬编码（addedViaDrop/skippedNonSrt）+source_header 标题改值（追认项可单项回退）+目录收编保持 *.srt 增「有 ASS 无 SRT」分支提示（no_srt_in_folder 改值）；测试三层钉（精确值钉改合法串/parse_file_type 直测钉断言返回值——daily CI 无 gui extra 恒 skip 由 gui-probe 与本地实跑/全腿静态钉描述段无斜杠）；**输出口径维持 SRT**（保 ASS 格式另立项）；发行说明按「2.6.4 承诺兑现+回归修复」口径。详见 decision-log D2026-1005-02。
 - ⬜ **件2 ASR 下载元数据逐档核验（d271-asr-批清单 版本梯队表）**：tiny/base/small/medium 下载元数据逐档核验+sha256 补全，核验一档转一档（tiny/base 已于 2.7.1 顺手核验通过转可下载）。
 
 ## 2.7.1 —— 安装版 ASR 探测修复+模型管理面板 ✅ 已发布（2026-10-05，tag v2.7.1→87f0002 release/2.7.1 分支制，Release id 403198677：SubTrans-setup-2.7.1.exe 50,828,884B sha256 01769C01…77B56 与 SHA256SUMS 核对一致；构建 run 37232463479 绿（含 UTF-8 热修重建）；notes 只写本版；main=2.7.2.dev0=f41e836+1126df4；owner 从 GitHub 下载真机测试中）
