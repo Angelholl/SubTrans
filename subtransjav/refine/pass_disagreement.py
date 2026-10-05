@@ -25,6 +25,19 @@ logger = logging.getLogger(__name__)
 _LANG_RE = re.compile(r"\.(ja|japanese|zh|chinese|translated)$")
 # 阶段/产物标记后缀（merged 可带可选 .subtransjav / .whisperjav 尾缀）
 _MARKER_RE = re.compile(r"\.(pass1|pass2|merged(?:\.(?:subtransjav|whisperjav))?)$")
+# pass-only 标记后缀（2.7.3 件④）：仅识别流水线中间稿 pass1/pass2，
+# 不含 merged 分支——.merged.* 是产成品，收编过滤时不得误杀。
+_PASS_MARKER_RE = re.compile(r"\.(pass1|pass2)$")
+
+
+def is_pass_intermediate(stem: str) -> bool:
+    """判定剥掉 .srt 后缀的 stem 是否为双引擎中间稿（pass1/pass2）。
+
+    与上方 ``_MARKER_RE`` 的 pass1|pass2 分支同源（对 stem 末尾锚定、
+    大小写敏感），一致性由钉测试守卫；刻意不含 merged 分支，见
+    ``_PASS_MARKER_RE`` 注释。
+    """
+    return bool(_PASS_MARKER_RE.search(stem))
 
 # 归一化时剔除的空白与常见标点
 _NORMALIZE_RE = re.compile(

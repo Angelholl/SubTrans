@@ -11,6 +11,32 @@ from pathlib import Path
 from typing import Any
 
 from subtransjav.refine.fs_utils import BACKUP_SUFFIX
+from subtransjav.refine.pass_disagreement import is_pass_intermediate
+
+
+def is_pipeline_intermediate(name: str) -> bool:
+    """判定文件名是否为本工具流水线产物（中间稿/终稿）。
+
+    2.7.3 件④（D2026-1005）：GUI 文件夹收编智能过滤用——流水线中间稿
+    （pass1/pass2、_refine_A 中断残留）与终稿（_final_cn 等）不是用户想
+    收编的翻译输入，产成品是 .merged.subtransjav/.merged.whisperjav。
+
+    判定规则（对剥掉 .srt 后缀的 stem 末尾锚定、大小写敏感，随产出侧
+    命名原样）：
+      1. pass 中间稿：{基名}.{语言码}.pass1/.pass2（pass_disagreement 命名约定）；
+      2. 中断残留：  *_refine_A（pipeline_v2 阶段A 产物）；
+      3. 终稿：      *_final_cn / *_final_en 等（v2_outputs final_stem 契约）。
+
+    刻意**不排 merged**：``{基名}.{语言码}.merged.subtransjav.srt`` 等是
+    合并产成品，可能被用户当输入再次收编，排除即误杀。CLI
+    ``find_srt_files`` 默认口径不受本谓词影响（一字未改）。
+    """
+    stem = name[:-4] if name.lower().endswith(".srt") else name
+    return (
+        is_pass_intermediate(stem)
+        or bool(re.search(r"_refine_[A-Za-z]$", stem))
+        or bool(re.search(r"_final_[A-Za-z0-9_-]+$", stem))
+    )
 
 
 def find_srt_files(

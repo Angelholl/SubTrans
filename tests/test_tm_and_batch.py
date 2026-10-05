@@ -415,3 +415,47 @@ class TestCLIBatchArgs:
         )
         files = _collect_input_files(args)
         assert len(files) == 1
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件④（D2026-1005）：is_pipeline_intermediate 真值表 / CLI 契约钉
+# ---------------------------------------------------------------------------
+
+def test_is_pipeline_intermediate_truth_table():
+    """is_pipeline_intermediate：pass/_refine_/_final_ 命中；merged 产成品
+    与末尾锚定防误伤项不命中（关键钉：merged 不排）。"""
+    from subtransjav.refine.batch import is_pipeline_intermediate
+
+    # True：流水线中间稿 / 中断残留 / 终稿（多语言码）
+    assert is_pipeline_intermediate("a.ja.pass1.srt") is True
+    assert is_pipeline_intermediate("a.ja.pass2.srt") is True
+    assert is_pipeline_intermediate("a_refine_A.srt") is True
+    assert is_pipeline_intermediate("a_final_cn.srt") is True
+    assert is_pipeline_intermediate("a_final_en.srt") is True
+    # 衍生稿（pass1 在中段、_final_ 收尾）确系终稿
+    assert is_pipeline_intermediate("a.pass1_final_cn.srt") is True
+
+    # False（关键钉）：merged 产成品不排（可能被当输入再收编）
+    assert is_pipeline_intermediate("a.ja.merged.subtransjav.srt") is False
+    assert is_pipeline_intermediate("a.ja.merged.whisperjav.srt") is False
+    # 末尾锚定防误伤：_refine_/_final_ 不在词尾
+    assert is_pipeline_intermediate("b_refine_notes.srt") is False
+    # 普通文件
+    assert is_pipeline_intermediate("movie.srt") is False
+
+
+def test_find_srt_files_cli_default_contract_pin(tmp_path):
+    """CLI 契约钉：find_srt_files 默认口径一字不改——含 _final_cn.srt 的
+    目录仍返回它（流水线过滤只发生在 GUI 层）。"""
+    from subtransjav.refine.batch import find_srt_files
+
+    (tmp_path / "a_final_cn.srt").write_text("test")
+    (tmp_path / "a.ja.pass1.srt").write_text("test")
+    (tmp_path / "movie.srt").write_text("test")
+
+    files = find_srt_files(str(tmp_path), recursive=False)
+    names = [f.rsplit("/", 1)[-1].rsplit("\\", 1)[-1] for f in files]
+    assert "a_final_cn.srt" in names, "find_srt_files 默认口径不得排除流水线产物"
+    assert "a.ja.pass1.srt" in names
+    assert "movie.srt" in names
+    assert len(files) == 3

@@ -393,3 +393,34 @@ def test_diagnosis_marker_mismatch_vs_missing_siblings(tmp_path, caplog):
     assert "无兄弟 pass 文件" in caplog.text
     assert "命名解析成功" in caplog.text
     assert "命名解析失败" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件④（D2026-1005）：pass-only 判定 + 与 _MARKER_RE pass 分支一致性钉
+# ---------------------------------------------------------------------------
+
+def test_is_pass_intermediate_truth_table():
+    """is_pass_intermediate：pass1/pass2 中间稿 True；merged 产成品/普通件 False。"""
+    from subtransjav.refine.pass_disagreement import is_pass_intermediate
+
+    # pass 中间稿（剥 .srt 后的 stem）
+    assert is_pass_intermediate("M.ja.pass1") is True
+    assert is_pass_intermediate("M.ja.pass2") is True
+    # merged 产成品（关键钉：_PASS_MARKER_RE 刻意不含 merged 分支）
+    assert is_pass_intermediate("M.ja.merged.subtransjav") is False
+    assert is_pass_intermediate("M.ja.merged.whisperjav") is False
+    # 末尾锚定防误伤 / 普通文件
+    assert is_pass_intermediate("M.pass1_final_cn") is False
+    assert is_pass_intermediate("movie") is False
+
+
+def test_pass_marker_consistency_pin():
+    """一致性钉：is_pass_intermediate 为 True 的 stem 必然匹配 _MARKER_RE
+    （防未来 _MARKER_RE 编辑丢失 pass1|pass2 分支）。"""
+    from subtransjav.refine.pass_disagreement import _MARKER_RE, is_pass_intermediate
+
+    for stem in ("M.ja.pass1", "M.ja.pass2", "M.zh.pass1",
+                 "M.ja.merged.subtransjav", "M.ja.merged.whisperjav", "movie"):
+        if is_pass_intermediate(stem):
+            assert _MARKER_RE.search(stem), \
+                f"{stem} 判为 pass 中间稿却未命中 _MARKER_RE（pass 分支疑丢失）"
