@@ -21,6 +21,10 @@ MSG = {
     "no_srt_in_folder": "所选文件夹中未找到 .srt 字幕（目录添加仅收 .srt；ASS/SSA/VTT 请用「添加文件」选择）",
     # 2.7.2 件1（D2026-1005-02）：目录无 .srt 但检测到 ASS/SSA/VTT 时的针对性提示
     "no_srt_but_subtitle_in_folder": "检测到 ASS/SSA/VTT 字幕，目录添加仅收 .srt，请用「添加文件」逐个选择",
+    # 2.7.3 件④（D2026-1005）：目录 .srt 全为流水线产物时的针对性提示
+    "folder_all_skipped_pipeline": "文件夹内的 .srt 全部是本工具的流水线中间稿或终稿"
+                                   "（pass1/pass2、_refine_、_final_ 命名），"
+                                   "没有可收编的新文件。如需添加，请用「添加文件」手动选择产成品。",
     "folder_opened": "文件夹已打开",
     "cannot_open_folder": "无法打开文件夹：{e}",
 
@@ -86,6 +90,8 @@ MSG = {
     "dict_kind_unsupported": "该词典暂不支持下载（仅 sudachi 提供下载式）",
     "dict_download_failed": "词典下载失败（网络/源不可达）",
     "dict_checksum_failed": "词典校验失败（SHA256 不符，已拒绝落位）",
+    # 2.7.3 件⑤（D2026-1005）：词典下载会话制——同 kind 互斥拒绝文案
+    "dict_download_busy": "已有词典任务在进行中，请稍候或先停止当前下载。",
     # 下载进度阶段文案（第四批 owner 验收反馈；前端 app.js MSG 同名键双表）
     "dict_verify": "校验中…",
     "dict_extract": "解压中…",
@@ -207,6 +213,11 @@ MSG = {
     # ---- 校对编辑（2.6.1 批 2b D2026-1002-10；api.py refine_review_save* 镜像）----
     "review_backup_failed": "备份原文件失败，已中止保存（原文件未改动）",
     "review_save_blocks_invalid": "字幕数据无效（blocks 须为非空且每项含 start_ms/end_ms/text）",
+
+    # ---- ASR 模型状态三口径对齐（2.7.3 件③；app.js MSG 镜像，JS 侧专用，
+    #      双表同步——红绿灯空态文案 + 下拉占位项，全 JS 态零静态 i18n 消耗）----
+    "asrModelUnselected": "未选择",
+    "asrModelPlaceholder": "未选择（点选即保存）",
 }
 
 

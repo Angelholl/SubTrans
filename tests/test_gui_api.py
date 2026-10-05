@@ -11,6 +11,8 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -1568,32 +1570,203 @@ def test_refine_dict_download_unsupported_kind(gui_api_obj):
     assert "不支持下载" in got["error"]
 
 
+def _dict_dl_wait_idle(kind: str, timeout: float = 5.0) -> None:
+    """等待 kind 的下载 worker 收口（注册表条目清除）。daemon 线程跨测试
+    残留会在 monkeypatch 还原后调用真实 download_dict（真实网络），故每
+    例收尾必须等待收口。"""
+    from subtransjav.webview_gui import api as api_mod
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with api_mod._DICT_DL_LOCK:
+            entry = api_mod._DICT_DL_REGISTRY.get(kind)
+        if entry is None:
+            return
+        entry["thread"].join(timeout=0.05)
+    raise AssertionError(f"词典下载线程 {kind} 未在 {timeout}s 内收口")
+
+
 def test_refine_dict_download_success_and_checksum(gui_api_obj, monkeypatch,
                                                    tmp_path):
+    """2.7.3 件⑤ 会话制改契约：refine_dict_download 立即返回
+    success+session_id（下载转后台线程；网络/校验失败改经 dict 层
+    failed 快照透出给轮询，不再经本方法返回值——原同步错误映射断言随
+    语义废止，失败快照语义由 test_dict_manager 覆盖）。保留原覆盖意图：
+    kind 白名单放行 + 会话可启动 + worker 真实调用 download_dict。"""
     from subtransjav.refine import dict_manager as dm
-    from subtransjav.refine.dict_manager import DictChecksumError, DictDownloadError
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-    # api 方法为函数内导入，patch 源模块属性才生效
-    monkeypatch.setattr(dm, "download_dict",
-                        lambda kind: str(tmp_path / "dict" / "system_core.dic"))
+    calls = []
+
+    def _fake(kind, *args, **kwargs):
+        calls.append(kind)
+        return str(tmp_path / "dict" / "system_core.dic")
+
+    monkeypatch.setattr(dm, "download_dict", _fake)
     got = gui_api_obj.refine_dict_download("sudachi")
     assert got["success"] is True
+    assert got.get("session_id")
+    _dict_dl_wait_idle("sudachi")
+    assert calls == ["sudachi"], "worker 须真实调用 download_dict(kind)"
 
-    def _raise_checksum(kind):
-        raise DictChecksumError("SHA256 不符")
 
-    monkeypatch.setattr(dm, "download_dict", _raise_checksum)
-    got2 = gui_api_obj.refine_dict_download("sudachi")
-    assert got2["success"] is False
-    assert "校验失败" in got2["error"]
+def test_refine_dict_download_async_immediate_session(gui_api_obj,
+                                                      monkeypatch):
+    """2.7.3 件⑤ ①：立即返回不阻塞 jsapi 线程——download_dict 打桩为
+    慢函数，返回时 worker 仍在跑（同步实现会在此挂死至慢函数返回）。"""
+    from subtransjav.refine import dict_manager as dm
+    from subtransjav.webview_gui import api as api_mod
+    started = threading.Event()
+    release = threading.Event()
 
-    def _raise_net(kind):
-        raise DictDownloadError("超时")
+    def _slow(kind, *args, **kwargs):
+        started.set()
+        release.wait(timeout=5)
 
-    monkeypatch.setattr(dm, "download_dict", _raise_net)
-    got3 = gui_api_obj.refine_dict_download("sudachi")
-    assert got3["success"] is False
-    assert "下载失败" in got3["error"]
+    monkeypatch.setattr(dm, "download_dict", _slow)
+    try:
+        r = gui_api_obj.refine_dict_download("sudachi")
+        assert r["success"] is True and r["session_id"]
+        assert started.wait(timeout=5), "后台 worker 未启动"
+        with api_mod._DICT_DL_LOCK:
+            entry = api_mod._DICT_DL_REGISTRY["sudachi"]
+        assert entry["session"] == r["session_id"]
+        assert entry["thread"].is_alive(), \
+            "慢下载未完成时线程必须仍存活（同步实现此处已返回终值）"
+    finally:
+        release.set()
+        _dict_dl_wait_idle("sudachi")
+
+
+def test_refine_dict_download_same_kind_busy_rejected(gui_api_obj,
+                                                      monkeypatch):
+    """2.7.3 件⑤ ②：同 kind 旧线程存活 → 二次调用被 dict_download_busy
+    人话拒绝（HRO-1 单一活跃下载者）；异 kind 不受互斥影响。"""
+    from subtransjav.refine import dict_manager as dm
+    release = threading.Event()
+
+    def _slow(kind, *args, **kwargs):
+        release.wait(timeout=5)
+
+    monkeypatch.setattr(dm, "download_dict", _slow)
+    try:
+        first = gui_api_obj.refine_dict_download("sudachi")
+        assert first["success"] is True
+        second = gui_api_obj.refine_dict_download("sudachi")
+        assert second["success"] is False
+        assert "进行中" in second["message"]
+        other = gui_api_obj.refine_dict_download("sudachi_full")
+        assert other["success"] is True, "互斥按 kind 分键，异 kind 不拒绝"
+    finally:
+        release.set()
+        _dict_dl_wait_idle("sudachi")
+        _dict_dl_wait_idle("sudachi_full")
+
+
+def test_refine_dict_download_stop_sets_event_no_snapshot(gui_api_obj,
+                                                          monkeypatch):
+    """2.7.3 件⑤ ③：stop 端点置位 Event（下载线程可观测）且绝不乐观写
+    stopped 快照（HRO-1.3：快照只能由下载线程检查点收口写）。"""
+    from subtransjav.refine import dict_manager as dm
+    monkeypatch.setattr(dm, "_DOWNLOAD_PROGRESS", {})
+    seen_stop = threading.Event()
+
+    def _waiter(kind, *args, stop_event=None, **kwargs):
+        if stop_event is not None:
+            stop_event.wait(timeout=5)
+            seen_stop.set()
+
+    monkeypatch.setattr(dm, "download_dict", _waiter)
+    try:
+        r = gui_api_obj.refine_dict_download("sudachi")
+        assert r["success"] is True
+        got = gui_api_obj.refine_dict_download_stop("sudachi")
+        assert got == {"success": True}
+        assert seen_stop.wait(timeout=5), "stop Event 未被下载线程观测到"
+        assert dm.download_progress("sudachi") == {}, \
+            "stop 端点不得乐观写 stopped 快照"
+    finally:
+        _dict_dl_wait_idle("sudachi")
+
+
+def test_refine_dict_download_stop_idempotent_no_entry(gui_api_obj):
+    """2.7.3 件⑤ ④：无线程时 stop 幂等宽容 False（绝不抛错）。"""
+    from subtransjav.webview_gui import api as api_mod
+    with api_mod._DICT_DL_LOCK:
+        api_mod._DICT_DL_REGISTRY.pop("sudachi", None)
+    assert gui_api_obj.refine_dict_download_stop("sudachi") \
+        == {"success": False}
+
+
+def test_refine_dict_download_registry_cleared_can_restart(gui_api_obj,
+                                                           monkeypatch):
+    """2.7.3 件⑤ ⑤：线程收口后注册表清空、可再次下载（新 session_id）。"""
+    from subtransjav.refine import dict_manager as dm
+    from subtransjav.webview_gui import api as api_mod
+    monkeypatch.setattr(dm, "download_dict", lambda kind, *a, **k: "x")
+    first = gui_api_obj.refine_dict_download("sudachi")
+    assert first["success"] is True
+    _dict_dl_wait_idle("sudachi")
+    with api_mod._DICT_DL_LOCK:
+        assert "sudachi" not in api_mod._DICT_DL_REGISTRY
+    second = gui_api_obj.refine_dict_download("sudachi")
+    assert second["success"] is True
+    assert second["session_id"] != first["session_id"]
+    _dict_dl_wait_idle("sudachi")
+
+
+def test_refine_dict_download_register_start_atomic(gui_api_obj, monkeypatch):
+    """code-review 触碰式修复①：登记与 worker.start() 同锁原子。旧实现
+    start() 在锁外——用 GatedThread 把 start 阻塞在「已登记未 start」窗口
+    内放大竞态，此时并发第二次调用会看到 is_alive()=False 覆盖条目致双
+    下载；修复后第二次调用阻塞等锁、锁释放时线程必已活，必被
+    dict_download_busy 拒（单一活跃下载者不变量）。"""
+    from subtransjav.refine import dict_manager as dm
+    from subtransjav.webview_gui import api as api_mod
+    real_thread_cls = threading.Thread        # 补丁前捕获真身（编排线程用）
+    dl_gate = threading.Event()               # 放大 start 前窗口
+    gated_seen = []
+
+    class _GatedThread(real_thread_cls):
+        def start(self):
+            if not gated_seen:                # 仅首个 worker（首次下载）设卡
+                gated_seen.append(self)
+                dl_gate.wait(timeout=5)       # 旧实现此处在锁外，新实现在锁内
+            super().start()
+
+    monkeypatch.setattr(api_mod.threading, "Thread", _GatedThread)
+    release = threading.Event()
+
+    def _slow(kind, *args, **kwargs):
+        release.wait(timeout=5)
+
+    monkeypatch.setattr(dm, "download_dict", _slow)
+    results = {}
+
+    def _call(slot):
+        results[slot] = gui_api_obj.refine_dict_download("sudachi")
+
+    t1 = real_thread_cls(target=_call, args=("first",))
+    t1.start()
+    # 等 t1 完成登记（条目可见）——此刻 t1 卡在 gated start() 内（持锁），
+    # 故这里只做无锁读轮询（GIL 下 dict 成员判断原子），绝不取锁防死锁
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if "sudachi" in api_mod._DICT_DL_REGISTRY:
+            break
+        time.sleep(0.01)
+    t2 = real_thread_cls(target=_call, args=("second",))
+    t2.start()
+    try:
+        dl_gate.set()                         # 放行首次 start，锁随后释放
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+        assert results["first"]["success"] is True
+        assert results["second"]["success"] is False, \
+            "start 前窗口内的并发二次调用必须被互斥拒绝"
+        assert "进行中" in results["second"]["message"]
+    finally:
+        dl_gate.set()                         # 防断言失败时 t1 仍卡 gate
+        release.set()
+        _dict_dl_wait_idle("sudachi")
 
 
 def test_refine_dict_download_progress_endpoint(gui_api_obj, monkeypatch):
@@ -2961,8 +3134,10 @@ def test_refine_asr_download_progress_endpoint(gui_api_obj, monkeypatch):
 
 def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
     """source 透传（D2026-1003-06 条件②）：official/mirror 双参调用；
-    auto/非法值保持单参调用（既有 mock 零改动兼容），非法由
-    download_dict 按 auto 处理。"""
+    auto/非法值按 auto 语义（2.7.3 件⑤ 会话制：worker 统一
+    download_dict(kind, source=..., stop_event=...) 调用，source 语义
+    不变——既有 mock 改 kwargs 兼容形，非法值仍由 download_dict 按
+    auto 处理）。"""
     from subtransjav.refine import dict_manager as dm
     rec = {}
 
@@ -2972,13 +3147,17 @@ def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
 
     monkeypatch.setattr(dm, "download_dict", _fake)
     assert gui_api_obj.refine_dict_download("sudachi")["success"] is True
+    _dict_dl_wait_idle("sudachi")       # 等 worker 跑完再读 rec（会话制异步）
     assert rec["source"] == "auto"
     assert gui_api_obj.refine_dict_download("sudachi", "official")["success"] is True
+    _dict_dl_wait_idle("sudachi")
     assert rec["source"] == "official"
     assert gui_api_obj.refine_dict_download("sudachi", "mirror")["success"] is True
+    _dict_dl_wait_idle("sudachi")
     assert rec["source"] == "mirror"
     assert gui_api_obj.refine_dict_download("sudachi", "bogus")["success"] is True
-    assert rec["source"] == "auto"
+    _dict_dl_wait_idle("sudachi")
+    assert rec["source"] == "bogus"
 
 
 def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
@@ -3195,3 +3374,126 @@ def test_select_srt_folder_subtitle_exts_pinned_to_drop_whitelist():
         f"main.py 放行集字幕子集漂移: {sorted(subtitle_subset)}"
     assert api_exts == subtitle_subset - {".srt"}, \
         "api.py 目录提示后缀与 main.py 拖放白名单字幕后缀不一致（防漂移）"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件④（D2026-1005）：文件夹收编智能过滤——keep/skip 分流 /
+# 全滤光第四分支 / bak 排除优先 / scan skipped_count 透传
+# ---------------------------------------------------------------------------
+
+def test_select_srt_folder_mixed_dir_net_set_and_skipped(gui_api_obj, monkeypatch, tmp_path):
+    """混合目录：paths=净集（流水线产物被滤），skipped 明细+计数齐全。"""
+    import subtransjav.webview_gui.api as api_mod
+
+    names = ["movie.srt", "a.ja.pass1.srt", "a.ja.pass2.srt",
+             "a_refine_A.srt", "a_final_cn.srt", "a.ja.merged.subtransjav.srt"]
+    for n in names:
+        (tmp_path / n).write_text("x", encoding="utf-8")
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is True
+    # 净集：普通件 + merged 产成品（不排）
+    assert str(tmp_path / "movie.srt") in r["paths"]
+    assert str(tmp_path / "a.ja.merged.subtransjav.srt") in r["paths"]
+    assert str(tmp_path / "a.ja.pass1.srt") not in r["paths"]
+    assert str(tmp_path / "a_refine_A.srt") not in r["paths"]
+    assert str(tmp_path / "a_final_cn.srt") not in r["paths"]
+    assert len(r["paths"]) == 2
+    assert sorted(r["skipped"]) == ["a.ja.pass1.srt", "a.ja.pass2.srt",
+                                    "a_final_cn.srt", "a_refine_A.srt"]
+    assert r["skipped_count"] == 4
+
+
+def test_select_srt_folder_all_pipeline_fourth_branch(gui_api_obj, monkeypatch, tmp_path):
+    """全滤光：目录确有 .srt 但全是流水线产物 → 第四分支 message+skipped。"""
+    import subtransjav.webview_gui.api as api_mod
+    from subtransjav.webview_gui.strings import msg
+    for n in ("a.ja.pass1.srt", "a.ja.pass2.srt", "a_refine_A.srt", "a_final_cn.srt"):
+        (tmp_path / n).write_text("x", encoding="utf-8")
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is False
+    assert r["message"] == msg("folder_all_skipped_pipeline")
+    assert sorted(r["skipped"]) == ["a.ja.pass1.srt", "a.ja.pass2.srt",
+                                    "a_final_cn.srt", "a_refine_A.srt"]
+
+
+def test_select_srt_folder_all_pipeline_branch_precedes_ass_branch(gui_api_obj, monkeypatch, tmp_path):
+    """第四分支优先于 ass 系分支：目录有流水线 .srt + .ass → 如实诊断而非提示 ass。"""
+    import subtransjav.webview_gui.api as api_mod
+    from subtransjav.webview_gui.strings import msg
+    (tmp_path / "a.ja.pass1.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "a.ass").write_text("x", encoding="utf-8")
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is False
+    assert r["message"] == msg("folder_all_skipped_pipeline")
+
+
+def test_select_srt_folder_bak_exclusion_still_first(gui_api_obj, monkeypatch, tmp_path):
+    """bak 排除仍优先：bak-only 目录不走第四分支，保持原 no_srt_in_folder 通道。"""
+    import subtransjav.webview_gui.api as api_mod
+    from subtransjav.webview_gui.strings import msg
+    (tmp_path / "a.bak.srt").write_text("x", encoding="utf-8")
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is False
+    assert r["message"] == msg("no_srt_in_folder")
+    assert "skipped" not in r
+
+
+def test_select_srt_folder_bak_filtered_before_pipeline_split(gui_api_obj, monkeypatch, tmp_path):
+    """bak 排除 + 流水线过滤共存：bak 不计入 skipped，净件照常收编。"""
+    import subtransjav.webview_gui.api as api_mod
+    (tmp_path / "movie.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "movie.bak.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "movie.ja.pass1.srt").write_text("x", encoding="utf-8")
+
+    class FakeWin:
+        @staticmethod
+        def create_file_dialog(*args, **kwargs):
+            return [str(tmp_path)]
+
+    monkeypatch.setattr(api_mod.webview, "windows", [FakeWin()])
+    r = gui_api_obj.select_srt_folder()
+    assert r["success"] is True
+    assert r["paths"] == [str(tmp_path / "movie.srt")]
+    assert r["skipped"] == ["movie.ja.pass1.srt"]
+    assert r["skipped_count"] == 1
+
+
+def test_scan_srt_folder_skipped_count_passthrough(gui_api_obj, monkeypatch, tmp_path):
+    """scan_srt_folder：summary.skipped_count 透传（既有 summary 键不动）。"""
+    (tmp_path / "movie.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "a.ja.pass1.srt").write_text("x", encoding="utf-8")
+    (tmp_path / "a_final_cn.srt").write_text("x", encoding="utf-8")
+
+    r = gui_api_obj.scan_srt_folder(str(tmp_path), recursive=False)
+    assert r["success"] is True
+    assert r["summary"]["count"] == 3          # find_srt_files 默认口径不变
+    assert r["summary"]["skipped_count"] == 2  # pass1 + _final_cn
+    assert "total_size" in r["summary"] and "dirs" in r["summary"]

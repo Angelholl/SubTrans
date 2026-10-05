@@ -30,6 +30,7 @@ const MSG = {
     skippedNonSrt: n => `ℹ 跳过 ${n} 个不支持的文件（仅支持 .srt/.ass/.ssa/.vtt）`,
     addedFiles: n => `已添加 ${n} 个字幕文件`,
     addedFilesFromFolder: n => `已从文件夹添加 ${n} 个 .srt 文件`,
+    folderSkippedPipeline: n => `ℹ 跳过 ${n} 个流水线中间稿/终稿（pass1/pass2、_refine_、_final_）`,
     fileSelectError: '文件选择出错',
     folderSelectError: '文件夹选择出错',
     removedItems: n => `已移除 ${n} 项`,
@@ -453,6 +454,12 @@ const MSG = {
     dict_downloading: '下载中…',
     dict_verify: '校验中…',
     dict_extract: '解压中…',
+    // 2.7.3 件⑤（词典下载停止按钮）：停止中过渡/已停止收口文案（JS 态
+    // 键，禁 index.html 静态消耗）；停止按钮主文案复用 MSG.stop_btn（
+    // :235 既有键），零新增按钮键
+    dict_stop_pending: '正在停止下载…',
+    dict_stopping: '停止中…',
+    dict_stop_note: '已停止下载（未安装）。可切换网络代理后重新下载。',
     dict_download_done: '下载完成',
     dict_download_failed: '下载失败',
     dict_load_failed: '词典状态加载失败',
@@ -467,7 +474,7 @@ const MSG = {
     // hint 条/四 kind chip/收单操作行前缀/失败人话映射/诊断网格字段标签
     // （全 JS 态填充，禁 index.html 静态中文）
     dict_status_not_installed: '未安装',
-    dict_install_hint: '该词典未安装——下载后语法提示可用',
+    dict_install_hint: '该词典未安装——下载后语法提示可用。直连下载慢属正常：系统会先走系统代理、失败自动切直连（两跳）；也可切换镜像或用 --dict-from-file 离线导入。',
     dict_sudachi_full_chip_title: '与日语二选一',
     dict_download_source: '下载源',
     dict_fail_checksum: '文件校验不符，下载不完整或源文件异常',
@@ -559,6 +566,10 @@ const MSG = {
     // 2.7.1（D2026-1005-01 承接批）：红绿灯🟡档文案（上游通但缺模型/缺 ffmpeg）
     asrProbeUpstreamOk: '上游环境可达；模型或 ffmpeg 有缺口——打开「模型管理」查看/补齐',
     asrSelectPlaceholder: '选择 ASR 模型（媒体重点对照用）',
+    // 2.7.3 件③：ASR 状态三口径对齐——红绿灯空态文案 + 下拉占位项
+    // （全 JS 态零静态 id/data-i18n；strings.py 双表同步）
+    asrModelUnselected: '未选择',
+    asrModelPlaceholder: '未选择（点选即保存）',
     asrSaved: '已保存 ASR 模型选择',
     // 批2（D2026-1002-12 拍板点1）：ASR 卡重整空态/说明文案（JS 态零静态键）
     asr_env_undetected: '未探测——点击「重新探测」检测本机 ASR 环境',
@@ -2061,6 +2072,10 @@ const FileListManager = {
                 });
                 this.render();
                 ConsoleManager.log(MSG.addedFilesFromFolder(result.paths.length), 'info');
+                // 2.7.3 件④：流水线中间稿/终稿被智能过滤跳过时补明细行
+                if (result.skipped_count > 0) {
+                    ConsoleManager.log(MSG.folderSkippedPipeline(result.skipped_count), 'info');
+                }
             } else if (result.message) {
                 ConsoleManager.log(result.message, 'warning');
             }
@@ -4752,7 +4767,7 @@ function switchTab(tabId) {
     if (r && r.available) {
       cls = 'dot-ok';
       text = MSG.asrProbeReady(r.whisper_version || '?',
-        r.model_present ? (r.saved_model || 'large-v2')
+        r.model_present ? (r.saved_model || MSG.asrModelUnselected)
           : MSG.asrProbeNoModel);
     } else if (triage === 'ok' || triage === 'ffmpeg-missing') {
       cls = 'dot-warn';
@@ -4822,7 +4837,20 @@ function switchTab(tabId) {
         sel.appendChild(o);
       });
       const saved = r.saved_model || '';
-      if (saved && models.some(m => m.name === saved)) sel.value = saved;
+      if (saved && models.some(m => m.name === saved)) {
+        sel.value = saved;
+      } else {
+        // 2.7.3 件③：saved 空或不在本机清单时，确保占位 option（JS 渲染）
+        // 并显式归零选中——否则浏览器默认选中第一项=假选中（后端 CLI 不带
+        // --asr-model 缺省 large-v2 是合法降级，UI 不得替用户显示已选）
+        if (!sel.querySelector('option[value=""]')) {
+          const ph = document.createElement('option');
+          ph.value = '';
+          ph.textContent = MSG.asrModelPlaceholder;
+          sel.appendChild(ph);
+        }
+        sel.value = '';
+      }
       const tgl = $('asrCrosscheckToggle');
       if (tgl) tgl.checked = !!r.crosscheck_enabled;
       const pyInp = $('asrPythonInput');
@@ -5140,6 +5168,9 @@ function switchTab(tabId) {
     const asrSel = $('asrModelSel');
     if (asrSel) asrSel.addEventListener('change', async () => {
       if (!window.pywebview || !window.pywebview.api) return;
+      // 2.7.3 件③（评议员条件⑥）：占位空值不保存、不覆盖既有 saved_model
+      // （占位项恰为当前选中时用户点选=空操作）
+      if (asrSel.value === '') return;
       try {
         const r = await window.pywebview.api.refine_save_stage_settings(
           null, null, { asr_model: asrSel.value });
@@ -5258,6 +5289,16 @@ function switchTab(tabId) {
   // code-review 发现下载中切词典→dictRenderDetail 重渲染复位共享操作行，
   // 可对另一 kind 并发发起下载——以模块级占位在渲染与入口双端钉死）
   let _dictBusyKind = null;
+  // 2.7.3 件⑤（词典下载停止按钮）：停止中过渡态标记 + 请求时刻（过渡
+  // 兜底量纲用）。停止过渡期 _dictBusyKind 保持占用直到终态（防提前
+  // 解锁邀请重下——与后端 HRO-1.3「不乐观写 stopped 快照」对齐）
+  let _dictStopPending = false;
+  let _dictStopRequestedAt = 0;
+  // 过渡兜底显式常数（评议员条件③）：单分块 socket 超时 10s（后端
+  // opener.open timeout=10，停止信号最迟等当前 1MB 分块读返回才到检查
+  // 点）+ 2 拍轮询间隔（实测轮询 1000ms/拍）；超时未见终态→本地按失败
+  // 收口（后端线程终会写 stopped 快照，后续状态查询自纠）
+  const DICT_STOP_GRACE_MS = 10000 + 2000;
   // 批1b 件1/件2：自定义词典目录态（custom_dir=设置值|null；
   // needs_migration/old_dir=选新目录后由 refine_pick_dict_dir 返回的迁移提示）
   let _dictCustomDir = null;
@@ -5582,10 +5623,17 @@ function switchTab(tabId) {
         btn.textContent = '';
       }
       // 一次性 click 绑定（静态 DOM 不重建，dataset.bound 防重复挂监听）；
-      // 回调读当前 sel.value 保证通用性（按钮现仅 sudachi 分支显示）
+      // 2.7.3 件⑤ 四态分派：下载中=主按钮已转停止键（调停止端点），
+      // 空闲=发起下载。回调读当前 sel.value 保证通用性
       if (!btn.dataset.bound) {
         btn.dataset.bound = '1';
-        btn.addEventListener('click', () => dictDownload($('dictSelect').value, btn));
+        btn.addEventListener('click', () => {
+          if (_dictBusyKind) {
+            dictRequestStop($('dictSelect').value, btn);
+          } else {
+            dictDownload($('dictSelect').value, btn);
+          }
+        });
       }
       // 源选择双按钮（2.6.3 批B，D2026-1003-06 条件②①）：JS 注入零 id
       // （FROZEN_IDS 冻结）。2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：
@@ -5654,6 +5702,7 @@ function switchTab(tabId) {
     // 直接拒绝重入（按钮禁用态是第一道，此处兜底防编程态/竞态双击）
     if (_dictBusyKind) return;
     _dictBusyKind = kind;
+    _dictStopPending = false;         // 件⑤：新会话复位停止过渡态
     // 终态按钮文案（2.6.3 批B）：双按钮路径恢复各自标签，主按钮恢复「下载」
     const doneLabel = source === 'official' ? MSG.dictSrcOfficialOnly
       : source === 'mirror' ? MSG.dictSrcMirrorOnly : MSG.dict_download;
@@ -5698,6 +5747,36 @@ function switchTab(tabId) {
     let poller = null;
     let lastBytes = 0;
     const stopPoll = () => { if (poller) { clearInterval(poller); poller = null; } };
+    // 2.7.3 件⑤：终态收口（done/failed/stopped/互斥拒绝/兜底超时共用）——
+    // 原同步 await 的 finally 解锁链整体前移至此，终态改由轮询驱动
+    // （会话制下 refine_dict_download 立即返回，不再以该 await 为终态）；
+    // finished 单次闸防轮询多拍并发重复收口
+    let finished = false;
+    const finish = (statusText, isErr, diag) => {
+      if (finished) return;
+      finished = true;
+      stopPoll();                       // 防重复 poller 泄漏
+      showProgress(false);              // 隐藏统一放收口（覆盖成功/失败/停止三路径）
+      _dictBusyKind = null;             // 先清占位再 dictLoad()：重渲染据此解除整行禁用
+      _dictStopPending = false;
+      if (actionRow) actionRow.classList.remove('is-busy');
+      srcBtns.forEach((b) => { if (b) b.disabled = false; });
+      const sel = $('dictSelect');
+      if (!sel || sel.value === kind) {
+        // 终态与当前选中词典一致才直改按钮（className 同步复位：下载中
+        // 挂过 btn-danger 停止态）；不一致交由 dictLoad()→dictRenderDetail()
+        // 重刷详情区对齐（重渲染不触碰静态进度条）
+        if (btn) {
+          btn.disabled = false;
+          const finInfo = _dictStatusCache[kind] || {};
+          btn.className = finInfo.available ? 'btn btn-ghost btn-compact'
+            : 'btn btn-primary btn-compact';
+          btn.textContent = doneLabel;
+        }
+      }
+      if (st) dictShowStatus(st, statusText, isErr, diag);
+      dictLoad();
+    };
     showProgress(true);
     poller = setInterval(async () => {
       try {
@@ -5714,61 +5793,87 @@ function switchTab(tabId) {
         // 回退可见提示（2.6.3 批B 评议员条件①）：auto 轮换不再静默，
         // note 写 #dictStatus（后端快照粘滞字段，轮询必能采样）
         if (p.note && owned && st) st.textContent = p.note;
+        // 过渡兜底（2.7.3 件⑤ 评议员条件③）：停止请求后超时未见终态→
+        // 本地按失败收口（后端线程终会写 stopped，后续状态查询自纠）
+        if (_dictStopPending &&
+            Date.now() - _dictStopRequestedAt > DICT_STOP_GRACE_MS) {
+          finish(MSG.dict_stop_note, true, null);
+          return;
+        }
         if (!owned) return;
-        if (p.phase === 'download') {
-          if (btn) btn.textContent = MSG.dict_downloading;   // 纯文案，百分比迁移至进度条
-        } else if (p.phase === 'verify') {
-          if (btn) btn.textContent = MSG.dict_verify;
-        } else if (p.phase === 'extract') {
-          if (btn) btn.textContent = MSG.dict_extract;
+        // 2.7.3 件⑤ 四态状态机：download/verify/extract=下载中可停止
+        // （主按钮转 btn-danger「停止」，复用既有 .btn-danger 样式与
+        // MSG.stop_btn 键）；done/failed/stopped=终态收口
+        if (p.phase === 'download' || p.phase === 'verify' ||
+            p.phase === 'extract') {
+          if (btn && _dictStopPending) {
+            // 停止中过渡：按钮禁用防连点，_dictBusyKind 保持占用直到终态
+            btn.disabled = true;
+            btn.textContent = MSG.dict_stop_pending;
+          } else if (btn) {
+            btn.disabled = false;               // 停止键须可点
+            btn.className = 'btn btn-danger btn-compact';
+            btn.textContent = MSG.stop_btn;
+          }
+          if (st && _dictStopPending) st.textContent = MSG.dict_stopping;
+          return;
+        }
+        if (p.phase === 'stopped') {
+          // 已停止：回未安装态，状态行人话指引（finish 解锁链覆盖 stopped
+          // ——dictLoad() 重渲染后源 pill/整行立即解锁）
+          finish(MSG.dict_stop_note, false, null);
+        } else if (p.phase === 'done') {
+          // 终态大小以 done 快照链路的 lastBytes 为准（会话制下无同步
+          // 返回 path，改为字节数口径）
+          finish(`${MSG.dict_download_done}（${fmtMB(lastBytes)}MB）`,
+            false, null);
+        } else if (p.phase === 'failed') {
+          finish(dictFailureText(`${p.error || ''}`, p.diag), true, p.diag);
         }
       } catch (e) { /* 进度轮询失败不干扰主流程 */ }
     }, 1000);
     try {
-      // 源透传（2.6.3 批B）：undefined/非法由后端按 auto 处理
+      // 2.7.3 件⑤ 会话制：refine_dict_download 立即返回 session_id，
+      // 下载在后端线程执行，终态（done/failed/stopped）由上方轮询驱动；
+      // 本 await 仅处理「启动失败」（kind 校验/同 kind 互斥拒绝等）
       const r = await pywebview.api.refine_dict_download(kind, source || 'auto');
       if (r && r.success) {
-        // 终态大小以 done 快照为准（轮询最后一拍可能滞后）
+        // 已启动：读取一次当前快照校准计数（后端可能已推进）
         try {
           const f = await pywebview.api.refine_dict_download_progress(kind);
           if (f && f.success && typeof f.downloaded === 'number' &&
               f.downloaded > 0) lastBytes = f.downloaded;
         } catch (e) { /* ignore */ }
+        return;
       }
-      // 2.6.5 段2（D2026-1004-01 #6）：失败时一行人话（红）+ 技术串下沉
-      // details 诊断网格——diag 取自后端 failed 快照（refine_dict_download_
-      // progress 轮询桥，phase=failed 时携带段1 落库的七字段契约）
-      let diag = null;
-      if (!(r && r.success)) {
-        try {
-          const f = await pywebview.api.refine_dict_download_progress(kind);
-          if (f && f.success && f.phase === 'failed' && f.diag) diag = f.diag;
-        } catch (e) { /* 诊断快照获取失败不掩盖主错误 */ }
-      }
-      if (st) {
-        dictShowStatus(st,
-          (r && r.success)
-            ? `${MSG.dict_download_done}：${r.path}（${fmtMB(lastBytes)}MB）`
-            : dictFailureText(`${(r && r.error) || ''}`, diag),
-          !(r && r.success), diag);
-      }
+      // 启动失败（含 dict_download_busy 互斥拒绝）：立即按失败收口
+      finish((r && (r.message || r.error)) || MSG.dict_download_failed,
+        true, null);
     } catch (e) {
       // 异常路径=未知错误：一行人话沿用原文（红），无诊断网格
-      if (st) dictShowStatus(st, dictFailureText(String(e), null), true, null);
-    } finally {
-      stopPoll();                       // 防重复 poller 泄漏
-      showProgress(false);              // 隐藏统一放 finally（覆盖成功/失败/异常三路径含 catch）
-      _dictBusyKind = null;             // 先清占位再 dictLoad()：重渲染据此解除整行禁用
-      if (actionRow) actionRow.classList.remove('is-busy');
-      srcBtns.forEach((b) => { if (b) b.disabled = false; });
-      const sel = $('dictSelect');
-      if (!sel || sel.value === kind) {
-        // 终态与当前选中词典一致才直改按钮；不一致交由 dictLoad()→
-        // dictRenderDetail() 重刷详情区对齐（重渲染不触碰静态进度条）
-        if (btn) { btn.disabled = false; btn.textContent = doneLabel; }
-      }
-      dictLoad();
+      finish(dictFailureText(String(e), null), true, null);
     }
+  }
+  // 2.7.3 件⑤：停止请求（下载中主按钮=停止键）。本地立即进入停止中
+  // 过渡（按钮禁用防连点 + 状态行「停止中…」），后端经 stop 端点置位
+  // Event，下载线程在检查点收口写 stopped 快照（后端绝不乐观代写）；
+  // 超时未见终态由轮询兜底（DICT_STOP_GRACE_MS）本地按失败收口
+  async function dictRequestStop(kind, btn) {
+    if (_dictStopPending) return;       // 防连点（按钮禁用是第一道）
+    // 跨 kind 守卫（code-review 触碰式修复②，与 _dictBusyKind 跨 kind
+    // 并发洞收口同口径）：A 下载中把下拉切到 B 再点停止——kind 参数读自
+    // 当前 sel.value，不校验会对 B 调 stop 端点（后端幂等 False 无害，
+    // 但 UI 误入停止中过渡、绕过 _dictBusyKind 跨 kind 互斥占位）。只认
+    // _dictBusyKind 本尊：当前选中 kind ≠ 下载中 kind 一律忽略
+    if (_dictBusyKind !== kind) return;
+    _dictStopPending = true;
+    _dictStopRequestedAt = Date.now();
+    const st = $('dictStatus');
+    if (btn) { btn.disabled = true; btn.textContent = MSG.dict_stop_pending; }
+    if (st) dictShowStatus(st, MSG.dict_stopping, false, null);
+    try {
+      await pywebview.api.refine_dict_download_stop(kind);
+    } catch (e) { /* 停止请求失败不本地解锁——轮询/兜底收口 */ }
   }
 
   // ---- 词典目录设置 + 一键迁移（批1b D2026-1002-12 件1/件2）----

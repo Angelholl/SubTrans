@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -66,6 +67,43 @@ def register_session_paths(paths) -> None:
                 SESSION_SELECTED_PATHS.add(str(Path(p).resolve()))
             except (OSError, ValueError):
                 continue
+
+
+# ---------------------------------------------------------------------------
+# 词典下载会话注册表（2.7.3 件⑤，HRO-1 同 kind 后端真互斥）
+# kind → {"session": str(uuid4), "stop": threading.Event, "thread": Thread}，
+# threading.Lock 保护全部读写。单一活跃下载者语义：同 kind 旧线程存活即
+# 拒绝新下载（终态快照会话门控与临时件隔离随之天然满足）；stop 只作用于
+# 当前注册表条目（互斥保证无旧会话残留可误停）；线程收口仅当注册表条目
+# 仍属本会话才清除（防新会话条目被旧线程误删）。
+# ---------------------------------------------------------------------------
+_DICT_DL_REGISTRY: dict[str, dict[str, Any]] = {}
+_DICT_DL_LOCK = threading.Lock()
+
+
+def _dict_download_worker(kind: str, source: str, session: str,
+                          stop_event: threading.Event) -> None:
+    """后台下载线程目标（2.7.3 件⑤）：调 dict 层 download_dict。
+
+    DictDownloadStopped 静默收口（stopped 快照已在 dict 层检查点收口时
+    写好，api 层绝不乐观代写——HRO-1.3）；其余异常的 failed 快照亦已在
+    dict 层落库，此处仅记日志防线程裸崩。finally 持锁清除条目前校验
+    session 归属（期间同 kind 可能已被新会话登记，旧线程不得误删）。"""
+    from subtransjav.refine.dict_manager import (
+        DictDownloadStopped,
+        download_dict,
+    )
+    try:
+        download_dict(kind, source=source, stop_event=stop_event)
+    except DictDownloadStopped:
+        pass
+    except Exception:  # noqa: BLE001 - 后台线程兜底：failed 快照已落，勿裸崩
+        _log_exc("refine_dict_download(worker)")
+    finally:
+        with _DICT_DL_LOCK:
+            entry = _DICT_DL_REGISTRY.get(kind)
+            if entry is not None and entry["session"] == session:
+                del _DICT_DL_REGISTRY[kind]
 
 
 def _review_save_allowed(path: str) -> str:
@@ -704,11 +742,26 @@ class TranslateAPI:
             # 批2 多格式导入范围外：目录收编保持 *.srt 口径（与 CLI
             # --input-dir 同口径，ASS/VTT 仅显式选择走转换步）
             # C1（D2026-1002-10）：排除校对页备份件 *.bak.srt
-            srt_files = sorted(str(f) for f in folder.glob("*.srt")
-                               if not f.name.endswith(BACKUP_SUFFIX))
-            if srt_files:
+            candidates = [f for f in folder.glob("*.srt")
+                          if not f.name.endswith(BACKUP_SUFFIX)]
+            # 2.7.3 件④（D2026-1005）：流水线中间稿/终稿（pass1/pass2、
+            # _refine_、_final_）不是可收编的翻译输入，智能过滤跳过；
+            # merged 产成品不排（见 refine.batch.is_pipeline_intermediate）
+            from subtransjav.refine.batch import is_pipeline_intermediate
+            keep = [f for f in candidates if not is_pipeline_intermediate(f.name)]
+            skipped = [f.name for f in candidates if is_pipeline_intermediate(f.name)]
+            if keep:
+                srt_files = sorted(str(f) for f in keep)
                 register_session_paths(srt_files)
-                return {"success": True, "paths": srt_files, "folder": result[0]}
+                return {"success": True, "paths": srt_files, "folder": result[0],
+                        "skipped": sorted(skipped),
+                        "skipped_count": len(skipped)}
+            if candidates:
+                # 2.7.3 件④：目录确有 .srt 但全是流水线产物 → 如实诊断
+                # （优先于 ass 系分支；bak 排除仍优先，bak-only 走原 no_srt 通道）
+                return {"success": False,
+                        "message": msg("folder_all_skipped_pipeline"),
+                        "skipped": sorted(skipped)}
             # 2.7.2 件1（D2026-1005-02）：目录无 .srt 但检测到 ASS/SSA/VTT 时
             # 给出针对性提示（目录收编口径仍为 *.srt，不放开；复用 message 通道）
             subtitle_files = [f for f in folder.glob("*")
@@ -737,7 +790,7 @@ class TranslateAPI:
             exclude:   排除的路径模式列表
         """
         try:
-            from subtransjav.refine.batch import find_srt_files, scan_summary
+            from subtransjav.refine.batch import find_srt_files, is_pipeline_intermediate, scan_summary
             folder = _validate_user_directory(folder)
             files = find_srt_files(
                 directory=folder,
@@ -750,6 +803,9 @@ class TranslateAPI:
                 exclude_patterns=exclude,
             )
             summary = scan_summary(files)
+            # 2.7.3 件④：流水线中间稿/终稿计数增量（既有 summary 键一字不动）
+            summary["skipped_count"] = sum(
+                1 for f in files if is_pipeline_intermediate(os.path.basename(f)))
             register_session_paths(files)
             return {
                 "success": True,
@@ -1195,46 +1251,68 @@ class TranslateAPI:
             return {"success": False, "error": str(e)}
 
     def refine_dict_download(self, kind: str, source: str = "auto") -> dict[str, Any]:
-        """显式下载词典（2.1；当前仅 sudachi；SHA256 不符拒绝落位）。
+        """显式下载词典（2.1；2.7.3 件⑤ 改会话制：立即返回不阻塞 jsapi 线程）。
 
-        同步执行（下载几十 MB 级 wheel，GUI 侧按钮转下载中态，进度经
-        refine_dict_download_progress 1s 轮询）；网络失败与校验失败
-        分开报错（DictDownloadError / DictChecksumError）。
+        2.7.3 件⑤（词典下载停止按钮）：下载改后台线程执行，本方法校验
+        kind 后登记会话（uuid4 + stop Event + Thread）并立即返回
+        ``{"success": True, "session_id": ...}``；进度仍经
+        refine_dict_download_progress 1s 轮询，终态新增 stopped（用户停止）。
+        网络失败与校验失败由 dict 层写 failed 快照（download_dict 语义不变）。
 
-        source（2.6.3 批B，D2026-1003-06 条件②①）：源选择 ∈ {auto,
-        official, mirror}，非法值按 auto；透传 download_dict（auto 保持
-        原单参调用，既有 mock/调用方零改动兼容）。
+        HRO-1 同 kind 后端真互斥：持锁查注册表，同 kind 旧线程存活即拒绝
+        （dict_download_busy 人话文案）——单一活跃下载者，终态快照会话门控
+        与临时件隔离随之天然满足。登记与 ``worker.start()`` 同锁原子
+        （code-review 触碰式修复①：start 留在锁外时，登记后 start 前的
+        微窗口内同 kind 二次调用可见 ``is_alive()==False`` 覆盖条目致双
+        下载，破坏单一活跃下载者不变量）。source（2.6.3 批B，
+        D2026-1003-06 条件②①）∈ {auto, official, mirror}，非法值由
+        download_dict 按 auto 处理。
         """
-        try:
-            from subtransjav.refine.dict_manager import (
-                DictChecksumError,
-                DictDownloadError,
-                download_dict,
-            )
-            if kind not in ("sudachi", "sudachi_full"):
-                # 2.5.0 修复A：kind 兼容三联——硬拒放开为双词典 kind 白名单
-                return {"success": False,
-                        "error": msg("dict_kind_unsupported")}
-            path = (download_dict(kind, source=source)
-                    if source in ("official", "mirror")
-                    else download_dict(kind))   # auto 保持单参调用（既有 mock 零改动兼容）
-            return {"success": True, "path": path}
-        except DictDownloadError as e:
+        if kind not in ("sudachi", "sudachi_full"):
+            # 2.5.0 修复A：kind 兼容三联——硬拒放开为双词典 kind 白名单
             return {"success": False,
-                    "error": f"{msg('dict_download_failed')}: {e}"}
-        except DictChecksumError as e:
-            return {"success": False,
-                    "error": f"{msg('dict_checksum_failed')}: {e}"}
-        except Exception as e:
-            _log_exc("refine_dict_download")
-            return {"success": False, "error": str(e)}
+                    "error": msg("dict_kind_unsupported")}
+        with _DICT_DL_LOCK:
+            entry = _DICT_DL_REGISTRY.get(kind)
+            if entry is not None and entry["thread"].is_alive():
+                # HRO-1：同 kind 单一活跃下载者，重入显式拒绝（不发新线程）
+                return {"success": False, "message": msg("dict_download_busy")}
+            session = str(uuid.uuid4())
+            stop_event = threading.Event()
+            worker = threading.Thread(
+                target=_dict_download_worker,
+                args=(kind, source, session, stop_event),
+                name=f"dict-dl-{kind}",
+                daemon=True)
+            _DICT_DL_REGISTRY[kind] = {"session": session,
+                                       "stop": stop_event,
+                                       "thread": worker}
+            # 同锁内启动（修复①）：start() 返回时线程必已 alive
+            # （Thread.start 语义保证），锁外观察者只会看到活跃条目
+            worker.start()
+        return {"success": True, "session_id": session}
+
+    def refine_dict_download_stop(self, kind: str) -> dict[str, Any]:
+        """请求停止当前词典下载（2.7.3 件⑤；协作式——置位 stop Event）。
+
+        会话绑定语义：只作用于当前注册表条目（互斥保证无旧会话残留可
+        误停）；无条目=幂等宽容返回 ``{"success": False}``。**绝不乐观写
+        stopped 快照**（HRO-1.3：防 UI 提前解锁邀请重下——stopped 快照
+        只能由下载线程在检查点收口时写入）。"""
+        with _DICT_DL_LOCK:
+            entry = _DICT_DL_REGISTRY.get(kind)
+            if entry is None:
+                return {"success": False}
+            entry["stop"].set()
+        return {"success": True}
 
     def refine_dict_download_progress(self, kind: str) -> dict[str, Any]:
         """词典下载进度快照（第四批 owner 验收反馈；只读零副作用）。
 
         前端在 refine_dict_download 期间 1s 轮询：phase ∈
-        download/verify/extract/done/failed，downloaded/total 为字节
-        数（total 取 Content-Length，可能为 None）。
+        download/verify/extract/done/failed/stopped（2.7.3 件⑤ 增
+        stopped 终态），downloaded/total 为字节数（total 取
+        Content-Length，可能为 None）。
         """
         try:
             from subtransjav.refine.dict_manager import download_progress

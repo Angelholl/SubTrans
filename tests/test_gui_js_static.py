@@ -1636,6 +1636,28 @@ def test_dict_source_buttons_pinned():
         "下载中须禁双源键（三键 setDisabled）"
 
 
+def test_dict_stop_button_pinned():
+    """2.7.3 件⑤ 词典下载停止按钮：四态状态机静态钉——下载中主按钮转
+    btn-danger 停止键（复用 MSG.stop_btn，零新增按钮键/零新增静态 id）、
+    停止中过渡（禁用防连点+状态行）、stopped 终态回未安装态+解锁链、
+    过渡兜底显式常数、停止走独立 dictRequestStop（refine_dict_download_stop
+    端点）。"""
+    src = _app_js_source()
+    dl = _extract_function(src, "dictDownload")
+    assert "MSG.stop_btn" in dl, "下载中主按钮须转停止键（复用 stop_btn）"
+    assert "btn-danger" in dl, "停止键须挂既有 .btn-danger 样式"
+    assert "MSG.dict_stop_pending" in dl and "MSG.dict_stopping" in dl, \
+        "停止中过渡文案缺失（按钮禁用防连点+状态行）"
+    assert "p.phase === 'stopped'" in dl and "MSG.dict_stop_note" in dl, \
+        "stopped 终态收口（回未安装态+重下指引）缺失"
+    assert "DICT_STOP_GRACE_MS" in dl, "过渡兜底显式常数未接入轮询"
+    stopfn = _extract_function(src, "dictRequestStop")
+    assert "refine_dict_download_stop(kind)" in stopfn, "停止端点调用缺失"
+    assert "_dictStopPending = true" in stopfn, "停止中过渡态标记缺失"
+    # 会话制：终态由轮询驱动（finish 收口），停止过渡期 _dictBusyKind 保持占用
+    assert "_dictBusyKind = null" in dl, "终态收口须清 _dictBusyKind 占位"
+
+
 # ---------------------------------------------------------------------------
 # 2.6.4 批1（D2026-1003-05 策略 B）：词库页 TM 只读搜索区块静态钉
 # （index.html 冻结零改动：全 createElement 注入，零新增静态 id/data-i18n；
@@ -1928,3 +1950,58 @@ def test_batch_d_css_modal_lg_pinned():
         "弹窗内 .tpl-goto-btn 必须隐藏"
     assert re.search(r"@media \(max-width: 768px\)[\s\S]*\.modal-card\.modal-lg",
                      css), "缺小屏响应微调"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件③（D2026-1005）：ASR 状态三口径对齐 + 词典下载缓解引导
+# ---------------------------------------------------------------------------
+
+def test_asr_status_three_view_alignment_pinned():
+    """件③回归钉：红绿灯/下拉/摘要卡三处 UI 口径对齐，空态不得假显 large-v2。
+
+    人工推演（假选中场景）：asrRefresh 清空重建下拉后仅在有 saved 且命中
+    本机清单时设 sel.value；saved 空时不设值 → 浏览器默认选中第一项
+    option = 用户未选却显示已选（假选中）；红绿灯 saved 空时硬编码兜底
+    'large-v2' 同属假显（后端 CLI 不带 --asr-model 缺省 large-v2 是合法
+    降级，asr_runner/quality_advisor 不动，本件只修 UI 诚实性）：
+    - 红绿灯 asrApplyEnvStatus：兜底改 MSG.asrModelUnselected；
+    - 下拉 asrRefresh：saved 空/不在清单时显式 sel.value='' + JS 渲染
+      占位 option（MSG.asrModelPlaceholder，零静态 id/data-i18n——
+      FROZEN_IDS=213 / i18n=189 既有钉零改动）；
+    - change 处理器（bindDom 内 asrSel 链）：空值守卫（评议员条件⑥）
+      ——占位空值不保存、不覆盖既有 saved_model（占位项恰为当前选中
+      时点选=空操作）；
+    - 摘要卡 probeAsr：model_present && saved_model 双门控本已诚实，
+      失败三分支 asrProbeFail 恰 3 次口径不变（防连带漂移复述钉）。
+    """
+    src = _app_js_source()
+    apply_body = _extract_function(src, "asrApplyEnvStatus")
+    assert "'large-v2'" not in apply_body, \
+        "红绿灯残留 large-v2 硬编码兜底（saved 空时假显已选模型）"
+    assert "MSG.asrModelUnselected" in apply_body, \
+        "红绿灯 saved 空态须走 MSG.asrModelUnselected"
+    refresh = _extract_function(src, "asrRefresh")
+    assert "sel.value = ''" in refresh, \
+        "下拉 saved 空态须显式归零选中（消灭浏览器默认选中第一项的假选中）"
+    assert "MSG.asrModelPlaceholder" in refresh, "下拉占位 option 须挂新键文案"
+    assert "createElement('option')" in refresh, \
+        "占位 option 必须 JS 渲染（零静态 id/data-i18n）"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "asrModelPlaceholder" not in html and "asrModelUnselected" not in html, \
+        "件③新键文案不得静态写入 index.html"
+    bind = _extract_function(src, "bindDom")
+    assert re.search(r"asrSel\.value === ''\s*\)\s*return", bind), \
+        "asrSel change 缺空值守卫（占位空值不得写回 saved_model，评议员条件⑥）"
+    keys = _js_msg_keys()
+    for key in ("asrModelUnselected", "asrModelPlaceholder"):
+        assert key in keys, f"MSG 缺少件③新键: {key}"
+        m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
+        assert m and m.group(1), f"MSG 键 {key} 文案为空"
+    # 摘要卡口径不变：probeAsr 失败三分支 asrProbeFail 恰 3 次（既有钉复述）
+    probe = _extract_function(src, "probeAsr")
+    assert probe.count("MSG.asrProbeFail") == 3, \
+        "摘要卡 asrProbeFail 三分支口径漂移（件③不得增删）"
+    # 词典下载缓解引导（D 缓解）：三点核心信息在既有 hint 键文案内
+    assert "dict_install_hint" in keys, "MSG 缺 dict_install_hint 键"
+    assert "两跳" in src and "--dict-from-file" in src and "切换镜像" in src, \
+        "dict_install_hint 缺下载缓解引导（两跳自动/镜像切换/离线导入）"
