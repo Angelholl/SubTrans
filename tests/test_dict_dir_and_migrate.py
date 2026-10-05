@@ -100,7 +100,7 @@ def test_kind_dir_and_download_follow_effective_dir(
     monkeypatch.setattr(dm, "load_source_manifest", lambda: {
         **base, "dicts": {**base["dicts"], "sudachi": sudachi}})
     monkeypatch.setattr(dm, "_http_get",
-                        lambda url, dest, progress=None:
+                        lambda url, dest, progress=None, stop_event=None:
                         Path(dest).write_bytes(wheel))
     target = dm.download_dict("sudachi")
     assert Path(target) == custom / "sudachi" / "system_core.dic"

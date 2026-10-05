@@ -8,6 +8,7 @@ urlopen），网络桩统一 monkeypatch ``urllib.request.build_opener``；
 import hashlib
 import io
 import sys
+import threading
 import types
 import urllib.error
 import urllib.request
@@ -100,7 +101,7 @@ def test_download_dict_success(monkeypatch, tmp_path):
         {"source": "pypi", "url": "https://files.pythonhosted.org/x.whl",
          "sha256": sha, "sha256_verified": True}])
     monkeypatch.setattr(dm, "_http_get",
-                        lambda url, dest, progress=None:
+                        lambda url, dest, progress=None, stop_event=None:
                         Path(dest).write_bytes(wheel))
     target = dm.download_dict("sudachi")
     assert Path(target) == tmp_path / "dict" / "sudachi" / "system_core.dic"
@@ -113,7 +114,7 @@ def test_download_dict_checksum_error_no_fallback(monkeypatch, tmp_path):
     wheel = _fake_wheel()
     calls = []
 
-    def _fake_get(url, dest, progress=None):
+    def _fake_get(url, dest, progress=None, stop_event=None):
         calls.append(url)
         Path(dest).write_bytes(wheel)
 
@@ -141,7 +142,7 @@ def test_download_dict_network_fallback(monkeypatch, tmp_path):
         {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
          "sha256": sha, "sha256_verified": True}])
 
-    def _fake_get(url, dest, progress=None):
+    def _fake_get(url, dest, progress=None, stop_event=None):
         if "tuna" not in url:
             raise dm.DictDownloadError("连接超时")
         Path(dest).write_bytes(wheel)
@@ -157,7 +158,7 @@ def test_download_dict_all_sources_down(monkeypatch, tmp_path):
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True}])
 
-    def _always_down(url, dest, progress=None):
+    def _always_down(url, dest, progress=None, stop_event=None):
         raise dm.DictDownloadError("网络不可达")
 
     monkeypatch.setattr(dm, "_http_get", _always_down)
@@ -460,7 +461,7 @@ def test_download_dict_progress_phase_chain(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dm, "_set_download_progress", _spy)
     monkeypatch.setattr(dm, "_http_get",
-                        lambda url, dest, progress=None:
+                        lambda url, dest, progress=None, stop_event=None:
                         Path(dest).write_bytes(wheel))
     target = dm.download_dict("sudachi")
     assert Path(target).is_file()
@@ -492,7 +493,7 @@ def test_download_dict_progress_reset_per_source(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dm, "_set_download_progress", _spy)
 
-    def _flaky(url, dest, progress=None):
+    def _flaky(url, dest, progress=None, stop_event=None):
         if "tuna" not in url:
             progress(8, 100)          # 主源推进计数后网络断
             raise dm.DictDownloadError("连接超时")
@@ -512,7 +513,7 @@ def test_download_dict_progress_failed_phase(monkeypatch, tmp_path):
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True}])
 
-    def _down(url, dest, progress=None):
+    def _down(url, dest, progress=None, stop_event=None):
         raise dm.DictDownloadError("网络不可达")
 
     monkeypatch.setattr(dm, "_http_get", _down)
@@ -654,7 +655,7 @@ def test_download_dict_source_official_keeps_cloudfront(monkeypatch, tmp_path):
     _manifest_full(monkeypatch, sha)
     calls = []
     monkeypatch.setattr(dm, "_http_get",
-                        lambda url, dest, progress=None:
+                        lambda url, dest, progress=None, stop_event=None:
                         (calls.append(url), Path(dest).write_bytes(zbuf)))
     target = dm.download_dict("sudachi_full", source="official")
     assert Path(target).is_file()
@@ -662,25 +663,48 @@ def test_download_dict_source_official_keeps_cloudfront(monkeypatch, tmp_path):
 
 
 def test_download_dict_source_mirror_full_no_mirror(monkeypatch, tmp_path):
-    """真实清单事实：sudachi_full 官方 CDN 单源，mirror 模式显式报错。"""
+    """真实清单事实（2.7.3 件②只接线不点亮）：sudachi_full 的 hf-mirror
+    条目 sha256_verified=false 未点亮，不入镜像池——mirror 模式显式报错。"""
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     with pytest.raises(dm.DictDownloadError, match="无镜像源"):
         dm.download_dict("sudachi_full", source="mirror")
 
 
+def test_mirror_pool_excludes_empty_url_placeholder(monkeypatch):
+    """code-review 触碰式修复③钉：镜像占位条目（url=""）即使 verified 被
+    翻 true 且开 allow_unverified 双保险也不入池——空 URL 入池必下载失败
+    并打「镜像源不可达，已回退」假 note，与未点亮同门排除（报「无镜像源」
+    而非发起注定失败的请求）。"""
+    base = dm.load_source_manifest()
+    full = {**base["dicts"]["sudachi_full"], "downloads": [
+        {"source": "hf-mirror", "role": "mirror", "url": "",
+         "sha256": "a" * 64, "sha256_verified": True},
+        {"source": "cloudfront-cdn",
+         "url": "https://d2ej7fkh96fzlu.cloudfront.net/full.zip",
+         "sha256": "b" * 64, "sha256_verified": True}]}
+    monkeypatch.setattr(dm, "load_source_manifest", lambda: {
+        **base, "dicts": {**base["dicts"], "sudachi_full": full}})
+    with pytest.raises(dm.DictDownloadError, match="无镜像源"):
+        dm.download_dict("sudachi_full", source="mirror",
+                         allow_unverified=True)
+
+
 def test_download_dict_source_official_and_mirror_split(monkeypatch, tmp_path):
-    """sudachi 双源分流：official 只走 pypi（排除 tuna）；mirror 只走 tuna。"""
+    """sudachi 双源分流：official 只走 pypi（排除 role=mirror 的 tuna）；
+    mirror 只走 tuna。（2.7.3 件② role 旗标泛化：fixture 随清单语义补
+    role=mirror——verified 镜像不因角色混入 official 池。）"""
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": sha, "sha256_verified": True},
-        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+        {"source": "tuna", "role": "mirror",
+         "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
          "sha256": sha, "sha256_verified": True}])
     calls = []
     monkeypatch.setattr(dm, "_http_get",
-                        lambda url, dest, progress=None:
+                        lambda url, dest, progress=None, stop_event=None:
                         (calls.append(url), Path(dest).write_bytes(wheel)))
     assert Path(dm.download_dict("sudachi", source="official")).is_file()
     assert calls == ["https://files.pythonhosted.org/a.whl"]
@@ -702,7 +726,7 @@ def test_download_dict_fallback_note_visible(monkeypatch, tmp_path):
          "sha256": sha, "sha256_verified": True}])
     seen = {}
 
-    def _flaky(url, dest, progress=None):
+    def _flaky(url, dest, progress=None, stop_event=None):
         if "tuna" not in url:
             raise dm.DictDownloadError("连接超时")
 
@@ -730,7 +754,7 @@ def test_download_dict_invalid_source_falls_back_auto(monkeypatch, tmp_path):
          "sha256": sha, "sha256_verified": True}])
     calls = []
 
-    def _flaky(url, dest, progress=None):
+    def _flaky(url, dest, progress=None, stop_event=None):
         calls.append(url)
         if "tuna" not in url:
             raise dm.DictDownloadError("连接超时")
@@ -751,3 +775,393 @@ def test_dict_status_sources_summary(monkeypatch, tmp_path):
     assert s["sudachi"] == {"has_official": True, "has_mirror": True}
     assert s["sudachi_full"] == {"has_official": True, "has_mirror": False}
     assert "jieba" not in s and "english_rules" not in s
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件②（D2026-1005-05）：下载镜像提速接线——role 旗标泛化 + hf-mirror
+#（只接线不点亮：未点亮镜像不入任何下载池、GUI 不虚亮；点亮=owner 上传
+# 后另走生产路径核验转 verified）
+# ---------------------------------------------------------------------------
+def _manifest_full_with_mirror(monkeypatch, sha: str,
+                               mirror_verified: bool) -> None:
+    """sudachi_full downloads 替换为真实形状 [hf-mirror, cloudfront]
+    （镜像在前=JSON 列表序；点亮态由 mirror_verified 控制）。"""
+    mirror_url = ("https://hf-mirror.com/resolve/abc/full.zip"
+                  if mirror_verified else "")
+    base = dm.load_source_manifest()
+    full = {**base["dicts"]["sudachi_full"], "downloads": [
+        {"source": "hf-mirror", "role": "mirror",
+         "url": mirror_url, "sha256": sha,
+         "sha256_verified": mirror_verified},
+        {"source": "cloudfront-cdn",
+         "url": "https://d2ej7fkh96fzlu.cloudfront.net/full.zip",
+         "sha256": sha, "sha256_verified": True}]}
+    monkeypatch.setattr(dm, "load_source_manifest", lambda: {
+        **base, "dicts": {**base["dicts"], "sudachi_full": full}})
+
+
+def test_source_manifest_mirror_role_pinned():
+    """清单钉：core 的 tuna 带 role=mirror（pypi 无 role=官方）；sudachi_full
+    在 cloudfront 之前有未点亮 hf-mirror 条目（url 待填、sha256 同 pin——
+    列表序=点亮后 auto 链镜像优先的实现机制）。"""
+    m = dm.load_source_manifest()
+    core = m["dicts"]["sudachi"]["downloads"]
+    assert core[0].get("role") is None, "pypi 官方条目不得带 mirror role"
+    assert core[1].get("role") == "mirror"
+    full = m["dicts"]["sudachi_full"]["downloads"]
+    assert [d["source"] for d in full] == ["hf-mirror", "cloudfront-cdn"]
+    mirror = full[0]
+    assert mirror.get("role") == "mirror"
+    assert mirror["url"] == "", "未点亮镜像 url 必须为空（待 owner 上传后填）"
+    assert mirror["sha256_verified"] is False
+    assert mirror["sha256"] == full[1]["sha256"], "镜像须与官方源同 pin"
+    assert mirror["sha256"] == \
+        "eb6d02206e93f1b62508c9f2d4d4940d6f82c7f63c630bc0c1c4f9c50b7e871e"
+
+
+def test_url_host_allow_mirror_domains_pinned():
+    """白名单钉（2026-10-05 生产形态 GET 直连路由 4/4 采样实测两域）：
+    hf-mirror.com 与 cas-bridge.xethub.hf.co 放行；被墙源站 huggingface.co
+    保持拒绝（经代理 308 回源站，观测不入围）。"""
+    assert {"hf-mirror.com", "cas-bridge.xethub.hf.co"} \
+        <= dm._URL_HOST_ALLOW
+    assert dm._validate_url(
+        "https://hf-mirror.com/resolve/abc/sudachi-full.zip")
+    assert dm._validate_url(
+        "https://cas-bridge.xethub.hf.co/cas/xethub/sudachi-full.zip")
+    with pytest.raises(dm.DictDownloadError):
+        dm._validate_url("https://huggingface.co/resolve/main/a.zip")
+
+
+def test_download_dict_unlit_mirror_not_in_any_pool(monkeypatch, tmp_path):
+    """未点亮行为钉（只接线不点亮）：sha256_verified=false 的镜像条目不
+    入 auto 池（实际只走 cloudfront）；mirror 请求显式报「无镜像源」；
+    official 池仍走 cloudfront；GUI 数据面 has_mirror=false（mirBtn
+    disabled 的数据源，不虚亮）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    zbuf = _fake_wheel(member="system_full.dic")
+    sha = hashlib.sha256(zbuf).hexdigest()
+    _manifest_full_with_mirror(monkeypatch, sha, mirror_verified=False)
+    calls = []
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None, stop_event=None:
+                        (calls.append(url), Path(dest).write_bytes(zbuf)))
+    assert Path(dm.download_dict("sudachi_full", source="auto")).is_file()
+    assert calls == ["https://d2ej7fkh96fzlu.cloudfront.net/full.zip"]
+    with pytest.raises(dm.DictDownloadError, match="无镜像源"):
+        dm.download_dict("sudachi_full", source="mirror")
+    calls.clear()
+    assert Path(dm.download_dict("sudachi_full", source="official")).is_file()
+    assert calls == ["https://d2ej7fkh96fzlu.cloudfront.net/full.zip"]
+    st = dm.dict_status()["sources"]["sudachi_full"]
+    assert st == {"has_official": True, "has_mirror": False}
+
+
+def test_download_dict_lit_mirror_auto_order_and_fallback_note(
+        monkeypatch, tmp_path):
+    """点亮模拟钉（fixture 翻转 sha256_verified=true）：auto 链按 JSON 列表
+    序 [hf-mirror, cloudfront] 镜像优先；镜像段网络失败自动轮换回
+    cloudfront，快照 note 方向感知=「镜像源不可达，已回退官方源」。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    zbuf = _fake_wheel(member="system_full.dic")
+    sha = hashlib.sha256(zbuf).hexdigest()
+    _manifest_full_with_mirror(monkeypatch, sha, mirror_verified=True)
+    calls = []
+    seen = {}
+
+    def _flaky(url, dest, progress=None, stop_event=None):
+        calls.append(url)
+        if "hf-mirror" in url:
+            raise dm.DictDownloadError("连接超时")
+
+        def _p(n, t):
+            progress(n, t)
+            seen["snap"] = dm.download_progress("sudachi_full")
+
+        _p(5, 7)
+        Path(dest).write_bytes(zbuf)
+
+    monkeypatch.setattr(dm, "_http_get", _flaky)
+    assert Path(dm.download_dict("sudachi_full", source="auto")).is_file()
+    assert calls == ["https://hf-mirror.com/resolve/abc/full.zip",
+                     "https://d2ej7fkh96fzlu.cloudfront.net/full.zip"]
+    assert seen["snap"].get("note") == "镜像源不可达，已回退官方源"
+
+
+def test_download_dict_lit_mirror_and_official_split(monkeypatch, tmp_path):
+    """点亮模拟钉：mirror 请求走 hf-mirror 直链；role 隔离（HRO-2 最严重
+    项）——镜像条目即使 sha256_verified=true 也不入 official 池，official
+    仍只走 cloudfront（防官方语义被镜像击穿的回归钉）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    zbuf = _fake_wheel(member="system_full.dic")
+    sha = hashlib.sha256(zbuf).hexdigest()
+    _manifest_full_with_mirror(monkeypatch, sha, mirror_verified=True)
+    calls = []
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None, stop_event=None:
+                        (calls.append(url), Path(dest).write_bytes(zbuf)))
+    assert Path(dm.download_dict("sudachi_full", source="mirror")).is_file()
+    assert calls == ["https://hf-mirror.com/resolve/abc/full.zip"]
+    calls.clear()
+    assert Path(dm.download_dict("sudachi_full", source="official")).is_file()
+    assert calls == ["https://d2ej7fkh96fzlu.cloudfront.net/full.zip"]
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件①：词典替换 WinError 5 自锁修复（release_tokenizer + 窄域异常）
+# ---------------------------------------------------------------------------
+def test_replace_locked_release_then_retry_succeeds(monkeypatch, tmp_path):
+    """os.replace 首抛 PermissionError → 释放分词器（侦确认被调）→
+    重试成功 → done 快照且词典落位。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True}])
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None, stop_event=None:
+                        Path(dest).write_bytes(wheel))
+    real_replace = dm.os.replace
+    state = {"first": True}
+
+    def _flaky_replace(src, dst):
+        if str(src).endswith(".extracting") and state["first"]:
+            state["first"] = False
+            raise PermissionError(5, "拒绝访问。")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(dm.os, "replace", _flaky_replace)
+
+    import subtransjav.refine.grammar_hint as gh
+    released = []
+
+    def _fake_release(after_release=None):
+        released.append(True)
+        if after_release is not None:
+            after_release()
+
+    monkeypatch.setattr(gh, "release_tokenizer", _fake_release)
+
+    target = dm.download_dict("sudachi")
+    assert Path(target).read_bytes() == b"DICDATA"
+    assert released == [True], "替换被锁必须经 release_tokenizer 释放后重试"
+    assert dm.download_progress("sudachi")["phase"] == "done"
+    assert not any((tmp_path / "dict" / "sudachi").glob("*.extracting"))
+
+
+def test_replace_locked_persists_raises_narrow_error(monkeypatch, tmp_path):
+    """重试仍被锁 → 窄域异常（不继承 DictDownloadError，不轮换、无回退
+    note）+ failed 快照人话消息 + .downloading/.extracting 残件清理。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": sha, "sha256_verified": True}])
+    calls = []
+
+    def _fake_get(url, dest, progress=None, stop_event=None):
+        calls.append(url)
+        Path(dest).write_bytes(wheel)
+
+    monkeypatch.setattr(dm, "_http_get", _fake_get)
+
+    def _always_locked(src, dst):
+        raise PermissionError(5, "拒绝访问。")
+
+    monkeypatch.setattr(dm.os, "replace", _always_locked)
+
+    import subtransjav.refine.grammar_hint as gh
+
+    def _fake_release(after_release=None):
+        # 模拟真实契约：重试闭包必被调（仍抛 PermissionError → 窄域异常）
+        if after_release is not None:
+            after_release()
+
+    monkeypatch.setattr(gh, "release_tokenizer", _fake_release)
+
+    with pytest.raises(dm.DictReplaceLockedError) as ei:
+        dm.download_dict("sudachi")
+    msg = str(ei.value)
+    assert "重启" in msg, "人话消息须含「重启」对冲指引"
+    # 窄域异常不得是 DictDownloadError 子类（防误触跨源轮换）
+    assert not isinstance(ei.value, dm.DictDownloadError)
+    assert len(calls) == 1, "替换被锁不得轮换下一源"
+    snap = dm.download_progress("sudachi")
+    assert snap["phase"] == "failed"
+    assert "重启" in snap["error"]
+    assert "note" not in snap, "替换被锁不得打「已回退镜像源」note"
+    d = tmp_path / "dict" / "sudachi"
+    assert not any(d.glob("system_core.dic.downloading*"))
+    assert not any(d.glob("*.extracting"))
+
+
+def test_extracting_tmp_cleaned_on_mid_extract_error(monkeypatch, tmp_path):
+    """解压中途 IO 异常 → DictChecksumError 且 .extracting 残件清理
+    （补断言：_extract_dic 内 :555-561 清理覆盖解压循环抛错路径）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    out = tmp_path / "out.dic"
+
+    class _BrokenSrc:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n):
+            raise OSError("simulated mid-extract IO failure")
+
+    class _FakeZipInfo:
+        file_size = 100
+
+    class _FakeZip:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def namelist(self):
+            return ["sudachidict_core/resources/system.dic"]
+
+        def getinfo(self, name):
+            return _FakeZipInfo()
+
+        def open(self, name):
+            return _BrokenSrc()
+
+    monkeypatch.setattr(dm.zipfile, "ZipFile", lambda *a, **k: _FakeZip())
+    archive = tmp_path / "fake.whl"
+    archive.write_bytes(b"not-a-real-zip")
+    with pytest.raises(dm.DictChecksumError):
+        dm._extract_dic(str(archive),
+                        "sudachidict_core/resources/system.dic", str(out))
+    assert not out.exists()
+    assert not (tmp_path / "out.dic.extracting").exists()
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件⑤：词典下载协作式停止（DictDownloadStopped 三处显式透传 +
+# stopped 快照收口；检查点=attempt 循环头/1MB 分块循环每拍/4MB 解压循环
+# 每拍/源循环头）
+# ---------------------------------------------------------------------------
+def test_dict_download_stopped_not_download_error_subclass():
+    """钉：DictDownloadStopped 不得继承 DictDownloadError（防误触直连
+    重试/跨源轮换/假回退 note——与 DictReplaceLockedError 同裁定）。"""
+    assert not issubclass(dm.DictDownloadStopped, dm.DictDownloadError)
+
+
+def test_http_get_stop_in_chunk_loop_no_attempt2(monkeypatch, tmp_path):
+    """分块循环中置位 stop → DictDownloadStopped 透传：不被通用包裹吞成
+    DictDownloadError、不触发 attempt#2 直连重试（断言仅一次源访问）；
+    .part 残件清理。"""
+    payload = b"abcdefgh" * 2                   # 16 字节，chunk 4 → 多拍
+    stop = threading.Event()
+    seen = []
+
+    def _progress(n, t):
+        seen.append(n)
+        stop.set()                              # 首拍置位 → 下拍循环头抛出
+
+    _, open_calls = _patch_build_opener(
+        monkeypatch,
+        lambda req: _StreamResponse(payload, chunk=4, total=len(payload)))
+    dest = str(tmp_path / "x.whl")
+    with pytest.raises(dm.DictDownloadStopped) as ei:
+        dm._http_get("https://files.pythonhosted.org/x.whl", dest,
+                     progress=_progress, stop_event=stop)
+    assert not isinstance(ei.value, dm.DictDownloadError), \
+        "停止异常不得被通用包裹转成 DictDownloadError"
+    assert len(open_calls) == 1, "停止不得触发 attempt#2 直连重试"
+    assert seen == [4], "置位后须在下一拍循环头停止（不多读分块）"
+    assert not Path(dest + ".part").exists(), "停止路径须清理 .part 残件"
+
+
+def test_download_dict_stop_at_source_loop_head(monkeypatch, tmp_path):
+    """源循环头置位 → 首源未访问、第二源未尝试；收口 stopped 快照
+    （note 带重下指引、不写 error/diag）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": "1" * 64, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": "2" * 64, "sha256_verified": True}])
+    calls = []
+
+    def _fake_get(url, dest, progress=None, stop_event=None):
+        calls.append(url)
+
+    monkeypatch.setattr(dm, "_http_get", _fake_get)
+    stop = threading.Event()
+    stop.set()
+    with pytest.raises(dm.DictDownloadStopped):
+        dm.download_dict("sudachi", stop_event=stop)
+    assert calls == [], "源循环头检查点须先于任何源访问（双源均未尝试）"
+    snap = dm.download_progress("sudachi")
+    assert snap["phase"] == "stopped"
+    assert "已停止下载" in snap["note"]
+    assert snap["error"] is None and "diag" not in snap
+
+
+def test_download_dict_stop_not_swallowed_by_rotation(monkeypatch, tmp_path):
+    """源#1 下载中置位 → 源轮换捕获不得吞掉 DictDownloadStopped：第二源
+    未尝试、不打「已回退」假 note，收口 stopped 快照。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": "1" * 64, "sha256_verified": True},
+        {"source": "tuna", "url": "https://pypi.tuna.tsinghua.edu.cn/b.whl",
+         "sha256": "2" * 64, "sha256_verified": True}])
+    calls = []
+
+    def _fake_get(url, dest, progress=None, stop_event=None):
+        calls.append(url)
+        if stop_event is not None:
+            stop_event.set()
+        raise dm.DictDownloadStopped("词典下载已被用户停止")
+
+    monkeypatch.setattr(dm, "_http_get", _fake_get)
+    stop = threading.Event()
+    with pytest.raises(dm.DictDownloadStopped):
+        dm.download_dict("sudachi", stop_event=stop)
+    assert calls == ["https://files.pythonhosted.org/a.whl"], \
+        "停止不得轮换第二源"
+    snap = dm.download_progress("sudachi")
+    assert snap["phase"] == "stopped"
+    assert "已回退" not in snap.get("note", ""), "停止不得打「已回退」假 note"
+
+
+def test_download_dict_stop_in_extract_loop_cleanup(monkeypatch, tmp_path):
+    """解压循环置位 → stopped 快照（note 指引）+ .downloading/.extracting
+    残件清理（复用件①清理链）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    wheel = _fake_wheel()
+    sha = hashlib.sha256(wheel).hexdigest()
+    _manifest_with_downloads(monkeypatch, [
+        {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
+         "sha256": sha, "sha256_verified": True}])
+    monkeypatch.setattr(dm, "_http_get",
+                        lambda url, dest, progress=None, stop_event=None:
+                        Path(dest).write_bytes(wheel))
+    stop = threading.Event()
+    real_sha = dm._sha256_of
+
+    def _sha_then_stop(path):
+        out = real_sha(path)
+        stop.set()                  # 校验通过后、解压前置位 → 解压循环首拍停止
+        return out
+
+    monkeypatch.setattr(dm, "_sha256_of", _sha_then_stop)
+    with pytest.raises(dm.DictDownloadStopped):
+        dm.download_dict("sudachi", stop_event=stop)
+    snap = dm.download_progress("sudachi")
+    assert snap["phase"] == "stopped"
+    assert "可切换网络代理后重新下载" in snap["note"]
+    assert snap["error"] is None and "diag" not in snap
+    d = tmp_path / "dict" / "sudachi"
+    assert not any(d.glob("system_core.dic.downloading*"))
+    assert not any(d.glob("*.extracting"))

@@ -25,6 +25,7 @@
 import hashlib
 import logging
 import os
+import threading
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -46,6 +47,16 @@ _URL_HOST_ALLOW = {
     # sudachi_full 完整版 CDN 直链（2.5.0 修复A）：固定上游官方域名、仅 https、
     # 落位经 DictChecksumError 校验拒串改
     "d2ej7fkh96fzlu.cloudfront.net",
+    # sudachi_full 镜像加速（2.7.3 件②，D2026-1005-05）：hf-mirror.com 中转 +
+    # 302 终跳 cas-bridge.xethub.hf.co 直连。实测依据（2026-10-05，主模型生产
+    # 形态 GET 直连路由 4/4 采样）：/resolve/ 链无 Range 普通 GET→302→
+    # cas-bridge.xethub.hf.co（终跳直连可达，64KB 取样成功）；Range GET→
+    # hf-mirror 本域 206 直服。huggingface.co 经代理出口路由→308→被墙源站，
+    # 观测不入围（attempt#1 失败自动降 attempt#2 直连，不得放行被墙源站）。
+    # 点亮（owner 上传镜像后 sha256_verified 转 true）前须复验实链路；实测若
+    # 现新域→扩面回评议（D2026-1005-05 HRO-①③）。
+    "hf-mirror.com",
+    "cas-bridge.xethub.hf.co",
 }
 
 
@@ -63,10 +74,33 @@ class DictChecksumError(RuntimeError):
     """词典 SHA256 校验失败或清单字段非法（拒绝落位）。"""
 
 
+class DictReplaceLockedError(RuntimeError):
+    """词典落位替换失败：旧词典文件被占用（2.7.3 件①）。
+
+    刻意**不继承** DictDownloadError：替换锁定属本地资源冲突
+    （分词器单例 mmap 旧 .dic 未释放），跨源轮换毫无意义（换源
+    下载到相同产物仍替换失败），且不得误触 download_dict 的
+    DictDownloadError 跨源轮换分支。
+    """
+
+
+class DictDownloadStopped(RuntimeError):
+    """词典下载被用户主动停止（2.7.3 件⑤，协作式停止检查点抛出）。
+
+    刻意**不继承** DictDownloadError：停止属用户意图而非网络失败，
+    不得触发 _http_get 的 attempt#2 直连重试，也不得触发
+    download_dict 的跨源轮换分支（那会打出「已回退镜像源」假 note）。
+    三处显式透传（_http_get 通用包裹 / download_dict 源轮换捕获 /
+    download_dict 顶层通用收口）保证停止不被吞成重试/轮换/failed。
+    """
+
+
 # 下载进度状态（第四批 owner 验收反馈：下载无进度条/成败不醒目）：
 # kind → 快照 {"kind","phase","downloaded","total","error"}，phase ∈
-# download/verify/extract/done/failed。写侧整体赋值换引用（读侧拿到
-# 一致性视图），无需复杂锁；GUI 经 api 层 1s 轮询消费。
+# download/verify/extract/done/failed/stopped（2.7.3 件⑤ 增 stopped：
+# 用户主动停止的终态，由 download_dict 顶层 DictDownloadStopped 收口
+# 写入，note 带重下指引、不写 error/diag）。写侧整体赋值换引用（读侧
+# 拿到一致性视图），无需复杂锁；GUI 经 api 层 1s 轮询消费。
 _DOWNLOAD_PROGRESS: dict = {}
 
 
@@ -399,7 +433,16 @@ class _DictGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _http_get(url: str, dest: str, progress=None) -> None:
+def _check_stop(stop_event: threading.Event | None) -> None:
+    """协作式停止检查点（2.7.3 件⑤）：stop_event 置位即抛
+    DictDownloadStopped。调用点=_http_get attempt 循环头、1MB 分块循环
+    每拍、_extract_dic 4MB 解压循环每拍、download_dict 源循环头。"""
+    if stop_event is not None and stop_event.is_set():
+        raise DictDownloadStopped("词典下载已被用户停止")
+
+
+def _http_get(url: str, dest: str, progress=None,
+              stop_event: threading.Event | None = None) -> None:
     """下载到 dest（流式分块落盘，.part 先写再原子改名；dest 由调用方
     约束在数据根词典目录内且父目录已建）。
 
@@ -449,6 +492,7 @@ def _http_get(url: str, dest: str, progress=None) -> None:
 
     last_err: DictDownloadError | None = None
     for attempt in (1, 2):
+        _check_stop(stop_event)     # 2.7.3 件⑤：attempt 循环头停止检查
         expected: int | None = None
         done = 0
         enc = ""
@@ -473,6 +517,7 @@ def _http_get(url: str, dest: str, progress=None) -> None:
                 enc = resp.headers.get("Content-Encoding") or ""
                 with open(tmp, "wb") as out:
                     while True:
+                        _check_stop(stop_event)   # 件⑤：分块循环每拍停止检查
                         chunk = resp.read(1024 * 1024)
                         if not chunk:
                             break
@@ -491,6 +536,11 @@ def _http_get(url: str, dest: str, progress=None) -> None:
         except DictChecksumError:
             # 防洗白裁定边界（D2026-1003-06）：校验错误绝不吞成网络错误、
             # 绝不触发直连重试（当前不可达，防未来重构回归）
+            raise
+        except DictDownloadStopped:
+            # 2.7.3 件⑤：停止先于 :497 通用包裹透传（防被吞成
+            # DictDownloadError 触发 attempt#2 直连重试）；.part 残件照旧清理
+            _unlink_quiet(tmp)
             raise
         except DictDownloadError as e:
             last_err = e
@@ -514,7 +564,8 @@ def _unlink_quiet(path: str) -> None:
 
 
 def _extract_dic(archive_path: str, member_suffix: str,
-                 dest_path: str) -> str:
+                 dest_path: str,
+                 stop_event: threading.Event | None = None) -> str:
     """从 zip/whl 提取词典文件到 dest（流式分块写+原子改名）。
 
     2.5.0 修复A 加固：①弃 read_bytes 全量双缓冲（full 的 .dic 解压后
@@ -548,6 +599,7 @@ def _extract_dic(archive_path: str, member_suffix: str,
                               2 * zinfo.file_size)
             with z.open(names[0]) as src, open(tmp, "wb") as out:
                 while True:
+                    _check_stop(stop_event)   # 件⑤：解压循环每拍停止检查
                     chunk = src.read(4 * 1024 * 1024)
                     if not chunk:
                         break
@@ -555,16 +607,47 @@ def _extract_dic(archive_path: str, member_suffix: str,
     except DictChecksumError:
         _unlink_quiet(str(tmp))
         raise
+    except DictDownloadStopped:
+        # 2.7.3 件⑤：停止先于通用包裹透传（防被吞成 DictChecksumError），
+        # .extracting 残件照旧清理（复用件①清理链）
+        _unlink_quiet(str(tmp))
+        raise
     except Exception as e:  # noqa: BLE001
         _unlink_quiet(str(tmp))
         raise DictChecksumError(
             f"词典压缩包解析失败: {type(e).__name__}: {e}") from e
-    os.replace(str(tmp), dest_path)
+    # 2.7.3 件①：Windows 下 grammar_hint 分词器单例 mmap 旧词典文件，
+    # os.replace 覆盖必 PermissionError（WinError 5）→ 尽力释放分词器
+    # 后原地重试一次；重试仍被锁抛窄域异常（不继承 DictDownloadError，
+    # 防误触跨源轮换）。其余 OSError（只读/盘错等）走既有通用失败路径。
+    try:
+        os.replace(str(tmp), dest_path)
+    except PermissionError as e:
+        def _retry_replace() -> None:
+            os.replace(str(tmp), dest_path)
+
+        try:
+            from .grammar_hint import release_tokenizer
+            release_tokenizer(after_release=_retry_replace)
+        except PermissionError as e2:
+            _log.warning("词典 %s 替换失败：文件被占用（首次 %s / 重试 %s）；"
+                         "已尽力释放分词器仍未解锁", dest_path,
+                         e.strerror or e, e2.strerror or e2)
+            raise DictReplaceLockedError(
+                "词典文件被占用，替换失败。本程序的分词器可能正在使用旧词典，"
+                "重启程序后即生效；若重启后仍失败，请检查杀毒软件拦截或文件"
+                "只读属性。") from e2
+        return dest_path
+    finally:
+        # 重试失败/其余 OSError 路径清 .extracting 残件（成功时文件已
+        # 改名落位，unlink 静默无操作）
+        _unlink_quiet(str(tmp))
     return dest_path
 
 
 def download_dict(kind: str, allow_unverified: bool = False,
-                  local_file: str = "", source: str = "auto") -> str:
+                  local_file: str = "", source: str = "auto",
+                  stop_event: threading.Event | None = None) -> str:
     """下载（或本地导入）词典到数据根 ``dict/<install_dir>/<target_name>``。
 
     local_file 非空=离线导入：wheel 按源清单哈希校验（不匹配即拒），
@@ -572,12 +655,19 @@ def download_dict(kind: str, allow_unverified: bool = False,
     返回落位路径；网络失败可跨源 fallback，校验失败直接抛
     DictChecksumError 不轮换（防串改文件被"换个源洗白"）。
 
-    source（2.6.3 批B，D2026-1003-06 条件②①）：源选择 ∈ {auto, official,
-    mirror}，非法值按 auto。mirror 集=清单 ``source=="tuna"``；official=
-    排除镜像（保留 pypi 与 cloudfront-cdn——sudachi_full 官方源就是
-    cloudfront，不得只留 pypi）；official/mirror 过滤后为空显式报错。
-    auto 静默轮换升级为可见：官方源网络失败且有下一源时进度快照带
-    note 提示（1s 轮询透出）。
+    source（2.6.3 批B，D2026-1003-06 条件②①；2.7.3 件② HRO-2 role 旗标
+    泛化）：源选择 ∈ {auto, official, mirror}，非法值按 auto。镜像集=
+    清单 ``role=="mirror"`` 且 ``sha256_verified`` 为真（未点亮镜像不入
+    池——点亮门）；官方=``role != "mirror"``（保留 pypi 与 cloudfront-cdn
+    ——sudachi_full 官方源就是 cloudfront，镜像即使 verified 也不混入）；
+    official/mirror 过滤后为空显式报错。auto 链顺序=JSON 列表序（点亮后
+    sudachi_full 镜像条目在前即镜像优先）。轮换由静默升级为可见且方向
+    感知：镜像段失败回官方→「镜像源不可达，已回退官方源」，官方段失败
+    回镜像→「官方源不可达，已回退镜像源」（1s 轮询透出）。
+
+    stop_event（2.7.3 件⑤，协作式停止）：置位后在检查点（源循环头/
+    分块循环每拍/解压循环每拍）抛 DictDownloadStopped，顶层收口写
+    stopped 快照（note 带重下指引）后原样上抛——不写 failed、不轮换。
     """
     entry = load_source_manifest()["dicts"].get(kind)
     if entry is None:
@@ -591,17 +681,26 @@ def download_dict(kind: str, allow_unverified: bool = False,
     dest = str(_ensure_inside_dict_root(out_dir / target_name))
     member = entry.get("archive_member") or ""
 
-    # 源选择过滤（D2026-1003-06 条件②）：mirror=tuna；official=排除镜像
-    # （pypi+cloudfront-cdn 均属官方，不得只留 pypi）
+    # 源选择过滤（D2026-1003-06 条件②；2.7.3 件② HRO-2 role 旗标泛化）：
+    # 镜像=``role=="mirror"`` 且 sha256_verified 为真（未点亮镜像绝不入池
+    # ——点亮门）且 url 非空（code-review 触碰式修复③：占位条目即使被
+    # 误置 verified=true，url 空串入池也必失败并打「已回退」假 note，空
+    # URL 与未点亮同门排除）；官方=``role != "mirror"``（pypi+
+    # cloudfront-cdn 均属官方，镜像即使 verified 也不得混入 official/auto
+    # 官方段）。auto 池=JSON 列表序原样拼装（不改序）——sudachi_full 点亮
+    # 后镜像条目在前即镜像优先
     if source not in ("auto", "official", "mirror"):
         source = "auto"
     all_downloads = list(entry.get("downloads", []))
     if source == "mirror":
-        pool = [d for d in all_downloads if d.get("source") == "tuna"]
+        pool = [d for d in all_downloads
+                if d.get("role") == "mirror" and d.get("sha256_verified")
+                and d.get("url")]
         if not pool:
-            raise DictDownloadError(f"词典 {kind} 无镜像源（官方 CDN 单源）")
+            raise DictDownloadError(
+                f"词典 {kind} 无镜像源（无镜像条目或镜像未点亮）")
     elif source == "official":
-        pool = [d for d in all_downloads if d.get("source") != "tuna"]
+        pool = [d for d in all_downloads if d.get("role") != "mirror"]
         if not pool:
             raise DictDownloadError(f"词典 {kind} 无官方源")
     else:
@@ -622,7 +721,7 @@ def download_dict(kind: str, allow_unverified: bool = False,
                     raise DictChecksumError(
                         f"本地 wheel SHA256 与源清单不符: {src}")
                 _set_download_progress(kind, "extract", 0, None)
-                _extract_dic(str(src), member, dest)
+                _extract_dic(str(src), member, dest, stop_event=stop_event)
             else:
                 print(f"⚠️ 本地 .dic 导入无源清单哈希可校，按用户自解压产物落位: "
                       f"{src}")
@@ -634,6 +733,7 @@ def download_dict(kind: str, allow_unverified: bool = False,
 
         last_err: Exception | None = None
         for i, d in enumerate(pool):
+            _check_stop(stop_event)     # 件⑤：源循环头停止检查（不进下一源）
             if not d.get("sha256_verified") and not allow_unverified:
                 continue
             url = d.get("url") or ""
@@ -649,7 +749,10 @@ def download_dict(kind: str, allow_unverified: bool = False,
             _set_download_progress(kind, "download", 0, None)
             try:
                 _http_get(url, tmp, progress=lambda n, t:
-                          _set_download_progress(kind, "download", n, t))
+                          _set_download_progress(kind, "download", n, t),
+                          stop_event=stop_event)
+            except DictDownloadStopped:
+                raise   # 件⑤：停止不得被吞成轮换/「已回退」假 note
             except DictDownloadError as e:
                 last_err = e
                 # D2026-1003-06 条件①：静默轮换升级为可见——快照带 note
@@ -657,8 +760,14 @@ def download_dict(kind: str, allow_unverified: bool = False,
                 has_next = any(x.get("sha256_verified") or allow_unverified
                                for x in pool[i + 1:])
                 if has_next:
-                    _set_download_note(kind, "官方源不可达，已回退镜像源")
-                    _log.info("词典 %s 官方源不可达，已回退镜像源", kind)
+                    # 2.7.3 件②：方向感知回退 note——镜像段失败回官方 vs
+                    # 官方段失败回镜像，文案随失败条目的 role 而定
+                    if d.get("role") == "mirror":
+                        _fallback_note = "镜像源不可达，已回退官方源"
+                    else:
+                        _fallback_note = "官方源不可达，已回退镜像源"
+                    _set_download_note(kind, _fallback_note)
+                    _log.info("词典 %s %s", kind, _fallback_note)
                 continue            # 网络失败 → 试下一源
             _carry_download_progress(kind, "verify")
             if _sha256_of(tmp) != d.get("sha256"):
@@ -667,8 +776,12 @@ def download_dict(kind: str, allow_unverified: bool = False,
                 raise DictChecksumError(
                     f"SHA256 校验失败，已拒绝落位: {url}")
             _carry_download_progress(kind, "extract")
-            _extract_dic(tmp, member, dest)
-            _unlink_quiet(tmp)
+            # 2.7.3 件①：try/finally 保证任何异常路径（含替换被锁的
+            # DictReplaceLockedError、校验失败等）都清理 .downloading 残件
+            try:
+                _extract_dic(tmp, member, dest, stop_event=stop_event)
+            finally:
+                _unlink_quiet(tmp)
             size = os.path.getsize(dest)
             _set_download_progress(kind, "done", size, size)
             return dest
@@ -676,6 +789,14 @@ def download_dict(kind: str, allow_unverified: bool = False,
             raise last_err
         raise DictDownloadError(
             f"词典 {kind} 无可用下载源（全部未核实且未开 --dict-allow-unverified）")
+    except DictDownloadStopped:
+        # 2.7.3 件⑤：停止收口——stopped 快照（note 人话指引重下），不写
+        # error/diag、不轮换、不写 failed；异常照旧上抛供 api 层会话收口
+        # （GUI 轮询见 phase=stopped 即回未安装态并解锁整行）
+        _set_download_progress(
+            kind, "stopped",
+            note="已停止下载（未安装）。可切换网络代理后重新下载。")
+        raise
     except Exception as e:
         # D2026-1004-01 C3：_http_get 挂的 diag（若有）随 failed 快照
         # 透出（段2 #6 数据来源）；校验失败无 diag → 不加 diag 键
@@ -891,15 +1012,19 @@ def dict_status() -> dict:
     # 批1b 件1：dict_dir=现生效目录（自定义覆盖后即生效值），
     # custom_dir=设置值（未设 null），effective_dir 与 dict_dir 等价显式键
     # 2.6.3 批B（D2026-1003-06 条件②）：sources 摘要——前端「仅镜像」键
-    # disabled 门控（从清单推导；仅 target_name 非空的可下载 kind）
+    # disabled 门控（从清单推导；仅 target_name 非空的可下载 kind）。
+    # 2.7.3 件② HRO-2：has_mirror 按 role 旗标 + sha256_verified 点亮门推导
+    # （未点亮镜像不虚亮 GUI）；has_official 排除 role=mirror（镜像即使
+    # verified 也不入官方语义）
     sources_summary: dict = {}
     for kind, entry in manifest["dicts"].items():
         if not (entry.get("target_name") or ""):
             continue
         dl = entry.get("downloads") or []
         sources_summary[kind] = {
-            "has_official": any(d.get("source") != "tuna" for d in dl),
-            "has_mirror": any(d.get("source") == "tuna" for d in dl),
+            "has_official": any(d.get("role") != "mirror" for d in dl),
+            "has_mirror": any(d.get("role") == "mirror"
+                              and d.get("sha256_verified") for d in dl),
         }
     return {"dict_dir": dict_dir(), "custom_dir": _CUSTOM_DICT_DIR,
             "effective_dir": dict_dir(), "dicts": dicts,
