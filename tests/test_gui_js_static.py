@@ -2083,3 +2083,47 @@ def test_startup_chain_not_killed_by_scope_leak():
         "pywebviewready 链必须调用 FeatureStatus.init（语法徽章初始化）"
     assert "refine_asr_status" in chain_b and "3000" in chain_b, \
         "pywebviewready 链必须保留 setTimeout 3000 ASR 预热（refine_asr_status）"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件⑦（D2026-1006-01）：翻译期 Console 流断防御——显示链生命线
+# 重排（轮询先行、原始日志通道与 status 桥解耦）
+# ---------------------------------------------------------------------------
+
+def test_start_translation_polling_before_started_log():
+    """startTranslation 成功分支必须轮询先行，打点异常不拖垮显示链生命线。
+
+    人工推演（D2026-1006-01 件⑦）：ConsoleManager.log(translationStarted)
+    若抛错会跳过 startStatusPolling——状态栏/进度/收尾判断全部失联（显示链
+    生命线单点）。修复后 startStatusPolling() 先行，打点包 try/catch 仅降级
+    为 console.warn，轮询启动不再受打点异常影响。
+    """
+    body = _extract_function(_app_js_source(), "startTranslation")
+    assert "this.startStatusPolling()" in body, \
+        "成功分支必须启动状态轮询（显示链生命线）"
+    assert "MSG.translationStarted" in body, \
+        "成功分支必须保留 translationStarted 打点"
+    assert body.index("this.startStatusPolling()") \
+        < body.index("MSG.translationStarted"), \
+        "startStatusPolling() 必须位于 MSG.translationStarted 之前（轮询先行）"
+    # 打点必须防弹：try/catch 包裹，异常仅 console.warn
+    guard = re.search(
+        r"try\s*\{[^}]*MSG\.translationStarted[\s\S]*?\}\s*catch", body)
+    assert guard, "translationStarted 打点必须包 try/catch（打点异常不外溢）"
+
+
+def test_status_polling_fetch_logs_decoupled_from_status_bridge():
+    """startStatusPolling 内 fetchLogs 必须移出 status try 块（通道解耦）。
+
+    人工推演（D2026-1006-01 件⑦）：fetchLogs 嵌在 status 桥的 try 块内时，
+    get_translation_status 每拍异常都会连带跳过 fetchLogs——status 桥故障
+    即原始日志通道死（Console 完全无输出）。修复后 fetchLogs 位于 catch
+    之后（回调体末尾、done/error/cancelled 收尾判断之外），且自身自带
+    try/catch，不再依赖 status 每拍成功。
+    """
+    body = _extract_function(_app_js_source(), "startStatusPolling")
+    assert body.count("this.fetchLogs()") == 1, \
+        "fetchLogs 在轮询回调内只允许出现一次"
+    assert "catch" in body, "status 桥必须保留 try/catch"
+    assert body.index("this.fetchLogs()") > body.index("catch"), \
+        "fetchLogs 必须位于 catch 之后（原始日志通道与 status 桥解耦）"

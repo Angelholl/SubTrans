@@ -553,3 +553,90 @@ def test_cli_where_fts5_probe_line():
     out = cli._print_where()
     # 宽松断言：只钉前缀行存在，不绑定可用/不可用（极旧环境 sqlite3 可能无 FTS5）
     assert "FTS5 全文搜索:" in out
+
+
+# ---------------------------------------------------------------------------
+# 2.7.3 件⑦（D2026-1006-01）：stdio 加固按管道/tty 区分编码策略
+# ---------------------------------------------------------------------------
+
+class _FakeStream:
+    """最小假流：记录 reconfigure 调用参数，isatty/故障行为可控。"""
+
+    def __init__(self, tty, *, support_reconfigure=True,
+                 fail_reconfigure=False, fail_isatty=False):
+        self._tty = tty
+        self._fail_reconfigure = fail_reconfigure
+        self._fail_isatty = fail_isatty
+        self.calls = []
+        if support_reconfigure:
+            self.reconfigure = self._do_reconfigure
+
+    def isatty(self):
+        if self._fail_isatty:
+            raise OSError("tty probe failed")
+        return self._tty
+
+    def write(self, s):
+        return len(s)
+
+    def flush(self):
+        return None
+
+    def _do_reconfigure(self, **kwargs):
+        self.calls.append(kwargs)
+        if self._fail_reconfigure:
+            raise ValueError("boom")
+
+
+def test_harden_stdio_pipe_uses_utf8(monkeypatch):
+    """isatty=False（管道，GUI spawn 场景）：reconfigure 必须显式挂 utf-8。
+
+    D2026-1006-01 件⑦：frozen 下 PyInstaller 无视 PYTHONUTF8/
+    PYTHONIOENCODING（2026-10-06 动态实验实证），GUI 按 utf-8 解码管道，
+    编码必须显式钉 utf-8 修 frozen GBK 乱码。
+    """
+    from subtransjav.refine.cli import _harden_stdio
+    out = _FakeStream(tty=False)
+    err = _FakeStream(tty=False)
+    monkeypatch.setattr("sys.stdout", out)
+    monkeypatch.setattr("sys.stderr", err)
+    _harden_stdio()
+    assert len(out.calls) == 1 and len(err.calls) == 1
+    assert out.calls[0].get("encoding") == "utf-8", "管道必须显式挂 utf-8"
+    assert out.calls[0].get("errors") == "backslashreplace"
+    assert err.calls[0].get("encoding") == "utf-8"
+    assert err.calls[0].get("errors") == "backslashreplace"
+
+
+def test_harden_stdio_tty_keeps_encoding_untouched(monkeypatch):
+    """isatty=True（真实终端）：只放宽 errors，encoding 不动（cp936 中文照常）。"""
+    from subtransjav.refine.cli import _harden_stdio
+    out = _FakeStream(tty=True)
+    err = _FakeStream(tty=True)
+    monkeypatch.setattr("sys.stdout", out)
+    monkeypatch.setattr("sys.stderr", err)
+    _harden_stdio()
+    assert len(out.calls) == 1 and len(err.calls) == 1
+    assert "encoding" not in out.calls[0], "tty 场景不得改挂 encoding"
+    assert out.calls[0] == {"errors": "backslashreplace"}
+    assert "encoding" not in err.calls[0]
+    assert err.calls[0] == {"errors": "backslashreplace"}
+
+
+def test_harden_stdio_tolerates_broken_streams(monkeypatch):
+    """无 reconfigure 属性 / reconfigure 抛 ValueError / isatty 抛 OSError：
+    全部静默跳过，绝不外抛影响主流程。"""
+    from subtransjav.refine.cli import _harden_stdio
+    no_attr = _FakeStream(tty=False, support_reconfigure=False)
+    broken = _FakeStream(tty=False, fail_reconfigure=True)
+    broken_tty = _FakeStream(tty=True, fail_isatty=True)
+    monkeypatch.setattr("sys.stdout", no_attr)
+    monkeypatch.setattr("sys.stderr", broken_tty)
+    _harden_stdio()  # stdout 无属性 + stderr isatty 抛错，不应外抛
+    assert no_attr.calls == []
+    assert broken_tty.calls == []
+    # 再单独验证 reconfigure 抛 ValueError 的流（管道场景：kwargs 先记录后抛错）
+    monkeypatch.setattr("sys.stdout", broken)
+    monkeypatch.setattr("sys.stderr", _FakeStream(tty=False))
+    _harden_stdio()
+    assert broken.calls == [{"encoding": "utf-8", "errors": "backslashreplace"}]

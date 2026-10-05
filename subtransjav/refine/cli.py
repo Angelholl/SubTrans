@@ -588,17 +588,41 @@ def _cmd_dict_download(kind: str, from_file: str = "",
     return 0
 
 
-def main(argv=None):
-    # stdio 加固（同 tools/guard_banned_paths.py）：argparse 在 parse 时才打印
-    # 中文 help，stdout 为管道且 locale 码页过窄（CI windows cp1252 实测回归）
-    # 会 UnicodeEncodeError → 退出 1；只放宽 errors 不挂 encoding——本地 cp936
-    # 控制台中文照常，窄码页降级 \uXXXX 转义不崩；流不可 reconfigure 时静默跳过。
+def _harden_stdio():
+    """stdio 加固（同 tools/guard_banned_paths.py），按管道/tty 区分策略。
+
+    背景（D2026-1006-01 件⑦）：frozen（PyInstaller）下子进程无视
+    PYTHONUTF8/PYTHONIOENCODING 环境变量（2026-10-06 动态实验实证：注入后
+    --help 中文仍 GBK 乱码），因此管道编码必须显式挂 utf-8——GUI 经
+    spawn_refine_cli 以管道接管 stdout/stderr 且按 utf-8 解码，frozen 默认
+    GBK 编码会产生乱码。
+
+    - isatty() 为 False（管道，GUI spawn 场景）：reconfigure(encoding="utf-8",
+      errors="backslashreplace")，对端解码口必须匹配。
+    - isatty() 为 True（真实终端）：仅放宽 errors 不挂 encoding——本地 cp936
+      控制台中文照常，窄码页降级 \\uXXXX 转义不崩（tty 场景零行为变化）。
+    - 容错：流为 None / 无 reconfigure 属性 / isatty 或 reconfigure 抛
+      OSError/ValueError 时静默跳过，绝不影响主流程。
+    """
     import sys as _sys
     for _stream in (_sys.stdout, _sys.stderr):
         if _stream is None or not hasattr(_stream, "reconfigure"):
             continue
-        with contextlib.suppress(OSError, ValueError):
-            _stream.reconfigure(errors="backslashreplace")
+        try:
+            if _stream.isatty():
+                _stream.reconfigure(errors="backslashreplace")
+            else:
+                _stream.reconfigure(encoding="utf-8",
+                                    errors="backslashreplace")
+        except (OSError, ValueError):
+            continue
+
+
+def main(argv=None):
+    # stdio 加固：argparse 在 parse 时才打印中文 help，stdout 为管道且 locale
+    # 码页过窄（CI windows cp1252 实测回归）会 UnicodeEncodeError → 退出 1；
+    # 管道场景还需显式挂 utf-8 修 frozen GBK 乱码（D2026-1006-01 件⑦）。
+    _harden_stdio()
 
     # 模型缓存重定向到仓库 models/ 目录（不占 C 盘）
     from subtransjav.utils.model_cache import apply_model_cache_env

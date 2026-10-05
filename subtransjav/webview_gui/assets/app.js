@@ -2699,8 +2699,11 @@ const TranslatorManager = {
             }
 
             if (result.success) {
-                ConsoleManager.log(MSG.translationStarted(result.pid), 'info');
+                // 显示链生命线先行：轮询启动不受打点异常影响（D2026-1006-01 件⑦）
                 this.startStatusPolling();
+                try {
+                    ConsoleManager.log(MSG.translationStarted(result.pid), 'info');
+                } catch (e) { console.warn('translationStarted log failed:', e); }
             } else {
                 throw new Error(result.error || MSG.startFailed);
             }
@@ -2792,8 +2795,6 @@ const TranslatorManager = {
                     this.setProgress(status.progress);
                 }
 
-                this.fetchLogs();
-
                 if (status.status === 'completed') {
                     this.setProgress(100);
                     if (status.untranslated_majority) {
@@ -2822,6 +2823,10 @@ const TranslatorManager = {
             } catch (error) {
                 console.error('Status poll error:', error);
             }
+
+            // 原始日志通道与 status 桥解耦（D2026-1006-01 件⑦）：fetchLogs
+            // 自带 try/catch，不随 status 每拍异常断流。
+            this.fetchLogs();
         }, 1000);
     },
 
