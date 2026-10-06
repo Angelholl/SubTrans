@@ -413,8 +413,17 @@ const MSG = {
     media_source_label: '媒体来源',
     media_source_auto: '自动发现',
     media_source_explicit: '显式指定',
-    media_source_none: '（导读未包含媒体路径）',
+    // 2.7.4 件1（D2026-1007-01）：缺失态文案收敛为 chip 短句（tag-none）
+    media_source_none: '未包含媒体路径',
     media_source_change_btn: '更换',
+    // 2.7.4 件1 新增 JS 态键（零静态 i18n 消耗；preview_media_matched 备件2
+    // 「已自动匹配」数据接线用）
+    guide_custom_source: '自定义导读',
+    guide_copy_path: '复制路径',
+    guide_copy_path_done: '已复制',
+    guide_media_missing_hint: '媒体路径缺失：条目可查看但不可试听，请在「更换」中显式指定媒体文件路径',
+    preview_matching: '正在匹配媒体路径并定位片段…',
+    preview_media_matched: '已自动匹配媒体路径',
     media_override_apply: '应用',
     media_override_placeholder: '输入媒体文件完整路径（等价 --media-path，仅本报告会话内生效）',
     media_override_applied: '已设为本报告会话内媒体来源（显式指定）',
@@ -3529,8 +3538,11 @@ function switchTab(tabId) {
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
-    return String(s == null ? '' : s).replace(/"/g, '&quot;')
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    // 2.7.4 件1 三发修订（#189 双重转义根因）：& 必须最先转义——原序先
+    // 把 " 转成 &quot; 再转 &，会把 &quot; 的 & 二次转义为 &amp;quot;，
+    // 页面显示字面 &quot;（所有含引号文本全局受害，非模板双层包裹）
+    return String(s == null ? '' : s).replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
 
   // 服务商默认接口地址（切换服务商时自动填充到该阶段的地址栏）
@@ -4561,9 +4573,72 @@ function switchTab(tabId) {
   // 会话内媒体路径覆盖（等价 --media-path；仅显式输入，非空即优先生效）
   let mediaOverridePath = '';
 
-  function guideStatus(text) {
+  // 状态行（2.7.4 件1 语义收敛）：#guideStatus 同槽复用（FROZEN 零改动），
+  // 首用时动态补齐 .status-line 骨架——图标槽（成功✓/失败⚠）+.status-path
+  // （mono 11px/nowrap/ellipsis）+媒体缺失琥珀提示槽+复制路径键；
+  // 路径回显唯一走本行（guideCustomStatus 收敛为来源 chip，双写撤销）
+  function ensureGuideStatusLine() {
     const st = $('guideStatus');
-    if (st) st.textContent = text || '';
+    if (!st || st.dataset.statusUpgraded) return st;
+    st.dataset.statusUpgraded = '1';
+    st.classList.add('status-path');
+    const wrap = st.parentElement;
+    if (!wrap) return st;
+    wrap.classList.add('status-line');
+    const ico = document.createElement('span');
+    ico.className = 'status-ico';
+    ico.textContent = '✓';
+    wrap.insertBefore(ico, st);
+    const hint = document.createElement('span');
+    hint.className = 'guide-media-hint';
+    hint.style.display = 'none';
+    wrap.appendChild(hint);
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'btn btn-ghost btn-sm guide-copy-btn';
+    copy.textContent = MSG.guide_copy_path;
+    copy.addEventListener('click', () => guideCopyPath(copy));
+    wrap.appendChild(copy);
+    return st;
+  }
+
+  function guideStatus(text, isError) {
+    const st = ensureGuideStatusLine();
+    if (!st) return;
+    st.textContent = text || '';
+    st.title = text || '';          // 悬停全文（ellipsis 截断兜底）
+    const line = st.parentElement;
+    if (!line) return;
+    line.classList.toggle('status-err', !!isError);
+    const ico = line.querySelector('.status-ico');
+    if (ico) ico.textContent = isError ? '⚠' : '✓';
+  }
+
+  // 复制路径：clipboard 失败/缺席静默降级（title 悬停可取全文，同
+  // AppModal.download copyable 先例）；成功「已复制」1.5s 复位
+  function guideCopyPath(btn) {
+    const st = $('guideStatus');
+    const text = st ? (st.title || st.textContent || '') : '';
+    if (!btn || !text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = MSG.guide_copy_path_done;
+        setTimeout(() => { btn.textContent = MSG.guide_copy_path; }, 1500);
+      }).catch(() => { btn.title = text; });
+    } else {
+      btn.title = text;
+    }
+  }
+
+  // 媒体缺失琥珀提示槽（状态行内独立 span，随媒体来源三态联动）
+  function mediaMissingHint(show) {
+    ensureGuideStatusLine();
+    const st = $('guideStatus');
+    const hint = st && st.parentElement
+      ? st.parentElement.querySelector('.guide-media-hint') : null;
+    if (!hint) return;
+    hint.textContent = show ? MSG.guide_media_missing_hint : '';
+    hint.style.display = show ? '' : 'none';
   }
 
   function guidePath() {
@@ -4587,6 +4662,10 @@ function switchTab(tabId) {
     const jsonBlocks = $('guideJsonBlocks');
     if (txtView) txtView.style.display = 'none';
     if (jsonBlocks) jsonBlocks.style.display = '';
+    // 区块重排（2.7.4 件1）：零 DOM 移动——容器挂 .json-blocks（flex
+    // column + CSS order：条目1/结论2/章节3/伴生4/meta5），子节点 append
+    // 顺序保持静态 DOM 原序
+    if (jsonBlocks) jsonBlocks.classList.add('json-blocks');
     const ulC = $('guideConclusions');
     const dlS = $('guideSections');
     const ulP = $('guideCompanions');
@@ -4596,17 +4675,70 @@ function switchTab(tabId) {
         || '<li>' + MSG.no_conclusions + '</li>';
     }
     if (dlS) {
-      dlS.innerHTML = (data.sections || [])
-        .map(s => '<dt>' + esc(s.title) + '</dt><dd>' + esc(s.note) + '</dd>')
-        .join('') || '<dt>' + MSG.no_sections + '</dt>';
+      // 章节导读分节卡（2.7.4 件1）：dt/dd 平铺改 .section-card——标题行
+      // （chevron+title 600 字重）点击展开/收起，note 正文 muted 默认折叠。
+      // 容器 dl#guideSections 与 id 零改动；dl 内分组 div 为 HTML5 合法子元素
+      const sections = Array.isArray(data.sections) ? data.sections : [];
+      dlS.innerHTML = '';
+      if (!sections.length) {
+        dlS.innerHTML = '<dt>' + MSG.no_sections + '</dt>';
+      }
+      sections.forEach((s) => {
+        const o = s || {};
+        const card = document.createElement('div');
+        card.className = 'section-card';
+        const head = document.createElement('div');
+        head.className = 'section-card-head';
+        const chev = document.createElement('span');
+        chev.className = 'guide-chevd';
+        chev.textContent = '▾';
+        const title = document.createElement('span');
+        title.className = 'section-card-title';
+        title.textContent = String(o.title || '');
+        head.appendChild(chev);
+        head.appendChild(title);
+        head.addEventListener('click', () => {
+          card.classList.toggle('sect-open');
+        });
+        const note = document.createElement('div');
+        note.className = 'section-card-note';
+        note.textContent = String(o.note || '');
+        card.appendChild(head);
+        card.appendChild(note);
+        dlS.appendChild(card);
+      });
     }
     const divI = $('guideItems');
     if (divI) {
       const items = Array.isArray(data.items) ? data.items : [];
+      // 行动条目标题提级 + 条数 chip（2.7.4 件1）：标题 h4 为静态节点，
+      // JS 动态加 .block-title.main 与 .count-chip（applyI18n 首屏已跑完，
+      // 动态子节点不会被 i18n 重写抹除；幂等——重渲染仅更新计数）
+      const itemsHead = divI.previousElementSibling;
+      if (itemsHead && itemsHead.tagName === 'H4') {
+        itemsHead.classList.add('block-title', 'main');
+        let chip = itemsHead.querySelector('.count-chip');
+        if (!chip) {
+          chip = document.createElement('span');
+          chip.className = 'count-chip';
+          itemsHead.appendChild(chip);
+        }
+        chip.textContent = String(items.length) + ' 条';
+      }
       if (!items.length) {
         divI.innerHTML = '<div>' + MSG.guide_items_none + '</div>';
       } else {
         const MAX_ITEMS = 50;
+        // 分类徽标复用件3 bfp-cat-chip 色系类（cps=warn/untranslated=
+        // primary/antonym=danger，映射缺失回退中性 bfp-cat-neutral）
+        const catCls = (c) => (c === 'cps_too_fast' ? 'bfp-cat-warn'
+          : c === 'untranslated' ? 'bfp-cat-primary'
+          : c === 'antonym_yamete' ? 'bfp-cat-danger' : 'bfp-cat-neutral');
+        // 条目行三段化（2.7.4 件1）：.item-head（#编号 mono + 分类徽标 +
+        // mono timing ellipsis + 右对齐试听键）/.item-msg（message 全文）/
+        // .item-cur（现译 · 状态 muted）。
+        // 契约红线：.btn-audio-preview class 与 data-timing 属性必须原样
+        // 保留（bindDom 事件委托锚点，试听链路依赖）
         divI.innerHTML = items.slice(0, MAX_ITEMS).map(it => {
           const o = it || {};
           const cur = (o.current_text == null)
@@ -4619,14 +4751,20 @@ function switchTab(tabId) {
           const hasTiming = !!o.timing;
           return '<div class="guide-item'
             + (isMissed ? ' guide-item-missed' : '') + '">'
-            + esc('#' + o.index) + ' [' + esc(o.category) + '] '
-            + esc(o.timing) + '｜' + esc(o.message) + '｜'
-            + MSG.guide_item_current_label + cur + '｜' + esc(o.status)
+            + '<div class="item-head">'
+            + '<span class="idx-chip">#' + esc(o.index) + '</span>'
+            + '<span class="bfp-cat-chip ' + catCls(String(o.category || ''))
+            + '">' + esc(o.category) + '</span>'
+            + '<span class="item-timing">' + esc(o.timing) + '</span>'
             + (hasTiming
-              ? ' <button type="button" class="btn btn-ghost btn-sm'
+              ? '<button type="button" class="btn btn-ghost btn-sm'
                 + ' btn-audio-preview" data-timing="' + esc(o.timing)
                 + '">' + esc(MSG.preview_play_btn) + '</button>'
               : '')
+            + '</div>'
+            + '<div class="item-msg">' + esc(o.message) + '</div>'
+            + '<div class="item-cur">' + MSG.guide_item_current_label + cur
+            + ' · ' + esc(o.status) + '</div>'
             + '</div>';
         }).join('')
           + (items.length > MAX_ITEMS
@@ -4653,7 +4791,7 @@ function switchTab(tabId) {
   // guidePath 按输入/输出目录自动推导（只加载最近产出）
   async function guideLoad(silent, customPath) {
     if (!window.pywebview || !window.pywebview.api) {
-      if (!silent) guideStatus(MSG.api_not_ready);
+      if (!silent) guideStatus(MSG.api_not_ready, true);
       return;
     }
     let p;
@@ -4670,7 +4808,9 @@ function switchTab(tabId) {
       }
     }
     if (!silent || isCustom) guideStatus(MSG.guide_loading);
-    if (isCustom) guideCustomStatus(MSG.guide_loading, false);
+    // 2.7.4 件1 双写收敛：加载中隐藏来源 chip（成功后按来源重显），
+    // 路径回显唯一走 #guideStatus 状态行
+    guideCustomStatus('');
     try {
       const r = await window.pywebview.api.read_output_artifact(p);
       if (r && r.success) {
@@ -4692,10 +4832,11 @@ function switchTab(tabId) {
           batchFixRefresh();
           guideStatus(MSG.guide_txt_loaded(r.path || p)
             + (r.truncated ? MSG.guide_txt_truncated_note : ''));
-          if (isCustom) {
-            guideCustomStatus(MSG.guide_txt_loaded(r.path || p)
-              + (r.truncated ? MSG.guide_txt_truncated_note : ''), false);
-          }
+          // 来源 chip：仅自定义导读成功加载时显示（2.7.4 件1 收敛）
+          guideCustomStatus(isCustom
+            ? (MSG.guide_txt_loaded(r.path || p)
+              + (r.truncated ? MSG.guide_txt_truncated_note : ''))
+            : '');
           return;
         }
         lastLoadedGuidePath = r.path || p;
@@ -4705,17 +4846,15 @@ function switchTab(tabId) {
         guideRender(r.data || {});
         batchFixRefresh();
         guideStatus(MSG.guide_loaded(r.path || p));
-        if (isCustom) guideCustomStatus(MSG.guide_loaded(r.path || p), false);
+        guideCustomStatus(isCustom ? MSG.guide_loaded(r.path || p) : '');
       } else {
         const err = MSG.guide_load_failed((r && r.error) || MSG.unknownError);
-        guideStatus(err);
-        if (isCustom) guideCustomStatus(err, true);
+        guideStatus(err, true);
       }
     } catch (e) {
       const err = MSG.guide_load_failed(
         e && e.message ? e.message : String(e));
-      guideStatus(err);
-      if (isCustom) guideCustomStatus(err, true);
+      guideStatus(err, true);
     }
   }
 
@@ -4731,12 +4870,20 @@ function switchTab(tabId) {
     }
   }
 
-  // 「打开其他质量报告导读」行内状态（成功灰色 / 失败红色）
+  // 「打开其他质量报告导读」来源徽标（2.7.4 件1 语义收敛）：仅自定义导读
+  // 成功加载时显示 chip（primary-soft/strong 来源色，title 悬停本次加载
+  // 路径）；加载中/失败/非自定义一律隐藏——路径与错误回显唯一走
+  // #guideStatus 状态行
   function guideCustomStatus(text, isError) {
     const st = $('guideCustomStatus');
     if (!st) return;
-    st.textContent = text || '';
-    st.style.color = isError ? 'var(--status-err)' : 'var(--text-muted)';
+    const show = !isError && !!text;
+    st.style.display = show ? '' : 'none';
+    if (show) {
+      st.classList.add('guide-custom-chip');
+      st.textContent = MSG.guide_custom_source;
+      st.title = text;
+    }
   }
 
   // 完成翻译后的静默自动探测：成功才展开面板，失败不打扰用户
@@ -4760,16 +4907,33 @@ function switchTab(tabId) {
     const autoIsOverride = String((data && data.media_path_source) || '')
       === 'override';
     const path = mediaOverridePath || autoPath;
+    // 三态修饰类（2.7.4 件1）：tag-none=warn 色系 / tag-auto=ok 色系 /
+    // tag-explicit=主色（现蓝不变）。tag-auto 仅备类——「已自动匹配」的
+    // 数据接线属件2，本件不触发（autoPath 命中仍按既有文案原蓝展示）
+    const setTag = (cls, text) => {
+      tagEl.classList.remove('tag-none', 'tag-auto', 'tag-explicit');
+      if (cls) tagEl.classList.add(cls);
+      tagEl.textContent = text;
+    };
     if (mediaOverridePath) {
-      tagEl.textContent = MSG.media_source_explicit;
+      setTag('tag-explicit', MSG.media_source_explicit);
       pathEl.textContent = mediaOverridePath;
+      pathEl.title = mediaOverridePath;   // 悬停全路径
+      mediaMissingHint(false);
     } else if (autoPath) {
-      tagEl.textContent = autoIsOverride
-        ? MSG.media_source_explicit : MSG.media_source_auto;
+      // 后端回包 media_path_source=override 时按原语义归显式态（tag-explicit）；
+      // 纯自动命中暂用默认原蓝，「已自动匹配」接线属件2（tag-auto 备而不触发）
+      setTag(autoIsOverride ? 'tag-explicit' : '',
+        autoIsOverride ? MSG.media_source_explicit : MSG.media_source_auto);
       pathEl.textContent = autoPath;
+      pathEl.title = autoPath;
+      mediaMissingHint(false);
     } else {
-      tagEl.textContent = MSG.media_source_none;
+      // 缺失态：tag-none 短句 + 状态行琥珀提示（条目可查看但不可试听）
+      setTag('tag-none', MSG.media_source_none);
       pathEl.textContent = '';
+      pathEl.title = '';
+      mediaMissingHint(true);
     }
     bar.style.display = '';
   }
@@ -4790,23 +4954,80 @@ function switchTab(tabId) {
       .map(encodeURIComponent).join('/');
   }
 
+  // ============================================================
+  // 试听错误槽（2.7.4 件1 owner 终版裁定）：错误展示从浮层条内迁出为
+  // 独立动态槽——旧浮层内静态错误元素废弃（DOM 保留不删不写，零
+  // FROZEN 解冻）。槽注入 #tab-guide 页面级稳定容器（no_guide 态——导读
+  // 未加载/折叠收起——也可见，不依赖导读加载后才存在的容器）；
+  // position:fixed + z-index 1001：高于浮层条 z-900 与模态遮罩 z-1000，
+  // 错误态永不被遮。幂等：首帧注入后复用。
+  // ============================================================
+  function ensurePreviewErrorSlot() {
+    let slot = document.querySelector('.preview-error-slot');
+    if (slot) return slot;
+    slot = document.createElement('div');
+    slot.className = 'preview-error-slot';
+    const ico = document.createElement('span');
+    ico.className = 'preview-error-ico';
+    ico.textContent = '⚠';
+    const txt = document.createElement('span');
+    txt.className = 'preview-error-text';
+    slot.appendChild(ico);
+    slot.appendChild(txt);
+    const page = document.getElementById('tab-guide');
+    (page || document.body).appendChild(slot);
+    return slot;
+  }
+
+  function clearPreviewError() {
+    const slot = document.querySelector('.preview-error-slot');
+    if (!slot) return;
+    slot.classList.remove('show');
+    const txt = slot.querySelector('.preview-error-text');
+    if (txt) txt.textContent = '';
+  }
+
   function showPreviewError(text) {
-    const errEl = $('audioPreviewError');
+    // 停播保留（评议员条件）：错误即清 src，防上一次试听的声音持续播放
     const player = $('audioPreviewPlayer');
     if (player) { player.src = ''; }
-    if (errEl) {
-      errEl.textContent = text;
-      errEl.style.display = '';
+    // 失败态=浮层条隐藏 + 独立错误槽红字（浮层不再承载错误展示）
+    const bar = $('audioPreviewBar');
+    if (bar) {
+      bar.classList.remove('bar-loading', 'bar-ready');
+      bar.style.display = 'none';
     }
+    const slot = ensurePreviewErrorSlot();
+    const txt = slot.querySelector('.preview-error-text');
+    if (txt) txt.textContent = text;
+    slot.classList.add('show');
+  }
+
+  // loading 提示行（浮层条内动态注入，幂等）：timing 右侧「正在匹配媒体
+  // 路径并定位片段…」，ready 态隐藏、audio 才显示
+  function ensurePreviewLoadingNote() {
+    const main = document.querySelector('#audioPreviewBar .audio-preview-main');
+    if (!main) return null;
+    let note = main.querySelector('.preview-loading-note');
+    if (!note) {
+      note = document.createElement('span');
+      note.className = 'preview-loading-note';
+      note.textContent = MSG.preview_matching;
+      const audio = main.querySelector('audio');
+      if (audio) main.insertBefore(note, audio); else main.appendChild(note);
+    }
+    return note;
   }
 
   function closeAudioPreview() {
     const bar = $('audioPreviewBar');
     const player = $('audioPreviewPlayer');
-    const errEl = $('audioPreviewError');
     if (player) { player.pause(); player.src = ''; }
-    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-    if (bar) bar.style.display = 'none';
+    if (bar) {
+      bar.classList.remove('bar-loading', 'bar-ready');
+      bar.style.display = 'none';
+    }
+    clearPreviewError();   // 同步清理错误槽（关浮层不留残红）
     lastPreviewToken++;   // 在途请求返回后作废
   }
 
@@ -4817,33 +5038,39 @@ function switchTab(tabId) {
     const bar = $('audioPreviewBar');
     const player = $('audioPreviewPlayer');
     const timingEl = $('audioPreviewTiming');
-    const errEl = $('audioPreviewError');
-    if (!bar || !player || !timingEl || !errEl) return;
+    if (!bar || !player || !timingEl) return;
+    clearPreviewError();   // 每分支入口先清旧红字（防残留），再判断分支
     if (!lastLoadedGuidePath) {
-      bar.style.display = '';
+      // no_guide：失败态（浮层不展开，错误槽红字页面级可见）
       showPreviewError(MSG.audio_preview_no_guide);
       return;
     }
     const span = timingToSeconds(timing);
     if (!span) {
-      bar.style.display = '';
       showPreviewError(MSG.audio_preview_no_timing);
       return;
     }
-    errEl.style.display = 'none';
-    errEl.textContent = '';
+    ensurePreviewLoadingNote();
+    // 两态浮层：点击即 loading（timing + 匹配中文案，播放器隐藏）；
+    // 拿到可播放 src 才 ready 显示 audio
     timingEl.textContent = String(timing || '');
     player.src = '';
+    bar.classList.remove('bar-ready');
+    bar.classList.add('bar-loading');
     bar.style.display = '';
     const token = ++lastPreviewToken;
     try {
       const r = await window.pywebview.api.refine_audio_preview(
         lastLoadedGuidePath, span[0], span[1], mediaOverridePath);
-      if (token !== lastPreviewToken) return;
+      if (token !== lastPreviewToken) return;   // 过期回调不写 UI
       if (r && r.ok && r.mode === 'direct' && r.media_path) {
+        bar.classList.remove('bar-loading');
+        bar.classList.add('bar-ready');
         player.src = fileUrlOf(r.media_path);
         player.play().catch(() => {});
       } else if (r && r.ok && r.mode === 'clip' && r.data_url) {
+        bar.classList.remove('bar-loading');
+        bar.classList.add('bar-ready');
         player.src = r.data_url;
         player.play().catch(() => {});
       } else {
@@ -5444,7 +5671,9 @@ function switchTab(tabId) {
     const guideOtherBtn = $('guideOpenOtherBtn');
     if (guideOtherBtn) guideOtherBtn.addEventListener('click', async () => {
       if (!window.pywebview || !window.pywebview.api) {
-        guideCustomStatus(MSG.api_not_ready, true);
+        // 2.7.4 件1 收敛：错误回显唯一走 #guideStatus 状态行
+        // （guideCustomStatus 已收敛为来源 chip，不承载错误文案）
+        guideStatus(MSG.api_not_ready, true);
         return;
       }
       try {
@@ -5452,12 +5681,12 @@ function switchTab(tabId) {
         if (r && r.success && r.path) {
           guideLoad(false, r.path);
         } else if (!r || !r.cancelled) {
-          // 用户取消（cancelled）静默返回；其余错误（如无活动窗口）静默显示在状态 span，不弹窗
-          guideCustomStatus(
+          // 用户取消（cancelled）静默返回；其余错误（如无活动窗口）显示在状态行，不弹窗
+          guideStatus(
             MSG.guide_load_failed((r && r.error) || MSG.unknownError), true);
         }
       } catch (e) {
-        guideCustomStatus(MSG.guide_load_failed(
+        guideStatus(MSG.guide_load_failed(
           e && e.message ? e.message : String(e)), true);
       }
     });

@@ -2338,3 +2338,136 @@ def test_batch_fix_preview_msg_and_css_pinned():
     assert ".bfp-text.bfp-open" in block, "展开态解除折叠缺失"
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", block), \
         "bfp 样式块出现硬编码色值（必须全 var() token，暗色自动适配）"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.4 件1（D2026-1007-01）：质量报告导读页可读性整改
+# （状态行升级/媒体三态徽标/区块重排/分节卡/条目三段化/试听错误槽）
+# ---------------------------------------------------------------------------
+def test_guide_page_readability_app_pinned():
+    """件1 app.js 静态钉：新 MSG 键、#audioPreviewError 零写者（废弃静态
+    保证）、player.src='' 停播保留、三分支入口清红字、错误槽动态注入
+    （tab-guide 页面级容器）、媒体三态类、状态行收敛（双写撤销）。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    for key in ("guide_custom_source", "guide_copy_path",
+                "guide_copy_path_done", "guide_media_missing_hint",
+                "preview_matching", "preview_media_matched"):
+        assert key in keys, f"MSG 缺少 2.7.4 件1 新键: {key}"
+    # 废弃静态保证：#audioPreviewError 在 app.js 零读写（DOM 保留不删不写）
+    assert "audioPreviewError" not in src, \
+        "#audioPreviewError 已废弃，app.js 不得再读写"
+    # 停播保留（评议员条件）：错误即清 src，防上一次试听声音持续播放
+    spe = _extract_function(src, "showPreviewError")
+    assert "player.src = ''" in spe, "错误路径必须停播（player.src=''）"
+    assert "ensurePreviewErrorSlot()" in spe and "audioPreviewBar" in spe, \
+        "失败态=浮层条隐藏+独立错误槽红字"
+    # 错误槽动态注入（页面级稳定容器，no_guide 态可见）
+    eps = _extract_function(src, "ensurePreviewErrorSlot")
+    assert "createElement" in eps and "tab-guide" in eps, \
+        "错误槽须动态注入 #tab-guide 页面级容器"
+    # 三分支入口先清旧红字（防残留）：clearPreviewError 位于 no_guide 判定前
+    oap = _extract_function(src, "openAudioPreview")
+    assert "clearPreviewError()" in oap, "分支入口清红字缺失"
+    assert oap.index("clearPreviewError()") \
+        < oap.index("audio_preview_no_guide"), \
+        "清红字必须先于分支判定（每分支入口语义）"
+    assert "bar-loading" in oap and "bar-ready" in oap, \
+        "浮层两态（loading→ready）缺失"
+    # 竞态：lastPreviewToken 失效机制保留（过期回调不写 UI）
+    assert "token !== lastPreviewToken" in oap, "lastPreviewToken 失效机制缺失"
+    # 媒体三态修饰类 + 缺失提示接线
+    ums = _extract_function(src, "updateMediaSourceBar")
+    for cls in ("tag-none", "tag-auto", "tag-explicit"):
+        assert cls in ums, f"媒体三态类缺失: {cls}"
+    assert "MSG.guide_media_missing_hint" in src, "缺失态琥珀提示未接线"
+    # 状态行收敛：guideLoad 撤销 loading 双写（loading 不再写来源 chip）
+    gl = _extract_function(src, "guideLoad")
+    assert "guideCustomStatus(MSG.guide_loading" not in gl, \
+        "guideLoad loading 态不得再双写 guideCustomStatus（收敛遗留）"
+    # 复制路径链：clipboard 成功「已复制」1.5s 复位，失败静默降级 title
+    gcp = _extract_function(src, "guideCopyPath")
+    assert "writeText" in gcp and "guide_copy_path_done" in gcp, \
+        "复制成功链缺失"
+    assert "setTimeout" in gcp and "btn.title = text" in gcp, \
+        "1.5s 复位/静默降级 title 缺失"
+
+
+def test_guide_page_readability_render_css_pinned():
+    """件1 渲染与样式钉：guideRender 区块重排挂类/分节卡/条目三段化
+    （data-timing 契约红线）/count-chip；style.css order 声明/三态徽标/
+    错误槽/浮层条扁平化（box-shadow 移除）。件3 confirm 钉不回退由
+    test_batch_fix_run_uses_structured_preview 继续守护。"""
+    src = _app_js_source()
+    gr = _extract_function(src, "guideRender")
+    assert "json-blocks" in gr, "区块重排容器挂类缺失"
+    assert "section-card" in gr and "sect-open" in gr, "章节分节卡缺失"
+    assert "section-card-head" in gr and "section-card-note" in gr, \
+        "分节卡标题行/正文段缺失"
+    # 三段化模板 + 契约红线：试听委托锚点 class/data-timing 原样保留
+    for frag in ("item-head", "idx-chip", "item-timing", "item-msg",
+                 "item-cur", "bfp-cat-chip", "btn-audio-preview",
+                 "data-timing="):
+        assert frag in gr, f"条目三段化模板缺 {frag}"
+    assert "block-title" in gr and "count-chip" in gr, \
+        "行动条目标题提级/条数 chip 缺失"
+    # 来源 chip 按成功来源显隐的收敛调用
+    assert "guideCustomStatus(isCustom" in gr or \
+        "guideCustomStatus(isCustom" in _extract_function(src, "guideLoad"), \
+        "来源 chip 收敛调用缺失"
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    for cls in (".status-line", ".status-ico", ".status-path",
+                ".guide-media-hint", ".guide-custom-chip",
+                ".media-source-tag.tag-none", ".media-source-tag.tag-auto",
+                ".media-source-tag.tag-explicit", ".json-blocks",
+                ".section-card", ".section-card-head", ".section-card-note",
+                ".item-head", ".idx-chip", ".item-timing", ".item-msg",
+                ".item-cur", ".count-chip", ".preview-error-slot",
+                ".preview-loading-note"):
+        assert cls in css, f"style.css 缺少 {cls}"
+    # 区块重排 order 声明（条目1/结论2/章节3/伴生4/meta5）
+    for order in ("order: 1", "order: 2", "order: 3", "order: 4", "order: 5"):
+        assert order in css, f"区块 order 声明缺失: {order}"
+    # 浮层条扁平化（设计师偏离点）：box-shadow 移除、border-top 分隔保留
+    bar = re.search(r"\.audio-preview-bar \{[^}]*\}", css)
+    assert bar, "浮层条规则缺失"
+    assert "box-shadow" not in bar.group(0), \
+        "浮层条硬编码 box-shadow 应移除（暗色不可见，双主题统一扁平分隔）"
+    assert "border-top" in bar.group(0), "浮层条 border-top 分隔缺失"
+    # 错误槽层级：高于浮层条 z-900 与模态遮罩 z-1000
+    slot = re.search(r"\.preview-error-slot \{[^}]*\}", css)
+    assert slot and "z-index: 1001" in slot.group(0), \
+        "错误槽须 z-index 1001（不被浮层条/模态遮罩遮挡）"
+
+
+def test_guide_page_escape_order_and_narrow_pinned():
+    """件1 三发缺陷钉（黑盒复核）：esc() 转义序根因（& 先于 " 替换，防
+    &quot; 被二次转义为 &amp;quot;）+ 模板单层 esc；768px 既有断点块内
+    summary 媒体来源条整行换行（勿新增断点）；试听键 nowrap+不压缩。"""
+    src = _app_js_source()
+    # 转义序根因钉：esc 体内 & 替换必须先于 " 替换——原序先转 " 再转 &，
+    # 会把 &quot; 的 & 二次转义为 &amp;quot;（#189 页面显示字面 &quot;）
+    m = re.search(r"function esc\(s\) \{(.+?)\n  \}", src, re.S)
+    assert m, "esc 定义缺失"
+    esc_body = m.group(1)
+    assert esc_body.index("replace(/&/g, '&amp;')") \
+        < esc_body.index('replace(/"/g'), \
+        "esc 转义序错误：& 必须最先替换（二次转义回退）"
+    # 模板单层 esc：message 须经 esc 渲染且全源码禁双层包裹
+    gr = _extract_function(src, "guideRender")
+    assert "esc(o.message)" in gr, "message 须经单层 esc 渲染"
+    assert "esc(esc(" not in src, "模板双层 esc 回归"
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    # 768px 既有断点块（勿新增断点）：summary 内媒体来源条整行换行
+    assert css.count("@media (max-width: 768px)") == 1, "新增了 768px 断点块"
+    mq = css[css.index("@media (max-width: 768px)"):]
+    mq = mq[:mq.index("\n}")]
+    assert "#refineGuideViewer summary .media-source-bar" in mq \
+        and "flex-basis: 100%" in mq, \
+        "窄断点下卡头媒体来源条须 flex-basis:100% 整行换行"
+    # 试听键：nowrap + flex-shrink:0（窄窗不被压成一字宽竖排）
+    btn = re.search(r"\.btn-audio-preview \{[^}]*\}", css)
+    assert btn, "试听键规则缺失"
+    assert "white-space: nowrap" in btn.group(0) \
+        and "flex-shrink: 0" in btn.group(0), \
+        "试听键须 nowrap+flex-shrink:0（只动该按钮类）"

@@ -1878,7 +1878,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 /* ============================================================
    17. 快速试听浮层（底部固定条）
    ============================================================ */
-.btn-audio-preview { white-space: nowrap; }
+.btn-audio-preview { white-space: nowrap; flex-shrink: 0; }
 
 .audio-preview-bar {
     position: fixed;
@@ -1888,8 +1888,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     z-index: 900;
     padding: var(--space-2) 14px;
     background: var(--surface);
+    /* 2.7.4 件1（D2026-1007-01 设计师偏离点）：硬编码投影层移除，
+       双主题统一 border-top 扁平分隔（暗色下阴影不可见） */
     border-top: 1px solid var(--border);
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
 }
 .audio-preview-error {
     font-size: var(--font-xs);
@@ -2485,6 +2486,13 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 @media (max-width: 768px) {
     .modal-card.modal-lg { width: 96vw; max-height: 92vh; }
     .editor-ta-wrap { min-height: 180px; }
+    /* 2.7.4 件1 三发（窄窗 C 区规格）：导读卡头 summary 行窄断点下媒体
+       来源条整行换行（flex-basis:100% 占满一行），防标题+徽标+操作键
+       横向挤出可视区；标题行换行由 summary 内联 flex-wrap:wrap 承载 */
+    #refineGuideViewer summary .media-source-bar {
+        flex-basis: 100%;
+        max-width: 100%;
+    }
 }
 
 /* ============================================================
@@ -2551,3 +2559,122 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .bfp-cat-primary { color: var(--primary-strong); background: var(--primary-soft); }
 .bfp-cat-danger  { color: var(--danger); background: var(--danger-soft); }
 .bfp-cat-neutral { color: var(--text-2); background: var(--surface-3); }
+
+/* ============================================================
+   2.7.4 件1（D2026-1007-01）：质量报告导读页可读性整改
+   （状态行升级/媒体三态徽标/区块重排/分节卡/条目三段化/试听错误槽）
+   全部取色走既有 design token（var()），暗色主题经变量自动生效
+   ============================================================ */
+
+/* —— 状态行（#guideStatus 同槽升级：图标+等宽路径+媒体缺失提示+复制键）—— */
+.status-line {
+    display: flex; align-items: center; gap: var(--space-2);
+    flex-wrap: wrap; min-width: 0;
+    font-size: var(--font-xs); color: var(--text-2);
+    margin-bottom: var(--space-2);
+}
+.status-line .status-ico { color: var(--status-ok); flex-shrink: 0; }
+.status-line.status-err .status-ico,
+.status-line.status-err .status-path { color: var(--status-err); }
+.status-line .status-path {
+    font-family: var(--font-mono); font-size: 11px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%; min-width: 0; flex: 1;
+}
+.guide-media-hint {
+    display: none; flex-basis: 100%;
+    font-size: var(--font-xs); color: var(--status-warn); word-break: break-word;
+}
+.guide-copy-btn { flex-shrink: 0; }
+
+/* —— 「自定义导读」来源徽标 chip（后置定义覆盖 .muted 同特异性基色）—— */
+.guide-custom-chip {
+    display: inline-flex; align-items: center;
+    font-size: var(--font-xs); padding: 1px var(--space-2);
+    border-radius: var(--radius-pill);
+    color: var(--primary-strong); background: var(--primary-soft);
+}
+
+/* —— 媒体来源三态徽标（tag-auto 备件2 接线，本件不触发）—— */
+.media-source-tag.tag-none    { color: var(--warn); background: var(--warn-soft); }
+.media-source-tag.tag-auto    { color: var(--ok); background: var(--ok-soft); }
+.media-source-tag.tag-explicit { color: var(--primary-strong); background: var(--primary-soft); }
+
+/* —— 区块重排（零 DOM 移动，CSS order；:has 锚定各静态标题归组）—— */
+.json-blocks { display: flex; flex-direction: column; }
+.json-blocks h4:has(+ #guideItems),
+.json-blocks #guideItems { order: 1; }
+.json-blocks h4:has(+ #guideConclusions),
+.json-blocks #guideConclusions { order: 2; }
+.json-blocks h4:has(+ #guideSections),
+.json-blocks #guideSections { order: 3; padding-left: 0; }
+.json-blocks h4:has(+ #guideCompanions),
+.json-blocks #guideCompanions { order: 4; }
+.json-blocks > div:last-child { order: 5; }
+#guideJsonBlocks h4.block-title { display: flex; align-items: center; gap: var(--space-2); }
+#guideJsonBlocks h4.block-title.main { font-size: var(--font); }
+.count-chip {
+    font-size: var(--font-xs); font-weight: 600;
+    padding: 1px var(--space-2); border-radius: var(--radius-pill);
+    color: var(--text-2); background: var(--surface-3); flex-shrink: 0;
+}
+
+/* —— 章节导读分节卡（默认折叠，标题行点击展开）—— */
+.section-card {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    padding: var(--space-2) var(--space-3);
+    margin: 0 0 var(--space-2);
+}
+.section-card-head {
+    display: flex; align-items: center; gap: var(--space-2);
+    cursor: pointer; min-width: 0;
+}
+.section-card .guide-chevd { color: var(--text-3); flex-shrink: 0; transition: transform var(--dur) ease; }
+.section-card:not(.sect-open) .guide-chevd { transform: rotate(-90deg); }
+.section-card-title { font-size: var(--font-sm); font-weight: 600; color: var(--text-1); min-width: 0; }
+.section-card-note {
+    display: none;
+    font-size: var(--font-xs); color: var(--text-2);
+    margin-top: 2px; word-break: break-word;
+}
+.section-card.sect-open .section-card-note { display: block; }
+
+/* —— 行动条目行三段化（.item-head/.item-msg/.item-cur）—— */
+.guide-item { display: flex; flex-direction: column; gap: 2px; }
+.item-head {
+    display: flex; align-items: center; gap: var(--space-2);
+    flex-wrap: wrap; min-width: 0;
+}
+.idx-chip {
+    font-family: var(--font-mono); font-size: var(--font-xs);
+    font-weight: 600; color: var(--text-1); flex-shrink: 0;
+}
+.item-timing {
+    font-family: var(--font-mono); font-size: var(--font-xs); color: var(--text-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0; flex: 1 1 auto;
+}
+.item-head .btn-audio-preview { margin-left: auto; flex-shrink: 0; }
+.item-msg { font-size: var(--font-sm); color: var(--text-1); word-break: break-word; }
+.item-cur { font-size: var(--font-xs); color: var(--text-3); word-break: break-word; }
+
+/* —— 试听浮层两态（loading 匹配中 / ready 播放器）+ 独立错误槽 —— */
+.preview-loading-note {
+    display: none; align-items: center;
+    flex: 1; min-width: 0;
+    font-size: var(--font-xs); color: var(--text-2);
+}
+.audio-preview-bar.bar-loading .preview-loading-note { display: flex; }
+.audio-preview-bar.bar-loading .audio-preview-main audio { display: none; }
+.audio-preview-bar.bar-ready .audio-preview-main audio { display: block; }
+.preview-error-slot {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 1001;   /* 高于浮层条 z-900 与模态遮罩 z-1000，错误态不被遮 */
+    display: none; align-items: flex-start; gap: var(--space-2);
+    padding: var(--space-2) 14px;
+    background: var(--surface); border-top: 1px solid var(--danger-border);
+}
+.preview-error-slot.show { display: flex; }
+.preview-error-ico { color: var(--danger); flex-shrink: 0; }
+.preview-error-text { font-size: var(--font-xs); color: var(--danger); word-break: break-word; min-width: 0; }
