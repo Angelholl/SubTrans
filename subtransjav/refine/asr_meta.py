@@ -343,8 +343,12 @@ def _num_signal(v) -> float | None:
     return f
 
 
-def _strip_stem_suffixes(stem: str) -> str:
-    """剥 SRT 文件名的语言/管线后缀（逐段剥，直至无可剥）。"""
+def strip_stem_suffixes(stem: str) -> str:
+    """剥 SRT/媒体文件名的语言/管线后缀（逐段剥，直至无可剥）。
+
+    2.7.4 件2（D2026-1007-01）导出公共名：试听媒体自动推断复用同一剥链
+    （禁止复制第二份）；原唯一内部调用点 _discover_telemetry_path 同步更新。
+    """
     changed = True
     while changed and stem:
         changed = False
@@ -374,7 +378,7 @@ def _discover_telemetry_path(cfg, srt_path: str, warnings: list) -> str | None:
     if not srt_path:
         return None
     srt_dir = os.path.dirname(os.path.abspath(srt_path))
-    stem = _strip_stem_suffixes(
+    stem = strip_stem_suffixes(
         os.path.splitext(os.path.basename(srt_path))[0])
     raw_dir = os.path.join(srt_dir, "raw_subs")
     hits: list = []

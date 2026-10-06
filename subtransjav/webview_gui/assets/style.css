@@ -2678,3 +2678,4 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .preview-error-slot.show { display: flex; }
 .preview-error-ico { color: var(--danger); flex-shrink: 0; }
 .preview-error-text { font-size: var(--font-xs); color: var(--danger); word-break: break-word; min-width: 0; }
+.preview-error-rematch { margin-left: auto; flex-shrink: 0; }

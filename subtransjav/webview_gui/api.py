@@ -2833,6 +2833,13 @@ class TranslateAPI:
 
             db = tm_mod.TranslationMemory()
             results: list[dict] = []
+            # 件4 埋点（2.7.4 批 D2026-1007-01）：疑似整段/长句入库特征
+            # 聚合观测——每次调用至多一条 debug（防刷屏）；只记长度与句末
+            # 标点计数（。！？），绝不记 TM 原文、不阻断不改落库行为。
+            n_total = 0
+            n_flagged = 0
+            max_len = 0
+            max_punct = 0
             try:
                 for e in entries:
                     if not isinstance(e, dict):
@@ -2841,6 +2848,14 @@ class TranslateAPI:
                     tgt = str(e.get("target", "")).strip()
                     if not src or not tgt:
                         continue
+                    n_total += 1
+                    punct = sum(src.count(c) for c in "。！？")
+                    if len(src) > max_len:
+                        max_len = len(src)
+                    if punct > max_punct:
+                        max_punct = punct
+                    if punct >= 2 or len(src) > 100:
+                        n_flagged += 1
                     added = db.store(src, tgt)
                     warn = src in conflicted or (
                         src.isascii() and src.lower() in conflicted)
@@ -2849,6 +2864,11 @@ class TranslateAPI:
                                     "conflict_warn": warn})
             finally:
                 db.close()
+            if n_flagged:
+                _log.debug(
+                    "refine_ai_apply_tm 疑似整段/长句入库特征: "
+                    "flagged=%d total=%d max_len=%d max_sent_punct=%d",
+                    n_flagged, n_total, max_len, max_punct)
             return {"success": True, "results": results}
         except Exception as e:
             _log_exc("refine_ai_apply_tm")
@@ -2881,6 +2901,155 @@ class TranslateAPI:
     _AUDIO_PREVIEW_DIRECT_EXTS = {".mp4", ".m4a", ".webm", ".mov"}
     _AUDIO_PREVIEW_DIRECT_VIDEO = {"", "h264", "vp8", "vp9"}
     _AUDIO_PREVIEW_DIRECT_AUDIO = {"", "aac"}
+    # 2.7.4 件2（D2026-1007-01）：试听媒体自动推断——视频扩展名闭集 +
+    # 持久化 override LRU 上限（复用 refine_stage_settings.json settings KV）
+    _AUDIO_PREVIEW_VIDEO_EXTS = frozenset(
+        {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"})
+    _MEDIA_OVERRIDES_KEY = "media_overrides"
+    _MEDIA_OVERRIDES_MAX = 50
+
+    def _media_override_key(self, guide_path: str) -> str:
+        """media_overrides KV 键：normcase 归一化导读路径（Windows 语义）。"""
+        from subtransjav.paths import normalize_path_case
+        return normalize_path_case(str(guide_path or ""))
+
+    def _load_media_overrides(self) -> dict[str, str]:
+        """media_overrides KV 读取（settings 命名空间；缺省/损坏→空 dict）。
+
+        经 refine_get_stage_settings 既有读取通道（本方法零自有 open——
+        Mimosa path-traversal 消模式：api.py 零新增 open occurrence）。"""
+        res = self.refine_get_stage_settings()
+        if not res.get("success"):
+            return {}
+        settings = res.get("settings")
+        ov = settings.get(self._MEDIA_OVERRIDES_KEY) \
+            if isinstance(settings, dict) else None
+        return {str(k): str(v) for k, v in ov.items()
+                } if isinstance(ov, dict) else {}
+
+    def refine_save_media_override(self, guide_path: str,
+                                   media_path: str = "") -> dict[str, Any]:
+        """「更换」apply 持久化（2.7.4 件2 owner 终版第 2 条）。
+
+        写入 refine_stage_settings.json 顶层 settings 字典的
+        media_overrides 命名空间：{normcase(guide_path): 媒体路径}——
+        LRU 语义：重写键触尾、超 _MEDIA_OVERRIDES_MAX(50) 淘汰最旧；
+        media_path 空串=删除该条（空表时该键存空 dict，读取端视为缺省）。
+        落盘统一走 refine_save_stage_settings 既有通道（settings 按键合并、
+        未知键保留；前端 refine_save_stage_settings(null, null, {...})
+        service_quick 先例）——本方法零自有 open 写点（Mimosa
+        path-traversal 消模式，甄别表 #29 先例：改代码消模式不挂账），
+        对外响应契约 {success, overrides_saved} 不变。
+        """
+        try:
+            gp = str(guide_path or "").strip()
+            if not gp:
+                return {"success": False, "error": "缺少导读文件路径"}
+            overrides = self._load_media_overrides()
+            key = self._media_override_key(gp)
+            overrides.pop(key, None)   # LRU：重写即触尾
+            mp = str(media_path or "").strip()
+            if mp:
+                overrides[key] = mp
+            while len(overrides) > self._MEDIA_OVERRIDES_MAX:
+                overrides.pop(next(iter(overrides)))
+            res = self.refine_save_stage_settings(
+                None, None, {self._MEDIA_OVERRIDES_KEY: overrides})
+            if not res.get("success"):
+                return {"success": False,
+                        "error": str(res.get("error") or "持久化写入失败")}
+            return {"success": True, "overrides_saved": len(overrides)}
+        except Exception as e:
+            _log_exc("refine_save_media_override")
+            return {"success": False, "error": str(e)}
+
+    def _infer_preview_media(self, guide_path: str,
+                             clip_end_s: float) -> dict[str, Any]:
+        """同目录自动推断试听媒体（2.7.4 件2 ④层，与试听同源唯一实现）。
+
+        guide json 文件名剥导读后缀（复用 _AUDIO_PREVIEW_GUIDE_SUFFIX，不新增
+        第 5 处字面量）→ 复用 asr_meta.strip_stem_suffixes 剥语言/管线后缀 →
+        同目录（不递归）normcase 精确基名匹配视频扩展名闭集。唯一命中再过
+        时长守卫（fail-closed，owner 终版第 7 条）：复用 _review_media_duration
+        （15s 超时元数据级），比较基准 clip_end=end+_AUDIO_PREVIEW_PAD_S，
+        容差 max(5s, 1% 时长)；ffprobe 失败/None/时长不足一律拒绝自动采用。
+        .ja 过度剥离边缘（如 song.ja.whisperjav 导读剥为 "song"，同目录仅有
+        song.ja.mp4 时零命中）→ 优雅降级 no_candidate，不误配。
+
+        返回 {ok, media_path, media_source:"inferred"} 或
+        {ok:False, error_key, error, candidates:[文件名,...]}——
+        no_candidate（零命中/多命中，多命中带候选列表）/
+        duration_mismatch / verify_failed。
+        """
+        from subtransjav.paths import normalize_path_case
+        from subtransjav.refine.asr_meta import strip_stem_suffixes
+        suffix = self._AUDIO_PREVIEW_GUIDE_SUFFIX
+        base = os.path.basename(str(guide_path or ""))
+        if not base.endswith(suffix) or len(base) <= len(suffix):
+            return {"ok": False, "error_key": "no_candidate",
+                    "error": f"非导读文件: {base}", "candidates": []}
+        stem = strip_stem_suffixes(base[:-len(suffix)])
+        gdir = os.path.dirname(os.path.abspath(str(guide_path)))
+        try:
+            names = os.listdir(gdir)
+        except OSError:
+            names = []
+        key = normalize_path_case(stem)
+        candidates: list[str] = []
+        for name in names:
+            root, ext = os.path.splitext(name)
+            if ext.lower() not in self._AUDIO_PREVIEW_VIDEO_EXTS:
+                continue
+            if normalize_path_case(root) == key:
+                candidates.append(name)
+        if not candidates:
+            return {"ok": False, "error_key": "no_candidate",
+                    "error": f"未在导读同目录找到与「{stem}」匹配的媒体文件",
+                    "candidates": []}
+        if len(candidates) > 1:
+            sorted_hits = sorted(candidates)
+            return {"ok": False, "error_key": "no_candidate",
+                    "error": "同目录命中多个候选媒体，请显式指定: "
+                             + "、".join(sorted_hits),
+                    "candidates": sorted_hits}
+        hit = candidates[0]
+        hit_path = os.path.join(gdir, hit)
+        dur = self._review_media_duration(hit_path)
+        if dur is None:
+            return {"ok": False, "error_key": "verify_failed",
+                    "error": f"候选媒体元数据探测失败，拒绝自动采用: {hit}",
+                    "candidates": [hit]}
+        tolerance = max(5.0, dur * 0.01)
+        if clip_end_s > dur + tolerance:
+            return {"ok": False, "error_key": "duration_mismatch",
+                    "error": f"候选媒体时长与试听时段不符: {hit}"
+                             f"（媒体 {dur:.1f}s < 所需 {clip_end_s:.1f}s）",
+                    "candidates": [hit]}
+        return {"ok": True, "media_path": hit_path,
+                "media_source": "inferred", "duration_s": round(dur, 3)}
+
+    def refine_preview_infer_media(self, guide_path: str,
+                                   clip_end_s: float = 0.0) -> dict[str, Any]:
+        """试听媒体自动推断独立入口（复用 _infer_preview_media，零第二实现）。
+
+        「重新自动匹配」按钮契约（err_kind=path_invalid 时前端错误槽内
+        出现）：clip_end_s 缺省 0——无试听上下文时时长守卫退化为 ffprobe
+        可读性验证（verify_failed 仍 fail-closed）；正式试听会再过完整守卫。
+        """
+        try:
+            p = str(guide_path or "").strip()
+            if not p:
+                return {"ok": False, "error_key": "no_candidate",
+                        "error": "缺少导读文件路径", "candidates": []}
+            try:
+                clip_end = max(0.0, float(clip_end_s))
+            except (TypeError, ValueError):
+                clip_end = 0.0
+            return self._infer_preview_media(p, clip_end)
+        except Exception as e:
+            _log_exc("refine_preview_infer_media")
+            return {"ok": False, "error_key": "verify_failed",
+                    "error": str(e), "candidates": []}
 
     def _ffprobe_stream_codecs(self, media_path: str) -> dict | None:
         """ffprobe 取首路 video/audio 真实 codec（list-args 禁 shell）。
@@ -2971,8 +3140,11 @@ class TranslateAPI:
                              media_override: str = "") -> dict[str, Any]:
         """质量导读条目快速试听（全容错不抛，前端显示错误条）。
 
-        返回 {ok, mode:"direct", media_path} 或
-        {ok, mode:"clip", data_url, duration_s}，失败 {ok:false, error}。
+        返回 {ok, mode:"direct", media_path, media_source} 或
+        {ok, mode:"clip", data_url, media_path, media_source, duration_s}，
+        失败 {ok:false, error, error_key?}——error_key 四态
+        no_candidate/duration_mismatch/verify_failed/path_invalid
+        （2.7.4 件2 结构化错误，前端按 key 驱动、禁靠中文文案匹配）。
         """
         try:
             return self._refine_audio_preview_impl(
@@ -3001,23 +3173,9 @@ class TranslateAPI:
             return {"ok": False,
                     "error": str(got.get("error") or "导读读取失败")}
         data = got.get("data")
-        media = ""
-        if str(media_override or "").strip():
-            try:
-                media = str(_resolve_safe_path(str(media_override).strip()))
-            except ValueError as ve:
-                return {"ok": False,
-                        "error": f"媒体路径不在允许的目录下: {ve}"}
-            if not os.path.isfile(media):
-                return {"ok": False, "error": f"媒体文件不存在: {media}"}
-        else:
-            media = str((data or {}).get("media_path") or "")
-        if not media:
-            return {"ok": False,
-                    "error": "导读未包含媒体路径，请在媒体来源中显式指定",
-                    "error_key": "no_media"}
 
         # timing 越界钳制：start ≥ 0；end ≥ start；零长时段拒绝
+        # （件2 前移：时长守卫基准 clip_end 依赖 end，须先于媒体解析）
         try:
             start = max(0.0, float(timing_start_s))
         except (TypeError, ValueError):
@@ -3029,6 +3187,83 @@ class TranslateAPI:
         if end - start <= 0:
             return {"ok": False, "error": "试听时段无效（起止时间）"}
 
+        # —— 试听媒体路径四层优先级（2.7.4 件2，评议员钉测）——
+        # ① 本次请求显式 override > ② guide json 自带 media_path（文件有效
+        # 时）> ③ GUI 持久化配置 > ④ 同目录自动推断。②失效（文件不存在/
+        # ffprobe 失败）才落 ③④——不自动覆盖有效已有路径（owner 裁定）。
+        # 结构化错误四态（沿用 error_key 先例，前端禁靠中文文案匹配）：
+        # no_candidate / duration_mismatch / verify_failed / path_invalid。
+        guide_media = str((data or {}).get("media_path") or "")
+        failed_existing: list[str] = []   # 已有路径失效（path_invalid 汇报）
+        media = ""
+        media_source = ""
+        if str(media_override or "").strip():
+            try:
+                media = str(_resolve_safe_path(str(media_override).strip()))
+            except ValueError as ve:
+                return {"ok": False, "error_key": "path_invalid",
+                        "error": f"媒体路径不在允许的目录下: {ve}"}
+            if not os.path.isfile(media):
+                return {"ok": False, "error_key": "path_invalid",
+                        "error": f"媒体文件不存在: {media}"}
+            media_source = "override"
+        if not media and guide_media:
+            gp = ""
+            try:
+                gp = str(_resolve_safe_path(guide_media))
+            except ValueError:
+                gp = ""
+            if not gp or not os.path.isfile(gp):
+                # 安全锚拒绝/文件不存在 → ②失效，落 ③④
+                failed_existing.append(guide_media)
+            elif self._review_media_duration(gp) is not None:
+                media = gp
+                media_source = "guide"
+            elif shutil.which("ffprobe") is None:
+                # ffprobe 二进制缺席：无法验证亦无法否证——保持既有
+                # no-ffmpeg 降级契约（mp4/m4a direct 或 clip 自然报错），
+                # 不据此判 ②失效
+                media = gp
+                media_source = "guide"
+            else:
+                # ffprobe 可用但探测失败 → ②失效，落 ③④
+                failed_existing.append(guide_media)
+        if not media:
+            # ③ GUI 持久化配置（media_overrides KV；失效仅记录不阻塞）
+            persisted = self._load_media_overrides().get(
+                self._media_override_key(p))
+            if persisted:
+                pp = ""
+                try:
+                    pp = str(_resolve_safe_path(persisted))
+                except ValueError:
+                    pp = ""
+                if pp and os.path.isfile(pp):
+                    media = pp
+                    media_source = "persisted"
+                else:
+                    failed_existing.append(persisted)
+        infer_res: dict[str, Any] | None = None
+        if not media:
+            # ④ 同目录自动推断（fail-closed 时长守卫，唯一实现见
+            # _infer_preview_media；re-match 入口复用同一实现）
+            infer_res = self._infer_preview_media(
+                p, end + self._AUDIO_PREVIEW_PAD_S)
+            if infer_res.get("ok"):
+                media = str(infer_res["media_path"])
+                media_source = "inferred"
+        if not media:
+            if failed_existing:
+                return {"ok": False, "error_key": "path_invalid",
+                        "error": "已有媒体路径失效: "
+                                 + "；".join(failed_existing),
+                        "candidates": (infer_res or {}).get("candidates", [])}
+            if infer_res is not None:
+                return infer_res
+            return {"ok": False, "error_key": "no_candidate",
+                    "error": "导读未包含媒体路径，请在媒体来源中显式指定",
+                    "candidates": []}
+
         ext = os.path.splitext(media)[1].lower()
         codecs = self._ffprobe_stream_codecs(media)
         if codecs is not None:
@@ -3038,13 +3273,13 @@ class TranslateAPI:
                                    self._AUDIO_PREVIEW_DIRECT_AUDIO)
             if direct:
                 return {"ok": True, "mode": "direct", "media_path": media,
-                        "codec_probe": True}
+                        "media_source": media_source, "codec_probe": True}
         else:
             # ffprobe 缺失/失败：mp4/m4a（aac 语义）尝试 direct；
             # 其余容器无法解码判定 → 无 ffmpeg 即报错
             if ext in (".mp4", ".m4a"):
                 return {"ok": True, "mode": "direct", "media_path": media,
-                        "codec_probe": False}
+                        "media_source": media_source, "codec_probe": False}
             if shutil.which("ffmpeg") is None:
                 return {"ok": False,
                         "error": "未检测到 ffmpeg，无法解码该容器",
@@ -3083,6 +3318,7 @@ class TranslateAPI:
             return {"ok": False, "error": f"试听片段读取失败: {e}"}
         return {"ok": True, "mode": "clip",
                 "data_url": f"data:audio/wav;base64,{b64}",
+                "media_path": media, "media_source": media_source,
                 "duration_s": round(duration, 3), "clip_path": out_path}
 
     # ================================================================

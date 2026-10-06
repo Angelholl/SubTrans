@@ -1298,13 +1298,22 @@ def _make_guide(tmp_path: Path, media_path=None, stem="ep01") -> Path:
     return p
 
 
-def _install_fake_ffprobe(monkeypatch, video="", audio=""):
-    """替身 ffprobe 链路：shutil.which 命中 + subprocess.run 返回 codec JSON。"""
+def _install_fake_ffprobe(monkeypatch, video="", audio="", duration_s=3600.0):
+    """替身 ffprobe 链路：shutil.which 命中 + subprocess.run 返回 codec JSON；
+    format=duration 查询（2.7.4 件2 层② 时长验证/④ 时长守卫）返回
+    duration_s（缺省 3600s=媒体时长充足）。"""
     import subtransjav.webview_gui.api as api_mod
     captured: dict = {}
 
     def _fake_run(args, **kwargs):
         captured["args"] = args
+        if "format=duration" in args:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {"format": {"duration": str(duration_s)}}
+                ).encode("utf-8"),
+                stderr=b"")
         return SimpleNamespace(
             returncode=0,
             stdout=json.dumps({"streams": [
@@ -1367,6 +1376,9 @@ def test_refine_audio_preview_clip_fallback(gui_api_obj, monkeypatch,
     assert r["mode"] == "clip"
     assert r["data_url"].startswith("data:audio/wav;base64,")
     assert r["duration_s"] == 3.0
+    # 2.7.4 件2：clip 回包补 media_path/media_source（向后兼容加列）
+    assert r["media_path"] == str(media)
+    assert r["media_source"] == "guide"
     assert captured["start"] == 9.5 and captured["dur"] == 3.0
     assert captured["media"] == str(media)
     # 片段落 TEMP_DIR/audio_detect/preview/，命名带哈希
@@ -1419,11 +1431,14 @@ def test_refine_audio_preview_override_outside_anchor_rejected(
 
 def test_refine_audio_preview_guide_missing_media_path(gui_api_obj,
                                                        tmp_path):
-    """导读缺 media_path 且未显式指定 → 结构化失败（前端提示显式指定）。"""
+    """导读缺 media_path 且同目录无推断候选 → no_candidate 结构化失败
+    （2.7.4 件2：原 no_media 文案被四层解析的零命中态取代）。"""
     guide = _make_guide(tmp_path)
     r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
     assert r["ok"] is False
-    assert "媒体路径" in r["error"]
+    assert r["error_key"] == "no_candidate"
+    assert "媒体" in r["error"]
+    assert r["candidates"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -3631,3 +3646,233 @@ def test_scan_srt_folder_skipped_count_passthrough(gui_api_obj, monkeypatch, tmp
     assert r["summary"]["count"] == 3          # find_srt_files 默认口径不变
     assert r["summary"]["skipped_count"] == 2  # pass1 + _final_cn
     assert "total_size" in r["summary"] and "dirs" in r["summary"]
+
+
+# ---------------------------------------------------------------------------
+# 2.7.4 件2（D2026-1007-01）：试听媒体路径自动推断 + 失效重建 + GUI 持久化
+# 四层优先级：①请求 override > ②guide media_path（有效时）> ③持久化 KV
+# > ④同目录推断（fail-closed 时长守卫）；结构化 error_key 四态。
+# ---------------------------------------------------------------------------
+
+def test_strip_stem_suffixes_public_export():
+    """剥链公共名导出（唯一实现，禁第二份）：owner 实名样本 + 中文/日语样本。"""
+    import subtransjav.refine.asr_meta as am
+    from subtransjav.refine.asr_meta import strip_stem_suffixes
+    # owner 实名样本：4k2.me@mida-559ja.merged.whisperjav_质量报告导读.json
+    # → 剥导读后缀 + 管线后缀 → 4k2.me@mida-559ja.merged
+    assert strip_stem_suffixes("4k2.me@mida-559ja.merged.whisperjav") \
+        == "4k2.me@mida-559ja.merged"
+    assert strip_stem_suffixes("song.ja.whisperjav") == "song"
+    assert strip_stem_suffixes("第01话.ja") == "第01话"
+    assert strip_stem_suffixes("第01话.ja.whisperjav") == "第01话"
+    assert strip_stem_suffixes("plain") == "plain"
+    # 导出完整性：旧私有名零残留（唯一内部调用点已同步更新）
+    assert "_strip_stem_suffixes" not in dir(am)
+
+
+def _make_video(tmp_path: Path, name: str) -> Path:
+    p = tmp_path / name
+    p.write_bytes(b"fake-media")
+    return p
+
+
+def test_preview_infer_unique_hit_adopted(gui_api_obj, monkeypatch, tmp_path):
+    """④ 唯一命中采用：导读无 media_path、同目录同名 mp4 → inferred 采纳
+    （时长守卫通过：3600s ≥ clip_end+容差），direct 直播。"""
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    media = _make_video(tmp_path, "ep09.mp4")
+    guide = _make_guide(tmp_path, stem="ep09")
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True and r["mode"] == "direct"
+    assert r["media_path"] == str(media)
+    assert r["media_source"] == "inferred"
+
+
+def test_preview_infer_multi_hit_lists_candidates(gui_api_obj, monkeypatch,
+                                                  tmp_path):
+    """多命中 → no_candidate + 候选文件名列表（评议员条件①）。"""
+    _install_fake_ffprobe(monkeypatch)
+    _make_video(tmp_path, "ep10.mp4")
+    _make_video(tmp_path, "ep10.mkv")
+    guide = _make_guide(tmp_path, stem="ep10")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "no_candidate"
+    assert sorted(r["candidates"]) == ["ep10.mkv", "ep10.mp4"]
+    assert "ep10.mp4" in r["error"]
+
+
+def test_preview_infer_zero_hit_graceful_degrade(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """零命中 → no_candidate 空候选（.ja 过度剥离边缘优雅降级：剥链后
+    stem="song"，同目录仅 song.ja.mp4 不误配）。"""
+    _install_fake_ffprobe(monkeypatch)
+    _make_video(tmp_path, "song.ja.mp4")
+    guide = _make_guide(tmp_path, stem="song.ja.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "no_candidate"
+    assert r["candidates"] == []
+
+
+def test_preview_infer_duration_mismatch_rejected(gui_api_obj, monkeypatch,
+                                                  tmp_path):
+    """时长不符拒绝（fail-closed）：媒体 10s，clip_end=30.5 > 10+max(5,1%)。"""
+    _install_fake_ffprobe(monkeypatch, duration_s=10.0)
+    _make_video(tmp_path, "ep11.mp4")
+    guide = _make_guide(tmp_path, stem="ep11")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 30.0)
+    assert r["ok"] is False and r["error_key"] == "duration_mismatch"
+    assert r["candidates"] == ["ep11.mp4"]
+
+
+def test_preview_infer_ffprobe_fail_rejected(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """ffprobe 探测失败拒绝（fail-closed）：rc≠0 → verify_failed。"""
+    import subtransjav.webview_gui.api as api_mod
+    _make_video(tmp_path, "ep12.mp4")
+    guide = _make_guide(tmp_path, stem="ep12")
+    monkeypatch.setattr(api_mod.shutil, "which",
+                        lambda name: "/fake/ffprobe"
+                        if name == "ffprobe" else None)
+    monkeypatch.setattr(
+        api_mod.subprocess, "run",
+        lambda args, **kw: SimpleNamespace(returncode=1, stdout=b"",
+                                           stderr=b""))
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "verify_failed"
+    assert r["candidates"] == ["ep12.mp4"]
+
+
+def test_preview_layer2_invalid_falls_to_path_invalid(gui_api_obj,
+                                                      monkeypatch, tmp_path):
+    """已有路径失效：guide media 指向不存在文件且零候选 → path_invalid。"""
+    _install_fake_ffprobe(monkeypatch)
+    guide = _make_guide(tmp_path, media_path=str(tmp_path / "gone.mp4"),
+                        stem="ep13")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "path_invalid"
+    assert "gone.mp4" in r["error"]
+    assert r["candidates"] == []
+
+
+def test_preview_layer2_invalid_falls_to_infer_success(gui_api_obj,
+                                                       monkeypatch, tmp_path):
+    """②失效落 ④：guide media 指向不存在文件但推断唯一命中 → 采用推断
+    （不自动覆盖的是【有效】已有路径；无效路径被推断替换，owner 裁定）。"""
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    media = _make_video(tmp_path, "ep14.mp4")
+    guide = _make_guide(tmp_path, media_path=str(tmp_path / "dead.mp4"),
+                        stem="ep14")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is True and r["media_source"] == "inferred"
+    assert r["media_path"] == str(media)
+
+
+def test_preview_persisted_layer_and_priority(gui_api_obj, monkeypatch,
+                                              tmp_path):
+    """③ 持久化层 + 优先级钉：③ 压 ④；② 有效压 ③；① override 压一切。
+    settings 文件 monkeypatch 到 tmp（防本机 refine_stage_settings.json
+    污染，沿既有隔离先例）。"""
+    settings_path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(settings_path))
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    other_dir = tmp_path / "elsewhere"
+    other_dir.mkdir()
+    persisted_media = other_dir / "movie.mp4"
+    persisted_media.write_bytes(b"fake")
+    _make_video(tmp_path, "ep15.mp4")   # ④ 会命中——验证 ③ 优先于 ④
+    guide = _make_guide(tmp_path, stem="ep15")
+    w = gui_api_obj.refine_save_media_override(str(guide), str(persisted_media))
+    assert w["success"] is True
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is True and r["media_source"] == "persisted"
+    assert r["media_path"] == str(persisted_media)
+
+    # ② 有效（文件存在+ffprobe 可读）压过 ③（不自动覆盖有效已有路径）
+    guide2_media = _make_video(tmp_path, "ep15b.mp4")
+    guide2 = _make_guide(tmp_path, media_path=str(guide2_media), stem="ep15b")
+    gui_api_obj.refine_save_media_override(str(guide2), str(persisted_media))
+    r2 = gui_api_obj.refine_audio_preview(str(guide2), 0.0, 2.0)
+    assert r2["ok"] is True and r2["media_source"] == "guide"
+    assert r2["media_path"] == str(guide2_media)
+
+    # ① 请求 override 压一切
+    r3 = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0,
+                                          media_override=str(persisted_media))
+    assert r3["media_source"] == "override"
+
+
+def test_preview_override_lru_cap_and_delete(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """media_overrides LRU 上限 50：超限淘汰最旧、重写触尾、空串删除。"""
+    settings_path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(settings_path))
+    guides = [_make_guide(tmp_path, stem=f"lru{i:02d}") for i in range(51)]
+    for i, g in enumerate(guides[:50]):
+        assert gui_api_obj.refine_save_media_override(
+            str(g), f"X:/m{i}.mp4")["success"]
+    # 重写最旧键 → 触尾（不再是最旧）
+    gui_api_obj.refine_save_media_override(str(guides[0]), "X:/m0b.mp4")
+    # 第 51 条写入 → 淘汰当前最旧（guides[1]）
+    gui_api_obj.refine_save_media_override(str(guides[50]), "X:/m50.mp4")
+    ov = gui_api_obj._load_media_overrides()
+    assert len(ov) == 50
+    assert gui_api_obj._media_override_key(str(guides[1])) not in ov
+    assert ov[gui_api_obj._media_override_key(str(guides[0]))] == "X:/m0b.mp4"
+    assert ov[gui_api_obj._media_override_key(str(guides[50]))] == "X:/m50.mp4"
+    # 空串 = 删除该条
+    gui_api_obj.refine_save_media_override(str(guides[2]), "")
+    assert gui_api_obj._media_override_key(str(guides[2])) not in \
+        gui_api_obj._load_media_overrides()
+
+
+def test_refine_ai_apply_tm_telemetry_features_only(gui_api_obj, monkeypatch,
+                                                    tmp_path, caplog):
+    """件4 埋点：疑似整段/长句入库特征聚合一条 debug——只记长度+句末标点
+    计数，不含 TM 原文；不阻断不改落库行为。"""
+    import logging
+
+    import subtransjav.refine.glossary_conflict as gc_mod
+    import subtransjav.refine.tm as tm_mod
+
+    stored: list = []
+
+    class _FakeTM:
+        def __init__(self, db_path=None):
+            pass
+
+        def store(self, source, target, stage=0, source_name=None):
+            stored.append((source, target))
+            return True
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(tm_mod, "TranslationMemory", _FakeTM)
+    monkeypatch.setattr(gc_mod, "default_watch_path",
+                        lambda: str(tmp_path / "absent_watch.json"))
+
+    long_src = "あ" * 120
+    multi_src = "第一句。第二句！第三句？"
+    normal_src = "はい"
+    entries = [
+        {"source": long_src, "target": "长句译"},
+        {"source": multi_src, "target": "多句译"},
+        {"source": normal_src, "target": "普通译"},
+    ]
+    with caplog.at_level(logging.DEBUG, logger="subtransjav.gui"):
+        r = gui_api_obj.refine_ai_apply_tm(
+            json.dumps(entries, ensure_ascii=False))
+    assert r["success"] is True
+    assert stored == [(e["source"], e["target"]) for e in entries], \
+        "埋点不得改变落库行为"
+    debug_text = "\n".join(rec.getMessage() for rec in caplog.records
+                           if rec.name == "subtransjav.gui")
+    assert "flagged=2" in debug_text and "total=3" in debug_text, \
+        "聚合特征计数缺失（长句 1 + 多句标点 1）"
+    assert "max_len=120" in debug_text and "max_sent_punct=3" in debug_text
+    # 不记 TM 原文（出域面纪律）：debug 输出零原文泄漏
+    assert long_src not in debug_text
+    assert multi_src not in debug_text
+    assert normal_src not in debug_text

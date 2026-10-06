@@ -424,6 +424,8 @@ const MSG = {
     guide_media_missing_hint: '媒体路径缺失：条目可查看但不可试听，请在「更换」中显式指定媒体文件路径',
     preview_matching: '正在匹配媒体路径并定位片段…',
     preview_media_matched: '已自动匹配媒体路径',
+    // 「重新自动匹配」键（err_kind=path_invalid 时错误槽内出现）
+    preview_rematch: '重新自动匹配',
     media_override_apply: '应用',
     media_override_placeholder: '输入媒体文件完整路径（等价 --media-path，仅本报告会话内生效）',
     media_override_applied: '已设为本报告会话内媒体来源（显式指定）',
@@ -4572,6 +4574,9 @@ function switchTab(tabId) {
   let lastGuideData = null;
   // 会话内媒体路径覆盖（等价 --media-path；仅显式输入，非空即优先生效）
   let mediaOverridePath = '';
+  // 2.7.4 件2：试听媒体推断结果每 guide 前端缓存（override/持久化变更时
+  // 失效）——导读加载后缺失态即可显示 tag-auto 横幅，不等首次试听
+  let inferredMediaCache = {};
 
   // 状态行（2.7.4 件1 语义收敛）：#guideStatus 同槽复用（FROZEN 零改动），
   // 首用时动态补齐 .status-line 骨架——图标槽（成功✓/失败⚠）+.status-path
@@ -4843,6 +4848,15 @@ function switchTab(tabId) {
         lastLoadedIsTxt = false;
         lastGuideData = r.data || {};
         updateMediaSourceBar(lastGuideData);
+        // 2.7.4 件2：推断缓存命中且当前为缺失态 → tag-auto 横幅显示
+        // 推断路径（评议员条件②：持久化条目不在加载时阻塞校验，仅展示）
+        const tagNow = $('mediaSourceTag');
+        if (tagNow && tagNow.classList.contains('tag-none')
+            && inferredMediaCache[lastLoadedGuidePath]) {
+          renderMediaTag('tag-auto', MSG.preview_media_matched,
+            inferredMediaCache[lastLoadedGuidePath]);
+          mediaMissingHint(false);
+        }
         guideRender(r.data || {});
         batchFixRefresh();
         guideStatus(MSG.guide_loaded(r.path || p));
@@ -4896,6 +4910,19 @@ function switchTab(tabId) {
   // 媒体路径来源收窄（C-5 契约内选择）：导读 media_path（自动发现）
   // 或用户显式输入（等价 --media-path，会话内覆盖）；无文件对话框。
   // ============================================================
+
+  // 媒体来源条标签/路径直写（2.7.4 件2）：推断命中（tag-auto）/重匹配
+  // 成功后显示推断路径横幅；与 updateMediaSourceBar 的三态切换共用 DOM
+  function renderMediaTag(cls, text, path) {
+    const tagEl = $('mediaSourceTag');
+    const pathEl = $('mediaSourcePath');
+    if (!tagEl || !pathEl) return;
+    tagEl.classList.remove('tag-none', 'tag-auto', 'tag-explicit');
+    if (cls) tagEl.classList.add(cls);
+    tagEl.textContent = text;
+    pathEl.textContent = path || '';
+    pathEl.title = path || '';
+  }
 
   function updateMediaSourceBar(data) {
     const bar = $('mediaSourceBar');
@@ -4972,8 +4999,15 @@ function switchTab(tabId) {
     ico.textContent = '⚠';
     const txt = document.createElement('span');
     txt.className = 'preview-error-text';
+    const rematch = document.createElement('button');
+    rematch.type = 'button';
+    rematch.className = 'btn btn-ghost btn-compact preview-error-rematch';
+    rematch.textContent = MSG.preview_rematch;
+    rematch.style.display = 'none';   // 仅 err_kind=path_invalid 时出现
+    rematch.addEventListener('click', () => rematchPreviewMedia());
     slot.appendChild(ico);
     slot.appendChild(txt);
+    slot.appendChild(rematch);
     const page = document.getElementById('tab-guide');
     (page || document.body).appendChild(slot);
     return slot;
@@ -4985,9 +5019,14 @@ function switchTab(tabId) {
     slot.classList.remove('show');
     const txt = slot.querySelector('.preview-error-text');
     if (txt) txt.textContent = '';
+    const rematch = slot.querySelector('.preview-error-rematch');
+    if (rematch) rematch.style.display = 'none';
   }
 
-  function showPreviewError(text) {
+  // err_kind 结构化驱动（2.7.4 件2，评议员条件①）：前端按 error_key
+  // 判定、禁靠中文文案匹配——仅 path_invalid（已有路径失效）时错误槽内
+  // 出现「重新自动匹配」
+  function showPreviewError(text, errKind) {
     // 停播保留（评议员条件）：错误即清 src，防上一次试听的声音持续播放
     const player = $('audioPreviewPlayer');
     if (player) { player.src = ''; }
@@ -5001,6 +5040,41 @@ function switchTab(tabId) {
     const txt = slot.querySelector('.preview-error-text');
     if (txt) txt.textContent = text;
     slot.classList.add('show');
+    const rematch = slot.querySelector('.preview-error-rematch');
+    if (rematch) rematch.style.display = errKind === 'path_invalid' ? '' : 'none';
+  }
+
+  // 「重新自动匹配」（2.7.4 件2）：复用后端推断引擎（refine_preview_infer_media
+  // 与试听同源实现，零第二份）；成功后更新媒体条横幅并自动重试本次试听
+  async function rematchPreviewMedia() {
+    const slot = document.querySelector('.preview-error-slot');
+    const btn = slot ? slot.querySelector('.preview-error-rematch') : null;
+    if (btn) btn.disabled = true;
+    try {
+      if (!lastLoadedGuidePath || !window.pywebview
+          || !window.pywebview.api
+          || !window.pywebview.api.refine_preview_infer_media) {
+        return;
+      }
+      const r = await window.pywebview.api.refine_preview_infer_media(
+        lastLoadedGuidePath);
+      if (r && r.ok && r.media_path) {
+        inferredMediaCache[lastLoadedGuidePath] = String(r.media_path);
+        renderMediaTag('tag-auto', MSG.preview_media_matched,
+          String(r.media_path));
+        mediaMissingHint(false);
+        clearPreviewError();
+        if (lastPreviewTiming) openAudioPreview(lastPreviewTiming);
+      } else {
+        showPreviewError(MSG.audio_preview_failed(
+          (r && r.error) || MSG.unknownError), (r && r.error_key) || '');
+      }
+    } catch (e) {
+      showPreviewError(MSG.audio_preview_failed(
+        e && e.message ? e.message : String(e)), '');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   // loading 提示行（浮层条内动态注入，幂等）：timing 右侧「正在匹配媒体
@@ -5033,6 +5107,8 @@ function switchTab(tabId) {
 
   // 请求序号：连续点击/关闭后旧响应不得覆盖新状态
   let lastPreviewToken = 0;
+  // 2.7.4 件2：最近一次试听 timing（重匹配成功后自动重试用）
+  let lastPreviewTiming = '';
 
   async function openAudioPreview(timing) {
     const bar = $('audioPreviewBar');
@@ -5058,6 +5134,7 @@ function switchTab(tabId) {
     bar.classList.remove('bar-ready');
     bar.classList.add('bar-loading');
     bar.style.display = '';
+    lastPreviewTiming = String(timing || '');   // 重匹配自动重试依据
     const token = ++lastPreviewToken;
     try {
       const r = await window.pywebview.api.refine_audio_preview(
@@ -5066,23 +5143,36 @@ function switchTab(tabId) {
       if (r && r.ok && r.mode === 'direct' && r.media_path) {
         bar.classList.remove('bar-loading');
         bar.classList.add('bar-ready');
+        markInferredMedia(r);
         player.src = fileUrlOf(r.media_path);
         player.play().catch(() => {});
       } else if (r && r.ok && r.mode === 'clip' && r.data_url) {
         bar.classList.remove('bar-loading');
         bar.classList.add('bar-ready');
+        markInferredMedia(r);
         player.src = r.data_url;
         player.play().catch(() => {});
       } else {
         showPreviewError(MSG.audio_preview_failed(
-          (r && r.error) || MSG.unknownError));
+          (r && r.error) || MSG.unknownError),
+          (r && r.error_key) || '');
       }
     } catch (e) {
       if (token === lastPreviewToken) {
         showPreviewError(MSG.audio_preview_failed(
-          e && e.message ? e.message : String(e)));
+          e && e.message ? e.message : String(e)), '');
       }
     }
+  }
+
+  // 推断命中回显（2.7.4 件2）：media_source=inferred → 媒体条 tag-auto
+  // 横幅显示匹配路径 + 写入每 guide 缓存（导读加载后缺失态即可展示）
+  function markInferredMedia(r) {
+    if (!r || r.media_source !== 'inferred' || !r.media_path) return;
+    inferredMediaCache[lastLoadedGuidePath] = String(r.media_path);
+    renderMediaTag('tag-auto', MSG.preview_media_matched,
+      String(r.media_path));
+    mediaMissingHint(false);
   }
 
   // ============================================================
@@ -5894,6 +5984,17 @@ function switchTab(tabId) {
       if (st) {
         st.textContent = mediaOverridePath
           ? MSG.media_override_applied : MSG.media_override_cleared;
+      }
+      // 2.7.4 件2：override 变更 → 推断缓存失效；显式路径持久化写入
+      // （media_overrides KV，空串=删除该条；失败静默——会话内覆盖已生效）
+      delete inferredMediaCache[lastLoadedGuidePath];
+      if (lastLoadedGuidePath && window.pywebview
+          && window.pywebview.api
+          && window.pywebview.api.refine_save_media_override) {
+        try {
+          window.pywebview.api.refine_save_media_override(
+            lastLoadedGuidePath, mediaOverridePath).catch(() => {});
+        } catch (e) { /* 桥缺席静默（会话内覆盖已生效） */ }
       }
       updateMediaSourceBar(lastGuideData);
     });

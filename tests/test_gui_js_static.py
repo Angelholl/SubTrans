@@ -2471,3 +2471,37 @@ def test_guide_page_escape_order_and_narrow_pinned():
     assert "white-space: nowrap" in btn.group(0) \
         and "flex-shrink: 0" in btn.group(0), \
         "试听键须 nowrap+flex-shrink:0（只动该按钮类）"
+
+
+def test_preview_media_infer_frontend_pinned():
+    """2.7.4 件2 前端接线钉：重匹配按钮按结构化 error_key 驱动（禁中文
+    文案匹配）、同一后端推断入口（零第二实现）、tag-auto 推断回显、
+    每 guide 推断缓存、apply 持久化写入与缓存失效。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    assert "preview_rematch" in keys, "MSG 缺少 2.7.4 件2 重匹配键"
+    assert "preview_media_matched" in keys, "MSG 缺少 tag-auto 横幅键"
+    # 结构化 err_kind 驱动（评议员条件①：禁靠中文文案匹配）
+    assert "errKind === 'path_invalid'" in src, \
+        "重匹配按钮须按结构化 err_kind 驱动"
+    spe = _extract_function(src, "showPreviewError")
+    assert "errKind" in spe, "showPreviewError 须接收 err_kind 参数"
+    # 重匹配复用同一后端推断入口（零第二实现，不复制试听链路）
+    rm = _extract_function(src, "rematchPreviewMedia")
+    assert "refine_preview_infer_media(" in rm, "重匹配须走推断独立入口"
+    assert "refine_audio_preview(" not in rm, "重匹配不得复制试听链路"
+    assert "lastPreviewTiming" in rm, "重匹配成功后自动重试本次试听"
+    # 推断命中回显：media_source 判定 + tag-auto + 每 guide 缓存
+    mi = _extract_function(src, "markInferredMedia")
+    assert "media_source !== 'inferred'" in mi, "推断命中须按 media_source 判定"
+    assert "inferredMediaCache" in mi and "tag-auto" in mi \
+        and "MSG.preview_media_matched" in mi, "推断回显/缓存缺失"
+    assert "let inferredMediaCache" in src, "每 guide 推断缓存声明缺失"
+    gl = _extract_function(src, "guideLoad")
+    assert "inferredMediaCache[lastLoadedGuidePath]" in gl, \
+        "导读加载缺失态须回显缓存推断（评议员条件②）"
+    # 「更换」apply：持久化写入 + 缓存失效
+    bind = _extract_function(src, "bindDom")
+    assert "refine_save_media_override(" in bind, "apply 持久化写入缺失"
+    assert "delete inferredMediaCache[lastLoadedGuidePath]" in bind, \
+        "override 变更须失效推断缓存"
