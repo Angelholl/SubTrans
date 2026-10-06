@@ -13,7 +13,7 @@ __version_display__ = "2.7.3.dev0"
 __version_info__ = {
     "major": 2,
     "minor": 7,
-    "patch": 3,
+    "patch": 4,
     "release": "dev",
     "architecture": "refine-standalone"
 }
