@@ -1901,11 +1901,12 @@ def test_batch_d_modal_enter_branch_excludes_editor_pinned():
     关闭；已有 dirty 则每次回车误弹放弃确认）。_open/download/editor
     四处同款绑定运行时只注册最先打开的一份，故逐一断言防单点回改；
     alert/download 既有行为零变化。2.7.1：models 面板同款绑定（Enter=关闭，
-    面板无文本输入语义）。"""
+    面板无文本输入语义）。2.7.4 件3（D2026-1007-01）：batchFixPreview
+    同款绑定（Enter=确认，列表容器零键盘监听，语义保持全局），四处→五处。"""
     src = _app_js_source()
     conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
-    assert len(conds) == 4, \
-        f"keydown Enter 分支应恰四处（_open/download/editor/models），实得 {len(conds)}"
+    assert len(conds) == 5, \
+        f"keydown Enter 分支应恰五处（_open/download/editor/models/batchFixPreview），实得 {len(conds)}"
     for cond in conds:
         assert "AppModal._kind !== 'alert'" in cond, \
             f"Enter 分支缺 alert 排除: {cond}"
@@ -2230,3 +2231,110 @@ def test_batch_8b_activity_stream_and_console_trim_pinned():
     assert start_body.index("ActivityStream.reset()") \
         < start_body.index("this.startStatusPolling()"), \
         "活动流清空必须位于轮询启动之前（旧流残行不进新任务）"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.4 件3（D2026-1007-01）：批量修复确认框完整化（AppModal.batchFixPreview）
+# 原纯文本 AppModal.confirm 只列前 10 条（slice(0,10)+"…其余 N 条省略"），
+# 改结构化弹窗：元信息区+分类 chips（数量降序）+全条目滚动列表+现译全文
+# （lastGuideData 已持有导读 json；后端摘录限长仅约束回包形状）。
+# ---------------------------------------------------------------------------
+def test_batch_fix_preview_modal_pinned():
+    """AppModal.batchFixPreview：结构化 body 全 createElement 注入（零新增
+    id/data-i18n）+ .modal-lg 滚动配方 + 回退标记 + 全文不 JS 切字符串。"""
+    src = _app_js_source()
+    assert "batchFixPreview(opts)" in src, "AppModal.batchFixPreview 缺失"
+    body = _extract_function(src, "batchFixPreview")
+    assert "createElement" in body, "弹窗 body 须 createElement 注入"
+    assert "bfp-meta" in body and "bfp-cats" in body and "bfp-list" in body, \
+        "元信息区/分类 chips/滚动列表三段结构缺失"
+    assert "bfp-cat-chip" in body, "分类 chip 缺失"
+    assert "bfp-item-head" in body and "bfp-idx" in body and "bfp-timing" in body, \
+        "条目头行（编号+chip+timing）缺失"
+    assert "modal-lg" in body, ".modal-lg 弹性滚动配方缺失"
+    assert "dataset.bound" in body, "须复用 dataset.bound 一次性绑定"
+    # 结算三态：_busy 重入=resolve(false)（取消/ESC/遮罩走 _cancelValue=false）
+    assert "if (this._busy) return Promise.resolve(false);" in body, \
+        "_busy 重入必须立即 resolve(false)（单例不叠加）"
+    # 全文匹配键 Number 强转 + null 先判（防 Number(null)=0 陷阱）+回退标记
+    assert "Number(it.index)" in body, "匹配键必须 Number 强转比对"
+    assert "hasOwnProperty.call(texts" in body, "全文查无回退分支缺失"
+    assert "MSG.batchFixExcerptOnly" in body, "「仅摘录」回退标记缺失"
+    assert "MSG.batchFixExpand" in body and "MSG.batchFixCollapse" in body, \
+        "展开全文/收起切换文案缺失"
+    assert "txt.title = text" in body, "现译须 title 悬停全文"
+    assert ".slice(0" not in body, "弹窗内不得 JS 切字符串（防代理对切半）"
+    # 全文进 DOM：文本节点取自 texts/回退摘录的完整串
+    assert "String(texts[idx])" in body and "String(it.excerpt" in body, \
+        "现译全文/回退摘录必须整串写入 DOM"
+    # kind 隔离：_settle 不含 batchfix 阻塞分支（关闭永不阻塞）
+    settle = _extract_function(src, "_settle")
+    assert "_kind === 'batchfix'" not in settle, \
+        "batchfix kind 不得进 _settle 阻塞守卫"
+    # 短文本噪音清理（2.7.4 件3 黑盒走查修订）：渲染后收尾 pass 移除未
+    # 实际折叠条目的展开键（scrollHeight<=clientHeight+1 → remove 非隐藏）
+    assert "scrollHeight" in body and "clientHeight + 1" in body, \
+        "折叠生效检测判据缺失（scrollHeight > clientHeight + 1）"
+    assert "querySelectorAll('.bfp-item')" in body, "逐条收尾检测缺失"
+    assert "toggle.remove()" in body, "未折叠条目须移除（非隐藏）展开键"
+    # 检测必须在 display:flex 之后（display:none 下两值恒 0 会误杀全部按钮）
+    assert body.index("root.style.display = 'flex'") \
+        < body.index("scrollHeight"), \
+        "折叠检测必须位于显示之后（display:none 下判据失效）"
+
+
+def test_batch_fix_run_uses_structured_preview():
+    """batchFixRun 改调 AppModal.batchFixPreview：不再 slice(0,10) 截断、
+    分类明细按数量降序（设计取舍）、全文 textMap 取自 lastGuideData；
+    AppModal.confirm 其余调用点数量不变（app.js 7 处）。"""
+    src = _app_js_source()
+    caller = _extract_function(src, "batchFixRun")
+    assert "AppModal.batchFixPreview(" in caller, "须改调结构化弹窗"
+    assert "AppModal.confirm" not in caller, \
+        "批量修复确认不得回退纯文本 confirm"
+    assert "slice(0, 10)" not in caller, "预览列表不得只列前 10 条"
+    assert "slice(0, 50)" in caller, "50 条单批上限逻辑必须保留"
+    assert "lastGuideData" in caller, "全文 textMap 须取自已加载导读"
+    assert "catCount[b] - catCount[a]" in caller, \
+        "分类明细必须按数量降序（设计取舍，非字母序）"
+    assert "Number.isFinite(k)" in caller, "textMap 键须 Number 强转守卫"
+    # confirm 其余调用点零变化（原 7 处，本件只迁走批量修复一处→余 6）
+    assert src.count("AppModal.confirm(") == 6, \
+        "AppModal.confirm 调用点数量漂移（本件只允许迁走批量修复一处）"
+
+
+def test_batch_fix_preview_msg_and_css_pinned():
+    """新 MSG 键存在；死键清理（batchFixPreviewMore 仅原弹窗一处消费，
+    batchFixCats 被 chips 取代）；style.css bfp 族在位且全 token 零硬编码色。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    for key in ("batchFixConfirmOk", "batchFixExpand", "batchFixCollapse",
+                "batchFixExcerptOnly", "batchFixPreviewHead",
+                "batchFixEstimate", "batchFixProvider", "batchFixCapHit",
+                "batchFixCloudCost"):
+        assert key in keys, f"MSG 缺少 2.7.4 件3 键: {key}"
+    for dead in ("batchFixPreviewMore", "batchFixCats"):
+        assert dead not in keys, f"2.7.4 件3 死键残留: {dead}"
+        assert f"MSG.{dead}" not in src, f"死键仍有消费点: {dead}"
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    block = css[css.index(".bfp-meta {"):]
+    for cls in (".bfp-meta-row", ".bfp-meta-warn", ".bfp-cats",
+                ".bfp-list-title", ".bfp-list", ".bfp-item",
+                ".bfp-item-head", ".bfp-idx", ".bfp-timing", ".bfp-trunc",
+                ".bfp-text", ".bfp-toggle", ".bfp-cat-chip",
+                ".bfp-cat-warn", ".bfp-cat-primary", ".bfp-cat-danger",
+                ".bfp-cat-neutral"):
+        assert cls in block, f"style.css 缺少 {cls}"
+    # 折叠机制（二发修订）：max-height 无引擎依赖（-webkit-line-clamp 在
+    # Chromium 146 实测被重映射为 flow-root 整体失效，禁回退）+ 底部渐隐
+    # mask 提示截断（mask 色用 black 关键字，块内零 hex 硬编码）
+    assert "max-height: calc(3 * 1.55em)" in block, "现译默认 3 行折叠缺失"
+    assert "-webkit-line-clamp" not in block, \
+        "line-clamp 三件套残留（Chromium 146 下失效的死特性）"
+    assert "mask-image" in block and "-webkit-mask-image" in block, \
+        "折叠态底部渐隐 mask 缺失（截断可感知）"
+    assert ".bfp-text.bfp-open" in block and "max-height: none" in block, \
+        "展开态解除折叠缺失"
+    assert ".bfp-text.bfp-open" in block, "展开态解除折叠缺失"
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", block), \
+        "bfp 样式块出现硬编码色值（必须全 var() token，暗色自动适配）"

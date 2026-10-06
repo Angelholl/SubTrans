@@ -558,10 +558,15 @@ const MSG = {
     batchFixBtn: '一键修复建议',
     batchFixConfirmTitle: '确认执行批量修复？',
     batchFixPreviewHead: '将修复以下条目：',
-    batchFixPreviewMore: n => `…其余 ${n} 条省略`,
+    // 2.7.4 件3（D2026-1007-01）：预览改结构化弹窗（AppModal.batchFixPreview），
+    // 全条目渲染不再省略（batchFixPreviewMore 删除）、分类明细改 chips
+    // （batchFixCats 删除）；下列为弹窗新增 JS 态键
+    batchFixConfirmOk: '开始修复',
+    batchFixExpand: '展开全文',
+    batchFixCollapse: '收起',
+    batchFixExcerptOnly: '仅摘录，完整译文未加载',
     batchFixEstimate: n => `预估调用：翻译 ${n} 次 + 复验全片 AI 分析 1 次`,
     batchFixProvider: p => `修复服务商：${p}`,
-    batchFixCats: c => `分类明细：${c}`,
     batchFixCloudCost: '当前修复服务商为云端（按量计费）；发送内容为字幕文本与词条上下文，不含音视频。',
     batchFixCapHit: (n, total) => `待修共 ${total} 条，单批上限 50：本次修前 ${n} 条（按序），确认后可再次发起处理余量`,
     batchFixNoItems: '当前导读没有可自动修复的待修条目（或均已修过）',
@@ -1682,6 +1687,173 @@ const AppModal = {
                 const body2 = root.querySelector('.modal-body');
                 if (body2) body2.classList.remove('mp-body');
                 if (okBtn) okBtn.style.display = '';
+                resolve(value);
+            };
+        });
+    },
+
+    // ============================================================
+    // 批量修复确认框（2.7.4 件3，D2026-1007-01）：结构化确认弹窗，取代
+    // batchFixRun 原纯文本 AppModal.confirm（slice(0,10) 只列前 10 条）。
+    // 复用 #appModal 骨架 + dataset.bound 一次性绑定（download 先例；
+    // 绑定块与 _open confirm 同款：Enter=确认/ESC=取消/遮罩=取消）；
+    // kind='batchfix' 不命中 _settle 任何阻塞分支（_dlRunning/_edSaving
+    // 仅 download/editor kind），关闭永不阻塞。
+    // 结算三态（钉）：确认键/Enter=resolve(true)；取消键/ESC/遮罩点击=
+    // resolve(false)；_busy 重入=立即 resolve(false)（单例不叠加）。
+    // 布局：.modal-lg 配方（编辑器同款）——.bfp-meta/.bfp-cats 固定不
+    // 滚动，仅 .bfp-list 滚动（flex:1;min-height:0;overflow-y:auto），
+    // 按钮区在 .modal-card 弹性列内恒可见（窄窗滚到底确认键仍在）。
+    // 列表容器零键盘监听：不拦截 keydown/不 stopPropagation，Enter/Esc
+    // 语义保持 document 全局（列表滚动由鼠标滚轮承载）。
+    // 现译全文：texts 由调用方从 lastGuideData.items 构建（前端经
+    // read_output_artifact 已持有导读 json；后端 action_items 摘录限长
+    // 仅约束回包形状）——按 Number(it.index) 强转匹配（后端 idx 非 int
+    // 回 null，先判 null 再强转防 Number(null)=0 陷阱），查无全文回退
+    // it.excerpt 并带「仅摘录」标记；DOM 放全文不 JS 切字符串（防代理对
+    // 切半），CSS max-height 3 行折叠（底部渐隐 mask 提示截断；Chromium
+    // 146 实测 -webkit-line-clamp 被重映射为 flow-root 失效，故弃用）
+    // + 逐条展开/收起键 + title 悬停全文。
+    // opts = {title, okText?, meta:[{text,warn?}], cats:[{cat,count}],
+    //         head, items:[{index,category,timing,excerpt}], texts:{idx:text}}
+    // body 全 createElement 注入（FROZEN_IDS 冻结：零新增 id/data-i18n）；
+    // 关闭自清理 modal-lg/whiteSpace（editor 同款，防污染后续 confirm）。
+    // ============================================================
+    batchFixPreview(opts) {
+        if (this._busy) return Promise.resolve(false);      // 重入=取消结算
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve(false);           // 骨架缺席兜底
+        const o = opts || {};
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = o.title || '';
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';   // .modal-card .modal-body 默认 pre-wrap
+        const card = root.querySelector('.modal-card');
+        if (card) card.classList.add('modal-lg');
+        input.style.display = 'none';
+        okBtn.style.display = '';
+        okBtn.textContent = o.okText || MSG.ui_ok;
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                if (e.target === root) AppModal._settle(AppModal._cancelValue());
+            });
+            okBtn.addEventListener('click', () => {
+                AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
+            });
+            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
+            document.addEventListener('keydown', (e) => {
+                if (!AppModal._busy) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
+                }
+            });
+        }
+
+        const el = (tag, cls, text) => {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text != null) n.textContent = text;
+            return n;
+        };
+        // 分类色系（复用既有 token 族，非映射类回退中性灰）：
+        // cps_too_fast=警示 / untranslated=主色 / antonym_yamete=危险
+        const catCls = (c) => (c === 'cps_too_fast' ? ' bfp-cat-warn'
+            : c === 'untranslated' ? ' bfp-cat-primary'
+            : c === 'antonym_yamete' ? ' bfp-cat-danger' : ' bfp-cat-neutral');
+
+        // —— 头部非滚动元信息区（预估调用/服务商/云端成本/超上限提示）——
+        const metaBox = el('div', 'bfp-meta');
+        (o.meta || []).forEach((m) => {
+            metaBox.appendChild(el('div',
+                'bfp-meta-row' + (m.warn ? ' bfp-meta-warn' : ''), m.text));
+        });
+        body.appendChild(metaBox);
+
+        // —— 分类明细 chips（调用方已按数量降序排列）——
+        const catBox = el('div', 'bfp-cats');
+        (o.cats || []).forEach((c) => {
+            catBox.appendChild(el('span',
+                'bfp-cat-chip' + catCls(c.cat), c.cat + ' ' + c.count));
+        });
+        body.appendChild(catBox);
+
+        if (o.head) body.appendChild(el('div', 'bfp-list-title', o.head));
+
+        // —— 可滚动列表：全部条目渲染，零 slice 截断 ——
+        const texts = o.texts || {};
+        const listBox = el('div', 'bfp-list');
+        (o.items || []).forEach((it) => {
+            const idx = (it.index == null) ? null : Number(it.index);
+            const full = (idx != null
+              && Object.prototype.hasOwnProperty.call(texts, idx))
+              ? String(texts[idx]) : null;
+            const text = full != null ? full : String(it.excerpt || '');
+            const item = el('div', 'bfp-item');
+            const head = el('div', 'bfp-item-head');
+            head.appendChild(el('span', 'bfp-idx', '#' + it.index));
+            head.appendChild(el('span',
+                'bfp-cat-chip' + catCls(it.category), it.category));
+            const timing = el('span', 'bfp-timing', it.timing || '');
+            timing.title = it.timing || '';
+            head.appendChild(timing);
+            if (full == null) {
+                head.appendChild(el('span', 'bfp-trunc', MSG.batchFixExcerptOnly));
+            }
+            item.appendChild(head);
+            const txt = el('div', 'bfp-text', text);
+            txt.title = text;               // 悬停全文（折叠态可取全文）
+            item.appendChild(txt);
+            const toggle = el('button', 'btn btn-ghost btn-compact bfp-toggle',
+                MSG.batchFixExpand);
+            toggle.type = 'button';
+            toggle.addEventListener('click', () => {
+                const open = txt.classList.toggle('bfp-open');
+                toggle.textContent = open
+                  ? MSG.batchFixCollapse : MSG.batchFixExpand;
+            });
+            item.appendChild(toggle);
+            listBox.appendChild(item);
+        });
+        body.appendChild(listBox);
+
+        this._busy = true;
+        this._kind = 'batchfix';
+        root.style.display = 'flex';
+
+        // —— 收尾 pass：移除未实际折叠条目的展开键（短文本按钮噪音清理，
+        // 2.7.4 件3 黑盒走查修订）——判据 scrollHeight > clientHeight + 1
+        // （max-height 折叠生效时 clientHeight 被钉在 3 行高度、scrollHeight
+        // 反映全文高度，该判据可靠）。须在 display:flex 之后测：display:none
+        // 下两值恒 0，判据失效会误杀全部按钮。取舍：仅本渲染 tick 检测一次
+        // （本地系统字体无 FOUT，同 tick 内读取即强制同步布局）；弹窗会话内
+        // 不随宽度变化重新检测——窄窗拖宽后新达标条目残留按钮属极端场景
+        // 可接受（title 悬停仍可读全文），已折叠条目展开/收起往复后按钮
+        // 恒保留（不二次检测）。
+        listBox.querySelectorAll('.bfp-item').forEach((row) => {
+            const txt = row.querySelector('.bfp-text');
+            const toggle = row.querySelector('.bfp-toggle');
+            if (txt && toggle && txt.scrollHeight <= txt.clientHeight + 1) {
+                toggle.remove();        // 移除而非隐藏（DOM 干净，无死节点）
+            }
+        });
+
+        okBtn.focus();
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                // 自清理（editor 同款）：modal-lg/whiteSpace 复位，
+                // 防污染后续 alert/confirm/prompt
+                if (card) card.classList.remove('modal-lg');
+                body.style.whiteSpace = '';
                 resolve(value);
             };
         });
@@ -4939,24 +5111,34 @@ function switchTab(tabId) {
     batch.forEach(it => {
       catCount[it.category] = (catCount[it.category] || 0) + 1;
     });
-    const catsText = Object.keys(catCount).sort()
-      .map(c => c + '（' + catCount[c] + '）').join('、');
-    const lines = batch.slice(0, 10).map(it =>
-      '#' + it.index + ' [' + it.category + '] ' + it.timing
-      + ' ｜ ' + (it.excerpt || '（无摘录）'));
-    if (batch.length > 10) {
-      lines.push(MSG.batchFixPreviewMore(batch.length - 10));
-    }
-    const body = [
-      MSG.batchFixEstimate(batch.length),
-      MSG.batchFixProvider(provLabel),
-      MSG.batchFixCats(catsText),
-      cloud ? MSG.batchFixCloudCost : '',
-      capNote,
-      MSG.batchFixPreviewHead,
-      lines.join('\n'),
-    ].filter(Boolean).join('\n\n');
-    const go = await AppModal.confirm(MSG.batchFixConfirmTitle, body);
+    // 分类明细按数量降序（设计取舍：主要问题类前置，原字母序弱化主次
+    // ——2.7.4 件3 D2026-1007-01）
+    const cats = Object.keys(catCount)
+      .sort((a, b) => catCount[b] - catCount[a])
+      .map(c => ({ cat: c, count: catCount[c] }));
+    // 现译全文取自已加载导读（lastGuideData 经 read_output_artifact 持有；
+    // 后端 action_items 摘录限长仅约束回包形状）——Number 强转匹配，
+    // index 非 int 的条目查无全文自动回退摘录并带标记（弹窗内处理）
+    const textMap = {};
+    ((lastGuideData && lastGuideData.items) || []).forEach((g) => {
+      if (!g || g.current_text == null) return;
+      const k = Number(g.index);
+      if (Number.isFinite(k)) textMap[k] = String(g.current_text);
+    });
+    const go = await AppModal.batchFixPreview({
+      title: MSG.batchFixConfirmTitle,
+      okText: MSG.batchFixConfirmOk,
+      meta: [
+        { text: MSG.batchFixEstimate(batch.length) },
+        { text: MSG.batchFixProvider(provLabel) },
+        cloud ? { text: MSG.batchFixCloudCost, warn: true } : null,
+        capNote ? { text: capNote, warn: true } : null,
+      ].filter(Boolean),
+      cats: cats,
+      head: MSG.batchFixPreviewHead,
+      items: batch,
+      texts: textMap,
+    });
     if (!go) return;
     const btn = $('refineBatchFixBtn');
     if (btn) btn.disabled = true;

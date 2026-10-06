@@ -2460,8 +2460,9 @@ class TranslateAPI:
     def refine_guide_action_items(self, guide_path: str) -> dict[str, Any]:
         """读导读 json 行动条目并标记台账已修状态（幂等守卫数据源）。
 
-        只回元数据与短摘录（现译前 20 字），不回全量文本（出域面最小化，
-        威胁模型-质量闭环-d1002 §1）。"""
+        只回元数据与短摘录（现译前 20 字），不回全量文本。摘录限长仅约束
+        后端回包形状；GUI 确认框展示全文来自其已持有的导读 json
+        （read_output_artifact），实际暴露面不变（D2026-1007-01）。"""
         try:
             p, stem, guide, err = self._load_validated_guide(guide_path)
             if err is not None:

@@ -2486,3 +2486,68 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     .modal-card.modal-lg { width: 96vw; max-height: 92vh; }
     .editor-ta-wrap { min-height: 180px; }
 }
+
+/* ============================================================
+   2.7.4 件3（D2026-1007-01）：批量修复确认框（AppModal.batchFixPreview）
+   复用 .modal-card.modal-lg 弹性列配方：元信息/分类行 flex-shrink:0 固定，
+   仅 .bfp-list 滚动（flex:1;min-height:0），底部按钮区（.modal-actions，
+   弹性列内）恒可见——窄窗滚到底确认键仍在（验收项）。
+   全部取色走既有 design token（var()），暗色主题经变量自动生效，零硬编码色值。
+   ============================================================ */
+.bfp-meta { display: flex; flex-direction: column; gap: var(--space-1); flex-shrink: 0; }
+.bfp-meta-row {
+    display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+    font-size: var(--font-sm); color: var(--text-1); word-break: break-word;
+}
+.bfp-meta-warn { color: var(--status-warn); font-size: var(--font-xs); }
+.bfp-cats {
+    display: flex; align-items: center; gap: var(--space-2);
+    flex-wrap: wrap; flex-shrink: 0;
+}
+.bfp-list-title { font-size: var(--font-sm); font-weight: 600; color: var(--text-1); flex-shrink: 0; }
+.bfp-list {
+    flex: 1; min-height: 0; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: var(--space-1) 0; user-select: text;
+}
+.bfp-item {
+    display: flex; flex-direction: column; gap: var(--space-1);
+    padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border);
+}
+.bfp-item:last-child { border-bottom: none; }
+/* 头行 flex-wrap：618 窄窗下 timing 折行不破版 */
+.bfp-item-head {
+    display: flex; align-items: center; gap: var(--space-2);
+    flex-wrap: wrap; min-width: 0;
+}
+.bfp-idx { font-family: var(--font-mono); font-size: var(--font-xs); font-weight: 600; color: var(--text-1); flex-shrink: 0; }
+.bfp-timing {
+    font-family: var(--font-mono); font-size: var(--font-xs); color: var(--text-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0; flex: 1 1 auto;
+}
+.bfp-trunc { font-size: var(--font-xs); color: var(--status-warn); font-weight: 600; flex-shrink: 0; }
+/* 现译全文进 DOM，默认 max-height 3 行折叠 + 底部渐隐 mask（截断可感知）。
+   引擎修订（2.7.4 件3 黑盒走查二发）：旧 webkit line-clamp 三件套在
+   Chromium 146（IAB/Electron 及真机 WebView2 同代）实测被重映射为
+   flow-root 而整体失效，改用无引擎依赖的 max-height——行高取正文
+   1.55 倍率（style.css body 同值，项目无 --line-height token）× 3 行，
+   em 随 .bfp-text 自身 font-xs 字号计算 */
+.bfp-text {
+    font-size: var(--font-xs); line-height: 1.55; color: var(--text-2); word-break: break-word;
+    max-height: calc(3 * 1.55em); overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+}
+/* 展开态解除折叠与渐隐（button 切换 .bfp-open；title 悬停恒有全文兜底） */
+.bfp-text.bfp-open { max-height: none; -webkit-mask-image: none; mask-image: none; }
+.bfp-toggle { align-self: flex-start; }
+/* 分类 chip 族（复用既有 token 色系：警示/主色/危险/中性，非映射类回退中性） */
+.bfp-cat-chip {
+    font-size: var(--font-xs); font-weight: 600; padding: 1px var(--space-2);
+    border-radius: var(--radius-pill); white-space: nowrap; flex-shrink: 0;
+}
+.bfp-cat-warn    { color: var(--status-warn); background: var(--warn-soft); }
+.bfp-cat-primary { color: var(--primary-strong); background: var(--primary-soft); }
+.bfp-cat-danger  { color: var(--danger); background: var(--danger-soft); }
+.bfp-cat-neutral { color: var(--text-2); background: var(--surface-3); }
