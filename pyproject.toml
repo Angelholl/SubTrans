@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "subtransjav"
-version = "2.7.4.dev0"
+version = "2.7.4"
 description = "Standalone two-stage (v2) SRT subtitle translation (net-speech refine pipeline) extracted from SubTransJAV"
 readme = "README.md"
 license = {text = "MIT"}
