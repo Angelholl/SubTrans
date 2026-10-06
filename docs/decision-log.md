@@ -3037,3 +3037,24 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 - **验证链**：ruff+mypy 零漂移；定向 341 passed；全量 **1996+4**（基线 1973+4 只增，净增 23）；Mimosa deep **36=基线零新增** seal ccfedcc1e769…25b1；**flake 第 5 例**：test_gate0_summary_payload_and_disposal_section_contract 全量首跑单败、单跑恒绿（与第 3 例 test_file_parallel_disabled_for_local_providers 同型互踩，横切观察项累计；两次全量各自单败一例且互异、单跑全绿）。
 - **件⑨ 阶段B 预检 TTL 卸载缓解（owner 真机现场拍板并入 2.7.3，a471408）**：owner 今日批量 9 文件「成功 8 / 失败 1」——mufr-006 阶段A（TM 命中高仅 2 分钟）恰好把审校模型 heretic-apex 的空闲时间顶过 LM Studio TTL 线（最后使用 05:41:44），05:44:32 阶段B 预检 `_loaded_ids` 查无此模型，自动加载通道全不可用（无 lms CLI+JIT 未开）→失败跳过；GUI chip 卡「翻译中」=2.7.2 files 缺 failed 态伴生 bug（件⑧已修，失败可见性恢复）。**owner 两问裁定**：①伴生 bug 修复≠场景不可复现（引擎侧失败行为 2.7.3 未改，仅由静默转可见）；②缓解不占 GPU（纯 HTTP 查 state，不发起推理、不干预 LM Studio TTL 生命周期）→拍板直接加入 2.7.3 一起发版。落法=ensure_lmstudio_model 无 CLI 分支前有限等待复查（3×15s 常量，不进 CLI 参数面）：命中手动加载自动续跑（ctx 失配告警放行——救回意图优先于对齐严格）；超时落回现行失败+已等待时长；CLI 存在/未下载/不可达零变化；等待窗口内 state 查询抖动按续查（coding 保守取舍采纳）。4 用例钉（恢复成功含 ctx 告警/超时/有 CLI 零变化/未下载不等待）。验证链：ruff+mypy 零漂移；定向 67；全量 **2000+4**（基线 1996+4 只增；首跑单败一例复跑恒绿=互踩型 flake 同型）。
 - **待 owner**：真机走查 2.7.3 九件（重点：翻译期 Console 流动性+活动流真实场景+无乱码+启动链日志/徽章/预热齐全+TTL 缓解人话行）→件② HF 点亮→发版 SOP 排期（owner 令后启动）。
+
+## [2026-10-07] [D2026-1007-01] 2.7.4 第一批定版：真机走查三反馈四件（件1 导读页可读性 / 件2 媒体路径自动推断 / 件3 批修复确认框完整化 / 件4 TM 入库埋点观察）[已定版·执行中]
+
+**一、决策背景**：owner 真机走查（第五次测试，E:\死字幕\新建文件夹\五次测试）三反馈——①质量导读页加载后杂乱难读：顶部两个「已加载」长路径块挤爆卡头（#guideCustomStatus 与 #guideStatus 两独立状态槽各写一遍同一路径且无省略样式，app.js:4535-4536）+章节导读 sections 平铺 dt/dd 连排一大块（每项仅 {title,note}，quality_report.py:1387-1396+_SECTION_NOTES）；试听报「导读未包含媒体路径」且留 00:00/00:00 空播放器条（根因：resolve_media_path 两来源（--media-path/manifest 配对）全空时 guide json media_path 两键整体缺席 quality_report.py:1494-1496，前后端均无同目录推断兜底；空条=错误元素嵌播放器条内且浮层先行展开 app.js:4665）。②批量修复确认框只列 10 条「其余 25 条略」（前端 slice(0,10) app.js:4944-4959）且单条摘录 20 字截断（后端 refine_guide_action_items cur[:20] 出域面设计 api.py:2463；全文在 guide json items[].current_text 前端已持有——展示限制非数据缺失）。③TM 建议词条「やめて。やめねぇよ。」疑两句拼接未识别（查证=quality_advisor LLM 输出原样透传，代码无拼行/拆行逻辑，行为符合设计；antonym flagged 对本就被挡在自动 TM 学习外）。
+
+**二、评议轨迹**：decision-critic 首轮三连挂（模型请求故障）→general-purpose 代位首轮（有条件支持+**HR-1**=guide json 后缀实况 `_质量报告导读.json` 三处钉死且内嵌终稿 SRT stem 而非媒体名，须复用 asr_meta._strip_stem_suffixes 剥链——「去一个后缀即得媒体主名」前提错误已采纳修订）→连通性测试后正式 critic 二轮（有条件支持+5 条件）→owner 7 条修订（其中推翻 2 条：件1 DOM 迁移改独立错误槽、时长守卫 fail-open 改 fail-closed）→critic 三轮终版表决：**7 条全部接受、撤回 fail-open（论证=误拒有手动出口代价不对称；与「ffprobe 缺失乐观 direct」类型不同不冲突——codec 探测是播放模式决策、时长守卫是信任路径决策），无残余 HRO**。设计师（design-expert 本尊）出逐区域规格+自包含原型（docs/design/2026-1007-guide-batch-ux/prototype.html，双主题+618 窄窗已验证）；交叉对审无实质冲突。
+
+**三、owner 拍板终版（2026-10-07，7 条修订全文）**：
+1. 件2 触发条件扩展：不自动覆盖已有路径，但已有路径失效（视频被移动/改名/删除）时失败提示里必须给显式「重新自动匹配」按钮，复用同一套同目录精确匹配逻辑。
+2. 不回写 json（管线生成物再生成即覆盖），但手动指定本批就做 GUI 配置持久化——按导读 json 路径记键值存 GUI 自有配置（既有 refine_stage_settings.json 同款机制）。
+3. 件3 反对 120 字硬截断：全量可滚动/超长默认折叠「展开全文」（不丢数据）；回退现摘录时明确提示「仅摘录，完整译文未加载」。
+4. 件1 错误呈现改独立错误槽：不迁移播放器条内部 DOM——新增独立错误区域（动态注入稳定容器，no_guide 态可见、z-index 高于浮层条），三处报错分支直接写新槽；旧播放器条内错误元素废弃/隐藏不参与显示、不删（避 FROZEN 解冻）。
+5. 件4 展示标注砍掉，但 TM 入库层加最小非阻断埋点/日志（词条含多个句末标点或异常长度只记日志，不展示不阻断不改行为）。
+6. 执行顺序改 件3→件1→件2（先拿确定收益、再碰状态机）。
+7. 验收口径加分支：件2 第六分支=已有路径但文件失效/ffprobe 失败必须拒绝自动采用并回退手动（不能「探测不了就先播」）；件1 加竞态（快速连点/关闭浮层后过期回调/停播保持）；件3 加键盘焦点/Esc 关闭/滚动到底确认按钮仍可见。
+
+**四、终版残余条件（评议员 7 项，随编码回归闭环）**：①件2 结构化失败标识 err_kind 区分 无候选/时长不符/无法验证/路径失效 四态（按钮不得靠中文文案匹配驱动）；②持久化四件=settings 内独立命名空间 media_auto_match 键+normcase 绝对路径键（复用 normalize_path_case）+优先级四层钉测（手动 override>guide 自带 media_path>持久化>会话推断）+不阻塞加载与上限清理；③件3 按行独立展开+current_text 缺失/空串同触发「仅摘录」提示+展开按钮键盘可达；④件1 新槽动态注入稳定容器/z-index>900/no_guide 可见+停播保持（player.src=''）+入口先清红字；⑤件4 埋点只记特征计数不记 TM 原文+debug 级+批量导入防刷屏；⑥件2 GUI 验证 web-gui-tester 竞态三场景；⑦件3 ESC/滚动到底确认可见钉。
+
+**五、执行状态（首笔归档时点）**：件3 已编码待验证链（AppModal.batchFixPreview 新方法 Promise\<bool\> 三态结算/全条目渲染零 slice/current_text 全文 line-clamp+逐条展开收起/回退摘录带标记/MSG 新增 batchFixConfirmOk·batchFixExpand·batchFixCollapse·batchFixExcerptOnly 四键+死键清理 batchFixPreviewMore·batchFixCats/分类 chips 数量降序/confirm 调用点 7→6 其余零触碰/api.py:2463 契约注释同批更新+威胁模型 §1 补记）；件1/件2 排序执行中。
+
+**六、风险跟踪**：件2 持久化优先级四层钉测+推断缓存失效时机（override/持久化变更）；件1 停播/竞态三场景 GUI 黑盒兜底；件4 埋点数据量观察（下批依据真机数据决定入库打标方案，roadmap 横切观察项已登记）；验证链照常（静态→定向→全量→冒烟→Mimosa 深扫比对基线 36 零新增；测试基线 2000+4 只增）+GUI 变更提交注明黑盒结果。

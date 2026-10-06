@@ -190,3 +190,4 @@
 - 审计积压 4 项挂起（2026-10-01 复核维持挂起，decision-log:1395；D2026-1001-03 收编）：v2_outputs "done" payload 消费端核查（触发=新增/改动消费端或结构时先核查）/ premerge_max_gap_s 移出指纹（触发=任一指纹/断点/恢复路径改动立项时先出兼容分析，无方案不得动指纹哈希面）/ tools 一次性脚本债务（笼统挂起）/ _pid_alive AccessDenied（psutil 硬依赖不可达，笼统挂起）
 - 首文件抽检历史观测（v1.3.0 时代，decision-log:1082）：考点=别停/クリ/部長で 误切；后续多轮实测无复发记录，触发=同类误切再现时复核
 - test_effective_dir_blacklist_falls_back windows 腿 flake 观测（2026-10-05，批4 CI 首现）：windows-3.13 单腿 AssertionError（tmp 路径竞速类），同 commit attempt 2 自愈全绿；本地 3.12 五连绿；与 2.6.5 候选B flake 同模式；**复发两次即升格为钉测试竞速修复专项，不逐次重跑**
+- TM 入库层多句/异常长词条埋点观察（D2026-1007-01 件4）：refine_ai_apply_tm 仅记特征计数（长度/句末标点数）不记 TM 原文、debug 级、不阻断不改行为；触发=真机死键/误配再现或埋点数据显著，届时再决定入库打标方案

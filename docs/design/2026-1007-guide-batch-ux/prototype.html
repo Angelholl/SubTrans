@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTrans 2.7.4 设计原型 · 导读页信息架构 + 批量修复确认框</title>
+<style>
+:root {
+    --bg:#F3F4F6; --surface:#FFFFFF; --surface-2:#F9FAFB; --surface-3:#F3F4F6;
+    --border:#E5E7EB; --border-strong:#D1D5DB;
+    --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+    --primary:#3B82F6; --primary-strong:#2563EB; --primary-soft:#EFF6FF; --primary-border:#BFDBFE;
+    --ok:#10B981; --ok-soft:#ECFDF5;
+    --warn:#F59E0B; --warn-soft:#FFFBEB;
+    --danger:#DC2626; --danger-soft:#FEF2F2; --danger-soft-hover:#FEE2E2; --danger-border:#FECACA;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    --shadow-md:0 2px 4px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.08);
+    --radius-sm:8px; --radius:12px; --radius-lg:16px; --radius-pill:999px;
+    --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+    --h-ctl:36px; --h-ctl-sm:30px;
+    --dur-fast:.12s; --dur:.15s;
+    --font:14px; --font-sm:13px; --font-xs:12px;
+    --font-mono:"Cascadia Code", Consolas, "JetBrains Mono", monospace;
+    --font-sans:-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --status-warn:#B26A00;
+}
+[data-theme="dark"] {
+    --bg:#0B0F17; --surface:#141821; --surface-2:#1A202B; --surface-3:#1F2530;
+    --border:#262D3B; --border-strong:#333C4D;
+    --text-1:#E5E7EB; --text-2:#9CA3AF; --text-3:#6B7280;
+    --primary:#60A5FA; --primary-strong:#3B82F6; --primary-soft:rgba(59,130,246,.14); --primary-border:rgba(96,165,250,.35);
+    --ok:#34D399; --ok-soft:rgba(16,185,129,.12);
+    --warn:#FBBF24; --warn-soft:rgba(245,158,11,.12);
+    --danger:#F87171; --danger-soft:rgba(239,68,68,.12); --danger-soft-hover:rgba(239,68,68,.22); --danger-border:rgba(248,113,113,.35);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 2px 4px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.4);
+    --status-warn:var(--warn);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family:var(--font-sans); font-size:var(--font); line-height:1.55;
+    color:var(--text-1); background:var(--bg); transition:background .25s ease, color .25s ease;
+}
+button { font-family:inherit; cursor:pointer; }
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:8px; }
+
+/* 顶部演示工具条（原型专用，不属于交付组件） */
+.proto-toolbar {
+    display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;
+    padding:10px 18px; background:var(--surface); border-bottom:1px solid var(--border);
+    font-size:var(--font-xs); color:var(--text-2);
+}
+.proto-toolbar .proto-title { font-weight:650; color:var(--text-1); font-size:var(--font-sm); }
+.proto-demo-ctl { display:flex; align-items:center; gap:var(--space-1); flex-wrap:wrap; }
+.proto-demo-ctl .ctl-label { font-weight:600; }
+.proto-demo-ctl .btn-sm { min-height:26px; padding:0 8px; }
+
+/* 按钮族 —— 照抄 style.css:811-865 */
+.btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    min-height:var(--h-ctl); padding:0 14px; font-size:var(--font-sm); font-weight:550;
+    border-radius:9px; border:1px solid transparent; background:transparent; color:var(--text-1);
+    transition:all var(--dur) ease; white-space:nowrap; cursor:pointer;
+}
+.btn:disabled { opacity:.45; cursor:not-allowed; }
+.btn-primary { background:var(--primary); color:#fff; box-shadow:0 1px 2px rgba(37,99,235,.3); }
+.btn-primary:hover:not(:disabled) { background:var(--primary-strong); }
+.btn-secondary { background:var(--surface); color:var(--text-1); border-color:var(--border-strong); }
+.btn-secondary:hover:not(:disabled) { background:var(--surface-2); }
+.btn-ghost { background:transparent; color:var(--text-2); }
+.btn-ghost:hover:not(:disabled) { background:var(--surface-3); color:var(--text-1); }
+.btn-sm, .btn-compact { min-height:var(--h-ctl-sm); padding:0 10px; font-size:var(--font-xs); border-radius:var(--radius-sm); }
+/* 质量页导读卡 —— 对齐 style.css:1657-1739 现有语言 */
+.page-wrap { display:flex; justify-content:center; padding:var(--space-4); }
+.guide-page { width:100%; max-width:880px; display:flex; flex-direction:column; gap:var(--space-3); }
+.section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); }
+.summary {
+    display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;
+    padding:var(--space-3) 18px; font-weight:650; font-size:var(--font); color:var(--text-1); cursor:pointer;
+    user-select:none;
+}
+.section-title-text { flex-shrink:0; }
+.guide-chevd { display:inline-flex; align-items:center; color:var(--text-3); transition:transform .2s ease; flex-shrink:0; }
+.det-closed .guide-chevd { transform:rotate(-90deg); }
+.section-content { padding:var(--space-2) 18px var(--space-3); display:flex; flex-direction:column; gap:var(--space-2); }
+.det-closed .section-content { display:none; }
+
+/* 媒体来源条（卡头折叠态 / 展开编辑态） */
+.media-source-bar {
+    display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;
+    padding:var(--space-2) 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface);
+}
+.summary .media-source-bar {
+    border:none; padding:0; background:transparent; flex-wrap:nowrap;
+    max-width:360px; min-width:0;
+}
+.media-source-label { font-size:var(--font-xs); font-weight:600; white-space:nowrap; color:var(--text-2); flex-shrink:0; }
+.media-source-tag { font-size:11px; padding:1px var(--space-2); border-radius:var(--radius-pill); white-space:nowrap; flex-shrink:0; }
+.media-source-tag.tag-auto   { color:var(--ok); background:var(--ok-soft); }
+.media-source-tag.tag-explicit{ color:var(--primary-strong); background:var(--primary-soft); }
+.media-source-tag.tag-none   { color:var(--status-warn); background:var(--warn-soft); }
+.media-source-path {
+    font-size:var(--font-xs); color:var(--text-2); flex:1; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.media-source-edit-row { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; padding:0 10px; }
+.form-input {
+    height:var(--h-ctl); padding:0 var(--space-3); border:1px solid var(--border-strong);
+    border-radius:9px; background:var(--surface); color:var(--text-1); font-size:var(--font-sm);
+}
+.grow { flex:1; min-width:0; }
+/* 状态行（两槽合一后的信息行） */
+.status-line {
+    display:flex; align-items:center; gap:var(--space-2); min-width:0;
+    font-size:var(--font-xs); color:var(--text-2); margin-bottom:var(--space-2);
+}
+.status-line .status-path {
+    font-family:var(--font-mono); font-size:11px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; max-width:100%; min-width:0;
+}
+.status-line.status-err { color:var(--danger); }
+.status-line.status-err .status-path { color:var(--danger); }
+.pv-ico-ok { color:var(--ok); display:inline-flex; flex-shrink:0; }
+.copy-btn { flex-shrink:0; margin-left:auto; }
+.copy-btn.copied { color:var(--ok); }
+.source-chip { display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--font-xs); padding:1px var(--space-2); border-radius:var(--radius-pill); color:var(--primary-strong); background:var(--primary-soft); flex-shrink:0; }
+
+/* 导读结构化块：区块重排（CSS order，零 DOM 移动） */
+.json-blocks { display:flex; flex-direction:column; gap:var(--space-4); }
+.json-blocks .lb-items      { order:1; }
+.json-blocks .lb-concl      { order:2; }
+.json-blocks .lb-sections   { order:3; }
+.json-blocks .lb-companions { order:4; }
+.json-blocks .lb-meta       { order:5; }
+.block-head { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+.block-title { font-size:var(--font-sm); font-weight:650; color:var(--text-1); }
+.block-title.main { font-size:var(--font); }
+.count-chip { font-size:var(--font-xs); font-weight:600; padding:1px var(--space-2); border-radius:var(--radius-pill); color:var(--text-2); background:var(--surface-3); flex-shrink:0; }
+.sect-toggle { background:none; border:none; display:inline-flex; align-items:center; color:var(--text-3); margin-left:auto; padding:2px; border-radius:var(--radius-sm); }
+.sect-toggle:hover { background:var(--surface-3); color:var(--text-1); }
+.sect-toggle.open .guide-chevd { transform:rotate(-180deg); }
+/* 行动条目 —— 页面主体（行内三段：头行 + 消息 + 现译） */
+.items-list { display:flex; flex-direction:column; gap:var(--space-1); margin-top:var(--space-2); }
+.guide-item {
+    border:1px solid var(--border); border-left:3px solid transparent;
+    border-radius:var(--radius-sm); background:var(--surface);
+    padding:var(--space-2) var(--space-3);
+    display:flex; flex-direction:column; gap:var(--space-1);
+}
+.guide-item:hover { background:var(--surface-2); }
+.guide-item.guide-item-missed { border-left-color:var(--warn); background:var(--warn-soft); }
+.item-head { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; min-width:0; }
+.idx-chip { font-family:var(--font-mono); font-size:var(--font-xs); font-weight:600; color:var(--text-1); flex-shrink:0; }
+.cat-chip { font-size:var(--font-xs); font-weight:600; padding:1px var(--space-2); border-radius:var(--radius-pill); white-space:nowrap; flex-shrink:0; }
+.cat-chip.cat-warn       { color:var(--status-warn);  background:var(--warn-soft); }
+.cat-chip.cat-primary    { color:var(--primary-strong); background:var(--primary-soft); }
+.cat-chip.cat-danger     { color:var(--danger); background:var(--danger-soft); }
+.cat-chip.cat-neutral    { color:var(--text-2); background:var(--surface-3); }
+.item-timing { font-family:var(--font-mono); font-size:var(--font-xs); color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.item-acts { display:flex; align-items:center; gap:var(--space-1); margin-left:auto; flex-shrink:0; }
+.item-msg { font-size:var(--font-sm); color:var(--text-1); word-break:break-word; }
+.item-cur { font-size:var(--font-xs); color:var(--text-3); word-break:break-word; }
+/* 结论 */
+.concl-list { margin:var(--space-2) 0 0; padding-left:20px; font-size:var(--font-sm); color:var(--text-2); }
+.concl-list li { margin:2px 0; }
+/* 章节导读 —— 分节卡片，默认折叠 */
+.sections-wrap { margin-top:var(--space-2); display:flex; flex-direction:column; gap:var(--space-2); }
+.sections-wrap.closed { display:none; }
+.section-card { border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-2); padding:var(--space-2) var(--space-3); }
+.section-card-title { font-size:var(--font-sm); font-weight:600; color:var(--text-1); }
+.section-card-note { font-size:var(--font-xs); color:var(--text-2); margin-top:2px; }
+/* 伴生 / meta：尾部降级 */
+.companions-list { margin:var(--space-1) 0 0; padding-left:20px; font-size:var(--font-xs); color:var(--text-3); }
+.lb-meta { font-size:var(--font-xs); color:var(--text-3); }
+.lb-companions .block-title { font-size:var(--font-xs); font-weight:600; color:var(--text-3); }
+/* 快速试听浮层（底部固定条 · 三态 is-loading / is-ready / is-error） */
+.audio-preview-bar {
+    position:fixed; left:0; right:0; bottom:0; z-index:900;
+    padding:var(--space-2) 14px; background:var(--surface); border-top:1px solid var(--border);
+    display:none;
+}
+.audio-preview-bar.show { display:block; }
+.audio-preview-error {
+    display:none; align-items:flex-start; gap:var(--space-2);
+    font-size:var(--font-xs); color:var(--danger); margin-bottom:var(--space-1);
+}
+.bar-error .audio-preview-error { display:flex; }
+.audio-preview-main { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.audio-preview-timing { font-size:var(--font-xs); color:var(--text-2); white-space:nowrap; font-family:var(--font-mono); }
+.audio-preview-main audio { flex:1; min-width:200px; height:32px; display:none; }
+.bar-ready .audio-preview-main audio { display:block; }
+.bar-loading .audio-preview-main audio, .bar-error .audio-preview-main audio { display:none; }
+.preview-loading-note { display:none; align-items:center; gap:var(--space-2); font-size:var(--font-xs); color:var(--text-2); }
+.bar-loading .preview-loading-note { display:flex; }
+.preview-ready-note { display:none; align-items:center; gap:var(--space-2); font-size:var(--font-xs); }
+.bar-ready .preview-ready-note { display:flex; }
+.preview-ready-note .media-source-tag { padding:0 var(--space-2); }
+.pv-close { margin-left:auto; }
+/* 批处理确认框（AppModal.batchFixPreview · 复用 modal-lg flex column 配方） */
+.modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000;
+    align-items:center; justify-content:center;
+}
+.modal-overlay.active { display:flex; }
+.modal-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-md); max-width:min(760px, 92vw); width:92vw;
+    max-height:88vh; display:flex; flex-direction:column; padding:var(--space-4) 20px 20px;
+    animation:modal-slide-in .2s ease;
+}
+@keyframes modal-slide-in { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+.modal-title { font-size:16px; font-weight:650; margin-bottom:var(--space-2); }
+.modal-body { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:var(--space-3); padding:0; }
+.modal-actions { display:flex; justify-content:flex-end; gap:var(--space-2); margin-top:var(--space-4); flex-shrink:0; }
+.bfp-meta { display:flex; flex-direction:column; gap:var(--space-1); flex-shrink:0; }
+.bfp-meta-row { display:flex; align-items:center; gap:var(--space-2); font-size:var(--font-sm); color:var(--text-1); flex-wrap:wrap; }
+.bfp-meta-row .meta-label { color:var(--text-3); flex-shrink:0; }
+.bfp-meta-row.cloud { color:var(--status-warn); font-size:var(--font-xs); }
+.bfp-meta-row.capnote { color:var(--status-warn); font-size:var(--font-xs); }
+.bfp-cats { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; flex-shrink:0; }
+.bfp-cat-chip { font-size:var(--font-xs); font-weight:600; padding:1px var(--space-2); border-radius:var(--radius-pill); }
+.bfp-list { flex:1; min-height:0; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:var(--space-1) 0; user-select:text; }
+.bfp-item { display:flex; flex-direction:column; gap:var(--space-1); padding:var(--space-2) var(--space-3); border-bottom:1px solid var(--border); }
+.bfp-item:last-child { border-bottom:none; }
+.bfp-item-head { display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
+.bfp-idx { font-family:var(--font-mono); font-size:var(--font-xs); font-weight:600; color:var(--text-1); flex-shrink:0; }
+.bfp-timing { font-family:var(--font-mono); font-size:var(--font-xs); color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.bfp-trunc { font-size:var(--font-xs); color:var(--text-3); font-weight:600; flex-shrink:0; }
+.bfp-excerpt { font-size:var(--font-xs); color:var(--text-2); word-break:break-word; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+/* 响应式（618px 视口先例） */
+@media (max-width: 768px) {
+    .summary .media-source-bar { flex-basis:100%; max-width:100%; flex-wrap:wrap; }
+    .section-content, .summary { padding-left:14px; padding-right:14px; }
+    .audio-preview-main audio { min-width:160px; }
+    .modal-card { width:96vw; max-height:92vh; }
+    .bfp-excerpt { -webkit-line-clamp:4; }
+}
+</style>
+</head>
+<body>
+<div class="proto-toolbar">
+    <span class="proto-title">2.7.4 设计原型 · 导读页信息架构 + 批量修复确认（真实数据演示）</span>
+    <span class="proto-demo-ctl">
+        <span class="ctl-label">演示：</span>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnTheme">切深色/浅色</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnMsNone">媒体缺失</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnMsAuto">已自动匹配</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnMsManual">已手动指定</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnPvFail">试听失败态</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnBatch">批量修复确认框（35 条）</button>
+    </span>
+</div>
+
+<div class="page-wrap">
+    <div class="guide-page">
+        <section class="section" id="guideCard">
+            <div class="summary" id="guideSummary">
+                <span class="guide-chevd" id="guideChevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                <span class="section-title-text" id="guideTitle">质量报告导读</span>
+                <div class="media-source-bar" id="mediaSourceBar">
+                    <span class="media-source-label">媒体来源</span>
+                    <span class="media-source-tag" id="mediaSourceTag"></span>
+                    <span class="media-source-path" id="mediaSourcePath" title=""></span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="mediaSourceToggleBtn">更换</button>
+                </div>
+                <span class="proto-demo-ctl" style="margin-left:auto">
+                    <button type="button" class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>打开其他质量报告导读</button>
+                    <button type="button" class="btn btn-ghost btn-sm">加载导读</button>
+                </span>
+            </div>
+            <div class="section-content" id="guideContent">
+                <div class="media-source-edit-row" id="mediaSourceEditRow" style="display:none">
+                    <input type="text" class="form-input grow" id="mediaOverrideInput" placeholder="输入媒体文件完整路径（等价 --media-path，仅本报告会话内生效）" autocomplete="off">
+                    <button type="button" class="btn btn-secondary btn-compact" id="mediaOverrideApplyBtn">应用</button>
+                    <span class="muted" id="mediaOverrideStatus"></span>
+                </div>
+                <div class="status-line" id="guideStatusLine">
+                    <span class="pv-ico-ok" id="guideStatusIcon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+                    <span class="status-path" id="guideStatusPath"></span>
+                    <button type="button" class="btn btn-ghost btn-sm btn-icon-only copy-btn" id="copyPathBtn" title="复制路径"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+                </div>
+                <div class="json-blocks" id="jsonBlocks">
+                    <div class="lb-items">
+                        <div class="block-head"><h4 class="block-title main" style="margin:0">行动条目</h4><span class="count-chip" id="itemCount">—</span></div>
+                        <div class="items-list" id="itemsList"></div>
+                    </div>
+                    <div class="lb-concl">
+                        <div class="block-head"><h4 class="block-title" style="margin:0">结论</h4><span class="count-chip" id="conclCount">—</span></div>
+                        <ul class="concl-list" id="conclList"></ul>
+                    </div>
+                    <div class="lb-sections">
+                        <div class="block-head"><h4 class="block-title" style="margin:0">章节导读</h4><span class="count-chip" id="sectCount">—</span><button type="button" class="sect-toggle" id="sectToggle" title="折叠/展开"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
+                        <div class="sections-wrap closed" id="sectionsWrap"></div>
+                    </div>
+                    <div class="lb-companions">
+                        <div class="block-head"><h4 class="block-title" style="margin:0">伴生文件</h4></div>
+                        <ul class="companions-list" id="companionsList"></ul>
+                    </div>
+                    <div class="lb-meta" id="lbMeta"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+<!-- 快速试听浮层（底部固定条 · 三态） -->
+<div class="audio-preview-bar" id="audioPreviewBar">
+    <div class="audio-preview-error" id="audioPreviewError">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+        <span id="audioPreviewErrorText"></span>
+    </div>
+    <div class="audio-preview-main">
+        <span class="audio-preview-timing" id="audioPreviewTiming"></span>
+        <span class="preview-loading-note"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>正在匹配媒体路径并定位片段…</span>
+        <span class="preview-ready-note">已自动匹配媒体路径 <span class="media-source-tag tag-auto">自动匹配</span></span>
+        <audio id="audioPreviewPlayer" controls></audio>
+        <button type="button" class="btn btn-ghost btn-sm pv-close" id="audioPreviewCloseBtn">关闭</button>
+    </div>
+</div>
+
+<!-- 批量修复确认框（AppModal.batchFixPreview 骨架演示） -->
+<div class="modal-overlay" id="appModal">
+    <div class="modal-card">
+        <div class="modal-title" id="modalTitle">确认执行批量修复？</div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" id="modalCancel">取消</button>
+            <button type="button" class="btn btn-primary" id="modalOk">开始修复</button>
+        </div>
+    </div>
+</div>
+<script>
+/* ============================================================
+   演示数据 —— 截图事实（owner 真机路径 / 分类分布 / 条目编号）
+   ============================================================ */
+const GUIDE_PATH = 'E:/死字幕/新建文件夹/五次测试/4k2.me@mida-559ja.merged.whisperjav_质量报告导读.json';
+const AUTO_MEDIA  = 'E:/死字幕/新建文件夹/五次测试/4k2.me@mida-559ja.merged.whisperjav.mp4';
+const MANUAL_MEDIA = 'E:/素材/mida-559ja.1080p.mp4';
+
+const CONCLUSIONS = [
+  '整体翻译完成度较高，日文对白基本全覆盖，未出现整段漏译。',
+  'cps_too_fast（语速过快）为主要问题类：20 处集中在对话密集场景，建议复核节奏与字幕断行。',
+  'untranslated（未翻译）14 处，均为短句或语气词残留，可批量复译处理。',
+  'antonym_yamete 1 处为情绪反转句误译，需人工裁决后落库术语。',
+  '伴生文件齐全（字幕/字词典/TM），媒体路径已自动匹配，试听功能可用。'
+];
+
+const SECTIONS = [
+  { title: '片头/标题（00:00:00-00:01:30）', note: 'OP 曲名与制作名单，无对白，无需关注。' },
+  { title: '第 1 话·登校（00:01:31-00:12:40）', note: '场景为早高峰电车，对话密集，cps_too_fast 集中区（#65/#112/#133）。' },
+  { title: '第 1 话·教室（00:12:41-00:21:05）', note: '教师讲解与同学闲聊交替；untranslated 短句残留集中于此段。' },
+  { title: '第 1 话·放学后（00:21:06-00:28:50）', note: '二人独处场景，语速平稳，仅有 1 处情绪反转句（#133 相关）。' },
+  { title: '第 2 话·社团（00:28:51-00:41:20）', note: '社团活动背景音较多，注意环境音与人声混叠。' },
+  { title: '第 2 话·雨夜（00:41:21-00:52:05）', note: '关键情节段，语气词残留密集，建议复核。' },
+  { title: '第 3 话·假日（00:52:06-01:04:30）', note: '场景切换频繁，含手机消息字幕。' },
+  { title: '片尾/预告（01:04:31-01:09:00）', note: 'ED 与下集预告，无对白。' }
+];
+
+const GUIDE_ITEMS = [
+  { index: 65,  category: 'cps_too_fast', timing: '00:02:14,520 --> 00:02:17,880', message: '对白语速过快，字幕停留过短，建议断行或放慢中译节奏。', cur: '对不起，非常抱歉打搅你了！', status: '待修' },
+  { index: 112, category: 'untranslated', timing: '00:08:41,000 --> 00:08:44,200', message: '源句保留原文未翻译（可能是语气词短句）。', cur: '不可自动重翻', status: '待修' },
+  { index: 133, category: 'antonym_yamete', timing: '00:11:05,300 --> 00:11:08,900', message: '反义句误译：「やめて」被译作肯定语气。', cur: '不，别这样……', status: '待修' },
+  { index: 189, category: 'cps_too_fast', timing: '00:17:52,100 --> 00:17:55,400', message: '连续三句对白共用一条字幕，建议拆分。', cur: '我知道了，马上就去准备！', status: '待修' },
+  { index: 269, category: 'untranslated', timing: '00:31:26,700 --> 00:31:28,150', message: '原文残留「あっ」未译。', cur: '不可自动重翻', status: '待修' },
+  { index: 432, category: 'cps_too_fast', timing: '00:47:03,900 --> 00:47:06,500', message: '背景音与人声混叠，字幕时间轴偏紧。', cur: '真的非常感谢你一直以来的照顾。', status: '待修' }
+];
+
+const CAT_SORT = ['cps_too_fast', 'untranslated', 'antonym_yamete'];
+const CAT_LABEL = { cps_too_fast: '语速过快', untranslated: '未翻译', antonym_yamete: '反义词误译' };
+const CAT_CLS  = { cps_too_fast: 'cat-warn', untranslated: 'cat-primary', antonym_yamete: 'cat-danger' };
+
+function catClass(c) {
+  return CAT_CLS[c] || 'cat-neutral';
+}
+function catClassForCls(c, base) {
+  return { warn: 'cat-warn', primary: 'cat-primary', danger: 'cat-danger' }[c] || 'cat-neutral';
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (m) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+
+/* 主题切换 */
+let theme = 'light';
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  $('btnTheme').textContent = theme === 'light' ? '切深色' : '切浅色';
+}
+$('btnTheme').addEventListener('click', () => { theme = theme === 'light' ? 'dark' : 'light'; applyTheme(); });
+/* ============================================================
+   导读页渲染（对齐 guideRender 语义，结构按本节设计规格分块）
+   ============================================================ */
+function renderguide() {
+  // 行动条目（主体区块，先渲染）
+  $('itemCount').textContent = GUIDE_ITEMS.length + ' 条';
+  $('itemsList').innerHTML = GUIDE_ITEMS.map((it) => (
+    '<div class="guide-item' + (it.category === 'suspected_missed_speech' ? ' guide-item-missed' : '') + '">'
+    + '<div class="item-head">'
+    + '<span class="idx-chip">#' + it.index + '</span>'
+    + '<span class="cat-chip ' + catClass(it.category) + '">' + esc(CAT_LABEL[it.category] || it.category) + '</span>'
+    + '<span class="item-timing">' + esc(it.timing) + '</span>'
+    + '<span class="item-acts">'
+    + '<button type="button" class="btn btn-ghost btn-sm btn-audio-preview" data-timing="' + esc(it.timing) + '">'
+    + '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>试听</button>'
+    + '</span></div>'
+    + '<div class="item-msg">' + esc(it.message) + '</div>'
+    + '<div class="item-cur">现译：' + esc(it.cur) + ' · ' + esc(it.status) + '</div>'
+    + '</div>'
+  )).join('');
+  // 结论
+  $('conclCount').textContent = CONCLUSIONS.length;
+  $('conclList').innerHTML = CONCLUSIONS.map((c) => '<li>' + esc(c) + '</li>').join('');
+  // 章节导读（默认折叠，辅助图例）
+  $('sectCount').textContent = SECTIONS.length;
+  $('sectionsWrap').innerHTML = SECTIONS.map((s, i) => (
+    '<div class="section-card">'
+    + '<div class="section-card-title">' + (i + 1) + '. ' + esc(s.title) + '</div>'
+    + '<div class="section-card-note">' + esc(s.note) + '</div>'
+    + '</div>'
+  )).join('');
+  // 伴生文件
+  $('companionsList').innerHTML = [
+    '<li>字幕 srt ✓</li>', '<li>词典 csv ✓</li>', '<li>翻译记忆库 json ✓</li>',
+    '<li>ASR 模型内嵌 ✗（未单独产出）</li>'
+  ].join('');
+  // meta 尾部
+  $('lbMeta').textContent = '生成于 2026-10-07 09:24 · 流水线 阶段A 净语+翻译 → 阶段B 审校+抛光';
+}
+/* ============================================================
+   媒体来源三态（缺失 / 已自动匹配 / 已手动指定）
+   ============================================================ */
+let mediaState = 'auto'; // none | auto | manual
+function setMediaState(s) {
+  mediaState = s;
+  const tag = $('mediaSourceTag');
+  const path = $('mediaSourcePath');
+  // 三态文案与 token 配色（对照 updateMediaSourceBar 4581-4600）
+  if (s === 'none') {
+    tag.textContent = '未包含媒体路径';
+    tag.className = 'media-source-tag tag-none';
+    path.textContent = '';
+    path.title = '';
+    $('guideStatusIcon').innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>';
+    $('guideStatusIcon').style.color = 'var(--status-warn)';
+    $('guideStatusPath').textContent = '媒体路径缺失：条目可查看但不可试听，请在「更换」中显式指定媒体文件路径';
+    $('guideStatusPath').title = '';
+  } else if (s === 'manual') {
+    tag.textContent = '显式指定';
+    tag.className = 'media-source-tag tag-explicit';
+    path.textContent = MANUAL_MEDIA;
+    path.title = MANUAL_MEDIA;
+    $('guideStatusIcon').innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    $('guideStatusIcon').style.color = '';
+    $('guideStatusPath').textContent = 'E:/死字幕/新建文件夹/五次测试/4k2.me@mida-559ja.merged.whisperjav_质量报告导读.json';
+    $('guideStatusPath').title = GUIDE_PATH;
+  } else {
+    tag.textContent = '已自动匹配';
+    tag.className = 'media-source-tag tag-auto';
+    path.textContent = AUTO_MEDIA;
+    path.title = AUTO_MEDIA;
+    $('guideStatusIcon').innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    $('guideStatusIcon').style.color = '';
+    $('guideStatusPath').textContent = '已加载：' + GUIDE_PATH;
+    $('guideStatusPath').title = GUIDE_PATH;
+  }
+}
+
+function copyPath() {
+  const text = $('guideStatusPath').title || $('guideStatusPath').textContent;
+  const btn = $('copyPathBtn');
+  const done = () => {
+    btn.classList.add('copied');
+    btn.title = '已复制';
+    setTimeout(() => { btn.classList.remove('copied'); btn.title = '复制路径'; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => done());
+  } else {
+    // 降级：无 clipboard 时以 title 全文悬停取用（对齐 AppModal.download 先例）
+    btn.title = '剪贴板不可用，全文见上方 title 悬停'; done();
+  }
+}
+$('copyPathBtn').addEventListener('click', copyPath);
+
+/* summary 折叠/展开 */
+let detOpen = true;
+function toggleDet() {
+  detOpen = !detOpen;
+  $('guideCard').classList.toggle('det-closed', !detOpen);
+}
+$('guideSummary').addEventListener('click', (e) => {
+  if (e.target.closest('button')) return;
+  toggleDet();
+});
+/* ============================================================
+   试听浮层三态（is-ready 成功 / is-error 失败 / is-loading 过渡）
+   ============================================================ */
+function setPreviewBar(state, opts) {
+  const bar = $('audioPreviewBar');
+  const o = opts || {};
+  bar.classList.remove('bar-ready', 'bar-error', 'bar-loading');
+  $('audioPreviewTiming').textContent = o.timing || '';
+  if (state === 'error') {
+    bar.classList.add('bar-error', 'show');
+    $('audioPreviewErrorText').textContent = o.message || '';
+  } else if (state === 'loading') {
+    bar.classList.add('bar-loading', 'show');
+  } else {
+    bar.classList.add('bar-ready', 'show');
+  }
+}
+function closePreview() {
+  $('audioPreviewBar').classList.remove('show', 'bar-ready', 'bar-error', 'bar-loading');
+  const p = $('audioPreviewPlayer'); p.pause(); p.removeAttribute('src');
+}
+$('audioPreviewCloseBtn').addEventListener('click', closePreview);
+
+/* 行动条目试听按钮（对齐 5465-5468 事件委托锚 .btn-audio-preview） */
+$('itemsList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-audio-preview');
+  if (!btn) return;
+  const timing = btn.dataset.timing || '';
+  if (mediaState === 'none') {
+    setPreviewBar('error', { timing, message: '导读未包含媒体路径，试听不可用；请在「媒体来源」中显式指定（下方状态行已提示）' });
+    return;
+  }
+  // 拿到可播放 src 前只展开 loading 行（空播放器不再出现）
+  setPreviewBar('loading', { timing });
+  setTimeout(() => {
+    if (mediaState === 'auto') {
+      // 自动匹配成功：ready 态 + 来源提示行/n
+      setPreviewBar('ready', { timing });
+    } else {
+      setPreviewBar('ready', { timing });
+    }
+  }, 900);
+});
+
+/* 试听失败态演示（工具栏按钮） */
+$('btnPvFail').addEventListener('click', () => {
+  setPreviewBar('error', { timing: '00:02:14,520 --> 00:02:17,880',
+    message: '试听失败：无法访问媒体文件，或文件已被移动/重命名' });
+});
+
+/* 媒体三态演示按钮 */
+$('btnMsNone').addEventListener('click', () => setMediaState('none'));
+$('btnMsAuto').addEventListener('click', () => setMediaState('auto'));
+$('btnMsManual').addEventListener('click', () => setMediaState('manual'));
+/* ============================================================
+   批量修复确认框（35 条 · 元信息区 + 分类明细 + 滚动列表）
+   ============================================================ */
+function genBatchItems() {
+  const items = [];
+  const add = (index, cat, timing, excerpt, trunc) => items.push({ index, cat, timing, excerpt, trunc });
+  const T = (h, m1, s1, m2, s2) => String(h).padStart(2, '0') + ':' + String(m1).padStart(2, '0') + ':' + String(s1).padStart(2, '0') + ',500 --> ' + String(h + 0).padStart(2, '0') + ':' + String(m2).padStart(2, '0') + ':' + String(s2).padStart(2, '0') + ',100';
+  // 超长摘录（cap 120 字截断示例）
+  const LONG = 'あの……本当にすみません、ここで待っていただいても、私がすぐ戻ってきますから、どうか少しだけ待っていてください。ここを離れると、また迷子になってしまうので、あなただけが頼りなんです……';
+  // cps_too_fast 20 条
+  const fastIdx = [65, 189, 432, 25, 78, 95, 157, 201, 240, 288, 331, 355, 398, 421, 487, 512, 544, 577, 609, 631];
+  fastIdx.forEach((n, i) => {
+    add(n, 'cps_too_fast', T(0, 2 + i, 14, 5 + i, 17),
+      n === 65 ? LONG : '对白语速过快，字幕停留过短，建议断行或放慢中译节奏。',
+      n === 65);
+  });
+  // untranslated 14 条
+  const unIdx = [112, 269, 18, 47, 73, 102, 146, 183, 214, 251, 302, 344, 380, 411];
+  unIdx.forEach((n, i) => {
+    add(n, 'untranslated', T(0, 8 + i, 41, 11 + i, 44),
+      '源句保留原文未翻译（可能是语气词短句）：「' + ['あっ', 'えっ', 'うん', 'そうだな', 'まあ', 'ちょっと', 'ねえ', 'ふむ', 'あれ', 'まさか', 'もしかして', 'どうしよう', 'よし', 'うわあ'][i] + '」');
+  });
+  // antonym_yamete 1 条
+  add(133, 'antonym_yamete', T(0, 11, 5, 14, 8), '反义句误译：「やめて」被译作肯定语气，应取否定义。');
+  return items;
+}
+const BATCH = genBatchItems();
+const BATCH_CATS = { cps_too_fast: 20, untranslated: 14, antonym_yamete: 1 };
+const BATCH_PROV = 'LM Studio';
+const BATCH_CLOUD = false;
+
+function renderBatchModal() {
+  const body = $('modalBody');
+  const parts = [];
+  parts.push('<div class="bfp-meta">');
+  parts.push('<div class="bfp-meta-row"><span class="meta-label">预估调用</span>翻译 35 次 + 复验全片 AI 分析 1 次</div>');
+  parts.push('<div class="bfp-meta-row"><span class="meta-label">修复服务商</span>' + (BATCH_CLOUD ? 'DeepSeek API' : 'LM Studio（本地 · 内容不出本机）') + '</div>');
+  if (BATCH_CLOUD) {
+    parts.push('<div class="bfp-meta-row cloud"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/></svg>当前修复服务商为云端（按量计费）；发送内容为字幕文本与词条上下文，不含音视频。</div>');
+  }
+  parts.push('<div class="bfp-meta-row capnote">待修共 35 条，单批上限 50：本次修前 35 条（按序），可一次完成。</div>');
+  parts.push('</div>');
+  parts.push('<div class="bfp-cats">');
+  Object.keys(BATCH_CATS).forEach((c) => {
+    parts.push('<span class="bfp-cat-chip ' + catClass(c) + '">' + esc(CAT_LABEL[c] || c) + ' ' + BATCH_CATS[c] + '</span>');
+  });
+  parts.push('</div>');
+  parts.push('<div class="bfp-list">');
+  BATCH.forEach((it) => {
+    parts.push('<div class="bfp-item">');
+    parts.push('<div class="bfp-item-head">');
+    parts.push('<span class="bfp-idx">#' + it.index + '</span>');
+    parts.push('<span class="cat-chip ' + catClass(it.cat) + '">' + esc(CAT_LABEL[it.cat] || it.cat) + '</span>');
+    parts.push('<span class="bfp-timing">' + esc(it.timing) + '</span>');
+    parts.push((it.trunc ? '<span class="bfp-trunc">[摘录过长，截断显示]</span>' : ''));
+    parts.push('</div>');
+    parts.push('<div class="bfp-excerpt">' + esc(it.excerpt) + '</div>');
+    parts.push('</div>');
+  });
+  parts.push('</div>');
+  body.innerHTML = parts.join('');
+}
+function openBatchFix() {
+  renderBatchModal();
+  $('appModal').classList.add('active');
+}
+function closeBatchFix() {
+  $('appModal').classList.remove('active');
+}
+$('btnBatch').addEventListener('click', openBatchFix);
+$('modalOk').addEventListener('click', closeBatchFix);
+$('modalCancel').addEventListener('click', closeBatchFix);
+$('appModal').addEventListener('click', (e) => {
+  if (e.target === $('appModal')) closeBatchFix();   // 遮罩取消
+});
+document.addEventListener('keydown', (e) => {
+  if ($('appModal').classList.contains('active')) {
+    if (e.key === 'Escape') { e.preventDefault(); closeBatchFix(); }
+    else if (e.key === 'Enter') { e.preventDefault(); closeBatchFix(); }
+  }
+});
+
+/* 媒体来源「更换」展开编辑行 */
+$('mediaSourceToggleBtn').addEventListener('click', () => {
+  const row = $('mediaSourceEditRow');
+  row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+});
+$('mediaOverrideApplyBtn').addEventListener('click', () => {
+  const val = ($('mediaOverrideInput').value || '').trim();
+  if (val) { setMediaState('manual'); $('mediaSourceEditRow').style.display = 'none'; }
+});
+
+/* 章节导读折叠按钮（sect-toggle.open 控制箭头） */
+$('sectToggle').addEventListener('click', () => {
+  $('sectionsWrap').classList.toggle('closed');
+  $('sectToggle').classList.toggle('open');
+});
+
+renderguide();
+setMediaState('auto');
+applyTheme();
+</script>
+</body>
+</html>
