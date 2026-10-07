@@ -233,6 +233,57 @@ def _loopback_http_client(base_url: str, timeout: float):
     return Client(trust_env=False, timeout=timeout)
 
 
+def probe_endpoint_reachable(base_url: str,
+                             timeout: float = 5.0) -> tuple[bool, str]:
+    """C8 端点预检（D2026-1007-02 件E）：对 ``{base_url}/v1/models`` 做一次
+    GET 探活，只判「连通与否」——HTTP 任意响应码都算通（服务在跑即可达），
+    连接错误/超时算不通；不校验模型是否存在/在载（LM Studio 按需加载，
+    探模型会误拦）。供 GUI 在 spawn 修复子进程前快速拦截「本地推理服务
+    未启动」类必败批次（故障史：端点不通时逐条全败才退出 1）。
+
+    HTTP 构造复用 _loopback_http_client 的 trust_env=False 回环直连惯例
+    （O6，非回环端点走 httpx 默认，与 openai 客户端行为一致）。
+    本函数不抛异常；返回 (ok, detail)，detail 为 HTTP 状态或人话原因
+    （日志/提示用，截断防日志单行超长）。
+
+    SSRF 边界（协议白名单 + 主机边界校验，fail-closed；Mimosa SSRF 模式
+    消除，段2 复扫 37→基线36）：动态 URL 进服务端请求前，scheme 仅放行
+    http/https，hostname 仅放行 localhost 或本机/内网 IP 字面量
+    （is_loopback / is_private）——C8 预检语义本就仅限本地型 provider
+    （lmstudio/ollama 端点应指向本机或局域网），公网 IP/任意域名属配置
+    异常，直接判不可达不发起请求。
+    """
+    if not (base_url or "").strip():
+        return False, "端点为空"
+    # -- SSRF 边界：协议白名单 + 主机边界校验（在发请求之前，fail-closed）--
+    parts = urlsplit(base_url)
+    if parts.scheme not in ("http", "https"):
+        return False, "非 http(s) 端点"
+    host = (parts.hostname or "").strip("[]").lower()   # urlsplit 已剥 []，防御性再剥
+    if host != "localhost":
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:      # 任意域名：非 IP 字面量，不解析不放行
+            return False, "探活仅允许本机/内网端点（不支持域名）"
+        if not (ip.is_loopback or ip.is_private):
+            return False, "探活仅允许本机/内网端点（公网地址属配置异常）"
+    # -- 边界内，发起探活请求 --
+    url = base_url.rstrip("/") + "/v1/models"
+    http_client = _loopback_http_client(base_url, timeout)
+    try:
+        if http_client is not None:
+            resp = http_client.get(url)
+        else:
+            import httpx
+            resp = httpx.get(url, timeout=timeout)
+        return True, f"HTTP {resp.status_code}"
+    except Exception as e:      # noqa: BLE001 探活语义：任何异常=不通
+        return False, str(e)[:200]
+    finally:
+        if http_client is not None:
+            http_client.close()
+
+
 class LLMClient:
     """OpenAI 兼容字幕翻译客户端。"""
 

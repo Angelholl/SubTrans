@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 import uuid
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -2183,6 +2184,12 @@ class TranslateAPI:
         "siliconflow": "--siliconflow-endpoint",
         "custom": "--custom-endpoint",
     }
+    # 本地型 provider（C8 预检覆盖面，D2026-1007-02 件E；与
+    # RefineConfig.resolve_api_key「lmstudio / ollama 本地服务」口径一致）：
+    # spawn 修复子进程前对其端点探活；云端 provider 一律跳过（行为不变）
+    _AI_LOCAL_PROVIDERS = ("lmstudio", "ollama")
+    # C8 探活超时（秒）：只判连通，超时=不通（宁误拦不放任 35 条逐条全败）
+    _ENDPOINT_PROBE_TIMEOUT_S = 5
     # 云端 provider → 子进程密钥环境变量名（与 RefineConfig.resolve_api_key、
     # start_translation 注入表一致；zen 走 OPENCODE_API_KEY）
     _AI_PROVIDER_KEY_ENV = {
@@ -2550,6 +2557,26 @@ class TranslateAPI:
             return []
         return data if isinstance(data, list) else []
 
+    def _ledger_top_reason(self, guide_dir: str, stem: str) -> str:
+        """C9（D2026-1007-02 件E）：台账失败 reason 主因（Counter top1，
+        截断 ≤200 字符）。跳过空/缺失 reason；台账缺失/损坏/读失败/无
+        有效 reason 一律返回 ""（降级为仅退出码文案），任何情况不抛异常。
+        复用 _read_ledger（fail-soft 返回 []），零新增读取通道。"""
+        try:
+            reasons: list[str] = []
+            for rec in self._read_ledger(guide_dir, stem):
+                if not isinstance(rec, dict):
+                    continue
+                reason = str(rec.get("reason") or "").strip()
+                if reason:
+                    reasons.append(reason)
+            if not reasons:
+                return ""
+            top, _count = Counter(reasons).most_common(1)[0]
+            return top[:200]
+        except Exception:
+            return ""
+
     def _suggestion_counts(self, guide_dir: str, stem: str) -> dict[str, int]:
         counts = {k: 0 for k in self._SUGGESTION_KEYS}
         try:
@@ -2721,6 +2748,31 @@ class TranslateAPI:
         cfg = self._resolve_fix_model_config()
         if not cfg.get("ok"):
             return {"success": False, "error": msg("fix_model_unconfigured")}
+        # C8 端点预检（D2026-1007-02 件E）：仅本地型 provider（provider 空
+        # = CLI 缺省 lmstudio，见 cli.config_from_args）在 spawn 前对其端点
+        # /v1/models 探一次连通性——端点不通时子进程逐条全败才退出 1（故障
+        # 史），探活秒级拦截。只判连通不校验模型在载（LM Studio 按需加载）；
+        # 端点缺省回退与 CLI --<provider>-endpoint 缺省同源
+        # （PROVIDER_ENDPOINT_DEFAULTS，cli.py 旗标 default 同值）。云端
+        # provider 一律跳过，行为与既往一致。探活实现在 provider 客户端
+        # 模块（llm_client.probe_endpoint_reachable，复用其回环直连 HTTP
+        # 惯例），本层只包薄调用，零新增网络/文件写读点（Mimosa 纪律）。
+        probe_provider = (str(cfg.get("provider") or "").strip().lower()
+                          or "lmstudio")
+        if probe_provider in self._AI_LOCAL_PROVIDERS:
+            endpoint = str(cfg.get("endpoint") or "")
+            if not endpoint:
+                from subtransjav.refine.config import PROVIDER_ENDPOINT_DEFAULTS
+                endpoint = PROVIDER_ENDPOINT_DEFAULTS.get(probe_provider, "")
+            from subtransjav.translate.llm_client import probe_endpoint_reachable
+            reachable, detail = probe_endpoint_reachable(
+                endpoint, timeout=self._ENDPOINT_PROBE_TIMEOUT_S)
+            if not reachable:
+                _log.warning("refine_batch_fix 端点预检失败: %s (%s)",
+                             endpoint, detail)
+                return {"success": False,
+                        "error": msg("fix_endpoint_unreachable",
+                                     endpoint=endpoint)}
         args = ["--action-retranslate", p,
                 "--entries", ",".join(str(i) for i in sorted(want)),
                 "--apply"]
@@ -2813,7 +2865,17 @@ class TranslateAPI:
             1 for r in new_records
             if isinstance(r, dict) and r.get("source_partial"))
         if rc != 3 and rc != 0:
+            # C9 失败可观测性（D2026-1007-02 件E）：stdout_tail 原本只存
+            # 内存回包，失败时落 gui.log（单行摘要防日志超长）；台账失败
+            # reason 主因（Counter top1）拼入 error——此前端点不通/模型缺失
+            # 时用户只见「退出码 1」。台账缺失/损坏一律降级为仅退出码文案
+            # （_ledger_top_reason fail-soft），任何情况不抛异常。
+            _log.warning("refine_batch_fix 失败: exit=%s stdout_tail(尾段)=%s",
+                         rc, " | ".join(tail[-8:])[-600:] or "（空）")
             result["error"] = msg("process_exit_code", code=rc)
+            top_reason = self._ledger_top_reason(guide_dir, stem)
+            if top_reason:
+                result["error"] += f"；主因：{top_reason}"
             return result
 
         # 复验（恒开）：重跑全片 AI 分析恰 1 次，建议件三键计数 diff
@@ -3055,6 +3117,9 @@ class TranslateAPI:
         {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v"})
     _MEDIA_OVERRIDES_KEY = "media_overrides"
     _MEDIA_OVERRIDES_MAX = 50
+    # 2.7.4 件F（D2026-1007-02）：上次手动媒体目录（推断⑤层附加搜索目录）
+    # ——与 media_overrides 同走 stage_settings KV 既有读写通道
+    _PREVIEW_MEDIA_LAST_DIR_KEY = "preview_media_last_dir"
 
     def _media_override_key(self, guide_path: str) -> str:
         """media_overrides KV 键：normcase 归一化导读路径（Windows 语义）。"""
@@ -3075,6 +3140,26 @@ class TranslateAPI:
         return {str(k): str(v) for k, v in ov.items()
                 } if isinstance(ov, dict) else {}
 
+    def _load_preview_media_last_dir(self) -> str:
+        """preview_media_last_dir KV 读取（2.7.4 件F ⑤层）。
+
+        缺失/空值/非现存目录 → 空串（调用方静默跳过⑤层，行为与
+        四层时代完全一致）。经 refine_get_stage_settings 既有读取
+        通道（零新增 open），全容错不抛。"""
+        try:
+            res = self.refine_get_stage_settings()
+            if not res.get("success"):
+                return ""
+            settings = res.get("settings")
+            val = settings.get(self._PREVIEW_MEDIA_LAST_DIR_KEY) \
+                if isinstance(settings, dict) else None
+            val = str(val or "").strip()
+            if val and os.path.isdir(val):
+                return val
+            return ""
+        except Exception:
+            return ""
+
     def refine_save_media_override(self, guide_path: str,
                                    media_path: str = "") -> dict[str, Any]:
         """「更换」apply 持久化（2.7.4 件2 owner 终版第 2 条）。
@@ -3088,6 +3173,10 @@ class TranslateAPI:
         service_quick 先例）——本方法零自有 open 写点（Mimosa
         path-traversal 消模式，甄别表 #29 先例：改代码消模式不挂账），
         对外响应契约 {success, overrides_saved} 不变。
+        2.7.4 件F（D2026-1007-02）：media_path 非空保存时同步把所选媒体
+        父目录（normcase 绝对路径）写入同命名空间新键
+        preview_media_last_dir（试听推断⑤层附加搜索目录）；空串删除
+        不触碰该键。同一帧 patch 落盘，零新增写点。
         """
         try:
             gp = str(guide_path or "").strip()
@@ -3101,8 +3190,12 @@ class TranslateAPI:
                 overrides[key] = mp
             while len(overrides) > self._MEDIA_OVERRIDES_MAX:
                 overrides.pop(next(iter(overrides)))
-            res = self.refine_save_stage_settings(
-                None, None, {self._MEDIA_OVERRIDES_KEY: overrides})
+            patch: dict[str, Any] = {self._MEDIA_OVERRIDES_KEY: overrides}
+            if mp:
+                from subtransjav.paths import normalize_path_case
+                patch[self._PREVIEW_MEDIA_LAST_DIR_KEY] = \
+                    normalize_path_case(os.path.dirname(os.path.abspath(mp)))
+            res = self.refine_save_stage_settings(None, None, patch)
             if not res.get("success"):
                 return {"success": False,
                         "error": str(res.get("error") or "持久化写入失败")}
@@ -3112,12 +3205,17 @@ class TranslateAPI:
             return {"success": False, "error": str(e)}
 
     def _infer_preview_media(self, guide_path: str,
-                             clip_end_s: float) -> dict[str, Any]:
-        """同目录自动推断试听媒体（2.7.4 件2 ④层，与试听同源唯一实现）。
+                             clip_end_s: float,
+                             search_dir: str = "") -> dict[str, Any]:
+        """目录内自动推断试听媒体（件2 ④层 + 件F ⑤层共用唯一实现）。
 
         guide json 文件名剥导读后缀（复用 _AUDIO_PREVIEW_GUIDE_SUFFIX，不新增
         第 5 处字面量）→ 复用 asr_meta.strip_stem_suffixes 剥语言/管线后缀 →
-        同目录（不递归）normcase 精确基名匹配视频扩展名闭集。2.7.4 件B
+        搜索目录内（不递归）normcase 精确基名匹配视频扩展名闭集。搜索目录
+        由 search_dir 决定：空串=导读同目录（④层，media_source="inferred"）；
+        非空=上次手动媒体目录（件F ⑤层，media_source="last_dir"）——stem
+        仍取自导读文件名，跨目录候选集不合并（由调用方保证逐层独立）。
+        2.7.4 件B
         （D2026-1007-02）：精确匹配按 _preview_stem_candidates 的 leveled
         候选序贯进行（首个产生命中的层即裁决：恰 1 个采用、多命中
         fail-closed），全层零命中再做边界感知前缀兜底。唯一命中再过
@@ -3128,10 +3226,10 @@ class TranslateAPI:
         song.ja.mp4 时前缀兜底亦不命中——root "song.ja" 比 stem "song" 长，
         不构成 stem 前缀）→ 优雅降级 no_candidate，不误配。
 
-        返回 {ok, media_path, media_source:"inferred"} 或
+        返回 {ok, media_path, media_source:"inferred"|"last_dir"} 或
         {ok:False, error_key, error, candidates:[文件名,...]}——
-        no_candidate（零命中/多命中，多命中带候选列表）/
-        duration_mismatch / verify_failed。
+        no_candidate（零命中/多命中，多命中带候选列表并在 error 标注
+        来源目录）/ duration_mismatch / verify_failed。
         """
         from subtransjav.paths import normalize_path_case
         from subtransjav.refine.asr_meta import strip_stem_suffixes
@@ -3141,7 +3239,12 @@ class TranslateAPI:
             return {"ok": False, "error_key": "no_candidate",
                     "error": f"非导读文件: {base}", "candidates": []}
         stem = strip_stem_suffixes(base[:-len(suffix)])
-        gdir = os.path.dirname(os.path.abspath(str(guide_path)))
+        if search_dir:
+            gdir = os.path.abspath(str(search_dir))
+            src_label = f"指定目录 {gdir}"
+        else:
+            gdir = os.path.dirname(os.path.abspath(str(guide_path)))
+            src_label = "导读同目录"
         try:
             names = os.listdir(gdir)
         except OSError:
@@ -3176,12 +3279,12 @@ class TranslateAPI:
                 and key0.startswith(normalize_path_case(root) + ".")]
         if not candidates:
             return {"ok": False, "error_key": "no_candidate",
-                    "error": f"未在导读同目录找到与「{stem}」匹配的媒体文件",
+                    "error": f"未在{src_label}找到与「{stem}」匹配的媒体文件",
                     "candidates": []}
         if len(candidates) > 1:
             sorted_hits = sorted(candidates)
             return {"ok": False, "error_key": "no_candidate",
-                    "error": "同目录命中多个候选媒体，请显式指定: "
+                    "error": f"{src_label}命中多个候选媒体，请显式指定: "
                              + "、".join(sorted_hits),
                     "candidates": sorted_hits}
         hit = candidates[0]
@@ -3198,7 +3301,8 @@ class TranslateAPI:
                              f"（媒体 {dur:.1f}s < 所需 {clip_end_s:.1f}s）",
                     "candidates": [hit]}
         return {"ok": True, "media_path": hit_path,
-                "media_source": "inferred", "duration_s": round(dur, 3)}
+                "media_source": "last_dir" if search_dir else "inferred",
+                "duration_s": round(dur, 3)}
 
     def refine_preview_infer_media(self, guide_path: str,
                                    clip_end_s: float = 0.0) -> dict[str, Any]:
@@ -3359,10 +3463,11 @@ class TranslateAPI:
         if end - start <= 0:
             return {"ok": False, "error": "试听时段无效（起止时间）"}
 
-        # —— 试听媒体路径四层优先级（2.7.4 件2，评议员钉测）——
+        # —— 试听媒体路径五层优先级（2.7.4 件2 四层 + 件F ⑤层，评议员钉测）——
         # ① 本次请求显式 override > ② guide json 自带 media_path（文件有效
-        # 时）> ③ GUI 持久化配置 > ④ 同目录自动推断。②失效（文件不存在/
-        # ffprobe 失败）才落 ③④——不自动覆盖有效已有路径（owner 裁定）。
+        # 时）> ③ GUI 持久化配置 > ④ 同目录自动推断 > ⑤ 上次手动媒体目录
+        # 推断（④ 零命中后才尝试）。②失效（文件不存在/ffprobe 失败）才落
+        # ③④⑤——不自动覆盖有效已有路径（owner 裁定）。
         # 结构化错误四态（沿用 error_key 先例，前端禁靠中文文案匹配）：
         # no_candidate / duration_mismatch / verify_failed / path_invalid。
         guide_media = str((data or {}).get("media_path") or "")
@@ -3424,12 +3529,31 @@ class TranslateAPI:
             if infer_res.get("ok"):
                 media = str(infer_res["media_path"])
                 media_source = "inferred"
+        last_dir_res: dict[str, Any] | None = None
+        if not media and infer_res is not None \
+                and infer_res.get("error_key") == "no_candidate" \
+                and not infer_res.get("candidates"):
+            # ⑤ 上次手动媒体目录（2.7.4 件F）：④ 零命中后才尝试——
+            # 键缺失/目录不存在/非法静默跳过（行为与四层时代一致）；
+            # 同目录多命中（fail-closed 带候选）不落⑤（不跨目录合并）；
+            # last_dir 内多候选同样 fail-closed（error 标注来源目录）。
+            last_dir = self._load_preview_media_last_dir()
+            if last_dir:
+                last_dir_res = self._infer_preview_media(
+                    p, end + self._AUDIO_PREVIEW_PAD_S, search_dir=last_dir)
+                if last_dir_res.get("ok"):
+                    media = str(last_dir_res["media_path"])
+                    media_source = str(
+                        last_dir_res.get("media_source") or "last_dir")
         if not media:
             if failed_existing:
                 return {"ok": False, "error_key": "path_invalid",
                         "error": "已有媒体路径失效: "
                                  + "；".join(failed_existing),
-                        "candidates": (infer_res or {}).get("candidates", [])}
+                        "candidates": (last_dir_res or infer_res or {}
+                                       ).get("candidates", [])}
+            if last_dir_res is not None:
+                return last_dir_res
             if infer_res is not None:
                 return infer_res
             return {"ok": False, "error_key": "no_candidate",

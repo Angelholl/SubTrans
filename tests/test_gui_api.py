@@ -2676,6 +2676,144 @@ def test_refine_preview_fix_config_shape(gui_api_obj, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# 2.7.4 件E（D2026-1007-02）：C8 本地端点 spawn 前预检 + C9 失败可观测性
+# ---------------------------------------------------------------------------
+
+def test_endpoint_probe_timeout_constant_pinned():
+    """C8 探活超时常量钉（秒）：只判连通，超时=不通。"""
+    from subtransjav.webview_gui.api import TranslateAPI as _T
+    assert _T._ENDPOINT_PROBE_TIMEOUT_S == 5
+
+
+def test_batch_fix_probe_blocks_spawn_when_endpoint_down(gui_api_obj,
+                                                         monkeypatch,
+                                                         tmp_path):
+    """C8：本地 provider 端点不通 → 不 spawn，error 含 endpoint 与启动提示。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch, provider="lmstudio",
+                         endpoint="http://localhost:9999/v1",
+                         model="sb-model")
+    probe_calls: list = []
+
+    def _fake_probe(endpoint, **kwargs):
+        probe_calls.append((endpoint, kwargs.get("timeout")))
+        return False, "connection refused"
+
+    import subtransjav.translate.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "probe_endpoint_reachable", _fake_probe)
+    captured = _install_fake_bf_spawn(monkeypatch)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False
+    assert "http://localhost:9999/v1" in r["error"]
+    assert "本地推理服务已启动" in r["error"]
+    assert "calls" not in captured              # 未 spawn
+    assert probe_calls == [("http://localhost:9999/v1",
+                            gui_api_obj._ENDPOINT_PROBE_TIMEOUT_S)]
+
+
+def test_batch_fix_probe_passes_then_spawns(gui_api_obj, monkeypatch,
+                                            tmp_path):
+    """C8：探活连通（HTTP 任意响应码都算通）→ 走既有 spawn 流程不受影响。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch, provider="lmstudio",
+                         endpoint="http://localhost:1234/v1",
+                         model="sb-model")
+    probe_endpoints: list = []
+
+    def _fake_probe(endpoint, **kwargs):
+        probe_endpoints.append(endpoint)
+        return True, "HTTP 404"                 # 非 2xx 也算通
+
+    import subtransjav.translate.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "probe_endpoint_reachable", _fake_probe)
+    _install_fake_bf_spawn(monkeypatch, lines=["ok"], rc=0,
+                           verify_suggestions={"glossary": [], "tm": [],
+                                               "observations": []})
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is True and r["exit_code"] == 0
+    assert probe_endpoints == ["http://localhost:1234/v1"]
+
+
+def test_batch_fix_cloud_provider_skips_probe(gui_api_obj, monkeypatch,
+                                              tmp_path):
+    """C8：云端 provider 一律跳过探活（探活调用次数 0），行为与既往一致。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch, provider="deepseek",
+                         endpoint="https://api.example.com/v1",
+                         model="sb-model")
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+
+    def _must_not_probe(endpoint, **kwargs):
+        raise AssertionError("云端 provider 不得触发端点探活")
+
+    import subtransjav.translate.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "probe_endpoint_reachable", _must_not_probe)
+    captured = _install_fake_bf_spawn(monkeypatch, lines=["ok"], rc=0)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is True and r["exit_code"] == 0
+    assert "calls" in captured                  # 照常 spawn
+
+
+def test_batch_fix_exit1_ledger_top_reason(gui_api_obj, monkeypatch,
+                                           tmp_path):
+    """C9：rc=1 且台账 105 条同 reason → error 拼主因（截断 ≤200 字符）；
+    空/缺失 reason 不参与计数；台账读取走 _read_ledger 复用（patch 点在
+    _read_ledger 而非内建 open——证明无第二读取通道）。"""
+    items = [_bf_item(3, _T3, "甲")]
+    ledger = ([{"timing": f"T{i}", "outcome": "failed",
+                "reason": "长" * 300} for i in range(105)]
+              + [{"timing": f"U{i}", "outcome": "failed", "reason": ""}
+                 for i in range(50)]
+              + [{"timing": f"V{i}", "outcome": "failed", "reason": "短因"}
+                 for i in range(3)])
+    guide = _make_bf_guide(tmp_path, items, ledger=ledger)
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    ledger_calls: list = []
+    real_read = gui_api_obj._read_ledger
+
+    def _counting_read(guide_dir, stem):
+        ledger_calls.append(stem)
+        return real_read(guide_dir, stem)
+
+    monkeypatch.setattr(gui_api_obj, "_read_ledger", _counting_read)
+    _install_fake_bf_spawn(monkeypatch, lines=["boom"] * 3, rc=1)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False and r["exit_code"] == 1
+    assert "主因：" in r["error"]
+    assert r["error"].split("主因：", 1)[1] == "长" * 200      # 截断 ≤200
+    assert ledger_calls                              # 确经 _read_ledger 读取
+
+
+def test_batch_fix_exit1_ledger_corrupt_degrades(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """C9：台账损坏（非法 json）→ 降级为仅退出码文案，不抛异常。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").write_text(
+        "{not json", encoding="utf-8")
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    _install_fake_bf_spawn(monkeypatch, lines=["boom"], rc=1)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False and r["exit_code"] == 1
+    assert "退出码 1" in r["error"] and "主因" not in r["error"]
+
+
+def test_batch_fix_exit1_ledger_missing_degrades(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """C9：台账缺失 → 降级为仅退出码文案，不抛异常。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    _install_fake_bf_spawn(monkeypatch, lines=["boom"], rc=1)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False and r["exit_code"] == 1
+    assert "退出码 1" in r["error"] and "主因" not in r["error"]
+
+
+# ---------------------------------------------------------------------------
 # 2.6.1 批 2a（D2026-1002-09）：校对页后端（probe 三态 / load_srt / 转码命令）
 # ---------------------------------------------------------------------------
 
@@ -4081,3 +4219,96 @@ def test_refine_ai_apply_tm_telemetry_features_only(gui_api_obj, monkeypatch,
     assert long_src not in debug_text
     assert multi_src not in debug_text
     assert normal_src not in debug_text
+
+
+# ---------------------------------------------------------------------------
+# 2.7.4 件F（D2026-1007-02）：上次手动媒体目录持久化为推断⑤层附加搜索目录
+# 保存 override 时落 preview_media_last_dir KV（normcase 父目录）；④ 零命中
+# 后才搜 last_dir（不递归、同套 leveled 剥链+前缀兜底+时长守卫）；跨目录
+# 候选集不合并（last_dir 多候选 fail-closed、同目录多命中不落⑤）。
+# ---------------------------------------------------------------------------
+
+def test_preview_last_dir_saved_on_override(gui_api_obj, monkeypatch, tmp_path):
+    """override 保存成功 → preview_media_last_dir KV 落所选媒体父目录
+    （normcase 绝对路径）；空串删除不触碰该键。"""
+    from subtransjav.paths import normalize_path_case
+    settings_path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(settings_path))
+    other_dir = tmp_path / "elsewhere"
+    other_dir.mkdir()
+    media = _make_video(other_dir, "movie.mp4")
+    guide = _make_guide(tmp_path, stem="ld00")
+    w = gui_api_obj.refine_save_media_override(str(guide), str(media))
+    assert w["success"] is True
+    assert gui_api_obj._load_preview_media_last_dir() == \
+        normalize_path_case(str(other_dir))
+    # 空串 = 删除 override 条目，last_dir 键保留不触碰
+    gui_api_obj.refine_save_media_override(str(guide), "")
+    assert gui_api_obj._load_preview_media_last_dir() == \
+        normalize_path_case(str(other_dir))
+
+
+def test_preview_last_dir_layer5_hit(gui_api_obj, monkeypatch, tmp_path):
+    """⑤ 命中：导读目录无视频 + last_dir 有 X.mp4（导读
+    X.ja.merged.whisperjav 式，leveled 剥 ".merged" 达 root X）→
+    media_source="last_dir" 采纳，时长守卫照常生效。"""
+    settings_path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(settings_path))
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    movies = tmp_path / "movies"
+    movies.mkdir()
+    media = _make_video(movies, "X.mp4")
+    assert gui_api_obj.refine_save_stage_settings(
+        None, None, {"preview_media_last_dir": str(movies)})["success"]
+    guide = _make_guide(tmp_path, stem="X.ja.merged.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True
+    assert r["media_source"] == "last_dir"
+    assert r["media_path"] == str(media)
+
+
+def test_preview_last_dir_multi_candidate_fail_closed(gui_api_obj, monkeypatch,
+                                                      tmp_path):
+    """⑤ 多候选 fail-closed：last_dir 内 X.mp4+X.mkv → no_candidate 带
+    候选列表，error 标注来源目录（跨目录候选集不合并）。"""
+    from subtransjav.paths import normalize_path_case
+    settings_path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(settings_path))
+    _install_fake_ffprobe(monkeypatch)
+    movies = tmp_path / "movies"
+    movies.mkdir()
+    _make_video(movies, "X.mp4")
+    _make_video(movies, "X.mkv")
+    assert gui_api_obj.refine_save_stage_settings(
+        None, None, {"preview_media_last_dir": str(movies)})["success"]
+    guide = _make_guide(tmp_path, stem="X.ja.merged.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "no_candidate"
+    assert sorted(r["candidates"]) == ["X.mkv", "X.mp4"]
+    assert normalize_path_case(str(movies)) in normalize_path_case(r["error"])
+
+
+def test_preview_last_dir_missing_or_invalid_noop(gui_api_obj, monkeypatch,
+                                                  tmp_path):
+    """last_dir 键缺失/目录不存在 → 静默跳过⑤层，行为与四层时代完全
+    一致（no_candidate、error 仍指向导读同目录，零回归）。"""
+    settings_path = tmp_path / "refine_stage_settings.json"
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(settings_path))
+    _install_fake_ffprobe(monkeypatch)
+    guide = _make_guide(tmp_path, stem="Y")
+    # 键缺失
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "no_candidate"
+    assert "导读同目录" in r["error"]
+    assert r["candidates"] == []
+    # 目录不存在 → 行为与键缺失完全一致
+    assert gui_api_obj.refine_save_stage_settings(
+        None, None,
+        {"preview_media_last_dir": str(tmp_path / "gone")})["success"]
+    assert gui_api_obj._load_preview_media_last_dir() == ""
+    r2 = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r2 == r

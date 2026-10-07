@@ -680,3 +680,61 @@ def test_pipeline_injects_recovery_for_lmstudio_only(monkeypatch):
     assert callable(local._unloaded_recovery_default)
     assert cloud._unloaded_recovery_default is None
     assert V2_STAGE_SLOT["A"] == 0    # 槽位契约不变（守卫断言）
+
+
+# ---------------------------------------------------------------------------
+# C8 端点预检（D2026-1007-02 件E）：SSRF 边界 + 连通性语义
+# ---------------------------------------------------------------------------
+
+class _FakeProbeResp:
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+
+def test_probe_endpoint_reachable_ssrf_boundary_rejects(monkeypatch):
+    """SSRF 边界（fail-closed）：公网 IP/任意域名/非 http(s) 协议 →
+    判不可达，且不发起任何 HTTP 请求（httpx.get / httpx.Client.get
+    均不得被触碰）。"""
+    import httpx
+
+    from subtransjav.translate.llm_client import probe_endpoint_reachable
+
+    def _no_request(*args, **kwargs):
+        raise AssertionError("边界外端点不得发起 HTTP 请求")
+
+    monkeypatch.setattr(httpx, "get", _no_request)
+    monkeypatch.setattr(httpx.Client, "get", _no_request)
+    cases = (
+        ("http://8.8.8.8:1234/v1", "探活仅允许本机/内网端点"),       # 公网 IP
+        ("https://api.deepseek.com/v1", "探活仅允许本机/内网端点"),   # 域名
+        ("http://my-studio.example.com:1234/v1", "探活仅允许本机/内网端点"),
+        ("ftp://localhost:1234/v1", "非 http(s) 端点"),             # 协议白名单
+        ("http:///v1", "探活仅允许本机/内网端点"),                   # 无主机
+    )
+    for bad, reason_part in cases:
+        ok, detail = probe_endpoint_reachable(bad)
+        assert ok is False, bad
+        assert reason_part in detail, (bad, detail)
+
+
+def test_probe_endpoint_reachable_ssrf_boundary_allows_local(monkeypatch):
+    """SSRF 边界放行面：localhost 与私网 IP（192.168.x，IPv6 回环）→
+    正常发起探活，HTTP 任意响应码都算通。"""
+    import httpx
+
+    from subtransjav.translate.llm_client import probe_endpoint_reachable
+
+    def _fake_client_get(self, url, **kwargs):
+        return _FakeProbeResp(200)
+
+    def _fake_get(url, **kwargs):
+        return _FakeProbeResp(404)
+
+    monkeypatch.setattr(httpx.Client, "get", _fake_client_get)   # 回环路径
+    monkeypatch.setattr(httpx, "get", _fake_get)                 # 非回环路径
+    ok, detail = probe_endpoint_reachable("http://localhost:1234/v1")
+    assert ok is True and detail == "HTTP 200"
+    ok, detail = probe_endpoint_reachable("http://192.168.1.10:8000/v1")
+    assert ok is True and detail == "HTTP 404"
+    ok, detail = probe_endpoint_reachable("http://[::1]:1234/v1")
+    assert ok is True and detail == "HTTP 200"
