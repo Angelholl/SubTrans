@@ -221,6 +221,10 @@ MSG = {
     #      双表同步——红绿灯空态文案 + 下拉占位项，全 JS 态零静态 i18n 消耗）----
     "asrModelUnselected": "未选择",
     "asrModelPlaceholder": "未选择（点选即保存）",
+
+    # ---- 质量闭环一键批次修复（D2026-1007-02 件C：修复模型解析补链 C7；
+    #      api.py refine_batch_fix 拒绝分支——不 spawn 直接报错）----
+    "fix_model_unconfigured": "修复模型未配置：请在「翻译设置 · 阶段B（审校+抛光）」填写模型名，或检查阶段A 模型设置（当前修复无从取得可用模型）",
 }
 
 

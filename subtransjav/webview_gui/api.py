@@ -540,6 +540,48 @@ def _codec_direct(ext: str, codecs: dict, exts, vids, auds) -> bool:
             and str(codecs.get("audio") or "") in set(auds))
 
 
+# 2.7.4 件B（D2026-1007-02）：试听媒体推断专用剥链后缀表。在既有闭集
+# （".ja.whisperjav"/".whisperjav"/".ja"，即 asr_meta._STEM_STRIP_SUFFIXES）
+# 基础上插入 ".merged"——owner merged 工作流产物 X.ja.merged.whisperjav
+# 经共享剥链停于 X.ja.merged，须再剥一层才可达视频 root X。
+_PREVIEW_STEM_SUFFIXES = (".ja.whisperjav", ".whisperjav", ".merged", ".ja")
+
+
+def _preview_stem_candidates(stem: str) -> list[str]:
+    """试听媒体推断专用：由导读 stem 生成 leveled 候选 stem 序列。
+
+    只服务 _infer_preview_media 的候选生成——**不动**
+    asr_meta.strip_stem_suffixes 共享剥链（其闭集被 manifest 配对/指纹
+    等消费方依赖，插入 ".merged" 会波及面失控，故在此独立成表）。
+
+    生成规则（确定性：按 (剥的层数, 生成顺序) 排列，BFS 逐层）：
+      - level 0 = 原 stem（与既有 strip_stem_suffixes 全剥结果一致，
+        保证老路径零回退）；
+      - 每层对当前候选从右剥「一个」后缀：按 _PREVIEW_STEM_SUFFIXES
+        表序尝试取首个命中（大小写不敏感，对齐共享剥链 endswith 语义），
+        守卫 len(候选) > len(后缀)（对齐 strip_stem_suffixes，剥后非空）；
+      - 已见过的候选不重复入队（防 ".ja.ja" 类分支重复/回环）。
+    """
+    start = str(stem or "")
+    seen = {start}
+    ordered = [start]
+    frontier = [start]
+    while frontier:
+        nxt: list[str] = []
+        for cur in frontier:
+            low = cur.lower()
+            for suf in _PREVIEW_STEM_SUFFIXES:
+                if low.endswith(suf) and len(cur) > len(suf):
+                    stripped = cur[:-len(suf)]
+                    if stripped not in seen:
+                        seen.add(stripped)
+                        ordered.append(stripped)
+                        nxt.append(stripped)
+                    break   # 每候选每层只剥一个后缀（表序首个命中）
+        frontier = nxt
+    return ordered
+
+
 def _ms_to_srt_time(ms: int) -> str:
     """毫秒 → SRT 时间戳 ``HH:MM:SS,mmm``（cleaner_rules ms 原生重建 timing）。"""
     ms = max(0, int(ms))
@@ -2176,6 +2218,19 @@ class TranslateAPI:
                 return str(s.get("endpoint") or "").strip()
         return ""
 
+    def _stage_a_model(self) -> str:
+        """阶段A（存储 stage=1）模型名；读取失败/未存返回空串。"""
+        try:
+            got = self.refine_get_stage_settings()
+        except Exception:
+            return ""
+        if not isinstance(got, dict) or not got.get("success"):
+            return ""
+        for s in got.get("stages") or []:
+            if isinstance(s, dict) and int(s.get("stage") or 0) == 1:
+                return str(s.get("model") or "").strip()
+        return ""
+
     def refine_ai_analyze(self, report_path: str, model: str = None,
                           ai_provider: str = None) -> dict[str, Any]:
         """同步执行 AI 质量分析并读回建议件。
@@ -2376,6 +2431,92 @@ class TranslateAPI:
     def _stage_b_model(self) -> str:
         return self._stage_b_stage_settings("model")
 
+    def _resolve_fix_model_config(self) -> dict[str, Any]:
+        """C7 补链（D2026-1007-02 件C）：批量修复 provider/endpoint/model
+        统一解析（fail-closed；三元组全部读既有阶段 KV getter，零新增
+        读取通道）。修复子进程 model 缺失时 CLI 落缺省空串 →
+        pipeline RefineError「未指定模型名」全败退出，故拒绝必须发生在
+        spawn 之前而非放任子进程失败。
+
+        规则（三元组=provider/endpoint/model）：
+        - 阶段B provider 与 model 均非空 → 用 B 整组（endpoint=B，可空）；
+        - 阶段B provider 与 model 均空 → 整组回退阶段A（全取 A）；A 的
+          model 也空 → 拒绝（无模型修复必然全败）；
+        - 阶段B provider 非空但 model 空 → 仅当阶段A provider 与 B 同名
+          （小写比较）时取 B provider/endpoint + A model，否则拒绝（防
+          「B 端点 + A 异服务商模型名」跨服务商错配）；
+        - 阶段B model 非空但 provider 空 → 维持现行为：provider 不传落
+          CLI 缺省 lmstudio，放行但以 source 标注（注释即本行）；阶段A
+          provider 已配置且非 lmstudio 时拒绝（防「lmstudio 本地端点 +
+          云模型名」错配——与上一条同理 fail-closed；A 未配置不算错配）。
+
+        返回 dict(provider, endpoint, model, source, ok, reason)；
+        拒绝时 ok=False + 人话 reason 且三元组为空串。"""
+        b_provider = self._stage_b_provider_name()
+        b_model = self._stage_b_model()
+        b_endpoint = self._stage_b_endpoint()
+
+        def _deny(reason: str) -> dict[str, Any]:
+            return {"ok": False, "provider": "", "endpoint": "",
+                    "model": "", "source": "", "reason": reason}
+
+        if b_provider and b_model:
+            return {"ok": True, "provider": b_provider,
+                    "endpoint": b_endpoint, "model": b_model,
+                    "source": "stage_b", "reason": ""}
+        if not b_provider and not b_model:
+            a_provider = self._stage_a_provider_name()
+            a_endpoint = self._stage_a_endpoint()
+            a_model = self._stage_a_model()
+            if not a_model:
+                return _deny(
+                    "阶段B 与阶段A 均未配置可用模型：请先在「翻译设置」"
+                    "为至少一个阶段填写模型名")
+            return {"ok": True, "provider": a_provider,
+                    "endpoint": a_endpoint, "model": a_model,
+                    "source": "stage_a_fallback", "reason": ""}
+        if b_provider and not b_model:
+            a_provider = self._stage_a_provider_name()
+            if (a_provider or "").strip().lower() == b_provider.lower():
+                a_model = self._stage_a_model()
+                if a_model:
+                    return {"ok": True, "provider": b_provider,
+                            "endpoint": b_endpoint, "model": a_model,
+                            "source": "stage_b_provider_stage_a_model",
+                            "reason": ""}
+            return _deny(
+                f"阶段B（{b_provider}）未填写模型名，且阶段A 没有同名"
+                "服务商的可用模型：请在「翻译设置 · 阶段B（审校+抛光）」"
+                "填写模型名")
+        # 剩余分支：B model 非空但 provider 空（见 docstring 第 4 条）
+        a_provider = self._stage_a_provider_name()
+        if (a_provider or "").strip().lower() not in ("", "lmstudio"):
+            return _deny(
+                f"阶段B 只填了模型名未填服务商，而阶段A 服务商为 "
+                f"{a_provider}（非 lmstudio）：修复将落本地 lmstudio 端点"
+                "与该模型名错配，已拒绝；请在阶段B 补全服务商")
+        return {"ok": True, "provider": "", "endpoint": "",
+                "model": b_model,
+                "source": "stage_b_model_provider_default", "reason": ""}
+
+    def refine_preview_fix_config(self) -> dict[str, Any]:
+        """C7 桥（D2026-1007-02 件C）：修复生效配置预览（只读、无副作用、
+        不 spawn），供前端修复卡明示行与确认框刷新。共用
+        _resolve_fix_model_config 解析结果，形状钉（provider/endpoint/
+        model/source/reason 恒为字符串，ok 恒为布尔）。"""
+        try:
+            cfg = self._resolve_fix_model_config()
+        except Exception as e:
+            _log_exc("refine_preview_fix_config")
+            return {"ok": False, "provider": "", "endpoint": "",
+                    "model": "", "source": "", "reason": str(e)}
+        return {"ok": bool(cfg.get("ok")),
+                "provider": str(cfg.get("provider") or ""),
+                "endpoint": str(cfg.get("endpoint") or ""),
+                "model": str(cfg.get("model") or ""),
+                "source": str(cfg.get("source") or ""),
+                "reason": str(cfg.get("reason") or "")}
+
     def _load_guide_json(self, p: str) -> dict[str, Any] | None:
         try:
             with open(p, encoding="utf-8") as f:
@@ -2524,7 +2665,9 @@ class TranslateAPI:
         逐条命中 open 且有现译（观察类必拒，C6）→ 台账已修拒入批
         （C1 幂等守卫；重修走 CLI --entries 显式通道）。执行=
         spawn_refine_cli 子进程跑 --action-retranslate --apply（修复
-        provider=阶段B/槽 s3；台账先于终稿写序/恒等式断言在执行器侧
+        provider/model 经 _resolve_fix_model_config 统一解析
+        （C7/D2026-1007-02 件C：拒绝即不 spawn）；台账先于终稿写序/
+        恒等式断言在执行器侧
         原样生效）；复验=生效后重跑全片 AI 分析恰 1 次做建议件三键
         计数 diff（复验 provider/model 透传 AI 分析独立配置）。"""
         p, stem, guide, err = self._load_validated_guide(guide_path)
@@ -2571,19 +2714,24 @@ class TranslateAPI:
             os.path.join(guide_dir, stem + self._AI_SUGGESTION_SUFFIX))
         pre_ledger_len = len(self._read_ledger(guide_dir, stem))
 
-        # 修复 provider=阶段B：与 AI 分析同理不显式传会落 CLI 缺省本地
-        # 端点；密钥仅经子进程环境变量注入（白名单表与翻译/分析一致）。
+        # 修复 provider/endpoint/model 统一经 C7 解析（D2026-1007-02 件C：
+        # 阶段B 缺模型时回退/拒绝链；拒绝即不 spawn——原先空 model 放任
+        # 子进程落 CLI 缺省空串 → pipeline RefineError 全败退出 1）；
+        # 密钥仍仅经子进程环境变量注入（白名单表与翻译/分析一致）。
+        cfg = self._resolve_fix_model_config()
+        if not cfg.get("ok"):
+            return {"success": False, "error": msg("fix_model_unconfigured")}
         args = ["--action-retranslate", p,
                 "--entries", ",".join(str(i) for i in sorted(want)),
                 "--apply"]
-        provider = self._stage_b_provider_name()
+        provider = str(cfg.get("provider") or "")
         if provider:
             args.extend(["--s3-provider", provider])
             flag = self._AI_PROVIDER_ENDPOINT_FLAGS.get(provider)
-            endpoint = self._stage_b_endpoint()
+            endpoint = str(cfg.get("endpoint") or "")
             if endpoint and flag:
                 args.extend([flag, endpoint])
-        fix_model = self._stage_b_model()
+        fix_model = str(cfg.get("model") or "")
         if fix_model:
             args.extend(["--action-model", fix_model])
         env_extra: dict[str, str] = {"PYTHONUNBUFFERED": "1"}
@@ -2969,12 +3117,16 @@ class TranslateAPI:
 
         guide json 文件名剥导读后缀（复用 _AUDIO_PREVIEW_GUIDE_SUFFIX，不新增
         第 5 处字面量）→ 复用 asr_meta.strip_stem_suffixes 剥语言/管线后缀 →
-        同目录（不递归）normcase 精确基名匹配视频扩展名闭集。唯一命中再过
+        同目录（不递归）normcase 精确基名匹配视频扩展名闭集。2.7.4 件B
+        （D2026-1007-02）：精确匹配按 _preview_stem_candidates 的 leveled
+        候选序贯进行（首个产生命中的层即裁决：恰 1 个采用、多命中
+        fail-closed），全层零命中再做边界感知前缀兜底。唯一命中再过
         时长守卫（fail-closed，owner 终版第 7 条）：复用 _review_media_duration
         （15s 超时元数据级），比较基准 clip_end=end+_AUDIO_PREVIEW_PAD_S，
         容差 max(5s, 1% 时长)；ffprobe 失败/None/时长不足一律拒绝自动采用。
         .ja 过度剥离边缘（如 song.ja.whisperjav 导读剥为 "song"，同目录仅有
-        song.ja.mp4 时零命中）→ 优雅降级 no_candidate，不误配。
+        song.ja.mp4 时前缀兜底亦不命中——root "song.ja" 比 stem "song" 长，
+        不构成 stem 前缀）→ 优雅降级 no_candidate，不误配。
 
         返回 {ok, media_path, media_source:"inferred"} 或
         {ok:False, error_key, error, candidates:[文件名,...]}——
@@ -2994,14 +3146,34 @@ class TranslateAPI:
             names = os.listdir(gdir)
         except OSError:
             names = []
-        key = normalize_path_case(stem)
+        # 预筛视频扩展名闭集候选（扩展名闭集与过滤口径不变）
+        video_named: list[tuple[str, str, str]] = [
+            (name, *os.path.splitext(name)) for name in names]
+        # leveled 序贯匹配（2.7.4 件B）：按候选层序逐层做 normcase 精确
+        # 基名匹配，首个产生命中的层即裁决——恰 1 个走时长守卫后采用；
+        # 多于 1 个维持既有 fail-closed 多命中语义（不向更深层回退：
+        # 近层歧义即歧义）。
         candidates: list[str] = []
-        for name in names:
-            root, ext = os.path.splitext(name)
-            if ext.lower() not in self._AUDIO_PREVIEW_VIDEO_EXTS:
-                continue
-            if normalize_path_case(root) == key:
-                candidates.append(name)
+        for cand in _preview_stem_candidates(stem):
+            ckey = normalize_path_case(cand)
+            candidates = [
+                name for name, root, ext in video_named
+                if ext.lower() in self._AUDIO_PREVIEW_VIDEO_EXTS
+                and normalize_path_case(root) == ckey]
+            if candidates:
+                break
+        if not candidates:
+            # 前缀兜底（边界感知）：全部精确层零命中时，收集「候选文件
+            # root + '.' 是 level 0 stem 前缀」的文件（即
+            # stem.startswith(root + '.')）。'.' 边界防扩展伪装误配：
+            # stem="X" 不以 "X.merged." 开头，故不误命中 "X.merged.mp4"；
+            # 而 stem="X.ja.merged" 可前缀命中 root="X" 的文件。恰 1 个
+            # 才走时长守卫后采用；0/多维持 no_candidate（多候选举证列表）。
+            key0 = normalize_path_case(stem)
+            candidates = [
+                name for name, root, ext in video_named
+                if ext.lower() in self._AUDIO_PREVIEW_VIDEO_EXTS
+                and key0.startswith(normalize_path_case(root) + ".")]
         if not candidates:
             return {"ok": False, "error_key": "no_candidate",
                     "error": f"未在导读同目录找到与「{stem}」匹配的媒体文件",

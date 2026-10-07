@@ -1008,8 +1008,10 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # FROZEN_IDS 214→213（模型管理入口走 class 锚零新增 id）；
     # 2.7.3 件⑧批 8b（D2026-1006-01）：Console 活动流批显式解冻 213→217
     # （consoleActivity/rawLogToggleBtn/exportConsoleBtn/copyConsoleBtn，
-    # 全部零 data-i18n，文案 JS 态 MSG 键承接）
-    assert len(ids) == 217, f"id 全集数漂移（2.7.3 批8b 解冻后契约 217 不变），实为 {len(ids)}"
+    # 全部零 data-i18n，文案 JS 态 MSG 键承接）；
+    # 2.7.4 件C（D2026-1007-02）：修复生效配置明示行显式解冻 217→218
+    # （batchFixEffectiveLine，零 data-i18n，文案 JS 态 MSG 键承接）
+    assert len(ids) == 218, f"id 全集数漂移（2.7.4 件C 解冻后契约 218 不变），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -2303,6 +2305,37 @@ def test_batch_fix_run_uses_structured_preview():
         "AppModal.confirm 调用点数量漂移（本件只允许迁走批量修复一处）"
 
 
+def test_batch_fix_effective_line_pinned():
+    """2.7.4 件C（D2026-1007-02）：修复生效配置常驻明示行。
+
+    - index.html 静态锚 #batchFixEffectiveLine（FROZEN_IDS 217→218 显式
+      解冻，批准依据=决策 D2026-1007-02），零 data-i18n（JS 态键承接）；
+    - bfRefreshEffective 调后端 refine_preview_fix_config（C7 桥，与修复
+      子进程同一解析结果），拒绝分支红色 status-err 直显原因；
+    - batchFixRefresh 每次刷新同步明示行（载入导读/修复结束共用）；
+    - batchFixRun 打开确认框前 await 取回生效配置进 meta 副行。"""
+    src = _app_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'id="batchFixEffectiveLine"' in html, \
+        "index.html 缺少 #batchFixEffectiveLine 明示行锚"
+    m = re.search(r'<div id="batchFixEffectiveLine"[^>]*>', html)
+    assert m and "data-i18n" not in m.group(0), \
+        "明示行不得带静态 data-i18n（文案走 JS 态 MSG 键）"
+    eff = _extract_function(src, "bfRefreshEffective")
+    assert "refine_preview_fix_config" in eff, \
+        "明示行必须调 refine_preview_fix_config（与修复子进程同一解析）"
+    assert "status-err" in eff, "拒绝分支必须红色 status-err 直显原因"
+    assert "MSG.batchFixUsing" in eff and "MSG.batchFixModelUnset" in eff, \
+        "明示行文案必须走 MSG 键"
+    refresh = _extract_function(src, "batchFixRefresh")
+    assert "bfRefreshEffective()" in refresh, \
+        "batchFixRefresh 须同步刷新明示行（载入导读/修复结束共用）"
+    caller = _extract_function(src, "batchFixRun")
+    assert "await bfRefreshEffective()" in caller, \
+        "batchFixRun 打开确认框前须刷新并取回生效配置"
+    assert "fixCfgMeta" in caller, "确认框 meta 缺少生效配置副行"
+
+
 def test_batch_fix_preview_msg_and_css_pinned():
     """新 MSG 键存在；死键清理（batchFixPreviewMore 仅原弹窗一处消费，
     batchFixCats 被 chips 取代）；style.css bfp 族在位且全 token 零硬编码色。"""
@@ -2311,7 +2344,9 @@ def test_batch_fix_preview_msg_and_css_pinned():
     for key in ("batchFixConfirmOk", "batchFixExpand", "batchFixCollapse",
                 "batchFixExcerptOnly", "batchFixPreviewHead",
                 "batchFixEstimate", "batchFixProvider", "batchFixCapHit",
-                "batchFixCloudCost"):
+                "batchFixCloudCost",
+                # 2.7.4 件C（D2026-1007-02）：修复生效配置明示行两键
+                "batchFixUsing", "batchFixModelUnset"):
         assert key in keys, f"MSG 缺少 2.7.4 件3 键: {key}"
     for dead in ("batchFixPreviewMore", "batchFixCats"):
         assert dead not in keys, f"2.7.4 件3 死键残留: {dead}"

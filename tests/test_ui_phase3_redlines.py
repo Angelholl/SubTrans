@@ -143,6 +143,7 @@ pipelineMirrorLine progressBar progressFill refineAdaptiveThresholds refineAiAna
 refineAiAnalyzeSection refineAiAnalyzeStatus refineAiPrivacy refineAiResult
 refineAutoSynopsis refineBatchCloud refineBatchLocal
 refineBatchFixBtn refineBatchFixScope refineBatchFixStatus
+batchFixEffectiveLine
 refineCancelBtn refineCleanerConfig
 refineCleanerConfigShow refineConcurrency refineEndpointStatus refineFallbackLocal
 refineFallbackModel refineForceResume refineGl1 refineGl2 refineGlAdd refineGlCount
@@ -221,7 +222,10 @@ def _current_i18n_keys():
 
 
 def test_r3_id_fullset_frozen():
-    """钉⑤a（HRO-1）：id 全集快照冻结，新增/删除/改名一律显式改快照。"""
+    """钉⑤a（HRO-1）：id 全集快照冻结，新增/删除/改名一律显式改快照。
+
+    快照显式解冻记录：2.7.4 件C（D2026-1007-02）新增
+    batchFixEffectiveLine（修复生效配置明示行，决策明示批准）。"""
     cur = _current_ids()
     assert cur == FROZEN_IDS, (
         f"id 全集漂移：新增={sorted(cur - FROZEN_IDS)} 删除={sorted(FROZEN_IDS - cur)}"

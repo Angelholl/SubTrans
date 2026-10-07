@@ -658,6 +658,10 @@
                             <select id="refineBatchFixScope" class="form-select compact" style="width:auto; display:none;" aria-label="fix scope"></select>
                             <span id="refineBatchFixStatus" class="muted"></span>
                         </div>
+                        <!-- D2026-1007-02 件C：修复生效配置明示行（FROZEN_IDS
+                             217→218 显式解冻，批准依据=决策 D2026-1007-02；
+                             文案 JS 态 MSG 键承接，零 data-i18n） -->
+                        <div id="batchFixEffectiveLine" class="muted" style="display:none;"></div>
                         <!-- 2.5.0 批5（D2026-1001-07）：AI 分析独立配置（缺省跟随阶段A；custom 无默认端点已排除）
                              批3（D2026-1002-12）：平铺六件套改 3 组顶置标签列（.field-col），
                              橙色提示移入行尾独立成行（order:99 对齐 .stage-row .muted 先例） -->

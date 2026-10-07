@@ -592,6 +592,11 @@ const MSG = {
     batchFixSourcePartial: '；部分条目按导读摘录对齐（未提供原始源文）',
     batchFixScopeAll: '全部待修条目',
     batchFixScopeCat: (c, n) => `${c}（${n} 条）`,
+    // 2.7.4 件C（D2026-1007-02）：修复生效配置明示行（C7 补链：生效
+    // provider/model 由后端 refine_preview_fix_config 统一解析，拒绝原因
+    // 明示行红色直显；确认框副行同键复用）
+    batchFixUsing: (p, m) => `修复将使用：${p} / ${m}`,
+    batchFixModelUnset: '未配置',
     // 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理（媒体重点对照，音频零出域）。
     // asr_panel_title 为静态 data-i18n 键（HTML+MSG+钉⑤三处同步）；其余 JS 态
     asr_panel_title: 'ASR 模型（媒体重点对照）',
@@ -5356,11 +5361,46 @@ function switchTab(tabId) {
     if (st) st.textContent = text || '';
   }
 
+  // 2.7.4 件C（D2026-1007-02）：修复生效配置常驻明示行（对齐
+  // aiRefreshEffective 先例）：生效 provider/model 由后端
+  // refine_preview_fix_config 统一解析（C7 fail-closed，与修复子进程
+  // 同一结果），拒绝时明示行红色直显原因；未加载导读时隐藏。
+  // 返回桥结果（供 batchFixRun 确认框副行复用），桥异常回 null。
+  function bfRefreshEffective() {
+    const el = $('batchFixEffectiveLine');
+    if (!el) return Promise.resolve(null);
+    if (!lastLoadedGuidePath || lastLoadedIsTxt) {
+      el.style.display = 'none';
+      return Promise.resolve(null);
+    }
+    if (!window.pywebview || !window.pywebview.api) {
+      return Promise.resolve(null);
+    }
+    return window.pywebview.api.refine_preview_fix_config()
+      .then((r) => {
+        if (!r) return null;
+        el.style.display = '';
+        if (r.ok) {
+          el.classList.remove('status-err');
+          el.textContent = MSG.batchFixUsing(
+            r.provider || MSG.batchFixModelUnset,
+            r.model || MSG.batchFixModelUnset);
+        } else {
+          el.classList.add('status-err');
+          el.textContent = r.reason || MSG.batchFixModelUnset;
+        }
+        return r;
+      })
+      .catch(() => null);
+  }
+
   function batchFixRefresh() {
     // 使能钩子：导读 json 加载成功后拉取行动条目（含台账已修标记）
     const btn = $('refineBatchFixBtn');
     const scope = $('refineBatchFixScope');
     if (!btn || !window.pywebview || !window.pywebview.api) return;
+    // 2.7.4 件C（D2026-1007-02）：明示行随刷新链同步（载入导读/修复结束共用）
+    bfRefreshEffective();
     if (!lastLoadedGuidePath || lastLoadedIsTxt) {
       lastActionItems = null;
       btn.disabled = true;
@@ -5442,12 +5482,23 @@ function switchTab(tabId) {
       const k = Number(g.index);
       if (Number.isFinite(k)) textMap[k] = String(g.current_text);
     });
+    // 2.7.4 件C（D2026-1007-02）：打开确认框前刷新明示行并取生效配置
+    // （与修复子进程同一解析结果；拒绝时确认框 warn 行直显原因）
+    const fixCfg = await bfRefreshEffective();
+    const fixCfgMeta = !fixCfg
+      ? null
+      : (fixCfg.ok
+          ? { text: MSG.batchFixUsing(
+                fixCfg.provider || MSG.batchFixModelUnset,
+                fixCfg.model || MSG.batchFixModelUnset) }
+          : { text: fixCfg.reason || MSG.batchFixModelUnset, warn: true });
     const go = await AppModal.batchFixPreview({
       title: MSG.batchFixConfirmTitle,
       okText: MSG.batchFixConfirmOk,
       meta: [
         { text: MSG.batchFixEstimate(batch.length) },
         { text: MSG.batchFixProvider(provLabel) },
+        fixCfgMeta,
         cloud ? { text: MSG.batchFixCloudCost, warn: true } : null,
         capNote ? { text: capNote, warn: true } : null,
       ].filter(Boolean),

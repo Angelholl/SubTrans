@@ -2305,6 +2305,20 @@ def _install_fake_stage3(gui_api_obj, monkeypatch, provider="deepseek",
                  "settings": {}, "key_status": {}, "first_run": False})
 
 
+def _install_fake_stages(gui_api_obj, monkeypatch, stage1=None, stage3=None):
+    """替身 refine_get_stage_settings：阶段A/B 双段可配
+    （C7 修复模型解析测试用，D2026-1007-02 件C）。"""
+    stages: list[dict] = []
+    if stage1 is not None:
+        stages.append({"stage": 1, **stage1})
+    if stage3 is not None:
+        stages.append({"stage": 3, **stage3})
+    monkeypatch.setattr(
+        gui_api_obj, "refine_get_stage_settings",
+        lambda: {"success": True, "stages": stages,
+                 "settings": {}, "key_status": {}, "first_run": False})
+
+
 class _FakePopen:
     def __init__(self, lines, rc=0):
         self.stdout = iter(lines)
@@ -2537,6 +2551,128 @@ def test_batch_fix_guard_path_missing(gui_api_obj, tmp_path):
     r = gui_api_obj.refine_batch_fix(
         str(tmp_path / "无_质量报告导读.json"), [3])
     assert r["success"] is False and r["error"]
+
+
+# ---------------------------------------------------------------------------
+# 2.7.4 件C（D2026-1007-02）：C7 修复模型解析补链
+# ---------------------------------------------------------------------------
+
+def test_resolve_fix_model_config_c7_rules(gui_api_obj, monkeypatch):
+    """C7 解析规则三例：B 全空+A 齐全 → 整组 A；B 有 provider 无 model
+    且 A 同 provider（大小写不敏感）→ B 端点组+A model；A 异 provider →
+    拒绝（fail-closed）。"""
+    # ① B 全空 → 整组回退阶段A
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "deepseek",
+                                 "endpoint": "https://a.example/v1",
+                                 "model": "a-model"},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": ""})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True and r["source"] == "stage_a_fallback"
+    assert (r["provider"], r["endpoint"], r["model"]) == \
+        ("deepseek", "https://a.example/v1", "a-model")
+    # ② B 有 provider 无 model 且 A 同 provider → B provider/endpoint
+    #    + A model（A provider 大小写不同也算同名）
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "DeepSeek",
+                                 "endpoint": "https://a.example/v1",
+                                 "model": "a-model"},
+                         stage3={"provider": "deepseek",
+                                 "endpoint": "https://b.example/v1",
+                                 "model": ""})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True
+    assert r["source"] == "stage_b_provider_stage_a_model"
+    assert (r["provider"], r["endpoint"], r["model"]) == \
+        ("deepseek", "https://b.example/v1", "a-model")
+    # ③ B 有 provider 无 model 且 A 异 provider → 拒绝 + 人话 reason
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "deepseek", "endpoint": "",
+                                 "model": "a-model"},
+                         stage3={"provider": "ollama",
+                                 "endpoint": "", "model": ""})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is False
+    assert r["reason"] and not any(
+        (r["provider"], r["endpoint"], r["model"]))
+
+
+def test_batch_fix_rejects_when_model_unresolvable(gui_api_obj, monkeypatch,
+                                                   tmp_path):
+    """两处皆空 → 拒绝且不 spawn（fail-closed：原空 model 放任子进程落
+    CLI 缺省空串 → pipeline RefineError 全败退出 1，现拦截在 GUI 层）。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "", "endpoint": "",
+                                 "model": ""},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": ""})
+    captured = _install_fake_bf_spawn(monkeypatch)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3])
+    assert r["success"] is False
+    assert "修复模型未配置" in r["error"]
+    assert "calls" not in captured          # 未 spawn
+
+
+def test_resolve_fix_model_config_b_model_only(gui_api_obj, monkeypatch):
+    """B model 非空 provider 空：A=lmstudio（或未配置）→ 维持现行为放行
+    带 source 标注；A 为其他 provider → 拒绝（防 lmstudio 本地端点 +
+    云模型名错配，fail-closed）。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "lmstudio", "endpoint": "",
+                                 "model": "qwen"},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": "b-model"})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True and r["provider"] == ""
+    assert r["source"] == "stage_b_model_provider_default"
+    assert r["model"] == "b-model"
+    # A 未配置：不算错配，维持现行为放行（provider 仍落 CLI 缺省）
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "", "endpoint": "",
+                                 "model": ""},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": "b-model"})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True
+    assert r["source"] == "stage_b_model_provider_default"
+    # A 云 provider → 拒绝
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "deepseek", "endpoint": "",
+                                 "model": "a-model"},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": "b-model"})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is False and "deepseek" in r["reason"]
+
+
+def test_refine_preview_fix_config_shape(gui_api_obj, monkeypatch):
+    """桥方法形状钉：只读不 spawn，恒返回六键形状（ok 布尔 + 五字符串），
+    拒绝带人话 reason；ok=True 分支 source=stage_b。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "", "endpoint": "",
+                                 "model": ""},
+                         stage3={"provider": "deepseek", "endpoint": "",
+                                 "model": ""})
+    r = gui_api_obj.refine_preview_fix_config()
+    assert set(r) == {"ok", "provider", "endpoint", "model",
+                      "source", "reason"}
+    assert r["ok"] is False
+    assert all(isinstance(r[k], str) for k in
+               ("provider", "endpoint", "model", "source", "reason"))
+    assert r["reason"]
+    # ok=True 分支同样形状
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage3={"provider": "deepseek", "endpoint": "",
+                                 "model": "sb-model"})
+    r = gui_api_obj.refine_preview_fix_config()
+    assert set(r) == {"ok", "provider", "endpoint", "model",
+                      "source", "reason"}
+    assert r["ok"] is True and r["source"] == "stage_b"
+    assert r["provider"] == "deepseek" and r["model"] == "sb-model"
+    assert r["reason"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -3825,6 +3961,75 @@ def test_preview_override_lru_cap_and_delete(gui_api_obj, monkeypatch,
     gui_api_obj.refine_save_media_override(str(guides[2]), "")
     assert gui_api_obj._media_override_key(str(guides[2])) not in \
         gui_api_obj._load_media_overrides()
+
+
+# ---------------------------------------------------------------------------
+# 2.7.4 件B（D2026-1007-02）：试听推断 leveled 剥链 + 边界感知前缀兜底（C5）
+# 共享剥链 asr_meta.strip_stem_suffixes 不动；api.py 内 _preview_stem_candidates
+# 专用 leveled 候选（闭集插入 ".merged"），首个命中层裁决 + 全层零命中前缀兜底。
+# ---------------------------------------------------------------------------
+
+def test_preview_infer_leveled_level0_no_fallback(gui_api_obj, monkeypatch,
+                                                  tmp_path):
+    """C5-a：X.mp4 与 X.ja.merged.mp4 同目录，导读 X.ja.merged.whisperjav
+    → level0（X.ja.merged）精确直配 X.ja.merged.mp4，不回退 X.mp4。"""
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    _make_video(tmp_path, "X.mp4")
+    merged = _make_video(tmp_path, "X.ja.merged.mp4")
+    guide = _make_guide(tmp_path, stem="X.ja.merged.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True and r["media_source"] == "inferred"
+    assert r["media_path"] == str(merged)
+
+
+def test_preview_infer_prefix_boundary_blocks_extension_spoof(
+        gui_api_obj, monkeypatch, tmp_path):
+    """C5-b：stem="X"、目录仅 X.merged.mp4 → 前缀兜底不命中（'.' 边界
+    防 "X" 误配 "X.merged.mp4" 扩展伪装）→ no_candidate 空候选。"""
+    _install_fake_ffprobe(monkeypatch)
+    _make_video(tmp_path, "X.merged.mp4")
+    guide = _make_guide(tmp_path, stem="X")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "no_candidate"
+    assert r["candidates"] == []
+
+
+def test_preview_infer_leveled_strip_merged_hits(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """C5-c：目录仅 X.mp4，导读 X.ja.merged.whisperjav（共享剥链停于
+    X.ja.merged）→ leveled 剥 ".merged" 至 X → 命中 X.mp4。"""
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    media = _make_video(tmp_path, "X.mp4")
+    guide = _make_guide(tmp_path, stem="X.ja.merged.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True and r["media_source"] == "inferred"
+    assert r["media_path"] == str(media)
+
+
+def test_preview_infer_legacy_path_no_regression(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """C5-d：老路径导读 X.ja.whisperjav（level0=X）仍直配 X.mp4，
+    leveled 改造零回退。"""
+    _install_fake_ffprobe(monkeypatch, video="h264", audio="aac")
+    media = _make_video(tmp_path, "X.mp4")
+    guide = _make_guide(tmp_path, stem="X.ja.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 10.0, 12.0)
+    assert r["ok"] is True and r["media_source"] == "inferred"
+    assert r["media_path"] == str(media)
+
+
+def test_preview_infer_leveled_multi_hit_fail_closed(gui_api_obj, monkeypatch,
+                                                     tmp_path):
+    """C5-e：leveled 命中层多候选（X.mp4 + X.mkv）→ no_candidate 带候选
+    列表（fail-closed：不向更深层回退，也不落前缀兜底）。"""
+    _install_fake_ffprobe(monkeypatch)
+    _make_video(tmp_path, "X.mp4")
+    _make_video(tmp_path, "X.mkv")
+    guide = _make_guide(tmp_path, stem="X.ja.merged.whisperjav")
+    r = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
+    assert r["ok"] is False and r["error_key"] == "no_candidate"
+    assert sorted(r["candidates"]) == ["X.mkv", "X.mp4"]
+    assert "X.mp4" in r["error"]
 
 
 def test_refine_ai_apply_tm_telemetry_features_only(gui_api_obj, monkeypatch,
