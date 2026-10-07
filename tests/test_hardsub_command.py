@@ -217,8 +217,8 @@ def test_parse_dequotes_wrapped_tokens():
 
 
 def test_parse_backslash_path_untouched():
-    toks = parse_custom_params(r'-tune "D:\dir a\b.mp4"')
-    assert toks == ["-tune", r"D:\dir a\b.mp4"]
+    toks = parse_custom_params(r'-threads "D:\dir a\b.mp4"')
+    assert toks == ["-threads", r"D:\dir a\b.mp4"]
 
 
 def test_custom_params_appended_before_output():
@@ -228,15 +228,44 @@ def test_custom_params_appended_before_output():
 
 
 # ---------------------------------------------------------------------------
-# backend=gpu 显式拒绝（A9）
+# backend=gpu（批2 解禁）：结构校验放行；构建期无编码器名显式拒绝（A9 延续：
+# 不静默降级 CPU——静默会让用户误以为在用 NVENC）
 # ---------------------------------------------------------------------------
-def test_gpu_rejected_not_silent():
-    with pytest.raises(ValueError) as ei:
-        validate_params(_params(backend="gpu"))
-    assert "GPU 后端将在 2.8.0 批2 提供" in str(ei.value)
+def test_gpu_requires_resolved_encoder():
+    validate_params(_params(backend="gpu"))   # 结构校验放行（可用性归供给层双检）
     with pytest.raises(ValueError, match="GPU"):
         build_ffmpeg_args(_params(backend="gpu"), "D:/vid/a.mp4", "D:/sub/a.srt",
                           1.0, True, "aac")
+    args, _ = build_ffmpeg_args(_params(backend="gpu", quality="quality"),
+                                "D:/vid/a.mp4", "D:/sub/a.srt", 1.0, True, "aac",
+                                gpu_encoder="hevc_nvenc")
+    assert "hevc_nvenc" in args and "-tune" in args and "hq" in args
+    assert "-rc" in args and "vbr" in args   # nvenc VBR 派生（owner AV1.xml 锚形态）
+
+
+def test_gpu_qsv_amf_mapping():
+    args, _ = build_ffmpeg_args(_params(backend="gpu", video_format="h265"),
+                                "D:/v.mp4", "D:/s.srt", 1.0, True, "aac",
+                                gpu_encoder="hevc_qsv")
+    assert "hevc_qsv" in args and "-global_quality" in args and "24" in args
+    args2, _ = build_ffmpeg_args(_params(backend="gpu", video_format="h264"),
+                                 "D:/v.mp4", "D:/s.srt", 1.0, True, "aac",
+                                 gpu_encoder="h264_amf")
+    assert "h264_amf" in args2 and "-quality" in args2
+
+
+def test_gpu_av1_amf_combo_rejected():
+    with pytest.raises(ValueError, match="av1"):
+        build_ffmpeg_args(_params(backend="gpu", video_format="av1"),
+                          "D:/v.mp4", "D:/s.srt", 1.0, True, "aac",
+                          gpu_encoder="h264_amf")
+
+
+def test_gpu_program_flags_banned_for_user():
+    """GPU 码控旗标（-tune/-global_quality/-quality/-rc）为程序特权，用户注入拒。"""
+    for flag in ("-tune hq", "-global_quality 24", "-quality balanced", "-rc vbr"):
+        with pytest.raises(BannedFlagError):
+            parse_custom_params(flag)
 
 
 def test_font_size_range():

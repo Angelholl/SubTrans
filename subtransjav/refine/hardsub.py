@@ -49,6 +49,38 @@ _RATE_CONTROL: dict[str, dict[str, tuple[int, str]]] = {
     "av1": {"compress": (55, "6"), "balanced": (45, "8"), "quality": (35, "10")},
 }
 
+# GPU 码控映射（批2，决策 MVP：NVENC p6/p7+tune hq+b:v 派生 1.45×/2.9×；
+# QSV global_quality+slower（owner HQ.xml 实锚 24@1080p）；AMF 未实测占位）。
+# {family: {fmt: {tier: (preset_value, quality_value)}}}——nvenc 两值=(p 档, None
+# 走 VBR 派生)；qsv/amf=(preset 名, global_quality/-quality 值)
+_GPU_FAMILIES = {
+    "nvenc": {
+        "h264": {"compress": ("p6", None), "balanced": ("p6", None), "quality": ("p7", None)},
+        "h265": {"compress": ("p6", None), "balanced": ("p6", None), "quality": ("p7", None)},
+        "av1": {"compress": ("p6", None), "balanced": ("p6", None), "quality": ("p7", None)},
+    },
+    "qsv": {
+        "h264": {"compress": ("slower", 26), "balanced": ("slower", 24), "quality": ("slower", 22)},
+        "h265": {"compress": ("slower", 26), "balanced": ("slower", 24), "quality": ("slower", 22)},
+        "av1": {"compress": ("slower", 26), "balanced": ("slower", 24), "quality": ("slower", 22)},
+    },
+    "amf": {
+        "h264": {"compress": ("speed", None), "balanced": ("balanced", None), "quality": ("quality", None)},
+        "h265": {"compress": ("speed", None), "balanced": ("balanced", None), "quality": ("quality", None)},
+        "av1": None,   # AMF 无 AV1 编码器（占位标注，决策 MVP）
+    },
+}
+
+# GPU 后端编码耗时系数（决策 ETA 分档 GPU≈1/5-8，取保守 0.25 供超时预算）
+_GPU_SPEED_FACTOR = 0.25
+
+# GPU 编码器候选链（决策 MVP：nvenc→qsv→amf，逐格式；amf 无 av1）
+_GPU_ENCODER_CHAIN: dict[str, list[tuple[str, str]]] = {
+    "h264": [("h264_nvenc", "nvenc"), ("h264_qsv", "qsv"), ("h264_amf", "amf")],
+    "h265": [("hevc_nvenc", "nvenc"), ("hevc_qsv", "qsv"), ("hevc_amf", "amf")],
+    "av1": [("av1_nvenc", "nvenc"), ("av1_qsv", "qsv")],
+}
+
 # VBR 模式 preset 恒取格式均衡档（批清单件1）
 _BALANCED_PRESET = {"h264": "medium", "h265": "medium", "av1": "8"}
 
@@ -117,11 +149,11 @@ class EncodeParams:
 
 
 def validate_params(params: EncodeParams) -> None:
-    """参数全量校验（枚举/范围），违规抛 ValueError。"""
-    if params.backend == "gpu":
-        # A9：显式拒绝不静默降级——静默走 CPU 会让用户误以为在用 NVENC
-        raise ValueError("GPU 后端将在 2.8.0 批2 提供")
-    if params.backend not in ("auto", "cpu"):
+    """参数全量校验（枚举/范围），违规抛 ValueError。
+
+    backend=gpu 批2 解禁：结构校验放行，实际可用性由供给层双检解析
+    （resolve_gpu_encoder），不可用显因拒绝（不静默降级，A9 语义延续）。"""
+    if params.backend not in ("auto", "cpu", "gpu"):
         raise ValueError(f"未知 backend: {params.backend}")
     if params.video_format not in _VIDEO_CODECS:
         raise ValueError(f"未知视频格式: {params.video_format}")
@@ -156,9 +188,29 @@ def reference_bitrate_kbps(video_format: str, resolution: str, quality: str) -> 
     return int(round(base * (width * height) / _1080P_PIXELS * tier))
 
 
-def speed_factor(video_format: str, quality: str) -> float:
-    """速度系数（编码耗时 ≈ k × 时长，spike 冻结表）；未知组合回落均衡档。"""
+def speed_factor(video_format: str, quality: str, backend: str = "auto") -> float:
+    """编码耗时系数（编码耗时 ≈ k × 时长，spike 冻结表）；未知组合回落均衡档。
+
+    backend=gpu 走 GPU 系数（决策 ETA 分档 GPU≈1/5-8，保守 0.25）。"""
+    if backend == "gpu":
+        return _GPU_SPEED_FACTOR
     return _SPEED_FACTOR.get(video_format, {}).get(quality, _SPEED_FACTOR[video_format]["balanced"])
+
+
+def gpu_encoder_chain(video_format: str) -> list[tuple[str, str]]:
+    """GPU 编码器候选链（nvenc→qsv→amf，amf 无 av1；决策 MVP）。"""
+    return _GPU_ENCODER_CHAIN[video_format]
+
+
+def gpu_family(encoder_name: str) -> str:
+    """由编码器名判族（nvenc/qsv/amf），未知名回空。"""
+    if encoder_name.endswith("_nvenc"):
+        return "nvenc"
+    if encoder_name.endswith("_qsv"):
+        return "qsv"
+    if encoder_name.endswith("_amf"):
+        return "amf"
+    return ""
 
 
 def escape_subtitles_path(path: str) -> str:
@@ -200,6 +252,7 @@ def build_ffmpeg_args(
     duration_s: float,
     has_audio: bool,
     audio_codec: str,
+    gpu_encoder: str = "",
 ) -> tuple[list[str], str]:
     """组装 ffmpeg argv（不含 exe 本体；队列层在前拼接 ffmpeg 路径）。
 
@@ -210,10 +263,17 @@ def build_ffmpeg_args(
     2-pass 候选与队列层统一入口；ffmpeg 直写 ``params.out_path``（队列层
     传 .part 路径实现原子成片）。``-progress pipe:1`` 固定注入（队列解析
     out_time_ms 实为微秒，api._transcode_sync 先例）。
+
+    ``gpu_encoder``：backend=gpu 时必填（供给层双检解析产物，如
+    hevc_nvenc）；backend=auto/cpu 传空。GPU 码控映射见 ``_GPU_FAMILIES``
+    （nvenc=VBR 派生+p6/p7+tune hq，owner AV1.xml 实锚；qsv=global_quality+
+    slower，owner HQ.xml 实锚；amf=quality 三挡占位未实测）。
     """
     validate_params(params)
     if not params.out_path:
         raise ValueError("缺少输出路径 out_path")
+    if params.backend == "gpu" and gpu_family(gpu_encoder) not in ("nvenc", "qsv", "amf"):
+        raise ValueError(f"GPU 后端需要供给层解析的编码器名，得到: {gpu_encoder!r}")
 
     args: list[str] = ["-i", media_path]
     # 固定注入（生成者=core）：容器/快启/去字幕流/主视频轨
@@ -234,12 +294,35 @@ def build_ffmpeg_args(
         else:
             args += ["-c:a", "aac", "-b:a", params.audio_mode]
 
-    codec = _VIDEO_CODECS[params.video_format]
-    if params.rate_mode == "target_vbr":
+    if params.backend == "gpu":
+        family = gpu_family(gpu_encoder)
+        args += ["-c:v", gpu_encoder]
+        table = _GPU_FAMILIES[family].get(params.video_format)
+        if table is None:
+            raise ValueError(f"{family} 无 {params.video_format} 编码器（该组合不可用）")
+        preset_v, quality_v = table[params.quality]
+        if family == "nvenc":
+            # owner AV1.xml 实锚形态：VBR b:v 派生 + maxrate/bufsize 1.45×/2.9×
+            kbps = params.target_bitrate_kbps or reference_bitrate_kbps(
+                params.video_format, params.resolution, params.quality)
+            args += ["-preset", preset_v, "-tune", "hq", "-rc", "vbr",
+                     "-b:v", f"{kbps}k",
+                     "-maxrate", f"{int(kbps * _VBR_MAXRATE_RATIO)}k",
+                     "-bufsize", f"{int(kbps * _VBR_BUFSIZE_RATIO)}k"]
+        elif family == "qsv":
+            args += ["-preset", preset_v, "-global_quality", str(quality_v)]
+        else:   # amf（占位，未实测——决策 MVP 标注）
+            args += ["-quality", preset_v]
+            kbps = params.target_bitrate_kbps or reference_bitrate_kbps(
+                params.video_format, params.resolution, params.quality)
+            args += ["-rc", "vbr_peak", "-b:v", f"{kbps}k",
+                     "-maxrate", f"{int(kbps * _VBR_MAXRATE_RATIO)}k",
+                     "-bufsize", f"{int(kbps * _VBR_BUFSIZE_RATIO)}k"]
+    elif params.rate_mode == "target_vbr":
         kbps = params.target_bitrate_kbps or reference_bitrate_kbps(
             params.video_format, params.resolution, params.quality)
         args += [
-            "-c:v", codec,
+            "-c:v", _VIDEO_CODECS[params.video_format],
             "-b:v", f"{kbps}k",
             "-maxrate", f"{int(kbps * _VBR_MAXRATE_RATIO)}k",
             "-bufsize", f"{int(kbps * _VBR_BUFSIZE_RATIO)}k",
@@ -247,7 +330,8 @@ def build_ffmpeg_args(
         ]
     else:
         crf, preset = _RATE_CONTROL[params.video_format][params.quality]
-        args += ["-c:v", codec, "-crf", str(crf), "-preset", preset]
+        args += ["-c:v", _VIDEO_CODECS[params.video_format],
+                 "-crf", str(crf), "-preset", preset]
 
     args += ["-vf", _build_filter_chain(params, subtitle_path)]
     # 逃生门：三层黑名单校验通过才 append（命中抛 BannedFlagError）
@@ -265,7 +349,8 @@ class BannedFlagError(ValueError):
     """custom_params 命中黑名单/别名/守卫（消息含旗标名）。"""
 
 
-# canonical 归一集：原十五件套 + 轮4 六件 + 本轮四件 + HRO-2 补充（全 38 件）
+# canonical 归一集：原十五件套 + 轮4 六件 + 本轮四件 + HRO-2 补充 + 批2 GPU
+# 程序特权旗标（41 件）；黑名单只约束用户逃生门，程序侧不受限
 _BANNED_CANONICAL = frozenset({
     "-i", "-f", "-c:v", "-c:a", "-c:s", "-vf", "-filter:v", "-map",
     "-ss", "-t", "-to", "-y", "-n", "-metadata", "-map_metadata",
@@ -274,6 +359,8 @@ _BANNED_CANONICAL = frozenset({
     "-pix_fmt", "-filter_complex", "-c", "-vcodec", "-acodec",
     "-profile:v", "-x264-params", "-x265-params", "-svtav1-params",
     "-movflags", "-r", "-fps_mode", "-codec",
+    # 批2 GPU 码控映射程序特权旗标（用户覆盖会破坏 nvenc/qsv/amf 映射契约）
+    "-tune", "-global_quality", "-quality",
 })
 
 # 别名归一表：别名 → canonical，归一后查 canonical 集
@@ -350,6 +437,8 @@ def parse_custom_params(s: str) -> list[str]:
 # 生成者注册表（程序侧旗标声明；自洽钉见 assert_generators_consistent）。
 # - core：核心构建（容器/映射/码控/音频）
 # - subtitles / enhance：均只产出 -vf 滤镜串内容（串内内容非旗标）
+# - gpu：批2 硬件后端（nvenc/qsv/amf 码控映射；程序特权旗标含黑名单成员
+#   ——黑名单只约束用户逃生门，程序侧不受限）
 # - 批3 预留：音量增益（-af 生成者）届时注册
 _GENERATOR_REGISTRY: dict[str, frozenset] = {
     "core": frozenset({
@@ -358,6 +447,10 @@ _GENERATOR_REGISTRY: dict[str, frozenset] = {
     }),
     "subtitles": frozenset({"-vf"}),
     "enhance": frozenset({"-vf"}),
+    "gpu": frozenset({
+        "-c:v", "-preset", "-tune", "-rc", "-b:v", "-maxrate", "-bufsize",
+        "-global_quality", "-quality",
+    }),
 }
 
 # 非受限旗标：不进注册表的结构性 IO 项（-i/-y/-progress）与程序 VBR 三元组
@@ -385,6 +478,17 @@ def assert_generators_consistent() -> None:
                                       out_path="D:/out/x_hardsub.mp4")
                 args, _ = build_ffmpeg_args(params, "D:/in/x.mp4", "D:/in/x.srt",
                                             60.0, has_audio, "aac")
+                emitted |= {a for a in args if a.startswith("-") and a != "-"}
+    # GPU 空间（批2）：逐族逐格式逐档——amf/av1 组合不可用（映射表 None）
+    for chain_name, _family in (("h264_nvenc", "nvenc"), ("h264_qsv", "qsv"),
+                                ("h264_amf", "amf")):
+        for quality in ("compress", "balanced", "quality"):
+            for rate_mode in ("quality_tier", "target_vbr"):
+                params = EncodeParams(video_format="h264", rate_mode=rate_mode,
+                                      backend="gpu", quality=quality,
+                                      out_path="D:/out/x_hardsub.mp4")
+                args, _ = build_ffmpeg_args(params, "D:/in/x.mp4", "D:/in/x.srt",
+                                            60.0, True, "aac", gpu_encoder=chain_name)
                 emitted |= {a for a in args if a.startswith("-") and a != "-"}
     unregistered = emitted - declared - _UNRESTRICTED_FLAGS
     if unregistered:

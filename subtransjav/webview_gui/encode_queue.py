@@ -39,6 +39,7 @@ from subtransjav.refine.ffmpeg_supply import (
     MediaInfo,
     SupplyResult,
     probe_media,
+    resolve_gpu_encoder,
     resolve_hardsub_ffmpeg,
 )
 from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW  # 窗口标志单一来源（批0）
@@ -389,17 +390,45 @@ class EncodeQueue:
             except FfprobeError as e:
                 self._fail(job, f"媒体探测失败：{e}")
                 return
+        # GPU 解析（批2）：auto=GPU 优先回落 CPU（选择结果记 note 透出）；
+        # 显式 gpu 不可用=显因拒绝（不静默降级，A9 语义延续）。
+        # ffmpeg 路径不存在（测试假供给/异常环境）直接跳过解析不触进程。
+        gpu_encoder = ""
+        effective_backend = job.params.backend
+        can_probe_gpu = (supply.ffmpeg_path and os.path.isfile(supply.ffmpeg_path))
+        if job.params.backend in ("gpu", "auto") and can_probe_gpu:
+            try:
+                enc, reasons = resolve_gpu_encoder(supply.ffmpeg_path,
+                                                   job.params.video_format)
+            except Exception as e:  # noqa: BLE001  探测异常按不可用显因
+                enc, reasons = "", [str(e)]
+            if enc:
+                gpu_encoder = enc
+                effective_backend = "gpu"
+                if job.params.backend == "auto":
+                    job.note = f"已选用硬件编码 {enc}"
+            elif job.params.backend == "gpu":
+                self._fail(job, "GPU 编码不可用：" + "；".join(reasons))
+                return
+            else:
+                effective_backend = "cpu"   # auto 回落 CPU
         try:
+            # auto+GPU 命中时按 effective_backend 构建（build 只在 backend=gpu
+            # 分支消费 gpu_encoder；auto 语义已在解析层落定）
+            build_params = (replace(job.params, backend=effective_backend)
+                            if effective_backend != job.params.backend
+                            else job.params)
             args, fall_reason = hardsub.build_ffmpeg_args(
-                job.params, job.video_path, job.subtitle_path, info.duration_s,
-                info.has_audio, info.audio_codec)
+                build_params, job.video_path, job.subtitle_path, info.duration_s,
+                info.has_audio, info.audio_codec, gpu_encoder=gpu_encoder)
         except ValueError as e:  # 含 BannedFlagError（逃生门黑名单）
             self._fail(job, f"参数构建失败：{e}")
             return
         if fall_reason:
             job.note = fall_reason  # C6：回落原因透出 UI
 
-        speed = hardsub.speed_factor(job.params.video_format, job.params.quality)
+        speed = hardsub.speed_factor(job.params.video_format, job.params.quality,
+                                     backend=effective_backend)
         duration = info.duration_s
         # C2 总超时：统一安全系数 max(speed×4, 2)，与固定下限 duration×3+120 取大
         total_timeout = max(duration * 3 + 120.0, duration * max(speed * 4.0, 2.0))

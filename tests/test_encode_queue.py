@@ -413,6 +413,52 @@ def test_on_idle_fires_once_after_queue_drains(tmp_path, fake_env, monkeypatch):
     assert len(calls) == 1
 
 
+def test_gpu_explicit_unavailable_fails_and_auto_falls_cpu(tmp_path, fake_env,
+                                                           monkeypatch):
+    """批2 GPU 分支：显式 gpu 不可用=显因拒绝；auto 回落 CPU 跑通。"""
+    fake_ff = tmp_path / "ff.exe"
+    fake_ff.write_bytes(b"x")   # 真实存在→can_probe_gpu 通过（解析本身被桩）
+    monkeypatch.setattr(eq, "resolve_hardsub_ffmpeg",
+                        lambda *a, **k: fsup.SupplyResult(
+                            ffmpeg_path=str(fake_ff), ffprobe_path=str(fake_ff),
+                            capability={}, missing=[]))
+    monkeypatch.setattr(eq, "resolve_gpu_encoder",
+                        lambda *a, **k: ("", ["h264_nvenc: 试编码失败（x）"]))
+    spawner = FakeSpawner([dict(rc=0), dict(rc=0)])
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", spawner)
+    q = fresh_queue()
+    job = mkjob(tmp_path, 1, backend="gpu")
+    acc, _ = q.enqueue_batch([job])
+    assert wait_until(lambda: acc[0].state == "failed")
+    assert "GPU 编码不可用" in acc[0].error
+    assert spawner.procs == []   # 未起进程即拒
+    # auto：GPU 不可用回落 CPU 正常完成
+    q2 = fresh_queue()
+    job2 = mkjob(tmp_path, 2, backend="auto")
+    acc2, _ = q2.enqueue_batch([job2])
+    assert wait_until(lambda: acc2[0].state == "done")
+
+
+def test_gpu_auto_prefers_gpu_and_notes(tmp_path, fake_env, monkeypatch):
+    """auto+GPU 可用：走 GPU 编码器且 note 透出选择。"""
+    fake_ff = tmp_path / "ff2.exe"
+    fake_ff.write_bytes(b"x")
+    monkeypatch.setattr(eq, "resolve_hardsub_ffmpeg",
+                        lambda *a, **k: fsup.SupplyResult(
+                            ffmpeg_path=str(fake_ff), ffprobe_path=str(fake_ff),
+                            capability={}, missing=[]))
+    monkeypatch.setattr(eq, "resolve_gpu_encoder",
+                        lambda *a, **k: ("h264_nvenc", []))
+    spawner = FakeSpawner([dict(rc=0)])
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", spawner)
+    q = fresh_queue()
+    job = mkjob(tmp_path, 3, backend="auto")
+    acc, _ = q.enqueue_batch([job])
+    assert wait_until(lambda: acc[0].state == "done")
+    assert "h264_nvenc" in spawner.procs[0].argv
+    assert "硬件编码" in acc[0].note
+
+
 # ---------------------------------------------------------------------------
 # retry / snapshot / id
 # ---------------------------------------------------------------------------

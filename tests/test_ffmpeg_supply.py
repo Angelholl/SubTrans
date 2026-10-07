@@ -425,3 +425,73 @@ def test_fetch_completes_without_content_length(tmp_path):
                          opener_factory=lambda: FakeOpener(resp))
     assert received == 15
     assert dest.read_bytes() == b"a" * 10 + b"b" * 5
+
+
+# ---------------------------------------------------------------------------
+# GPU 后端解析（批2：nvenc→qsv→amf 双检链）
+# ---------------------------------------------------------------------------
+def _fake_tool_runner(encoders_text, fail_encoders=()):
+    def runner(cmd):
+        if cmd[-1] == "-encoders":
+            return 0, encoders_text, ""
+        for enc in fail_encoders:
+            if enc in cmd:
+                return 1, "", f"Cannot load {enc}"
+        return 0, "", ""
+    return runner
+
+
+def test_resolve_gpu_encoder_picks_first_working(tmp_path):
+    exe = tmp_path / "f1.exe"
+    exe.write_bytes(b"x")
+    runner = _fake_tool_runner(" V....D h264_nvenc Encoding\n V....D h264_qsv Encoding\n")
+    picked, reasons = fs.resolve_gpu_encoder(str(exe), "h264", runner=runner)
+    assert picked == "h264_nvenc" and reasons == []
+
+
+def test_resolve_gpu_encoder_falls_to_next_on_run_fail(tmp_path):
+    exe = tmp_path / "f2.exe"
+    exe.write_bytes(b"x")
+    runner = _fake_tool_runner(" V....D h264_nvenc \n V....D h264_qsv \n",
+                               fail_encoders=("h264_nvenc",))
+    picked, reasons = fs.resolve_gpu_encoder(str(exe), "h264", runner=runner)
+    assert picked == "h264_qsv"
+    assert any("nvenc" in r and "试编码失败" in r for r in reasons)
+
+
+def test_resolve_gpu_encoder_all_fail_reasons(tmp_path):
+    exe = tmp_path / "f3.exe"
+    exe.write_bytes(b"x")
+    runner = _fake_tool_runner("")
+    picked, reasons = fs.resolve_gpu_encoder(str(exe), "h264", runner=runner)
+    assert picked == "" and len(reasons) == 3   # 三候选全显因
+    assert all("未编译" in r for r in reasons)
+
+
+def test_resolve_gpu_encoder_av1_chain_no_amf(tmp_path):
+    exe = tmp_path / "f4.exe"
+    exe.write_bytes(b"x")
+    runner = _fake_tool_runner(" V....D av1_nvenc \n")
+    picked, _ = fs.resolve_gpu_encoder(str(exe), "av1", runner=runner)
+    assert picked == "av1_nvenc"
+    # amf 不在 av1 链：全败显因只有 2 条
+    runner2 = _fake_tool_runner("")
+    exe2 = tmp_path / "f5.exe"
+    exe2.write_bytes(b"x")
+    _picked2, reasons2 = fs.resolve_gpu_encoder(str(exe2), "av1", runner=runner2)
+    assert len(reasons2) == 2
+
+
+def test_resolve_gpu_encoder_cached(tmp_path):
+    exe = tmp_path / "f6.exe"
+    exe.write_bytes(b"x")
+    calls = []
+
+    def runner(cmd):
+        calls.append(1)
+        return 0, " V....D h264_nvenc \n", ""
+
+    fs.resolve_gpu_encoder(str(exe), "h264", runner=runner)
+    n = len(calls)
+    fs.resolve_gpu_encoder(str(exe), "h264", runner=runner)
+    assert len(calls) == n   # 缓存命中不再探测

@@ -388,6 +388,70 @@ def _sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
+# ---------------------------------------------------------------------------
+# GPU 后端解析（批2，决策 MVP：nvenc→qsv→amf 构建级+1s 运行双检）
+# ---------------------------------------------------------------------------
+
+_GPU_PROBE_TIMEOUT_S = 15.0    # 1s 试编码的进程上限（慢机裕度）
+
+
+def _gpu_run_check(ffmpeg_path: str, encoder: str,
+                   runner=None) -> tuple[bool, str]:
+    """1s 试编码双检第二级：真实起一帧编码到 null，非零退出=不可用。
+
+    构建级（-encoders 列表命中）只证明「编译进去了」；驱动不支持/显卡
+    代际不够时起编即败——必须真跑一次。返回 (ok, 失败显因尾)。
+    ``runner`` 可注入（签名同 _run_tool），测试用。"""
+    run = runner or _run_tool
+    rc, _out, err = run(
+        [ffmpeg_path, "-hide_banner", "-v", "error", "-f", "lavfi",
+         "-i", "color=black:s=256x256:d=0.1", "-frames:v", "1",
+         "-c:v", encoder, "-f", "null", "-"])
+    if rc == 0:
+        return True, ""
+    tail = ((err or "").strip().splitlines() or [""])[-1][:160]
+    return False, tail
+
+
+def resolve_gpu_encoder(ffmpeg_path: str, video_format: str,
+                        runner=None) -> tuple[str, list[str]]:
+    """按候选链（nvenc→qsv→amf，amf 无 av1）解析首个可用 GPU 编码器。
+
+    双检：构建级（-encoders 命中）+ 1s 试编码真跑；任一失败即该候选
+    显因跳过。返回 (encoder_name 或 "", 逐候选显因链)。结果按（二进制
+    路径+mtime, 格式）缓存（懒执行+按(二进制,encoder)缓存，决策 MVP）。
+    ``runner`` 可注入（签名同 _run_tool），测试用。"""
+    from subtransjav.refine.hardsub import gpu_encoder_chain
+    chain = gpu_encoder_chain(video_format)
+    try:
+        mtime = os.path.getmtime(ffmpeg_path)
+    except OSError:
+        mtime = -1.0
+    cache_key = ("gpu", os.path.normcase(os.path.abspath(ffmpeg_path)),
+                 mtime, video_format)
+    hit = _CAPABILITY_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
+    run = runner or _run_tool
+    enc_rc, enc_out, _ = run([ffmpeg_path, "-encoders"])
+    enc_names = _parse_tool_names(enc_out, ("Encoders:",)) if enc_rc == 0 else set()
+    reasons: list[str] = []
+    picked = ""
+    for enc_name, _family in chain:
+        if enc_name not in enc_names:
+            reasons.append(f"{enc_name}: 未编译进该 ffmpeg")
+            continue
+        ok, tail = _gpu_run_check(ffmpeg_path, enc_name, runner)
+        if not ok:
+            reasons.append(f"{enc_name}: 试编码失败（{tail or '非零退出'}）")
+            continue
+        picked = enc_name
+        break
+    result = (picked, reasons)
+    _CAPABILITY_CACHE[cache_key] = result
+    return result
+
+
 def download_full_variant(
     dest_dir: str,
     progress_cb=None,

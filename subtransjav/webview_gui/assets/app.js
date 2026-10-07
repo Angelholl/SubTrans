@@ -94,8 +94,19 @@ const MSG = {
     encodeModalAudio: '音频',
     encodeAudioCopy: '直接复制（推荐）',
     encodeModalEnhance: '画质增强（降噪+锐化；关闭=忠实源）',
-    encodeModalAdvanced: '高级（批2 启用）',
+    encodeModalAdvanced: '高级',
     encodeModalAdvancedPh: '自定义参数 / 预设管理 —— 批2 面板完整化时启用',
+    encodePresetLabel: '预设',
+    encodePresetSave: '存为预设',
+    encodePresetDelete: '删除',
+    encodePresetBuiltinGroup: '内置',
+    encodePresetUserGroup: '我的预设',
+    encodePresetNamePrompt: '预设名称：',
+    encodePresetSaved: '预设已保存',
+    encodePresetDeleteConfirm: '删除预设「{n}」？',
+    encodeCustomLabel: '自定义参数（逃生门，追加到命令尾部）',
+    encodeCustomHint: '以空格分隔，如：-crf 18 -threads 8；与面板参数冲突或破坏固定约束（像素格式/滤镜链/码控映射）的旗标会被拒绝并显因',
+    encodeAv1Warn: 'AV1 编码耗时显著更长（CPU 下与视频时长同量级），请留意预估时长',
     encodeJobsLine: '共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边',
     encodeSecBase: '基础',
     encodeSecSubAudio: '字幕与音频',
@@ -1802,6 +1813,7 @@ const AppModal = {
         if (!root) return Promise.resolve(null);            // 骨架缺席兜底
         const o = opts || {};
         const jobs = o.jobs || [];
+        const api = window.pywebview && window.pywebview.api;   // 预设通道（models 先例）
         const body = root.querySelector('.modal-body');
         const cancelBtn = root.querySelector('.modal-cancel');
         const okBtn = root.querySelector('.modal-ok');
@@ -1854,11 +1866,18 @@ const AppModal = {
             { v: 'h265', t: MSG.encodeFmtH265 },
             { v: 'av1', t: MSG.encodeFmtAv1 },
         ], last.video_format || 'h264');
+        // 后端（批2）：GPU 编码器经供给层双检解析——可用则点亮并显名，
+        // 不可用保持禁用并以 title 透出逐候选显因（A9 不静默降级）
+        const gpuEnc = (o.gpu && o.gpu.encoder) || "";
         const elBackend = mkSelect(mkField(grid1, MSG.encodeModalBackend), [
             { v: 'auto', t: MSG.encodeBackendAuto },
             { v: 'cpu', t: 'CPU' },
-            { v: 'gpu', t: MSG.encodeBackendGpu, disabled: true },
+            { v: 'gpu', t: gpuEnc ? ('GPU（' + gpuEnc + '）') : MSG.encodeBackendGpu,
+              disabled: !gpuEnc },
         ], 'auto');
+        if (!gpuEnc && o.gpu && o.gpu.reasons && o.gpu.reasons.length) {
+            elBackend.title = o.gpu.reasons.join('；');
+        }
         const elQuality = mkSelect(mkField(grid1, MSG.encodeModalQuality), [
             { v: 'compress', t: MSG.encodeQCompress },
             { v: 'balanced', t: MSG.encodeQBalanced },
@@ -1898,6 +1917,15 @@ const AppModal = {
         } else {
             etaRow.textContent = '⏱ ' + MSG.encodeEtaNone;
         }
+        // 长任务硬性规定③（E3 批2 落点）：AV1 警告条（预期管理）
+        const av1Warn = mk('div', 'enc-eta-row', sec1);
+        av1Warn.style.background = 'var(--warn-soft)';
+        av1Warn.style.display = 'none';
+        av1Warn.textContent = '⚠ ' + MSG.encodeAv1Warn;
+        elFmt.addEventListener('change', () => {
+            av1Warn.style.display = elFmt.value === 'av1' ? '' : 'none';
+        });
+        if (elFmt.value === 'av1') av1Warn.style.display = '';
 
         // —— 分区 2：字幕与音频 ——
         const sec2 = mk('div', 'enc-section', body);
@@ -1921,14 +1949,116 @@ const AppModal = {
         elEnhance.checked = last.enhance_on !== false;
         enhLabel.appendChild(document.createTextNode(' ' + MSG.encodeModalEnhance));
 
-        // —— 分区 3：高级（批2 启用；C8 置空禁用占位）——
-        const sec3 = mk('div', 'enc-section disabled', body);
+        // —— 分区 3：高级（批2 启用：预设管理+自定义参数逃生门；增强链
+        //     参数旋钮归批3）——
+        const sec3 = mk('div', 'enc-section', body);
         mk('h4', null, sec3).textContent = MSG.encodeModalAdvanced;
-        mk('div', 'enc-placeholder', sec3).textContent = MSG.encodeModalAdvancedPh;
+        const grid3 = mk('div', 'enc-grid', sec3);
+        const presetField = mkField(grid3, MSG.encodePresetLabel);
+        presetField.classList.add('full');
+        const presetRow = mk('div', null, presetField);
+        presetRow.style.display = 'flex';
+        presetRow.style.gap = '6px';
+        const elPreset = mk('select', 'form-select', presetRow);
+        const saveBtn = mk('button', 'btn btn-secondary btn-compact', presetRow);
+        saveBtn.type = 'button';
+        saveBtn.textContent = MSG.encodePresetSave;
+        const delBtn = mk('button', 'btn btn-ghost btn-compact', presetRow);
+        delBtn.type = 'button';
+        delBtn.textContent = MSG.encodePresetDelete;
+        const cpField = mkField(grid3, MSG.encodeCustomLabel);
+        cpField.classList.add('full');
+        const elCustom = mk('textarea', 'form-input', cpField);
+        elCustom.rows = 2;
+        elCustom.placeholder = MSG.encodeCustomHint;
+        if (last.custom_params) elCustom.value = String(last.custom_params);
+
+        // 表单值回填（预设加载用；字段全集=collect 快照）
+        const applyParams = (p) => {
+            p = p || {};
+            if (p.video_format) elFmt.value = p.video_format;
+            if (p.quality) elQuality.value = p.quality;
+            if (p.resolution) elRes.value = p.resolution;
+            if (p.rate_mode) elRate.value = p.rate_mode;
+            elBitrate.style.display = elRate.value === 'target_vbr' ? '' : 'none';
+            if (p.target_bitrate_kbps) elBitrate.value = String(p.target_bitrate_kbps);
+            if (p.audio_mode) elAudio.value = p.audio_mode;
+            if (p.font_size) elFont.value = String(p.font_size);
+            if (typeof p.enhance_on === 'boolean') elEnhance.checked = p.enhance_on;
+            if (typeof p.custom_params === 'string') elCustom.value = p.custom_params;
+            av1Warn.style.display = elFmt.value === 'av1' ? '' : 'none';
+        };
+        const fillPresets = async () => {
+            let pl = null;
+            try { pl = await api.encode_presets_list(); } catch (e) { pl = null; }
+            elPreset.textContent = '';
+            if (pl && pl.success) {
+                const g1 = document.createElement('optgroup');
+                g1.label = MSG.encodePresetBuiltinGroup;
+                (pl.builtin || []).forEach((p) => {
+                    const op = document.createElement('option');
+                    op.value = '__b__:' + p.name;
+                    op.textContent = p.name;
+                    g1.appendChild(op);
+                });
+                elPreset.appendChild(g1);
+                const names = Object.keys(pl.user || {});
+                if (names.length) {
+                    const g2 = document.createElement('optgroup');
+                    g2.label = MSG.encodePresetUserGroup;
+                    names.forEach((n) => {
+                        const op = document.createElement('option');
+                        op.value = '__u__:' + n;
+                        op.textContent = n;
+                        g2.appendChild(op);
+                    });
+                    elPreset.appendChild(g2);
+                }
+            }
+        };
+        elPreset.addEventListener('change', async () => {
+            const v = elPreset.value || '';
+            if (v.startsWith('__b__:')) {
+                let pl = null;
+                try { pl = await api.encode_presets_list(); } catch (e) { return; }
+                const hit = (pl.builtin || []).find((p) => p.name === v.slice(6));
+                if (hit) applyParams(hit.params);
+            } else if (v.startsWith('__u__:')) {
+                let pl = null;
+                try { pl = await api.encode_presets_list(); } catch (e) { return; }
+                const hit = (pl.user || {})[v.slice(6)];
+                if (hit) applyParams(hit);
+            }
+        });
+        saveBtn.addEventListener('click', async () => {
+            const name = await AppModal.prompt(MSG.encodePresetNamePrompt, '');
+            if (!name || !String(name).trim()) return;
+            try {
+                const r = await api.encode_preset_save(String(name).trim(), collect());
+                if (r && r.success) await fillPresets();
+                AppModal.alert(MSG.encodeModalTitle,
+                    r && r.success ? MSG.encodePresetSaved : String(r && r.error || ''));
+            } catch (e) {
+                AppModal.alert(MSG.encodeModalTitle, String(e));
+            }
+        });
+        delBtn.addEventListener('click', async () => {
+            const v = elPreset.value || '';
+            if (!v.startsWith('__u__:')) return;   // 内置三档不可删
+            const name = v.slice(6);
+            const ok = await AppModal.confirm(
+                MSG.encodeModalTitle, MSG.encodePresetDeleteConfirm.replace('{n}', name));
+            if (!ok) return;
+            try {
+                const r = await api.encode_preset_delete(name);
+                if (r && r.success) await fillPresets();
+            } catch (e) { /* 下次打开自愈 */ }
+        });
+        fillPresets();
 
         const collect = () => ({
             video_format: elFmt.value,
-            backend: 'auto',   // 批1 恒 auto（gpu 档仅展示禁用，A9 显式拒绝在后端）
+            backend: elBackend.value === 'gpu' && gpuEnc ? 'gpu' : 'auto',
             quality: elQuality.value,
             resolution: elRes.value,
             rate_mode: elRate.value,
@@ -1938,6 +2068,7 @@ const AppModal = {
             font_size: Math.min(72, Math.max(12, parseInt(elFont.value, 10) || 22)),
             enhance_on: elEnhance.checked,
             out_dir: elOutDir.value.trim(),
+            custom_params: elCustom.value.trim(),
         });
         okBtn.onclick = () => AppModal._settle(true);
 
@@ -7350,10 +7481,14 @@ const EncodeDock = {
             AppModal.alert(MSG.encodeModalTitle, why + '（' + (pre.items || []).length + ' 个文件）');
             return;
         }
+        let presets = null;
+        try { presets = await api.encode_presets_list(); } catch (e) { presets = null; }
         const res = await AppModal.encode({
             jobs: valid,
             totalEtaS: pre.total_eta_s,
             last: this._lastParams || {},
+            presets,
+            gpu: pre.gpu,
         });
         if (!res || !res.ok) return;
         this._lastParams = res.params;

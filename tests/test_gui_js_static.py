@@ -2304,9 +2304,8 @@ def test_batch_fix_run_uses_structured_preview():
         "分类明细必须按数量降序（设计取舍，非字母序）"
     assert "Number.isFinite(k)" in caller, "textMap 键须 Number 强转守卫"
     # confirm 其余调用点零变化（原 7 处，2.7.4 件C 迁走批量修复一处→余 6；
-    # 2.8.0 批1 EncodeDock 新增 4 处：供给下载确认/单任务取消/整队取消/
-    # 覆盖确认→10）
-    assert src.count("AppModal.confirm(") == 10, \
+    # 2.8.0 批1 EncodeDock 新增 4 处→10；批2 预设删除确认 +1→11）
+    assert src.count("AppModal.confirm(") == 11, \
         "AppModal.confirm 调用点数量漂移（增删须显式改钉并回评议）"
 
 

@@ -1793,8 +1793,10 @@ class TranslateAPI:
                         saved_settings += 1
 
                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
+                # 批2（D2026-1007-03）：原子写改造——中断不再留半截设置文件
+                # （mkstemp+fsync+os.replace，fs_utils 单一来源）
+                from subtransjav.refine.fs_utils import _atomic_write_text
+                _atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
             if keys:
                 from subtransjav.refine.secrets import store_secret
                 for item in keys or []:
@@ -4320,7 +4322,8 @@ class TranslateAPI:
 
         逐 job：存在性（视频/字幕）→ ffprobe 探测 → 产物路径/覆盖 →
         体积估算与 ETA。供给缺口整体返回 supply_missing（前端引导按需
-        下载）。ffmpeg 未就绪时跳过探测，仅返回存在性结果。
+        下载）。ffmpeg 未就绪时跳过探测，仅返回存在性结果。批2 增：
+        所选格式的 GPU 编码器解析（双检懒缓存，供面板后端选项显因）。
         """
         try:
             parsed = self._parse_encode_params(params)
@@ -4376,7 +4379,17 @@ class TranslateAPI:
             "encode_running": encode_active(),
             "items": items,
             "total_eta_s": round(total_eta, 1),
+            "gpu": self._resolve_gpu_for_preflight(supply, parsed),
         }
+
+    @staticmethod
+    def _resolve_gpu_for_preflight(supply, parsed) -> dict[str, Any]:
+        """所选格式的 GPU 编码器解析（ffmpeg 就绪时；双检懒缓存）。"""
+        if supply.missing or not supply.ffmpeg_path:
+            return {"encoder": "", "reasons": ["ffmpeg 未就绪"]}
+        from subtransjav.refine.ffmpeg_supply import resolve_gpu_encoder
+        enc, reasons = resolve_gpu_encoder(supply.ffmpeg_path, parsed.video_format)
+        return {"encoder": enc, "reasons": reasons}
 
     def encode_commit(self, jobs: list[dict[str, Any]],
                       params: dict[str, Any],
@@ -4478,6 +4491,92 @@ class TranslateAPI:
             return {"success": True, "params": data if isinstance(data, dict) else {}}
         except Exception:
             return {"success": True, "params": {}}
+
+    # -- 自建预设（批2：hardsub_presets.json KV 上限 20，损坏降级+.bak）----
+
+    _HARDSUB_PRESET_CAP = 20
+
+    @staticmethod
+    def _hardsub_presets_path() -> str:
+        from subtransjav.refine.config import CONFIG_DIR
+        return os.path.join(str(CONFIG_DIR), "hardsub_presets.json")
+
+    def _load_hardsub_presets(self) -> dict[str, Any]:
+        """预设装载：形状损坏→key 级降级（留 .bak 档案）回空表，不抛。"""
+        path = self._hardsub_presets_path()
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and isinstance(data.get("presets"), dict):
+                return {str(k): v for k, v in data["presets"].items()
+                        if isinstance(k, str) and isinstance(v, dict)}
+            raise ValueError("形状不符")
+        except Exception:
+            if os.path.isfile(path):
+                import shutil
+                with contextlib.suppress(OSError):
+                    shutil.copy2(path, path + ".bak")
+                _log_exc("_load_hardsub_presets(降级)")
+            return {}
+
+    def _save_hardsub_presets(self, presets: dict[str, Any]) -> None:
+        """预设原子落盘（_atomic_write_text；写前旧档滚动 .bak）。"""
+        import shutil
+
+        from subtransjav.refine.config import CONFIG_DIR
+        from subtransjav.refine.fs_utils import _atomic_write_text
+        path = self._hardsub_presets_path()
+        os.makedirs(str(CONFIG_DIR), exist_ok=True)
+        if os.path.isfile(path):
+            with contextlib.suppress(OSError):
+                shutil.copy2(path, path + ".bak")
+        _atomic_write_text(path, json.dumps({"presets": presets},
+                                            ensure_ascii=False, indent=2))
+
+    def encode_presets_list(self) -> dict[str, Any]:
+        """预设清单：内置三档（只读）+ 用户自建。"""
+        return {
+            "success": True,
+            "builtin": [
+                {"name": "高压缩", "params": {"video_format": "h264", "quality": "compress"}},
+                {"name": "均衡", "params": {"video_format": "h264", "quality": "balanced"}},
+                {"name": "高画质", "params": {"video_format": "h264", "quality": "quality"}},
+            ],
+            "user": self._load_hardsub_presets(),
+        }
+
+    def encode_preset_save(self, name: str, params: dict[str, Any]) -> dict[str, Any]:
+        """保存/覆盖用户预设（上限 20；params 全量快照由前端组装）。"""
+        key = str(name or "").strip()
+        if not key:
+            return {"success": False, "error": "预设名不能为空"}
+        if len(key) > 40:
+            return {"success": False, "error": "预设名过长（≤40 字符）"}
+        presets = self._load_hardsub_presets()
+        if key not in presets and len(presets) >= self._HARDSUB_PRESET_CAP:
+            return {"success": False,
+                    "error": f"预设已达上限 {self._HARDSUB_PRESET_CAP} 个，请先删除不再使用的预设"}
+        presets[key] = dict(params or {})
+        try:
+            self._save_hardsub_presets(presets)
+        except Exception as e:
+            _log_exc("encode_preset_save")
+            return {"success": False, "error": str(e)}
+        return {"success": True}
+
+    def encode_preset_delete(self, name: str) -> dict[str, Any]:
+        """删除用户预设（内置三档不可删，前端不下发此处兜底）。"""
+        presets = self._load_hardsub_presets()
+        key = str(name or "").strip()
+        if key not in presets:
+            return {"success": False, "error": "预设不存在"}
+        del presets[key]
+        try:
+            self._save_hardsub_presets(presets)
+        except Exception as e:
+            _log_exc("encode_preset_delete")
+            return {"success": False, "error": str(e)}
+        return {"success": True}
 
     def encode_save_last_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """上次压制参数持久化（fs_utils 原子写；不碰 refine_save_stage_settings）。"""

@@ -4427,3 +4427,39 @@ def test_encode_pairing_chain(gui_api_obj, tmp_path):
     # 缺视频 → 空串
     (tmp_path / "vid2_final_cn.srt").write_text("x", encoding="utf-8")
     assert gui_api_obj._resolve_video_for_subtitle(str(tmp_path / "vid2_final_cn.srt")) == ""
+
+
+def test_encode_presets_crud_and_cap(gui_api_obj, tmp_path, monkeypatch):
+    """批2 预设：CRUD+上限 20+内置三档只读。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    lst = gui_api_obj.encode_presets_list()
+    assert lst["success"] and len(lst["builtin"]) == 3 and lst["user"] == {}
+    for i in range(20):
+        r = gui_api_obj.encode_preset_save(f"p{i}", {"quality": "balanced"})
+        assert r["success"]
+    r = gui_api_obj.encode_preset_save("p20", {"quality": "balanced"})
+    assert r["success"] is False and "上限" in r["error"]
+    # 覆盖既有名不受上限约束
+    assert gui_api_obj.encode_preset_save("p0", {"quality": "quality"})["success"]
+    assert gui_api_obj.encode_preset_delete("p0")["success"]
+    assert gui_api_obj.encode_preset_save("p20", {})["success"]
+    assert gui_api_obj.encode_preset_delete("no-such")["success"] is False
+    assert gui_api_obj.encode_preset_save("  ", {})["success"] is False
+
+
+def test_encode_presets_corruption_degrades_with_bak(gui_api_obj, tmp_path,
+                                                     monkeypatch):
+    """批2 预设：文件损坏→key 级降级回空+.bak 留档。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    assert gui_api_obj.encode_preset_save("keep", {"quality": "balanced"})["success"]
+    path = tmp_path / "hardsub_presets.json"
+    good = path.read_bytes()
+    path.write_text("{broken json!!", encoding="utf-8")
+    lst = gui_api_obj.encode_presets_list()
+    assert lst["success"] and lst["user"] == {}          # 降级回空不抛
+    assert (tmp_path / "hardsub_presets.json.bak").exists()  # 坏档留 .bak
+    # 下次保存从空表重建（坏档 .bak 仍留）
+    assert gui_api_obj.encode_preset_save("fresh", {})["success"]
+    assert path.read_bytes() != good
