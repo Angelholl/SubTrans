@@ -3149,3 +3149,15 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
    - **预算量级**：静态 data-i18n 键 +6 以内（其余 JS 态 MSG 先例）、新 id +5~8、CSS 2~3 个小组件族（.pipe-steps/.file-item 进度变体/.progress-fill.err）——全走批清单预算程序。
 
 **十、owner 补充裁定（2026-10-07 同日）**：①**字幕样式实时预览不立项**（撤出候选池——owner：「字幕样式实时预览不需要」，研究报告 f1 项就此关闭）；②**字幕缺省位置=底端居中**（Alignment 2/MarginV 20，对齐 owner Shana 预设 substyle 原件），位置不做旋钮维持原裁定（字号除外）。
+
+**十一、批1 开工门评议裁定(2026-10-07,decision-critic SUPPORT_WITH_CONDITIONS,三 HRO 全采纳) [已裁定·批清单修订归档·进实现]**
+
+批清单=docs/design/d280-批1-批清单.md(+设计小样 d280-批1-设计小样.html)。评议结论:范围无越界、与定案逐条一致、可独立验收;3 条 HRO+条件 C1-C11+组内 findings(A/B/D/E/F/G)。
+
+- **HRO-1 采纳(CRITICAL)**:按需下载升主路径但 gyan full 形态不可实现(实测 .7z-only+zip 404+无 7z 依赖)——主源改 **BtbN/FFmpeg-Builds win64-gpl .zip**(tag pin,含 libass+libsvtav1,stdlib zipfile 零新依赖);备源=同 release 第二制品;域名级单点接受(代理引导 10808 先例缓解);--ffmpeg-from-file 与 gyan .7z+py7zr 备源登记候选;白名单 {github.com, objects.githubusercontent.com} 实测跳转链定集(C4/B2);sha256 TOFU 记档(B3)。
+- **HRO-2 采纳(MAJOR)**:黑名单改三层契约「canonical 归一集+别名展开层+不变式守卫」,**不再以 25 件计数做门**;canonical 补 -pix_fmt/-filter_complex/-c/-vcodec/-acodec/-profile:v/-x264-params/-x265-params/-svtav1-params/-movflags/-r/-fps_mode/-codec;别名归一表(-codec:v→-c:v 等);不变式守卫(pix_fmt 非 8bit 拒=10bit 零残留钉、filter 系只认注册生成者);每别名+10bit 注入拒绝用例入钉。
+- **HRO-3 采纳(MAJOR)**:中文字幕 CJK 字形纳入设计与 DoD——force_style 钉 `Fontname=Microsoft YaHei,Bold=1`(A4 一并);spike 增中文渲染真跑核验(截帧留档);DoD 增「中文硬字幕可读」;非中文 Windows 字体缺失风险跟踪(命中转内置字体+fontsdir 回评议)。
+- **条件全采纳**:C5 看门狗 progress≥100 停表+收尾独立 deadline max(120s,大小/40MBps);C6 音频 copy 白名单 {aac,mp3,ac3,eac3} 外回落 aac 显因;C7 shlex commenters=''+去包裹引号;C8 批1 弹窗=三分区容器骨架(高级区置空禁用),批2 声明「扩展而非重建」;C9 钩子 once 守卫+cancelled/error 不触发;C10 批1 直落 main、发版切点=84bd60c 成文、forward-port 发版会话人工挑、2.8.0.dev0 随批2 前进;C11 faststart 常量+磁盘峰值计入;C2(件3)AV1 超时下限×4 看门狗为主;C3(件3)CRF 磁盘估算 max(VBR 表,源码率×duration×1.1);D2 互斥单一锁 check-and-set;D3 commit 复验覆盖;E3 四处落点=批1 预估行+磁盘 danger/批2 AV1 警告条/批3 完成不打断;F2 spike 二进制=供给落位二进制;A6 faithful 保留 setsar=1/1;A8 码率表锚 720p/1080p/2160p 三点、AV1 1080p=3113k;A9 backend 枚举含 gpu 批1 显式拒绝。
+- **编制时 spike 新事实入档**:本机上游 ffmpeg 7.1.1 无 libass(subtitles 滤镜不存在)→能力探测+按需下载升主路径保障;owner 五份 Shana 预设锚值提取(AV1 链实串/字幕样式 22 号白字黑边 2.5 底端/NVENC 3113k 派生比例)。
+- 原十五件套明细 [UNVERIFIABLE] 维持,以 canonical 契约为准;owner 日后出示原件仅增量对账不改门。INFO_GAP:设计小样已补(d280-批1-设计小样.html)。
+- 风险跟踪新增:①BtbN 域名级单点;②faststart 收尾相位实机边界;③Microsoft YaHei 精简系统缺失;④2.7.5 forward-port 冲突高危面(app.js/api.py/index.html/style.css/strings.py);⑤码率派生 owner 目视确认;⑥音频回落对体积目标影响;⑦离线导入/py7zr 候选未排期。
