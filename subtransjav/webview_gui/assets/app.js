@@ -434,6 +434,12 @@ const MSG = {
     audio_preview_failed: m => `试听失败：${m}`,
     audio_preview_no_timing: '该条目缺少可解析时间轴，无法试听',
     audio_preview_no_guide: '请先加载质量报告导读',
+    // C4（D2026-1007-02）：direct 播放静默失败可见化（audio error 监听入错误槽）
+    audio_preview_play_error:
+      '音频播放失败：浏览器无法解码该媒体（编码不受支持或文件不可访问）',
+    // F5（D2026-1007-02）：试听「未找到媒体」（err_kind=no_candidate）时
+    // 错误槽内出现的文件选择直通键
+    preview_pick_media: '选择媒体文件…',
 
     // ---- 数据保存目录（高级参数页；pointer 写入 .data-root，重启生效）----
     data_root_title: '数据保存目录',
@@ -5010,9 +5016,16 @@ function switchTab(tabId) {
     rematch.textContent = MSG.preview_rematch;
     rematch.style.display = 'none';   // 仅 err_kind=path_invalid 时出现
     rematch.addEventListener('click', () => rematchPreviewMedia());
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'btn btn-ghost btn-compact preview-error-pickmedia';
+    pick.textContent = MSG.preview_pick_media;
+    pick.style.display = 'none';   // 仅 err_kind=no_candidate（未找到媒体）时出现
+    pick.addEventListener('click', () => pickPreviewMediaManually());
     slot.appendChild(ico);
     slot.appendChild(txt);
     slot.appendChild(rematch);
+    slot.appendChild(pick);
     const page = document.getElementById('tab-guide');
     (page || document.body).appendChild(slot);
     return slot;
@@ -5026,6 +5039,8 @@ function switchTab(tabId) {
     if (txt) txt.textContent = '';
     const rematch = slot.querySelector('.preview-error-rematch');
     if (rematch) rematch.style.display = 'none';
+    const pick = slot.querySelector('.preview-error-pickmedia');
+    if (pick) pick.style.display = 'none';
   }
 
   // err_kind 结构化驱动（2.7.4 件2，评议员条件①）：前端按 error_key
@@ -5047,6 +5062,9 @@ function switchTab(tabId) {
     slot.classList.add('show');
     const rematch = slot.querySelector('.preview-error-rematch');
     if (rematch) rematch.style.display = errKind === 'path_invalid' ? '' : 'none';
+    // F5 直通键：仅「未找到媒体」（结构化 err_kind=no_candidate）时出现
+    const pick = slot.querySelector('.preview-error-pickmedia');
+    if (pick) pick.style.display = errKind === 'no_candidate' ? '' : 'none';
   }
 
   // 「重新自动匹配」（2.7.4 件2）：复用后端推断引擎（refine_preview_infer_media
@@ -5077,6 +5095,39 @@ function switchTab(tabId) {
     } catch (e) {
       showPreviewError(MSG.audio_preview_failed(
         e && e.message ? e.message : String(e)), '');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // 「选择媒体文件…」（F5 直通，D2026-1007-02）：试听「未找到媒体」
+  // （err_kind=no_candidate）时错误槽内出现——文件对话框直选 → 持久化
+  // 覆盖（refine_save_media_override，media_overrides KV，失败不阻塞会话
+  // 内重试）→ 清该 guide 推断缓存（防直通后仍走旧推断）→ 自动重试上次
+  // 试听（rematch 先例：lastPreviewTiming）。用户取消对话框 → 静默返回。
+  async function pickPreviewMediaManually() {
+    const slot = document.querySelector('.preview-error-slot');
+    const btn = slot ? slot.querySelector('.preview-error-pickmedia') : null;
+    if (btn) btn.disabled = true;
+    try {
+      if (!window.pywebview || !window.pywebview.api
+          || !window.pywebview.api.refine_review_pick_media) {
+        return;
+      }
+      const r = await window.pywebview.api.refine_review_pick_media();
+      // 取消（cancelled）/桥失败 → 静默返回（保留原错误态）
+      if (!r || !r.success || !r.path || !lastLoadedGuidePath) return;
+      if (window.pywebview.api.refine_save_media_override) {
+        try {
+          await window.pywebview.api.refine_save_media_override(
+            lastLoadedGuidePath, String(r.path));
+        } catch (e) { /* 持久化失败不阻塞会话内重试 */ }
+      }
+      delete inferredMediaCache[lastLoadedGuidePath];
+      renderMediaTag('tag-explicit', MSG.media_source_explicit, String(r.path));
+      mediaMissingHint(false);
+      clearPreviewError();
+      if (lastPreviewTiming) openAudioPreview(lastPreviewTiming);
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -6021,6 +6072,16 @@ function switchTab(tabId) {
     });
     const pvCloseBtn = $('audioPreviewCloseBtn');
     if (pvCloseBtn) pvCloseBtn.addEventListener('click', closeAudioPreview);
+    // C4（D2026-1007-02）：direct 播放失败可见化——audio error 监听入独立
+    // 错误槽（no-src guard 照抄 review.js：showPreviewError/closeAudioPreview
+    // 清 src 触发的无源 error 忽略，防幽灵红字闪回）
+    const pvPlayer = $('audioPreviewPlayer');
+    if (pvPlayer) pvPlayer.addEventListener('error', () => {
+      if (!pvPlayer.getAttribute('src')) return;
+      console.error('[guide] audio preview error:',
+        (pvPlayer.error && pvPlayer.error.code) || 'unknown');
+      showPreviewError(MSG.audio_preview_play_error, '');
+    });
     const msToggleBtn = $('mediaSourceToggleBtn');
     if (msToggleBtn) msToggleBtn.addEventListener('click', () => {
       const row = $('mediaSourceEditRow');

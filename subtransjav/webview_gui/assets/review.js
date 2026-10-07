@@ -23,6 +23,10 @@ const REVIEW_MSG = {
     review_bad_encoding: '字幕文件编码无法识别（仅支持 UTF-8 / GBK），请另存为 UTF-8 后重试',
     review_api_not_ready: '接口未就绪，请稍后再试',
     review_media_error: '无法解码该媒体，请尝试手动转码',
+    // F2 错误分型（D2026-1007-02 C3）：probe 实证编解码探测通过
+    // （codec_probe=true）仍 error code 4 → 真编解码/通道异常专用文案；
+    // 其余路径（ffprobe 缺席乐观 direct 等）维持中性 review_media_error
+    review_media_codec_error: '该媒体通道编码异常，浏览器无法解码播放，请尝试手动转码',
     review_srt_loaded: (n, enc) => `字幕已载入：${n} 条（${enc}）`,
     // ---- 批 2b（D2026-1002-10）：校对编辑 ----
     review_list_empty: '字幕未载入有效条目：请导入 .srt 字幕',
@@ -547,8 +551,17 @@ const ReviewUI = {
         // 兜底；_showVideo(null) removeAttribute 触发的无源 error 忽略）
         v.addEventListener('error', () => {
             if (!v.getAttribute('src')) { return; }
-            console.error('[review] video error:',
-                          (v.error && v.error.code) || 'unknown');
+            const code = (v.error && v.error.code) || 0;
+            console.error('[review] video error:', code || 'unknown');
+            // F2 分型（D2026-1007-02 C3）：仅 ffprobe 编解码探测实证通过
+            // （codec_probe=true）仍 code 4 才示「通道异常」文案；其余
+            // （ffprobe 缺席乐观 direct 等）维持中性文案（转码引导保留）
+            if (this._probe && this._probe.codec_probe === true
+                    && code === 4) {
+                this._status.setState({ state: 'error',
+                                        labelKey: 'review_media_codec_error' });
+                return;
+            }
             this._status.setState({ state: 'error',
                                     labelKey: 'review_media_error' });
         });

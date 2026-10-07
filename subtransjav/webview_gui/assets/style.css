@@ -2273,7 +2273,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 .review-row {
     display: grid;
-    grid-template-columns: 3em 11em 1fr;
+    /* F3（D2026-1007-02）：时间串 29 字符 12px 等宽约需 17-18em，原列
+       钉死宽度溢出叠画进文本列——改 max-content 由内容定宽 */
+    grid-template-columns: 3em max-content 1fr;
     gap: var(--space-2);
     align-items: baseline;
     padding: var(--space-1) var(--space-2);
@@ -2307,6 +2309,10 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     color: var(--text-3);
     cursor: default;
     white-space: nowrap;
+    /* F3 防御（D2026-1007-02）：极窄窗口下省略号截断，不叠画进文本列 */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .review-edit-input {
     width: 100%;

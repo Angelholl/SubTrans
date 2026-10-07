@@ -2540,3 +2540,75 @@ def test_preview_media_infer_frontend_pinned():
     assert "refine_save_media_override(" in bind, "apply 持久化写入缺失"
     assert "delete inferredMediaCache[lastLoadedGuidePath]" in bind, \
         "override 变更须失效推断缓存"
+
+
+# ---------------------------------------------------------------------------
+# 2.7.5 件D（D2026-1007-02 P1）：F2 错误分型 / C4 audio 监听 / F3 时间列 / F5 直通选媒体
+# ---------------------------------------------------------------------------
+def test_review_video_error_codec_probe_typed():
+    """F2 错误分型钉（C3 条件）：video error 仅 codec_probe===true 且
+    code===4 才示「通道异常」文案；no-src guard 与中性文案回退保留。"""
+    src = _review_js_source()
+    keys = _review_msg_keys()
+    assert "review_media_codec_error" in keys, "REVIEW_MSG 缺分型键"
+    bind = _extract_function(src, "_bindPlayer")
+    # no-src guard（批 4 审计先例）不得回退
+    assert "if (!v.getAttribute('src')) { return; }" in bind, \
+        "no-src guard 缺失（清 src 触发的无源 error 须忽略）"
+    # 分型双门槛：codec_probe 实证 + code 4，缺一即维持中性文案
+    assert "codec_probe === true" in bind and "code === 4" in bind, \
+        "分型须双门槛（codec_probe===true 且 code===4）"
+    assert "'review_media_codec_error'" in bind and \
+        "'review_media_error'" in bind, "分型/中性双文案键缺失"
+
+
+def test_preview_audio_error_listener_and_pick_media_pinned():
+    """C4+F5 钉：audio error 监听（no-src guard 照抄 review.js 先例）入
+    独立错误槽；「选择媒体文件…」直通键按 err_kind=no_candidate 结构化
+    驱动（禁中文文案匹配）——pick_media → save_override → 清 guide 键
+    推断缓存 → 自动重试上次试听；按钮动态注入零新增静态 id。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    for key in ("audio_preview_play_error", "preview_pick_media"):
+        assert key in keys, f"MSG 缺 2.7.5 件D 新键: {key}"
+    # C4：error 监听在 bindDom + no-src guard（防清 src 幽灵 error 闪回红字）
+    bind = _extract_function(src, "bindDom")
+    assert "pvPlayer.addEventListener('error'" in bind, \
+        "audioPreviewPlayer 缺 error 监听（direct 播放失败静默无声回归）"
+    guard = "if (!pvPlayer.getAttribute('src')) return;"
+    assert guard in bind, "audio error 监听缺 no-src guard（review.js:549 先例）"
+    assert "MSG.audio_preview_play_error" in bind, "监听未入独立错误槽"
+    # F5：直通键动态注入错误槽容器内（零新增静态 id，FROZEN_IDS 不变）
+    eps = _extract_function(src, "ensurePreviewErrorSlot")
+    assert "preview-error-pickmedia" in eps, "错误槽缺选择媒体直通键"
+    assert "MSG.preview_pick_media" in eps, "直通键文案未走 MSG 键表"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "pickmedia" not in html, "直通键不得新增 index.html 静态 id/class"
+    # 结构化 err_kind 驱动（评议员条件①先例：禁中文文案匹配）
+    spe = _extract_function(src, "showPreviewError")
+    assert "errKind === 'no_candidate'" in spe, "直通键须按 no_candidate 驱动"
+    pick = _extract_function(src, "pickPreviewMediaManually")
+    assert "refine_review_pick_media(" in pick, "缺文件对话框桥调用"
+    assert "refine_save_media_override(" in pick, "缺持久化覆盖写入"
+    assert "delete inferredMediaCache[lastLoadedGuidePath]" in pick, \
+        "直通后必须按 guide 键清推断缓存（防仍走旧推断）"
+    assert "lastPreviewTiming" in pick and "openAudioPreview(" in pick, \
+        "选到媒体后须自动重试上次试听（rematch 先例）"
+    # 用户取消对话框 → 静默返回（保留原错误态）
+    assert "!r || !r.success || !r.path" in pick, "取消/失败须静默返回"
+
+
+def test_review_timing_column_layout_pinned():
+    """F3 时间列布局钉：11em 钉死轨道溢出叠画进文本列（真机截图错位）——
+    .review-row 列定义改 3em max-content 1fr；.review-timing-readonly 带
+    min-width:0 + ellipsis 防御（极窄窗口省略号截断而非叠画）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    row = re.search(r"\.review-row \{[^}]*\}", css)
+    assert row, "style.css 缺 .review-row 规则"
+    assert "grid-template-columns: 3em max-content 1fr" in row.group(0), \
+        "时间列须改 max-content（内容定宽，防 29 字符时间串溢出）"
+    assert "11em" not in row.group(0), "残留 11em 钉死列定义（溢出叠画回归）"
+    timing = re.search(r"\.review-timing-readonly \{[^}]*\}", css)
+    assert timing, "style.css 缺 .review-timing-readonly 规则"
+    for frag in ("min-width: 0", "overflow: hidden", "text-overflow: ellipsis"):
+        assert frag in timing.group(0), f"时间列缺防御声明: {frag}"
