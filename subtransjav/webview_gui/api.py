@@ -950,6 +950,15 @@ class TranslateAPI:
         with self._translate_lock:
             if self._translate_process is not None:
                 return {"success": False, "error": msg("translation_in_progress")}
+            # 压制互斥预检（D2 单一状态源；claim 原子占用，失败路径一律释放）
+            from subtransjav.webview_gui.encode_queue import (
+                claim_translate_slot,
+                encode_active,
+            )
+            if encode_active():
+                return {"success": False, "error": msg("encode_translate_conflict")}
+            if not claim_translate_slot():
+                return {"success": False, "error": msg("translation_in_progress")}
             # Sentinel: mark "starting" to block double-start while Popen runs
             #（True 哨兵仅作占位，消费侧均先判 `is True`；cast 仅为类型清零）
             self._translate_process = cast(subprocess.Popen, True)
@@ -1025,6 +1034,8 @@ class TranslateAPI:
 
             self._translate_status = "running"
             self._translate_error = None
+            # 会话结束钩子 once 守卫复位（C9：每会话至多触发一次）
+            self._session_hook_fired = False
 
             # 两个守护 reader 线程：stdout→解析器 feed + 人类可读行入日志队列；
             # stderr→原样入日志队列
@@ -1047,6 +1058,8 @@ class TranslateAPI:
 
         except Exception as e:
             _log_exc("start_translation")
+            from subtransjav.webview_gui.encode_queue import release_translate_slot
+            release_translate_slot()
             with self._translate_lock:
                 proc = self._translate_process
                 self._translate_process = None
@@ -1128,6 +1141,8 @@ class TranslateAPI:
             self._translate_status = "cancelled"
             self._translate_log_queue.put(
                 f"\n[CANCELLED] {msg('log_cancelled')}\n")
+            from subtransjav.webview_gui.encode_queue import release_translate_slot
+            release_translate_slot()
             with self._translate_lock:
                 self._translate_process = None
 
@@ -1190,6 +1205,14 @@ class TranslateAPI:
                                 or msg("process_exit_code", code=exit_code))
                         self._translate_log_queue.put(
                             f"\n[ERROR] {msg('log_exit_code', code=exit_code)}\n")
+
+                # 终态消费点（轮询驱动；每进程至多进入一次——proc 已清空）：
+                # 翻译互斥槽归还（幂等）+ 会话结束钩子（批1 骨架 no-op，批3 接
+                # 「批量翻译→批后自动压制」；C9 once 守卫在钩子内）
+                from subtransjav.webview_gui.encode_queue import release_translate_slot
+                release_translate_slot()
+                if self._translate_status == "completed":
+                    self._on_translation_session_completed(snap)
 
         risk_count = int(snap.get('risk_count') or 0)
         majority = bool(snap.get('untranslated_majority'))
@@ -4195,3 +4218,333 @@ class TranslateAPI:
                 pass
         if getattr(self, "_refine_tmp_dirs", None):
             self._refine_tmp_dirs.clear()
+
+    # ========================================================================
+    # 硬字幕压制（2.8.0 批1 件4，D2026-1007-03；批清单 docs/design/d280-批1-批清单.md）
+    # ========================================================================
+
+    @staticmethod
+    def _encode_queue():
+        from subtransjav.webview_gui.encode_queue import (
+            get_encode_queue,
+            release_encode_slot,
+        )
+        q = get_encode_queue()
+        # 队列空闲自动归还互斥槽（幂等重接；回调异常队列内侧已吞）
+        q.on_idle = release_encode_slot
+        return q
+
+    @staticmethod
+    def _parse_encode_params(raw: dict[str, Any]):
+        """前端参数 dict → EncodeParams（缺省项补齐；非法值抛 ValueError）。"""
+        from subtransjav.refine.hardsub import EncodeParams, parse_custom_params, validate_params
+        raw = dict(raw or {})
+        known = set(EncodeParams.__dataclass_fields__)
+        params = EncodeParams(
+            **{k: v for k, v in raw.items() if k in known and k != "out_path"})
+        validate_params(params)
+        parse_custom_params(params.custom_params)   # 逃生门黑名单前置校验
+        return params
+
+    def _encode_out_path(self, video_path: str, out_dir: str) -> str:
+        """成品缺省名 <stem>_hardsub.mp4（输出目录缺省=视频同目录）。"""
+        stem = os.path.splitext(os.path.basename(video_path))[0]
+        directory = out_dir or os.path.dirname(video_path) or "."
+        return os.path.join(directory, f"{stem}_hardsub.mp4")
+
+    # 压制配对（批1：校对页/导读页给 srt，后端按契约配「终稿字幕+视频」）
+    _ENCODE_VIDEO_EXTS = (".mp4", ".mkv", ".webm", ".mov", ".avi", ".ts", ".m2ts")
+
+    @classmethod
+    def _resolve_final_subtitle(cls, srt_path: str) -> str:
+        """输入 srt → 终稿字幕：已是 _final_ 产物原样返回；否则按
+        final_stem 契约（strip_lang_suffix→_final_cn）拼同目录终稿名，
+        不存在返回空串（调用方显因，不猜）。"""
+        if "_final_" in os.path.basename(srt_path):
+            return srt_path
+        try:
+            from subtransjav.refine.pipeline_support import strip_lang_suffix
+            from subtransjav.refine.v2_outputs import final_stem
+            p = Path(srt_path)
+            cand = p.with_name(final_stem(strip_lang_suffix(p.stem)) + ".srt")
+            return str(cand) if cand.is_file() else ""
+        except Exception:
+            return ""
+
+    @classmethod
+    def _resolve_video_for_subtitle(cls, subtitle_path: str) -> str:
+        """终稿字幕 → 视频：剥链候选 stem（复用 _preview_stem_candidates
+        闭集，.merged/.ja/.whisperjav 系）× 常见视频扩展名，同目录首个
+        命中；找不到返回空串。"""
+        from subtransjav.refine.pipeline_support import strip_lang_suffix
+        stem = Path(subtitle_path).stem
+        if "_final_" in stem:
+            stem = stem[:stem.index("_final_")]
+        stem = strip_lang_suffix(stem)
+        directory = os.path.dirname(subtitle_path) or "."
+        for cand_stem in _preview_stem_candidates(stem):
+            for ext in cls._ENCODE_VIDEO_EXTS:
+                cand = os.path.join(directory, cand_stem + ext)
+                if os.path.isfile(cand):
+                    return cand
+        return ""
+
+    def _normalize_encode_jobs(self, jobs: list[dict[str, Any]]) -> list[dict[str, str]]:
+        """入队载荷归一：{srt_path} 自动配对；显式 video/subtitle 优先。"""
+        out: list[dict[str, str]] = []
+        for job in jobs or []:
+            srt = str(job.get("srt_path") or "")
+            video = str(job.get("video_path") or "")
+            subtitle = str(job.get("subtitle_path") or "")
+            if subtitle and not video:
+                video = self._resolve_video_for_subtitle(subtitle)
+            if not subtitle and srt:
+                subtitle = self._resolve_final_subtitle(srt)
+                if subtitle and not video:
+                    video = self._resolve_video_for_subtitle(subtitle)
+            out.append({"video_path": video, "subtitle_path": subtitle,
+                        "srt_path": srt})
+        return out
+
+    def encode_preflight(self, jobs: list[dict[str, Any]],
+                         params: dict[str, Any]) -> dict[str, Any]:
+        """入队前一次性校验（不落队、不占互斥槽）。
+
+        逐 job：存在性（视频/字幕）→ ffprobe 探测 → 产物路径/覆盖 →
+        体积估算与 ETA。供给缺口整体返回 supply_missing（前端引导按需
+        下载）。ffmpeg 未就绪时跳过探测，仅返回存在性结果。
+        """
+        try:
+            parsed = self._parse_encode_params(params)
+        except ValueError as e:
+            return {"success": False, "error": msg("encode_jobs_invalid", reason=str(e))}
+        from subtransjav.refine.ffmpeg_supply import FfprobeError, resolve_hardsub_ffmpeg
+        from subtransjav.refine.hardsub import speed_factor
+        from subtransjav.webview_gui.encode_queue import (
+            encode_active,
+            estimate_output_bytes,
+        )
+
+        out_dir = str(params.get("out_dir") or "")
+        supply = resolve_hardsub_ffmpeg()
+        items: list[dict[str, Any]] = []
+        total_eta = 0.0
+        for job in self._normalize_encode_jobs(jobs):
+            video = job["video_path"]
+            subtitle = job["subtitle_path"]
+            item: dict[str, Any] = {
+                "video_path": video, "subtitle_path": subtitle,
+                "srt_path": job["srt_path"],
+                "video_exists": bool(video) and os.path.isfile(video),
+                "subtitle_exists": bool(subtitle) and os.path.isfile(subtitle),
+            }
+            if supply.missing or not item["video_exists"]:
+                items.append(item)
+                continue
+            out_path = self._encode_out_path(video, out_dir)
+            item["out_path"] = out_path
+            item["overwrite"] = os.path.isfile(out_path)
+            try:
+                if supply.ffprobe_path:
+                    from subtransjav.refine.ffmpeg_supply import probe_media
+                    info = probe_media(supply.ffprobe_path, video)
+                    eta = info.duration_s * speed_factor(
+                        parsed.video_format, parsed.quality)
+                    item.update({
+                        "duration_s": round(info.duration_s, 2),
+                        "has_audio": info.has_audio,
+                        "audio_codec": info.audio_codec,
+                        "eta_s": round(eta, 1),
+                        "estimated_bytes": estimate_output_bytes(
+                            parsed, info.bit_rate_bps, info.duration_s),
+                    })
+                    total_eta += eta
+            except FfprobeError as e:
+                item["probe_error"] = str(e)
+            items.append(item)
+        return {
+            "success": True,
+            "supply_missing": list(supply.missing),
+            "encode_running": encode_active(),
+            "items": items,
+            "total_eta_s": round(total_eta, 1),
+        }
+
+    def encode_commit(self, jobs: list[dict[str, Any]],
+                      params: dict[str, Any],
+                      allow_overwrite: bool = False) -> dict[str, Any]:
+        """入队（D3：commit 时复验覆盖；互斥槽 check-and-set 后整批落队）。"""
+        try:
+            parsed = self._parse_encode_params(params)
+        except ValueError as e:
+            return {"success": False, "error": msg("encode_jobs_invalid", reason=str(e))}
+        from subtransjav.webview_gui.encode_queue import (
+            EncodeJob,
+            claim_encode_slot,
+            encode_active,
+            release_encode_slot,
+        )
+        if encode_active():
+            return {"success": False, "error": msg("translate_encode_conflict")}
+        out_dir = str(params.get("out_dir") or "")
+        # D3 复验：覆盖清单以 commit 时实际存在为准，新增覆盖项须重新确认
+        overwrite_now: list[str] = []
+        prepared: list[tuple[str, str, str]] = []
+        for job in self._normalize_encode_jobs(jobs):
+            video = job["video_path"]
+            subtitle = job["subtitle_path"]
+            if not video or not os.path.isfile(video):
+                return {"success": False,
+                        "error": msg("encode_jobs_invalid",
+                                     reason=f"未找到视频文件（{job['srt_path'] or subtitle} 同目录需有同名视频）")}
+            if not subtitle or not os.path.isfile(subtitle):
+                return {"success": False,
+                        "error": msg("encode_jobs_invalid",
+                                     reason=f"终稿字幕不存在: {subtitle or job['srt_path']}")}
+            out_path = self._encode_out_path(video, out_dir)
+            if os.path.isfile(out_path):
+                overwrite_now.append(out_path)
+            prepared.append((video, subtitle, out_path))
+        if overwrite_now and not allow_overwrite:
+            return {"success": False, "needs_confirm": True,
+                    "existing": overwrite_now}
+
+        if not claim_encode_slot():
+            return {"success": False, "error": msg("translate_encode_conflict")}
+        q = self._encode_queue()
+        encoded_jobs = [
+            EncodeJob(video_path=v, subtitle_path=s, out_path=o, params=parsed)
+            for v, s, o in prepared
+        ]
+        accepted, rejected = q.enqueue_batch(encoded_jobs)
+        if not accepted:
+            release_encode_slot()
+            reason = "；".join(r for _, r in rejected[:3]) or "未知原因"
+            return {"success": False,
+                    "error": msg("encode_commit_rejected", reason=reason)}
+        return {
+            "success": True,
+            "accepted": [j.snapshot() for j in accepted],
+            "rejected": [{"video_path": j.video_path, "reason": r}
+                         for j, r in rejected],
+        }
+
+    def encode_status(self) -> dict[str, Any]:
+        """队列快照（前端 1s 轮询）。"""
+        q = self._encode_queue()
+        return {"success": True, "running": q.is_running(),
+                "jobs": q.snapshot()}
+
+    def encode_cancel(self, job_id: str = "") -> dict[str, Any]:
+        """取消（job_id 空=当前 running+清空 queued）。"""
+        q = self._encode_queue()
+        q.cancel(job_id or None)
+        return {"success": True}
+
+    def encode_retry(self, job_id: str) -> dict[str, Any]:
+        """失败/取消任务重试（复制入队尾）。"""
+        q = self._encode_queue()
+        new_id = q.retry(job_id)
+        if new_id is None:
+            return {"success": False, "error": msg("encode_jobs_invalid",
+                                                   reason="任务不可重试或不存在")}
+        return {"success": True, "new_id": new_id}
+
+    def encode_open_folder(self, job_id: str) -> dict[str, Any]:
+        """打开任务成品所在文件夹（复用 open_output_folder 既有通道）。"""
+        q = self._encode_queue()
+        target = next((j for j in q.snapshot() if j["id"] == job_id), None)
+        if target is None:
+            return {"success": False, "error": msg("encode_jobs_invalid",
+                                                   reason="任务不存在")}
+        folder = os.path.dirname(target["out_path"]) or "."
+        return self.open_output_folder(folder, create=False)
+
+    def encode_get_last_params(self) -> dict[str, Any]:
+        """上次压制参数（config/hardsub_last.json；缺省返回空 dict）。"""
+        from subtransjav.refine.config import CONFIG_DIR
+        path = os.path.join(str(CONFIG_DIR), "hardsub_last.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            return {"success": True, "params": data if isinstance(data, dict) else {}}
+        except Exception:
+            return {"success": True, "params": {}}
+
+    def encode_save_last_params(self, params: dict[str, Any]) -> dict[str, Any]:
+        """上次压制参数持久化（fs_utils 原子写；不碰 refine_save_stage_settings）。"""
+        from subtransjav.refine.config import CONFIG_DIR
+        from subtransjav.refine.fs_utils import _atomic_write_text
+        try:
+            path = os.path.join(str(CONFIG_DIR), "hardsub_last.json")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            _atomic_write_text(path, json.dumps(params or {}, ensure_ascii=False, indent=2))
+            return {"success": True}
+        except Exception as e:
+            _log_exc("encode_save_last_params")
+            return {"success": False, "error": str(e)}
+
+    # -- ffmpeg 按需下载（独立进度通道；词典四态范式，_supplyBusy 单飞）----
+
+    def ffmpeg_supply_download(self) -> dict[str, Any]:
+        """后台下载 pinned BtbN full 变体落位数据根（单飞；进度走
+        ffmpeg_supply_progress 轮询）。"""
+        if getattr(self, "_supply_busy", False):
+            return {"success": False, "error": "ffmpeg 下载已在进行中"}
+        self._supply_busy = True
+        self._supply_stop = threading.Event()
+        state = self._ensure_supply_state()
+        state.update(phase="downloading", received=0, total=0, error="")
+
+        def worker():
+            try:
+                from subtransjav import paths
+                from subtransjav.refine.ffmpeg_supply import download_full_variant
+
+                def cb(received: int, total: int) -> None:
+                    state["received"] = received
+                    state["total"] = total
+
+                download_full_variant(str(paths.data_root()), progress_cb=cb,
+                                      stop_event=self._supply_stop)
+                state["phase"] = "done"
+                self._encode_queue().reset_supply()
+            except Exception as e:  # noqa: BLE001  供给异常统一落状态（含 SupplyStopped）
+                from subtransjav.refine.ffmpeg_supply import SupplyStopped
+                state["phase"] = "stopped" if isinstance(e, SupplyStopped) else "failed"
+                state["error"] = str(e)
+            finally:
+                self._supply_busy = False
+
+        threading.Thread(target=worker, name="ffmpeg-supply-download",
+                         daemon=True).start()
+        return {"success": True}
+
+    def ffmpeg_supply_stop(self) -> dict[str, Any]:
+        """协作停止下载（残件清理由供给层 finally 保证）。"""
+        event = getattr(self, "_supply_stop", None)
+        if event is not None:
+            event.set()
+        return {"success": True}
+
+    def ffmpeg_supply_progress(self) -> dict[str, Any]:
+        """下载进度快照（phase: idle/downloading/done/failed/stopped）。"""
+        state = self._ensure_supply_state()
+        return {"success": True, **state,
+                "busy": bool(getattr(self, "_supply_busy", False))}
+
+    def _ensure_supply_state(self) -> dict[str, Any]:
+        if not hasattr(self, "_supply_state"):
+            self._supply_state: dict[str, Any] = {
+                "phase": "idle", "received": 0, "total": 0, "error": ""}
+        return self._supply_state
+
+    def _on_translation_session_completed(self, summary: dict[str, Any]) -> None:
+        """翻译会话结束钩子（批1 骨架：once 守卫+日志行；批3 接自动化入队
+        「批量翻译→批后自动压制」与 lms unload 清场）。触发点=get_translation_status
+        终态消费（completed 分支）；cancelled/error 不触发（C9）。"""
+        if getattr(self, "_session_hook_fired", False):
+            return
+        self._session_hook_fired = True
+        with contextlib.suppress(Exception):
+            _log.info("[encode] 翻译会话完成（钩子骨架 no-op，批3 接自动压制）")

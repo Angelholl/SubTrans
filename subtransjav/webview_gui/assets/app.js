@@ -66,6 +66,78 @@ const MSG = {
     bridgeConnected: 'PyWebView 桥接已连接',
 
     // ============================================================
+    // 硬字幕压制（2.8.0 批1 件5，D2026-1007-03）：全 JS 态键（零静态
+    // data-i18n 消耗）；双表同步镜像见 strings.py「硬字幕压制」节
+    // ============================================================
+    encodeEntryReview: '压制成品（硬字幕）',
+    encodeEntryGuide: '压制成品',
+    encodeModalTitle: '压制成品',
+    encodeModalFmt: '格式',
+    encodeFmtH264: 'H.264（兼容性最好）',
+    encodeFmtH265: 'H.265（体积更小）',
+    encodeFmtAv1: 'AV1（体积最小·耗时可能最长）',
+    encodeModalBackend: '后端',
+    encodeBackendAuto: '自动',
+    encodeBackendGpu: 'GPU（批2 提供）',
+    encodeModalQuality: '画质',
+    encodeQCompress: '高压缩（体积优先）',
+    encodeQBalanced: '均衡（推荐）',
+    encodeQQuality: '高画质（观感优先）',
+    encodeModalRes: '分辨率',
+    encodeResOriginal: '保持原样',
+    encodeModalRate: '码控',
+    encodeRateTier: '按画质档（推荐）',
+    encodeRateVbr: '目标码率',
+    encodeModalBitrate: '目标码率（kbps，留空=按参考表派生）',
+    encodeModalOutDir: '输出目录（留空=与视频同目录）',
+    encodeModalFont: '字幕字号（12-72，缺省 22）',
+    encodeModalAudio: '音频',
+    encodeAudioCopy: '直接复制（推荐）',
+    encodeModalEnhance: '画质增强（降噪+锐化；关闭=忠实源）',
+    encodeModalAdvanced: '高级（批2 启用）',
+    encodeModalAdvancedPh: '自定义参数 / 预设管理 —— 批2 面板完整化时启用',
+    encodeJobsLine: '共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边',
+    encodeSecBase: '基础',
+    encodeSecSubAudio: '字幕与音频',
+    encodeEtaNone: '（时长预估需 ffmpeg 就绪后预检提供）',
+    encodeEtaTotal: '预计总时长：约 {t}',
+    encodeOk: '加入压制队列',
+    encodeNoJobs: '没有可压制的文件——请先在「翻译」页添加文件并完成翻译',
+    encodeSupplyMissing: '当前 ffmpeg 不支持硬字幕烧录（缺 libass/subtitles 滤镜）。需要下载一次完整版 ffmpeg（约 191MB，存到数据目录，仅下载一次）。现在下载吗？',
+    encodeSupplyFailed: 'ffmpeg 下载失败：{e}',
+    encodeSupplyDone: '完整版 ffmpeg 就绪，请重新点击「压制成品」发起压制',
+    encodeOverwriteTitle: '覆盖确认',
+    encodeOverwriteBody: '以下成品文件已存在，覆盖它们吗？\n\n{list}',
+    encodeCommitRejected: '未能入队：{e}',
+    encodeConflict: '压制任务进行中，无法开始翻译——请等待压制完成，或在队列底条中取消压制任务',
+    encodeTranslateConflict: '翻译任务进行中，无法加入压制队列——请等待翻译完成后再试',
+    encodeCancelOneConfirm: '取消当前压制任务？',
+    encodeCancelAllConfirm: '取消当前任务并清空排队中的任务？',
+    encodeDockRunning: '压制中',
+    encodeDockDone: '压制完成',
+    encodeDockFailed: '压制失败',
+    encodeDockIdle: '队列空闲',
+    encodeStQueued: '排队中',
+    encodeStRunning: '压制中',
+    encodeStDone: '已完成',
+    encodeStFailed: '失败',
+    encodeStCancelled: '已取消',
+    encodeStStopped: '已停止',
+    encodeNoVideo: '未找到视频',
+    encodeNoSubtitle: '终稿字幕不存在',
+    encodeProbeErr: '媒体识别失败',
+    encodeRetry: '重试',
+    encodeOpenFolder: '打开文件夹',
+    encodeCancelJob: '取消',
+    encodeStop: '停止',
+    encodeExpand: '展开',
+    encodeCollapse: '收起',
+    encodeDismiss: '关闭',
+    encodeDownloadDock: '下载 ffmpeg 组件',
+    encodeMinutes: '{m} 分',
+    encodeEtaPending: '预估中',
+
+    // ============================================================
     // i18n 键表（W2 收编）：index.html data-i18n/data-i18n-title/
     // data-i18n-placeholder 引用的键必须全部出现在本表（tests 钉住）；
     // JS 动态文案也统一收编于此，键名 snake_case 或 camelCase 语义化。
@@ -1710,6 +1782,173 @@ const AppModal = {
                 if (body2) body2.classList.remove('mp-body');
                 if (okBtn) okBtn.style.display = '';
                 resolve(value);
+            };
+        });
+    },
+
+    // ============================================================
+    // 压制参数弹窗（2.8.0 批1 件5，D2026-1007-03）：kind='encode' 三分区
+    // 容器（批1/批2 共用骨架，开工门 C8——高级区批1 置空禁用占位，批2
+    // 扩展不重建）。body 全 createElement 注入（全 class+data-testid，
+    // 零新增 id/data-i18n）。okBtn.onclick 赋值式绑定（防叠加）→
+    // _settle(true)；resolve 包装器把 true（含 Enter 键）转 {ok, params}
+    // ——Enter=按当前表单值确认。取消/ESC/遮罩=resolve(null)。
+    // opts = {jobs:[{name, out_path, eta_s, video_exists, subtitle_exists}],
+    //         totalEtaS, last:<encode_get_last_params 的 params>}
+    // ============================================================
+    encode(opts) {
+        if (this._busy) return Promise.resolve(null);       // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve(null);            // 骨架缺席兜底
+        const o = opts || {};
+        const jobs = o.jobs || [];
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = MSG.encodeModalTitle;
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';
+        input.style.display = 'none';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        okBtn.style.display = '';
+        okBtn.textContent = MSG.encodeOk + '（' + jobs.length + '）';
+        const last = o.last || {};
+
+        const mk = (tag, cls, parent) => {
+            const el = document.createElement(tag);
+            if (cls) el.className = cls;
+            if (parent) parent.appendChild(el);
+            return el;
+        };
+        const mkField = (parent, text) => {
+            const w = mk('div', 'enc-field', parent);
+            const lb = mk('label', null, w);
+            lb.textContent = text;
+            return w;
+        };
+        const mkSelect = (parent, options, value) => {
+            const s = mk('select', 'form-select', parent);
+            options.forEach((op) => {
+                const opt = document.createElement('option');
+                opt.value = op.v;
+                opt.textContent = op.t;
+                if (op.disabled) opt.disabled = true;
+                s.appendChild(opt);
+            });
+            if (value) s.value = value;
+            return s;
+        };
+
+        // 任务概览行
+        const jobsLine = mk('div', 'enc-jobs-line', body);
+        jobsLine.textContent = MSG.encodeJobsLine.replace('{n}', String(jobs.length));
+
+        // —— 分区 1：基础 ——
+        const sec1 = mk('div', 'enc-section', body);
+        mk('h4', null, sec1).textContent = MSG.encodeSecBase;
+        const grid1 = mk('div', 'enc-grid', sec1);
+        const elFmt = mkSelect(mkField(grid1, MSG.encodeModalFmt), [
+            { v: 'h264', t: MSG.encodeFmtH264 },
+            { v: 'h265', t: MSG.encodeFmtH265 },
+            { v: 'av1', t: MSG.encodeFmtAv1 },
+        ], last.video_format || 'h264');
+        const elBackend = mkSelect(mkField(grid1, MSG.encodeModalBackend), [
+            { v: 'auto', t: MSG.encodeBackendAuto },
+            { v: 'cpu', t: 'CPU' },
+            { v: 'gpu', t: MSG.encodeBackendGpu, disabled: true },
+        ], 'auto');
+        const elQuality = mkSelect(mkField(grid1, MSG.encodeModalQuality), [
+            { v: 'compress', t: MSG.encodeQCompress },
+            { v: 'balanced', t: MSG.encodeQBalanced },
+            { v: 'quality', t: MSG.encodeQQuality },
+        ], last.quality || 'balanced');
+        const elRes = mkSelect(mkField(grid1, MSG.encodeModalRes), [
+            { v: 'original', t: MSG.encodeResOriginal },
+            { v: '720p', t: '720p' },
+            { v: '1080p', t: '1080p' },
+            { v: '1440p', t: '1440p' },
+            { v: '2160p', t: '2160p' },
+        ], last.resolution || 'original');
+        const elRate = mkSelect(mkField(grid1, MSG.encodeModalRate), [
+            { v: 'quality_tier', t: MSG.encodeRateTier },
+            { v: 'target_vbr', t: MSG.encodeRateVbr },
+        ], last.rate_mode || 'quality_tier');
+        const bitField = mkField(grid1, MSG.encodeModalBitrate);
+        const elBitrate = mk('input', 'form-input', bitField);
+        elBitrate.type = 'number';
+        elBitrate.min = '100';
+        elBitrate.style.display = elRate.value === 'target_vbr' ? '' : 'none';
+        if (last.target_bitrate_kbps) elBitrate.value = String(last.target_bitrate_kbps);
+        elRate.addEventListener('change', () => {
+            elBitrate.style.display = elRate.value === 'target_vbr' ? '' : 'none';
+        });
+        const outField = mkField(grid1, MSG.encodeModalOutDir);
+        outField.classList.add('full');
+        const elOutDir = mk('input', 'form-input', outField);
+        elOutDir.type = 'text';
+        elOutDir.placeholder = 'D:\\Videos';
+        if (last.out_dir) elOutDir.value = String(last.out_dir);
+        // 长任务硬性规定①（E3 批1 落点）：预估行
+        const etaRow = mk('div', 'enc-eta-row', sec1);
+        if (o.totalEtaS && o.totalEtaS > 0) {
+            etaRow.textContent = '⏱ ' + MSG.encodeEtaTotal
+                .replace('{t}', Math.max(1, Math.round(o.totalEtaS / 60)) + ' ' + '分');
+        } else {
+            etaRow.textContent = '⏱ ' + MSG.encodeEtaNone;
+        }
+
+        // —— 分区 2：字幕与音频 ——
+        const sec2 = mk('div', 'enc-section', body);
+        mk('h4', null, sec2).textContent = MSG.encodeSecSubAudio;
+        const grid2 = mk('div', 'enc-grid', sec2);
+        const elFont = mk('input', 'form-input', mkField(grid2, MSG.encodeModalFont));
+        elFont.type = 'number';
+        elFont.min = '12';
+        elFont.max = '72';
+        elFont.value = String(last.font_size || 22);
+        const elAudio = mkSelect(mkField(grid2, MSG.encodeModalAudio), [
+            { v: 'copy', t: MSG.encodeAudioCopy },
+            { v: '96k', t: 'AAC 96k' },
+            { v: '128k', t: 'AAC 128k' },
+            { v: '192k', t: 'AAC 192k' },
+        ], last.audio_mode || 'copy');
+        const enhWrap = mk('div', 'enc-field full', grid2);
+        const enhLabel = mk('label', null, enhWrap);
+        const elEnhance = mk('input', null, enhLabel);
+        elEnhance.type = 'checkbox';
+        elEnhance.checked = last.enhance_on !== false;
+        enhLabel.appendChild(document.createTextNode(' ' + MSG.encodeModalEnhance));
+
+        // —— 分区 3：高级（批2 启用；C8 置空禁用占位）——
+        const sec3 = mk('div', 'enc-section disabled', body);
+        mk('h4', null, sec3).textContent = MSG.encodeModalAdvanced;
+        mk('div', 'enc-placeholder', sec3).textContent = MSG.encodeModalAdvancedPh;
+
+        const collect = () => ({
+            video_format: elFmt.value,
+            backend: 'auto',   // 批1 恒 auto（gpu 档仅展示禁用，A9 显式拒绝在后端）
+            quality: elQuality.value,
+            resolution: elRes.value,
+            rate_mode: elRate.value,
+            target_bitrate_kbps: elRate.value === 'target_vbr'
+                ? (parseInt(elBitrate.value, 10) || null) : null,
+            audio_mode: elAudio.value,
+            font_size: Math.min(72, Math.max(12, parseInt(elFont.value, 10) || 22)),
+            enhance_on: elEnhance.checked,
+            out_dir: elOutDir.value.trim(),
+        });
+        okBtn.onclick = () => AppModal._settle(true);
+
+        this._busy = true;
+        this._kind = 'encode';
+        root.style.display = 'flex';
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                okBtn.onclick = null;
+                // true（确认键/Enter）→ 按当前表单值结算；falsy（取消/ESC/遮罩）→ null
+                resolve(value ? { ok: true, params: collect() } : null);
             };
         });
     },
@@ -7008,6 +7247,10 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
         await window.__refineLoadRemote();
     }
 
+    // 硬字幕压制底条/入口接线（2.8.0 批1 件5）；若有在途队列（热刷新场景）
+    // 由 refresh 轮询自然恢复显示
+    EncodeDock.init();
+
     // Initialize feature status indicators
     await FeatureStatus.init();
 
@@ -7022,6 +7265,343 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
         } catch (e) { /* 后台预热失败静默（显式探测按钮兜底） */ }
     }, 3000);
 });
+
+// ============================================================
+// 硬字幕压制队列底条（2.8.0 批1 件5，D2026-1007-03）：全局串行队列 UI。
+// - 常驻骨架（#encodeDock）由 show() 显现；只在用户点关闭（×）时隐藏，
+//   不随队列空闲自动消失（DoD：完成后「打开文件夹」与失败「重试」须可达）；
+// - 轮询 1s：encode_status() + ffmpeg_supply_progress()（下载行复用同面板）；
+// - 列表行 createElement 注入（零 id）；外部文本全部 textContent 承载
+//   （不经 innerHTML，esc() 语义无涉）；禁 line-clamp（2.7.4 教训）；
+// - 行内动作按态：running/queued=取消、failed/cancelled=重试、done=打开文件夹。
+// ============================================================
+const EncodeDock = {
+    _poll: null,
+    _expanded: false,
+    _lastParams: null,
+
+    _api() {
+        return (window.pywebview && window.pywebview.api) || null;
+    },
+
+    init() {
+        const self = this;
+        document.querySelectorAll('.encode-entry-btn').forEach((btn) => {
+            btn.textContent = btn.dataset.testid === 'encode-entry-guide'
+                ? MSG.encodeEntryGuide : MSG.encodeEntryReview;
+            btn.addEventListener('click', () => self.openModal());
+        });
+        const dock = document.getElementById('encodeDock');
+        if (!dock) return;
+        dock.querySelector('.queue-dock-dismiss').textContent = MSG.encodeDismiss;
+        dock.querySelector('.queue-dock-dismiss').addEventListener('click', () => self.hide());
+        const toggle = document.getElementById('encodeDockToggle');
+        toggle.textContent = MSG.encodeExpand;
+        toggle.addEventListener('click', () => self.togglePanel());
+        dock.querySelector('.queue-dock-cancel').textContent = MSG.encodeCancelJob;
+        dock.querySelector('.queue-dock-cancel').addEventListener('click', () => self.cancelAll());
+    },
+
+    async openModal() {
+        const api = this._api();
+        if (!api) return;
+        const jobs = (AppState.selectedFiles || []).map((p) => ({ srt_path: p }));
+        if (jobs.length === 0) {
+            AppModal.alert(MSG.encodeModalTitle, MSG.encodeNoJobs);
+            return;
+        }
+        let pre = null;
+        try {
+            if (!this._lastParams) {
+                const lp = await api.encode_get_last_params();
+                if (lp && lp.success) this._lastParams = lp.params || {};
+            }
+            pre = await api.encode_preflight(jobs, this._lastParams || {});
+        } catch (e) {
+            AppModal.alert(MSG.encodeModalTitle, String(e));
+            return;
+        }
+        if (!pre || pre.success === false) {
+            AppModal.alert(MSG.encodeModalTitle, (pre && pre.error) || String(pre));
+            return;
+        }
+        // 供给缺口 → 引导一次完整版下载（HRO-1：能力探测是主路径保障）
+        if (pre.supply_missing && pre.supply_missing.length > 0) {
+            const ok = await AppModal.confirm(MSG.encodeModalTitle, MSG.encodeSupplyMissing);
+            if (ok) {
+                try {
+                    await api.ffmpeg_supply_download();
+                } catch (e) { /* 单飞守卫拒绝视为已在下载 */ }
+                this.show();
+            }
+            return;
+        }
+        // 有效任务过滤（缺视频/缺终稿字幕的项不入队，明细在 preflight items）
+        const valid = [];
+        let noVideo = 0;
+        let noSub = 0;
+        (pre.items || []).forEach((it) => {
+            if (!it.video_exists) { noVideo += 1; return; }
+            if (!it.subtitle_exists) { noSub += 1; return; }
+            valid.push(it);
+        });
+        if (valid.length === 0) {
+            const why = noVideo > 0 ? MSG.encodeNoVideo : MSG.encodeNoSubtitle;
+            AppModal.alert(MSG.encodeModalTitle, why + '（' + (pre.items || []).length + ' 个文件）');
+            return;
+        }
+        const res = await AppModal.encode({
+            jobs: valid,
+            totalEtaS: pre.total_eta_s,
+            last: this._lastParams || {},
+        });
+        if (!res || !res.ok) return;
+        this._lastParams = res.params;
+        try { api.encode_save_last_params(res.params); } catch (e) { /* 持久化失败不阻塞 */ }
+        await this.commit(valid, res.params, false);
+    },
+
+    async commit(jobs, params, allowOverwrite) {
+        const api = this._api();
+        let commit = null;
+        try {
+            commit = await api.encode_commit(jobs, params, allowOverwrite === true);
+        } catch (e) {
+            AppModal.alert(MSG.encodeModalTitle, String(e));
+            return;
+        }
+        if (commit && commit.needs_confirm) {
+            const list = (commit.existing || []).map((p) => '· ' + p).join('\n');
+            const ok = await AppModal.confirm(
+                MSG.encodeOverwriteTitle,
+                MSG.encodeOverwriteBody.replace('{list}', list));
+            if (ok) await this.commit(jobs, params, true);
+            return;
+        }
+        if (!commit || commit.success === false) {
+            const err = (commit && commit.error) || String(commit);
+            AppModal.alert(MSG.encodeModalTitle,
+                MSG.encodeCommitRejected.replace('{e}', err));
+            return;
+        }
+        if (commit.rejected && commit.rejected.length > 0) {
+            const first = commit.rejected[0] || {};
+            AppModal.alert(MSG.encodeModalTitle, String(first.reason || ''));
+        }
+        this.show();
+        this.refresh();
+    },
+
+    show() {
+        const dock = document.getElementById('encodeDock');
+        if (dock) dock.style.display = '';
+        this.startPolling();
+    },
+
+    hide() {
+        const dock = document.getElementById('encodeDock');
+        if (dock) dock.style.display = 'none';
+        this.stopPolling();
+    },
+
+    togglePanel() {
+        this._expanded = !this._expanded;
+        const panel = document.getElementById('encodeDockList');
+        const toggle = document.getElementById('encodeDockToggle');
+        if (panel) panel.style.display = this._expanded ? '' : 'none';
+        if (toggle) toggle.textContent = this._expanded ? MSG.encodeCollapse : MSG.encodeExpand;
+    },
+
+    startPolling() {
+        if (this._poll) return;
+        this.refresh();
+        this._poll = setInterval(() => this.refresh(), 1000);
+    },
+
+    stopPolling() {
+        if (this._poll) {
+            clearInterval(this._poll);
+            this._poll = null;
+        }
+    },
+
+    async refresh() {
+        const api = this._api();
+        if (!api) return;
+        let st = null;
+        let sup = null;
+        try {
+            st = await api.encode_status();
+            sup = await api.ffmpeg_supply_progress();
+        } catch (e) {
+            return;   // 桥未就绪/瞬时失败：下轮自愈
+        }
+        if (!st || st.success === false) return;
+        const jobs = st.jobs || [];
+        const supplyActive = sup && sup.success !== false
+            && (sup.busy || sup.phase === 'downloading');
+        if (jobs.length === 0 && !supplyActive) return;   // 未显过底条则保持隐藏
+        this.show();
+        this.render(jobs, sup);
+    },
+
+    _stateText(state) {
+        return MSG['encodeSt' + String(state || '').charAt(0).toUpperCase()
+            + String(state || '').slice(1)] || state;
+    },
+
+    render(jobs, sup) {
+        const dock = document.getElementById('encodeDock');
+        if (!dock) return;
+        const dot = dock.querySelector('.queue-dock-state');
+        const label = document.getElementById('encodeDockLabel');
+        const fill = document.getElementById('encodeDockFill');
+        const eta = dock.querySelector('.queue-dock-eta');
+        const cancelBtn = dock.querySelector('.queue-dock-cancel');
+        const running = jobs.find((j) => j.state === 'running');
+        const hasQueued = jobs.some((j) => j.state === 'queued');
+        const hasFailed = jobs.some((j) => j.state === 'failed' || j.state === 'cancelled');
+
+        // 供给下载行优先（压制未启动时占住底条）
+        if (sup && (sup.busy || (sup.phase && sup.phase !== 'idle' && sup.phase !== 'done'))) {
+            const pct = (sup.total > 0)
+                ? Math.min(99, Math.round((sup.received / sup.total) * 100)) : 0;
+            dot.className = 'queue-dock-state running';
+            label.textContent = MSG.encodeDownloadDock
+                + ' ' + ((sup.received / (1024 * 1024)) || 0).toFixed(0) + 'MB';
+            fill.style.width = pct + '%';
+            fill.classList.remove('err');
+            eta.textContent = pct + '%';
+            cancelBtn.style.display = '';
+            cancelBtn.textContent = MSG.encodeStop;
+        } else if (running) {
+            dot.className = 'queue-dock-state running';
+            label.textContent = MSG.encodeDockRunning + ' ' + this._baseName(running.out_path)
+                + ' · ' + String(running.params && running.params.video_format || '').toUpperCase()
+                + ' ' + this._stateText(running.state);
+            fill.style.width = (running.progress || 0) + '%';
+            fill.classList.remove('err');
+            eta.textContent = (running.progress || 0) + '%'
+                + (running.eta_s > 0
+                    ? ' · ETA ' + MSG.encodeMinutes.replace('{m}', Math.max(1, Math.round(running.eta_s / 60)))
+                    : '');
+            cancelBtn.style.display = '';
+            cancelBtn.textContent = MSG.encodeCancelJob;
+        } else {
+            dot.className = 'queue-dock-state' + (hasFailed ? ' failed' : '');
+            label.textContent = hasFailed ? MSG.encodeDockFailed
+                : (hasQueued ? MSG.encodeDockRunning : MSG.encodeDockDone);
+            fill.style.width = hasFailed ? fill.style.width : '100%';
+            if (hasFailed) fill.classList.add('err'); else fill.classList.remove('err');
+            eta.textContent = '';
+            cancelBtn.style.display = 'none';
+        }
+        this.renderList(jobs, sup);
+    },
+
+    _baseName(p) {
+        return String(p || '').split(/[\\/]/).pop() || String(p || '');
+    },
+
+    renderList(jobs, sup) {
+        const panel = document.getElementById('encodeDockList');
+        if (!panel) return;
+        panel.textContent = '';
+        const mk = (tag, cls, parent) => {
+            const el = document.createElement(tag);
+            if (cls) el.className = cls;
+            if (parent) parent.appendChild(el);
+            return el;
+        };
+        if (sup && (sup.busy || sup.phase === 'downloading')) {
+            const row = mk('div', 'queue-item', panel);
+            mk('span', 'queue-item-dot running', row);
+            const nm = mk('span', 'queue-item-name', row);
+            nm.textContent = MSG.encodeDownloadDock;
+            const tr = mk('span', 'queue-item-track', row);
+            const f = mk('span', 'progress-fill', tr);
+            f.style.width = ((sup.total > 0)
+                ? Math.min(99, Math.round((sup.received / sup.total) * 100)) : 0) + '%';
+        }
+        jobs.slice().reverse().forEach((j) => {
+            const row = mk('div', 'queue-item', panel);
+            row.dataset.encodeJobId = j.id;
+            mk('span', 'queue-item-dot ' + j.state, row);
+            const nm = mk('span', 'queue-item-name', row);
+            nm.textContent = this._baseName(j.out_path);
+            nm.title = j.out_path;
+            if (j.state === 'running' || j.state === 'queued') {
+                const tr = mk('span', 'queue-item-track', row);
+                const f = mk('span', 'progress-fill', tr);
+                f.style.width = (j.progress || 0) + '%';
+                if (j.state === 'queued') f.style.width = '0%';
+            } else if (j.state === 'done') {
+                const pill = mk('span', 'queue-item-pill', row);
+                pill.textContent = MSG.encodeStDone;
+            } else if (j.error) {
+                const err = mk('span', 'queue-item-err', row);
+                err.textContent = j.error;
+                err.title = j.error;
+            }
+            const act = mk('button', 'btn btn-ghost btn-sm', row);
+            if (j.state === 'running' || j.state === 'queued') {
+                act.textContent = MSG.encodeCancelJob;
+                act.addEventListener('click', () => this.cancelOne(j));
+            } else if (j.state === 'failed' || j.state === 'cancelled') {
+                act.textContent = MSG.encodeRetry;
+                act.addEventListener('click', () => this.retry(j.id));
+            } else if (j.state === 'done') {
+                act.textContent = MSG.encodeOpenFolder;
+                act.addEventListener('click', () => this.openFolder(j.id));
+            } else {
+                act.style.display = 'none';
+            }
+        });
+    },
+
+    async cancelOne(job) {
+        const api = this._api();
+        if (!api) return;
+        if (job.state === 'running') {
+            const ok = await AppModal.confirm(MSG.encodeModalTitle, MSG.encodeCancelOneConfirm);
+            if (!ok) return;
+        }
+        try { await api.encode_cancel(job.id); } catch (e) { /* 下轮轮询自愈 */ }
+        this.refresh();
+    },
+
+    async cancelAll() {
+        const api = this._api();
+        if (!api) return;
+        // 供给下载进行中 → 停止下载；否则取消队列
+        try {
+            const sup = await api.ffmpeg_supply_progress();
+            if (sup && sup.success !== false && (sup.busy || sup.phase === 'downloading')) {
+                await api.ffmpeg_supply_stop();
+                this.refresh();
+                return;
+            }
+        } catch (e) { /* 忽略走队列取消 */ }
+        const ok = await AppModal.confirm(MSG.encodeModalTitle, MSG.encodeCancelAllConfirm);
+        if (!ok) return;
+        try { await api.encode_cancel(''); } catch (e) { /* 下轮轮询自愈 */ }
+        this.refresh();
+    },
+
+    async retry(jobId) {
+        const api = this._api();
+        if (!api) return;
+        try { await api.encode_retry(jobId); } catch (e) { /* 下轮轮询自愈 */ }
+        this.show();
+        this.refresh();
+    },
+
+    async openFolder(jobId) {
+        const api = this._api();
+        if (!api) return;
+        try { await api.encode_open_folder(jobId); } catch (e) { /* 静默 */ }
+    },
+};
 
 // Feature status management
 const FeatureStatus = {

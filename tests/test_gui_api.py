@@ -4312,3 +4312,100 @@ def test_preview_last_dir_missing_or_invalid_noop(gui_api_obj, monkeypatch,
     assert gui_api_obj._load_preview_media_last_dir() == ""
     r2 = gui_api_obj.refine_audio_preview(str(guide), 0.0, 2.0)
     assert r2 == r
+
+
+# ---------------------------------------------------------------------------
+# 硬字幕压制 api（2.8.0 批1 件4：会话钩子 once（C9）+ 互斥（D2）+ 参数持久化）
+# ---------------------------------------------------------------------------
+
+class _FakeTermProc:
+    """假翻译子进程：poll() 返回预设退出码（终态消费路径驱动）。"""
+
+    def __init__(self, code):
+        self._code = code
+
+    def poll(self):
+        return self._code
+
+
+def _hook_probe_api(code):
+    """构造带翻译终态的最小 api 实例（object.__new__ 跳过 __init__ 副作用）。"""
+    api = object.__new__(TranslateAPI)
+    api._translate_lock = threading.Lock()
+    TranslateAPI._init_translation_state(api)
+    api._translate_process = _FakeTermProc(code)
+    api._translate_status = "running"
+    api._translate_parser = EventStreamParser()
+    fired = []
+    api._on_translation_session_completed = lambda summary: fired.append(summary)
+    return api, fired
+
+
+def test_encode_session_hook_fires_once_on_completed(gui_api_obj):
+    """C9：completed 终态触发钩子且仅一次（重复轮询不重复触发）。"""
+    api, fired = _hook_probe_api(0)
+    api.get_translation_status()
+    assert api._translate_status == "completed"
+    assert len(fired) == 1
+    api.get_translation_status()   # proc 已清空，不再进入终态消费
+    assert len(fired) == 1
+
+
+def test_encode_session_hook_not_fired_on_error_or_cancelled(gui_api_obj):
+    """C9：error/cancelled 终态不触发钩子（cancelled 不进终态消费分支）。"""
+    api, fired = _hook_probe_api(1)
+    api.get_translation_status()
+    assert api._translate_status == "error"
+    assert fired == []
+    api2, fired2 = _hook_probe_api(0)
+    api2._translate_status = "cancelled"
+    api2.get_translation_status()
+    assert fired2 == []
+
+
+def test_encode_session_hook_guard_blocks_second_call(gui_api_obj, monkeypatch):
+    """C9：once 守卫——同会话第二次直接短路（真实方法直调不产生第二次副作用）。"""
+    import subtransjav.webview_gui.api as api_mod
+    api = object.__new__(TranslateAPI)
+    api._session_hook_fired = True   # 模拟已触发
+    seen = []
+    monkeypatch.setattr(api_mod._log, "info",
+                        lambda msg, *a, **k: seen.append(str(msg)))
+    api._on_translation_session_completed({})
+    assert seen == []                # 守卫短路：无日志副作用
+    assert api._session_hook_fired is True
+
+
+def test_start_translation_rejected_while_encoding(gui_api_obj, monkeypatch):
+    """互斥（D2）：压制运行中 start_translation 拒绝并人话显因。"""
+    import subtransjav.webview_gui.encode_queue as eq
+    gui_api_obj._translate_lock = threading.Lock()
+    monkeypatch.setattr(eq, "encode_active", lambda: True)
+    r = gui_api_obj.start_translation({"inputs": []})
+    assert r["success"] is False and "压制" in r["error"]
+
+
+def test_encode_commit_rejected_while_translating(gui_api_obj, tmp_path,
+                                                  monkeypatch):
+    """互斥（D2）：翻译槽被占（_translate_running 同锁置位）→ commit 拒。"""
+    import subtransjav.webview_gui.encode_queue as eq
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"v")
+    sub = tmp_path / "v.srt"
+    sub.write_text("1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    monkeypatch.setattr(eq, "_translate_running", True)
+    r = gui_api_obj.encode_commit(
+        [{"video_path": str(video), "subtitle_path": str(sub)}],
+        {"video_format": "h264"})
+    assert r["success"] is False and "翻译" in r["error"]
+
+
+def test_encode_last_params_roundtrip(gui_api_obj, tmp_path, monkeypatch):
+    """上次压制参数持久化（fs_utils 原子写；CONFIG_DIR 打桩隔离）。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    assert gui_api_obj.encode_get_last_params()["params"] == {}
+    assert gui_api_obj.encode_save_last_params(
+        {"video_format": "av1", "quality": "balanced"})["success"]
+    r = gui_api_obj.encode_get_last_params()
+    assert r["success"] and r["params"]["video_format"] == "av1"

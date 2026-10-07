@@ -614,6 +614,8 @@
                             <span class="guide-summary-actions">
                                 <button type="button" id="guideOpenOtherBtn" class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span data-i18n="guide_open_other_btn">打开其他质量报告导读</span></button>
                                 <button type="button" class="btn btn-ghost btn-sm" id="refineGuideLoadBtn" data-i18n="guide_load_btn">加载导读</button>
+                                <!-- 压制辅入口（2.8.0 批1 件5）：文案 JS 态填充零 id -->
+                                <button type="button" class="btn btn-ghost btn-sm encode-entry-btn" data-testid="encode-entry-guide"></button>
                             </span>
                         </summary>
                         <div class="section-content" style="padding-top:8px;">
@@ -838,6 +840,13 @@
                 <div class="action-row review-transcode-row" style="display:none;">
                     <button type="button" id="reviewTranscodeBtn" class="btn btn-warning" style="display:none;"></button>
                     <span class="review-transcode-hint muted" style="display:none;"></span>
+                </div>
+
+                <!-- 硬字幕压制入口（2.8.0 批1 件5）：校对页主入口（决策 UI=B+）；
+                     按钮文案 JS 态填充零静态 i18n、零 id（FROZEN_IDS 契约） -->
+                <div class="action-row encode-entry-row" style="margin-top:6px;">
+                    <button type="button" class="btn btn-primary btn-compact encode-entry-btn" data-testid="encode-entry-review"></button>
+                    <span class="muted encode-entry-hint"></span>
                 </div>
 
                 <!-- 疑点段面板（批 3 D2026-1002-11）：折叠容器+行 class 委托零 id；
@@ -1066,6 +1075,22 @@
         </div>
     </div>
 
+
+    <!-- 硬字幕压制全局队列底条（2.8.0 批1 件5，D2026-1007-03）：常驻骨架，
+         有任务时由 JS 显现；文案 JS 态填充零静态 i18n；5 个预算内 id
+         （FROZEN_IDS 218→223 显式解冻），列表项 createElement 注入零 id -->
+    <div id="encodeDock" class="queue-dock" style="display:none;" data-testid="encode-dock">
+        <div class="queue-dock-main">
+            <span class="queue-dock-state" data-testid="encode-dock-state"></span>
+            <span id="encodeDockLabel" class="queue-dock-label"></span>
+            <span class="queue-dock-track"><span id="encodeDockFill" class="progress-fill" style="width:0%"></span></span>
+            <span class="queue-dock-eta muted"></span>
+            <button type="button" id="encodeDockToggle" class="btn btn-ghost btn-sm"></button>
+            <button type="button" class="btn btn-danger btn-sm queue-dock-cancel" style="display:none;"></button>
+            <button type="button" class="btn btn-ghost btn-sm queue-dock-dismiss" data-testid="encode-dock-dismiss"></button>
+        </div>
+        <div id="encodeDockList" class="queue-dock-panel" style="display:none;"></div>
+    </div>
 
     <!-- 自制通用模态（2.4.0 批1 S1）：替换原生 alert/confirm/prompt（宿主无关+防 prompt null）；
          class-only 承载（复用 .modal-overlay 体系），按钮文字 JS 填 MSG.ui_ok/ui_cancel（静态键 +0） -->

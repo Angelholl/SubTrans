@@ -47,10 +47,13 @@ __all__ = [
     "EncodeJob",
     "EncodeQueue",
     "claim_encode_slot",
+    "claim_translate_slot",
+    "encode_active",
     "estimate_output_bytes",
     "get_encode_queue",
     "is_encode_slot_free",
     "release_encode_slot",
+    "release_translate_slot",
 ]
 
 _NO_PROGRESS_TIMEOUT_S = 90.0        # 看门狗：编码相无新 out_time 的容忍窗
@@ -92,6 +95,33 @@ def is_encode_slot_free() -> bool:
     """互斥状态查询（翻译侧 start_translation 预检用，非占用）。"""
     with encode_translate_mutex:
         return not (_encode_active or _translate_running)
+
+
+def encode_active() -> bool:
+    """编码侧占用查询（翻译侧互斥文案分型用，不判翻译自身）。"""
+    with encode_translate_mutex:
+        return _encode_active
+
+
+def claim_translate_slot() -> bool:
+    """占用翻译互斥槽（D2 单一状态源：与 encode 侧同锁 check-and-set）。
+
+    api.start_translation 在进程哨兵置位后调用；返回 False=压制运行中
+    或翻译已在启动序（后者 api 层先经 _translate_process 检查，此处兜底）。
+    """
+    global _translate_running
+    with encode_translate_mutex:
+        if _encode_active or _translate_running:
+            return False
+        _translate_running = True
+        return True
+
+
+def release_translate_slot() -> None:
+    """释放翻译互斥槽（幂等）：start 失败/取消/终态消费时调用。"""
+    global _translate_running
+    with encode_translate_mutex:
+        _translate_running = False
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +250,9 @@ class EncodeQueue:
         self._seq = 0
         self._supply: SupplyResult | None = None
         self._stop = False
+        # 队列空闲回调（api 层接 release_encode_slot 做互斥槽自动归还；
+        # worker 收尾发现无 pending 时触发一次，异常被吞不回传队列）
+        self.on_idle: Callable[[], None] | None = None
 
     # -- 供给 ----------------------------------------------------------------
 
@@ -227,6 +260,10 @@ class EncodeQueue:
         if self._supply is None:
             self._supply = resolve_hardsub_ffmpeg()
         return self._supply
+
+    def reset_supply(self) -> None:
+        """供给缓存失效（ffmpeg 按需下载成功落位后由 api 层调用，下轮重解析）。"""
+        self._supply = None
 
     # -- 入队 ----------------------------------------------------------------
 
@@ -334,6 +371,10 @@ class EncodeQueue:
                     self._current = None
                     self._current_box = None
                     self._current_proc = None
+                    idle = not self._pending and not self._stop
+            if idle and self.on_idle is not None:
+                with contextlib.suppress(Exception):
+                    self.on_idle()
 
     def _fail(self, job: EncodeJob, reason: str) -> None:
         job.state = "failed"

@@ -1010,8 +1010,11 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # （consoleActivity/rawLogToggleBtn/exportConsoleBtn/copyConsoleBtn，
     # 全部零 data-i18n，文案 JS 态 MSG 键承接）；
     # 2.7.4 件C（D2026-1007-02）：修复生效配置明示行显式解冻 217→218
-    # （batchFixEffectiveLine，零 data-i18n，文案 JS 态 MSG 键承接）
-    assert len(ids) == 218, f"id 全集数漂移（2.7.4 件C 解冻后契约 218 不变），实为 {len(ids)}"
+    # （batchFixEffectiveLine，零 data-i18n，文案 JS 态 MSG 键承接）；
+    # 2.8.0 批1（D2026-1007-03）：压制队列底条显式解冻 218→223
+    # （encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/
+    #  encodeDockToggle，零 data-i18n，文案 JS 态 MSG 键承接）
+    assert len(ids) == 223, f"id 全集数漂移（2.8.0 批1 解冻后契约 223 不变），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -2300,9 +2303,11 @@ def test_batch_fix_run_uses_structured_preview():
     assert "catCount[b] - catCount[a]" in caller, \
         "分类明细必须按数量降序（设计取舍，非字母序）"
     assert "Number.isFinite(k)" in caller, "textMap 键须 Number 强转守卫"
-    # confirm 其余调用点零变化（原 7 处，本件只迁走批量修复一处→余 6）
-    assert src.count("AppModal.confirm(") == 6, \
-        "AppModal.confirm 调用点数量漂移（本件只允许迁走批量修复一处）"
+    # confirm 其余调用点零变化（原 7 处，2.7.4 件C 迁走批量修复一处→余 6；
+    # 2.8.0 批1 EncodeDock 新增 4 处：供给下载确认/单任务取消/整队取消/
+    # 覆盖确认→10）
+    assert src.count("AppModal.confirm(") == 10, \
+        "AppModal.confirm 调用点数量漂移（增删须显式改钉并回评议）"
 
 
 def test_batch_fix_effective_line_pinned():

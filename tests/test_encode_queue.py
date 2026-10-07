@@ -400,6 +400,19 @@ def test_mutex_translate_side_blocks_encode():
     assert eq.is_encode_slot_free() is True
 
 
+def test_on_idle_fires_once_after_queue_drains(tmp_path, fake_env, monkeypatch):
+    """队列排空触发 on_idle 恰一次（api 层接互斥槽归还）。"""
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", FakeSpawner([dict(rc=0)]))
+    q = fresh_queue()
+    calls = []
+    q.on_idle = lambda: calls.append(1)
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert wait_until(lambda: accepted[0].state == "done")
+    assert wait_until(lambda: len(calls) == 1)
+    time.sleep(0.05)
+    assert len(calls) == 1
+
+
 # ---------------------------------------------------------------------------
 # retry / snapshot / id
 # ---------------------------------------------------------------------------
