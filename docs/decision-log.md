@@ -3103,3 +3103,30 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 - **件F 已收口（9da9d40）**：refine_save_media_override 同帧持久化 preview_media_last_dir（normcase 父目录，既有 stage_settings 通道）；试听推断④同目录**零命中**才落⑤ last_dir 非递归搜索（同套 leveled+时长守卫，media_source="last_dir"，跨目录候选不合并、last_dir 多候选 fail-closed；④多命中不跨目录回退——口径裁量有钉）。**口径裁量：仅零命中落⑤**（非「no_candidate 即落」），与件B「近层歧义即歧义」一致。
 - **验证链**：ruff CI 口径绿×2 段；全量 2033+4（P0 段）→**2049+4**（段2，只增）；冒烟 --version/--help 过；Mimosa 终 36=基线零新增（过程 37→消模式→36，seal d8da7692961f2716）；secret 扫描逐笔 CLEAN；黑盒五点（上）。
 - **待 owner（C10 实景复测门=2.7.5 交付放行判据）**：①一键修复可发起且重翻记录 model_used 非空（当前真机预期：阶段B KV 空→自动回退阶段A lmstudio/qwen3.8）；②校对页导入视频直连可播（mida-559.mp4 本尊应直接播，无需转码）；③试听 direct 有声（修好推断后 35 条媒体应命中）；④启动无红色横幅（gui.log 有 protocol=file: 正常）；⑤「选择媒体文件…」与 last_dir 场景试用；⑥flake 观察照旧。
+
+## [2026-10-07] D2026-1007-03 压制输出（硬字幕成品）立项定案 [已拍板·待开工令]
+
+**需求沿革**：owner 六条消息逐步收敛（①ShanaEncoder 在、压制候选疑废 ②简化自建进 tab ③参数可调/自建预设 ④GPU 必须做否则没意义 ⑤三主格式+画质三档+分辨率四挡+抄 Shana 值得的自定义 ⑥UI=B 方案+自动化/手动双模式+2-pass 砍掉），并以五份真实 ShanaEncoder 预设（D:\压缩\ShanaEncoder\presets\ 的 AV1/HQ/仅剪辑/202502171739.json 等）作为档位校准基准。
+
+**MVP 定稿**：
+- 参数模型两维：**格式 H.264/H.265/AV1 × 后端 自动/GPU/CPU**。GPU 候选链 nvenc→qsv→amf 逐格式构建级+1s 运行双检、懒执行+按（二进制，encoder）缓存、失败显因；CPU=libx264/libx265/libsvtav1；AMF 未实测占位标注。
+- 画质三档（高压缩/均衡/高画质）× 格式自由组合，映射以 **owner 五预设为主锚**（NVENC p6/p7+tune hq+b:v 派生比例≈maxrate 1.45×/bufsize 2.9×、QSV global_quality+slower、CPU CRF/preset）spike 定值；轮 4 cq 占位作废。
+- 分辨率 保持原样(缺省)/720p/1080p/1440p/2160p，低源上采样提示不拦。
+- 码控模式=按画质档（CRF/RF/ICQ 映射）‖ 目标码率 VBR（b:v+maxrate/bufsize 自动派生可手改）；**2-pass 砍掉挂候选**（含 passlogfile 护栏一并休眠），单遍 VBR 承接体积目标。
+- 10bit 高级开关缺省关（仅 H.265/AV1；yuv420p 护栏参数化为 8/10bit 由开关独占；固定滤镜链 8bit 运行、yuv420p10le 置链尾烧录后；spike 全链实跑；H.264 隐藏该开关）。
+- 画质增强受控开关（lanczos+hqdn3d+deblock+unsharp 固定串复刻 owner 链，缺省开，文档注明"输出经处理非源忠实"；关=忠实源出口）。
+- 音量增益 ±12dB 受控旋钮（≠0 强制 aac 重编码并提示）；字幕字号（缺省样式对齐 owner 预设：白字/黑边 2.5/底边距）；音频 copy 优先+aac 三档；输出目录+磁盘预检（失败 danger 行+禁开始）；覆盖确认。
+- 预设三层：内置三档/自建 hardsub_presets（KV 通道、上限 20、key 级损坏降级+.bak、api.py:1773 原子写改造）/运行时微调不回写（显"自定义（基于 X）"pill）。
+- 队列：串行+进度+取消（AppModal.confirm）+90s 无进展看门狗+tier-aware 超时 `max(duration×3+120, 预估×2)`+预计时长分档（x264≈1/8、x265≈1/3、AV1 均衡≈1/2、AV1 高画质≥×1、GPU≈1/5-8 注"滤镜 CPU 侧以实测为准"）。
+- 自动化/手动双模式：**自动化=翻译会话结束批量入队 final**（禁单文件中途触发——防批次自毁）+`lms unload --all` 自动清场（复用 lmstudio.py:242 既有路径，失败告警不阻塞）+成品已存在跳过并通知；手动=校对页/导读页入口+面板独立配对；**双向互斥**（翻译运行中拒入队压制/压制运行中拒入队翻译）。
+- 逃生门黑名单终版 25 件（原十五件套+轮4 六件 -preset/-rc/-cq/-qp/-b:v/-b:a+本轮 -an/-sn/-dn/-af），受控生成者注册制（subtitles/增强链/音量为面板独占生成者）。
+- UI=B+（校对页主入口 primary 键+导读页辅入口+面板内独立配对；AppModal modal-lg 三分区面板：基础 8 控件/字幕音频 4 控件/高级折叠；全局队列底条+展开浮层；长任务四处硬性规定：预估行/AV1 警告条/磁盘 danger 行/完成不打断）——设计师意见书（评议员通道余额故障，按 D2026-1004-263 先例 general-purpose 替代出具）+owner"先设计弄有问题再改"。
+- 明示不做（验收单列名防"以为有"）：多字幕轨/QSV·AMF 之外的 GPU 后端细分/片段切割/字幕位置描边颜色（字号除外）/帧率限制（逃生门可达）/2-pass/10bit for H.264/GPU 加速 QSV·AMF 不可达/跨会话队列持久化。
+
+**评议**：五轮（轮 1-3 正式评议员、轮 4-5 general-purpose 替代——评议员通道余额故障按先例替代），各轮均有条件支持；HRO-1（ffmpeg 随装）采纳关闭；终轮无 HRO。关键事实修正：full/lite 双安装器先例已在 2.3.0 合单撤销（F1 MATERIAL_CONFLICT）；ShanaEncoder 无官方 CLI；libsvtav1 仅 ffmpeg full 变体（下载兜底制品须 full）；owner QSV/10bit 实证推翻两假设；LM Studio 卸载复用 lms CLI 既有路径（非新设计）。
+
+**梯队**：**2.8.0 前段三批**（批1 CPU 链+队列+护栏，含受控生成者注册制/外部入队接口/会话结束钩子骨架，可独立验收 → 批2 硬件后端解析器+面板+预设 → 批3 自动化+音量+画质增强）；**2.8.0 原规划 CT2 引擎顺延后段或换号——待 owner 排序拍板**；NVENC/后端解析器降级出口预授权（深水问题→2.8.0 发 CPU-only，NVENC 顺延）。
+
+**风险跟踪**：LM Studio unload --all 全清用户感知（文档注明"压制开始会清空 LM Studio 已载模型"）；QSV 中途失败验收用例（无实机 mock 钉）；AV1 时长预期管理；增强链吃 GPU 加速比（时长表变量）；自动模式跳过语义；同 GPU 翻译/压制竞争归因文案。
+
+**开工条件**：owner 开工令+2.8.0 排序拍板 → 批1 批清单评议（含设计面板小样，原型蓝本 docs/design/2026-1007-guide-batch-ux/prototype.html）。与 2.7.5 C10 复测门并行无冲突。
