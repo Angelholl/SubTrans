@@ -3161,3 +3161,13 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 - **编制时 spike 新事实入档**:本机上游 ffmpeg 7.1.1 无 libass(subtitles 滤镜不存在)→能力探测+按需下载升主路径保障;owner 五份 Shana 预设锚值提取(AV1 链实串/字幕样式 22 号白字黑边 2.5 底端/NVENC 3113k 派生比例)。
 - 原十五件套明细 [UNVERIFIABLE] 维持,以 canonical 契约为准;owner 日后出示原件仅增量对账不改门。INFO_GAP:设计小样已补(d280-批1-设计小样.html)。
 - 风险跟踪新增:①BtbN 域名级单点;②faststart 收尾相位实机边界;③Microsoft YaHei 精简系统缺失;④2.7.5 forward-port 冲突高危面(app.js/api.py/index.html/style.css/strings.py);⑤码率派生 owner 目视确认;⑥音频回落对体积目标影响;⑦离线导入/py7zr 候选未排期。
+
+**十二、执行追记（2026-10-08 全量收口+双发版）[已完成]**
+
+- **批1**（1d3befe 后端三件/cdd871e api+前端/ac2dfdc 黑盒修正/1153d33 甄别表）：编制时 spike 实测三事实入账——本机上游 ffmpeg 7.1.1 无 libass（能力探测+按需下载升主路径保障）、BtbN autobuild-2026-10-07 制品缺 EOCD 上游坏件（下载后 zipfile 试读+换 tag 重试为标准动作，终 pin 10-06 tag sha256 8428c7e0…）、速度系数实测表（h265 slower 最重 3.93×、av1 全档 0.37-0.54×）。黑盒（IAB+HTTP 桥生产 TranslateAPI+数据根隔离+真实 BtbN ffmpeg 落位）六点全过：入队→进度→完成打开文件夹/取消 .part 零残留/行内重试→完成/覆盖确认复验（D3）/中文烧录帧人工核（白字黑边底端居中）/srt→终稿→视频配对链——抓两笔真缺陷随批修：_resolve_final_subtitle 原用 strip_lang_suffix 不剥 .ja.whisperjav 管线链（改 _preview_stem_candidates 闭集深→浅+回归钉）；底条空闲标签以 history 末条为准（修历史含取消项永久卡「压制失败」）。程序化 tab 切换/点击按 IAB 输入层劣化先例声明。
+- **批2**（b1bd301）：GPU 双检解析（构建级+1s 试编码，按二进制懒缓存，逐候选显因；auto=GPU 优先回落 CPU 显因 note，显式 gpu 不可用拒绝不降级）；GPU 码控映射（nvenc VBR 派生 p6/p7+tune hq=owner AV1.xml 锚/qsv global_quality+slower=owner HQ.xml 锚/amf 占位）；GPU 特权旗标入黑名单（-tune/-global_quality/-quality）；预设体系（KV 上限 20+损坏 key 级降级+.bak 滚动）；refine_save_stage_settings 原子写改造（:1773 既有欠账）。黑盒：真实 NVENC 双检点亮（Blackwell 实机解析成功）。
+- **批3**（788e7f8）：自动化接线（管线设置 encode_auto_enabled 开关；钩子 once→收集 done→配对→成品已存在跳过并通知→入队；lms unload --all 清场复用既有路径失败告警不阻塞；自动化语义=跳过不覆盖，needs_confirm 按跳过处理）；音量 ±12dB 旋钮（≠0 强制 aac 重编码人话显因）；增强链参数受控校验（hqdn3d 0-10/deblock 0-1/unsharp 0-2）+三旋钮（缺省=owner 链值随预设存取）；全部完成 Console 活动流一行人话（完成不打断）。黑盒：三旋钮缺省渲染+开关抽查过。
+- **验证链**：全量 2049+4→**2211+4 只增**（+162）；ruff 全过；冒烟过；Mimosa deep 两轮——批1 seal a13bc88b 38 条（#30/#31 入账甄别：ffmpeg 供给写位 pin 制品+固定文件名集合封死；api 两条行移位非新增）、批2/3 seal fc8f5bcb 37 条零新 anchor 族。
+- **CI 事故一笔**：main ubuntu-3.12 mypy 基线外 17 条（本地同现——pytest 的 mypy 钉在批2 后未复跑是漏检根因）；纯静态类型（_floats 返回/GPU 表 str 统一/GPU 缓存独立 _GPU_CACHE），e805241 修，零运行时影响，v2.8.0 构建不受扰（release.yml 无 mypy 门）。
+- **双发版（C10 切点裁定执行）**：**v2.7.5**（Release id 406014977，SubTrans-setup-2.7.5.exe 50,963,154B sha256 CB763F96…C716A5 与 SHA256SUMS 一致+公开 URL 回读字节 MATCH；tag v2.7.5→190a301，release/2.7.5 自 84bd60c 切出，六件修复+CHANGELOG 2.7.2-2.7.4 缺段照分支制先例回填；构建 run 37660982558 success）；**v2.8.0**（Release id 406022360，SubTrans-setup-2.8.0.exe 51,034,166B sha256 ACE20282…D8048 一致+回读 MATCH；tag v2.8.0→9adc164，release/2.8.0 自 main 切出，压制三批全量；构建 run 37662180532 success）。owner 指示「直接推进到发版」=C10 实景复测门放行，复测点平移入两版真机走查。main 前进 **2.8.1.dev0**（e805241 类型修复后续 bump 另笔）。
+- **版本策略兑现**：2.8.0=压制全部当版本完成（NVENC 未砍未延）；CT2 引擎顺延下版本；下版本=修复+新功能集成模式。
