@@ -146,6 +146,8 @@ class EncodeParams:
     target_bitrate_kbps: int | None = None  # VBR 手改值；None=按参考表派生
     out_path: str = ""                  # 成品路径（队列层改写为 .part 后传入）
     custom_params: str = ""             # 逃生门，黑名单三层契约约束
+    volume_db: float = 0.0              # 批3 音量增益（受控 ±12dB；≠0 强制 aac）
+    auto: bool = False                  # 批3 自动化入队标记（跳过覆盖=跳过语义）
 
 
 def validate_params(params: EncodeParams) -> None:
@@ -175,6 +177,47 @@ def validate_params(params: EncodeParams) -> None:
         missing = [k for k in DEFAULT_ENHANCE_PARAMS if k not in params.enhance_params]
         if missing:
             raise ValueError(f"enhance_params 缺键: {missing}")
+        _validate_enhance_params(params.enhance_params)
+    if not -12.0 <= float(params.volume_db) <= 12.0:
+        raise ValueError(f"音量增益须在 ±12dB 内: {params.volume_db}")
+
+
+def _validate_enhance_params(ep: dict) -> None:
+    """增强链参数受控范围（批3 旋钮化，决策九-1：各带受控范围校验）。
+
+    - hqdn3d=「luma_sp:chroma_sp:luma_tmp:chroma_tmp」四数值，各 0~10；
+    - deblock=「alpha=X:beta=Y」，X/Y 各 0~1；
+    - unsharp=「lx:ly:la:cx:cy:ca」六数值，luma/croma amount 各 0~2。
+    超范围 ValueError（人话含滤镜名）。"""
+    def _floats(s: str, n: int) -> list[float]:
+        parts = str(s).split(":")
+        if len(parts) != n:
+            raise ValueError(f"参数段数应为 {n}: {s!r}")
+        vals = []
+        for p in parts:
+            key, _, v = p.partition("=") if "=" in p else ("", "", p)
+            try:
+                vals.append((key, float(v)))
+            except ValueError:
+                raise ValueError(f"参数非数值: {s!r}") from None
+        return vals
+
+    hq_vals = _floats(ep.get("hqdn3d", ""), 4)
+    for i, (_k, v) in enumerate(hq_vals):
+        if not 0 <= v <= 10:
+            raise ValueError(f"hqdn3d 参数超范围（0~10）: [{i}]={v}")
+    deb = _floats(ep.get("deblock", ""), 2)
+    for k, v in deb:
+        if not 0 <= v <= 1:
+            raise ValueError(f"deblock {k} 超范围（0~1）: {v}")
+    us = _floats(ep.get("unsharp", ""), 6)
+    for i, (_k, v) in enumerate(us):
+        if i in (2, 5) and not 0 <= v <= 2:
+            raise ValueError(f"unsharp amount 超范围（0~2）: {v}")
+        if i in (2, 5):
+            continue
+        if not 1 <= v <= 32:
+            raise ValueError(f"unsharp 尺寸超范围（1~32）: {v}")
 
 
 def reference_bitrate_kbps(video_format: str, resolution: str, quality: str) -> int:
@@ -282,7 +325,8 @@ def build_ffmpeg_args(
     audio_fall_back = ""
     if has_audio:
         args += ["-map", "0:a:0"]
-        if params.audio_mode == "copy":
+        want_volume = abs(float(params.volume_db or 0.0)) > 1e-9
+        if params.audio_mode == "copy" and not want_volume:
             if (audio_codec or "").lower() in _AUDIO_COPY_WHITELIST:
                 args += ["-c:a", "copy"]
             else:
@@ -291,8 +335,17 @@ def build_ffmpeg_args(
                     f"源音频编码 {audio_codec or '未知'} 不在 copy 白名单"
                     f"（{'/'.join(sorted(_AUDIO_COPY_WHITELIST))}），已回落 AAC 128k"
                 )
+        elif params.audio_mode == "copy" and want_volume:
+            # 音量增益需重编码（copy 流不可挂滤镜）；增益归 aac 128k 档
+            args += ["-c:a", "aac", "-b:a", "128k"]
+            audio_fall_back = (
+                f"已设置音量增益 {params.volume_db:+g}dB，音频需重编码"
+                "（AAC 128k，直接复制与音量调整不可兼得）")
         else:
             args += ["-c:a", "aac", "-b:a", params.audio_mode]
+        if want_volume:
+            # 批3 音量旋钮（生成者=volume；±12dB 受控旋钮，决策 MVP）
+            args += ["-af", f"volume={float(params.volume_db):g}dB"]
 
     if params.backend == "gpu":
         family = gpu_family(gpu_encoder)

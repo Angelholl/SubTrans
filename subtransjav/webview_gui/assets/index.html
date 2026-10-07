@@ -961,6 +961,14 @@
 
                 <div class="pipeline-mirror" id="pipelineMirrorLine"></div>
 
+                <!-- 自动压制开关（2.8.0 批3，D2026-1007-03 决策八-4：用户勾选
+                     决定是否启用自动化；状态存管线设置 encode_auto_enabled；
+                     零 id 零静态 i18n，文案 JS 态填充） -->
+                <label class="encode-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;cursor:pointer;" data-testid="encode-auto-row">
+                    <input type="checkbox" class="encode-auto-switch" style="margin:0;">
+                    <span class="encode-auto-label"></span>
+                </label>
+
                 <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
                     <span class="feature-badge" id="grammarHintBadge" style="display:none;">
                         <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>

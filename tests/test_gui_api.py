@@ -4463,3 +4463,83 @@ def test_encode_presets_corruption_degrades_with_bak(gui_api_obj, tmp_path,
     # 下次保存从空表重建（坏档 .bak 仍留）
     assert gui_api_obj.encode_preset_save("fresh", {})["success"]
     assert path.read_bytes() != good
+
+
+# ---------------------------------------------------------------------------
+# 批3：自动化（钩子→收集→跳过语义→入队；开关存管线设置）
+# ---------------------------------------------------------------------------
+@pytest.fixture()
+def _auto_env(tmp_path, monkeypatch):
+    """自动化测试环境：CONFIG_DIR 打桩 + 干净互斥态 + 队列供给桩。"""
+    import subtransjav.refine.config as cfg
+    import subtransjav.webview_gui.encode_queue as eq
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(eq, "_encode_active", False)
+    monkeypatch.setattr(eq, "_translate_running", False)
+    # 媒体：vid1.mp4+终稿字幕+管线中间稿（配对链复用）
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "vid1.mp4").write_bytes(b"v")
+    (media / "vid1_final_cn.srt").write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    inp = media / "vid1.ja.whisperjav.srt"
+    inp.write_text("1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    monkeypatch.setattr(eq, "resolve_hardsub_ffmpeg", lambda *a, **k: SimpleNamespace(
+        ffmpeg_path="", ffprobe_path="", capability={}, missing=[]))
+    # 媒体探测桩（enqueue_batch 内 probe）
+    monkeypatch.setattr(eq, "probe_media", lambda *a, **k: SimpleNamespace(
+        duration_s=10.0, width=640, height=360, bit_rate_bps=2_000_000,
+        has_audio=True, audio_codec="aac"))
+    yield {"srt": str(inp), "media": media}
+    eq._singleton = None   # 队列单例重置（history 只增，跨测试须换新）
+
+
+def test_automation_disabled_by_default(gui_api_obj, _auto_env):
+    """开关缺省关：钩子触发不入队（零副作用）。"""
+    gui_api_obj._on_translation_session_completed(
+        {"files": {_auto_env["srt"]: "done"}})
+    assert gui_api_obj.encode_status()["jobs"] == []
+
+
+def test_automation_enqueues_done_and_skips_existing(gui_api_obj, _auto_env,
+                                                     monkeypatch):
+    """开关开：done 文件配对入队；成品已存在跳过并通知（自动化语义）。"""
+    import json as _json
+    settings = {"settings": {"encode_auto_enabled": True}}
+    (tmp := _auto_env["media"].parent / "cfg").mkdir(exist_ok=True)
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp))
+    (tmp / "refine_stage_settings.json").write_text(
+        _json.dumps(settings), encoding="utf-8")
+    # 队列供给桩已由 _auto_env 注入（missing=[] → 入队走通；spawn 桩防真进程）
+    import subtransjav.webview_gui.encode_queue as eq
+    monkeypatch.setattr(eq, "_spawn_ffmpeg",
+                        lambda argv: (_ for _ in ()).throw(OSError("no ffmpeg")))
+    gui_api_obj._on_translation_session_completed(
+        {"files": {_auto_env["srt"]: "done"}})
+    jobs = gui_api_obj.encode_status()["jobs"]
+    assert len(jobs) == 1 and jobs[0]["state"] in ("queued", "failed")
+    assert jobs[0]["params"].get("auto") is True
+    # 二次触发：once 守卫（同会话不重复入队）
+    gui_api_obj._on_translation_session_completed(
+        {"files": {_auto_env["srt"]: "done"}})
+    assert len(gui_api_obj.encode_status()["jobs"]) == 1
+    eq.get_encode_queue().cancel(None)
+    eq.release_encode_slot()
+
+
+def test_automation_skips_existing_output(gui_api_obj, _auto_env, monkeypatch):
+    """成品已存在→跳过不入队（自动压制 skip-existing，决策自动化定稿）。"""
+    import json as _json
+
+    import subtransjav.refine.config as cfg
+    tmp = _auto_env["media"].parent / "cfg2"
+    tmp.mkdir(exist_ok=True)
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp))
+    (tmp / "refine_stage_settings.json").write_text(
+        _json.dumps({"settings": {"encode_auto_enabled": True}}), encoding="utf-8")
+    out = _auto_env["media"] / "vid1_hardsub.mp4"
+    out.write_bytes(b"exists")
+    gui_api_obj._on_translation_session_completed(
+        {"files": {_auto_env["srt"]: "done"}})
+    assert gui_api_obj.encode_status()["jobs"] == []   # 全跳过零入队

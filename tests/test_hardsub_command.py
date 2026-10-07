@@ -268,6 +268,50 @@ def test_gpu_program_flags_banned_for_user():
             parse_custom_params(flag)
 
 
+# ---------------------------------------------------------------------------
+# 批3：音量旋钮 + 增强链受控校验
+# ---------------------------------------------------------------------------
+def test_volume_knob_forces_aac_with_notice():
+    """音量 ≠0：copy 白名单内也强制 aac 重编码并透出人话原因（决策 MVP）。"""
+    args, fall = build_ffmpeg_args(_params(volume_db=3.5), "D:/v.mp4", "D:/s.srt",
+                                   10.0, True, "aac")
+    assert "-af" in args and "volume=3.5dB" in args
+    assert "-c:a" in args and "copy" not in args
+    assert "重编码" in fall
+    # 0dB：copy 保持
+    args0, fall0 = build_ffmpeg_args(_params(volume_db=0), "D:/v.mp4", "D:/s.srt",
+                                     10.0, True, "aac")
+    assert "-af" not in args0 and fall0 == ""
+
+
+def test_volume_range_validated():
+    with pytest.raises(ValueError, match="±12"):
+        validate_params(_params(volume_db=15))
+    with pytest.raises(ValueError, match="±12"):
+        validate_params(_params(volume_db=-13))
+
+
+def test_enhance_params_range_validated():
+    base = {"hqdn3d": "0.8:0.6:0.7:0.6", "deblock": "alpha=0.07:beta=0.07",
+            "unsharp": "5:5:0.5:3:3:0.3"}
+    validate_params(_params(enhance_params=dict(base)))   # 缺省过
+    bad = dict(base, hqdn3d="11:0.6:0.7:0.6")
+    with pytest.raises(ValueError, match="hqdn3d"):
+        validate_params(_params(enhance_params=bad))
+    bad2 = dict(base, deblock="alpha=1.5:beta=0.07")
+    with pytest.raises(ValueError, match="deblock"):
+        validate_params(_params(enhance_params=bad2))
+    bad3 = dict(base, unsharp="5:5:3:3:3:0.3")
+    with pytest.raises(ValueError, match="unsharp"):
+        validate_params(_params(enhance_params=bad3))
+    # 旋钮组装链路：改第一值仍过
+    ok = dict(base, hqdn3d="3.2:0.6:0.7:0.6", unsharp="5:5:1.5:3:3:0.3")
+    args, _ = build_ffmpeg_args(_params(enhance_params=ok), "D:/v.mp4", "D:/s.srt",
+                                1.0, True, "aac")
+    vf = args[args.index("-vf") + 1]
+    assert "hqdn3d=3.2:0.6:0.7:0.6" in vf and "unsharp=5:5:1.5:3:3:0.3" in vf
+
+
 def test_font_size_range():
     validate_params(_params(font_size=12))
     validate_params(_params(font_size=72))

@@ -4647,11 +4647,101 @@ class TranslateAPI:
         return self._supply_state
 
     def _on_translation_session_completed(self, summary: dict[str, Any]) -> None:
-        """翻译会话结束钩子（批1 骨架：once 守卫+日志行；批3 接自动化入队
-        「批量翻译→批后自动压制」与 lms unload 清场）。触发点=get_translation_status
-        终态消费（completed 分支）；cancelled/error 不触发（C9）。"""
+        """翻译会话结束钩子（批3 自动化接线）：用户勾选「翻译完成后自动
+        压制」（管线设置 encode_auto_enabled）时，收集本会话完成文件→
+        契约配对→成品已存在跳过（自动化语义，不覆盖）→余者入队→
+        lms unload --all 清场（复用 lmstudio 既有路径，失败告警不阻塞）。
+        once 守卫见批1；cancelled/error 不触发（C9）。"""
         if getattr(self, "_session_hook_fired", False):
             return
         self._session_hook_fired = True
-        with contextlib.suppress(Exception):
-            _log.info("[encode] 翻译会话完成（钩子骨架 no-op，批3 接自动压制）")
+        try:
+            if not self._encode_automation_enabled():
+                return
+            self._run_encode_automation(summary)
+        except Exception:
+            _log_exc("_on_translation_session_completed")
+
+    def _encode_automation_enabled(self) -> bool:
+        """管线设置 encode_auto_enabled（refine_save_stage_settings 同一
+        settings KV；缺省关）。"""
+        try:
+            with open(self._refine_stage_settings_path(), encoding="utf-8") as f:
+                data = json.load(f)
+            return bool((data.get("settings") or {}).get("encode_auto_enabled"))
+        except Exception:
+            return False
+
+    def _run_encode_automation(self, summary: dict[str, Any]) -> None:
+        """自动压制主体（触发上下文=前端轮询 get_translation_status 的
+        GUI 桥线程：轻量文件操作+入队，可接受）。"""
+        files_status = dict(summary.get("files") or {})
+        done_srts = [str(p) for p, st in files_status.items() if st == "done"]
+        if not done_srts:
+            _log.info("[encode] 自动压制：本会话无完成文件，跳过")
+            return
+        last = self.encode_get_last_params().get("params") or {}
+        params = dict(last)
+        params["auto"] = True   # 自动化入队标记（skip-existing 语义）
+        out_dir = str(params.get("out_dir") or "")
+        ready: list[dict[str, str]] = []
+        skipped: list[str] = []
+        for job in self._normalize_encode_jobs(
+                [{"srt_path": p} for p in done_srts]):
+            video = job["video_path"]
+            subtitle = job["subtitle_path"]
+            label = os.path.basename(job["srt_path"] or subtitle or video)
+            if not video or not os.path.isfile(video):
+                skipped.append(f"{label}（未找到视频）")
+                continue
+            if not subtitle or not os.path.isfile(subtitle):
+                skipped.append(f"{label}（终稿字幕不存在）")
+                continue
+            out_path = self._encode_out_path(video, out_dir)
+            if os.path.isfile(out_path):
+                skipped.append(f"{os.path.basename(out_path)}（成品已存在）")
+                continue
+            ready.append({"video_path": video, "subtitle_path": subtitle})
+        notice = f"[encode] 自动压制：完成 {len(done_srts)} 个文件，入队 {len(ready)}"
+        if skipped:
+            notice += (f"，跳过 {len(skipped)}"
+                       f"（{'；'.join(skipped[:3])}{'…' if len(skipped) > 3 else ''}）")
+        if not ready:
+            self._automation_notice(notice)
+            return
+        # 槽占用由 encode_commit 内部 claim（预占会与自己撞锁）；失败即人话回报
+        commit = self.encode_commit(ready, params, allow_overwrite=False)
+        if commit and commit.get("needs_confirm"):
+            # 入队瞬间出现新成品：自动化语义=跳过不覆盖
+            self._automation_notice("[encode] 自动压制：入队前出现新成品，按跳过处理（不覆盖）")
+            return
+        if not (commit and commit.get("success")):
+            _log.info("[encode] 自动压制入队失败：%s", (commit or {}).get("error"))
+            return
+        self._automation_notice(notice)
+        self._lms_unload_all_quiet()
+
+    def _automation_notice(self, text: str) -> None:
+        """自动压制人话通知：gui.log 恒落 + 翻译日志队列尽力投（测试桩/未初始化
+        上下文容错——object.__new__ 实例无队列属性时跳过）。"""
+        _log.info(text)
+        q = getattr(self, "_translate_log_queue", None)
+        if q is not None:
+            with contextlib.suppress(Exception):
+                q.put(text + "\n")
+
+    def _lms_unload_all_quiet(self) -> None:
+        """压制前 LM Studio 清场（决策：复用 lmstudio 既有 unload --all 路径；
+        失败告警不阻塞压制）。风险跟踪①：用户感知=开启自动化后压制开始会
+        清空已载模型（手册批注口径）。"""
+        try:
+            from subtransjav.utils import lmstudio
+            lms = lmstudio._find_lms()
+            if not lms:
+                _log.info("[encode] 未找到 lms CLI，跳过模型清场（不阻塞）")
+                return
+            res = lmstudio._run_lms(lms, ["unload", "--all"], 60.0)
+            state = "超时" if getattr(res, "timed_out", False) else "完成"
+            _log.info("[encode] LM Studio 清场%s（unload --all）", state)
+        except Exception:
+            _log_exc("_lms_unload_all_quiet")

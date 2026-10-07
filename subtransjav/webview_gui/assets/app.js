@@ -107,6 +107,12 @@ const MSG = {
     encodeCustomLabel: '自定义参数（逃生门，追加到命令尾部）',
     encodeCustomHint: '以空格分隔，如：-crf 18 -threads 8；与面板参数冲突或破坏固定约束（像素格式/滤镜链/码控映射）的旗标会被拒绝并显因',
     encodeAv1Warn: 'AV1 编码耗时显著更长（CPU 下与视频时长同量级），请留意预估时长',
+    encodeKnobDenoise: '降噪强度（0-10）',
+    encodeKnobDeblock: '去块强度（0-1）',
+    encodeKnobSharpen: '锐化量（0-2）',
+    encodeKnobVolume: '音量增益 dB（±12，≠0 需重编码音频）',
+    encodeAutoSwitch: '翻译完成后自动压制（硬字幕）',
+    encodeAutoDoneLine: '[压制] 全部完成——可在队列底条「打开文件夹」',
     encodeJobsLine: '共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边',
     encodeSecBase: '基础',
     encodeSecSubAudio: '字幕与音频',
@@ -1948,6 +1954,50 @@ const AppModal = {
         elEnhance.type = 'checkbox';
         elEnhance.checked = last.enhance_on !== false;
         enhLabel.appendChild(document.createTextNode(' ' + MSG.encodeModalEnhance));
+        // 批3 增强链旋钮（决策九-1 C3''：缺省=owner AV1 链，可调随预设存取；
+        // 三旋钮映射 hqdn3d 降噪主强度/deblock alpha/unsharp luma amount；
+        // 初值从 last.enhance_params 解析——预设与上次参数同源）
+        const knob0 = (s, i, dft) => {
+            const v = parseFloat(String(s || '').split(':')[i]);
+            return isNaN(v) ? dft : v;
+        };
+        const lastEp = last.enhance_params || {};
+        const knobRow = mk('div', 'enc-field full', grid2);
+        knobRow.style.display = 'grid';
+        knobRow.style.gridTemplateColumns = '1fr 1fr 1fr';
+        knobRow.style.gap = '8px';
+        const mkKnob = (labelText, min, max, step, val) => {
+            const w = mk('div', null, knobRow);
+            const lb = mk('label', null, w);
+            lb.textContent = labelText;
+            const inp = mk('input', 'form-input', w);
+            inp.type = 'number';
+            inp.min = String(min);
+            inp.max = String(max);
+            inp.step = String(step);
+            inp.value = String(val);
+            return inp;
+        };
+        const knobDenoise = mkKnob(MSG.encodeKnobDenoise, 0, 10, 0.1,
+            knob0(lastEp.hqdn3d, 0, 0.8));
+        const knobDeblock = mkKnob(MSG.encodeKnobDeblock, 0, 1, 0.01,
+            knob0(String(lastEp.deblock || '').replace('alpha=', ''), 0, 0.07));
+        const knobSharpen = mkKnob(MSG.encodeKnobSharpen, 0, 2, 0.05,
+            knob0(lastEp.unsharp, 2, 0.5));
+        const syncKnobs = () => {
+            const dis = !elEnhance.checked;
+            [knobDenoise, knobDeblock, knobSharpen].forEach((k) => { k.disabled = dis; });
+        };
+        elEnhance.addEventListener('change', syncKnobs);
+        syncKnobs();
+        // 批3 音量旋钮（±12dB 受控；≠0 强制 aac 重编码——后端回落显因透出）
+        const volField = mkField(grid2, MSG.encodeKnobVolume);
+        const elVolume = mk('input', 'form-input', volField);
+        elVolume.type = 'number';
+        elVolume.min = '-12';
+        elVolume.max = '12';
+        elVolume.step = '0.5';
+        elVolume.value = String(typeof last.volume_db === 'number' ? last.volume_db : 0);
 
         // —— 分区 3：高级（批2 启用：预设管理+自定义参数逃生门；增强链
         //     参数旋钮归批3）——
@@ -1985,8 +2035,18 @@ const AppModal = {
             if (p.audio_mode) elAudio.value = p.audio_mode;
             if (p.font_size) elFont.value = String(p.font_size);
             if (typeof p.enhance_on === 'boolean') elEnhance.checked = p.enhance_on;
+            if (p.enhance_params) {
+                const ep = p.enhance_params;
+                if (String(ep.hqdn3d || '').length) knobDenoise.value = knob0(ep.hqdn3d, 0, 0.8);
+                if (String(ep.deblock || '').length) {
+                    knobDeblock.value = knob0(String(ep.deblock).replace('alpha=', ''), 0, 0.07);
+                }
+                if (String(ep.unsharp || '').length) knobSharpen.value = knob0(ep.unsharp, 2, 0.5);
+            }
+            if (typeof p.volume_db === 'number') elVolume.value = String(p.volume_db);
             if (typeof p.custom_params === 'string') elCustom.value = p.custom_params;
             av1Warn.style.display = elFmt.value === 'av1' ? '' : 'none';
+            syncKnobs();
         };
         const fillPresets = async () => {
             let pl = null;
@@ -2067,6 +2127,12 @@ const AppModal = {
             audio_mode: elAudio.value,
             font_size: Math.min(72, Math.max(12, parseInt(elFont.value, 10) || 22)),
             enhance_on: elEnhance.checked,
+            enhance_params: {
+                hqdn3d: knobDenoise.value + ':0.6:0.7:0.6',
+                deblock: 'alpha=' + knobDeblock.value + ':beta=0.07',
+                unsharp: '5:5:' + knobSharpen.value + ':3:3:0.3',
+            },
+            volume_db: Math.max(-12, Math.min(12, parseFloat(elVolume.value) || 0)),
             out_dir: elOutDir.value.trim(),
             custom_params: elCustom.value.trim(),
         });
@@ -7410,6 +7476,7 @@ const EncodeDock = {
     _poll: null,
     _expanded: false,
     _lastParams: null,
+    _doneLogged: false,
 
     _api() {
         return (window.pywebview && window.pywebview.api) || null;
@@ -7422,6 +7489,32 @@ const EncodeDock = {
                 ? MSG.encodeEntryGuide : MSG.encodeEntryReview;
             btn.addEventListener('click', () => self.openModal());
         });
+        // 自动压制开关（批3：管线设置 encode_auto_enabled；缺省关）
+        const autoRow = document.querySelector('.encode-auto-row');
+        if (autoRow) {
+            const box = autoRow.querySelector('.encode-auto-switch');
+            const label = autoRow.querySelector('.encode-auto-label');
+            label.textContent = MSG.encodeAutoSwitch;
+            box.addEventListener('change', async () => {
+                const api2 = self._api();
+                if (!api2) return;
+                try {
+                    await api2.refine_save_stage_settings(null, null,
+                        { encode_auto_enabled: box.checked }, null);
+                } catch (e) { /* 下次切换自愈 */ }
+            });
+            // 启动回填（桥就绪后异步读设置；失败保持缺省关）
+            (async () => {
+                const api2 = self._api();
+                if (!api2) return;
+                try {
+                    const r = await api2.refine_get_stage_settings();
+                    if (r && r.success && r.settings) {
+                        box.checked = !!r.settings.encode_auto_enabled;
+                    }
+                } catch (e) { /* 保持缺省关 */ }
+            })();
+        }
         const dock = document.getElementById('encodeDock');
         if (!dock) return;
         dock.querySelector('.queue-dock-dismiss').textContent = MSG.encodeDismiss;
@@ -7575,6 +7668,16 @@ const EncodeDock = {
         const jobs = st.jobs || [];
         const supplyActive = sup && sup.success !== false
             && (sup.busy || sup.phase === 'downloading');
+        // 交付闭环（批3）：全部完成的瞬间 Console 活动流一行人话（完成不打断
+        // ——不弹窗不抢焦点，四处硬性规定之批3 落点）；每次排空只报一次
+        const anyActive = jobs.some((j) => j.state === 'running' || j.state === 'queued');
+        if (jobs.length > 0 && !anyActive && !this._doneLogged) {
+            this._doneLogged = true;
+            try {
+                ConsoleManager.log(MSG.encodeAutoDoneLine, 'success');
+            } catch (e) { /* console 通道缺席不阻塞 */ }
+        }
+        if (anyActive) this._doneLogged = false;
         if (jobs.length === 0 && !supplyActive) return;   // 未显过底条则保持隐藏
         this.show();
         this.render(jobs, sup);
