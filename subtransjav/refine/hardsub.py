@@ -51,22 +51,22 @@ _RATE_CONTROL: dict[str, dict[str, tuple[int, str]]] = {
 
 # GPU 码控映射（批2，决策 MVP：NVENC p6/p7+tune hq+b:v 派生 1.45×/2.9×；
 # QSV global_quality+slower（owner HQ.xml 实锚 24@1080p）；AMF 未实测占位）。
-# {family: {fmt: {tier: (preset_value, quality_value)}}}——nvenc 两值=(p 档, None
-# 走 VBR 派生)；qsv/amf=(preset 名, global_quality/-quality 值)
-_GPU_FAMILIES = {
+# {family: {fmt: {tier: (preset, quality)}}}——preset/quality 均以字符串下发
+# （av1 的 svt 档 "6"/"8"/"10" 亦为串）；quality=None=该族走 VBR 派生。
+_GPU_FAMILIES: dict[str, dict[str, dict[str, tuple[str, str]] | None]] = {
     "nvenc": {
-        "h264": {"compress": ("p6", None), "balanced": ("p6", None), "quality": ("p7", None)},
-        "h265": {"compress": ("p6", None), "balanced": ("p6", None), "quality": ("p7", None)},
-        "av1": {"compress": ("p6", None), "balanced": ("p6", None), "quality": ("p7", None)},
+        "h264": {"compress": ("p6", ""), "balanced": ("p6", ""), "quality": ("p7", "")},
+        "h265": {"compress": ("p6", ""), "balanced": ("p6", ""), "quality": ("p7", "")},
+        "av1": {"compress": ("p6", ""), "balanced": ("p6", ""), "quality": ("p7", "")},
     },
     "qsv": {
-        "h264": {"compress": ("slower", 26), "balanced": ("slower", 24), "quality": ("slower", 22)},
-        "h265": {"compress": ("slower", 26), "balanced": ("slower", 24), "quality": ("slower", 22)},
-        "av1": {"compress": ("slower", 26), "balanced": ("slower", 24), "quality": ("slower", 22)},
+        "h264": {"compress": ("slower", "26"), "balanced": ("slower", "24"), "quality": ("slower", "22")},
+        "h265": {"compress": ("slower", "26"), "balanced": ("slower", "24"), "quality": ("slower", "22")},
+        "av1": {"compress": ("slower", "26"), "balanced": ("slower", "24"), "quality": ("slower", "22")},
     },
     "amf": {
-        "h264": {"compress": ("speed", None), "balanced": ("balanced", None), "quality": ("quality", None)},
-        "h265": {"compress": ("speed", None), "balanced": ("balanced", None), "quality": ("quality", None)},
+        "h264": {"compress": ("speed", ""), "balanced": ("balanced", ""), "quality": ("quality", "")},
+        "h265": {"compress": ("speed", ""), "balanced": ("balanced", ""), "quality": ("quality", "")},
         "av1": None,   # AMF 无 AV1 编码器（占位标注，决策 MVP）
     },
 }
@@ -189,11 +189,11 @@ def _validate_enhance_params(ep: dict) -> None:
     - deblock=「alpha=X:beta=Y」，X/Y 各 0~1；
     - unsharp=「lx:ly:la:cx:cy:ca」六数值，luma/croma amount 各 0~2。
     超范围 ValueError（人话含滤镜名）。"""
-    def _floats(s: str, n: int) -> list[float]:
+    def _floats(s: str, n: int) -> list[tuple[str, float]]:
         parts = str(s).split(":")
         if len(parts) != n:
             raise ValueError(f"参数段数应为 {n}: {s!r}")
-        vals = []
+        vals: list[tuple[str, float]] = []
         for p in parts:
             key, _, v = p.partition("=") if "=" in p else ("", "", p)
             try:

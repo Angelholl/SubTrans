@@ -165,6 +165,10 @@ def _probe_capability(exe: str, runner=None) -> dict:
 # 变化自动失效；进程内 dict 即可，无持久化需求
 _CAPABILITY_CACHE: dict[tuple[str, float], dict] = {}
 
+# GPU 编码器解析缓存（批2）：(识别前缀, normcase 路径, mtime, 格式) →
+# (编码器名, 逐候选显因链)
+_GPU_CACHE: dict[tuple[str, str, float, str], tuple[str, list[str]]] = {}
+
 
 def _probe_capability_cached(exe: str, runner=None) -> dict:
     try:
@@ -429,7 +433,7 @@ def resolve_gpu_encoder(ffmpeg_path: str, video_format: str,
         mtime = -1.0
     cache_key = ("gpu", os.path.normcase(os.path.abspath(ffmpeg_path)),
                  mtime, video_format)
-    hit = _CAPABILITY_CACHE.get(cache_key)
+    hit = _GPU_CACHE.get(cache_key)
     if hit is not None:
         return hit
     run = runner or _run_tool
@@ -448,7 +452,7 @@ def resolve_gpu_encoder(ffmpeg_path: str, video_format: str,
         picked = enc_name
         break
     result = (picked, reasons)
-    _CAPABILITY_CACHE[cache_key] = result
+    _GPU_CACHE[cache_key] = result
     return result
 
 
