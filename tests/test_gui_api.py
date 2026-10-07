@@ -4409,3 +4409,21 @@ def test_encode_last_params_roundtrip(gui_api_obj, tmp_path, monkeypatch):
         {"video_format": "av1", "quality": "balanced"})["success"]
     r = gui_api_obj.encode_get_last_params()
     assert r["success"] and r["params"]["video_format"] == "av1"
+
+
+def test_encode_pairing_chain(gui_api_obj, tmp_path):
+    """srt→终稿字幕→视频契约配对（黑盒实锤回归钉：.ja.whisperjav 全链剥层）。"""
+    video = tmp_path / "vid1.mp4"
+    video.write_bytes(b"v")
+    final = tmp_path / "vid1_final_cn.srt"
+    final.write_text("1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    inp = tmp_path / "vid1.ja.whisperjav.srt"
+    inp.write_text("1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    # 终稿解析：管线中间稿名 → _final_cn 终稿（剥链闭集）
+    assert gui_api_obj._resolve_final_subtitle(str(inp)) == str(final)
+    assert gui_api_obj._resolve_final_subtitle(str(final)) == str(final)  # 已是终稿原样
+    # 视频解析：终稿 stem 剥 _final_ → 同目录视频
+    assert gui_api_obj._resolve_video_for_subtitle(str(final)) == str(video)
+    # 缺视频 → 空串
+    (tmp_path / "vid2_final_cn.srt").write_text("x", encoding="utf-8")
+    assert gui_api_obj._resolve_video_for_subtitle(str(tmp_path / "vid2_final_cn.srt")) == ""

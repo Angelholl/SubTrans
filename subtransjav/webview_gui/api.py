@@ -4257,17 +4257,25 @@ class TranslateAPI:
 
     @classmethod
     def _resolve_final_subtitle(cls, srt_path: str) -> str:
-        """输入 srt → 终稿字幕：已是 _final_ 产物原样返回；否则按
-        final_stem 契约（strip_lang_suffix→_final_cn）拼同目录终稿名，
-        不存在返回空串（调用方显因，不猜）。"""
+        """输入 srt → 终稿字幕：已是 _final_ 产物原样返回；否则按剥链候选
+        （_preview_stem_candidates 闭集，深→浅）逐层拼 final_stem 契约名，
+        首个存在即返；全无返回空串（调用方显因，不猜）。
+
+        注意 strip_lang_suffix 只剥语言后缀（.zh 系），不剥 .ja.whisperjav
+        管线链——必须走 preview 剥链闭集（黑盒实锤）。"""
         if "_final_" in os.path.basename(srt_path):
             return srt_path
         try:
-            from subtransjav.refine.pipeline_support import strip_lang_suffix
             from subtransjav.refine.v2_outputs import final_stem
             p = Path(srt_path)
-            cand = p.with_name(final_stem(strip_lang_suffix(p.stem)) + ".srt")
-            return str(cand) if cand.is_file() else ""
+            stem = p.stem
+            if "_final_" in stem:
+                stem = stem[:stem.index("_final_")]
+            for cand_stem in reversed(_preview_stem_candidates(stem)):
+                cand = p.with_name(final_stem(cand_stem) + ".srt")
+                if cand.is_file():
+                    return str(cand)
+            return ""
         except Exception:
             return ""
 

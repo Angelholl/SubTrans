@@ -7459,8 +7459,6 @@ const EncodeDock = {
         const eta = dock.querySelector('.queue-dock-eta');
         const cancelBtn = dock.querySelector('.queue-dock-cancel');
         const running = jobs.find((j) => j.state === 'running');
-        const hasQueued = jobs.some((j) => j.state === 'queued');
-        const hasFailed = jobs.some((j) => j.state === 'failed' || j.state === 'cancelled');
 
         // 供给下载行优先（压制未启动时占住底条）
         if (sup && (sup.busy || (sup.phase && sup.phase !== 'idle' && sup.phase !== 'done'))) {
@@ -7488,11 +7486,18 @@ const EncodeDock = {
             cancelBtn.style.display = '';
             cancelBtn.textContent = MSG.encodeCancelJob;
         } else {
-            dot.className = 'queue-dock-state' + (hasFailed ? ' failed' : '');
-            label.textContent = hasFailed ? MSG.encodeDockFailed
-                : (hasQueued ? MSG.encodeDockRunning : MSG.encodeDockDone);
-            fill.style.width = hasFailed ? fill.style.width : '100%';
-            if (hasFailed) fill.classList.add('err'); else fill.classList.remove('err');
+            // 空闲态标签/圆点跟随最新任务（黑盒修正：历史含取消/失败项时
+            // 不得永久卡「压制失败」——history 只增，以末条为准）
+            const latest = jobs.length ? jobs[jobs.length - 1] : null;
+            const bad = !!(latest
+                && (latest.state === 'failed' || latest.state === 'cancelled'));
+            dot.className = 'queue-dock-state' + (bad ? ' failed' : '');
+            label.textContent = !latest ? MSG.encodeDockIdle
+                : (latest.state === 'failed' ? MSG.encodeDockFailed
+                    : (latest.state === 'cancelled' ? MSG.encodeStCancelled
+                        : MSG.encodeDockDone));
+            fill.style.width = bad ? fill.style.width : '100%';
+            if (bad) fill.classList.add('err'); else fill.classList.remove('err');
             eta.textContent = '';
             cancelBtn.style.display = 'none';
         }
