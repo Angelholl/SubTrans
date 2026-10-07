@@ -48,7 +48,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = [
-    "pywebview>=5.0.0",
+    "pywebview>=6.2,<7",  # 2.7.5 件A（D2026-1007-02）：钉 6.2+ 对齐 as_uri file:// 媒体通道口径
     "pythonnet>=3.0; sys_platform == 'win32'",
 ]
 # 中文分词提示（2.1，D2026-0930-03 ④）：可选组件，缺失走静默降级

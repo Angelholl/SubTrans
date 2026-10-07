@@ -185,6 +185,12 @@ def _print_version() -> str:
 
 APP_TITLE = msg("app_title")
 
+# 2.7.5 件A（D2026-1007-02）：媒体通道 origin 自检横幅文案（Python 常量，
+# JS 注入时经 json.dumps 转义，中文直书不入 strings 表）
+MEDIA_ORIGIN_BANNER_TEXT = (
+    "媒体通道异常：页面未以 file:// 加载，视频/试听将不可用（详见 gui.log）"
+)
+
 
 def on_drop_event(e):
     """
@@ -256,6 +262,71 @@ def get_asset_path(relative_path: str) -> Path:
     return asset_path
 
 
+def asset_page_url(path: str | Path) -> str:
+    """资产页面加载 URL：Path.as_uri() 钉 file:// origin（2.7.5 件A）。
+
+    pywebview 6.x 对 ``url=`` 纯路径串走内置 Bottle 伺服，页面 origin 变
+    http://127.0.0.1:随机端口，WebView2 随即拒绝页面内 file:/// 媒体（校对页
+    <video>、试听 <audio> 直连全挂）；传 as_uri() 则 origin=file://，媒体
+    直连恢复（D2026-1002-09 §七 spike 结论，本函数即生产落码对齐闭环）。
+
+    转换失败（实测 Python 3.12 pathlib：相对路径抛
+    ValueError("relative path can't be expressed as a file URI")；UNC
+    //srv/share/x.html 不抛，得 file://srv/share/x.html——评议员预设 UNC
+    抛 ValueError 不成立，以实测为准）→ 回退 str(path)，并复用 api.py 既有
+    gui.log 通道记 warning（延迟导入，零新增 open 写点）。
+    """
+    try:
+        return Path(path).as_uri()
+    except ValueError as e:
+        try:
+            from .api import _log  # 延迟导入：复用既有 gui.log 通道，避免 import 期建 Logs 目录
+            _log.warning("asset_page_url 回退 str(path)：%r（%s）", path, e)
+        except Exception:
+            pass
+        return str(path)
+
+
+def bind_media_origin_check(window) -> None:
+    """2.7.5 件A（D2026-1007-02）启动自检：loaded 后校验页面 origin。
+
+    非 ``file:`` → ①经既有 gui.log 通道记 error；②往页面 body 前插一个
+    固定定位红色横幅（文案=MEDIA_ORIGIN_BANNER_TEXT）。全程 try/except
+    包裹：evaluate 失败不影响启动。
+    """
+
+    def _on_loaded():
+        try:
+            protocol = window.evaluate_js("location.protocol")
+            if protocol == "file:":
+                return
+            try:
+                from .api import _log  # 延迟导入：复用既有 gui.log 通道
+                _log.error(
+                    "媒体通道异常：页面 origin=%r 非 file://，视频/试听不可用",
+                    protocol,
+                )
+            except Exception:
+                pass
+            banner = (
+                "<div id='stj-media-origin-banner' style='position:fixed;top:0;"
+                "left:0;right:0;z-index:2147483647;background:#c0392b;color:#fff;"
+                "padding:8px 16px;font-size:14px;text-align:center;'>"
+                + MEDIA_ORIGIN_BANNER_TEXT
+                + "</div>"
+            )
+            window.evaluate_js(
+                "document.body.insertAdjacentHTML('afterbegin', "
+                + json.dumps(banner)
+                + ");"
+            )
+        except Exception as e:
+            # 全容错：自检/evaluate 失败不阻塞启动
+            print(f"⚠️ [origin 自检] 检查失败（忽略，继续启动）: {e}")
+
+    window.events.loaded += _on_loaded
+
+
 def check_webview2_windows():
     """Check if WebView2 runtime is installed on Windows."""
     if platform.system() != 'Windows':
@@ -319,7 +390,8 @@ def create_window():
 
     window_kwargs = {
         'title': APP_TITLE,
-        'url': str(html_path),
+        # 2.7.5 件A（D2026-1007-02）：as_uri 钉 file:// origin，媒体直连恢复
+        'url': asset_page_url(html_path),
         'js_api': api,
         'width': width_s,
         'height': height_s,
@@ -339,6 +411,8 @@ def create_window():
             pass
 
     window = webview.create_window(**cast(dict[str, Any], window_kwargs))
+    # 2.7.5 件A：loaded 后 origin 自检（非 file: → gui.log error + 红色横幅）
+    bind_media_origin_check(window)
     return window
 
 

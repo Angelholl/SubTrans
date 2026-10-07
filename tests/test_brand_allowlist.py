@@ -70,7 +70,6 @@ ALLOWLIST = frozenset({
     "spike/fts5_spike.py",                 # 本机绝对路径 D:/SubTransJAV/Temp/...（spike 脚本）
     "tools/bench_refine.py",               # 基准脚本 print 历史口径
     "tools/model_matrix_run.py",           # 本机仓库绝对路径 D:\SubTransJAV
-    "tools/spike_review_video.py",         # spike 窗口标题（工具脚本）
     # ---- bat 残留（旧品牌清理锚）----
     "uninstall.bat",                       # LNK6 旧桌面快捷方式 SubTransJAV.lnk 清理锚（D2026-1004-04 新增；任务栏钉扎 Quick Launch\User Pinned\TaskBar 红线永不清理）；小写 %LOCALAPPDATA%\subtransjav 缓存目录清理行不匹配本钉
 })
