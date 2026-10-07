@@ -3067,3 +3067,26 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 - **Mimosa 过程一笔**：件2 首扫 37=36+1（path-traversal CWE-22 occurrence，refine_save_media_override 自持 open("w") 与既有 stage_settings 写点同款触发），按甄别表 #29 先例改代码消模式（走既有通道+读点同消），复扫回 36；终 seal 2aacd61a…63e7f45。secret 扫描逐笔 CLEAN；冒烟 subtransjav-refine --help 过。
 - **横切**：flake 第 6 例=windows-3.12 腿 test_effective_dir_blacklist_falls_back（7177c18 首跑单败 rerun 自愈；2026-10-05 第 2 例为 windows-3.13 同测试）——**该测试复发已达升格线，登记钉测试竞速修复专项候选**（roadmap 已更新）；GUI 黑盒环境限制：IAB 物理输入三通道会话级失效，按 D2026-1006-01 先例程序化 click 代理（element.click/KeyboardEvent/scrollTop，走真实事件链）。
 - **待 owner**：真机走查本批（重点：导读页改版观感+状态行/复制键/分节卡；试听失败三态文案与「重新自动匹配」真实媒体同目录场景；确认框 35 条全列+展开收起；件4 埋点在 gui.log debug 层观察 TM 死键特征数据）；专项候选（flake 升格）如需动工另令。
+
+## [2026-10-07] D2026-1007-02 真机三反馈修复批：媒体通道 origin 修复+试听推断剥链+批量修复模型解析 [已拍板·开工]
+
+- **原决策**：v2.7.4 真机三反馈修复方案 F1-F7 全部纳入 2.7.5 批开工（含可选件 F6，排批末）；owner 拍板予执行。
+- **诊断结论摘要**：
+  - 反馈①（校对页黑屏+「无法解码该媒体」横幅）：main.py:322 以 `str(html_path)` 传 create_window url → pywebview 内置 Bottle 起 http://127.0.0.1:随机端口 origin → WebView2 URL safety check 拒绝全部 file:// 媒体（探针 4/4 实证 `MEDIA_ELEMENT_ERROR: Media load rejected by URL safety check`, code 4）；用户视频 H.264 Main+AAC-LC 本可直接播放，与编码无关；转码兜底产物同机制被拒，现网媒体直连/兜底整体失效。**探针双模式实证**（venv pywebview 6.2.1，与生产同链）：str(路径)→http origin 4/4 被拒；`Path.as_uri()`→file origin 4/4 直连成功（含中文路径 %3A 变体，videoWidth=1920），js_api 桥正常。另查实：试听 direct 播放失败为**静默无声**（audioPreviewPlayer 零 error 监听 + `play().catch(()=>{})` 吞 reject），非报错呈现。
+  - 反馈②（试听「未找到匹配媒体」+「未包含媒体路径」）：`_infer_preview_media`（api.py:2966-3029）剥链复用 `asr_meta.strip_stem_suffixes`（仅 .ja.whisperjav/.whisperjav/.ja），不剥 .merged——"X.ja.merged.whisperjav" 剥后停于 "X.ja.merged" ≠ 视频 root "X" → 零命中；quality_report.py:1494-1496 media_path 同现同缺（纯 SRT 工作流无 manifest 配对）；owner merged 产物 100% 触雷（同目录 mimk-268/270 同式）。
+  - 反馈③（一键修复「翻译进程已退出，退出码 1」）：**重翻台账验尸**——105 条 reason 全=「客户端构造失败: 阶段B 审校+抛光: 未指定模型名」，model_used 全空；根因链 api.py:2579-2589（B 段 KV 空→不传 --s3-provider/--action-model）→ CLI lmstudio 缺省 model 空串（config.py:119）→ pipeline_v2.py:490 RefineError → action_retranslate.py 全败 return 1；「跟随阶段A」显示属分析链路（app.js），修复子进程不消费；stdout_tail 仅内存不落盘。全败=无副作用，台账无脏数据。
+- **方案与批序**：P0=F1（as_uri origin 修复+自检+回归脚本升格）+F4（剥链 leveled 扩展+前缀兜底边界感知）+F7a（修复模型回退链+明示行）；P1=F2（错误分型，含 audio 监听扩项）+F3（时间列布局，自 P2 提入）+F5（试听直通选媒体）+F7b（spawn 前预检）+F7c（可观测性）；P2=F6（搜索目录扩展，批末）。硬约束：F1 与 F4 必须同批（否则试听从「找不到」变「找到也放不出/静默」）。
+- **我的异议**：F1 标 [HIGH_RISK_OBJECTION]（全局 origin 切换，影响 3+ 任务面）；**主模型回应：采纳（附条件），无驳回**。两轮评议出条件 C1-C10：
+  - C1-C6（F1/F4 轮）：pywebview 钉版本+回归断言 / as_uri ValueError 回退保险 / F2 分型加 codec_probe 门槛 / audio error 监听入错误槽 / F4 剥链 leveled 语义+边界感知+四例回归 / asset_page_url 单测钉 file:// scheme；
+  - C7-C10（F7 增量轮）：修复配置"三元组一致回退"+单一 resolve 函数（spawn 与预检共用，防漂移）/ 预检仅本地端点连通性、超时提常量放宽至 5s、不得做模型存在性拦截 / F7c 复用 `_read_ledger`（api.py:2403-2410，零新增 open 写读点，维持 Mimosa 消模式纪律）+ fail-soft + top1 reason ≤200 字符 / 回归钉+owner 实景复测门；
+  - 两微项：audio error 监听沿用 review.js:549 no-src guard 模式；回归脚本带"版本/protocol 不符即非零码退出"契约。
+  - 全部被采纳；F3 提 P1、F7 批次定为 P0=F7a/P1=F7b+F7c，与评议口径一致。
+- **D2026-1002-09 配置漂移对齐声明（C6）**：该 spike §七已登记「A file:/// 直连 ok（load_mode=file-url）」及平台行为①「媒体页必须与产品同构以 url= 本地文件加载（as_uri()）」；生产落码为 `str(html_path)` 构成验证与实现漂移。本次 F1 将 url 构造收口为 `asset_page_url()`（as_uri + C2 回退），以单测钉 scheme==file://，spike 结论与实现正式对齐，漂移闭环。
+- **主模型最终决定**：全采纳（F1-F7 + C1-C10 + 两微项），批序如上，随 2.7.5 开工。
+- **条件是否已闭环**：批内闭环——C1-C10 为开工实现要求，随批验证收口（C5 四例回归、C7 三例单测、C8 端点两例、C9 台账两例、C10 实景复测门为各条件闭环判据）。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：
+  - **C10 实景复测门（放行判据）**：owner 复测「一键修复可发起且重翻记录 model_used 非空」+ 校对页/试听媒体真机走查（含启动自检 protocol 输出记录）；未过门不出 2.7.5 交付结论。
+  - 回归脚本吸收 tools/spike_review_video.py 为单一常驻脚本：版本断言、protocol 断言、4 媒体 file:// 矩阵、audio error 可见性断言、非零码契约。
+  - 残余风险跟踪项：pywebview 版本漂移（C1 钉 >=6.2,<7 封口）；UNC 部署 as_uri 回退（C2 保险路径）；试听推断多候选/前缀边界（C5 fail-closed）；时间列布局回归（F3 DOM 钉）。
+  - GUI 验证通道：IAB 无法开 file:// 页（已知影响），媒体链路验证走探针脚本+真机；提交信息按项目规则注明「GUI 已验证/未验证」。
