@@ -1,6 +1,7 @@
 # Mimosa 扫描发现三态甄别表（v1.3.1 D7a-3，D2026-0925-02）
 
 - **数据源**：`C:\Users\57850\.mimosa\security-scans\project-84b400c5f32332301acf457f\scan-2026-09-24T17-54-12.317Z-a0276cc48beb\findings.json`
+- **Seal digest（2026-10-07 2.8.0 批1 复扫）**：`sha256:a13bc88b375051d30c6b561c440f5204e552520263ad4bc67050b15daf13523d`，findingCount=**38**（36+2 入账 #30/#31，scan-2026-10-07T16-56-12.216Z-46c18e0ac4ca）；本批 12 文件（hardsub/ffmpeg_supply/encode_queue 三新件+api 接线+前端底条/弹窗）——ffmpeg_supply×2 为新件首入深扫面（pin 制品+固定文件名集合封死，见 #30/#31）；api.py 两条既有发现行号漂移（1773→1796/2092→2115，anchor 同）；消除 2 条（gone）= 旧行号位置实例替换，anchor 族延续；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
 - **Seal digest（历史锚：2026-09-24 首扫基线，下表甄别结论即对该次快照作出）**：`sha256:53010c48d878099dfb2c3b91443593f3654baf79619c60063efbaa44bae080da`（seal.json，artifacts 含 findings.json sha256:51623f83…）
 - **Seal digest（2026-09-26 复扫后新基线）**：`sha256:79eae27d882b5b250dc2bac8574dd2ed3accd42cc29adbf0fa19f485bedecd2e`，findingCount=**24**，零新增；净减 2 = `tools/tm_promote.py` SQL 字面量化与 `create_shortcut.py` 换 `subprocess` 两处修复在复扫中兑现消除；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1。
 - **Seal digest（2026-10-04 v2.6.5 发版门复扫）**：`sha256:9cc727ed019e27e76920428178b43466003b61deb0b2d3ae5074cc4da16ae722`，findingCount=**36**，零新增（scan-2026-10-04T08-12-17.465Z-1daa7de837c4，release/2.6.5 分支树）；2.6.5 全批次（段1 词典链+安装器/段2 UI 三项/品牌第 1 层）三轮扫描 36 恒定——改动面 dict_manager×3/subtitle_convert×1/cli×1 均既有留痕族行号漂移（#27/#28/#29 anchor 逐一相同），树外 9 条=Temp 瞬态既签注；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
@@ -119,6 +120,13 @@
 | # | file:line | severity | findingId | 证据行与判据 |
 |---|---|---|---|---|
 | 29 | subtransjav/refine/subtitle_convert.py:141 | high | finding:c86cea32cfe8dfacba098141（anchor sha256:11933a66…，convert_file 的 `open(srt_path,"w")` 写位） | srt_path=`path.with_name(path.name+".conv.srt")`——产物与输入同目录同名派生，**不构造任何父目录引用**；输入路径来自操作者本人 CLI `-i` / GUI 原生文件对话框（本地单机，无跨信任边界不可信输入方），`-i` 任意路径历来即产品语义（与 #27 词典目录同威胁模型）。硬化尝试记录：L2 复查挂旗后尝试四种守卫变体（入口 os.pardir 拒绝/resolve+包含校验/最终 resolve/整文件 Write 重投）均被 Write 期静态模式拦截（行号 141→146→11→153→8 无规律漂移，同一 open 构造在首轮建文件时通过），判定为候选期模式误报循环；按留痕维持处置，若未来引入不可信输入方（如远端推送转换）须先补守卫再接线。另本扫既签注入账 2 条：#28（批B 文件首入深扫面）+Temp/release-263 构建产物 api.js（既签注类，瞬态不入库）。 |
+
+### ffmpeg 供给层 2 条路径穿越（pin 制品+固定文件名集合；2.8.0 批1）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 30 | subtransjav/refine/ffmpeg_supply.py:356 | high | anchor sha256:44aca6d2…（_fetch 的 `open(dest,"wb")` 下载写位） | dest=dest_dir/ffmpeg-full.zip.downloading 固定名派生；dest_dir 唯一调用点=api.ffmpeg_supply_download 传 paths.data_root()（程序内常量，非用户自由输入），与 #28 ASR .part 同构造同信任模型；上游=github.com/release-assets 域白名单逐跳守卫+TOFU sha256 pin+Content-Length/zipfile EOCD 双完整性门，写位内容不可控面封死；留痕维持。 |
+| 31 | subtransjav/refine/ffmpeg_supply.py:448 | high | anchor sha256:44aca6d2…（zip 解压 `os.path.join(out_bin, base)` 写位） | base 来自 zip namelist 但**先经固定集合过滤**（仅 basename ∈ {ffmpeg.exe, ffprobe.exe} 入 targets，其余成员全忽略），join 的第二段只能是这两个字面量之一，无遍历面；out_bin=data_root/ffmpeg/bin 程序常量；与 #27 词典 zip 解压写位同判据（member 名过滤+固定落位目录），留痕维持。另注：本扫 api.py 两条（:1796/:2115，anchor sha256:7f49388a…）为既有发现行号漂移（原 :1773/:2092，批1 api 增段致 +23 行），identity 同前非新增。 |
 
 ---
 
