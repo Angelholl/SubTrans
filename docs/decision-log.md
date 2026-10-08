@@ -3171,3 +3171,32 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 - **CI 事故一笔**：main ubuntu-3.12 mypy 基线外 17 条（本地同现——pytest 的 mypy 钉在批2 后未复跑是漏检根因）；纯静态类型（_floats 返回/GPU 表 str 统一/GPU 缓存独立 _GPU_CACHE），e805241 修，零运行时影响，v2.8.0 构建不受扰（release.yml 无 mypy 门）。
 - **双发版（C10 切点裁定执行）**：**v2.7.5**（Release id 406014977，SubTrans-setup-2.7.5.exe 50,963,154B sha256 CB763F96…C716A5 与 SHA256SUMS 一致+公开 URL 回读字节 MATCH；tag v2.7.5→190a301，release/2.7.5 自 84bd60c 切出，六件修复+CHANGELOG 2.7.2-2.7.4 缺段照分支制先例回填；构建 run 37660982558 success）；**v2.8.0**（Release id 406022360，SubTrans-setup-2.8.0.exe 51,034,166B sha256 ACE20282…D8048 一致+回读 MATCH；tag v2.8.0→9adc164，release/2.8.0 自 main 切出，压制三批全量；构建 run 37662180532 success）。owner 指示「直接推进到发版」=C10 实景复测门放行，复测点平移入两版真机走查。main 前进 **2.8.1.dev0**（e805241 类型修复后续 bump 另笔）。
 - **版本策略兑现**：2.8.0=压制全部当版本完成（NVENC 未砍未延）；CT2 引擎顺延下版本；下版本=修复+新功能集成模式。
+
+## [2026-10-08] [D2026-1008-01] 真机四反馈修复轮定版：四件全并（件1 试听 seek+自动停播 / 件2 压制参数独立设置项 / 件4 模型调度三件套迁移 / 件3 黑箱负载可停止+清理+启动自愈预案）+ 新常设版本政策（纯修复走四段号，本次发版 2.8.0.1）[已拍板·开工]
+
+**评议方**：decision-critic（有条件支持→条件全闭环）；**决策对象**：批序件1→件2→件4→件3，验证链照旧，发版号 2.8.0.1。
+
+### 一、[MATERIAL_CONFLICT] 裁定（主模型实测）
+1. **页面归属**：tab-guide(596)=质量与建议页（含 .ai-config-row/aiModelInput 684）；encode-auto-row(967) 位于右栏共享流水线卡（DOM 属 tab-review 子树，注释明示"所有页可见"）。裁定：件4 控件落 tab-guide——不受 tab-review 零文案断言约束，但仍受两份 FROZEN_IDS（test_gui_js_static.py + test_ui_phase3_redlines.py:124）与恰 3 个 .field-col 钉约束；件2 按钮落 encode-auto-row 旁——JS 态文案+class+data-testid。
+2. **件3④ 落点**：确认 600s 仅在 GUI 侧 api.py:2371（spawn timeout），CLI 内无 subprocess；④系①同一调用点误述，合并，按 HRO-1 替代方案 A 执行。
+
+### 二、HRO 回应（均采纳，无二次复议）
+- **HRO-1（件3 进程生命周期）采纳**：保留 capture 式调用+可中断等待（communicate 于工作线程+取消事件→身份核验后 terminate_process_tree）；补取消闩+单飞守卫防双向竞态；登记含 pid+create_time 身份。
+- **HRO-2（件4 LM Studio 列表源+冻结契约）采纳**：lmstudio 分支改走 list_local_models（已加载+已下载合并，/v1/models 仅已加载会复现 owner JIT 空列表痛点）；修复模型行放 .ai-config-row 之外；新控件全零 id+data-testid；两份冻结集零触碰；i18n 全走 JS 态 MSG 零解冻。
+
+### 三、owner 五点终裁
+①**版本政策（新常设）**：单纯修复不递增版号，四段号接当前版号（本次=2.8.0.1，自 main 切 release/2.8.0.1；工具链四段号此前已核验可行）；功能更新才递增版号；main 维持 2.8.1.dev0 作下一功能版横幅。
+②**件2**：压制参数设独立设置项（高级参数页新增「压制」组=组标题+「打开压制参数」按钮+当前参数摘要行，全 JS 态文案+零 id；右栏自动压制勾选旁加"参数"文字链接同开弹窗）；弹窗=参数具体内容（编辑模式：无选中文件可开、"开始压制"禁用、独立"保存参数"按钮写 hardsub_last.json，保存即自动压制采用该参数+文案明示）；applyParams backend 回填顺修；GPU 未知置灰降级。
+③**件1**：试听直接跳转到问题时间线开始（start-0.5s 前置与 clip pad 对齐）+自然播到 end+0.5s 自动停播（owner 明确拍板；用户 seeking 清段内标记不打断）；timeupdate 机制统一；坏文件 loadedmetadata 兜底。
+④**件4**：直接迁移模型选择三件套——下拉+刷新+测试（测试复用阶段页端点探测桥）；分析行（provider select+model 下拉+刷新+测试）；修复行（默认跟随现状 B→A，独立 select+刷新+测试，KV batch_fix_provider/batch_fix_model 缺省不写键=行为不变+回归钉）；半配置=拒绝明示；不新增端点输入用 provider 默认端点；拒绝文案收编 strings.py。
+⑤**件3 预案（owner 明确要求内置防复现）**：P1 取消按钮（分析/修复）；P2 退出清理全覆盖（锁下快照逐个树杀，保 _translate sentinel 语义）；P3 启动自愈扫描（spawn 时 data root 下 json 台账：pid+create_time+kind+cmdline 标记；GUI 启动读台账→三重核验〔cmdline 含本项目 CLI 标记+create_time 匹配+父进程已亡且早于本次启动〕→自动树杀+gui.log 记"已清理上次残留 N 个"）；P4 JIT/常驻可见性文案（补"取消后 LM Studio 侧可能已完成加载并常驻，后续分析变快"）。
+
+### 四、条件收编
+C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C10/C11/C12/C13 归件3；C19 件3 独立提交便于回退；C20 增量下限 件1≥3/件2≥5/件4≥6/件3≥7 合计≥21 只增不减，基线 2211+4；C21 验收含 direct/clip 双路径+进程快照断言+LM Studio 卸载态下拉列出已下载模型）。
+
+### 五、风险跟踪（新增）
+1. P3 启动自愈为新增破坏性动作：cmdline 标记须唯一稳定；create_time/孤儿判定边界钉测；台账 json 纳入 Mimosa 扫描面+淘汰策略。
+2. 件3 四硬约束（排水/身份核验/单飞/取消闩）各配定向测试（>64KB stdout 不超时+尾段可解析；pid 复用不误杀；取消先于 Popen 不漏杀；重复点击单飞）。
+3. 件4 list_local_models 分支：/api/v0/models 旧版本兼容+模型名去重回归；LM Studio 卸载态验收为 HRO-2 锚点不可省。
+4. 四段号 2.8.0.1 须与 test_version_consistency 一致性钉同批更新（先例 e15b328）。
+5. 基线门槛：pytest 只增不减（2211+4 起点）；Mimosa 比对基线 37 零新增；GUI 提交注明已验证/未验证。
