@@ -798,6 +798,17 @@
                         </label>
                     </div>
                     </div>
+
+                    <!-- 压制参数独立设置项（D2026-1008-01 批2）：仿「断点与日志」组
+                         结构；组内零 id/零静态 data-i18n（FROZEN_IDS/FROZEN_I18N_KEYS
+                         冻结），全部文案由 EncodeDock.init JS 态 MSG 承接；摘要行由
+                         EncodeDock.renderParamsSummary 渲染（保存成功后同步刷新） -->
+                    <div class="adv-group" data-testid="encode-adv-group">
+                    <div class="group-title encode-adv-title" data-testid="encode-adv-group-title"></div>
+                    <div class="muted encode-adv-desc" data-testid="encode-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact encode-params-open-btn" data-testid="encode-params-open-btn"></button>
+                    <div class="muted encode-params-summary" data-testid="encode-params-summary"></div>
+                    </div>
                 </div>
             </div>
 
@@ -968,6 +979,10 @@
                     <input type="checkbox" class="encode-auto-switch" style="margin:0;">
                     <span class="encode-auto-label"></span>
                 </label>
+                <!-- 压制参数入口（D2026-1008-01 批2）：「参数」文字小按钮同开
+                     编辑模式弹窗；置于 label 外（label 内点击会透传切换开关）；
+                     零 id 零静态 data-i18n，文案 EncodeDock.init JS 态承接 -->
+                <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link" style="margin-top:4px;"></button>
 
                 <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
                     <span class="feature-badge" id="grammarHintBadge" style="display:none;">

@@ -236,6 +236,11 @@ MSG = {
     "translate_encode_conflict": "翻译任务进行中，无法加入压制队列——请等待翻译完成后再试",
     "encode_jobs_invalid": "入队任务无效：{reason}",
     "encode_commit_rejected": "全部任务未能入队：{reason}",
+    # 压制参数独立设置项（D2026-1008-01 批2：encode_save_params 失败 tip，
+    # 对齐 _refine_error_tip 人话提示风格）
+    "encode_params_tip_invalid": "请检查压制参数——格式/画质/分辨率/字号/码率/音量须在允许范围内",
+    "encode_params_tip_json": "参数数据无法解析，请重新打开压制参数弹窗后再保存",
+    "encode_params_tip_write": "参数写入失败，请检查数据保存目录是否可写",
     # —— 以下为 app.js MSG「硬字幕压制」节的双表镜像（JS 态专用，后端不消费；
     #     键值以此处为准同步，防止两表漂移）——
     "encodeEntryReview": "压制成品（硬字幕）",
@@ -320,6 +325,21 @@ MSG = {
     "encodeDownloadDock": "下载 ffmpeg 组件",
     "encodeMinutes": "{m} 分",
     "encodeEtaPending": "预估中",
+    # 压制参数独立设置项（D2026-1008-01 批2：弹窗编辑模式+高级参数页入口）
+    "encodeEditHint": "参数编辑模式——仅保存压制参数，不发起压制；压制成品请在校对页/导读页选中已完成字幕后再点「压制成品」",
+    "encodeSaveParams": "保存参数",
+    "encodeParamsSaved": "压制参数已保存——自动压制与下次压制将使用这组参数",
+    "encodeParamsSaveFail": "参数保存失败：{e}",
+    "encodeAdvGroupTitle": "压制",
+    "encodeAdvGroupDesc": "压制成品的默认参数（格式/画质/音量等），「翻译完成后自动压制」同样使用这组参数",
+    "encodeAdvOpenBtn": "打开压制参数",
+    "encodeParamsLink": "参数",
+    "encodeGpuEditTitle": "GPU 可用性在发起一次压制时自动检测；此处暂不可选",
+    "encodeEditTitle": "压制参数",
+    "encodeSummaryLine": "当前压制参数：{parts}",
+    "encodeSummaryEmpty": "暂无已保存的压制参数（点「打开压制参数」设置）",
+    "encodeSummaryVol": "音量 {db}dB",
+    "encodeSummaryAt": "保存于 {t}",
 }
 
 

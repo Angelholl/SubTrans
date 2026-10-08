@@ -2684,3 +2684,139 @@ def test_preview_direct_seek_autostop_cleanup_pinned():
         and "player.play().catch(() => {})" in clip, "clip 分支既有链缺失"
     assert "attachPreviewSeekListeners" not in clip, \
         "clip 分支不受 direct 定位影响（后端已带 pad 并自行定界）"
+
+
+# ---------------------------------------------------------------------------
+# 批2（D2026-1008-01）：压制参数独立设置项——弹窗参数编辑模式 + 高级参数页
+# 「压制」组 + 右栏自动压制行「参数」入口 + applyParams backend 回填顺修
+# ---------------------------------------------------------------------------
+def _encode_dock_source(src: str) -> str:
+    """从 ``const EncodeDock = {`` 锚起按花括号配平截取 EncodeDock 对象
+    源码（app.js 存在多个 init 同名方法，须域内提取防误配）。"""
+    anchor = "const EncodeDock = {"
+    start = src.index(anchor) + len(anchor) - 1
+    depth = 0
+    for i in range(start, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[start:i + 1]
+    raise AssertionError("EncodeDock 对象花括号未配平")
+
+
+def test_encode_params_edit_mode_pinned():
+    """钉①编辑模式：encode(opts.editOnly) 无选中文件也可打开——「加入压制
+    队列」确认键隐藏、另设「保存参数」按钮（JS 态文案）、保存只走
+    encode_save_params 桥且成功经 o.onSaved 回调（同步调用方缓存/摘要行），
+    绝不触碰 encode_preflight/encode_commit（编辑模式分支零调用）。"""
+    src = _app_js_source()
+    enc = _extract_function(src, "encode")
+    assert "const editOnly = !!o.editOnly" in enc, "encode 缺编辑模式开关"
+    # 「加入压制队列」确认键：编辑模式隐藏（禁用/隐藏二选一的隐藏侧）
+    assert "okBtn.style.display = editOnly ? 'none' : ''" in enc, \
+        "编辑模式须隐藏「加入压制队列」确认键"
+    # 独立「保存参数」按钮 + 状态行（成功反馈），保存走 encode_save_params 桥
+    assert "enc-save-params-btn" in enc, "编辑模式缺独立「保存参数」按钮"
+    assert "enc-edit-status" in enc, "编辑模式缺保存状态行（成功/失败反馈）"
+    assert "MSG.encodeSaveParams" in enc, "保存按钮文案须 JS 态 MSG 承接"
+    assert "encode_save_params(JSON.stringify(params))" in enc, \
+        "保存须走 encode_save_params 桥（后端校验+原子写）"
+    assert "typeof o.onSaved === 'function'" in enc, \
+        "保存成功须经 onSaved 回调同步调用方 _lastParams 缓存/摘要行"
+    # 编辑模式绝不触碰 preflight/commit/jobs：openModal editOnly 分支
+    openm = _extract_function(src, "openModal")
+    edit = openm[:openm.index("const jobs = (AppState.selectedFiles")]
+    assert "opts && opts.editOnly" in edit, "openModal 缺编辑模式分支"
+    assert "encode_preflight" not in edit \
+        and "encode_commit" not in edit, \
+        "编辑模式分支不得触碰 preflight/commit（绝不建 job 不入队）"
+    assert "encode_get_last_params" in edit, \
+        "编辑模式须读上次参数回填弹窗"
+    assert "this.renderParamsSummary()" in edit, \
+        "保存成功回调须刷新高级参数页摘要行"
+    # GPU 可用性：编辑模式无 preflight 双检 → 选项置灰并 title 显因
+    assert "MSG.encodeGpuEditTitle" in enc, \
+        "编辑模式 GPU 选项须以 title 显因（无独立探测桥，发起压制后可检测）"
+
+
+def test_encode_apply_params_backend_backfill_pinned():
+    """钉②顺修：applyParams 回填恢复 backend（用户预设含 backend 快照）——
+    gpu 仅在探测已知可用（gpuEnc 非空）时恢复，cpu 显式恢复，其余/缺省落
+    回 auto（与 collect 读取逻辑镜像）；av1Warn/syncKnobs 联动保持收尾。"""
+    src = _app_js_source()
+    start = src.index("const applyParams = (p) => {")
+    body = src[start:src.index("const fillPresets", start)]
+    assert "elBackend.value" in body and "gpuEnc" in body, \
+        "applyParams 缺 backend 回填（预设加载丢后端档位）"
+    assert "p.backend === 'gpu' && gpuEnc" in body, \
+        "gpu 仅在已知可用时恢复（不可用须回落 auto，防选项假亮）"
+    assert "p.backend === 'cpu'" in body, "cpu 档须显式恢复"
+    assert "av1Warn.style.display" in body and "syncKnobs()" in body, \
+        "applyParams 收尾须保持 av1Warn/syncKnobs 联动（collect 同口径）"
+
+
+def test_encode_adv_group_entry_pinned():
+    """钉③高级参数页「压制」组：仿「断点与日志」组结构——组标题/简述/
+    「打开压制参数」按钮/参数摘要行四件套；零 id/零静态 data-i18n
+    （FROZEN_IDS/FROZEN_I18N_KEYS 冻结），文案 EncodeDock.init JS 态承接；
+    摘要行由 renderParamsSummary 渲染（格式/画质/音量/保存时间）。"""
+    src = _app_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # 四件套锚点（class+data-testid 承载）
+    for frag in ('data-testid="encode-adv-group-title"',
+                 'data-testid="encode-adv-desc"',
+                 'data-testid="encode-params-open-btn"',
+                 'data-testid="encode-params-summary"'):
+        assert frag in html, f"index.html 缺压制组锚点: {frag}"
+    m = re.search(r'<div class="adv-group" data-testid="encode-adv-group">.*?'
+                  r'<div class="muted encode-params-summary"', html, re.S)
+    assert m, "压制组结构漂移（标题→简述→按钮→摘要行顺序须保持）"
+    assert "data-i18n" not in m.group(0), \
+        "压制组锚点不得带静态 data-i18n（文案走 JS 态 MSG 键）"
+    init = _extract_function(_encode_dock_source(src), "init")
+    assert "encode-adv-title" in init and "MSG.encodeAdvGroupTitle" in init, \
+        "init 缺组标题 JS 态填充"
+    assert "encode-adv-desc" in init and "MSG.encodeAdvGroupDesc" in init, \
+        "init 缺组简述 JS 态填充"
+    assert "encode-params-open-btn" in init \
+        and "editOnly: true" in init, \
+        "「打开压制参数」须开编辑模式弹窗"
+    summary = _extract_function(src, "renderParamsSummary")
+    assert "encode_get_last_params" in summary, \
+        "摘要行须读 encode_get_last_params"
+    for frag in ("MSG.encodeSummaryVol", "MSG.encodeSummaryAt",
+                 "MSG.encodeSummaryEmpty"):
+        assert frag in summary, f"摘要行缺 JS 态拼装键: {frag}"
+    keys = _js_msg_keys()
+    for key in ("encodeAdvGroupTitle", "encodeAdvGroupDesc", "encodeAdvOpenBtn",
+                "encodeEditHint", "encodeSaveParams", "encodeParamsSaved",
+                "encodeParamsSaveFail", "encodeGpuEditTitle",
+                "encodeSummaryLine", "encodeSummaryEmpty", "encodeSummaryVol",
+                "encodeSummaryAt", "encodeEditTitle"):
+        assert key in keys, f"MSG 缺批2新键: {key}"
+
+
+def test_encode_auto_row_params_link_pinned():
+    """钉④右栏自动压制行「参数」文字小按钮：同开编辑模式弹窗；置于
+    encode-auto-row label 外（label 内点击会透传切换开关）；零 id/零静态
+    data-i18n，文案 JS 态承接。"""
+    src = _app_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<button[^>]*class="btn btn-ghost btn-compact '
+                  r'encode-params-link"[^>]*>', html)
+    assert m, "index.html 缺 encode-auto-row 旁「参数」文字小按钮"
+    tag = m.group(0)
+    assert not re.search(r'(?<![\w-])id="', tag) and "data-i18n" not in tag, \
+        "参数按钮不得带 id/data-i18n（FROZEN 契约，文案走 JS 态）"
+    # 位置：紧随 encode-auto-row 之后（label 外兄弟节点，防透传切换开关）
+    row_at = html.index('data-testid="encode-auto-row"')
+    assert html.index("encode-params-link") > row_at, \
+        "参数按钮须位于自动压制行之后"
+    init = _extract_function(_encode_dock_source(src), "init")
+    assert "encode-params-link" in init \
+        and "MSG.encodeParamsLink" in init, \
+        "init 缺「参数」按钮文案填充与接线"
+    assert init.count("editOnly: true") == 2, \
+        "两入口（高级参数页+自动压制行）须同开编辑模式弹窗"

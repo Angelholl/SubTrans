@@ -4411,6 +4411,79 @@ def test_encode_last_params_roundtrip(gui_api_obj, tmp_path, monkeypatch):
     assert r["success"] and r["params"]["video_format"] == "av1"
 
 
+# ---------------------------------------------------------------------------
+# 压制参数独立设置项（D2026-1008-01 批2）：encode_save_params 桥——校验复用
+# encode_preflight 同路径（_parse_encode_params），只校验不建 job 不入队，
+# 通过后原子写 config/hardsub_last.json。数据根隔离：CONFIG_DIR 与读路径
+# （encode_get_last_params）同一 import 期常量，沿用本文件既有打桩先例
+# （test_encode_last_params_roundtrip），另设 SUBTRANSJAV_DATA_ROOT 环境变量
+# 双保险（env 通道现读 helper 兜底隔离）。
+# ---------------------------------------------------------------------------
+
+def test_encode_save_params_valid_writes_hardsub_last(gui_api_obj, tmp_path,
+                                                      monkeypatch):
+    """合法参数：写 hardsub_last.json 且与读路径同源；原子写无 tmp 残留；
+    非 EncodeParams 字段（out_dir）透传保留；盖 saved_at 供摘要行。"""
+    import subtransjav.refine.config as cfg
+    root = tmp_path / "dataroot"
+    root.mkdir()
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(root / "config"))
+    params = {"video_format": "h265", "quality": "quality", "font_size": 28,
+              "volume_db": -1.5, "out_dir": str(tmp_path)}
+    r = gui_api_obj.encode_save_params(json.dumps(params))
+    assert r["success"] is True
+    path = root / "config" / "hardsub_last.json"
+    assert path.is_file(), "校验通过必须落盘 hardsub_last.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["video_format"] == "h265" and data["quality"] == "quality"
+    assert data["out_dir"] == str(tmp_path), "out_dir 非字段键须透传保留"
+    assert data.get("saved_at"), "须盖 saved_at 时间戳（前端摘要行素材）"
+    assert not list((root / "config").glob("*.tmp")), "原子写不得留 tmp 残留"
+    # 与读路径同源：encode_get_last_params 读回同一份
+    lp = gui_api_obj.encode_get_last_params()
+    assert lp["success"] and lp["params"]["video_format"] == "h265"
+    # 回包携带写入快照（前端 onSaved 直接同步缓存）
+    assert r["params"]["video_format"] == "h265" and r["params"]["saved_at"]
+
+
+def test_encode_save_params_invalid_rejected_with_reason_and_tip(gui_api_obj,
+                                                                 tmp_path,
+                                                                 monkeypatch):
+    """非法参数：拒绝带人话原因+tip，且不落盘（校验前置）。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    r = gui_api_obj.encode_save_params(json.dumps({"video_format": "mpeg2"}))
+    assert r["success"] is False and "视频格式" in r["error"], "须显因"
+    assert r.get("tip"), "失败须带 tip（_refine_error_tip 人话风格）"
+    assert not (tmp_path / "hardsub_last.json").exists(), "校验失败不得落盘"
+    # 逃生门黑名单同样前置拒绝（与 preflight 同路径）
+    r2 = gui_api_obj.encode_save_params(
+        json.dumps({"video_format": "h264", "custom_params": "-f mp4"}))
+    assert r2["success"] is False and r2.get("tip")
+    # JSON 不可解析 / 非对象：拒绝带 tip
+    r3 = gui_api_obj.encode_save_params("not-json{{")
+    assert r3["success"] is False and r3.get("error") and r3.get("tip")
+    assert not (tmp_path / "hardsub_last.json").exists()
+
+
+def test_encode_save_params_never_enqueues_job(gui_api_obj, tmp_path,
+                                               monkeypatch):
+    """只校验不建 job 不入队：enqueue_batch 若被触碰即炸；互斥槽不被占用。"""
+    import subtransjav.refine.config as cfg
+    import subtransjav.webview_gui.encode_queue as eq
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+
+    def _boom(*_a, **_k):
+        raise AssertionError("encode_save_params 不得入队（enqueue_batch 被触碰）")
+
+    monkeypatch.setattr(eq.EncodeQueue, "enqueue_batch", _boom)
+    r = gui_api_obj.encode_save_params(
+        json.dumps({"video_format": "h264", "quality": "balanced"}))
+    assert r["success"] is True
+    assert eq.encode_active() is False, "不得占用/触发压制互斥槽"
+
+
 def test_encode_pairing_chain(gui_api_obj, tmp_path):
     """srt→终稿字幕→视频契约配对（黑盒实锤回归钉：.ja.whisperjav 全链剥层）。"""
     video = tmp_path / "vid1.mp4"

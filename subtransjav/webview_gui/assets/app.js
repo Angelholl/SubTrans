@@ -154,6 +154,24 @@ const MSG = {
     encodeMinutes: '{m} 分',
     encodeEtaPending: '预估中',
 
+    // 压制参数独立设置项（D2026-1008-01 批2，D2026-1008-01）：弹窗编辑
+    // 模式+高级参数页/右栏自动压制行两入口；全 JS 态键（零静态 data-i18n），
+    // 双表同步镜像见 strings.py「硬字幕压制」节
+    encodeEditTitle: '压制参数',
+    encodeEditHint: '参数编辑模式——仅保存压制参数，不发起压制；压制成品请在校对页/导读页选中已完成字幕后再点「压制成品」',
+    encodeSaveParams: '保存参数',
+    encodeParamsSaved: '压制参数已保存——自动压制与下次压制将使用这组参数',
+    encodeParamsSaveFail: '参数保存失败：{e}',
+    encodeAdvGroupTitle: '压制',
+    encodeAdvGroupDesc: '压制成品的默认参数（格式/画质/音量等），「翻译完成后自动压制」同样使用这组参数',
+    encodeAdvOpenBtn: '打开压制参数',
+    encodeParamsLink: '参数',
+    encodeGpuEditTitle: 'GPU 可用性在发起一次压制时自动检测；此处暂不可选',
+    encodeSummaryLine: (parts) => `当前压制参数：${parts.join(' · ')}`,
+    encodeSummaryEmpty: '暂无已保存的压制参数（点「打开压制参数」设置）',
+    encodeSummaryVol: (db) => `音量 ${db}dB`,
+    encodeSummaryAt: (t) => `保存于 ${t}`,
+
     // ============================================================
     // i18n 键表（W2 收编）：index.html data-i18n/data-i18n-title/
     // data-i18n-placeholder 引用的键必须全部出现在本表（tests 钉住）；
@@ -1812,25 +1830,37 @@ const AppModal = {
     // ——Enter=按当前表单值确认。取消/ESC/遮罩=resolve(null)。
     // opts = {jobs:[{name, out_path, eta_s, video_exists, subtitle_exists}],
     //         totalEtaS, last:<encode_get_last_params 的 params>}
+    // 参数编辑模式（D2026-1008-01 批2：压制参数独立设置项）：opts.editOnly
+    // =true 时无选中文件也可打开——标题改「压制参数」、jobsLine 换编辑
+    // 提示、「加入压制队列」确认键隐藏，另设「保存参数」按钮（状态行给
+    // 成功/失败反馈，成功经 o.onSaved 回调同步调用方 _lastParams 缓存与
+    // 摘要行）；保存只走 encode_save_params 桥，绝不触碰 preflight/commit/
+    // jobs（Enter=关闭不保存，保存只经「保存参数」按钮，失败反馈留状态行）。
+    // GPU 可用性无独立探测桥（仅 preflight 顺带双检），编辑模式 GPU 选项
+    // 保持置灰并以 title 显因（encodeGpuEditTitle）。
     // ============================================================
     encode(opts) {
         if (this._busy) return Promise.resolve(null);       // 单例不叠加
         const root = document.getElementById('appModal');
         if (!root) return Promise.resolve(null);            // 骨架缺席兜底
         const o = opts || {};
+        const editOnly = !!o.editOnly;
         const jobs = o.jobs || [];
         const api = window.pywebview && window.pywebview.api;   // 预设通道（models 先例）
         const body = root.querySelector('.modal-body');
         const cancelBtn = root.querySelector('.modal-cancel');
         const okBtn = root.querySelector('.modal-ok');
         const input = root.querySelector('.modal-input');
-        root.querySelector('.modal-title').textContent = MSG.encodeModalTitle;
+        root.querySelector('.modal-title').textContent =
+            editOnly ? MSG.encodeEditTitle : MSG.encodeModalTitle;
         body.textContent = '';
         body.style.whiteSpace = 'normal';
         input.style.display = 'none';
         cancelBtn.style.display = '';
         cancelBtn.textContent = MSG.ui_cancel;
-        okBtn.style.display = '';
+        // 编辑模式：隐藏「加入压制队列」（开始压制仅存于正常模式），
+        // 另设「保存参数」按钮于分区 3 尾部（下文 saveParamsBtn）
+        okBtn.style.display = editOnly ? 'none' : '';
         okBtn.textContent = MSG.encodeOk + '（' + jobs.length + '）';
         const last = o.last || {};
 
@@ -1859,9 +1889,11 @@ const AppModal = {
             return s;
         };
 
-        // 任务概览行
+        // 任务概览行（编辑模式换编辑提示：本弹窗只存参数不入队）
         const jobsLine = mk('div', 'enc-jobs-line', body);
-        jobsLine.textContent = MSG.encodeJobsLine.replace('{n}', String(jobs.length));
+        jobsLine.textContent = editOnly
+            ? MSG.encodeEditHint
+            : MSG.encodeJobsLine.replace('{n}', String(jobs.length));
 
         // —— 分区 1：基础 ——
         const sec1 = mk('div', 'enc-section', body);
@@ -1883,6 +1915,11 @@ const AppModal = {
         ], 'auto');
         if (!gpuEnc && o.gpu && o.gpu.reasons && o.gpu.reasons.length) {
             elBackend.title = o.gpu.reasons.join('；');
+        }
+        // 编辑模式无 preflight（不触碰）→ GPU 可用性无从探测：选项置灰
+        // 并以 title 显因（发起一次压制后经预检自动检测点亮）
+        if (editOnly && !gpuEnc) {
+            elBackend.title = MSG.encodeGpuEditTitle;
         }
         const elQuality = mkSelect(mkField(grid1, MSG.encodeModalQuality), [
             { v: 'compress', t: MSG.encodeQCompress },
@@ -1915,9 +1952,12 @@ const AppModal = {
         elOutDir.type = 'text';
         elOutDir.placeholder = 'D:\\Videos';
         if (last.out_dir) elOutDir.value = String(last.out_dir);
-        // 长任务硬性规定①（E3 批1 落点）：预估行
+        // 长任务硬性规定①（E3 批1 落点）：预估行（编辑模式不发起压制，
+        // 预估无意义 → 整行隐藏）
         const etaRow = mk('div', 'enc-eta-row', sec1);
-        if (o.totalEtaS && o.totalEtaS > 0) {
+        if (editOnly) {
+            etaRow.style.display = 'none';
+        } else if (o.totalEtaS && o.totalEtaS > 0) {
             etaRow.textContent = '⏱ ' + MSG.encodeEtaTotal
                 .replace('{t}', Math.max(1, Math.round(o.totalEtaS / 60)) + ' ' + '分');
         } else {
@@ -2023,10 +2063,50 @@ const AppModal = {
         elCustom.placeholder = MSG.encodeCustomHint;
         if (last.custom_params) elCustom.value = String(last.custom_params);
 
+        // —— 参数编辑模式（D2026-1008-01 批2）专属尾部：状态行+「保存参数」
+        // ——保存=collect()→encode_save_params 桥（后端同一校验路径+原子写
+        // hardsub_last.json）；成功经 o.onSaved 同步调用方 _lastParams 缓存
+        // 与高级参数页摘要行，状态行人话反馈；绝不触碰 preflight/commit/jobs
+        const saveStatus = editOnly ? mk('div', 'enc-eta-row enc-edit-status', body) : null;
+        const saveParamsBtn = editOnly
+            ? mk('button', 'btn btn-secondary btn-compact enc-save-params-btn', body) : null;
+        const saveEditParams = async () => {
+            if (!api) return false;
+            const params = collect();
+            saveParamsBtn.disabled = true;
+            let r = null;
+            try {
+                r = await api.encode_save_params(JSON.stringify(params));
+            } catch (e) {
+                r = { success: false, error: String(e) };
+            }
+            saveParamsBtn.disabled = false;
+            if (r && r.success) {
+                if (typeof o.onSaved === 'function') o.onSaved(params);
+                saveStatus.textContent = MSG.encodeParamsSaved;
+                return true;
+            }
+            const why = (r && (r.tip || r.error)) || String(r);
+            saveStatus.textContent = MSG.encodeParamsSaveFail.replace('{e}', why);
+            return false;
+        };
+        if (editOnly) {
+            saveParamsBtn.type = 'button';
+            saveParamsBtn.textContent = MSG.encodeSaveParams;
+            saveParamsBtn.addEventListener('click', () => { saveEditParams(); });
+        }
+
         // 表单值回填（预设加载用；字段全集=collect 快照）
         const applyParams = (p) => {
             p = p || {};
             if (p.video_format) elFmt.value = p.video_format;
+            // backend 回填（批2 顺修）：用户预设含 backend 快照，gpu 仅在
+            // 探测已知可用时恢复（collect 同口径），cpu 显式恢复，其余/缺省
+            // 落回 auto——与 collect 读取逻辑镜像
+            if (p.backend) {
+                elBackend.value = (p.backend === 'gpu' && gpuEnc) ? 'gpu'
+                    : (p.backend === 'cpu' ? 'cpu' : 'auto');
+            }
             if (p.quality) elQuality.value = p.quality;
             if (p.resolution) elRes.value = p.resolution;
             if (p.rate_mode) elRate.value = p.rate_mode;
@@ -2144,7 +2224,9 @@ const AppModal = {
         return new Promise((resolve) => {
             this._resolve = (value) => {
                 okBtn.onclick = null;
-                // true（确认键/Enter）→ 按当前表单值结算；falsy（取消/ESC/遮罩）→ null
+                // true（确认键/Enter）→ 按当前表单值结算；falsy（取消/ESC/遮罩）→ null。
+                // 编辑模式确认键隐藏、Enter=关闭不保存（保存只经「保存参数」
+                // 按钮——失败反馈须留在可见状态行，结算后弹窗已收起）
                 resolve(value ? { ok: true, params: collect() } : null);
             };
         });
@@ -7587,6 +7669,27 @@ const EncodeDock = {
                 } catch (e) { /* 保持缺省关 */ }
             })();
         }
+        // 压制参数独立设置项（D2026-1008-01 批2）：高级参数页「压制」组
+        // （标题/简述 JS 态填充）+「打开压制参数」按钮+右栏自动压制行
+        // 「参数」——两入口同开编辑模式弹窗（无选中文件也可用）；摘要行
+        // JS 态渲染（保存成功后随 onSaved 刷新）
+        const advTitle = document.querySelector('.encode-adv-title');
+        if (advTitle) advTitle.textContent = MSG.encodeAdvGroupTitle;
+        const advDesc = document.querySelector('.encode-adv-desc');
+        if (advDesc) advDesc.textContent = MSG.encodeAdvGroupDesc;
+        document.querySelectorAll('.encode-params-open-btn').forEach((btn) => {
+            btn.textContent = MSG.encodeAdvOpenBtn;
+            btn.addEventListener('click', () => self.openModal({ editOnly: true }));
+        });
+        const paramsLink = document.querySelector('.encode-params-link');
+        if (paramsLink) {
+            paramsLink.textContent = MSG.encodeParamsLink;
+            paramsLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                self.openModal({ editOnly: true });
+            });
+        }
+        self.renderParamsSummary();
         const dock = document.getElementById('encodeDock');
         if (!dock) return;
         dock.querySelector('.queue-dock-dismiss').textContent = MSG.encodeDismiss;
@@ -7598,9 +7701,31 @@ const EncodeDock = {
         dock.querySelector('.queue-dock-cancel').addEventListener('click', () => self.cancelAll());
     },
 
-    async openModal() {
+    async openModal(opts) {
         const api = this._api();
         if (!api) return;
+        // 参数编辑模式（D2026-1008-01 批2）：压制参数独立设置项——无选中
+        // 文件也可打开，读上次参数进弹窗编辑；保存走 encode_save_params 桥
+        // （弹窗内「保存参数」按钮），此处绝不触碰 preflight/commit/jobs。
+        // GPU 可用性无独立探测桥（仅 preflight 顺带双检懒缓存），编辑模式
+        // 传 gpu:null → GPU 选项置灰、弹窗 title 显因「发起压制后可检测」
+        if (opts && opts.editOnly) {
+            let lp = null;
+            try { lp = await api.encode_get_last_params(); } catch (e) { lp = null; }
+            const last = (lp && lp.success && lp.params) || this._lastParams || {};
+            await AppModal.encode({
+                editOnly: true,
+                jobs: [],
+                last,
+                presets: null,
+                gpu: null,
+                onSaved: (params) => {
+                    this._lastParams = params;
+                    this.renderParamsSummary();
+                },
+            });
+            return;
+        }
         const jobs = (AppState.selectedFiles || []).map((p) => ({ srt_path: p }));
         if (jobs.length === 0) {
             AppModal.alert(MSG.encodeModalTitle, MSG.encodeNoJobs);
@@ -7659,6 +7784,39 @@ const EncodeDock = {
         this._lastParams = res.params;
         try { api.encode_save_last_params(res.params); } catch (e) { /* 持久化失败不阻塞 */ }
         await this.commit(valid, res.params, false);
+    },
+
+    // 高级参数页摘要行（D2026-1008-01 批2）：读 encode_get_last_params
+    // 渲染「格式 · 画质 · 音量 · 保存时间」一行简报（JS 态 MSG 函数键拼装；
+    // 缺已保存参数时空态文案）。弹窗编辑模式保存成功后经 onSaved 重渲染。
+    async renderParamsSummary() {
+        const row = document.querySelector('.encode-params-summary');
+        if (!row) return;
+        let p = this._lastParams;
+        if (!p || !Object.keys(p).length) {
+            const api = this._api();
+            if (api) {
+                try {
+                    const lp = await api.encode_get_last_params();
+                    if (lp && lp.success) { p = lp.params || {}; this._lastParams = p; }
+                } catch (e) { /* 渲染降级：保留空态文案 */ }
+            }
+        }
+        p = p || {};
+        if (!p.video_format && !p.quality && !p.saved_at) {
+            row.textContent = MSG.encodeSummaryEmpty;
+            return;
+        }
+        const parts = [];
+        const fmt = { h264: 'H.264', h265: 'H.265', av1: 'AV1' }[p.video_format];
+        if (fmt) parts.push(fmt);
+        const q = { compress: MSG.encodeQCompress, balanced: MSG.encodeQBalanced,
+                    quality: MSG.encodeQQuality }[p.quality];
+        if (q) parts.push(String(q).split('（')[0]);
+        const db = typeof p.volume_db === 'number' ? p.volume_db : 0;
+        parts.push(MSG.encodeSummaryVol((db > 0 ? '+' : '') + db));
+        if (p.saved_at) parts.push(MSG.encodeSummaryAt(p.saved_at));
+        row.textContent = MSG.encodeSummaryLine(parts);
     },
 
     async commit(jobs, params, allowOverwrite) {

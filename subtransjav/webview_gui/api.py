@@ -4591,6 +4591,45 @@ class TranslateAPI:
             _log_exc("encode_save_last_params")
             return {"success": False, "error": str(e)}
 
+    def encode_save_params(self, params_json: str) -> dict[str, Any]:
+        """压制参数独立设置项保存（D2026-1008-01 批2）：复用 encode_preflight
+        同一校验路径（_parse_encode_params=EncodeParams 全量校验+逃生门黑
+        名单前置），只校验不建 job 不入队；通过后原子写 config/hardsub_last.json
+        （写法对齐 encode_get_last_params / encode_save_last_params 先例，
+        数据根解析沿用 CONFIG_DIR 既有 helper），并盖 saved_at 时间戳供前端
+        摘要行展示。失败返回 {success, error, tip}（_refine_error_tip 人话
+        风格）；编辑模式弹窗经此保存，绝不触碰 preflight/commit/jobs。"""
+        try:
+            raw = json.loads(params_json) if isinstance(params_json, str) \
+                else dict(params_json or {})
+        except (TypeError, ValueError) as e:
+            return {"success": False,
+                    "error": msg("encode_jobs_invalid", reason=f"参数 JSON 无法解析（{e}）"),
+                    "tip": msg("encode_params_tip_json")}
+        if not isinstance(raw, dict):
+            return {"success": False,
+                    "error": msg("encode_jobs_invalid", reason="参数须为对象（键值表）"),
+                    "tip": msg("encode_params_tip_json")}
+        try:
+            self._parse_encode_params(raw)
+        except ValueError as e:
+            return {"success": False,
+                    "error": msg("encode_jobs_invalid", reason=str(e)),
+                    "tip": msg("encode_params_tip_invalid")}
+        from subtransjav.refine.config import CONFIG_DIR
+        from subtransjav.refine.fs_utils import _atomic_write_text
+        try:
+            data = dict(raw)
+            data["saved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            path = os.path.join(str(CONFIG_DIR), "hardsub_last.json")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            _atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
+        except Exception as e:
+            _log_exc("encode_save_params")
+            return {"success": False, "error": str(e),
+                    "tip": msg("encode_params_tip_write")}
+        return {"success": True, "params": data}
+
     # -- ffmpeg 按需下载（独立进度通道；词典四态范式，_supplyBusy 单飞）----
 
     def ffmpeg_supply_download(self) -> dict[str, Any]:
