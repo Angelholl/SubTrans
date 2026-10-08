@@ -3340,3 +3340,13 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **两处计数钉显式改钉（按钉自述机制+注释入账）**：Enter 分支排除钉 5→6、AppModal.confirm 调用点钉 11→12（tmEdit 脏态守卫 +1）。
 - **GUI 黑盒（web-gui-tester；stub 桥隔离副本 + 本地 8642 伺服）7 点全过**：①表渲染（4 行/3 编辑钮/1 ⚠️ 徽标）②编辑弹窗结构双证 ③Enter 不提交实测 ④空值校验「译文不能为空」弹窗保持 ⑤编辑保存=行内定向更新+他行按钮态/⚠️ 零串扰 ⑥存入 payload 实测=编辑后译文+按钮「已存入 ✓（编辑后译文）」+行级禁用 ⑦恢复原建议回滚+恢复后原样存入无后缀+第三条 exists「已存在」；批1 连带 GUI 核验：`.fix-model-row`=0、生效行 analyzeResolution 单源、分析发起桥参（model/provider）单源实测。**声明**：IAB 输入层会话级劣化（在册先例）——点击降级程序化 click 代理、文本输入走 playwright fill；Esc 脏态确认因键盘通道劣化未交互实测（静态钉 test_p3_tm_edit_modal_pinned 覆盖）；fill("") 空操作为工具怪癖（空值校验经等价空格路径实测）。
 - **验证链**：全量 **2246+4**（2243+4 只增，+3）；静态 125 passed；ruff 存量 8（spike/）零新增；mypy 基线门禁过；Mimosa deep **37=基线零新增**（seal 6060816b…）；冒烟=node --check+页面实载。
+
+**G1/G7 开工门实验记录（2026-10-08 夜，批3 编码前）[已归档]**
+
+- **LM Studio 版本指纹**：lms CLI commit `69d945a`（本机 ~\.lmstudio\bin\lms.exe）；端点 127.0.0.1:1234。
+- **实验①（杀客户端）**：`lms load google/gemma-4-12b` 起 6s 后 taskkill 整树杀客户端 → 60s 收敛窗内模型**装载延续并完成**（/v1/models 出现目标且保持）→ **分支 a 不成立**。
+- **实验②（在途 unload）**：起载 6s 后发 `lms unload --all` → 60s 内装载同样延续完成 → **分支 b 不成立**。
+- **G7 第四态观察**：/api/v0/models 的 state 字段在在途/已载场景报 `not-loaded`（与 /v1/models 矛盾）——该版本 v0 state 字段不可靠，实现层在载判定应以 /v1/models + `lms ps` 为准。
+- **G8 状态隔离**：每分支前后 `unload --all`+轮询 idle 均执行；预态（3 LLM+1 embedding）实验后已全量恢复（post /v1/models 与预态一致）。
+- **判定：分支 (c)**——P1 按「翻译启动遇预热 LOADING→阻断+有界超时（G9 快照锁参+倒计时）+文案透明（G4）」实现；`preempt_abort_converge_timeout`（G7 中止收敛窗）在 (c) 形态无承载点，登记为 (a)/(b) 形态预留名不实现（防死配置）；`preheat_load_hard_timeout` 落地（G10：可调+gui.log 打依据）。
+- **记录完整性说明**：实验 stdout 经 tail 管道仅留尾部（exp2 trace+判定+恢复段），exp1 完整 trace 未留档；判定布尔（a=false/b=false）与 G8/预态恢复记录完整，结论不受影响。轮询失败注入（第三态）按 G7 归实现层单测（mock 端点），不占真机门。
