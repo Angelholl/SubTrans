@@ -2616,3 +2616,71 @@ def test_review_timing_column_layout_pinned():
     assert timing, "style.css 缺 .review-timing-readonly 规则"
     for frag in ("min-width: 0", "overflow: hidden", "text-overflow: ellipsis"):
         assert frag in timing.group(0), f"时间列缺防御声明: {frag}"
+
+
+# ---------------------------------------------------------------------------
+# 批1（质量报告导读试听定位修复）：direct 分支 seek 定位 + 段内自动停播
+# + 监听清理防幽灵暂停
+# ---------------------------------------------------------------------------
+def test_preview_direct_seek_autostop_cleanup_pinned():
+    """批1 钉：direct 整文件试听不再从 0:00 播——src 赋值后挂一次性
+    loadedmetadata 监听，metadata 就绪后 seek 至片段起点前置 0.5s（与
+    clip 抽取 pad 对齐）；timeupdate 自然播到片段终点后 0.5s 自动暂停；
+    程序化 seek / 用户拖拽经 pendingSeek 标志区分（seeked 落定后武装、
+    seeking 非程序化解除武装不打断续听）；回调先校验代数防快速切换/
+    重匹配重试时旧回调落错点；拆除监听在 closeAudioPreview/
+    showPreviewError/openAudioPreview 重入均被调用；clip 分支既有播放
+    链不得回退。"""
+    src = _app_js_source()
+    oap = _extract_function(src, "openAudioPreview")
+    det = _extract_function(src, "detachPreviewSeekListeners")
+    att = _extract_function(src, "attachPreviewSeekListeners")
+    # ① direct 分支：src 赋值后挂定位监听（currentTime seek 落点前置 0.5s）
+    direct = oap[oap.index("r.mode === 'direct'"):]
+    direct = direct[:direct.index("r.mode === 'clip'")]
+    assert "player.src = fileUrlOf(r.media_path)" in direct, \
+        "direct 分支 src 赋值缺失"
+    assert "attachPreviewSeekListeners(player, span)" in direct, \
+        "direct 分支缺定位监听挂载（试听仍从 0:00 播）"
+    assert direct.index("player.src = fileUrlOf(r.media_path)") \
+        < direct.index("attachPreviewSeekListeners(player, span)"), \
+        "定位监听须在 src 赋值之后挂载"
+    assert "player.currentTime = Math.max(0, span[0] - 0.5)" in att, \
+        "缺 seek 赋值（起点前置 0.5s 须与 clip pad 对齐）"
+    assert "{ once: true }" in att, "loadedmetadata 须一次性监听"
+    assert "player.play().catch(() => {})" in direct, \
+        "direct 即播时机不得改动（play 仍在 src 赋值后，seek 异步落点）"
+    # ② 段内自动停播：timeupdate 到 span[1]+0.5 才 pause；pendingSeek
+    # 区分程序化 seek（落定武装）与用户拖拽（解除武装）
+    assert "player.currentTime >= span[1] + 0.5" in att \
+        and "player.pause()" in att, "缺段内自动停播（timeupdate→pause）"
+    assert "previewPendingSeek = true" in att \
+        and "previewPendingSeek = false" in att, \
+        "缺程序化 seek 标志（seeking 时区分程序化/用户拖拽）"
+    assert "if (!previewPendingSeek) previewArmStop = false" in att, \
+        "用户拖拽须解除武装（不打断续听）"
+    assert "previewArmStop = true" in att, "seeked 落定后须武装自动停播"
+    assert "gen !== previewSeekGen" in att, \
+        "回调缺代数校验（过期回调不落点，防切换/重试落错时间）"
+    # ③ 清理：closeAudioPreview / showPreviewError / openAudioPreview
+    # 重入均拆除新增监听（loadedmetadata/seeking/seeked/timeupdate）
+    # 并复位标志（防幽灵暂停）
+    for ev in ("loadedmetadata", "seeking", "seeked", "timeupdate"):
+        assert f"removeEventListener('{ev}'" in det, f"清理缺 {ev} 移除"
+    assert "previewSeekGen++" in det, "拆除须递增代数（作废在途回调）"
+    assert "previewPendingSeek = false" in det \
+        and "previewArmStop = false" in det, "拆除须复位武装/seek 标志"
+    cap = _extract_function(src, "closeAudioPreview")
+    spe = _extract_function(src, "showPreviewError")
+    assert "detachPreviewSeekListeners()" in cap, "closeAudioPreview 缺清理"
+    assert "detachPreviewSeekListeners()" in spe, "showPreviewError 缺清理"
+    assert oap.index("detachPreviewSeekListeners()") \
+        < oap.index("clearPreviewError()"), \
+        "openAudioPreview 每次重入须先拆旧监听再走分支"
+    # clip 分支既有播放链不得回退（本次修复不得波及）
+    clip = oap[oap.index("r.mode === 'clip'"):]
+    clip = clip[:clip.index("} else {")]
+    assert "player.src = r.data_url" in clip \
+        and "player.play().catch(() => {})" in clip, "clip 分支既有链缺失"
+    assert "attachPreviewSeekListeners" not in clip, \
+        "clip 分支不受 direct 定位影响（后端已带 pad 并自行定界）"

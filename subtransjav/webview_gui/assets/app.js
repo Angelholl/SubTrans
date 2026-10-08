@@ -5484,6 +5484,7 @@ function switchTab(tabId) {
   // 出现「重新自动匹配」
   function showPreviewError(text, errKind) {
     // 停播保留（评议员条件）：错误即清 src，防上一次试听的声音持续播放
+    detachPreviewSeekListeners();   // 同步拆 seek/停播监听（防幽灵暂停）
     const player = $('audioPreviewPlayer');
     if (player) { player.src = ''; }
     // 失败态=浮层条隐藏 + 独立错误槽红字（浮层不再承载错误展示）
@@ -5586,6 +5587,7 @@ function switchTab(tabId) {
   }
 
   function closeAudioPreview() {
+    detachPreviewSeekListeners();   // 拆 seek/停播监听（防幽灵暂停）
     const bar = $('audioPreviewBar');
     const player = $('audioPreviewPlayer');
     if (player) { player.pause(); player.src = ''; }
@@ -5602,11 +5604,80 @@ function switchTab(tabId) {
   // 2.7.4 件2：最近一次试听 timing（重匹配成功后自动重试用）
   let lastPreviewTiming = '';
 
+  // ============================================================
+  // direct 分支定位与段内自动停播（质量报告导读试听定位修复）：
+  // direct 整文件此前一律从 0:00 起播；改为 metadata 就绪后 seek 至
+  // 片段起点前置 0.5s（与 clip 抽取 pad 对齐），自然播到片段终点后
+  // 0.5s 自动暂停。程序化 seek / 用户拖拽区分（pendingSeek 标志）：
+  // seeking 时为真视为程序化（seeked 落定后清标志并武装自动停播）；
+  // 为假即用户拖拽，解除武装（不打断续听）。代数计数器防过期：
+  // openAudioPreview 每次重入 / close / error 均拆除监听并递增代数，
+  // 新增回调先校验代数、过期即返回，防快速切换条目/重匹配重试时旧
+  // 回调落错时间点。
+  // ============================================================
+  let previewSeekGen = 0;         // 代数：每次拆装递增作废在途回调
+  let previewPendingSeek = false; // seeking 时区分程序化/用户拖拽
+  let previewArmStop = false;     // 武装后 timeupdate 才可自动停播
+  let previewSeekHandlers = null; // 当前监听句柄（拆除/防重复挂载）
+
+  // 拆除 direct 分支 seek/停播监听并复位标志（close/error/重入共用）
+  function detachPreviewSeekListeners() {
+    previewSeekGen++;   // 作废全部在途 seek/停播回调
+    previewPendingSeek = false;
+    previewArmStop = false;
+    if (!previewSeekHandlers) return;
+    const h = previewSeekHandlers;
+    previewSeekHandlers = null;
+    h.el.removeEventListener('loadedmetadata', h.loadedmetadata);
+    h.el.removeEventListener('seeking', h.seeking);
+    h.el.removeEventListener('seeked', h.seeked);
+    h.el.removeEventListener('timeupdate', h.timeupdate);
+  }
+
+  // direct 分支 src 赋值后挂载（play() 时机不变：即播，seek 在
+  // metadata 就绪后落点；坏文件不触发 loadedmetadata 时仅不定位，
+  // 既有 error 路径与 no-src guard 不受影响）
+  function attachPreviewSeekListeners(player, span) {
+    const gen = previewSeekGen;   // 入口 detach 已递增，此后过期即弃
+    const onLoadedMetadata = () => {
+      if (gen !== previewSeekGen) return;
+      previewPendingSeek = true;   // 程序化 seek：seeking 不解除武装
+      player.currentTime = Math.max(0, span[0] - 0.5);
+    };
+    const onSeeking = () => {
+      if (gen !== previewSeekGen) return;
+      if (!previewPendingSeek) previewArmStop = false;   // 拖拽解除武装
+    };
+    const onSeeked = () => {
+      if (gen !== previewSeekGen) return;
+      if (!previewPendingSeek) return;
+      previewPendingSeek = false;   // 程序化 seek 落定
+      previewArmStop = true;        // 落定后才武装段内自动停播
+    };
+    const onTimeUpdate = () => {
+      if (gen !== previewSeekGen || !previewArmStop) return;
+      if (player.currentTime >= span[1] + 0.5) player.pause();
+    };
+    previewSeekHandlers = {
+      el: player,
+      loadedmetadata: onLoadedMetadata,
+      seeking: onSeeking,
+      seeked: onSeeked,
+      timeupdate: onTimeUpdate
+    };
+    player.addEventListener('loadedmetadata', onLoadedMetadata,
+      { once: true });
+    player.addEventListener('seeking', onSeeking);
+    player.addEventListener('seeked', onSeeked);
+    player.addEventListener('timeupdate', onTimeUpdate);
+  }
+
   async function openAudioPreview(timing) {
     const bar = $('audioPreviewBar');
     const player = $('audioPreviewPlayer');
     const timingEl = $('audioPreviewTiming');
     if (!bar || !player || !timingEl) return;
+    detachPreviewSeekListeners();   // 重入拆旧监听+递增代数（防过期回调落错点）
     clearPreviewError();   // 每分支入口先清旧红字（防残留），再判断分支
     if (!lastLoadedGuidePath) {
       // no_guide：失败态（浮层不展开，错误槽红字页面级可见）
@@ -5637,6 +5708,7 @@ function switchTab(tabId) {
         bar.classList.add('bar-ready');
         markInferredMedia(r);
         player.src = fileUrlOf(r.media_path);
+        attachPreviewSeekListeners(player, span);   // 定位+段内自动停播
         player.play().catch(() => {});
       } else if (r && r.ok && r.mode === 'clip' && r.data_url) {
         bar.classList.remove('bar-loading');
