@@ -540,3 +540,51 @@ def test_ledger_append_atomic_and_corrupt_recovery(tmp_path, install_client):
     assert records[0]["old_text"] == "前辈真厉害"
     assert not list(tmp_path.glob("*.tmp"))   # 原子写不残留临时件
 
+
+
+# ---------------------------------------------------------------------------
+# P2（D2026-1008-02）：动作客户端槽 A 同构（修复与分析模型完全统一）
+# ---------------------------------------------------------------------------
+
+def test_action_client_slot_a_isomorphism(monkeypatch):
+    """_make_action_client 与 quality_advisor._make_ai_client 同构：
+    槽 A 客户端工厂 + 模型覆盖（仅换 stages[0]，不改入参 cfg 本体）；
+    _resolve_action_model 台账兜底链=override→槽 A 模型→服务商默认
+    （与 _resolve_ai_model 同构）。CLI --action-model 缺省路径=空覆盖
+    → 槽 A 链（GUI spawn 侧恒传解析 model，缺省链为 CLI 直跑兜底）。"""
+    from subtransjav.refine import pipeline_v2
+    from subtransjav.refine.config import StageConfig
+
+    cfg = RefineConfig(stages=[
+        StageConfig(0, True, "deepseek", "a-model"),
+        StageConfig(1, False, "deepseek", ""),
+        StageConfig(2, True, "lmstudio", "b-model"),
+        StageConfig(3, False, "lmstudio", ""),
+    ])
+    seen: list = []
+
+    def _fake_make_client(c, tag):
+        seen.append((c, tag))
+        return object()
+
+    monkeypatch.setattr(pipeline_v2, "_make_client", _fake_make_client)
+    action_retranslate._make_action_client(cfg, "")
+    c, tag = seen[-1]
+    assert (tag, c.stages[0].provider, c.stages[0].model) == \
+        ("A", "deepseek", "a-model")            # 槽 A（非旧槽 B）
+    # 模型覆盖：仅换槽0 模型，入参 cfg 本体不被改写
+    action_retranslate._make_action_client(cfg, "override-model")
+    c2, tag2 = seen[-1]
+    assert tag2 == "A" and c2.stages[0].model == "override-model"
+    assert c2 is not cfg and cfg.stages[0].model == "a-model"
+    # 台账 model_used 兜底链与 quality_advisor._resolve_ai_model 同构
+    assert action_retranslate._resolve_action_model(cfg, "") == "a-model"
+    assert action_retranslate._resolve_action_model(cfg, "x") == "x"
+    cfg_default = RefineConfig(stages=[
+        StageConfig(0, True, "zen", ""),
+        StageConfig(1, False, "deepseek", ""),
+        StageConfig(2, True, "lmstudio", "b-model"),
+        StageConfig(3, False, "lmstudio", ""),
+    ])
+    assert action_retranslate._resolve_action_model(cfg_default, "") == \
+        "x-preview-f-free"                      # 服务商默认兜底

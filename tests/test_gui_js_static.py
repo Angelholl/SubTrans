@@ -2340,6 +2340,27 @@ def test_batch_fix_effective_line_pinned():
     assert "fixCfgMeta" in caller, "确认框 meta 缺少生效配置副行"
 
 
+def test_p2_cloud_warn_by_analysis_provider():
+    """矩阵⑥ 云端/本地警示（D2026-1008-02 P2/C7）：修复确认弹窗云端
+    判定与展示改按生效分析 provider（analyzeResolution().effProvider），
+    弃 refineS3Provider 阶段B 口径；refineAiAnalyze 云确认同源；修复
+    执行/复验传参走单源 helper（provider/model 同一键）。"""
+    src = _app_js_source()
+    run = _extract_function(src, "batchFixRun")
+    assert "refineS3Provider" not in run, \
+        "修复确认弹窗仍按阶段B 判云端（C7 违约：预览/执行不同源）"
+    assert "analyzeResolution()" in run, "修复确认/执行须走单源解析"
+    assert "isAiCloudProvider(fixRes.effProvider)" in run, \
+        "云端警示判定字段须=analyzeResolution 生效 provider"
+    assert "runRes.provider" in run and "runRes.model" in run, \
+        "修复执行传参须=单源解析 provider/model"
+    ana = _extract_function(src, "refineAiAnalyze")
+    assert "AI_CLOUD_PROVIDERS.includes(res.effProvider)" in ana, \
+        "分析云确认须按 analyzeResolution 生效 provider 判定"
+    assert "refine_ai_analyze(\n        rp, res.model, res.provider)" in ana, \
+        "分析发起传参须=单源解析 provider/model"
+
+
 def test_batch_fix_preview_msg_and_css_pinned():
     """新 MSG 键存在；死键清理（batchFixPreviewMore 仅原弹窗一处消费，
     batchFixCats 被 chips 取代）；style.css bfp 族在位且全 token 零硬编码色。"""
@@ -2869,52 +2890,41 @@ def test_batch3_analysis_model_select_trio_pinned():
         "placeholder 键随文本框退役残留（死键须清）"
 
 
-def test_batch3_fix_model_row_outside_config_row():
-    """②修复模型独立配置行：位于 .ai-config-row 之外（不破坏该行
-    "恰 3 个 field-col"钉）；行内 provider/model select+刷新/测试/状态
-    全 class+data-testid 零 id；KV 保存走 refine_save_stage_settings
-    同通道写 batch_fix_provider/batch_fix_model。"""
+def test_p2_fix_model_row_removed_analysis_single_source():
+    """P2（D2026-1008-02）：修复模型独立配置行随「修复=分析模型完全
+    统一」删除（C11 收尾一致性）——index.html 行整块退役；app.js 旧
+    函数族/batch_fix_* KV 读写/死键全清；修复解析单源 analyzeResolution
+    （后端 _resolve_ai_model_config 前端镜像，含 G5-补 半配置忽略）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
-    i = html.index('class="ai-config-row"')
-    assert 'data-testid="fix-model-row"' in html, "缺修复模型行"
-    # 位置钉：fix-model-row 与 .ai-config-row 同级（row 外），不得为其
-    # 子元素——取 ai-config-row 开标签至 fix-model-row 开标签之间的片段，
-    # div 开闭配平（开==闭）即证明 .ai-config-row 已在此前闭合
-    j = html.index('data-testid="fix-model-row"')
-    between = html[i:j]
-    assert len(re.findall(r"<div\b", between)) == between.count("</div>"), \
-        "修复模型行必须位于 .ai-config-row 之外（同级兄弟节点）"
-    block = html[j:html.index("</div>", j)]
-    for tid in ("fix-provider-sel", "fix-model-sel", "fix-model-refresh",
-                "fix-model-test", "fix-test-status"):
-        assert f'data-testid="{tid}"' in html, f"修复模型行缺锚: {tid}"
-    assert not re.search(r'(?<![\w-])id="', block), \
-        "修复模型行内不得有任何 id（FROZEN_IDS 冻结）"
-    assert "data-i18n" not in block, \
-        "修复模型行零静态 data-i18n（文案走 JS 态 MSG 键）"
-    assert 'class="field-col"' not in block, \
-        "修复模型行不得复用 field-col 类（防误入 3 列钉计数）"
+    assert 'data-testid="fix-model-row"' not in html, "修复模型行须已删除"
+    assert "fix-model-row" not in html, "修复模型行残留锚"
     src = _app_js_source()
-    assert "fixRowEls" in src and "refreshFixModels" in src \
-        and "testFixModel" in src, "修复行刷新/测试函数缺失"
-    assert "fixModelApplyFollowState" in src \
-        and "MSG.fix_model_follow_hint" in src, \
-        "修复行 follow 态（模型禁用+占位）缺失"
-    wiring = _extract_function(src, "bindDom")
-    assert "batch_fix_provider" in wiring and "batch_fix_model" in wiring \
-        and "refine_save_stage_settings" in wiring, \
-        "修复行保存必须走 refine_save_stage_settings 写 batch_fix_* KV"
-    assert "fix-model-row" in wiring, "bindDom 缺修复模型行接线"
+    for dead in ("fixRowEls", "refreshFixModels", "testFixModel",
+                 "fixModelApplyFollowState", "savedFixModel",
+                 "batch_fix_provider", "batch_fix_model"):
+        assert dead not in src, f"修复行退役代码/键残留: {dead}"
     keys = _js_msg_keys()
-    for key in ("fix_cfg_label", "fix_prov_label", "fix_prov_follow",
-                "fix_model_follow_hint", "batchFixSourceTag"):
-        assert key in keys, f"MSG 缺批3新键: {key}"
+    for dead_key in ("fix_cfg_label", "fix_prov_label", "fix_prov_follow",
+                     "fix_model_follow_hint"):
+        assert dead_key not in keys, f"MSG 死键残留: {dead_key}"
+        assert f"MSG.{dead_key}" not in src, f"死键仍有消费点: {dead_key}"
+    # 单源 helper 在位且含 G5-补 语义（半配置忽略键消费）
+    res = _extract_function(src, "analyzeResolution")
+    assert "aiProviderSel" in res and "aiModelInput" in res \
+        and "refineS1Provider" in res and "refineS1Model" in res, \
+        "analyzeResolution 读取面须=独立配置+阶段A 四元素"
+    assert "MSG.aiIndepHalfIgnored" in res, \
+        "analyzeResolution 缺半配置忽略注记（G5-补）"
+    assert "aiIndepHalfIgnored" in keys, "MSG 缺半配置忽略键"
+    # 保留键：生效源标签（后端 source_label 直拼）仍在
+    assert "batchFixSourceTag" in keys, "MSG 缺生效源标签键"
 
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 四锚点 id 保留 +
     无内联 width:auto；id 全集数 223 / data-i18n 键集 187 契约数零漂移
-    （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b）。"""
+    （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
+    模型行零 id/零 data-i18n，两契约数不漂移）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     i = html.index('class="ai-config-row"')
     row = html[i:html.index("</section>", i)]
@@ -2928,9 +2938,6 @@ def test_batch3_ai_config_row_pins_survive():
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     assert len(i18n) == 187, f"data-i18n 键集数漂移（契约 187），实为 {len(i18n)}"
-    j = html.index('data-testid="fix-model-row"')
-    block = html[j:html.index("</div>", j)]
-    assert "data-i18n" not in block, "修复模型行新增静态 data-i18n"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -2940,14 +2947,17 @@ def test_batch3_trio_wiring_and_effective_lines_pinned():
     """④接线与生效行钉：bindDom 填三件套文案/图标（不依赖设置回填路径）；
     分析生效行中文字面量收编 MSG 键（aiRefreshEffective 零硬编码中文）；
     修复明示行追加后端 source_label 直拼（前端零解析），拒绝分支
-    status-err + reason 保留。"""
+    status-err + reason 保留。P2（D2026-1008-02）：分析生效行改走
+    analyzeResolution 单源；修复行标签填充随删行退役。"""
     src = _app_js_source()
     bind = _extract_function(src, "bindDom")
     assert "MODEL_REFRESH_SVG" in bind and "MSG.refresh_model_title" in bind, \
         "bindDom 缺刷新按钮图标/title 填充"
-    assert "MSG.test_stage_btn" in bind and "MSG.fix_cfg_label" in bind, \
-        "bindDom 缺测试按钮文案/修复行标签填充"
+    assert "MSG.test_stage_btn" in bind, "bindDom 缺测试按钮文案填充"
+    assert "fix_cfg_label" not in bind, "修复行标签填充随删行退役残留"
     eff = _extract_function(src, "aiRefreshEffective")
+    assert "analyzeResolution()" in eff, \
+        "分析生效行须走 analyzeResolution 单源（P2）"
     assert "MSG.aiEffectiveLine" in eff and "MSG.aiEffFollow" in eff \
         and "MSG.aiEffIndependent" in eff and "MSG.aiCloudNote" in eff, \
         "分析生效行文案必须全走 MSG 键"
@@ -2955,8 +2965,11 @@ def test_batch3_trio_wiring_and_effective_lines_pinned():
         and "独立配置" not in eff and "未指定" not in eff, \
         "aiRefreshEffective 残留中文字面量（须收编 MSG 键）"
     bf = _extract_function(src, "bfRefreshEffective")
-    assert "MSG.batchFixSourceTag" in bf and "source_label" in bf, \
-        "修复明示行缺生效源标识直拼"
+    assert "analyzeResolution()" in bf, \
+        "修复明示行入参须=analyzeResolution 产物（预览/执行同源，C7）"
+    assert "refine_preview_fix_config" in bf and "source_label" in bf, \
+        "修复明示行缺后端解析消费"
+    assert "MSG.batchFixSourceTag" in bf, "修复明示行缺生效源标识直拼"
     assert "status-err" in bf and "MSG.batchFixUsing" in bf, \
         "修复明示行既有钉回归（status-err/batchFixUsing）"
     test_fix = _extract_function(src, "testTrioModel")

@@ -222,20 +222,19 @@ MSG = {
     "asrModelUnselected": "未选择",
     "asrModelPlaceholder": "未选择（点选即保存）",
 
-    # ---- 质量闭环一键批次修复（D2026-1007-02 件C：修复模型解析补链 C7；
-    #      api.py refine_batch_fix 拒绝分支——不 spawn 直接报错）----
-    "fix_model_unconfigured": "修复模型未配置：请在「翻译设置 · 阶段B（审校+抛光）」填写模型名，或检查阶段A 模型设置（当前修复无从取得可用模型）",
-
-    # ---- 批3（D2026-1008-01）：修复模型三源解析文案收编（原 api.py
-    #      _resolve_fix_model_config 内联硬编码收编入表；key 值为现状文案
-    #      逐字迁移，改动即破坏向后兼容回归钉）----
-    "fix_model_a_b_unset": "阶段B 与阶段A 均未配置可用模型：请先在「翻译设置」为至少一个阶段填写模型名",
-    "fix_model_b_provider_no_model": "阶段B（{provider}）未填写模型名，且阶段A 没有同名服务商的可用模型：请在「翻译设置 · 阶段B（审校+抛光）」填写模型名",
-    "fix_model_b_model_provider_mismatch": "阶段B 只填了模型名未填服务商，而阶段A 服务商为 {a_provider}（非 lmstudio）：修复将落本地 lmstudio 端点与该模型名错配，已拒绝；请在阶段B 补全服务商",
-    # 半配置拒绝（批3 新增分支：独立修复配置仅 provider/model 之一）
-    "fix_config_half_set": "修复模型独立配置不完整：仅配置了服务商/模型名之一，请在「质量与建议」补全或清空后再发起批量修复",
-    # 独立修复配置 custom 兜底拒绝（无默认端点，对齐分析独立配置先例）
-    "fix_config_custom_unsupported": "修复模型独立配置不支持自定义兼容接口（无默认端点）：请改选其他服务商",
+    # ---- P2 修复/分析模型统一（D2026-1008-02）：共用解析 helper
+    #      _resolve_ai_model_config 拒绝/注记文案（C6 单源；旧独立修复链
+    #      键 fix_model_unconfigured/fix_model_a_b_unset/
+    #      fix_model_b_provider_no_model/fix_model_b_model_provider_mismatch/
+    #      fix_config_half_set/fix_config_custom_unsupported 随链删除，
+    #      C11 解冻-重钉）----
+    # 独立配置半配置（G5-补：仅 provider 无 model）→ 视为未配置忽略
+    "fix_ai_indep_half_ignored": "分析独立配置不完整，已忽略",
+    # 阶段A 链终点仍无线索（C9：分析未配置+阶段A 无模型）→ 如实拒绝（C8）
+    "fix_ai_model_unset": "分析模型与阶段A 均未配置，无法修复：请在「质量与建议」配置 AI 分析模型，或在「翻译设置 · 阶段A（净语+翻译）」填写模型名",
+    # 独立配置 custom 兜底拒绝（无默认端点；refine_ai_analyze 与共用
+    # helper 同串单源消费）
+    "ai_indep_custom_unsupported": "自定义接口暂不支持独立配置：请将阶段A 服务商设为 custom 后使用",
 
     # ---- 批修复端点预检（D2026-1007-02 件E：C8 本地端点 spawn 前探活，
     #      不通即拦截；api.py refine_batch_fix 预检失败分支）----

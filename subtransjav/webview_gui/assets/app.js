@@ -719,18 +719,18 @@ const MSG = {
     // 明示行红色直显；确认框副行同键复用）
     batchFixUsing: (p, m) => `修复将使用：${p} / ${m}`,
     batchFixModelUnset: '未配置',
-    // 批3（D2026-1008-01）：分析/修复模型三件套（下拉+刷新+测试）+ 修复
-    // 模型独立配置 + 生效行中文字面量收编（全 JS 态键，零静态 data-i18n）
+    // 批3（D2026-1008-01）：分析模型三件套（下拉+刷新+测试）+ 生效行
+    // 中文字面量收编（全 JS 态键，零静态 data-i18n）；批3 修复模型独立
+    // 配置行四键（fix_cfg_label 等）随 P2（D2026-1008-02）删行退役
     ai_model_follow_hint: '跟随阶段A 当前模型',
     aiEffFollow: '跟随阶段A',
     aiEffIndependent: '独立配置',
     aiModelUnset: '（未指定）',
     aiEffectiveLine: (tag, prov, model) => `分析模型：${tag} — ${prov} / ${model}`,
     aiCloudNote: ' ｜ 注意：分析时报告内容将发送至该云端服务',
-    fix_cfg_label: '修复模型',
-    fix_prov_label: '修复服务商',
-    fix_prov_follow: '跟随修复链现状（阶段B 优先，回退阶段A）',
-    fix_model_follow_hint: '跟随修复链（未独立指定）',
+    // P2（D2026-1008-02）：分析独立配置半配置忽略说明（G5-补，JS 态键；
+    // 后端侧同义键=strings.py fix_ai_indep_half_ignored，双表镜像）
+    aiIndepHalfIgnored: '分析独立配置不完整，已忽略',
     batchFixSourceTag: s => `（生效源：${s}）`,
     // 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理（媒体重点对照，音频零出域）。
     // asr_panel_title 为静态 data-i18n 键（HTML+MSG+钉⑤三处同步）；其余 JS 态
@@ -4249,11 +4249,10 @@ function switchTab(tabId) {
   //（default_model_missing 警告的唯一触发源）；无已存值不预选不出警告
   const savedStageModels = { 1: '', 3: '' };
 
-  // 批3（D2026-1008-01）：分析/修复模型独立配置的已存模型名（回填/保存
-  // 成功后记忆；恢复语义对齐 savedStageModels 先例——刷新命中列表恢复
-  // 选中，未命中注入标记 option 后选中）
+  // 批3（D2026-1008-01）：分析模型独立配置的已存模型名（回填/保存成功后
+  // 记忆；恢复语义对齐 savedStageModels 先例——刷新命中列表恢复选中，
+  // 未命中注入标记 option 后选中）
   let savedAiModel = '';
-  let savedFixModel = '';
 
   // 模型下拉空态占位 option（批2 D2026-1002-12）：value 空 + disabled +
   // selected，文案走 JS 态键 model_list_empty_hint；HTML 初始骨架 /
@@ -4525,52 +4524,9 @@ function switchTab(tabId) {
     }
   }
 
-  // 修复行元素定位（全 class+data-testid 零 id，容器 .fix-model-row）
-  function fixRowEls() {
-    const row = document.querySelector('.fix-model-row');
-    if (!row) return null;
-    return {
-      prov: row.querySelector('.fix-provider-sel'),
-      model: row.querySelector('.fix-model-sel'),
-      refresh: row.querySelector('.fix-refresh-btn'),
-      test: row.querySelector('.fix-test-btn'),
-      status: row.querySelector('.fix-test-status')
-    };
-  }
-
-  // 修复行 follow 态统一口径（与分析行同款单源）
-  function fixModelApplyFollowState() {
-    const el = fixRowEls();
-    if (!el || !el.model) return;
-    const follow = !el.prov || el.prov.value === 'follow';
-    el.model.innerHTML = '<option value="" disabled selected>'
-      + (follow ? MSG.fix_model_follow_hint : MSG.model_list_empty_hint)
-      + '</option>';
-    el.model.disabled = follow;
-    if (el.refresh) el.refresh.disabled = follow;
-    if (el.test) el.test.disabled = follow;
-  }
-
-  // 修复行刷新（独立态；lmstudio 合并列表/默认端点/注入已存值同款）
-  async function refreshFixModels() {
-    const el = fixRowEls();
-    if (!el) return;
-    await refreshTrioSelect(
-      ((el.prov || {}).value || 'follow'),
-      el.model, el.refresh, savedFixModel,
-      (t, k) => trioStatus(el.status, t, k));
-  }
-
-  // 修复行测试（独立态；follow=按钮已随禁，不重复解析后端三源链）
-  async function testFixModel() {
-    const el = fixRowEls();
-    if (!el) return;
-    const prov = ((el.prov || {}).value || 'follow');
-    await testTrioModel(prov,
-      ((el.model || {}).value || '').trim(),
-      REFINE_PROVIDER_URLS[prov] || '', null,
-      el.test, (t, k) => trioStatus(el.status, t, k));
-  }
+  // P2（D2026-1008-02）：修复模型独立配置行随「修复=分析模型完全统一」
+  // 删除（其元素定位/follow 态/刷新/测试函数族一并退役）；修复生效模型
+  // 以分析独立配置为唯一来源。
 
   function glStatus(t) {
     const el = $('refineGlStatus');
@@ -5152,29 +5108,8 @@ function switchTab(tabId) {
             if (savedAiModel) aiModelInput.value = savedAiModel;
           }
         }
-        // 批3：修复模型独立配置回填（batch_fix_* 键缺省=保持 follow 缺省
-        // 零动作=行为完全不变；有键→provider select 恢复 + 模型注入选中）
-        const fixRowEl = document.querySelector('.fix-model-row');
-        if (fixRowEl) {
-          const fProv = fixRowEl.querySelector('.fix-provider-sel');
-          const fModel = fixRowEl.querySelector('.fix-model-sel');
-          const bfProv = String(r.settings.batch_fix_provider || '').trim();
-          const bfModel = String(r.settings.batch_fix_model || '').trim();
-          savedFixModel = bfModel;
-          if (fProv && bfProv && bfProv !== 'follow') {
-            fProv.value = bfProv;
-            fixModelApplyFollowState();
-            if (fModel && bfModel) {
-              if (![...fModel.options].some(o => o.value === bfModel)) {
-                const marker = document.createElement('option');
-                marker.value = bfModel;
-                marker.textContent = bfModel;
-                fModel.appendChild(marker);
-              }
-              fModel.value = bfModel;
-            }
-          }
-        }
+        // P2（D2026-1008-02）：修复模型独立配置行已删除——batch_fix_* KV
+        // 不再读写（旧键留在用户配置文件无害，不迁移）
         // 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（填充/恢复/保存）
         const aggWin = $('aggregateWindowSel');
         if (aggWin) {
@@ -6188,25 +6123,45 @@ function switchTab(tabId) {
     });
   }
 
+  // P2（D2026-1008-02）：分析/修复模型解析单源（后端共用 helper
+  // _resolve_ai_model_config 的前端镜像，C6/C7/G5-补）。语义：
+  // - 独立配置全有（provider+model）→ 生效（provider=所选，model=所填）；
+  // - 仅 provider（半配置）→ 视为未配置忽略（notes 记说明），回落阶段A；
+  // - follow / 独立模型空 → provider=null（跟随阶段A），model=阶段A 输入
+  //   （后端再落阶段A 模型/服务商默认兜底，C9）。
+  // 返回 {provider, model, effProvider, notes}：provider=null=跟随阶段A
+  // （桥参语义同 refine_ai_analyze）；effProvider=实际生效 provider（云端
+  // 警示/展示判定用）；notes=人话注记（预览/确认框拼入）。
+  function analyzeResolution() {
+    const indep = (($('aiProviderSel') || {}).value || 'follow');
+    const indepModel = (($('aiModelInput') || {}).value || '').trim();
+    const s1p = (($('refineS1Provider') || {}).value || '').toLowerCase();
+    const s1m = (($('refineS1Model') || {}).value || '').trim();
+    if (indep !== 'follow' && indepModel) {
+      return { provider: indep, model: indepModel,
+               effProvider: indep, notes: [] };
+    }
+    const notes = [];
+    if (indep !== 'follow') notes.push(MSG.aiIndepHalfIgnored);
+    return { provider: null, model: s1m, effProvider: s1p, notes: notes };
+  }
+
   // 2.5.0 批5（D2026-1001-07）：AI 分析生效配置常驻显示（C1/C5：复用 refineAiPrivacy）
   // 批3（D2026-1008-01）：中文字面量收编 MSG 键（aiEffectiveLine 等）
+  // P2（D2026-1008-02）：改走 analyzeResolution 单源（半配置如实显示
+  // 回落+忽略说明，与实际发起的分析/修复解析一致）
   function aiRefreshEffective() {
     const el = $('refineAiPrivacy');
     if (!el) return;
-    const indep = ($('aiProviderSel') || {}).value || 'follow';
-    const s1p = ($('refineS1Provider') || {}).value || 'lmstudio';
-    const s1m = ($('refineS1Model') || {}).value || '';
-    const im = (($('aiModelInput') || {}).value || '').trim();
+    const res = analyzeResolution();
     const cloud = window.AI_CLOUD_PROVIDERS || [];
-    let prov, model, tag;
-    if (indep === 'follow') {
-      prov = s1p; model = s1m || MSG.aiModelUnset; tag = MSG.aiEffFollow;
-    } else {
-      prov = indep; model = im || MSG.aiModelUnset; tag = MSG.aiEffIndependent;
-    }
+    const tag = res.provider ? MSG.aiEffIndependent : MSG.aiEffFollow;
+    const note = (res.notes || []).join('；');
     el.style.display = '';
-    el.textContent = MSG.aiEffectiveLine(tag, prov, model)
-      + (cloud.includes(prov) ? MSG.aiCloudNote : '');
+    el.textContent = MSG.aiEffectiveLine(tag, res.effProvider,
+                                          res.model || MSG.aiModelUnset)
+      + (note ? '｜' + note : '')
+      + (cloud.includes(res.effProvider) ? MSG.aiCloudNote : '');
   }
 
   async function refineAiAnalyze() {
@@ -6223,16 +6178,13 @@ function switchTab(tabId) {
       aiStatus(MSG.aiNeedGuide);
       return;
     }
-    // 修复B+2.5.0 批5（D2026-1001-07）：生效 provider/model=独立配置优先，缺席跟随阶段A；
-    // 云 provider 发送前确认读实际生效值（C1）
-    const indepProv = (($('aiProviderSel') || {}).value || 'follow');
-    const indepModel = (($('aiModelInput') || {}).value || '').trim();
-    const effProvider = (indepProv === 'follow'
-      ? (($('refineS1Provider') || {}).value || '').toLowerCase()
-      : indepProv).toLowerCase();
-    const model = (indepModel || (($('refineS1Model') || {}).value || '')).trim();
-    if (AI_CLOUD_PROVIDERS.includes(effProvider)) {
-      const go = await AppModal.confirm(MSG.aiCloudConfirm(effProvider));
+    // 修复B+2.5.0 批5（D2026-1001-07）：生效 provider/model 读数改单源
+    // analyzeResolution（P2/D2026-1008-02：G5-补 半配置忽略+回落阶段A，
+    // 弃「独立 provider×阶段A 模型」跨服务商拼装）；云 provider 发送前
+    // 确认读实际生效值（C1/C7）
+    const res = analyzeResolution();
+    if (AI_CLOUD_PROVIDERS.includes(res.effProvider)) {
+      const go = await AppModal.confirm(MSG.aiCloudConfirm(res.effProvider));
       if (!go) return;
     }
     const btn = $('refineAiAnalyzeBtn');
@@ -6259,7 +6211,7 @@ function switchTab(tabId) {
     aiStatus(MSG.aiAnalyzing);
     try {
       const r = await window.pywebview.api.refine_ai_analyze(
-        rp, model, indepProv === 'follow' ? null : indepProv);
+        rp, res.model, res.provider);
       if (r && r.success) {
         lastAiSuggestions = r;
         aiSetPrivacy(r.provider_name);
@@ -6298,9 +6250,11 @@ function switchTab(tabId) {
 
   // 2.7.4 件C（D2026-1007-02）：修复生效配置常驻明示行（对齐
   // aiRefreshEffective 先例）：生效 provider/model 由后端
-  // refine_preview_fix_config 统一解析（C7 fail-closed，与修复子进程
-  // 同一结果），拒绝时明示行红色直显原因；未加载导读时隐藏。
-  // 返回桥结果（供 batchFixRun 确认框副行复用），桥异常回 null。
+  // refine_preview_fix_config 统一解析，拒绝时明示行红色直显原因；
+  // 未加载导读时隐藏。P2（D2026-1008-02）：入参=analyzeResolution()
+  // 产物（预览与修复执行同源 by construction，C7）；notes（半配置
+  // 忽略说明）前端直拼；返回桥结果（供 batchFixRun 确认框副行复用），
+  // 桥异常回 null。
   function bfRefreshEffective() {
     const el = $('batchFixEffectiveLine');
     if (!el) return Promise.resolve(null);
@@ -6311,21 +6265,26 @@ function switchTab(tabId) {
     if (!window.pywebview || !window.pywebview.api) {
       return Promise.resolve(null);
     }
-    return window.pywebview.api.refine_preview_fix_config()
+    const res = analyzeResolution();
+    const note = (res.notes || []).join('；');
+    return window.pywebview.api.refine_preview_fix_config(
+        res.provider, res.model)
       .then((r) => {
         if (!r) return null;
         el.style.display = '';
         if (r.ok) {
           el.classList.remove('status-err');
-          // 批3（D2026-1008-01）：生效源人话标识（独立修复配置/阶段B/阶段A）
-          // 由后端 source_label 直出，前端零解析直拼（拒绝分支仍走 reason）
+          // 生效源人话标识（分析模型/跟随阶段A）由后端 source_label
+          // 直出，前端零解析直拼（拒绝分支仍走 reason）
           el.textContent = MSG.batchFixUsing(
             r.provider || MSG.batchFixModelUnset,
             r.model || MSG.batchFixModelUnset)
-            + (r.source_label ? MSG.batchFixSourceTag(r.source_label) : '');
+            + (r.source_label ? MSG.batchFixSourceTag(r.source_label) : '')
+            + (note ? '｜' + note : '');
         } else {
           el.classList.add('status-err');
-          el.textContent = r.reason || MSG.batchFixModelUnset;
+          el.textContent = (note ? note + '；' : '')
+            + (r.reason || MSG.batchFixModelUnset);
         }
         return r;
       })
@@ -6398,10 +6357,13 @@ function switchTab(tabId) {
       capNote = MSG.batchFixCapHit(50, batch.length);
       batch = batch.slice(0, 50);
     }
-    const provRaw = (($('refineS3Provider') || {}).value || '').toLowerCase();
-    const cloud = isAiCloudProvider(provRaw);
-    const provLabel = provRaw
-      ? (MSG['ai_prov_' + provRaw] || provRaw) : '跟随阶段B 配置';
+    // P2（D2026-1008-02）：云端警示/服务商展示按生效分析 provider 判定
+    // （C7——修复与分析已完全同一模型源，弃阶段B 服务商旧口径）
+    const fixRes = analyzeResolution();
+    const cloud = isAiCloudProvider(fixRes.effProvider);
+    const provLabel = fixRes.effProvider
+      ? (MSG['ai_prov_' + fixRes.effProvider] || fixRes.effProvider)
+      : MSG.batchFixModelUnset;
     const catCount = {};
     batch.forEach(it => {
       catCount[it.category] = (catCount[it.category] || 0) + 1;
@@ -6483,14 +6445,12 @@ function switchTab(tabId) {
       } catch (e) { /* 单次轮询失败静默，主调用最终回显为准 */ }
     }, 1000);
     try {
-      // 复验 provider/model 透传 AI 分析独立配置（与 refineAiAnalyze 同源读取）
-      const indepProv = (($('aiProviderSel') || {}).value || 'follow');
-      const indepModel = (($('aiModelInput') || {}).value || '').trim();
-      const effModel = (indepModel
-        || (($('refineS1Model') || {}).value || '')).trim();
+      // 修复执行/复验与确认框同一解析源（P2/D2026-1008-02：单源
+      // analyzeResolution，后端共用 helper 同参语义）
+      const runRes = analyzeResolution();
       const r = await window.pywebview.api.refine_batch_fix(
         lastLoadedGuidePath, batch.map(it => it.index),
-        indepProv === 'follow' ? null : indepProv, effModel);
+        runRes.provider, runRes.model);
       if (r && r.success) {
         let msg = MSG.batchFixDone(r.applied || 0, r.failed || 0);
         if (r.source_partial) msg += MSG.batchFixSourcePartial;
@@ -6910,62 +6870,9 @@ function switchTab(tabId) {
         aiProvBind.addEventListener('change', () => aiModelApplyFollowState());
       }
     }
-    // 批3：修复模型独立配置行接线（全 class+data-testid 零 id；provider
-    // option 中文填充对齐 aiProviderSel 先例；保存走 refine_save_stage_settings
-    // 同通道写 batch_fix_provider/batch_fix_model——缺省 follow 写空串=
-    // 后端"全空/无键"分支，行为与不写键完全一致；切 provider 只重置不自动拉）
-    const fixRow = document.querySelector('.fix-model-row');
-    if (fixRow) {
-      const fixLabel = fixRow.querySelector('.fix-model-label');
-      if (fixLabel) fixLabel.textContent = MSG.fix_cfg_label;
-      const fixProvSel = fixRow.querySelector('.fix-provider-sel');
-      const fixModelSel = fixRow.querySelector('.fix-model-sel');
-      const fixRefreshBtn = fixRow.querySelector('.fix-refresh-btn');
-      const fixTestBtn = fixRow.querySelector('.fix-test-btn');
-      if (fixProvSel) {
-        const fixProvOpts = { follow: MSG.fix_prov_follow,
-                              lmstudio: MSG.ai_prov_lmstudio,
-                              ollama: MSG.ai_prov_ollama,
-                              deepseek: MSG.ai_prov_deepseek,
-                              siliconflow: MSG.ai_prov_siliconflow,
-                              zen: MSG.ai_prov_zen };
-        [...fixProvSel.options].forEach(o => {
-          if (fixProvOpts[o.value]) o.textContent = fixProvOpts[o.value];
-        });
-        fixProvSel.title = MSG.fix_prov_label;
-      }
-      if (fixRefreshBtn) {
-        fixRefreshBtn.title = MSG.refresh_model_title;
-        fixRefreshBtn.innerHTML = MODEL_REFRESH_SVG;
-        fixRefreshBtn.addEventListener('click', () => refreshFixModels());
-      }
-      if (fixTestBtn) {
-        fixTestBtn.title = MSG.test_stage_title;
-        fixTestBtn.textContent = MSG.test_stage_btn;
-        fixTestBtn.addEventListener('click', () => testFixModel());
-      }
-      fixModelApplyFollowState();
-      const saveFixConfig = () => {
-        window.pywebview.api.refine_save_stage_settings(null, null, {
-          batch_fix_provider:
-            (!fixProvSel || fixProvSel.value === 'follow') ? '' : fixProvSel.value,
-          batch_fix_model: ((fixModelSel || {}).value || '').trim()
-        }).then(rv => {
-          if (!rv || rv.success !== true) console.warn('[refine] 修复模型设置保存失败');
-        }).catch(e => console.warn('[refine] 修复模型设置保存失败', e));
-      };
-      if (fixProvSel && !fixProvSel.dataset.bound) {
-        fixProvSel.dataset.bound = '1';
-        fixProvSel.addEventListener('change', () => {
-          fixModelApplyFollowState();
-          saveFixConfig();
-        });
-      }
-      if (fixModelSel && !fixModelSel.dataset.bound) {
-        fixModelSel.dataset.bound = '1';
-        fixModelSel.addEventListener('change', saveFixConfig);
-      }
-    }
+    // P2（D2026-1008-02）：修复模型独立配置行接线随删行退役——修复生效
+    // 模型唯一来源=分析独立配置（analyzeResolution 单源），旧 batch_fix_*
+    // KV 不再读写
     // 质量闭环一键批次修复（2.6.0 批1）
     const bfBtn = $('refineBatchFixBtn');
     if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());

@@ -2044,25 +2044,8 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .model-trio .btn-compact { flex: 0 0 auto; }
 .model-trio .ai-model-status { font-size: var(--font-xs); }
 
-/* 批3（D2026-1008-01）：修复模型独立配置行（.ai-config-row 之外，
-   不动该行"恰 3 个 field-col"静态钉）；布局对齐 .ai-config-row 先例
-   （横排可换行、label 顶置视觉对齐 .field-col 标签口径）；
-   全 class+data-testid 零 id，token 零硬编码色（暗色自动适配） */
-.fix-model-row {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-    flex-wrap: wrap;
-    margin-top: var(--space-2);
-}
-.fix-model-row .fix-model-label {
-    font-size: var(--font-xs);
-    font-weight: 550;
-    white-space: nowrap;
-}
-.fix-model-row .fix-provider-sel { flex: 0 1 auto; min-width: 0; }
-.fix-model-row .fix-model-sel { flex: 1 1 190px; min-width: 110px; }
-.fix-model-row .fix-test-status { font-size: var(--font-xs); }
+/* P2（D2026-1008-02）：修复模型独立配置行样式随删行退役——
+   一键修复与 AI 分析模型完全统一，生效模型在修复明示行直出 */
 
 /* 首启引导横幅（2.4.0 批2 S2）：低调引导条，token 对齐 .muted 先例
    （font-sm + text-2 系，亮暗主题变量自动适配） */

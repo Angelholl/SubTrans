@@ -143,26 +143,31 @@ def _passes_min_quality_gate(new_text: str, old_text: str,
 def _make_action_client(cfg, model_override: str = ""):
     """行动层 LLM 客户端注入点（模块级函数，便于测试 monkeypatch）。
 
-    复用管线槽 B 客户端工厂；model_override 非空时以 dataclasses.replace
-    构造 cfg 副本仅换槽 B 模型（不改入参 cfg 本体）。串行由执行器主循环
-    保证（逐条调用），客户端并发参数不参与。
+    复用管线槽 A 客户端工厂——与 AI 分析客户端（quality_advisor
+    ._make_ai_client）同构（P2/D2026-1008-02：一键修复与 AI 分析模型
+    完全统一，GUI 侧经 --s1-provider/--action-model 传参）；空
+    model_override 时槽 A 模型缺席由 _make_client 落服务商默认链（与
+    _resolve_ai_model 兜底语义一致）。model_override 非空时以
+    dataclasses.replace 构造 cfg 副本仅换槽 A 模型（不改入参 cfg 本体）。
+    串行由执行器主循环保证（逐条调用），客户端并发参数不参与。
     """
     import dataclasses
 
     from .pipeline_v2 import _make_client
     if model_override:
         stages = list(cfg.stages)
-        stages[2] = dataclasses.replace(stages[2], model=model_override)
+        stages[0] = dataclasses.replace(stages[0], model=model_override)
         cfg = dataclasses.replace(cfg, stages=stages)
-    return _make_client(cfg, "B")
+    return _make_client(cfg, "A")
 
 
 def _resolve_action_model(cfg, model_override: str) -> str:
-    """台账 model_used 取值：显式覆盖优先，否则槽 B 模型（含服务商默认）。"""
+    """台账 model_used 取值：显式覆盖优先，否则槽 A 模型（含服务商默认，
+    兜底链与 quality_advisor._resolve_ai_model 同构）。"""
     from .config import PROVIDER_MODEL_DEFAULTS
     if model_override:
         return model_override
-    stage = cfg.stages[2]
+    stage = cfg.stages[0]
     return stage.model or PROVIDER_MODEL_DEFAULTS.get(stage.provider, "")
 
 

@@ -199,7 +199,8 @@ def build_parser():
                             help="原始日文 SRT 路径（可选：按 timing 对齐恢复"
                                  "完整源文；缺省退化为导读摘录）")
     grp_action.add_argument("--action-model", default="",
-                            help="重翻模型名（缺省用阶段B/槽 B 模型）")
+                            help="重翻模型名（缺省用阶段A/槽 A 模型；"
+                                 "P2/D2026-1008-02 与 AI 分析同槽同源）")
     grp_action.add_argument("--action-sample", type=int, default=0,
                             help="只取选中条目的前 N 条（0=不限；供小样对比工作流）")
     grp_action.add_argument("--apply", action="store_true",

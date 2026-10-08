@@ -2568,9 +2568,10 @@ class TranslateAPI:
         if ai_provider:
             provider = str(ai_provider).strip().lower()
             if provider == "custom":
+                # P2（D2026-1008-02）：文案收编 strings.py——与共用解析
+                # helper _resolve_ai_model_config 同串单源
                 return {"success": False,
-                        "error": "自定义接口暂不支持独立配置："
-                                 "请将阶段A 服务商设为 custom 后使用"}
+                        "error": msg("ai_indep_custom_unsupported")}
             endpoint = ""
         else:
             provider = self._stage_a_provider_name()
@@ -2750,153 +2751,95 @@ class TranslateAPI:
                 "total": 0, "last_line": ""}
         return self._batch_fix_progress_state
 
-    def _stage_b_stage_settings(self, key: str) -> str:
-        """阶段B（存储 stage=3，槽 s3）设置项；读取失败/未存返回空串。"""
-        try:
-            got = self.refine_get_stage_settings()
-        except Exception:
-            return ""
-        if not isinstance(got, dict) or not got.get("success"):
-            return ""
-        for s in got.get("stages") or []:
-            if isinstance(s, dict) and int(s.get("stage") or 0) == 3:
-                return str(s.get(key) or "").strip()
-        return ""
+    def _resolve_ai_model_config(self, ai_provider: str = None,
+                                 ai_model: str = None) -> dict[str, Any]:
+        """C6 单源（D2026-1008-02 P2）：一键修复与 AI 分析共用同一模型解析。
 
-    def _stage_b_provider_name(self) -> str:
-        return self._stage_b_stage_settings("provider")
+        输入=分析按钮同源参（refine_ai_analyze 同签名语义：ai_provider
+        空/None=跟随阶段A，非空=分析独立配置）。解析规则：
+        1. 独立配置全有（ai_model 非空且 ai_provider 非空）→ 生效
+           （source=analyze_independent；端点走 CLI 各 provider 默认，
+           与分析路径同法；custom 无默认端点沿分析先例拒绝）；
+        2. ai_model 非空且 ai_provider 空 → 生效（source=stage_a_follow，
+           provider/endpoint 取阶段A）；
+        3. G5-补：ai_model 空但 ai_provider 非空 → 独立配置不完整（跨
+           服务商错配风险）→ 视为未配置，notes 追加「分析独立配置不
+           完整，已忽略」，落入阶段A 链；
+        4. 阶段A 链（C9 回退链终点，不回退阶段B——破坏「与分析完全
+           同一」契约）：model=阶段A model 或
+           PROVIDER_MODEL_DEFAULTS[阶段A provider]；provider/model 全无
+           线索 → 解析失败，reason 如实（此时才报错）。
 
-    def _stage_b_endpoint(self) -> str:
-        return self._stage_b_stage_settings("endpoint")
+        C18 边界：本 helper 只做配置层解析；配置完整后的运行时失败
+        （模型不存在/未下载/装载失败）由 ensure/CLI 原样报错，此处不做
+        任何配置回退（防「以为在用分析模型、实际跑阶段A」失真）。
 
-    def _stage_b_model(self) -> str:
-        return self._stage_b_stage_settings("model")
-
-    def _batch_fix_kv(self) -> dict[str, str]:
-        """「质量与建议」修复模型独立 KV（batch_fix_provider/batch_fix_model，
-        批3 D2026-1008-01）。缺键/读取失败/空串一律返回空——缺省不写键=
-        修复链行为完全不变（向后兼容）。"""
-        try:
-            got = self.refine_get_stage_settings()
-        except Exception:
-            return {"provider": "", "model": ""}
-        if not isinstance(got, dict) or not got.get("success"):
-            return {"provider": "", "model": ""}
-        kv = got.get("settings") or {}
-        if not isinstance(kv, dict):
-            return {"provider": "", "model": ""}
-        return {"provider": str(kv.get("batch_fix_provider") or "").strip(),
-                "model": str(kv.get("batch_fix_model") or "").strip()}
-
-    def _resolve_fix_model_config(self) -> dict[str, Any]:
-        """C7 补链（D2026-1007-02 件C）：批量修复 provider/endpoint/model
-        统一解析（fail-closed；三元组全部读既有阶段 KV getter，零新增
-        读取通道）。修复子进程 model 缺失时 CLI 落缺省空串 →
-        pipeline RefineError「未指定模型名」全败退出，故拒绝必须发生在
-        spawn 之前而非放任子进程失败。
-
-        三源优先级（批3 D2026-1008-01）：
-        1. 「质量与建议」独立修复配置（batch_fix_provider/model KV）全有
-           → 整组生效（source=batch_fix_independent；端点=该 provider
-           默认端点 PROVIDER_ENDPOINT_DEFAULTS，不引入端点输入；custom
-           无默认端点沿用分析独立配置先例拒绝）；
-        2. 独立修复配置仅其一非空（半配置）→ fail-closed 拒绝并明示
-           （fix_config_half_set）；
-        3. 全空/无键 → 现状链逐字保持（存量用户零行为变化）：
-        - 阶段B provider 与 model 均非空 → 用 B 整组（endpoint=B，可空）；
-        - 阶段B provider 与 model 均空 → 整组回退阶段A（全取 A）；A 的
-          model 也空 → 拒绝（无模型修复必然全败）；
-        - 阶段B provider 非空但 model 空 → 仅当阶段A provider 与 B 同名
-          （小写比较）时取 B provider/endpoint + A model，否则拒绝（防
-          「B 端点 + A 异服务商模型名」跨服务商错配）；
-        - 阶段B model 非空但 provider 空 → 维持现行为：provider 不传落
-          CLI 缺省 lmstudio，放行但以 source 标注（注释即本行）；阶段A
-          provider 已配置且非 lmstudio 时拒绝（防「lmstudio 本地端点 +
-          云模型名」错配——与上一条同理 fail-closed；A 未配置不算错配）。
-
-        返回 dict(provider, endpoint, model, source, ok, reason)；
-        拒绝时 ok=False + 人话 reason 且三元组为空串。"""
-        b_provider = self._stage_b_provider_name()
-        b_model = self._stage_b_model()
-        b_endpoint = self._stage_b_endpoint()
+        返回 dict(ok, provider, endpoint, model, source, notes, reason)；
+        拒绝时 ok=False + 人话 reason 且三元组为空串（notes 仍回带，
+        供调用方拼装完整人话）。"""
+        provider_in = str(ai_provider or "").strip().lower()
+        model_in = str(ai_model or "").strip()
+        notes: list[str] = []
 
         def _deny(reason: str) -> dict[str, Any]:
             return {"ok": False, "provider": "", "endpoint": "",
-                    "model": "", "source": "", "reason": reason}
+                    "model": "", "source": "", "notes": notes,
+                    "reason": reason}
 
-        # 三源优先级 1/2：独立修复配置（读 KV 通道=_batch_fix_kv，与
-        # refine_get_stage_settings 同源；文案收编 strings.py）
-        bf = self._batch_fix_kv()
-        bf_provider = bf.get("provider", "")
-        bf_model = bf.get("model", "")
-        if bf_provider and bf_model:
-            if bf_provider.lower() == "custom":
-                return _deny(msg("fix_config_custom_unsupported"))
-            from subtransjav.refine.config import PROVIDER_ENDPOINT_DEFAULTS
-            return {"ok": True, "provider": bf_provider,
-                    "endpoint": PROVIDER_ENDPOINT_DEFAULTS.get(
-                        bf_provider.lower(), ""),
-                    "model": bf_model,
-                    "source": "batch_fix_independent", "reason": ""}
-        if bf_provider or bf_model:
-            return _deny(msg("fix_config_half_set"))
-        # 三源优先级 3：全空/无键 → 现状链（以下逐字保持批3 之前的行为）
-        if b_provider and b_model:
-            return {"ok": True, "provider": b_provider,
-                    "endpoint": b_endpoint, "model": b_model,
-                    "source": "stage_b", "reason": ""}
-        if not b_provider and not b_model:
-            a_provider = self._stage_a_provider_name()
-            a_endpoint = self._stage_a_endpoint()
-            a_model = self._stage_a_model()
-            if not a_model:
-                return _deny(msg("fix_model_a_b_unset"))
-            return {"ok": True, "provider": a_provider,
-                    "endpoint": a_endpoint, "model": a_model,
-                    "source": "stage_a_fallback", "reason": ""}
-        if b_provider and not b_model:
-            a_provider = self._stage_a_provider_name()
-            if (a_provider or "").strip().lower() == b_provider.lower():
-                a_model = self._stage_a_model()
-                if a_model:
-                    return {"ok": True, "provider": b_provider,
-                            "endpoint": b_endpoint, "model": a_model,
-                            "source": "stage_b_provider_stage_a_model",
-                            "reason": ""}
-            return _deny(
-                msg("fix_model_b_provider_no_model", provider=b_provider))
-        # 剩余分支：B model 非空但 provider 空（见 docstring 第 3 条末款）
+        # 独立配置全有才做 custom 兜底拒绝（无默认端点，与分析路径
+        # 同串单源）；半配置 custom 落 G5-补 忽略规则
+        if provider_in == "custom" and model_in:
+            return _deny(msg("ai_indep_custom_unsupported"))
+        if model_in:
+            if provider_in:
+                return {"ok": True, "provider": provider_in,
+                        "endpoint": "", "model": model_in,
+                        "source": "analyze_independent",
+                        "notes": notes, "reason": ""}
+            return {"ok": True, "provider": self._stage_a_provider_name(),
+                    "endpoint": self._stage_a_endpoint(),
+                    "model": model_in,
+                    "source": "stage_a_follow", "notes": notes,
+                    "reason": ""}
+        if provider_in:
+            notes.append(msg("fix_ai_indep_half_ignored"))
+        # 阶段A 链（G5-补 忽略/follow 落此；provider 空时子进程落 CLI
+        # 缺省 lmstudio，与分析路径放行语义一致）
         a_provider = self._stage_a_provider_name()
-        if (a_provider or "").strip().lower() not in ("", "lmstudio"):
-            return _deny(msg("fix_model_b_model_provider_mismatch",
-                             a_provider=a_provider))
-        return {"ok": True, "provider": "", "endpoint": "",
-                "model": b_model,
-                "source": "stage_b_model_provider_default", "reason": ""}
+        a_endpoint = self._stage_a_endpoint()
+        a_model = self._stage_a_model()
+        from subtransjav.refine.config import PROVIDER_MODEL_DEFAULTS
+        model = a_model or PROVIDER_MODEL_DEFAULTS.get(
+            a_provider.strip().lower(), "")
+        if not model:
+            return _deny(msg("fix_ai_model_unset"))
+        return {"ok": True, "provider": a_provider, "endpoint": a_endpoint,
+                "model": model, "source": "stage_a_follow",
+                "notes": notes, "reason": ""}
 
-    # 批3（D2026-1008-01）：生效源人话标识（预览行直出，前端零解析；
-    # source 机器码 → 中文标签）
+    # P2（D2026-1008-02）：生效源人话标识（预览行直出，前端零解析；
+    # source 机器码 → 中文标签；修复解析已并轨分析源，仅两源）
     _FIX_SOURCE_LABELS = {
-        "batch_fix_independent": "独立修复配置",
-        "stage_b": "阶段B",
-        "stage_a_fallback": "阶段A",
-        "stage_b_provider_stage_a_model": "阶段B 服务商+阶段A 模型",
-        "stage_b_model_provider_default": "阶段B 模型（服务商缺省）",
+        "analyze_independent": "分析模型",
+        "stage_a_follow": "跟随阶段A",
     }
 
-    def refine_preview_fix_config(self) -> dict[str, Any]:
-        """C7 桥（D2026-1007-02 件C）：修复生效配置预览（只读、无副作用、
-        不 spawn），供前端修复卡明示行与确认框刷新。共用
-        _resolve_fix_model_config 解析结果，形状钉（provider/endpoint/
-        model/source/source_label/reason 恒为字符串，ok 恒为布尔；
-        source_label=生效源人话标识，批3 D2026-1008-01 追加）。"""
+    def refine_preview_fix_config(self, ai_provider: str = None,
+                                  ai_model: str = None) -> dict[str, Any]:
+        """C7 桥（D2026-1007-02 件C；P2 D2026-1008-02 改源）：修复生效
+        配置预览（只读、无副作用、不 spawn），供前端修复卡明示行与确认
+        框刷新。入参=前端 analyzeResolution() 产物，与 refine_batch_fix
+        共用 _resolve_ai_model_config 解析（预览与执行同源 by
+        construction，C7）。形状钉（provider/endpoint/model/source/
+        source_label/reason 恒为字符串，ok 恒为布尔，notes 恒为字符串
+        列表；source_label=生效源人话标识）。"""
         try:
-            cfg = self._resolve_fix_model_config()
+            cfg = self._resolve_ai_model_config(ai_provider, ai_model)
         except Exception as e:
             _log_exc("refine_preview_fix_config")
             return {"ok": False, "provider": "", "endpoint": "",
                     "model": "", "source": "", "source_label": "",
-                    "reason": str(e)}
+                    "reason": str(e), "notes": []}
         source = str(cfg.get("source") or "")
         return {"ok": bool(cfg.get("ok")),
                 "provider": str(cfg.get("provider") or ""),
@@ -2904,7 +2847,8 @@ class TranslateAPI:
                 "model": str(cfg.get("model") or ""),
                 "source": source,
                 "source_label": self._FIX_SOURCE_LABELS.get(source, ""),
-                "reason": str(cfg.get("reason") or "")}
+                "reason": str(cfg.get("reason") or ""),
+                "notes": [str(n) for n in (cfg.get("notes") or [])]}
 
     def _load_guide_json(self, p: str) -> dict[str, Any] | None:
         try:
@@ -3074,11 +3018,12 @@ class TranslateAPI:
         逐条命中 open 且有现译（观察类必拒，C6）→ 台账已修拒入批
         （C1 幂等守卫；重修走 CLI --entries 显式通道）。执行=
         spawn_refine_cli 子进程跑 --action-retranslate --apply（修复
-        provider/model 经 _resolve_fix_model_config 统一解析
-        （C7/D2026-1007-02 件C：拒绝即不 spawn）；台账先于终稿写序/
-        恒等式断言在执行器侧
-        原样生效）；复验=生效后重跑全片 AI 分析恰 1 次做建议件三键
-        计数 diff（复验 provider/model 透传 AI 分析独立配置）。"""
+        provider/model 与 AI 分析完全同一解析：P2/D2026-1008-02 弃独立
+        修复链，改用分析按钮同源形参 ai_provider/ai_model 经共用 helper
+        _resolve_ai_model_config 解析（C6 单源）；拒绝即不 spawn 且
+        reason 如实透出（C8，弃统一 generic 盖法）；台账先于终稿写序/
+        恒等式断言在执行器侧原样生效）；复验=生效后重跑全片 AI 分析
+        恰 1 次做建议件三键计数 diff（复验与执行同一解析入参）。"""
         p, stem, guide, err = self._load_validated_guide(guide_path)
         if err is not None:
             return err
@@ -3123,13 +3068,19 @@ class TranslateAPI:
             os.path.join(guide_dir, stem + self._AI_SUGGESTION_SUFFIX))
         pre_ledger_len = len(self._read_ledger(guide_dir, stem))
 
-        # 修复 provider/endpoint/model 统一经 C7 解析（D2026-1007-02 件C：
-        # 阶段B 缺模型时回退/拒绝链；拒绝即不 spawn——原先空 model 放任
-        # 子进程落 CLI 缺省空串 → pipeline RefineError 全败退出 1）；
-        # 密钥仍仅经子进程环境变量注入（白名单表与翻译/分析一致）。
-        cfg = self._resolve_fix_model_config()
+        # 修复 provider/endpoint/model 与 AI 分析完全同一解析（P2/
+        # D2026-1008-02：C6 单源 helper，入参=分析按钮同源形参；拒绝即
+        # 不 spawn 且 reason 如实透出（C8）——原先空 model 放任子进程落
+        # CLI 缺省空串 → pipeline RefineError 全败退出 1 的拦截保持在
+        # spawn 之前；notes（半配置忽略说明）拼入人话错误；密钥仍仅经
+        # 子进程环境变量注入（白名单表与翻译/分析一致）。
+        cfg = self._resolve_ai_model_config(ai_provider, ai_model)
+        notes = [str(n) for n in (cfg.get("notes") or []) if n]
         if not cfg.get("ok"):
-            return {"success": False, "error": msg("fix_model_unconfigured")}
+            reason = str(cfg.get("reason") or msg("fix_ai_model_unset"))
+            if notes:
+                reason = "；".join(notes) + "；" + reason
+            return {"success": False, "error": reason}
         # C8 端点预检（D2026-1007-02 件E）：仅本地型 provider（provider 空
         # = CLI 缺省 lmstudio，见 cli.config_from_args）在 spawn 前对其端点
         # /v1/models 探一次连通性——端点不通时子进程逐条全败才退出 1（故障
@@ -3160,7 +3111,12 @@ class TranslateAPI:
                 "--apply"]
         provider = str(cfg.get("provider") or "")
         if provider:
-            args.extend(["--s3-provider", provider])
+            # P2（D2026-1008-02）：与 refine_ai_analyze 同源旗标——动作
+            # 客户端已改槽A（stages[0]，与 quality_advisor._make_ai_client
+            # 同构），provider/endpoint 走 --s1-provider/
+            # --<provider>-endpoint（同分析路径传法）；独立配置端点空=
+            # CLI 各 provider 默认（同分析）
+            args.extend(["--s1-provider", provider])
             flag = self._AI_PROVIDER_ENDPOINT_FLAGS.get(provider)
             endpoint = str(cfg.get("endpoint") or "")
             if endpoint and flag:
