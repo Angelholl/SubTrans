@@ -3200,3 +3200,14 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 3. 件4 list_local_models 分支：/api/v0/models 旧版本兼容+模型名去重回归；LM Studio 卸载态验收为 HRO-2 锚点不可省。
 4. 四段号 2.8.0.1 须与 test_version_consistency 一致性钉同批更新（先例 e15b328）。
 5. 基线门槛：pytest 只增不减（2211+4 起点）；Mimosa 比对基线 37 零新增；GUI 提交注明已验证/未验证。
+
+**执行追记（2026-10-08 四批全收口+发版 2.8.0.1）[已完成]**
+
+- **批1 试听**（69ff282）：direct 分支 loadedmetadata-once seek 到 start-0.5s（与 clip pad 对齐）+seeked 落定武装 timeupdate 自动停播（end+0.5s）+用户 seeking 解除武装+代数计数防过期回调+close/错误/重入三处 detach；clip 分支与校对页不动。黑盒五点：seek 落点 7.65@0.7s、段尾 9.61 停、重入 2.03、拖拽解除武装 8.88 续播、自然播完+关闭清理。
+- **批2 压制入口**（0a9488d）：api 新桥 encode_save_params（复用 preflight 校验路径、只存参数不入队、原子写 hardsub_last.json 带 saved_at）；AppModal.encode editOnly 模式（入队键隐藏+独立「保存参数」）；EncodeDock 无选中文件可开；高级参数页「压制」组（组标题+打开按钮+参数摘要行）+右栏 encode-auto-row 旁「参数」链接；顺修 applyParams backend 不回填；GPU 编辑模式置灰显因（无廉价探测桥，按代码现实选）。FROZEN id 223/data-i18n 187 零漂移。
+- **批3 模型三件套**（4587c26）：分析模型 text→select（id 保留）+刷新/测试；修复模型独立行（.ai-config-row 之外，恰 3 field-col 钉不破）；refreshTrioSelect：lmstudio 走 list_local_models 合并已加载✓+已下载（HRO-2 落地），其余 provider 走 refine_list_models 默认端点；后端 _resolve_fix_model_config 三源优先级（batch_fix_* 全有→独立生效/半配置→拒绝明示 fix_config_half_set/无键→现状链逐字+逐字回归钉=存量零变化）；refine_preview_fix_config 增 source_label；拒绝文案收编 strings.py；aiRefreshEffective 中文字面量收编 MSG。
+- **批4 可停止+清理+自愈**（ef53d8f）：分析链 Popen+worker 线程 communicate 排水（capture 语义保留、crosscheck 解析不动）+登记槽（pid+create_time+kind）+取消闩+单飞守卫+refine_cancel_ai_analyze；修复链同款登记+refine_cancel_batch_fix（取消不触发自动复跑分析）；terminate_registered 身份核验（psutil 存在+create_time 差<1.5s+cmdline 含项目标记）防 PID 复用误杀；_on_exit_cleanup 扩展三槽全覆盖（_translate 分支逐字未动）；启动自愈：spawn 写 config/child_procs.json 台账（原子写、reap 移除），TranslateAPI.__init__ 三重核验自动树杀残留+gui.log 记账（psutil 缺失降级跳过）；前端「停止分析/停止修复」+C12 取消文案+分析中提示补 JIT 说明。黑盒三链（分析中态/停止→C12 文案→复位/修复停止链）+主翻译链零变化 diff 自证。
+- **验证链**：全量 2211+4→**2241+4 只增**（+30：件1 +1/件2 +7/件4 +10/件3 +12）；Mimosa deep 四轮全 **37=基线零新增**（seal 2a000764/8f7c0c34/6a73b1b2/a07f4a62）；CI 五笔全绿（批3 windows-3.12 腿 test_effective_dir_blacklist_falls_back flake 在册复发、rerun 自愈）；黑盒=stub 桥副本范式 16 点全过（IAB 输入层劣化「新标签页重置」先例再次实证；python http.server 根目录错位一次经 /assets/ 路径绕过）。
+- **发版 v2.8.0.1（四段号新政策首例）**：release/2.8.0.1 自 ef53d8f 切出，fb6dc17 bump 三常量+CHANGELOG（__version_info__ 增 micro 键；test_version_consistency 49 定向绿），tag v2.8.0.1→fb6dc17，构建 run 37737452559 success，**Release id 406499983**（https://github.com/Angelholl/SubTrans/releases/tag/v2.8.0.1 ）：SubTrans-setup-2.8.0.1.exe 51,060,954B sha256 CE071110…F4A3AF 与 SHA256SUMS 一致+公开 URL 回读字节 MATCH；**main 维持 2.8.1.dev0 不前进**（owner 新政策：纯修复不递增版号）。
+- **已知边界（登记观察）**：①空闲误点「停止分析」会吞掉下一次分析一次（取消闩 finally 陈旧清理封顶，影响极小）；②_batch_fix_proc 槽单条目覆盖——修复链现状本无单飞守卫，本批未越权补，如需另立项。
+- **待 owner**：2.8.0.1 真机走查四件（导读试听定位/压制参数入口与保存/AI-修复模型下拉/分析-修复停止+重启后无残留子进程）。
