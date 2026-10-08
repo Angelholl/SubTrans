@@ -644,6 +644,8 @@ _CHILD_PROCS_LEDGER_NAME = "child_procs.json"
 _CHILD_KIND_MARKERS = {
     "ai_analyze": "--ai-analyze",
     "batch_fix": "--action-retranslate",
+    # P1 分析模型预热（D2026-1008-02 批3）：登记后台账/启动自愈自动覆盖
+    "warmup": "--warmup-analysis",
 }
 # 项目标记：cmdline 须含其一（源码形态模块名 / frozen CLI 可执行体名）
 _CHILD_PROJECT_TOKENS = ("subtransjav", "subtrans-cli")
@@ -1080,6 +1082,19 @@ class TranslateAPI:
                 return {"success": False, "error": msg("encode_translate_conflict")}
             if not claim_translate_slot():
                 return {"success": False, "error": msg("translation_in_progress")}
+            # P1 预热互锁后端兜底（D2026-1008-02 批3，G1 (c) 阻断形态）：
+            # 预热 loading 中拒启翻译（前端 G9 持有重试为主责，此处兜底）；
+            # 已 claim 的槽原路归还防泄漏；不置哨兵（进程尚未启动）
+            self._init_ai_state()
+            with self._ai_lock:
+                warmup_loading = ((self._warmup_state or {}).get("state")
+                                  == "loading")
+                warmup_snapshot = dict(self._warmup_state or {})
+            if warmup_loading:
+                from subtransjav.webview_gui.encode_queue import release_translate_slot
+                release_translate_slot()
+                return {"success": False, "warmup_loading": True,
+                        "warmup_status": warmup_snapshot}
             # Sentinel: mark "starting" to block double-start while Popen runs
             #（True 哨兵仅作占位，消费侧均先判 `is True`；cast 仅为类型清零）
             self._translate_process = cast(subprocess.Popen, True)
@@ -2325,11 +2340,16 @@ class TranslateAPI:
     # ----------------------------------------------------------------
 
     def _init_ai_state(self):
-        """分析/修复登记槽惰性初始化（对齐 _init_translation_state 先例；
+        """分析/修复/预热登记槽惰性初始化（对齐 _init_translation_state 先例；
         测试以 object.__new__ 构造实例不经 __init__，故取槽前必须先调）。"""
         if not hasattr(self, "_ai_analyze_proc"):
             self._ai_analyze_proc: dict[str, Any] | None = None
             self._batch_fix_proc: dict[str, Any] | None = None
+            # P1 预热槽（D2026-1008-02 批3）：登记/台账/退出清理与批4 同构
+            self._warmup_proc: dict[str, Any] | None = None
+            # 预热状态机（G9/C4）：state=idle|loading|loaded|failed|hot，
+            # 另含 fingerprint/started_at/pid/provider/model（详见桥 docstring）
+            self._warmup_state: dict[str, Any] = {}
             self._ai_analyze_running = False
             self._ai_analyze_cancel = threading.Event()
             self._ai_lock = threading.Lock()
@@ -2354,6 +2374,8 @@ class TranslateAPI:
         with self._ai_lock:
             if kind == "ai_analyze":
                 self._ai_analyze_proc = entry
+            elif kind == "warmup":
+                self._warmup_proc = entry
             else:
                 self._batch_fix_proc = entry
         self._ledger_sync()
@@ -2362,8 +2384,8 @@ class TranslateAPI:
     def _release_child_slot(self, kind: str, entry: dict[str, Any]) -> None:
         """正常 reap 后清登记槽 + 台账同步（覆盖式写=条目移除）。"""
         with self._ai_lock:
-            slot = "_ai_analyze_proc" if kind == "ai_analyze" \
-                else "_batch_fix_proc"
+            slot = {"ai_analyze": "_ai_analyze_proc",
+                    "warmup": "_warmup_proc"}.get(kind, "_batch_fix_proc")
             if getattr(self, slot, None) is entry:
                 setattr(self, slot, None)
         self._ledger_sync()
@@ -2372,7 +2394,8 @@ class TranslateAPI:
         """当前登记快照（台账持久化形状：仅 pid/create_time/kind/marker）。"""
         with self._ai_lock:
             slots = [getattr(self, "_ai_analyze_proc", None),
-                     getattr(self, "_batch_fix_proc", None)]
+                     getattr(self, "_batch_fix_proc", None),
+                     getattr(self, "_warmup_proc", None)]
         return [{"pid": e["pid"], "create_time": e["create_time"],
                  "kind": e["kind"], "marker": e["marker"]}
                 for e in slots if e]
@@ -2437,6 +2460,12 @@ class TranslateAPI:
     # RefineConfig.resolve_api_key「lmstudio / ollama 本地服务」口径一致）：
     # spawn 修复子进程前对其端点探活；云端 provider 一律跳过（行为不变）
     _AI_LOCAL_PROVIDERS = ("lmstudio", "ollama")
+    # 本地 provider 缺省端点（CLI 既有默认；解析 endpoint 为空时的探活/
+    # 旗标缺省回退，与前端 REFINE_PROVIDER_URLS 镜像）
+    _AI_PROVIDER_ENDPOINT_DEFAULTS = {
+        "lmstudio": "http://localhost:1234/v1",
+        "ollama": "http://localhost:11434/v1",
+    }
     # C8 探活超时（秒）：只判连通，超时=不通（宁误拦不放任 35 条逐条全败）
     _ENDPOINT_PROBE_TIMEOUT_S = 5
     # 云端 provider → 子进程密钥环境变量名（与 RefineConfig.resolve_api_key、
@@ -3272,11 +3301,14 @@ class TranslateAPI:
         后树杀 → 短窗等退出（保证调用方返回时进程已收尾）。
 
         槽空（进程尚未 spawn/已收尾）→ 分析链置取消闩（spawn 前预检消费，
-        覆盖「用户秒点停止」竞态）；修复链无启动窗口竞态，不置闩。"""
+        覆盖「用户秒点停止」竞态）；修复/预热链无启动窗口竞态，不置闩。
+        槽判别按 kind 显式映射（批3 P1 修正：非 ai_analyze 不再一律当
+        batch_fix 取槽）。"""
         self._init_ai_state()
         with self._ai_lock:
-            entry = self._ai_analyze_proc if kind == "ai_analyze" \
-                else self._batch_fix_proc
+            slot = {"ai_analyze": "_ai_analyze_proc",
+                    "warmup": "_warmup_proc"}.get(kind, "_batch_fix_proc")
+            entry = getattr(self, slot, None)
         if entry is None:
             if kind == "ai_analyze":
                 self._ai_analyze_cancel.set()
@@ -3312,6 +3344,348 @@ class TranslateAPI:
         return self._cancel_registered(
             "batch_fix",
             {"success": False, "error": msg("no_batch_fix_in_progress")})
+
+    # ----------------------------------------------------------------
+    # P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）
+    # 设计契约落点：C1 同源通道（spawn --warmup-analysis 子进程，cfg 与
+    # 分析同参）；C3 透明（spawn/gui.log 留痕）；C4 状态优先去重（探
+    # /v1/models 在载判定为主，指纹为辅）；C5 退出清理/启动自愈经登记槽
+    # 自动覆盖；G3 同源指纹；G9 单飞+入队快照（快照在前端）；G10 硬超时
+    # 走 settings KV（缺省 300，gui.log 留痕依据）。
+    # 本节新增错误文案沿用批4 先例为内联中文（未进 strings.py，行为与
+    # msg() 回退语义等价），注释即契约。
+    # ----------------------------------------------------------------
+
+    # G10：预热装载硬超时 KV 键与缺省（KV 非法/非正值一律按缺省处理）
+    _WARMUP_TIMEOUT_KV = "preheat_load_hard_timeout"
+    _WARMUP_TIMEOUT_DEFAULT_S = 300
+    # C4 在载探活超时（/v1/models 只含已载模型；口径同 list_local_models）
+    _WARMUP_PROBE_TIMEOUT_S = 5
+
+    def _warmup_resolve_current(self) -> tuple[str, str] | None:
+        """按当前配置（ai_analyze_* KV→阶段A 同源链）解析预热三元组。
+
+        返回 (provider, model)；解析失败/非本地 provider 返回 None
+        （状态桥据此报 supported:false，静默不扰）。"""
+        try:
+            got = self.refine_get_stage_settings()
+            kv = (got or {}).get("settings") or {}
+        except Exception:
+            kv = {}
+        try:
+            res = self._resolve_ai_model_config(
+                str(kv.get("ai_analyze_provider") or "") or None,
+                str(kv.get("ai_analyze_model") or "") or None)
+        except Exception:
+            return None
+        if not res.get("ok"):
+            return None
+        prov = str(res.get("provider") or "").strip().lower()
+        model = str(res.get("model") or "").strip()
+        if prov not in self._AI_LOCAL_PROVIDERS or not model:
+            return None
+        return prov, model
+
+    def _warmup_fingerprint(self, provider: str, endpoint: str,
+                            model: str) -> str:
+        """G3 同源指纹：provider/endpoint/model/生效 ctx/并发。
+
+        C1：预热 CLI 不传 --v2-ctx/--v2-concurrency，与分析子进程同走
+        config 分层链——故 ctx 取 resolve_tunable 生效值、并发恒为 CLI
+        缺省 1（与分析路径一致），配置变更即指纹变更。"""
+        try:
+            from subtransjav.refine.config import resolve_tunable
+            ctx = int(resolve_tunable("v2_ctx_local") or 0)
+        except Exception:
+            ctx = 0
+        return "|".join(str(x) for x in (provider, endpoint, model, ctx, 1))
+
+    def _warmup_timeout_s(self) -> tuple[int, str]:
+        """G10 预热装载硬超时：settings KV ``preheat_load_hard_timeout``
+        读取 + int 合法化（非法/非正 → 缺省 300）。
+
+        返回 (秒, 依据)——依据∈{"settings KV", "settings 缺省"}，供 gui.log
+        打「本次预热超时=Xs，依据=Y」留痕（打点在 spawn 处，每轮预热一行）。"""
+        basis = "settings 缺省"
+        try:
+            got = self.refine_get_stage_settings()
+            raw = str(((got or {}).get("settings") or {})
+                      .get(self._WARMUP_TIMEOUT_KV, "") or "").strip()
+        except Exception:
+            raw = ""
+        if raw:
+            try:
+                v = int(raw)
+            except (TypeError, ValueError):
+                v = 0
+            if v > 0:
+                return v, "settings KV"
+        return self._WARMUP_TIMEOUT_DEFAULT_S, basis
+
+    def _warmup_probe_loaded(self, endpoint: str) -> list[str] | None:
+        """C4 在载探活：GET {root}/v1/models（只列已载模型，与
+        lmstudio._loaded_ids/list_local_models 同口径）。
+
+        返回已载模型 id 列表；端点不可达/服务不在/lms 环境异常一律返回
+        None（调用方静默转 supported:false，绝不 spawn 硬探）。"""
+        root = (endpoint or "").rstrip("/")
+        if root.endswith("/v1"):
+            root = root[:-3]
+        if not root:
+            return None
+        try:
+            import requests as _req
+            r = _req.get(f"{root}/v1/models",
+                         timeout=self._WARMUP_PROBE_TIMEOUT_S)
+            data = (r.json() or {}).get("data") or []
+            return [str(x.get("id") or "") for x in data
+                    if isinstance(x, dict) and x.get("id")]
+        except Exception:
+            return None
+
+    def _warmup_payload(self, st: dict[str, Any]) -> dict[str, Any]:
+        """由状态字典组装 status 回包（调用方持锁外调用；timeout 现读）。"""
+        timeout_s, _basis = self._warmup_timeout_s()
+        state = str(st.get("state") or "idle")
+        started_at = float(st.get("started_at") or 0.0)
+        elapsed = max(0.0, time.time() - started_at) if started_at else 0.0
+        return {"supported": True, "state": state,
+                "fingerprint": str(st.get("fingerprint") or ""),
+                "elapsed": round(elapsed, 3), "timeout": timeout_s,
+                "provider": str(st.get("provider") or ""),
+                "model": str(st.get("model") or "")}
+
+    def refine_warmup_status(self) -> dict[str, Any]:
+        """P1 预热状态桥（前端 G9 持有轮询 + 开始翻译前预检）。
+
+        返回 {supported, state, fingerprint, elapsed, timeout, provider,
+        model}：state∈idle|loading|loaded|failed|hot；elapsed=本预热起流经
+        秒数；timeout=G10 值（前端倒计时/超时放行同源）。supported=False=
+        预热通道对当前配置不适用（云 provider/解析失败/(c) 阻断不适用，
+        前端直接放行）。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            st = dict(self._warmup_state or {})
+        if st.get("state"):
+            return self._warmup_payload(st)
+        timeout_s, _ = self._warmup_timeout_s()
+        cur = self._warmup_resolve_current()
+        if cur is None:
+            return {"supported": False, "state": "idle", "fingerprint": "",
+                    "elapsed": 0.0, "timeout": timeout_s,
+                    "provider": "", "model": ""}
+        return {"supported": True, "state": "idle", "fingerprint": "",
+                "elapsed": 0.0, "timeout": timeout_s,
+                "provider": cur[0], "model": cur[1]}
+
+    def refine_warmup_analysis_model(self, model: str = None,
+                                     provider: str = None) -> dict[str, Any]:
+        """P1 预热桥（D2026-1008-02 批3）。触发方=前端 warmupMaybeStart()
+        （G2 队列完成/切质量页）与后端会话钩子；去重三层=单飞+C4 在载探活
+        +G3 指纹（5s 内重复触发抑制由前端兜底）。
+
+        流程：
+        ① 解析同源（C6 helper）：provider 空=跟随阶段A；解析失败/非本地
+           provider → {supported:False, reason}（静默不扰）。
+        ② 单飞：已有在飞预热（state=loading/槽在位）→ 返回现状态不重复
+           spawn（G9 点击入队语义）。
+        ③ C4 状态优先：探 /v1/models，目标模型已在载 → 置 state=hot 并
+           返回 {already_hot:True} 不 spawn；端点不可达 → supported:False。
+        ④ G3 指纹：与上次已完成（state=loaded）指纹相同 → 跳过（能走到
+           此处说明③探活不在载，该分支仅在探活与状态读取竞态窗口内生效，
+           TTL 卸载后不会误抑制——状态判定为主，C4）。
+        ⑤ spawn ``--warmup-analysis`` 子进程（与 refine_ai_analyze 同参源：
+           --ai-model/--s1-provider/--<provider>-endpoint；密钥 env 同表）
+           并登记 warmup 槽（台账/退出清理/启动自愈自动生效=C5）；状态机
+           loading→loaded/failed 由 reap 线程按退出码收口。
+        """
+        m = str(model or "").strip()
+        if not m:
+            return {"success": False, "supported": False,
+                    "reason": "模型名为空，跳过预热"}
+        # ① 解析同源 + 本地 provider 判定
+        try:
+            res = self._resolve_ai_model_config(
+                str(provider or "").strip().lower() or None, m)
+        except Exception as e:
+            return {"success": False, "supported": False,
+                    "reason": f"模型解析失败: {e}"}
+        if not res.get("ok"):
+            return {"success": False, "supported": False,
+                    "reason": str(res.get("reason") or "模型解析失败")}
+        prov = str(res.get("provider") or "").strip().lower()
+        if prov not in self._AI_LOCAL_PROVIDERS:
+            return {"success": False, "supported": False,
+                    "reason": f"预热仅支持本地服务商（当前生效 {prov or '未配置'}）"}
+        endpoint = str(res.get("endpoint") or "").strip() \
+            or self._AI_PROVIDER_ENDPOINT_DEFAULTS.get(prov, "")
+        fp = self._warmup_fingerprint(prov, endpoint, m)
+
+        self._init_ai_state()
+        # ② 单飞预检（快速路径；权威复检在④置 loading 的锁内）
+        with self._ai_lock:
+            cur = dict(self._warmup_state or {})
+            busy = cur.get("state") == "loading" \
+                or self._warmup_proc is not None
+        if busy:
+            return {"success": True, "supported": True,
+                    "already_loading": True, **self._warmup_payload(cur)}
+        # ③ C4 状态优先去重：在载 → hot 不 spawn
+        loaded = self._warmup_probe_loaded(endpoint)
+        if loaded is None:
+            # lms 不在/端点不可达：静默不扰（不 spawn、不改状态机）
+            return {"success": False, "supported": False,
+                    "reason": f"端点不可达: {endpoint}"}
+        if m in loaded:
+            with self._ai_lock:
+                self._warmup_state = {
+                    "state": "hot", "fingerprint": fp, "provider": prov,
+                    "model": m, "started_at": time.time(), "pid": None}
+            _log.info("[warmup] 分析模型已在载，跳过预热（model=%s）", m)
+            return {"success": True, "supported": True, "already_hot": True,
+                    **self._warmup_payload(self._warmup_state)}
+        # C4 状态优先（真值覆写）：探活成功且目标不在载 → 状态机残留的
+        # loaded/hot 终态必属陈旧（典型=LM Studio TTL 已卸载），降级清位，
+        # 防④指纹缓存把 TTL 后的重新预热永久抑制（误抑制=P1 收益归零）
+        with self._ai_lock:
+            stale = self._warmup_state
+            if stale.get("state") in ("loaded", "hot"):
+                _log.info("[warmup] 探活确认模型不在载，降级陈旧终态 "
+                          "(state=%s) 允许重新预热（C4 状态判定优先）",
+                          stale.get("state"))
+                stale["state"] = "idle"
+        # ④ G3 指纹去重 + 权威单飞（置 loading 前锁内复检，杜绝并发双 spawn）
+        dup_fp = False
+        with self._ai_lock:
+            prev = dict(self._warmup_state or {})
+            if prev.get("state") == "loading" \
+                    or self._warmup_proc is not None:
+                busy = True
+            else:
+                if prev.get("state") == "loaded" \
+                        and prev.get("fingerprint") == fp:
+                    self._warmup_state = {
+                        "state": "loaded", "fingerprint": fp,
+                        "provider": prov, "model": m,
+                        "started_at": prev.get("started_at"),
+                        "pid": prev.get("pid")}
+                    dup_fp = True
+                else:
+                    self._warmup_state = {
+                        "state": "loading", "fingerprint": fp,
+                        "provider": prov, "model": m,
+                        "started_at": time.time(), "pid": None}
+                    dup_fp = False
+        if busy:
+            return {"success": True, "supported": True,
+                    "already_loading": True, **self._warmup_payload(prev)}
+        if dup_fp:
+            return {"success": True, "supported": True, "skipped": True,
+                    **self._warmup_payload(self._warmup_state)}
+        # ⑤ spawn（同 refine_ai_analyze 参数源；G10 超时依据留痕）
+        timeout_s, basis = self._warmup_timeout_s()
+        _log.info("[warmup] 本次预热超时=%ss，依据=%s", timeout_s, basis)
+        args = ["--warmup-analysis", "--ai-model", m, "--s1-provider", prov]
+        flag = self._AI_PROVIDER_ENDPOINT_FLAGS.get(prov)
+        if endpoint and flag:
+            args.extend([flag, endpoint])
+        env_extra: dict[str, str] = {"PYTHONUNBUFFERED": "1"}
+        # 密钥仅经子进程环境变量注入（本地 provider 无密钥，表内不命中）
+        key_env = self._AI_PROVIDER_KEY_ENV.get(prov)
+        if key_env:
+            try:
+                from subtransjav.refine.secrets import read_secret
+                key = read_secret(prov)
+            except Exception:
+                key = ""
+            if key:
+                env_extra[key_env] = key
+        _log.info("[warmup] 预热可能切换 LM Studio 当前模型（model=%s "
+                  "provider=%s endpoint=%s），已在 gui.log 留痕", m, prov,
+                  endpoint)
+        try:
+            proc = cast(subprocess.Popen, spawn_refine_cli(
+                args, cwd=str(REPO_ROOT),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, encoding="utf-8", errors="replace",
+                env_extra=env_extra))
+        except Exception as e:
+            _log_exc("refine_warmup_analysis_model.spawn")
+            with self._ai_lock:
+                st = self._warmup_state
+                if st.get("state") == "loading":
+                    st["state"] = "failed"
+                    st["finished_at"] = time.time()
+            return {"success": False, "supported": True,
+                    "error": f"预热子进程启动失败: {e}"}
+        entry = self._register_child(proc, "warmup")
+        with self._ai_lock:
+            self._warmup_state["pid"] = int(proc.pid)
+
+        def _reap(en: dict[str, Any], warm_model: str = m) -> None:
+            """worker：communicate 排水两管道（批4 同款，防管道写满阻塞）
+            并按退出码收口状态机；daemon 线程，退出清理树杀后自然返回。"""
+            try:
+                en["proc"].communicate()
+                rc = en["proc"].returncode
+            except Exception:
+                rc = en["proc"].poll()
+            with self._ai_lock:
+                st = self._warmup_state
+                if st.get("state") == "loading" \
+                        and st.get("pid") == en.get("pid"):
+                    st["state"] = "loaded" if rc == 0 else "failed"
+                    st["finished_at"] = time.time()
+                    done_state = str(st.get("state"))
+                else:
+                    done_state = ""
+            self._release_child_slot("warmup", en)
+            if done_state:
+                _log.info("[warmup] 预热子进程退出 rc=%s（state=%s, "
+                          "model=%s）", rc, done_state, warm_model)
+        threading.Thread(target=_reap, args=(entry,), daemon=True,
+                         name="gui-warmup-reap").start()
+        return {"success": True, "supported": True,
+                **self._warmup_payload(self._warmup_state)}
+
+    def refine_cancel_warmup(self) -> dict[str, Any]:
+        """停止进行中的分析模型预热（P1 批3）。
+
+        (c) 阻断形态用户面无取消入口——本桥供超时放行（G7 第三态「杀客户端
+        +清状态+放行翻译」）、退出清理与测试使用：已登记 → 身份核验后树杀
+        +状态置 failed；未登记 → 幂等返回（不置闩：预热无 spawn 前用户
+        取消竞态）。"""
+        self._init_ai_state()
+        r = self._cancel_registered(
+            "warmup",
+            {"success": True, "cancelled_pending": True,
+             "message": "无进行中的预热"})
+        if r.get("cancelled_pending"):
+            return r
+        with self._ai_lock:
+            st = self._warmup_state
+            if isinstance(st, dict) and st.get("state") == "loading":
+                st["state"] = "failed"
+                st["finished_at"] = time.time()
+                st["cancelled"] = True
+        return r
+
+    def _warmup_after_session(self) -> None:
+        """G2 触发点①主体（翻译会话级完成=整队列回 idle）。
+
+        后端无前端解析上下文，自行读 ai_analyze_* KV+阶段A（批1
+        _resolve_ai_model_config 同源）算解析并 spawn；解析失败/云 provider/
+        已在载 → 桥内静默跳过。与前端触发去重靠桥内单飞+指纹。
+        压制自动化（若有）为 ffmpeg 非 LLM 消费者，不构成同资源冲突，
+        不抑制预热（勾账口径）。"""
+        cur = self._warmup_resolve_current()
+        if cur is None:
+            return
+        r = self.refine_warmup_analysis_model(cur[1], cur[0])
+        _log.info("[warmup] 会话完成触发预热: supported=%s already_hot=%s "
+                  "skipped=%s state=%s reason=%s",
+                  r.get("supported"), r.get("already_hot"),
+                  r.get("skipped"), r.get("state"), r.get("reason"))
 
     def _asr_probe_cache_path(self) -> str:
         """探测快照落点（tests 可 monkeypatch；fail-soft 返回 "" 禁用缓存）。"""
@@ -4588,14 +4962,17 @@ class TranslateAPI:
             self._translate_process = None
         # 批4（D2026-1008-01）：分析/修复登记槽全覆盖清理——上述 _translate
         # 分支语义零变化；新槽锁下快照后逐个走 terminate_registered（身份
-        # 核验防 PID 复用误杀），随后台账覆盖写空（正常退出不留残留条目）
+        # 核验防 PID 复用误杀），随后台账覆盖写空（正常退出不留残留条目）。
+        # 批3（D2026-1008-02 P1/C5）：预热槽一并纳入
         try:
             self._init_ai_state()
             with self._ai_lock:
                 pending = [e for e in (self._ai_analyze_proc,
-                                       self._batch_fix_proc) if e]
+                                       self._batch_fix_proc,
+                                       self._warmup_proc) if e]
                 self._ai_analyze_proc = None
                 self._batch_fix_proc = None
+                self._warmup_proc = None
             for entry in pending:
                 with contextlib.suppress(Exception):
                     terminate_registered(entry)
@@ -5081,16 +5458,26 @@ class TranslateAPI:
         压制」（管线设置 encode_auto_enabled）时，收集本会话完成文件→
         契约配对→成品已存在跳过（自动化语义，不覆盖）→余者入队→
         lms unload --all 清场（复用 lmstudio 既有路径，失败告警不阻塞）。
-        once 守卫见批1；cancelled/error 不触发（C9）。"""
+        once 守卫见批1；cancelled/error 不触发（C9）。
+        P1 批3 增：钩子尾部挂 G2 预热触发点①（会话级完成=整队列回 idle，
+        "无自动继续"以会话级判据落实；压制自动化为 ffmpeg 非 LLM 消费者
+        不构成资源冲突，不抑制预热）。"""
         if getattr(self, "_session_hook_fired", False):
             return
         self._session_hook_fired = True
         try:
-            if not self._encode_automation_enabled():
-                return
-            self._run_encode_automation(summary)
+            if self._encode_automation_enabled():
+                self._run_encode_automation(summary)
         except Exception:
             _log_exc("_on_translation_session_completed")
+        # G2 触发点①：daemon 线程内解析+spawn（探活≤5s 不占桥轮询线程）；
+        # 桥内单飞+C4 探活+G3 指纹与前端触发天然去重
+        try:
+            threading.Thread(target=self._warmup_after_session,
+                             daemon=True,
+                             name="gui-warmup-session-hook").start()
+        except Exception:
+            _log_exc("_warmup_after_session")
 
     def _encode_automation_enabled(self) -> bool:
         """管线设置 encode_auto_enabled（refine_save_stage_settings 同一

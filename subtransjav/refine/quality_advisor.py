@@ -415,3 +415,35 @@ def run_ai_analyze(cfg, args) -> int:
     print(f"   建议件已落盘: {out_path}")
     print("   （建议仅供人工裁决，本命令不直接改写词库/TM）")
     return 0
+
+
+def run_warmup(cfg, args) -> int:
+    """--warmup-analysis 主入口（cli.main 早退分流，D2026-1008-02 批3 P1）。
+
+    C1 同源契约：cfg 由 config_from_args 构造（与 AI 分析完全同参——不传
+    --v2-ctx/--v2-concurrency 时 ctx/并发走 user_settings/env 分层链，
+    与分析子进程同源）；槽A 客户端构造即触发 lmstudio 同步 ensure 加载
+    （pipeline_v2._make_client → _ensure_lmstudio_engine，ctx/并发由 cfg
+    派生）。不落任何产物文件、不做任何分析调用，加载完成即退。
+
+    返回退出码：0=模型就绪（ensure 返回）/ 1=预热失败（模型未配置/客户端
+    构造失败，含 LM Studio 未运行/模型未下载等运行时原因，如实透出）。"""
+    model_override = getattr(args, "ai_model", "") or ""
+    model = _resolve_ai_model(cfg, model_override)
+    provider = cfg.stages[0].provider
+    if not model:
+        print("❌ [预热] 分析模型未配置（--ai-model 与阶段A 槽均空且该"
+              f"服务商无默认模型: {provider}）")
+        return 1
+    print(f"🔥 [预热] 开始预热分析模型: {model}（provider={provider}，"
+          "ctx/并发与分析同源）")
+    try:
+        # 客户端构造即触发槽A ensure 加载（lmstudio 阻塞至装载完成）；
+        # 构造产物无需持有，仅借构造副作用完成预热
+        _make_ai_client(cfg, model_override)
+    except Exception as e:   # noqa: BLE001 同 run_ai_analyze 兜底口径，
+        # 运行时失败如实透出，不做任何配置回退（C18 姊妹边界）
+        print(f"❌ [预热] 失败: {e}")
+        return 1
+    print(f"✅ [预热] 分析模型已就绪: {model}")
+    return 0

@@ -5092,3 +5092,334 @@ def test_automation_skips_existing_output(gui_api_obj, _auto_env, monkeypatch):
     gui_api_obj._on_translation_session_completed(
         {"files": {_auto_env["srt"]: "done"}})
     assert gui_api_obj.encode_status()["jobs"] == []   # 全跳过零入队
+
+
+# ---------------------------------------------------------------------------
+# P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）：
+# 桥单飞/C4 在载去重/云 provider/互锁兜底/G10 超时合法化/取消判别/退出清理/
+# G2 会话挂点/CLI --warmup-analysis。预热状态机与登记槽全部打桩，零触网。
+# ---------------------------------------------------------------------------
+
+class _WarmupFakeProc:
+    """替身预热子进程：communicate 阻塞至 release（在飞/单飞语义可钉）。"""
+
+    def __init__(self, returncode=0):
+        self.pid = 424242
+        self.returncode = None
+        self._rc = returncode
+        self._release = threading.Event()
+
+    def release(self, rc=0):
+        self._rc = rc
+        self._release.set()
+
+    def communicate(self, timeout=None):
+        self._release.wait(timeout=30)
+        self.returncode = self._rc
+        return "", ""
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        self._release.wait(timeout=timeout or 5)
+        self.returncode = self._rc
+        return self.returncode
+
+    def kill(self):
+        self.release(1)
+
+
+def _install_fake_warmup_spawn(monkeypatch):
+    """替身 spawn_refine_cli（预热链）：捕获 CLI argv，返回可控假进程。"""
+    import subtransjav.webview_gui.api as api_mod
+    procs: list = []
+    argvs: list = []
+
+    def _fake(args, **kwargs):
+        argvs.append(list(args))
+        proc = _WarmupFakeProc()
+        procs.append(proc)
+        return proc
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake)
+    return procs, argvs
+
+
+def _fake_settings(settings: dict):
+    return {"success": True,
+            "stages": [{"stage": 1, "provider": "lmstudio",
+                        "endpoint": "", "model": ""}],
+            "settings": settings, "key_status": {}, "first_run": False}
+
+
+def test_warmup_bridge_spawn_args_and_single_flight(gui_api_obj, monkeypatch):
+    """桥主路径：spawn 旗标同分析参源（--warmup-analysis/--ai-model/
+    --s1-provider）+ 单飞（在飞二次调用不重复 spawn）+ 登记/台账含 warmup
+    + reap 收口 loaded。"""
+    import subtransjav.webview_gui.api as api_mod
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded", lambda ep: [])
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    gui_api_obj._init_ai_state()
+
+    r1 = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r1["success"] is True and r1["state"] == "loading"
+    assert len(argvs) == 1
+    argv = argvs[0]
+    assert argv[0] == "--warmup-analysis"
+    assert argv[argv.index("--ai-model") + 1] == "m1"
+    assert argv[argv.index("--s1-provider") + 1] == "lmstudio"
+
+    # 单飞：在飞中二次调用 → 返回现状态且不再 spawn
+    r2 = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r2.get("already_loading") is True
+    assert len(argvs) == 1, "单飞拒绝必须发生在 spawn 之前"
+
+    # 登记槽 + 台账（kind/marker 批3 新增）
+    entry = gui_api_obj._warmup_proc
+    assert entry is not None and entry["kind"] == "warmup"
+    assert entry["marker"] == "--warmup-analysis"
+    entries = api_mod._ledger_read_entries(
+        api_mod._child_procs_ledger_path())
+    assert any(e.get("kind") == "warmup"
+               and e.get("marker") == "--warmup-analysis" for e in entries)
+
+    # 收尾：release → reap 收口 loaded + 槽清位
+    procs[0].release(0)
+    deadline = time.time() + 10
+    while time.time() < deadline and gui_api_obj._warmup_proc is not None:
+        time.sleep(0.05)
+    assert gui_api_obj._warmup_proc is None
+    assert gui_api_obj.refine_warmup_status()["state"] == "loaded"
+
+
+def test_warmup_bridge_already_hot_skips_spawn(gui_api_obj, monkeypatch):
+    """C4 状态优先去重：探活返回含目标模型 → already_hot 不 spawn。"""
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded",
+                        lambda ep: ["m1", "other-model"])
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    gui_api_obj._init_ai_state()
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r.get("already_hot") is True and r.get("supported") is True
+    assert argvs == [], "已在载不得 spawn"
+    assert gui_api_obj.refine_warmup_status()["state"] == "hot"
+
+
+def test_warmup_bridge_cloud_provider_unsupported(gui_api_obj, monkeypatch):
+    """云 provider → supported:false 且不探活不 spawn（静默不扰）。"""
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    probed: list = []
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded",
+                        lambda ep: probed.append(ep))
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    gui_api_obj._init_ai_state()
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "deepseek")
+    assert r.get("supported") is False
+    assert argvs == [] and probed == []
+
+
+def test_warmup_bridge_endpoint_unreachable_silent(gui_api_obj, monkeypatch):
+    """端点不可达（探活 None）→ supported:false 静默不 spawn、状态机不动。"""
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded", lambda ep: None)
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    gui_api_obj._init_ai_state()
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r.get("supported") is False and argvs == []
+    assert gui_api_obj.refine_warmup_status()["state"] == "idle"
+
+
+def test_start_translation_blocked_while_warmup_loading(gui_api_obj,
+                                                        monkeypatch):
+    """互锁兜底：预热 loading 中 start_translation 拒启并带 warmup_loading；
+    已 claim 的翻译槽原路归还（防泄漏）；终态放行。"""
+    import subtransjav.webview_gui.encode_queue as eq
+    gui_api_obj._translate_lock = threading.Lock()
+    monkeypatch.setattr(eq, "encode_active", lambda: False)
+    monkeypatch.setattr(eq, "claim_translate_slot", lambda: True)
+    released: list = []
+    monkeypatch.setattr(eq, "release_translate_slot",
+                        lambda: released.append(1))
+    gui_api_obj._init_ai_state()
+    gui_api_obj._warmup_state = {"state": "loading",
+                                 "started_at": time.time(), "model": "m1"}
+    r = gui_api_obj.start_translation({"inputs": ["a.srt"], "force": True})
+    assert r.get("success") is False and r.get("warmup_loading") is True
+    assert r.get("warmup_status", {}).get("state") == "loading"
+    assert released, "已 claim 的翻译槽必须原路归还"
+
+    # 非 loading（终态）不拦：走正常启动链（spawn 桩抛错收尾，见既有先例）
+    captured: dict = {}
+    _capture_popen(monkeypatch, captured, gui_api_obj)
+    gui_api_obj._warmup_state = {"state": "failed"}
+    r2 = gui_api_obj.start_translation({"inputs": ["a.srt"], "force": True})
+    assert "warmup_loading" not in r2
+
+
+def test_warmup_timeout_kv_normalization(gui_api_obj, monkeypatch):
+    """G10：preheat_load_hard_timeout KV int 合法化（非法/非正/缺省=300）
+    与依据留痕字段（settings KV / settings 缺省）。"""
+    cases = [
+        ({"preheat_load_hard_timeout": "600"}, 600, "settings KV"),
+        ({"preheat_load_hard_timeout": 900}, 900, "settings KV"),
+        ({"preheat_load_hard_timeout": "abc"}, 300, "settings 缺省"),
+        ({"preheat_load_hard_timeout": "0"}, 300, "settings 缺省"),
+        ({"preheat_load_hard_timeout": "-5"}, 300, "settings 缺省"),
+        ({}, 300, "settings 缺省"),
+    ]
+    for settings, want_s, want_basis in cases:
+        monkeypatch.setattr(
+            gui_api_obj, "refine_get_stage_settings",
+            lambda s=settings: _fake_settings(s))
+        got_s, got_basis = gui_api_obj._warmup_timeout_s()
+        assert (got_s, got_basis) == (want_s, want_basis), settings
+
+
+def test_warmup_cancel_targets_warmup_slot_only(gui_api_obj):
+    """⑥ 取消判别修正：refine_cancel_warmup 只取 warmup 槽（不再把非
+    ai_analyze 一律当 batch_fix），其余槽零扰动；loading 状态收口 failed。"""
+    gui_api_obj._init_ai_state()
+
+    def _entry(kind, marker):
+        return {"proc": None, "pid": 999998, "create_time": 0.0,
+                "kind": kind, "marker": marker, "cancelled": False}
+
+    a = _entry("ai_analyze", "--ai-analyze")
+    b = _entry("batch_fix", "--action-retranslate")
+    w = _entry("warmup", "--warmup-analysis")
+    gui_api_obj._ai_analyze_proc = a
+    gui_api_obj._batch_fix_proc = b
+    gui_api_obj._warmup_proc = w
+    gui_api_obj._warmup_state = {"state": "loading",
+                                 "started_at": time.time()}
+    r = gui_api_obj.refine_cancel_warmup()
+    assert r.get("success") is True and r.get("cancelled") is True
+    assert w["cancelled"] is True
+    assert not a["cancelled"] and not b["cancelled"], "取消不得外溢他槽"
+    assert gui_api_obj._warmup_state["state"] == "failed"
+
+    # 幂等：槽空时 cancelled_pending 且不炸
+    gui_api_obj._warmup_proc = None
+    r2 = gui_api_obj.refine_cancel_warmup()
+    assert r2.get("cancelled_pending") is True
+
+
+def test_exit_cleanup_includes_warmup_slot(gui_api_obj):
+    """⑦ 退出清理（C5）：预热槽纳入 terminate_registered 全覆盖 + 台账写空。"""
+    import subtransjav.webview_gui.api as api_mod
+    gui_api_obj._init_ai_state()
+    gui_api_obj._translate_lock = threading.Lock()
+    gui_api_obj._warmup_proc = {"proc": None, "pid": 999998,
+                                "create_time": 0.0, "kind": "warmup",
+                                "marker": "--warmup-analysis"}
+    gui_api_obj._on_exit_cleanup()
+    assert gui_api_obj._warmup_proc is None
+    assert gui_api_obj._ai_analyze_proc is None
+    assert gui_api_obj._batch_fix_proc is None
+    assert api_mod._ledger_read_entries(
+        api_mod._child_procs_ledger_path()) == []
+
+
+def test_session_completed_triggers_warmup_hook(gui_api_obj, monkeypatch):
+    """G2 触发点①：会话级完成钩子尾部触发 _warmup_after_session（daemon），
+    后端自行按 ai_analyze_* KV 同源解析后调桥；解析失败静默跳过。"""
+    gui_api_obj._init_ai_state()
+    calls: list = []
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({
+                            "ai_analyze_provider": "lmstudio",
+                            "ai_analyze_model": "m1"}))
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: calls.append((m, p)) or
+                        {"success": True})
+    monkeypatch.setattr(gui_api_obj, "_encode_automation_enabled",
+                        lambda: False)
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed({})
+    assert gui_api_obj._session_hook_fired is True
+    deadline = time.time() + 5
+    while time.time() < deadline and not calls:
+        time.sleep(0.05)
+    assert calls == [("m1", "lmstudio")], "会话完成须以同源解析结果调桥"
+
+    # 解析失败（全空配置）→ 静默跳过，不调桥
+    calls.clear()
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    gui_api_obj._warmup_after_session()
+    assert calls == []
+
+
+def test_warmup_status_bridge_shapes(gui_api_obj, monkeypatch):
+    """状态桥形状：从未预热时按当前配置报 supported；timeout 恒随行。"""
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({
+                            "ai_analyze_provider": "lmstudio",
+                            "ai_analyze_model": "m1"}))
+    gui_api_obj._init_ai_state()
+    r = gui_api_obj.refine_warmup_status()
+    assert r["supported"] is True and r["state"] == "idle"
+    assert r["timeout"] == 300 and r["model"] == "m1"
+
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    r2 = gui_api_obj.refine_warmup_status()
+    assert r2["supported"] is False and r2["state"] == "idle"
+
+
+def test_cli_warmup_analysis_invokes_client_and_exit_code(monkeypatch):
+    """⑧ --warmup-analysis 早退分流：_make_ai_client 被调且退出码 0/1
+    （替身客户端零触网）。"""
+    import subtransjav.refine.cli as cli_mod
+    import subtransjav.refine.quality_advisor as qa_mod
+    calls: list = []
+
+    def _fake_client(cfg, model_override=""):
+        calls.append(model_override)
+        return SimpleNamespace(_chat=lambda s, u: "{}")
+
+    monkeypatch.setattr(qa_mod, "_make_ai_client", _fake_client)
+    rc = cli_mod.main(["--warmup-analysis", "--ai-model", "m1"])
+    assert rc == 0 and calls == ["m1"]
+
+    def _boom(cfg, model_override=""):
+        raise RuntimeError("LM Studio down")
+
+    monkeypatch.setattr(qa_mod, "_make_ai_client", _boom)
+    assert cli_mod.main(["--warmup-analysis", "--ai-model", "m1"]) == 1
+
+
+def test_warmup_analysis_flag_in_child_kind_markers():
+    """kind→旗标映射含 warmup（身份核验第③重依据）。"""
+    import subtransjav.webview_gui.api as api_mod
+    assert api_mod._CHILD_KIND_MARKERS.get("warmup") == "--warmup-analysis"
+
+
+def test_warmup_probe_miss_downgrades_stale_loaded_state(gui_api_obj,
+                                                        monkeypatch):
+    """C4 状态优先（TTL 回归钉）：LM Studio TTL 卸载后，陈旧 loaded 状态
+    +同指纹不得把重新预热永久抑制——探活确认不在载须降级并重新 spawn。"""
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded", lambda ep: [])
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    gui_api_obj._init_ai_state()
+    # 第一轮：spawn → release(0) → 状态机 loaded
+    r1 = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r1["state"] == "loading"
+    procs[0].release(0)
+    deadline = time.time() + 10
+    while time.time() < deadline \
+            and gui_api_obj.refine_warmup_status()["state"] != "loaded":
+        time.sleep(0.05)
+    assert gui_api_obj.refine_warmup_status()["state"] == "loaded"
+    # TTL 卸载后（探活仍 miss）：必须重新 spawn 而非 skipped
+    r2 = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r2["state"] == "loading"
+    assert len(argvs) == 2, "TTL 卸载后须重新预热（C4 真值覆写指纹缓存）"

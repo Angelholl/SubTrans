@@ -508,6 +508,17 @@ const MSG = {
     aiParseFailed: '⚠️ AI 输出解析失败，以下为原始观察文本',
     aiDone: 'AI 分析完成，建议仅供人工裁决',
     aiFailed: m => `AI 分析失败：${m}`,
+    // ---- P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）----
+    // G4 透明文案：预热可能顶掉 LM Studio 手动加载的当前模型（后端 gui.log 同步留痕）
+    warmupStarted: '正在预热分析模型，可能切换 LM Studio 当前模型',
+    warmupHot: '分析模型已在载，跳过预热',
+    warmupAfterQueue: '翻译队列完成，触发分析模型预热',
+    warmupQueued: '正在预热分析模型，翻译已排队（以点击时参数为准）',
+    warmupTimeout: '预热等待超时，已放行翻译',
+    warmupUnknown: '预热状态不可确认，已放行翻译',
+    warmupDone: '预热完成，继续启动翻译',
+    warmupFailed: '预热未完成，放行翻译（翻译将按自身流程加载模型）',
+    warmupHoldBtn: s => `预热中 ${s}s，翻译已排队…`,
     gui_initialized: '净语翻译 GUI 已初始化',
     gui_usage_hint: '在上方 Source 区添加字幕后点击「开始净语翻译」',
 
@@ -3889,16 +3900,33 @@ const TranslatorManager = {
 
     async startTranslation() {
         if (AppState.isRunning) return;
+        if (this._warmupHolding) return;   // 预热持有中重复点击：已入队不重复
 
         if (AppState.selectedFiles.length === 0) {
             ErrorHandler.show(MSG.noFilesTitle, MSG.no_files_hint);
             return;
         }
 
+        // G9 入队参数快照（方案 A，D2026-1008-02 批3）：点击那一刻的
+        // collectOptions 即「所点即所跑」，持有放行后按本快照走启动链
+        let options = null;
         try {
             // collectOptions 抛错时按钮状态才能正常复位并提示
-            const options = this.collectOptions();
+            options = this.collectOptions();
+        } catch (error) {
+            ConsoleManager.log(MSG.translationErrorLog(error.message), 'error');
+            ErrorHandler.show(MSG.translationErrorTitle, error.message);
+            this._finish(MSG.error);
+            return;
+        }
 
+        // P1 G9 (c) 阻断（D2026-1008-02 批3）：预热 loading 中 → 持有模式
+        //（参数区锁定+开始按钮倒计时），终态/超时/桥不可达放行后继续下方
+        // 正常启动链（含后端 needs_confirm 等既有门，不新增确认弹窗）
+        const go = await this._warmupHoldUntilRelease();
+        if (!go) return;
+
+        try {
             AppState.isRunning = true;
             this.state.isRunning = true;
             FileListManager.updateButtons();
@@ -3935,6 +3963,13 @@ const TranslatorManager = {
             }
 
             let result = await pywebview.api.start_translation(options);
+
+            // 后端预热互锁兜底（P1 批3 B.5）：后端拒启并带 warmup_loading
+            // → 同样进入持有模式，终态后以同一快照重试启动
+            if (result && result.warmup_loading) {
+                await this._warmupHoldUntilRelease();
+                result = await pywebview.api.start_translation(options);
+            }
 
             // 已有终稿产物：needs_confirm 时弹确认框（D2026-0925-01 D6）
             if (result && result.needs_confirm) {
@@ -3999,6 +4034,134 @@ const TranslatorManager = {
         this.setStatus(statusText);
     },
 
+    // ============================================================
+    // P1 G9 (c) 阻断持有模式（D2026-1008-02 批3）
+    // ============================================================
+
+    /**
+     * 参数区容器级锁定/恢复（G9 方案 A）。锁定时记录每个控件的原 disabled
+     * 值（恢复必须对称：锁了必恢复），恢复时逐一还原；容器加 .engine-locked
+     * 样式类（dim+锁定态，style.css 承接）。范围=#tab-engine 内全部可交互
+     * 控件；不含翻译页右侧开始/停止钮（refineStartBtn/refineCancelBtn——
+     * 开始钮由持有逻辑单独管文案/禁用）。
+     * @param {boolean} lock true=锁定 false=恢复
+     * @param {Array<{el: HTMLElement, disabled: boolean}>} recorded 锁定时返回的清单（恢复时传入）
+     * @returns {Array<{el: HTMLElement, disabled: boolean}>} 锁定时返回记录清单
+     */
+    _lockEngineControls(lock, recorded) {
+        const page = document.getElementById('tab-engine');
+        if (!page) return [];
+        if (lock) {
+            const list = [];
+            page.querySelectorAll('button, input, select, textarea')
+                .forEach(el => {
+                    // 防御性排除：开始/停止钮若日后挪入引擎页也不得被本锁管
+                    if (el.id === 'refineStartBtn'
+                        || el.id === 'refineCancelBtn') return;
+                    list.push({ el, disabled: el.disabled });
+                    el.disabled = true;
+                });
+            page.classList.add('engine-locked');
+            return list;
+        }
+        (recorded || []).forEach(({ el, disabled }) => {
+            el.disabled = disabled;
+        });
+        page.classList.remove('engine-locked');
+        return [];
+    },
+
+    /**
+     * 预热持有等待（G9）：预热 loading 中阻断启动——参数区锁定+开始按钮
+     * 倒计时（剩余=timeout-elapsed，每秒刷新），每 1s 轮询 warmup 状态桥。
+     * 释放条件：终态（loaded/hot/failed）或 supported:false；超时（G10
+     * timeout 值）；桥连续 N=3 次异常（G7 第三态：按预热已死放行）。
+     * 超时/不可确认释放时先 refine_cancel_warmup（杀客户端+清状态+放行，
+     * 防后端互锁兜底把翻译顶回持有死循环），再由调用方以点击时快照继续
+     * 正常启动链（含后端既有门，不新增确认弹窗）。
+     * @returns {Promise<boolean>} true=继续启动链 / false=中止（保留语义位）
+     */
+    async _warmupHoldUntilRelease() {
+        let st = null;
+        try {
+            if (window.pywebview && pywebview.api
+                && pywebview.api.refine_warmup_status) {
+                st = await pywebview.api.refine_warmup_status();
+            }
+        } catch (e) { st = null; }
+        if (!st || !st.supported || st.state !== 'loading') return true;
+
+        // ---- 进入持有模式 ----
+        ConsoleManager.log(MSG.warmupQueued, 'info');
+        this._warmupHolding = true;
+        const locked = this._lockEngineControls(true);
+        const startBtn = document.getElementById('refineStartBtn');
+        const prevText = startBtn ? startBtn.textContent : '';
+        if (startBtn) startBtn.disabled = true;
+        const firstTimeout = Number(st.timeout) > 0 ? Number(st.timeout) : 300;
+        // elapsed 与后端同源（首拍回带起流经秒数），倒计时基准对齐 G10
+        const startedAtMs = Number(st.elapsed) > 0
+            ? Date.now() - Number(st.elapsed) * 1000 : Date.now();
+        let released = null;   // 'loaded'|'hot'|'failed'|'timeout'|'unknown'|'unsupported'
+        let failStreak = 0;
+        try {
+            while (true) {
+                await new Promise(r => setTimeout(r, 1000));
+                const elapsedS = (Date.now() - startedAtMs) / 1000;
+                let cur = null;
+                try {
+                    cur = await pywebview.api.refine_warmup_status();
+                    failStreak = 0;
+                } catch (e) {
+                    failStreak += 1;
+                    if (failStreak >= 3) { released = 'unknown'; break; }
+                }
+                if (cur) {
+                    if (!cur.supported) { released = 'unsupported'; break; }
+                    if (cur.state === 'loaded' || cur.state === 'hot'
+                        || cur.state === 'failed') {
+                        released = cur.state;
+                        break;
+                    }
+                    if (cur.state !== 'loading') { released = 'failed'; break; }
+                }
+                const timeoutS = cur && Number(cur.timeout) > 0
+                    ? Number(cur.timeout) : firstTimeout;
+                if (elapsedS >= timeoutS) { released = 'timeout'; break; }
+                // 倒计时文案（每秒刷新，剩余=timeout-elapsed）
+                if (startBtn) {
+                    startBtn.disabled = true;   // 持有期间即便他处重排也保持锁定
+                    startBtn.textContent =
+                        MSG.warmupHoldBtn(Math.max(0, Math.ceil(timeoutS - elapsedS)));
+                }
+            }
+        } finally {
+            this._warmupHolding = false;
+            this._lockEngineControls(false, locked);
+            if (startBtn) {
+                startBtn.textContent = prevText;
+                startBtn.disabled = false;   // updateButtons 会按运行态再纠正
+            }
+            if (released === 'timeout' || released === 'unknown') {
+                // G7 第三态/超时放行：杀客户端+清状态（后端互锁随之放行）
+                try {
+                    Promise.resolve(pywebview.api.refine_cancel_warmup())
+                        .catch(() => {});
+                } catch (e) { /* 桥不可达：后端兜底不阻塞放行 */ }
+            }
+            if (released === 'timeout') {
+                ConsoleManager.log(MSG.warmupTimeout, 'warning');
+            } else if (released === 'unknown') {
+                ConsoleManager.log(MSG.warmupUnknown, 'warning');
+            } else if (released === 'failed' || released === 'unsupported') {
+                ConsoleManager.log(MSG.warmupFailed, 'warning');
+            } else if (released === 'loaded' || released === 'hot') {
+                ConsoleManager.log(MSG.warmupDone, 'success');
+            }
+        }
+        return true;
+    },
+
     // ---- Status polling ----
 
     startStatusPolling() {
@@ -4060,6 +4223,14 @@ const TranslatorManager = {
                     }
                     if (typeof this.guideAutoDetect === 'function') this.guideAutoDetect();
                     this._finish(MSG.completed);
+                    // P1 预热触发点①（D2026-1008-02 批3，G2 会话级完成=
+                    // 整队列回 idle）：Console 一行 + 调预热（后端会话钩子
+                    // 并发触发，后端桥内单飞+指纹去重）
+                    ConsoleManager.log(MSG.warmupAfterQueue, 'info');
+                    if (typeof window.__warmupMaybeStart === 'function') {
+                        try { window.__warmupMaybeStart(); }
+                        catch (e) { console.warn('warmup trigger failed:', e); }
+                    }
                 } else if (status.status === 'error') {
                     ConsoleManager.log(MSG.translationErrorLog(status.error), 'error');
                     ErrorHandler.show(MSG.translationFailedTitle,
@@ -4321,6 +4492,11 @@ function switchTab(tabId) {
     // 快照立即渲染（快照由首启空闲探测回填；强制刷新走「重新探测」按钮）
     if (tabId === 'tab-asrdict' && typeof window.__asrTabHook === 'function') {
         try { window.__asrTabHook(); } catch (e) { /* 初始化失败不阻断切页 */ }
+    }
+    // P1 分析模型预热触发点②（D2026-1008-02 批3）：切入质量与建议页且
+    // 页面有报告时预热（守卫/去重在 warmupMaybeStart 内，失败不阻断切页）
+    if (tabId === 'tab-guide' && typeof window.__warmupTabHook === 'function') {
+        try { window.__warmupTabHook(); } catch (e) { /* 触发失败不阻断切页 */ }
     }
 }
 
@@ -6428,6 +6604,46 @@ function switchTab(tabId) {
     if (indep !== 'follow') notes.push(MSG.aiIndepHalfIgnored);
     return { provider: null, model: s1m, effProvider: s1p, notes: notes };
   }
+
+  // ============================================================
+  // P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）
+  // ============================================================
+  // 触发守卫（顺序固定，静态钉）：桥就绪 → 非翻译运行中 → 页面有报告
+  // （导读或报告全文）→ 模型解析非空 → 生效 provider 为本地 → 高频抑制。
+  // 后端桥内另有单飞+C4 在载探活+G3 指纹三层去重（前端 5s 抑制仅兜高频）。
+  // C21：预热结果只进 Console/状态文案与 warmup 桥状态——不碰分析按钮
+  //（refineAiAnalyzeBtn）可用性、不跳过分析时真实 ensure。
+  let __warmupInflight = false;
+
+  function warmupMaybeStart() {
+    try {
+      if (!window.pywebview || !window.pywebview.api) return;
+      if (AppState.isRunning) return;                     // 翻译运行中跳过
+      // 页面无报告不预热（触发点②前置条件；触发点①完成时报告已可加载）
+      if (!lastLoadedGuidePath && !lastLoadedReportTxtPath) return;
+      const res = analyzeResolution();
+      if (!res || !res.model || !String(res.model).trim()) return;
+      const eff = String(res.effProvider || '').toLowerCase();
+      if (AI_CLOUD_PROVIDERS.includes(eff)) return;       // 云 provider 不预热
+      if (__warmupInflight) return;                       // 5s 高频抑制
+      __warmupInflight = true;
+      setTimeout(() => { __warmupInflight = false; }, 5000);
+      ConsoleManager.log(MSG.warmupStarted, 'info');
+      Promise.resolve(window.pywebview.api.refine_warmup_analysis_model(
+        res.model, res.provider))
+        .then(r => {
+          if (r && r.already_hot) {
+            ConsoleManager.log(MSG.warmupHot, 'info');
+          }
+        })
+        .catch(() => { /* 预热失败静默：C21 不推导分析可用性 */ });
+    } catch (e) { console.warn('warmupMaybeStart failed:', e); }
+  }
+  // 触发点①（TranslatorManager completed 分支）经全局别名调用
+  window.__warmupMaybeStart = warmupMaybeStart;
+  // 触发点②（switchTab tab-guide）：姿势钩子（照 __asrTabHook；每次切入
+  // 都触发，去重靠上方守卫+5s 抑制+后端桥三层）
+  window.__warmupTabHook = () => { warmupMaybeStart(); };
 
   // 2.5.0 批5（D2026-1001-07）：AI 分析生效配置常驻显示（C1/C5：复用 refineAiPrivacy）
   // 批3（D2026-1008-01）：中文字面量收编 MSG 键（aiEffectiveLine 等）

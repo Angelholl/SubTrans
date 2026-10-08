@@ -212,6 +212,12 @@ def build_parser():
                                  "导读 json/术语冲突观察 CSV 同目录自动发现）")
     grp_action.add_argument("--ai-model", default="",
                             help="AI 分析模型名（缺省用阶段A/槽 A 模型）")
+    # P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）：GUI 后台
+    # 预热通道（C1 同源：cfg 构造与分析完全同参，ctx/并发走分层链）
+    grp_action.add_argument("--warmup-analysis", action="store_true",
+                            help="预热分析模型后立即退出（构造槽A 客户端触发"
+                                 " LM Studio 按需加载，ctx/并发/端点与 AI "
+                                 "分析同源；不跑 run_v2、不落任何产物）")
     # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照的 ASR 指定（镜像
     # --ai-model 直连先例；不入 manifest 指纹——负向钉随批）
     grp_action.add_argument("--asr-model", default="",
@@ -678,6 +684,12 @@ def main(argv=None):
     if getattr(args, "ai_analyze", ""):
         from .quality_advisor import run_ai_analyze
         return run_ai_analyze(cfg, args)
+
+    # ---- AI 分析模型预热（D2026-1008-02 批3 P1）：早退分流，同
+    #      --ai-analyze 形态——不进 run_v2；退出码 0=就绪 / 1=预热失败 ----
+    if getattr(args, "warmup_analysis", False):
+        from .quality_advisor import run_warmup
+        return run_warmup(cfg, args)
 
     # ------------------------------------------------------------------
     # 运行日志：全量落盘（Logs/M-D.txt，同日追加时间）+ 7 天自动清理

@@ -3162,3 +3162,121 @@ def test_p3_tm_edit_save_updates_memory_and_dom():
     # 旁路存储形态：模块级内存 Map（let 声明），零序列化
     assert "let tmOriginalTargets = new Map()" in src, \
         "C19：旁路存储须为模块级内存 Map"
+
+
+# ---------------------------------------------------------------------------
+# P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）：前端静态钉
+# 全部 JS 态（零 index.html 改动，FROZEN 223/187 既有钉随全量回归保障）
+# ---------------------------------------------------------------------------
+
+def test_warmup_maybe_start_guards_order_and_bridge_call():
+    """warmupMaybeStart 守卫顺序固定 + 桥调用参数同源（静态钉）。
+
+    守卫链：桥就绪 → 非翻译运行中 → 页面有报告 → 模型解析非空 →
+    生效 provider 本地 → 高频抑制；任一不满足直接 return（不触发）。
+    """
+    src = _app_js_source()
+    body = _extract_function(src, "warmupMaybeStart")
+    marks = ["window.pywebview", "AppState.isRunning", "lastLoadedGuidePath",
+             "lastLoadedReportTxtPath", "analyzeResolution()", "res.model",
+             "AI_CLOUD_PROVIDERS.includes", "__warmupInflight"]
+    pos = [body.index(m) for m in marks]
+    assert pos == sorted(pos), f"warmupMaybeStart 守卫顺序漂移: {pos}"
+    # 桥调用与分析同参源（C6 镜像：model + provider，provider 可为 null）
+    assert "refine_warmup_analysis_model(" in body
+    assert "res.model, res.provider" in body
+    # G4 文案：触发即透明提示 + 已在载跳过提示
+    assert "MSG.warmupStarted" in body and "MSG.warmupHot" in body
+
+
+def test_warmup_trigger_points_wired():
+    """触发点①②接线：completed 分支 _finish 后触发；switchTab tab-guide
+    姿势钩子（照 __asrTabHook 先例）触发。"""
+    src = _app_js_source()
+    switch_body = _extract_function(src, "switchTab")
+    assert "'tab-guide'" in switch_body, "switchTab 须挂 tab-guide 触发"
+    assert "__warmupTabHook" in switch_body, "switchTab 须经 __warmupTabHook 触发"
+    assert "window.__warmupTabHook = " in src, "IIFE 须导出 __warmupTabHook"
+    # 触发点①：completed 分支内 _finish 之后调 __warmupMaybeStart()，
+    # 且附 Console 一行 warmupAfterQueue
+    assert "window.__warmupMaybeStart()" in src
+    assert src.index("this._finish(MSG.completed);") \
+        < src.index("window.__warmupMaybeStart()"), "触发须在 _finish 之后"
+    assert "MSG.warmupAfterQueue" in src
+    # 全局别名已导出（跨 IIFE 调用通道）
+    assert "window.__warmupMaybeStart = warmupMaybeStart" in src
+
+
+def test_warmup_hold_lock_restore_symmetry_and_g7_third_state():
+    """G9 持有模式：锁/恢复对称（锁了必恢复）+ G7 第三态（连续 3 次桥
+    异常按预热已死放行）+ 超时放行调取消桥。"""
+    src = _app_js_source()
+    lock_body = _extract_function(src, "_lockEngineControls")
+    # 锁定时记录原 disabled 值；恢复时逐一还原（对称性）
+    assert "list.push({ el, disabled: el.disabled })" in lock_body
+    assert "el.disabled = disabled" in lock_body
+    assert "engine-locked" in lock_body, "容器须挂锁定样式类"
+    # 开始/停止钮不受容器锁管理（开始钮由持有逻辑单独管）
+    assert "refineStartBtn" in lock_body and "refineCancelBtn" in lock_body
+
+    hold_body = _extract_function(src, "_warmupHoldUntilRelease")
+    assert "_lockEngineControls(true)" in hold_body
+    assert "_lockEngineControls(false, locked)" in hold_body
+    # 恢复必须在 finally 内（异常路径也保证解锁）
+    assert hold_body.index("finally {") \
+        < hold_body.index("_lockEngineControls(false, locked)")
+    assert "startBtn.textContent = prevText" in hold_body, \
+        "开始按钮文案必须恢复"
+    # G7 第三态：连续 N=3 次桥异常 → 按预热已死放行 + 专属文案
+    assert "failStreak >= 3" in hold_body
+    assert "MSG.warmupUnknown" in hold_body
+    # 超时/不可确认释放 → 杀客户端+清状态（取消桥），防互锁死循环
+    assert "refine_cancel_warmup" in hold_body
+    assert "MSG.warmupTimeout" in hold_body
+    # 倒计时：剩余=timeout-elapsed，每秒刷新
+    assert "MSG.warmupHoldBtn" in hold_body
+    assert "timeoutS - elapsedS" in hold_body
+    # 后端首拍 elapsed 同源（倒计时基准对齐 G10）
+    assert "st.elapsed" in hold_body
+
+
+def test_warmup_decoupled_from_analyze_button():
+    """C21：预热路径不碰 refineAiAnalyzeBtn、不走分析桥（不跳过真实
+    ensure、不改分析按钮可用性）。"""
+    for fn in ("warmupMaybeStart", "_warmupHoldUntilRelease",
+               "_lockEngineControls"):
+        body = _extract_function(_app_js_source(), fn)
+        assert "refineAiAnalyzeBtn" not in body, \
+            f"{fn} 不得触碰分析按钮（C21 解耦）"
+        assert "refine_ai_analyze" not in body, \
+            f"{fn} 不得经分析桥（C21：预热不替代真实 ensure）"
+
+
+def test_warmup_backend_interlock_hold_retry_wired():
+    """后端互锁兜底接线：startTranslation 内 warmup_loading → 持有后以
+    同一 options 快照重试；入队快照在持有等待之前（G9 方案 A）。"""
+    src = _app_js_source()
+    body = _extract_function(src, "startTranslation")
+    assert "warmup_loading" in body, "须消费后端互锁返回"
+    assert "_warmupHoldUntilRelease" in body
+    assert body.index("this.collectOptions()") \
+        < body.index("_warmupHoldUntilRelease"), \
+        "G9 方案 A：点击时快照必须先于持有等待"
+    # 持有中重复点击不重复入队
+    assert "_warmupHolding" in body
+
+
+def test_warmup_msg_keys_present():
+    """MSG 新键存在（全部 JS 态，零 data-i18n/零 id，FROZEN 双钉不变）。"""
+    keys = _js_msg_keys()
+    for k in ("warmupStarted", "warmupHot", "warmupAfterQueue",
+              "warmupQueued", "warmupTimeout", "warmupUnknown",
+              "warmupDone", "warmupFailed", "warmupHoldBtn"):
+        assert k in keys, f"MSG 缺少预热键: {k}"
+
+
+def test_warmup_engine_locked_style_present():
+    """G9 锁定样式类有 CSS 承接（style.js 态约定：容器 dim+锁定态）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert "#tab-engine.engine-locked" in css
+    assert "pointer-events: none" in css

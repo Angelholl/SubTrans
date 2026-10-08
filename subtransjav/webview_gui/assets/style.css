@@ -2797,3 +2797,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .enc-eta-row { display: flex; gap: 8px; align-items: center; background: var(--primary-soft);
     border-radius: 8px; padding: 6px 10px; font-size: 12.5px; color: var(--text-1); margin-top: 8px; }
 .enc-jobs-line { font-size: 12.5px; color: var(--text-2); margin-bottom: 10px; }
+
+/* ===== P1 预热 G9 参数区锁定（D2026-1008-02 批3；TranslatorManager
+   _lockEngineControls 挂/摘 .engine-locked，dim+锁定态）===== */
+#tab-engine.engine-locked { opacity: .55; pointer-events: none; }
