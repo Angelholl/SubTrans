@@ -494,6 +494,17 @@ const MSG = {
     aiApplyRetry: '重试',
     aiApplyFailed: m => `落库失败：${m}`,
     aiConflictWarn: '该词存在未裁决术语冲突，请确认',
+    // P3（D2026-1008-02）：TM 建议编辑后存入——行级编辑/恢复入口 +
+    // tmEdit 弹窗全 JS 态文案（零静态 data-i18n/零 id，FROZEN 双钉不变）
+    aiTmEditBtn: '编辑',
+    aiTmRestoreBtn: '恢复原建议',
+    aiTmStoredEdited: '已存入 ✓（编辑后译文）',
+    tmEditTitle: '编辑 TM 建议',
+    tmEditSessionHint: '仅本次会话有效，存入 TM 后才持久',
+    tmEditSave: '保存',
+    tmEditEmptyTarget: '译文不能为空',
+    tmEditSaveFailed: '保存失败',
+    tmEditDirtyConfirm: '有未保存的修改，确定放弃并关闭？',
     aiParseFailed: '⚠️ AI 输出解析失败，以下为原始观察文本',
     aiDone: 'AI 分析完成，建议仅供人工裁决',
     aiFailed: m => `AI 分析失败：${m}`,
@@ -912,6 +923,8 @@ const AppModal = {
     _edSaving: false,    // 批D：保存进行中（onSave Promise 未 settle，禁止关闭）
     _edConfirming: false,// 批D：放弃确认弹窗进行中（防守卫递归）
     _edOpts: null,       // 批D：editor(opts) 暂存（onSave/onStageChange/onDiscard/onClose）
+    _tmSaving: false,    // P3：tmEdit 保存进行中（禁关，editor 同款）
+    _tmOpts: null,       // P3：tmEdit(opts) 暂存（onSaved）
 
     _settle(value) {
         if (!this._busy) return;
@@ -925,6 +938,14 @@ const AppModal = {
         if (this._kind === 'editor' && this._edSaving) return;
         if (this._kind === 'editor' && this._edDirty && !this._edConfirming) {
             this._editorDiscardGuard();
+            return;
+        }
+        // P3（D2026-1008-02）：tmEdit 同 editor 先例——保存中禁关；
+        // 脏态先经放弃确认（_edDirty/_edConfirming 共用布尔，kind 互斥
+        // 安全），确认后经 _settle 正式结算
+        if (this._kind === 'tmEdit' && this._tmSaving) return;
+        if (this._kind === 'tmEdit' && this._edDirty && !this._edConfirming) {
+            this._tmEditDiscardGuard();
             return;
         }
         this._busy = false;
@@ -976,7 +997,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -1034,7 +1055,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -1259,7 +1280,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -1518,7 +1539,8 @@ const AppModal = {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
                 } else if (e.key === 'Enter' && AppModal._kind !== 'alert'
-                           && AppModal._kind !== 'editor') {
+                           && AppModal._kind !== 'editor'
+                           && AppModal._kind !== 'tmEdit') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
                 }
@@ -2314,7 +2336,7 @@ const AppModal = {
                 if (e.key === 'Escape') {
                     e.preventDefault();
                     AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor') {
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
                     e.preventDefault();
                     AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
                 }
@@ -2419,6 +2441,224 @@ const AppModal = {
                 resolve(value);
             };
         });
+    },
+
+    // ============================================================
+    // TM 建议编辑模态（P3，D2026-1008-02）：kind='tmEdit'，另立方法
+    // 不塞 encode/editOnly（C15，后者为压制参数专用）。body 全
+    // createElement 注入（全 class+data-testid，零新增 id/data-i18n，
+    // FROZEN 双钉不变）。原文只读、仅拟型译文可编辑（C17，textarea 借
+    // editor 先例 .editor-ta-wrap）；理由只读小字；「仅本次会话有效」
+    // 提示行（G6）。脏态守卫同 editor：textarea input 置 _edDirty（共用
+    // 布尔，kind 互斥安全），Esc/遮罩/取消键经 _settle tmEdit 分支先弹
+    // 放弃确认；Enter 不提交（全局 keydown 六处条件同 editor 排除
+    // 'tmEdit'——dataset.bound 首绑归属任意模态，须全部排除）。
+    // 保存校验：译文 trim 非空（原文只读不需要），不合法在弹窗状态行
+    // 显错（G6）。opts = {entry:<tm[i]>, onSaved(next)->void}
+    // ============================================================
+    tmEdit(opts) {
+        if (this._busy) return Promise.resolve(false);      // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve(false);           // 骨架缺席兜底
+        const o = opts || {};
+        const entry = o.entry || {};
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = MSG.tmEditTitle;
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';
+        input.style.display = 'none';
+        okBtn.style.display = 'none';       // 保存语义由 tm-edit-save 键承载
+        okBtn.textContent = '';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                if (e.target === root) AppModal._settle(AppModal._cancelValue());
+            });
+            cancelBtn.addEventListener('click', () =>
+                AppModal._settle(AppModal._cancelValue()));
+            document.addEventListener('keydown', (e) => {
+                if (!AppModal._busy) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                } else if (e.key === 'Enter' && AppModal._kind !== 'alert'
+                           && AppModal._kind !== 'editor'
+                           && AppModal._kind !== 'tmEdit') {
+                    e.preventDefault();
+                    AppModal._settle(AppModal._cancelValue());
+                }
+            });
+        }
+
+        const el = (tag, cls, text) => {
+            const n = document.createElement(tag);
+            if (cls) n.className = cls;
+            if (text != null) n.textContent = text;
+            return n;
+        };
+
+        // —— 原文（只读，C17：锁原文保 TM 键稳定）——
+        const srcField = el('div', 'tm-edit-field');
+        srcField.appendChild(el('div', 'tm-edit-label', MSG.th_source));
+        srcField.appendChild(el('div', 'tm-edit-ro', entry.source || ''));
+        body.appendChild(srcField);
+
+        // —— 拟型译文（textarea 可编辑，借 editor 的 .editor-ta-wrap）——
+        const tgtField = el('div', 'tm-edit-field tm-edit-grow');
+        tgtField.appendChild(el('div', 'tm-edit-label', MSG.th_target));
+        const taWrap = el('div', 'editor-ta-wrap tm-edit-ta-wrap');
+        const ta = el('textarea', 'tm-edit-ta');
+        ta.dataset.tmEditTa = '1';      // 弹窗内唯一锚（零 id，测试钉用）
+        ta.value = entry.target || '';
+        ta.addEventListener('input', () => { AppModal._edDirty = true; });
+        taWrap.appendChild(ta);
+        tgtField.appendChild(taWrap);
+        body.appendChild(tgtField);
+
+        // —— 理由（只读小字，可空省略）——
+        if (entry.reason) {
+            const rsnField = el('div', 'tm-edit-field');
+            rsnField.appendChild(el('div', 'tm-edit-label', MSG.aiThReason));
+            rsnField.appendChild(el('div', 'tm-edit-reason', entry.reason));
+            body.appendChild(rsnField);
+        }
+
+        // —— 提示行（G6：会话内有效性如实交代）——
+        body.appendChild(el('div', 'tm-edit-hint hint-warn',
+                            MSG.tmEditSessionHint));
+
+        // —— 状态行（校验错/保存失败显错位，editorRunSave 同款配色）——
+        const st = el('div', 'tm-edit-status');
+        st.style.display = 'none';
+        body.appendChild(st);
+
+        // —— 操作行：保存（取消=骨架取消键）——
+        const actions = el('div', 'tm-edit-actions');
+        const saveBtn = el('button', 'btn btn-primary btn-compact tm-edit-save',
+                           MSG.tmEditSave);
+        saveBtn.type = 'button';
+        saveBtn.addEventListener('click', () => AppModal.tmEditRunSave());
+        actions.appendChild(saveBtn);
+        body.appendChild(actions);
+
+        this._tmOpts = o;
+        this._busy = true;
+        this._kind = 'tmEdit';
+        this._edDirty = false;
+        this._tmSaving = false;
+        this._edConfirming = false;
+        root.style.display = 'flex';
+        ta.focus();
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                this._tmEditTeardown();
+                resolve(value);
+            };
+        });
+    },
+
+    // 保存主键（tm-edit-save）弹窗感知路径：校验→onSaved 回调（调用方
+    // 同步改内存+DOM）→清脏自动关闭；不合法/失败在状态行显错、弹窗保持
+    //（G6：真实原因透出，不让用户盲猜）
+    async tmEditRunSave() {
+        if (this._tmSaving || this._edConfirming) return;
+        const o = this._tmOpts || {};
+        if (typeof o.onSaved !== 'function') return;
+        const ta = document.querySelector(
+          '#appModal textarea[data-tm-edit-ta]');
+        const st = document.querySelector('#appModal .tm-edit-status');
+        const showErr = (m) => {
+            if (!st) return;
+            st.style.display = '';
+            st.style.color = 'var(--status-err)';
+            st.textContent = m;
+        };
+        // 校验：译文 trim 非空（原文只读不需要，C17）
+        const next = ((ta && ta.value) || '').trim();
+        if (!next) {
+            showErr(MSG.tmEditEmptyTarget);
+            return;
+        }
+        this._tmSaving = true;
+        const cancelBtn = document.querySelector('#appModal .modal-cancel');
+        if (cancelBtn) cancelBtn.disabled = true;
+        try {
+            await Promise.resolve(o.onSaved(next));
+        } catch (e) {
+            this._tmSaving = false;
+            if (cancelBtn) cancelBtn.disabled = false;
+            showErr(MSG.tmEditSaveFailed + '：'
+              + (e && e.message ? e.message : String(e)));
+            return;
+        }
+        this._tmSaving = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        this._edDirty = false;
+        this._settle(false);            // 保存成功自动关闭
+    },
+
+    // tmEdit 开态确认弹窗（与 confirm 共用单例骨架；editor 同款收放，
+    // 但 body 为动态节点无 vault——确认期间收起暂存保状态，取消原样
+    // 放回）：取消=原样恢复（_busy/_kind/_resolve/display 还原）；
+    // 确认=保持收起态由调用方收尾（_settle 正式结算）
+    _tmEditConfirmWhileOpen(msg) {
+        const tmResolve = this._resolve;    // confirm 会覆写 _resolve，先持有
+        const root = document.getElementById('appModal');
+        const okBtn = root && root.querySelector('.modal-ok');
+        const body = root && root.querySelector('.modal-body');
+        const stash = body ? Array.prototype.slice.call(body.childNodes) : [];
+        this._edConfirming = true;
+        if (body) while (body.firstChild) body.removeChild(body.firstChild);
+        if (root) root.style.display = 'none';
+        this._busy = false;
+        if (okBtn) okBtn.style.display = '';    // confirm 需要 OK 键（tmEdit 开态隐藏）
+        return AppModal.confirm(msg).then((ok) => {
+            this._busy = true;
+            this._kind = 'tmEdit';
+            this._resolve = tmResolve;
+            this._edConfirming = false;
+            if (okBtn) okBtn.style.display = 'none';
+            if (ok) return true;
+            if (body) {
+                while (body.firstChild) body.removeChild(body.firstChild);
+                stash.forEach((n) => body.appendChild(n));
+            }
+            if (root) root.style.display = 'flex';
+            return false;
+        });
+    },
+
+    // dirty 关闭守卫（editor 同款）：未保存修改先确认——取消=弹窗与
+    // 编辑状态原样保留；确认=真放弃（脏复位+正式结算）
+    _tmEditDiscardGuard() {
+        this._tmEditConfirmWhileOpen(MSG.tmEditDirtyConfirm).then((ok) => {
+            if (!ok) return;
+            this._edDirty = false;
+            this._settle(false);            // 正式结算（_resolve 收尾 teardown）
+        });
+    },
+
+    // 关闭收尾（_resolve 包装内调用）：动态节点随 body 清空丢弃（无
+    // vault 搬迁语义）+ 骨架默认态恢复（download/editor 同款自清理，
+    // 防污染后续 alert/confirm/prompt）
+    _tmEditTeardown() {
+        const root = document.getElementById('appModal');
+        if (root) {
+            const body = root.querySelector('.modal-body');
+            if (body) {
+                while (body.firstChild) body.removeChild(body.firstChild);
+                body.style.whiteSpace = '';
+            }
+            const okBtn = root.querySelector('.modal-ok');
+            if (okBtn) okBtn.style.display = '';
+        }
+        this._tmSaving = false;
+        this._edConfirming = false;
     }
 };
 
@@ -5301,6 +5541,11 @@ function switchTab(tabId) {
   let lastLoadedIsTxt = false;
   // 最近一次 AI 分析的建议载荷（逐条落库时按下标取条目）
   let lastAiSuggestions = null;
+  // P3（D2026-1008-02，C19）：TM 原始建议旁路存储（内存 Map idx→原始
+  // target，不序列化、不写伴生 JSON）——「恢复原建议」数据源；随
+  // lastAiSuggestions 重置/换渲染源而重置（修复复验重建属预期）
+  let tmOriginalTargets = new Map();
+  let tmOriginalSeed = null;   // 渲染源身份标记（同对象重渲染不覆盖已编辑值）
   // 最近一次成功加载的导读数据（媒体来源条渲染依据）
   let lastGuideData = null;
   // 会话内媒体路径覆盖（等价 --media-path；仅显式输入，非空即优先生效）
@@ -5554,6 +5799,7 @@ function switchTab(tabId) {
         // 防 aiApplyGlossary/aiApplyTm 把旧建议落进新报告对应的词库/TM
         // （错配消费），结果区 DOM 同步清零给用户可见反馈
         lastAiSuggestions = null;
+        tmOriginalTargets = new Map();   // C19：原始建议随内存同批重置
         const air = $('refineAiResult');
         if (air) air.innerHTML = '';
         const dv = $('refineGuideViewer');
@@ -6070,6 +6316,21 @@ function switchTab(tabId) {
       + '" style="cursor:help;">⚠️</span>';
   }
 
+  // P3（D2026-1008-02）：TM 行编辑/恢复小按钮（C12：独立 data-ai-act
+  // 标记，与 data-ai-kind 选择器不相交——点编辑绝不可误触 aiApplyTm
+  // 存入链；恢复钮渲染时当前值恒等于原始值，初始禁用，编辑保存后启用）
+  function aiEditBtn(idx, label) {
+    return '<button type="button" class="btn btn-secondary btn-compact btn-sm"'
+      + ' data-ai-act="edit" data-ai-idx="' + idx + '">'
+      + esc(label) + '</button>';
+  }
+
+  function aiRestoreBtn(idx, label) {
+    return '<button type="button" class="btn btn-secondary btn-compact btn-sm"'
+      + ' data-ai-act="restore" data-ai-idx="' + idx + '" disabled'
+      + ' title="' + esc(label) + '">↺</button>';
+  }
+
   function aiRenderResult(r) {
     const box = $('refineAiResult');
     if (!box) return;
@@ -6096,6 +6357,13 @@ function switchTab(tabId) {
     });
     parts.push('</tbody></table>');
     // 二段：TM 建议（conflict_warn 行加黄色 ⚠️ 徽标）
+    // P3（D2026-1008-02，C19）：渲染源更换（新对象）时重置原始建议
+    // Map——修复复验重建随内存重置属预期；同对象重渲染不覆盖已编辑值
+    if (tmOriginalSeed !== r) {
+      tmOriginalSeed = r;
+      tmOriginalTargets = new Map();
+      (sug.tm || []).forEach((t, i) => tmOriginalTargets.set(i, t.target));
+    }
     parts.push('<h4>' + esc(MSG.aiSectionTm) + '</h4>');
     parts.push('<table class="gl-table">'
       + '<thead><tr><th>' + esc(MSG.th_source)
@@ -6103,10 +6371,16 @@ function switchTab(tabId) {
       + '</th><th>' + esc(MSG.aiThReason)
       + '</th><th></th></tr></thead><tbody>');
     (sug.tm || []).forEach((t, i) => {
+      // 拟型译文包专用 span（C13）：定向更新只动该 span，原文格 ⚠️
+      // 徽标与其他行按钮态不受牵连（保存后禁止整表重渲染）
       parts.push('<tr><td>' + esc(t.source) + (t.conflict_warn
-        ? aiConflictBadge() : '') + '</td><td>' + esc(t.target)
+        ? aiConflictBadge() : '') + '</td><td>'
+        + '<span data-ai-tgt="' + i + '" data-testid="tm-sug-target">'
+        + esc(t.target) + '</span>'
         + '</td><td>' + esc(t.reason || '') + '</td><td>'
-        + aiActionBtn('tm', i, MSG.aiApplyTm) + '</td></tr>');
+        + aiActionBtn('tm', i, MSG.aiApplyTm)
+        + aiEditBtn(i, MSG.aiTmEditBtn)
+        + aiRestoreBtn(i, MSG.aiTmRestoreBtn) + '</td></tr>');
     });
     parts.push('</tbody></table>');
     // 三段：一般观察（纯文本，不可执行）
@@ -6119,6 +6393,15 @@ function switchTab(tabId) {
         const i = Number(btn.dataset.aiIdx) || 0;
         if (btn.dataset.aiKind === 'glossary') aiApplyGlossary(i, btn);
         else aiApplyTm(i, btn);
+      });
+    });
+    // P3（C12）：编辑/恢复分派循环独立成环（data-ai-act 与 data-ai-kind
+    // 选择器不相交；该处为 per-render addEventListener 非文档级委托）
+    box.querySelectorAll('button[data-ai-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.aiIdx) || 0;
+        if (btn.dataset.aiAct === 'edit') aiEditTm(i);
+        else aiRestoreTm(i, btn);
       });
     });
   }
@@ -6621,6 +6904,7 @@ function switchTab(tabId) {
     if (statusText) {
       btn.textContent = statusText;
       btn.disabled = true;
+      btn.title = '';   // P3/G6：清掉失败重试残留的错误透因 title（终态不背旧错）
     } else {
       btn.disabled = false;
     }
@@ -6628,9 +6912,12 @@ function switchTab(tabId) {
 
   // 落库失败反馈：按钮转「重试」态 + 行内（aiStatus）显示错误摘要，
   // 不再静默恢复；成功路径不受影响。
+  // P3（D2026-1008-02，G6）：桥返回的真实原因同步拼进按钮 title
+  //（悬停可读），杜绝只有笼统「重试」；重试能力保留（按钮未禁用）。
   function aiApplyFail(btn, err) {
     const m = (err && err.message) ? err.message : String(err || MSG.unknown);
     btn.textContent = MSG.aiApplyRetry;
+    btn.title = m;
     btn.disabled = false;
     aiStatus(MSG.aiApplyFailed(m));
   }
@@ -6673,12 +6960,71 @@ function switchTab(tabId) {
         return;
       }
       const st = ((r && r.results && r.results[0]) || {}).status || '';
+      // P3（D2026-1008-02，C20）：经编辑的条目存入成功反馈「编辑后译文」
+      //（对原始值判定），杜绝「以为存的是 AI 原文」；exists 分支文案不变
       aiBtnState(btn,
-        st === 'added' ? MSG.aiTmStored
+        st === 'added'
+          ? (tmOriginalTargets.has(idx)
+             && entry.target !== tmOriginalTargets.get(idx)
+            ? MSG.aiTmStoredEdited : MSG.aiTmStored)
           : st === 'exists' ? MSG.aiExists : '');
+      // C14：已存入/已存在行行级同步禁用编辑与恢复（aiBtnState 只作用
+      // 于传入单按钮，须 closest('tr') 定位）
+      const row = btn.closest('tr');
+      if (row) {
+        row.querySelectorAll('button[data-ai-act]')
+          .forEach(b => { b.disabled = true; });
+      }
     } catch (e) {
       aiApplyFail(btn, e);
     }
+  }
+
+  // ---- P3（D2026-1008-02）：TM 建议编辑后存入 ----
+
+  // 定向 DOM 更新（C13）：只替换该行拟型译文 span 的文本，禁止整表
+  // 重渲染——其他行「已存入✓/已存在/重试」按钮态与原文格 ⚠️ 徽标原样
+  // 保留（原文只读，徽标无被抹风险）
+  function aiUpdateTmTarget(idx, text) {
+    const box = $('refineAiResult');
+    if (!box) return;
+    const span = box.querySelector('span[data-ai-tgt="' + idx + '"]');
+    if (span) span.textContent = text;
+  }
+
+  // 行内「编辑」入口：弹 AppModal.tmEdit（C15 另立方法）；保存回调
+  // 同时改内存与 DOM（C16：仅改 DOM 会在修复复验重建重渲染时回退旧值）
+  function aiEditTm(idx) {
+    const entry = (((lastAiSuggestions || {}).suggestions || {}).tm
+      || [])[idx];
+    if (!entry) return;
+    AppModal.tmEdit({
+      entry: entry,
+      onSaved: (next) => {
+        entry.target = next;               // C16：内存先行
+        aiUpdateTmTarget(idx, next);       // C13：定向更新该行 span
+        const resBtn = document.querySelector(
+          '#refineAiResult button[data-ai-act="restore"][data-ai-idx="'
+          + idx + '"]');
+        // 恢复入口只在当前≠原始时可用（改回原值即再禁用）
+        if (resBtn) {
+          resBtn.disabled = tmOriginalTargets.has(idx)
+            && next === tmOriginalTargets.get(idx);
+        }
+      },
+    });
+  }
+
+  // 行内「恢复原建议」（C19）：内存回原始值+定向 DOM 恢复+禁用自身；
+  // 原始值随 lastAiSuggestions 重置/换渲染源而重置（旁路内存 Map，
+  // 不写伴生 JSON、不序列化）
+  function aiRestoreTm(idx, btn) {
+    const entry = (((lastAiSuggestions || {}).suggestions || {}).tm
+      || [])[idx];
+    if (!entry || !tmOriginalTargets.has(idx)) return;
+    entry.target = tmOriginalTargets.get(idx);
+    aiUpdateTmTarget(idx, entry.target);
+    btn.disabled = true;
   }
 
   // ---- 性暗示词替换（legacy 功能，已随 legacy 管线删除）----

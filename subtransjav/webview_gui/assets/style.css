@@ -2520,6 +2520,49 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 
 /* ============================================================
+   P3（D2026-1008-02）：TM 建议编辑弹窗（AppModal.tmEdit）
+   body createElement 注入零 id/data-i18n；字段纵排（原文只读/
+   译文 textarea 借 .editor-ta-wrap/理由小字/提示行/状态行/操作行），
+   全部取色走既有 design token（var()），暗色主题经变量自动生效，
+   零硬编码色值。
+   ============================================================ */
+.tm-edit-field { display: flex; flex-direction: column; }
+.tm-edit-label {
+    font-size: var(--font-xs);
+    color: var(--text-2);
+    margin-bottom: var(--space-1);
+}
+.tm-edit-ro {
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+/* 译文编辑区借 editor 弹性层，尺寸收窄适配 500px 小卡（优先级压过
+   .editor-ta-wrap 的 flex:1/min-height:240px 编辑器大卡规格） */
+.editor-ta-wrap.tm-edit-ta-wrap {
+    flex: none;
+    min-height: 140px;
+    height: 160px;
+}
+.tm-edit-reason {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.tm-edit-hint { font-size: var(--font-xs); }
+.tm-edit-status { font-size: var(--font-sm); }
+.tm-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+}
+
+/* ============================================================
    2.7.4 件3（D2026-1007-01）：批量修复确认框（AppModal.batchFixPreview）
    复用 .modal-card.modal-lg 弹性列配方：元信息/分类行 flex-shrink:0 固定，
    仅 .bfp-list 滚动（flex:1;min-height:0），底部按钮区（.modal-actions，

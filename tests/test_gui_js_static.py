@@ -1907,11 +1907,14 @@ def test_batch_d_modal_enter_branch_excludes_editor_pinned():
     四处同款绑定运行时只注册最先打开的一份，故逐一断言防单点回改；
     alert/download 既有行为零变化。2.7.1：models 面板同款绑定（Enter=关闭，
     面板无文本输入语义）。2.7.4 件3（D2026-1007-01）：batchFixPreview
-    同款绑定（Enter=确认，列表容器零键盘监听，语义保持全局），四处→五处。"""
+    同款绑定（Enter=确认，列表容器零键盘监听，语义保持全局），四处→五处。
+    P3（D2026-1008-02）：tmEdit 同款绑定（textarea 回车=换行不提交），
+    五处→六处；tmEdit 排除的逐条断言在
+    test_p3_tm_edit_modal_pinned（本钉只守 editor 排除不回归）。"""
     src = _app_js_source()
     conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
-    assert len(conds) == 5, \
-        f"keydown Enter 分支应恰五处（_open/download/editor/models/batchFixPreview），实得 {len(conds)}"
+    assert len(conds) == 6, \
+        f"keydown Enter 分支应恰六处（_open/download/editor/models/batchFixPreview/tmEdit），实得 {len(conds)}"
     for cond in conds:
         assert "AppModal._kind !== 'alert'" in cond, \
             f"Enter 分支缺 alert 排除: {cond}"
@@ -2304,8 +2307,9 @@ def test_batch_fix_run_uses_structured_preview():
         "分类明细必须按数量降序（设计取舍，非字母序）"
     assert "Number.isFinite(k)" in caller, "textMap 键须 Number 强转守卫"
     # confirm 其余调用点零变化（原 7 处，2.7.4 件C 迁走批量修复一处→余 6；
-    # 2.8.0 批1 EncodeDock 新增 4 处→10；批2 预设删除确认 +1→11）
-    assert src.count("AppModal.confirm(") == 11, \
+    # 2.8.0 批1 EncodeDock 新增 4 处→10；批2 预设删除确认 +1→11；
+    # P3（D2026-1008-02）tmEdit 脏态守卫 +1→12，editor 守卫先例同款）
+    assert src.count("AppModal.confirm(") == 12, \
         "AppModal.confirm 调用点数量漂移（增删须显式改钉并回评议）"
 
 
@@ -3029,3 +3033,132 @@ def test_batch4_cancel_and_jit_msg_keys_pinned():
     assert "首次调用 LM Studio 需按需加载大模型" in src, \
         "JIT 说明未并入分析中提示"
     assert "期间高负载来自 LM Studio 进程属正常" in src
+
+
+# ---------------------------------------------------------------------------
+# 批2（D2026-1008-02）：TM 建议编辑后存入（P3 纯前端批）
+# （行级编辑/恢复入口 data-ai-act 独立标记零 data-ai-kind 串扰；tmEdit
+#   弹窗 createElement 注入零 id/零 data-i18n；定向 DOM 更新禁整表重渲；
+#   原始建议旁路内存 Map 不写伴生 JSON；FROZEN 双钉 223/187 零触碰——
+#   本批零 index.html 改动，全集契约天然不漂移）
+# ---------------------------------------------------------------------------
+
+def test_p3_tm_edit_restore_buttons_independent_pin():
+    """C12：编辑/恢复按钮独立 data-ai-act 标记（与 button[data-ai-kind]
+    选择器不相交），渲染后分派循环独立成环——点编辑/恢复绝不可误触
+    aiApplyTm 存入链；编辑钮同款 btn-compact 样式；拟型译文单元格包
+    data-testid span（黑盒锚+定向更新依据）。"""
+    src = _app_js_source()
+    render = _extract_function(src, "aiRenderResult")
+    assert 'button[data-ai-kind]' in render and 'button[data-ai-act]' in \
+        render, "kind/act 两套选择器必须并存（各自独立循环）"
+    act_loop = render[render.index("button[data-ai-act]"):]
+    assert "aiEditTm" in act_loop and "aiRestoreTm" in act_loop, \
+        "data-ai-act 分派循环必须路由 aiEditTm/aiRestoreTm"
+    assert "aiApplyTm" not in act_loop, \
+        "C12 静态钉：编辑/恢复分派分支不得触达 aiApplyTm 存入链"
+    edit = _extract_function(src, "aiEditBtn")
+    assert 'data-ai-act="edit"' in edit, "编辑按钮必须独立 data-ai-act 标记"
+    assert "data-ai-kind" not in edit, \
+        "C12：编辑按钮严禁落入 button[data-ai-kind] 选择器"
+    assert "btn-compact" in edit, "编辑按钮须同款紧凑样式"
+    restore = _extract_function(src, "aiRestoreBtn")
+    assert 'data-ai-act="restore"' in restore and "disabled" in restore, \
+        "恢复钮渲染时当前恒等于原始值，须初始禁用（编辑保存后才启用）"
+    assert "data-ai-kind" not in restore, \
+        "C12：恢复按钮严禁落入 button[data-ai-kind] 选择器"
+    assert 'data-testid="tm-sug-target"' in render, \
+        "拟型译文必须包 data-testid span（黑盒锚+定向更新依据）"
+
+
+def test_p3_tm_edit_modal_pinned():
+    """C15/C17/G6：AppModal.tmEdit 另立方法（不塞 encode/editOnly）——
+    createElement 注入零 id/零 data-i18n；原文只读、译文 textarea 可编辑
+    （借 .editor-ta-wrap）；理由只读；「仅本次会话有效」提示行；脏态守卫
+    （_settle tmEdit 分支+_tmEditDiscardGuard 经 confirm）；保存校验
+    trim 非空在状态行显错；保存成功自动关闭；Enter 排除扩至 tmEdit
+    （六处同款绑定，textarea 回车=换行）；MSG 全键在表。"""
+    src = _app_js_source()
+    body = _extract_function(src, "tmEdit")
+    assert "createElement" in body, "弹窗必须 createElement 注入"
+    assert ' id="' not in body and "data-i18n" not in body, \
+        "tmEdit 弹窗零 id/零 data-i18n（FROZEN 双钉不变）"
+    assert "editor-ta-wrap" in body, "译文 textarea 须借 editor 弹性层先例"
+    assert "MSG.th_source" in body and "MSG.th_target" in body \
+        and "MSG.aiThReason" in body, "三字段标签须复用既有表头键"
+    assert "MSG.tmEditTitle" in body and "MSG.tmEditSessionHint" in body, \
+        "缺标题/「仅本次会话有效」提示行（G6）"
+    assert "entry.source" in body and "entry.target" in body \
+        and "entry.reason" in body, "tmEdit 字段面须=原文/译文/理由"
+    assert "editOnly" not in body and "encode" not in body, \
+        "C15：不得塞 encode/editOnly 语义（压制参数专用）"
+    assert "addEventListener('input'" in body, "textarea 缺 dirty input 监听"
+    settle = _extract_function(src, "_settle")
+    assert "this._kind === 'tmEdit' && this._tmSaving" in settle, \
+        "保存进行中 _settle 必须 no-op（editor 同款）"
+    assert "this._tmEditDiscardGuard()" in settle, \
+        "dirty 关闭必须走放弃确认守卫（G6：Esc/遮罩/关闭同源收口）"
+    guard = _extract_function(src, "_tmEditDiscardGuard")
+    assert "MSG.tmEditDirtyConfirm" in guard, "放弃守卫必须走确认弹窗"
+    confirm_open = _extract_function(src, "_tmEditConfirmWhileOpen")
+    assert "AppModal.confirm" in confirm_open, \
+        "守卫确认必须复用 AppModal.confirm 单例"
+    assert "stash" in confirm_open, \
+        "开态确认必须收起暂存动态节点（取消原样放回）"
+    save = _extract_function(src, "tmEditRunSave")
+    assert "MSG.tmEditEmptyTarget" in save and "trim" in save, \
+        "译文 trim 非空校验缺失（不合法在状态行显错，G6）"
+    assert "MSG.tmEditSaveFailed" in save, "保存失败状态行文案键缺失"
+    assert "this._settle(false)" in save, "保存成功必须自动关闭"
+    conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
+    assert len(conds) == 6, f"Enter 分支应恰六处，实得 {len(conds)}"
+    for cond in conds:
+        assert "AppModal._kind !== 'tmEdit'" in cond, \
+            f"Enter 分支缺 tmEdit 排除（Enter 不提交）: {cond}"
+    keys = _js_msg_keys()
+    for key in ("aiTmEditBtn", "aiTmRestoreBtn", "aiTmStoredEdited",
+                "tmEditTitle", "tmEditSessionHint", "tmEditSave",
+                "tmEditEmptyTarget", "tmEditSaveFailed",
+                "tmEditDirtyConfirm"):
+        assert key in keys, f"MSG 缺 P3 新键: {key}"
+    assert "仅本次会话有效，存入 TM 后才持久" in src, "G6 提示语逐字在表"
+
+
+def test_p3_tm_edit_save_updates_memory_and_dom():
+    """C16/C13/C19/C14/C20/G6：保存同时改内存+定向 DOM（禁整表重渲染）；
+    原始建议旁路内存 Map（C19）随渲染源更换/lastAiSuggestions 重置而重置；
+    恢复=内存+定向 DOM+禁自身；已存入/已存在行行级禁用（closest('tr')）；
+    存入成功按「编辑后译文」区分文案（C20）；落库失败真实原因拼进按钮
+    title+状态行（G6，重试能力保留）。"""
+    src = _app_js_source()
+    edit = _extract_function(src, "aiEditTm")
+    assert "AppModal.tmEdit(" in edit and "entry.target = next" in edit, \
+        "C16：保存必须写回内存（防复验重建重渲染回退旧值）"
+    assert "aiUpdateTmTarget" in edit, "保存必须定向更新该行 DOM"
+    upd = _extract_function(src, "aiUpdateTmTarget")
+    assert "span[data-ai-tgt=" in upd and "textContent" in upd, \
+        "C13：只许定向更新该行译文 span"
+    assert "innerHTML" not in upd, "C13：禁止整表重渲染"
+    assert "aiConflictBadge" not in upd, "原文格 ⚠️ 徽标不得被牵连"
+    rst = _extract_function(src, "aiRestoreTm")
+    assert "tmOriginalTargets" in rst and "aiUpdateTmTarget" in rst \
+        and "disabled = true" in rst, "C19：恢复=内存+定向 DOM+禁自身"
+    render = _extract_function(src, "aiRenderResult")
+    assert "tmOriginalTargets = new Map()" in render, \
+        "C19：渲染源更换（修复复验重建）时重置旁路 Map"
+    gl_body = _extract_function(src, "guideLoad")
+    assert "tmOriginalTargets = new Map()" in gl_body, \
+        "C19：lastAiSuggestions 重置处须同批重置旁路 Map"
+    ap = _extract_function(src, "aiApplyTm")
+    assert "closest('tr')" in ap, "C14：已存入行须行级禁用编辑/恢复"
+    assert "MSG.aiTmStoredEdited" in ap, "C20：编辑后存入须区分文案"
+    assert "tmOriginalTargets" in ap, "C20：编辑与否须对原始值判定"
+    assert "MSG.aiTmStored" in ap and "MSG.aiExists" in ap, \
+        "原样存入/已存在文案不回归"
+    fail = _extract_function(src, "aiApplyFail")
+    assert "btn.title" in fail, "G6：失败须把真实原因拼进按钮 title"
+    assert "MSG.aiApplyFailed" in fail, "状态行显因不回归"
+    assert "MSG.aiApplyRetry" in fail, "重试能力保留不回归"
+    # 旁路存储形态：模块级内存 Map（let 声明），零序列化
+    assert "let tmOriginalTargets = new Map()" in src, \
+        "C19：旁路存储须为模块级内存 Map"
