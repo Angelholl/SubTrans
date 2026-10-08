@@ -3327,3 +3327,9 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **版本闭包条款增补（RC 流程）**：真机复验在 **release 候选（RC）** 上做——release/2.8.0.2 分支切出后仅构建 RC 制品（不打正式 tag、不发 Release），owner 真机复验**通过后才打 v2.8.0.2 tag+发 Release**；RC 复验不通过→回 main 修，仍在本版号内闭环，2.8.0.2 不发布、不递延；仅 RC 通过后方可称"2.8.0.2 闭包"。杜绝"先 tag 再补丁"的既成事实。
 - **措辞条款（候选≠未闭环）**：日志明示——"自动取消预热"等增强候选**不是本次未完成项**；本次问题已由对应最终形态（真取消/阻断/安全点降级）在 2.8.0.2 闭环，2.8.1 不承接，不得作为欠账翻出。
 - **门禁归类（owner 排序）**：G7 三态判定与参数分离列入 **P1 开工门禁**——G1/G7 实验脚本须含**轮询失败注入**步骤（如暂停 LM Studio 服务模拟端点不可达）验证第三态按③分支行为；G9 快照、C21、RC 流程、措辞条款为日志与验收口径补字。
+
+**执行追记（2026-10-08 夜 批1 收口）[已完成]**
+
+- **批1=P2**（9c9dd9d，11 文件 +522/-673）：后端抽 `_resolve_ai_model_config` 共用 helper（独立全有→analyze_independent／model 有 provider 空→stage_a_follow／半配置→忽略+注记落阶段A 链／全空如实拒绝；C18 边界写入 docstring）；`refine_batch_fix` 弃 `_resolve_fix_model_config`（连 `_batch_fix_kv`/`_stage_b_*` 删）改共用 helper+真实 reason；探活用解析 endpoint；spawn 旗标同分析（`--s1-provider`/`--<provider>-endpoint`+密钥 env）；`action_retranslate._make_action_client` 槽B→槽A 同构+`_resolve_action_model` 兜底链（override→阶段A model→服务商默认）；`refine_preview_fix_config` 增 (ai_provider,ai_model) 参与 notes 键，`_FIX_SOURCE_LABELS` 两源（分析模型/跟随阶段A）；前端 `analyzeResolution()` 单源镜像（G5-补 半配置忽略），五消费点改走（refineAiAnalyze/aiRefreshEffective/batchFixRun 云端判定/修复传参/bfRefreshEffective）；删修复模型独立配置面（index.html `.fix-model-row`+app.js 保存/回填/刷新/测试+style.css 样式块）；strings.py 新 3 键删 6 旧键（`fix_endpoint_unreachable` 留用）；CHANGELOG 增 `[2.8.0.2] - 未发布` 小节三条行为变更。
+- **验证链**：全量 **2243+4**（基线 2241+4 只增，+2）；定向 519 passed；ruff 存量 8（spike/）零新增；mypy 基线门禁过；Mimosa deep **37=基线零新增**（seal 47306fd7…）；FROZEN 223/187 零漂移；冒烟 --help 过。
+- **已知边界**：CLI 裸跑 `--action-retranslate` 缺省模型从槽B 变槽A（统一契约必然结果，help 已注明）；GUI 黑盒随批2 一并做。
