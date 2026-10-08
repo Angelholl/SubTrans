@@ -2463,6 +2463,22 @@ class TranslateAPI:
     def _stage_b_model(self) -> str:
         return self._stage_b_stage_settings("model")
 
+    def _batch_fix_kv(self) -> dict[str, str]:
+        """「质量与建议」修复模型独立 KV（batch_fix_provider/batch_fix_model，
+        批3 D2026-1008-01）。缺键/读取失败/空串一律返回空——缺省不写键=
+        修复链行为完全不变（向后兼容）。"""
+        try:
+            got = self.refine_get_stage_settings()
+        except Exception:
+            return {"provider": "", "model": ""}
+        if not isinstance(got, dict) or not got.get("success"):
+            return {"provider": "", "model": ""}
+        kv = got.get("settings") or {}
+        if not isinstance(kv, dict):
+            return {"provider": "", "model": ""}
+        return {"provider": str(kv.get("batch_fix_provider") or "").strip(),
+                "model": str(kv.get("batch_fix_model") or "").strip()}
+
     def _resolve_fix_model_config(self) -> dict[str, Any]:
         """C7 补链（D2026-1007-02 件C）：批量修复 provider/endpoint/model
         统一解析（fail-closed；三元组全部读既有阶段 KV getter，零新增
@@ -2470,7 +2486,14 @@ class TranslateAPI:
         pipeline RefineError「未指定模型名」全败退出，故拒绝必须发生在
         spawn 之前而非放任子进程失败。
 
-        规则（三元组=provider/endpoint/model）：
+        三源优先级（批3 D2026-1008-01）：
+        1. 「质量与建议」独立修复配置（batch_fix_provider/model KV）全有
+           → 整组生效（source=batch_fix_independent；端点=该 provider
+           默认端点 PROVIDER_ENDPOINT_DEFAULTS，不引入端点输入；custom
+           无默认端点沿用分析独立配置先例拒绝）；
+        2. 独立修复配置仅其一非空（半配置）→ fail-closed 拒绝并明示
+           （fix_config_half_set）；
+        3. 全空/无键 → 现状链逐字保持（存量用户零行为变化）：
         - 阶段B provider 与 model 均非空 → 用 B 整组（endpoint=B，可空）；
         - 阶段B provider 与 model 均空 → 整组回退阶段A（全取 A）；A 的
           model 也空 → 拒绝（无模型修复必然全败）；
@@ -2492,6 +2515,23 @@ class TranslateAPI:
             return {"ok": False, "provider": "", "endpoint": "",
                     "model": "", "source": "", "reason": reason}
 
+        # 三源优先级 1/2：独立修复配置（读 KV 通道=_batch_fix_kv，与
+        # refine_get_stage_settings 同源；文案收编 strings.py）
+        bf = self._batch_fix_kv()
+        bf_provider = bf.get("provider", "")
+        bf_model = bf.get("model", "")
+        if bf_provider and bf_model:
+            if bf_provider.lower() == "custom":
+                return _deny(msg("fix_config_custom_unsupported"))
+            from subtransjav.refine.config import PROVIDER_ENDPOINT_DEFAULTS
+            return {"ok": True, "provider": bf_provider,
+                    "endpoint": PROVIDER_ENDPOINT_DEFAULTS.get(
+                        bf_provider.lower(), ""),
+                    "model": bf_model,
+                    "source": "batch_fix_independent", "reason": ""}
+        if bf_provider or bf_model:
+            return _deny(msg("fix_config_half_set"))
+        # 三源优先级 3：全空/无键 → 现状链（以下逐字保持批3 之前的行为）
         if b_provider and b_model:
             return {"ok": True, "provider": b_provider,
                     "endpoint": b_endpoint, "model": b_model,
@@ -2501,9 +2541,7 @@ class TranslateAPI:
             a_endpoint = self._stage_a_endpoint()
             a_model = self._stage_a_model()
             if not a_model:
-                return _deny(
-                    "阶段B 与阶段A 均未配置可用模型：请先在「翻译设置」"
-                    "为至少一个阶段填写模型名")
+                return _deny(msg("fix_model_a_b_unset"))
             return {"ok": True, "provider": a_provider,
                     "endpoint": a_endpoint, "model": a_model,
                     "source": "stage_a_fallback", "reason": ""}
@@ -2517,36 +2555,46 @@ class TranslateAPI:
                             "source": "stage_b_provider_stage_a_model",
                             "reason": ""}
             return _deny(
-                f"阶段B（{b_provider}）未填写模型名，且阶段A 没有同名"
-                "服务商的可用模型：请在「翻译设置 · 阶段B（审校+抛光）」"
-                "填写模型名")
-        # 剩余分支：B model 非空但 provider 空（见 docstring 第 4 条）
+                msg("fix_model_b_provider_no_model", provider=b_provider))
+        # 剩余分支：B model 非空但 provider 空（见 docstring 第 3 条末款）
         a_provider = self._stage_a_provider_name()
         if (a_provider or "").strip().lower() not in ("", "lmstudio"):
-            return _deny(
-                f"阶段B 只填了模型名未填服务商，而阶段A 服务商为 "
-                f"{a_provider}（非 lmstudio）：修复将落本地 lmstudio 端点"
-                "与该模型名错配，已拒绝；请在阶段B 补全服务商")
+            return _deny(msg("fix_model_b_model_provider_mismatch",
+                             a_provider=a_provider))
         return {"ok": True, "provider": "", "endpoint": "",
                 "model": b_model,
                 "source": "stage_b_model_provider_default", "reason": ""}
+
+    # 批3（D2026-1008-01）：生效源人话标识（预览行直出，前端零解析；
+    # source 机器码 → 中文标签）
+    _FIX_SOURCE_LABELS = {
+        "batch_fix_independent": "独立修复配置",
+        "stage_b": "阶段B",
+        "stage_a_fallback": "阶段A",
+        "stage_b_provider_stage_a_model": "阶段B 服务商+阶段A 模型",
+        "stage_b_model_provider_default": "阶段B 模型（服务商缺省）",
+    }
 
     def refine_preview_fix_config(self) -> dict[str, Any]:
         """C7 桥（D2026-1007-02 件C）：修复生效配置预览（只读、无副作用、
         不 spawn），供前端修复卡明示行与确认框刷新。共用
         _resolve_fix_model_config 解析结果，形状钉（provider/endpoint/
-        model/source/reason 恒为字符串，ok 恒为布尔）。"""
+        model/source/source_label/reason 恒为字符串，ok 恒为布尔；
+        source_label=生效源人话标识，批3 D2026-1008-01 追加）。"""
         try:
             cfg = self._resolve_fix_model_config()
         except Exception as e:
             _log_exc("refine_preview_fix_config")
             return {"ok": False, "provider": "", "endpoint": "",
-                    "model": "", "source": "", "reason": str(e)}
+                    "model": "", "source": "", "source_label": "",
+                    "reason": str(e)}
+        source = str(cfg.get("source") or "")
         return {"ok": bool(cfg.get("ok")),
                 "provider": str(cfg.get("provider") or ""),
                 "endpoint": str(cfg.get("endpoint") or ""),
                 "model": str(cfg.get("model") or ""),
-                "source": str(cfg.get("source") or ""),
+                "source": source,
+                "source_label": self._FIX_SOURCE_LABELS.get(source, ""),
                 "reason": str(cfg.get("reason") or "")}
 
     def _load_guide_json(self, p: str) -> dict[str, Any] | None:

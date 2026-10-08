@@ -681,7 +681,20 @@
                             </div>
                             <div class="field-col">
                                 <label class="muted" for="aiModelInput">Analysis model</label>
-                                <input type="text" id="aiModelInput" class="form-input compact">
+                                <!-- 批3（D2026-1008-01）：模型文本框→下拉三件套（下拉+
+                                     刷新+测试，对齐阶段页 refineS* 先例）；aiModelInput
+                                     id 保留（FROZEN_IDS 契约，只换标签类型）；刷新/测试
+                                     按钮 class+data-testid 零 id、零静态 data-i18n（文案/
+                                     图标 bindDom JS 态填充）；follow 态=禁用+占位（JS 态
+                                     ai_model_follow_hint），空态占位对齐阶段页骨架 -->
+                                <div class="model-trio">
+                                    <select id="aiModelInput" class="form-select compact">
+                                        <option value="" disabled selected></option>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary btn-compact ai-model-refresh" data-testid="ai-model-refresh"></button>
+                                    <button type="button" class="btn btn-secondary btn-compact ai-model-test" data-testid="ai-model-test"></button>
+                                    <span class="muted ai-model-status" data-testid="ai-model-status"></span>
+                                </div>
                             </div>
                             <!-- 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（JS 填充，零静态键） -->
                             <div class="field-col">
@@ -689,6 +702,30 @@
                                 <select id="aggregateWindowSel" class="form-select compact"></select>
                             </div>
                             <div id="refineAiPrivacy" class="muted hint-warn" style="display:none;"></div>
+                        </div>
+                        <!-- 批3（D2026-1008-01）：修复模型独立配置行（batch_fix_provider/
+                             batch_fix_model KV；缺省 follow=跟随修复链现状：阶段B 优先
+                             回退阶段A；不写键=行为完全不变向后兼容）。置于
+                             .ai-config-row 之外——不破坏该行"恰 3 个 field-col"静态钉；
+                             全 class+data-testid 零 id（FROZEN_IDS 冻结）、零静态
+                             data-i18n（文案 bindDom JS 态 MSG 承接；provider option
+                             英文骨架占位对齐 aiProviderSel 先例，JS 填中文） -->
+                        <div class="fix-model-row" data-testid="fix-model-row">
+                            <span class="fix-model-label" data-testid="fix-model-label">Fix model</span>
+                            <select class="form-select compact fix-provider-sel" data-testid="fix-provider-sel" aria-label="Fix provider">
+                                <option value="follow" selected>Follow fix chain (default)</option>
+                                <option value="lmstudio">LM Studio (local)</option>
+                                <option value="ollama">Ollama (local)</option>
+                                <option value="deepseek">DeepSeek API</option>
+                                <option value="siliconflow">SiliconFlow</option>
+                                <option value="zen">Zen (free)</option>
+                            </select>
+                            <select class="form-select compact fix-model-sel" data-testid="fix-model-sel" aria-label="Fix model">
+                                <option value="" disabled selected></option>
+                            </select>
+                            <button type="button" class="btn btn-secondary btn-compact fix-refresh-btn" data-testid="fix-model-refresh"></button>
+                            <button type="button" class="btn btn-secondary btn-compact fix-test-btn" data-testid="fix-model-test"></button>
+                            <span class="fix-test-status muted" data-testid="fix-test-status"></span>
                         </div>
                         <div id="refineAiResult" style="margin-top:8px;"></div>
                     </div>

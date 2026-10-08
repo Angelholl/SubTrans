@@ -2820,3 +2820,145 @@ def test_encode_auto_row_params_link_pinned():
         "init 缺「参数」按钮文案填充与接线"
     assert init.count("editOnly: true") == 2, \
         "两入口（高级参数页+自动压制行）须同开编辑模式弹窗"
+
+
+# ---------------------------------------------------------------------------
+# 批3（D2026-1008-01）：「质量与建议」页分析/修复模型三件套迁移钉
+# （下拉+刷新+测试，对齐阶段页 refineS* 先例；全 class+data-testid 零 id、
+#   零静态 data-i18n，文案 JS 态 MSG 承接；两份 FROZEN 集零触碰）
+# ---------------------------------------------------------------------------
+
+def test_batch3_analysis_model_select_trio_pinned():
+    """①分析模型行 select 化：aiModelInput 文本框→下拉（id 保留，只换
+    标签类型=FROZEN_IDS 契约）+ 刷新/测试按钮（class+data-testid 零 id、
+    零静态 data-i18n）；app.js 三件套函数在位，lmstudio 走
+    list_local_models（已加载 ✓ 置前）、其余走 refine_list_models。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert '<select id="aiModelInput"' in html, "分析模型未 select 化"
+    assert '<input type="text" id="aiModelInput"' not in html, \
+        "aiModelInput 文本框残留（应已换 select 标签类型）"
+    for tid in ("ai-model-refresh", "ai-model-test", "ai-model-status"):
+        m = re.search(rf'<(?:button|span)[^>]*data-testid="{tid}"[^>]*>',
+                      html)
+        assert m, f"分析模型行缺 data-testid={tid}"
+        assert not re.search(r'(?<![\w-])id="', m.group(0)) \
+            and "data-i18n" not in m.group(0), \
+            f"{tid} 不得携带 id/data-i18n（FROZEN 契约）"
+    src = _app_js_source()
+    refresh = _extract_function(src, "refreshTrioSelect")
+    assert "list_local_models" in refresh, \
+        "lmstudio 必须走 list_local_models（已加载置前，HRO-2 裁定）"
+    assert "refine_list_models" in refresh, \
+        "其余 provider 必须走 refine_list_models"
+    assert "REFINE_PROVIDER_URLS" in refresh, \
+        "端点必须用该 provider 默认端点（与后端独立模式消费口径一致）"
+    assert "originalHTML" in refresh and "savedModel" in refresh, \
+        "刷新失败须恢复原 HTML、已存值须参与恢复（阶段页先例）"
+    follow = _extract_function(src, "aiModelApplyFollowState")
+    assert "MSG.ai_model_follow_hint" in follow and "disabled" in follow, \
+        "follow 态须禁用模型下拉并填占位（ai_model_follow_hint）"
+    test_fn = _extract_function(src, "testAnalysisModel")
+    assert "testTrioModel" in test_fn and "refineS1Provider" in test_fn, \
+        "分析测试按钮 follow 态须测阶段A 当前配置"
+    keys = _js_msg_keys()
+    for key in ("ai_model_follow_hint", "aiEffFollow", "aiEffIndependent",
+                "aiModelUnset", "aiEffectiveLine", "aiCloudNote"):
+        assert key in keys, f"MSG 缺批3新键: {key}"
+    assert "ai_model_placeholder" not in keys \
+        and "MSG.ai_model_placeholder" not in src, \
+        "placeholder 键随文本框退役残留（死键须清）"
+
+
+def test_batch3_fix_model_row_outside_config_row():
+    """②修复模型独立配置行：位于 .ai-config-row 之外（不破坏该行
+    "恰 3 个 field-col"钉）；行内 provider/model select+刷新/测试/状态
+    全 class+data-testid 零 id；KV 保存走 refine_save_stage_settings
+    同通道写 batch_fix_provider/batch_fix_model。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    i = html.index('class="ai-config-row"')
+    assert 'data-testid="fix-model-row"' in html, "缺修复模型行"
+    # 位置钉：fix-model-row 与 .ai-config-row 同级（row 外），不得为其
+    # 子元素——取 ai-config-row 开标签至 fix-model-row 开标签之间的片段，
+    # div 开闭配平（开==闭）即证明 .ai-config-row 已在此前闭合
+    j = html.index('data-testid="fix-model-row"')
+    between = html[i:j]
+    assert len(re.findall(r"<div\b", between)) == between.count("</div>"), \
+        "修复模型行必须位于 .ai-config-row 之外（同级兄弟节点）"
+    block = html[j:html.index("</div>", j)]
+    for tid in ("fix-provider-sel", "fix-model-sel", "fix-model-refresh",
+                "fix-model-test", "fix-test-status"):
+        assert f'data-testid="{tid}"' in html, f"修复模型行缺锚: {tid}"
+    assert not re.search(r'(?<![\w-])id="', block), \
+        "修复模型行内不得有任何 id（FROZEN_IDS 冻结）"
+    assert "data-i18n" not in block, \
+        "修复模型行零静态 data-i18n（文案走 JS 态 MSG 键）"
+    assert 'class="field-col"' not in block, \
+        "修复模型行不得复用 field-col 类（防误入 3 列钉计数）"
+    src = _app_js_source()
+    assert "fixRowEls" in src and "refreshFixModels" in src \
+        and "testFixModel" in src, "修复行刷新/测试函数缺失"
+    assert "fixModelApplyFollowState" in src \
+        and "MSG.fix_model_follow_hint" in src, \
+        "修复行 follow 态（模型禁用+占位）缺失"
+    wiring = _extract_function(src, "bindDom")
+    assert "batch_fix_provider" in wiring and "batch_fix_model" in wiring \
+        and "refine_save_stage_settings" in wiring, \
+        "修复行保存必须走 refine_save_stage_settings 写 batch_fix_* KV"
+    assert "fix-model-row" in wiring, "bindDom 缺修复模型行接线"
+    keys = _js_msg_keys()
+    for key in ("fix_cfg_label", "fix_prov_label", "fix_prov_follow",
+                "fix_model_follow_hint", "batchFixSourceTag"):
+        assert key in keys, f"MSG 缺批3新键: {key}"
+
+
+def test_batch3_ai_config_row_pins_survive():
+    """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 四锚点 id 保留 +
+    无内联 width:auto；id 全集数 223 / data-i18n 键集 187 契约数零漂移
+    （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    i = html.index('class="ai-config-row"')
+    row = html[i:html.index("</section>", i)]
+    assert row.count('class="field-col"') == 3, "配置行必须恰 3 组顶置标签列"
+    for dom_id in ("aiProviderSel", "aiModelInput", "aggregateWindowSel",
+                   "refineAiPrivacy"):
+        assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
+    assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
+    ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
+    assert len(ids) == 223, f"id 全集数漂移（契约 223），实为 {len(ids)}"
+    i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
+                          html))
+    assert len(i18n) == 187, f"data-i18n 键集数漂移（契约 187），实为 {len(i18n)}"
+    j = html.index('data-testid="fix-model-row"')
+    block = html[j:html.index("</div>", j)]
+    assert "data-i18n" not in block, "修复模型行新增静态 data-i18n"
+    trio = html[html.index('class="model-trio"'):html.index("</div>",
+               html.index('class="model-trio"'))]
+    assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
+
+
+def test_batch3_trio_wiring_and_effective_lines_pinned():
+    """④接线与生效行钉：bindDom 填三件套文案/图标（不依赖设置回填路径）；
+    分析生效行中文字面量收编 MSG 键（aiRefreshEffective 零硬编码中文）；
+    修复明示行追加后端 source_label 直拼（前端零解析），拒绝分支
+    status-err + reason 保留。"""
+    src = _app_js_source()
+    bind = _extract_function(src, "bindDom")
+    assert "MODEL_REFRESH_SVG" in bind and "MSG.refresh_model_title" in bind, \
+        "bindDom 缺刷新按钮图标/title 填充"
+    assert "MSG.test_stage_btn" in bind and "MSG.fix_cfg_label" in bind, \
+        "bindDom 缺测试按钮文案/修复行标签填充"
+    eff = _extract_function(src, "aiRefreshEffective")
+    assert "MSG.aiEffectiveLine" in eff and "MSG.aiEffFollow" in eff \
+        and "MSG.aiEffIndependent" in eff and "MSG.aiCloudNote" in eff, \
+        "分析生效行文案必须全走 MSG 键"
+    assert "分析模型：" not in eff and "跟随阶段A" not in eff \
+        and "独立配置" not in eff and "未指定" not in eff, \
+        "aiRefreshEffective 残留中文字面量（须收编 MSG 键）"
+    bf = _extract_function(src, "bfRefreshEffective")
+    assert "MSG.batchFixSourceTag" in bf and "source_label" in bf, \
+        "修复明示行缺生效源标识直拼"
+    assert "status-err" in bf and "MSG.batchFixUsing" in bf, \
+        "修复明示行既有钉回归（status-err/batchFixUsing）"
+    test_fix = _extract_function(src, "testTrioModel")
+    assert "refine_test_stage" in test_fix, \
+        "三件套测试必须复用阶段页 refine_test_stage 桥"

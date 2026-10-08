@@ -2305,9 +2305,11 @@ def _install_fake_stage3(gui_api_obj, monkeypatch, provider="deepseek",
                  "settings": {}, "key_status": {}, "first_run": False})
 
 
-def _install_fake_stages(gui_api_obj, monkeypatch, stage1=None, stage3=None):
-    """替身 refine_get_stage_settings：阶段A/B 双段可配
-    （C7 修复模型解析测试用，D2026-1007-02 件C）。"""
+def _install_fake_stages(gui_api_obj, monkeypatch, stage1=None, stage3=None,
+                         settings=None):
+    """替身 refine_get_stage_settings：阶段A/B 双段可配（C7 修复模型解析
+    测试用，D2026-1007-02 件C）；批3（D2026-1008-01）增 settings 形参——
+    独立修复配置 KV（batch_fix_provider/model）注入用，缺省 {}=无键。"""
     stages: list[dict] = []
     if stage1 is not None:
         stages.append({"stage": 1, **stage1})
@@ -2316,7 +2318,8 @@ def _install_fake_stages(gui_api_obj, monkeypatch, stage1=None, stage3=None):
     monkeypatch.setattr(
         gui_api_obj, "refine_get_stage_settings",
         lambda: {"success": True, "stages": stages,
-                 "settings": {}, "key_status": {}, "first_run": False})
+                 "settings": settings or {}, "key_status": {},
+                 "first_run": False})
 
 
 class _FakePopen:
@@ -2649,8 +2652,9 @@ def test_resolve_fix_model_config_b_model_only(gui_api_obj, monkeypatch):
 
 
 def test_refine_preview_fix_config_shape(gui_api_obj, monkeypatch):
-    """桥方法形状钉：只读不 spawn，恒返回六键形状（ok 布尔 + 五字符串），
-    拒绝带人话 reason；ok=True 分支 source=stage_b。"""
+    """桥方法形状钉：只读不 spawn，恒返回七键形状（ok 布尔 + 六字符串，
+    批3 D2026-1008-01 追加 source_label 生效源人话标识），拒绝带人话
+    reason；ok=True 分支 source=stage_b。"""
     _install_fake_stages(gui_api_obj, monkeypatch,
                          stage1={"provider": "", "endpoint": "",
                                  "model": ""},
@@ -2658,10 +2662,11 @@ def test_refine_preview_fix_config_shape(gui_api_obj, monkeypatch):
                                  "model": ""})
     r = gui_api_obj.refine_preview_fix_config()
     assert set(r) == {"ok", "provider", "endpoint", "model",
-                      "source", "reason"}
+                      "source", "source_label", "reason"}
     assert r["ok"] is False
     assert all(isinstance(r[k], str) for k in
-               ("provider", "endpoint", "model", "source", "reason"))
+               ("provider", "endpoint", "model", "source", "source_label",
+                "reason"))
     assert r["reason"]
     # ok=True 分支同样形状
     _install_fake_stages(gui_api_obj, monkeypatch,
@@ -2669,10 +2674,144 @@ def test_refine_preview_fix_config_shape(gui_api_obj, monkeypatch):
                                  "model": "sb-model"})
     r = gui_api_obj.refine_preview_fix_config()
     assert set(r) == {"ok", "provider", "endpoint", "model",
-                      "source", "reason"}
+                      "source", "source_label", "reason"}
     assert r["ok"] is True and r["source"] == "stage_b"
     assert r["provider"] == "deepseek" and r["model"] == "sb-model"
-    assert r["reason"] == ""
+
+
+# ---------------------------------------------------------------------------
+# 批3（D2026-1008-01）：修复模型三源解析
+# （独立修复配置全有 / 半配置拒绝 / 无键现状链向后兼容回归钉）
+# ---------------------------------------------------------------------------
+
+def test_fix_config_independent_full_pair_wins(gui_api_obj, monkeypatch):
+    """①独立修复配置（batch_fix_provider/model 全有）→ 整组生效：
+    source=batch_fix_independent，端点=该 provider 默认端点
+    （PROVIDER_ENDPOINT_DEFAULTS；优先级高于阶段B 全有）。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "deepseek",
+                                 "endpoint": "https://a.example/v1",
+                                 "model": "a-model"},
+                         stage3={"provider": "deepseek",
+                                 "endpoint": "https://b.example/v1",
+                                 "model": "b-model"},
+                         settings={"batch_fix_provider": "lmstudio",
+                                   "batch_fix_model": "fix-model"})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True and r["source"] == "batch_fix_independent"
+    assert (r["provider"], r["model"]) == ("lmstudio", "fix-model")
+    from subtransjav.refine.config import PROVIDER_ENDPOINT_DEFAULTS
+    assert r["endpoint"] == PROVIDER_ENDPOINT_DEFAULTS["lmstudio"]
+    assert r["endpoint"] == "http://localhost:1234/v1"
+    # deepseek 无表内默认端点 → 空串（与 CLI DEEPSEEK_BASE_DEFAULT 消费口径一致）
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         settings={"batch_fix_provider": "deepseek",
+                                   "batch_fix_model": "fix-model"})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True and r["source"] == "batch_fix_independent"
+    assert r["endpoint"] == ""
+
+
+def test_fix_config_half_pair_rejected(gui_api_obj, monkeypatch):
+    """②半配置（仅 provider / 仅 model 两例）→ 拒绝且 reason 明示
+    「质量与建议」补全或清空指引（fail-closed，三元组全空）。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage3={"provider": "deepseek",
+                                 "endpoint": "https://b.example/v1",
+                                 "model": "b-model"},
+                         settings={"batch_fix_provider": "lmstudio",
+                                   "batch_fix_model": ""})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is False
+    assert "质量与建议" in r["reason"] and "补全或清空" in r["reason"]
+    assert not any((r["provider"], r["endpoint"], r["model"]))
+    # 仅 model：同样拒绝
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage3={"provider": "deepseek",
+                                 "endpoint": "https://b.example/v1",
+                                 "model": "b-model"},
+                         settings={"batch_fix_provider": "",
+                                   "batch_fix_model": "fix-model"})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is False and "质量与建议" in r["reason"]
+    assert not any((r["provider"], r["endpoint"], r["model"]))
+
+
+def test_fix_config_absent_chain_b_verbatim(gui_api_obj, monkeypatch):
+    """③向后兼容回归钉：无 batch_fix_* 键且阶段B 全有 → B 整组生效
+    （现状链逐字保持：source=stage_b，三元组与既有 C7 行为一致）。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage3={"provider": "deepseek",
+                                 "endpoint": "https://b.example/v1",
+                                 "model": "b-model"},
+                         settings={"unrelated_kv": "x"})   # 无 batch_fix_* 键
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True and r["source"] == "stage_b"
+    assert (r["provider"], r["endpoint"], r["model"]) == \
+        ("deepseek", "https://b.example/v1", "b-model")
+
+
+def test_fix_config_absent_chain_a_fallback_verbatim(gui_api_obj, monkeypatch):
+    """④向后兼容回归钉：无键且阶段B 全空 → 整组回退阶段A
+    （现状链逐字保持：source=stage_a_fallback，全取 A）。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "deepseek",
+                                 "endpoint": "https://a.example/v1",
+                                 "model": "a-model"},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": ""},
+                         settings=None)   # 键全缺（settings 无该两键）
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is True and r["source"] == "stage_a_fallback"
+    assert (r["provider"], r["endpoint"], r["model"]) == \
+        ("deepseek", "https://a.example/v1", "a-model")
+
+
+def test_fix_config_absent_a_b_unset_verbatim(gui_api_obj, monkeypatch):
+    """⑤向后兼容回归钉：无键且 A/B 皆空 → 拒绝且 reason 与现状文案
+    逐字一致（收编 strings.py fix_model_a_b_unset，不许改字）。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "", "endpoint": "",
+                                 "model": ""},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": ""})
+    r = gui_api_obj._resolve_fix_model_config()
+    assert r["ok"] is False
+    assert r["reason"] == ("阶段B 与阶段A 均未配置可用模型：请先在"
+                           "「翻译设置」为至少一个阶段填写模型名")
+    assert not any((r["provider"], r["endpoint"], r["model"]))
+
+
+def test_fix_preview_source_label(gui_api_obj, monkeypatch):
+    """⑥refine_preview_fix_config 生效源标识：独立修复配置/阶段B/阶段A
+    三源人话标签由后端直出（前端零解析）；拒绝分支 reason 直显。"""
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         settings={"batch_fix_provider": "ollama",
+                                   "batch_fix_model": "fix-model"})
+    r = gui_api_obj.refine_preview_fix_config()
+    assert r["ok"] is True
+    assert r["source"] == "batch_fix_independent"
+    assert r["source_label"] == "独立修复配置"
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage3={"provider": "deepseek", "endpoint": "",
+                                 "model": "sb-model"})
+    r = gui_api_obj.refine_preview_fix_config()
+    assert r["ok"] is True and r["source_label"] == "阶段B"
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         stage1={"provider": "deepseek",
+                                 "endpoint": "https://a.example/v1",
+                                 "model": "a-model"},
+                         stage3={"provider": "", "endpoint": "",
+                                 "model": ""})
+    r = gui_api_obj.refine_preview_fix_config()
+    assert r["ok"] is True and r["source_label"] == "阶段A"
+    # 拒绝分支：source_label 空串 + reason 明示（半配置例）
+    _install_fake_stages(gui_api_obj, monkeypatch,
+                         settings={"batch_fix_provider": "lmstudio",
+                                   "batch_fix_model": ""})
+    r = gui_api_obj.refine_preview_fix_config()
+    assert r["ok"] is False and r["source_label"] == ""
+    assert "质量与建议" in r["reason"]
 
 
 # ---------------------------------------------------------------------------

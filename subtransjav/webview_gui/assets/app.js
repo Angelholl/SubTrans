@@ -667,7 +667,6 @@ const MSG = {
     dict_sudachi_full_label: '日语词典·完整版（sudachi full）',
     dict_sudachi_full_desc: '完整版词典数据（语法提示分词用，与 core 版二选一即可；官方 CDN 单源直链，点下方按钮下载）',
     aiCloudConfirm: p => `当前使用的服务商为「${p}」（云端），质量报告内容将发送至云端进行 AI 分析。确认继续吗？`,
-    ai_model_placeholder: '留空=使用阶段A 当前模型',
     ai_cfg_provider_label: '分析服务商',
     ai_cfg_model_label: '分析模型',
     ai_prov_follow: '跟随阶段A（默认）',
@@ -710,6 +709,19 @@ const MSG = {
     // 明示行红色直显；确认框副行同键复用）
     batchFixUsing: (p, m) => `修复将使用：${p} / ${m}`,
     batchFixModelUnset: '未配置',
+    // 批3（D2026-1008-01）：分析/修复模型三件套（下拉+刷新+测试）+ 修复
+    // 模型独立配置 + 生效行中文字面量收编（全 JS 态键，零静态 data-i18n）
+    ai_model_follow_hint: '跟随阶段A 当前模型',
+    aiEffFollow: '跟随阶段A',
+    aiEffIndependent: '独立配置',
+    aiModelUnset: '（未指定）',
+    aiEffectiveLine: (tag, prov, model) => `分析模型：${tag} — ${prov} / ${model}`,
+    aiCloudNote: ' ｜ 注意：分析时报告内容将发送至该云端服务',
+    fix_cfg_label: '修复模型',
+    fix_prov_label: '修复服务商',
+    fix_prov_follow: '跟随修复链现状（阶段B 优先，回退阶段A）',
+    fix_model_follow_hint: '跟随修复链（未独立指定）',
+    batchFixSourceTag: s => `（生效源：${s}）`,
     // 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理（媒体重点对照，音频零出域）。
     // asr_panel_title 为静态 data-i18n 键（HTML+MSG+钉⑤三处同步）；其余 JS 态
     asr_panel_title: 'ASR 模型（媒体重点对照）',
@@ -4227,6 +4239,12 @@ function switchTab(tabId) {
   //（default_model_missing 警告的唯一触发源）；无已存值不预选不出警告
   const savedStageModels = { 1: '', 3: '' };
 
+  // 批3（D2026-1008-01）：分析/修复模型独立配置的已存模型名（回填/保存
+  // 成功后记忆；恢复语义对齐 savedStageModels 先例——刷新命中列表恢复
+  // 选中，未命中注入标记 option 后选中）
+  let savedAiModel = '';
+  let savedFixModel = '';
+
   // 模型下拉空态占位 option（批2 D2026-1002-12）：value 空 + disabled +
   // selected，文案走 JS 态键 model_list_empty_hint；HTML 初始骨架 /
   // 切服务商重置 / 拉取失败恢复共用同一形态
@@ -4346,6 +4364,202 @@ function switchTab(tabId) {
     } finally {
       btn.disabled = false;
     }
+  }
+
+  // ============================================================
+  // 批3（D2026-1008-01）：分析/修复模型三件套（下拉+刷新+测试）
+  // 下拉=select（阶段页 refineS*Model 先例）、刷新=在线拉模型、测试=
+  // refine_test_stage 同桥。分析行锚 aiModelInput（id 保留）；修复行全
+  // class+data-testid 零 id。状态反馈对齐 stageStatus（✅/❌+状态色）。
+  // ============================================================
+
+  // 刷新按钮内联 SVG（逐字对齐阶段页 refineRefreshS* 图标；innerHTML
+  // 保存/恢复惯例见 D2026-1001 批2 注释——textContent 会丢图标）
+  const MODEL_REFRESH_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
+
+  // 行内状态 span（分析行/修复行共用；kind 对齐 stageStatus 口径）
+  function trioStatus(el, text, kind) {
+    if (!el) return;
+    el.style.color = kind === 'err' ? 'var(--status-err)'
+      : (kind === 'ok' ? 'var(--status-ok)' : 'var(--text-muted)');
+    el.textContent = text;
+  }
+
+  // 三件套独立态刷新主体（分析行/修复行同款）：lmstudio 走
+  // list_local_models（已加载 ✓ 置前 + 已下载合并——HRO-2 裁定：通用
+  // /v1/models 只列已加载会复现"列表空"痛点）；其余 provider 走
+  // refine_list_models（api_key 传 null=后端回退已存密钥）。端点用
+  // REFINE_PROVIDER_URLS 默认端点（与后端 ai_provider 独立分支"CLI 各
+  // provider 默认端点"消费口径一致）。失败恢复原 HTML（阶段页先例）。
+  async function refreshTrioSelect(prov, sel, btn, savedModel, status) {
+    if (!sel || !btn) return;
+    if (!window.pywebview || !window.pywebview.api) {
+      status(MSG.api_not_ready, 'err');
+      return;
+    }
+    if (!prov || prov === 'follow') {
+      status(MSG.select_provider_first, 'err');
+      return;
+    }
+    btn.disabled = true;
+    const old = btn.innerHTML; btn.textContent = '…';
+    const originalHTML = sel.innerHTML;
+    sel.innerHTML = '<option value="">' + MSG.loading_models + '</option>';
+    status(MSG.fetching_models, '');
+    try {
+      const r = (prov === 'lmstudio')
+        ? await window.pywebview.api.list_local_models(
+            REFINE_PROVIDER_URLS.lmstudio || '')
+        : await window.pywebview.api.refine_list_models(
+            prov, REFINE_PROVIDER_URLS[prov] || '', null);
+      if (r && r.success && r.models.length) {
+        sel.innerHTML = r.models.map(m =>
+          '<option value="' + esc(m) + '">' + esc(m)
+          + (prov === 'lmstudio' && r.loaded && r.loaded.includes(m)
+              ? ' ✓' : '')
+          + '</option>').join('');
+        // 已存值不在列表→注入标记 option（阶段页先例）；命中→恢复选中
+        if (savedModel && !r.models.includes(savedModel)) {
+          const marker = document.createElement('option');
+          marker.value = savedModel;
+          marker.textContent = savedModel;
+          sel.appendChild(marker);
+        }
+        if (savedModel) sel.value = savedModel;
+        status(MSG.models_loaded(r.models.length), 'ok');
+      } else {
+        sel.innerHTML = originalHTML;
+        status('❌ ' + ((r && r.error) || MSG.fetch_failed)
+          + (r && r.tip ? ' · ' + r.tip : ''), 'err');
+      }
+    } catch (e) {
+      sel.innerHTML = originalHTML;
+      status('❌ ' + e, 'err');
+    } finally {
+      btn.disabled = false; btn.innerHTML = old;
+    }
+  }
+
+  // 三件套测试主体：桥=refine_test_stage（与阶段页测试按钮同桥同参），
+  // 反馈样式对齐 stageStatus（✅/❌ + 状态色 span）
+  async function testTrioModel(prov, model, endpoint, key, btn, status) {
+    if (!btn) return;
+    if (!window.pywebview || !window.pywebview.api) {
+      status(MSG.api_not_ready, 'err');
+      return;
+    }
+    btn.disabled = true;
+    status(MSG.testing, '');
+    try {
+      const r = await window.pywebview.api.refine_test_stage(
+        prov, model, endpoint, key);
+      const ok = !!(r && r.success);
+      status((ok ? '✅ ' : '❌ ') + (ok
+        ? (r.message || MSG.testing)
+        : ((r && (r.tip || r.error)) || MSG.failed)),
+        ok ? 'ok' : 'err');
+      if (!ok && r && r.tip) console.warn('[refine]', r.tip);
+    } catch (e) {
+      status('❌ ' + e, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // 分析行 follow 态统一口径：模型下拉禁用+占位（ai_model_follow_hint）、
+  // 刷新/测试按钮随禁（follow=无独立配置可刷可测；provider 切换/回填
+  // 共用此单源，避免状态漂移）
+  function aiModelApplyFollowState() {
+    const sel = $('aiModelInput');
+    if (!sel) return;
+    const follow = (($('aiProviderSel') || {}).value || 'follow') === 'follow';
+    sel.innerHTML = '<option value="" disabled selected>'
+      + (follow ? MSG.ai_model_follow_hint : MSG.model_list_empty_hint)
+      + '</option>';
+    sel.disabled = follow;
+    const row = document.querySelector('.ai-config-row');
+    ['.ai-model-refresh', '.ai-model-test'].forEach((cls) => {
+      const b = row && row.querySelector(cls);
+      if (b) b.disabled = follow;
+    });
+  }
+
+  // 分析行刷新（独立态）
+  async function refreshAnalysisModels() {
+    const sel = $('aiModelInput');
+    const btn = document.querySelector('.ai-config-row .ai-model-refresh');
+    if (!sel || !btn) return;
+    const st = document.querySelector('.ai-config-row .ai-model-status');
+    await refreshTrioSelect(
+      (($('aiProviderSel') || {}).value || 'follow'),
+      sel, btn, savedAiModel, (t, k) => trioStatus(st, t, k));
+  }
+
+  // 分析行测试：follow=测阶段A 当前配置（生效模型语义一致）；
+  // 独立态=测所选独立 provider/model（key=null=后端回退已存密钥）
+  async function testAnalysisModel() {
+    const btn = document.querySelector('.ai-config-row .ai-model-test');
+    if (!btn) return;
+    const st = document.querySelector('.ai-config-row .ai-model-status');
+    const status = (t, k) => trioStatus(st, t, k);
+    const prov = (($('aiProviderSel') || {}).value || 'follow');
+    if (prov === 'follow') {
+      await testTrioModel(
+        (($('refineS1Provider') || {}).value || '').toLowerCase(),
+        (($('refineS1Model') || {}).value || '').trim(),
+        stageEndpoint(1), stageKeyOrNull(1), btn, status);
+    } else {
+      await testTrioModel(prov,
+        (($('aiModelInput') || {}).value || '').trim(),
+        REFINE_PROVIDER_URLS[prov] || '', null, btn, status);
+    }
+  }
+
+  // 修复行元素定位（全 class+data-testid 零 id，容器 .fix-model-row）
+  function fixRowEls() {
+    const row = document.querySelector('.fix-model-row');
+    if (!row) return null;
+    return {
+      prov: row.querySelector('.fix-provider-sel'),
+      model: row.querySelector('.fix-model-sel'),
+      refresh: row.querySelector('.fix-refresh-btn'),
+      test: row.querySelector('.fix-test-btn'),
+      status: row.querySelector('.fix-test-status')
+    };
+  }
+
+  // 修复行 follow 态统一口径（与分析行同款单源）
+  function fixModelApplyFollowState() {
+    const el = fixRowEls();
+    if (!el || !el.model) return;
+    const follow = !el.prov || el.prov.value === 'follow';
+    el.model.innerHTML = '<option value="" disabled selected>'
+      + (follow ? MSG.fix_model_follow_hint : MSG.model_list_empty_hint)
+      + '</option>';
+    el.model.disabled = follow;
+    if (el.refresh) el.refresh.disabled = follow;
+    if (el.test) el.test.disabled = follow;
+  }
+
+  // 修复行刷新（独立态；lmstudio 合并列表/默认端点/注入已存值同款）
+  async function refreshFixModels() {
+    const el = fixRowEls();
+    if (!el) return;
+    await refreshTrioSelect(
+      ((el.prov || {}).value || 'follow'),
+      el.model, el.refresh, savedFixModel,
+      (t, k) => trioStatus(el.status, t, k));
+  }
+
+  // 修复行测试（独立态；follow=按钮已随禁，不重复解析后端三源链）
+  async function testFixModel() {
+    const el = fixRowEls();
+    if (!el) return;
+    const prov = ((el.prov || {}).value || 'follow');
+    await testTrioModel(prov,
+      ((el.model || {}).value || '').trim(),
+      REFINE_PROVIDER_URLS[prov] || '', null,
+      el.test, (t, k) => trioStatus(el.status, t, k));
   }
 
   function glStatus(t) {
@@ -4911,8 +5125,45 @@ function switchTab(tabId) {
           if (lblM) lblM.textContent = MSG.ai_cfg_model_label;
         }
         if (aiModelInput) {
-          aiModelInput.value = (r.settings.ai_analyze_model) || '';
-          aiModelInput.placeholder = MSG.ai_model_placeholder;
+          // 批3（D2026-1008-01）：模型文本框→下拉——回填改"follow 态单源
+          // 应用（禁用+占位，刷新/测试按钮随禁）+ 独立态注入标记 option 后
+          // 选中"（阶段页先例）；placeholder 语义随文本框一并退役
+          savedAiModel = (r.settings.ai_analyze_model || '').trim();
+          const aiFollow = !aiProvSel || aiProvSel.value === 'follow';
+          aiModelApplyFollowState();
+          if (!aiFollow) {
+            if (savedAiModel
+                && ![...aiModelInput.options].some(o => o.value === savedAiModel)) {
+              const marker = document.createElement('option');
+              marker.value = savedAiModel;
+              marker.textContent = savedAiModel;
+              aiModelInput.appendChild(marker);
+            }
+            if (savedAiModel) aiModelInput.value = savedAiModel;
+          }
+        }
+        // 批3：修复模型独立配置回填（batch_fix_* 键缺省=保持 follow 缺省
+        // 零动作=行为完全不变；有键→provider select 恢复 + 模型注入选中）
+        const fixRowEl = document.querySelector('.fix-model-row');
+        if (fixRowEl) {
+          const fProv = fixRowEl.querySelector('.fix-provider-sel');
+          const fModel = fixRowEl.querySelector('.fix-model-sel');
+          const bfProv = String(r.settings.batch_fix_provider || '').trim();
+          const bfModel = String(r.settings.batch_fix_model || '').trim();
+          savedFixModel = bfModel;
+          if (fProv && bfProv && bfProv !== 'follow') {
+            fProv.value = bfProv;
+            fixModelApplyFollowState();
+            if (fModel && bfModel) {
+              if (![...fModel.options].some(o => o.value === bfModel)) {
+                const marker = document.createElement('option');
+                marker.value = bfModel;
+                marker.textContent = bfModel;
+                fModel.appendChild(marker);
+              }
+              fModel.value = bfModel;
+            }
+          }
         }
         // 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（填充/恢复/保存）
         const aggWin = $('aggregateWindowSel');
@@ -4941,14 +5192,20 @@ function switchTab(tabId) {
           const saveAiConfig = () => {
             window.pywebview.api.refine_save_stage_settings(null, null, {
               ai_analyze_provider: aiProvSel.value,
-              ai_analyze_model: aiModelInput.value.trim()
+              ai_analyze_model: ((($('aiModelInput') || {}).value) || '').trim()
             }).then(rv => {
               if (!rv || rv.success !== true) console.warn('[refine] AI 分析设置保存失败');
             }).catch(e => console.warn('[refine] AI 分析设置保存失败', e));
             aiRefreshEffective();
           };
-          aiProvSel.addEventListener('change', saveAiConfig);
-          aiModelInput.addEventListener('change', saveAiConfig);
+          // 批3（D2026-1008-01）：切 provider 只重置模型下拉空态（follow=
+          // 禁用+占位，刷新/测试按钮随禁），不自动拉取（阶段页先例）
+          aiProvSel.addEventListener('change', () => {
+            aiModelApplyFollowState();
+            saveAiConfig();
+          });
+          const aiModelSel = $('aiModelInput');
+          if (aiModelSel) aiModelSel.addEventListener('change', saveAiConfig);
         }
         if (r.settings.first_run === true) {
           const banner = $('firstRunBanner');
@@ -5922,20 +6179,24 @@ function switchTab(tabId) {
   }
 
   // 2.5.0 批5（D2026-1001-07）：AI 分析生效配置常驻显示（C1/C5：复用 refineAiPrivacy）
+  // 批3（D2026-1008-01）：中文字面量收编 MSG 键（aiEffectiveLine 等）
   function aiRefreshEffective() {
     const el = $('refineAiPrivacy');
     if (!el) return;
     const indep = ($('aiProviderSel') || {}).value || 'follow';
     const s1p = ($('refineS1Provider') || {}).value || 'lmstudio';
     const s1m = ($('refineS1Model') || {}).value || '';
-    const im = ($('aiModelInput') || {}).value.trim();
+    const im = (($('aiModelInput') || {}).value || '').trim();
     const cloud = window.AI_CLOUD_PROVIDERS || [];
     let prov, model, tag;
-    if (indep === 'follow') { prov = s1p; model = s1m || '（未指定）'; tag = '跟随阶段A'; }
-    else { prov = indep; model = im || '（未指定）'; tag = '独立配置'; }
+    if (indep === 'follow') {
+      prov = s1p; model = s1m || MSG.aiModelUnset; tag = MSG.aiEffFollow;
+    } else {
+      prov = indep; model = im || MSG.aiModelUnset; tag = MSG.aiEffIndependent;
+    }
     el.style.display = '';
-    el.textContent = '分析模型：' + tag + ' — ' + prov + ' / ' + model
-      + (cloud.includes(prov) ? ' ｜ 注意：分析时报告内容将发送至该云端服务' : '');
+    el.textContent = MSG.aiEffectiveLine(tag, prov, model)
+      + (cloud.includes(prov) ? MSG.aiCloudNote : '');
   }
 
   async function refineAiAnalyze() {
@@ -6023,9 +6284,12 @@ function switchTab(tabId) {
         el.style.display = '';
         if (r.ok) {
           el.classList.remove('status-err');
+          // 批3（D2026-1008-01）：生效源人话标识（独立修复配置/阶段B/阶段A）
+          // 由后端 source_label 直出，前端零解析直拼（拒绝分支仍走 reason）
           el.textContent = MSG.batchFixUsing(
             r.provider || MSG.batchFixModelUnset,
-            r.model || MSG.batchFixModelUnset);
+            r.model || MSG.batchFixModelUnset)
+            + (r.source_label ? MSG.batchFixSourceTag(r.source_label) : '');
         } else {
           el.classList.add('status-err');
           el.textContent = r.reason || MSG.batchFixModelUnset;
@@ -6566,6 +6830,85 @@ function switchTab(tabId) {
       const lbl = document.querySelector('label[for="' + k + '"]');
       if (lbl) lbl.textContent = MSG[aiCfgLabels[k]];
     });
+    // 批3（D2026-1008-01）：分析模型三件套接线（文案/图标 JS 态填充，
+    // 绑 DOM 即填不依赖设置回填路径；follow 缺省态单源应用）
+    const aiRow = document.querySelector('.ai-config-row');
+    if (aiRow) {
+      const aiRefreshBtn = aiRow.querySelector('.ai-model-refresh');
+      const aiTestBtn = aiRow.querySelector('.ai-model-test');
+      if (aiRefreshBtn) {
+        aiRefreshBtn.title = MSG.refresh_model_title;
+        aiRefreshBtn.innerHTML = MODEL_REFRESH_SVG;
+        aiRefreshBtn.addEventListener('click', () => refreshAnalysisModels());
+      }
+      if (aiTestBtn) {
+        aiTestBtn.title = MSG.test_stage_title;
+        aiTestBtn.textContent = MSG.test_stage_btn;
+        aiTestBtn.addEventListener('click', () => testAnalysisModel());
+      }
+      aiModelApplyFollowState();
+      const aiProvBind = $('aiProviderSel');
+      if (aiProvBind && !aiProvBind.dataset.trioBound) {
+        aiProvBind.dataset.trioBound = '1';
+        aiProvBind.addEventListener('change', () => aiModelApplyFollowState());
+      }
+    }
+    // 批3：修复模型独立配置行接线（全 class+data-testid 零 id；provider
+    // option 中文填充对齐 aiProviderSel 先例；保存走 refine_save_stage_settings
+    // 同通道写 batch_fix_provider/batch_fix_model——缺省 follow 写空串=
+    // 后端"全空/无键"分支，行为与不写键完全一致；切 provider 只重置不自动拉）
+    const fixRow = document.querySelector('.fix-model-row');
+    if (fixRow) {
+      const fixLabel = fixRow.querySelector('.fix-model-label');
+      if (fixLabel) fixLabel.textContent = MSG.fix_cfg_label;
+      const fixProvSel = fixRow.querySelector('.fix-provider-sel');
+      const fixModelSel = fixRow.querySelector('.fix-model-sel');
+      const fixRefreshBtn = fixRow.querySelector('.fix-refresh-btn');
+      const fixTestBtn = fixRow.querySelector('.fix-test-btn');
+      if (fixProvSel) {
+        const fixProvOpts = { follow: MSG.fix_prov_follow,
+                              lmstudio: MSG.ai_prov_lmstudio,
+                              ollama: MSG.ai_prov_ollama,
+                              deepseek: MSG.ai_prov_deepseek,
+                              siliconflow: MSG.ai_prov_siliconflow,
+                              zen: MSG.ai_prov_zen };
+        [...fixProvSel.options].forEach(o => {
+          if (fixProvOpts[o.value]) o.textContent = fixProvOpts[o.value];
+        });
+        fixProvSel.title = MSG.fix_prov_label;
+      }
+      if (fixRefreshBtn) {
+        fixRefreshBtn.title = MSG.refresh_model_title;
+        fixRefreshBtn.innerHTML = MODEL_REFRESH_SVG;
+        fixRefreshBtn.addEventListener('click', () => refreshFixModels());
+      }
+      if (fixTestBtn) {
+        fixTestBtn.title = MSG.test_stage_title;
+        fixTestBtn.textContent = MSG.test_stage_btn;
+        fixTestBtn.addEventListener('click', () => testFixModel());
+      }
+      fixModelApplyFollowState();
+      const saveFixConfig = () => {
+        window.pywebview.api.refine_save_stage_settings(null, null, {
+          batch_fix_provider:
+            (!fixProvSel || fixProvSel.value === 'follow') ? '' : fixProvSel.value,
+          batch_fix_model: ((fixModelSel || {}).value || '').trim()
+        }).then(rv => {
+          if (!rv || rv.success !== true) console.warn('[refine] 修复模型设置保存失败');
+        }).catch(e => console.warn('[refine] 修复模型设置保存失败', e));
+      };
+      if (fixProvSel && !fixProvSel.dataset.bound) {
+        fixProvSel.dataset.bound = '1';
+        fixProvSel.addEventListener('change', () => {
+          fixModelApplyFollowState();
+          saveFixConfig();
+        });
+      }
+      if (fixModelSel && !fixModelSel.dataset.bound) {
+        fixModelSel.dataset.bound = '1';
+        fixModelSel.addEventListener('change', saveFixConfig);
+      }
+    }
     // 质量闭环一键批次修复（2.6.0 批1）
     const bfBtn = $('refineBatchFixBtn');
     if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());
