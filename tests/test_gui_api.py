@@ -6,12 +6,14 @@
   规避 ``__init__`` 的副作用（Documents 建目录 / atexit 注册）；
 - URL/endpoint 守卫入口在发起任何网络请求之前即短路，无网络副作用。
 """
+import contextlib
 import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -42,6 +44,17 @@ def gui_api_obj():
     SESSION_SELECTED_PATHS.clear()
     yield object.__new__(TranslateAPI)
     SESSION_SELECTED_PATHS.clear()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_child_procs_ledger(tmp_path, monkeypatch):
+    """批4：子进程台账落点打桩到测试 tmp（登记/自愈路径防真实写仓库
+    config/；仅重定向 api._child_procs_ledger_path，不触碰 CONFIG_DIR
+    其余消费方，零既有行为扰动）。"""
+    import subtransjav.webview_gui.api as api_mod
+    monkeypatch.setattr(
+        api_mod, "_child_procs_ledger_path",
+        lambda: str(tmp_path / "config" / "child_procs.json"))
 
 
 # ---------------------------------------------------------------------------
@@ -923,21 +936,59 @@ def _install_fake_stage_settings(gui_api_obj, monkeypatch,
                  "settings": {}, "key_status": {}, "first_run": False})
 
 
+class _FakeAnalyzeProc:
+    """替身分析子进程（批4：分析链改 Popen+communicate 可取消形态）。
+
+    communicate 记录超时实参（timeout 语义自 spawn 迁至 communicate，
+    形状钉消费）；raise_timeout 模拟 communicate 超时。"""
+
+    def __init__(self, returncode=0, stdout="", stderr="",
+                 raise_timeout=False):
+        self.pid = 424242
+        self.returncode = None
+        self._rc = returncode
+        self._stdout = stdout
+        self._stderr = stderr
+        self._raise_timeout = raise_timeout
+        self.timeout_seen = None
+
+    def communicate(self, timeout=None):
+        self.timeout_seen = timeout
+        if self._raise_timeout:
+            raise subprocess.TimeoutExpired(cmd=["ai-analyze"],
+                                            timeout=timeout or 0)
+        self.returncode = self._rc
+        return self._stdout, self._stderr
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        pass
+
+
 def _install_fake_ai_run(monkeypatch, *, returncode=0, stderr="",
                          raise_timeout=False):
-    """替身 subprocess.run：捕获 CLI 参数与环境，杜绝真实子进程。"""
+    """替身 spawn_refine_cli（分析链）：捕获 CLI 参数与 spawn 环境，
+    杜绝真实子进程。批4 起分析链改 Popen+communicate，替身自
+    subprocess.run 捕获同步迁移（args/kwargs 捕获语义不变）。"""
     import subtransjav.webview_gui.api as api_mod
     captured: dict = {}
+    procs: list[_FakeAnalyzeProc] = []
 
-    def _fake_run(args, **kwargs):
+    def _fake_spawn(args, **kwargs):
         captured["args"] = args
         captured["kwargs"] = kwargs
-        if raise_timeout:
-            raise subprocess.TimeoutExpired(cmd=args, timeout=600)
-        return SimpleNamespace(returncode=returncode, stderr=stderr,
-                               stdout="")
+        proc = _FakeAnalyzeProc(returncode=returncode, stderr=stderr,
+                                raise_timeout=raise_timeout)
+        procs.append(proc)
+        return proc
 
-    monkeypatch.setattr(api_mod.subprocess, "run", _fake_run)
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake_spawn)
+    captured["proc"] = lambda: procs[0] if procs else None
     return captured
 
 
@@ -963,7 +1014,9 @@ def test_refine_ai_analyze_success(gui_api_obj, monkeypatch, tmp_path):
     # F1：分析子进程跟随阶段A 服务商（fake 存储 provider=zen）
     assert args[args.index("--s1-provider") + 1] == "zen"
     kw = captured["kwargs"]
-    assert kw.get("timeout") == 600
+    # 批4：超时语义自 spawn kwargs 迁至 communicate(timeout)（可取消形态）
+    assert "timeout" not in kw
+    assert captured["proc"]().timeout_seen == 600
     assert kw.get("cwd") == str(REPO_ROOT)
     assert kw.get("encoding") == "utf-8"
 
@@ -1003,7 +1056,9 @@ def test_refine_ai_analyze_follows_stage_a_endpoint(gui_api_obj,
     assert args[args.index("--s1-provider") + 1] == "siliconflow"
     assert args[args.index("--siliconflow-endpoint") + 1] == \
         "https://api.siliconflow.cn/v1"
-    env = captured["kwargs"].get("env") or {}
+    # 批4：捕获点自 subprocess.run（env 已合并）迁至 spawn_refine_cli
+    #（env_extra 差异项），密钥最终经 _utf8_child_env 合并进子进程 env
+    env = captured["kwargs"].get("env_extra") or {}
     assert env.get("SILICONFLOW_API_KEY") == "sk-fake"
     # 密钥不写命令行
     assert all("sk-fake" not in str(a) for a in args)
@@ -1018,7 +1073,7 @@ def test_refine_ai_analyze_deepseek_key_env(gui_api_obj, monkeypatch,
     captured = _install_fake_ai_run(monkeypatch)
     r = gui_api_obj.refine_ai_analyze(str(report))
     assert r["success"] is True
-    env = captured["kwargs"].get("env") or {}
+    env = captured["kwargs"].get("env_extra") or {}
     assert env.get("DEEPSEEK_API_KEY") == "sk-fake"
     assert all("sk-fake" not in str(a) for a in captured["args"])
 
@@ -1039,7 +1094,7 @@ def test_refine_ai_analyze_local_provider_no_key_env(gui_api_obj,
     assert args[args.index("--s1-provider") + 1] == "lmstudio"
     assert args[args.index("--lmstudio-endpoint") + 1] == \
         "http://localhost:1234/v1"
-    env = captured["kwargs"].get("env") or {}
+    env = captured["kwargs"].get("env_extra") or {}
     for var in ("DEEPSEEK_API_KEY", "OPENCODE_API_KEY",
                 "SILICONFLOW_API_KEY", "CUSTOM_API_KEY"):
         assert var not in env, f"本地 provider 不得注入 {var}"
@@ -1080,7 +1135,8 @@ def test_refine_ai_analyze_rejects_non_report_and_missing(
     assert r2["success"] is False
     r3 = gui_api_obj.refine_ai_analyze("")
     assert r3["success"] is False
-    assert captured == {}, "前置拒绝必须发生在 subprocess 之前"
+    # 批4：捕获点改 spawn_refine_cli——"args" 缺席即未触达 spawn
+    assert "args" not in captured, "前置拒绝必须发生在 spawn 之前"
 
 
 def test_refine_ai_analyze_user_directory_guard_differential(
@@ -1133,7 +1189,8 @@ def test_refine_ai_analyze_user_directory_guard_differential(
     gui_api_obj.refine_ai_analyze(
         os.path.join(system_root, "fake_ep01_质量报告.txt"))
     gui_api_obj.refine_ai_analyze(str(exe))
-    assert captured == {}, "拒绝路径不得触达 subprocess"
+    # 批4：捕获点改 spawn_refine_cli——"args" 缺席即未触达 spawn
+    assert "args" not in captured, "拒绝路径不得触达 spawn"
 
 
 def test_refine_ai_analyze_companion_missing(gui_api_obj, monkeypatch,
@@ -1164,6 +1221,358 @@ def test_refine_ai_analyze_parse_failed_degraded(gui_api_obj, monkeypatch,
     assert r["success"] is True
     assert r["parse_ok"] is False
     assert r["suggestions"]["observations"] == ["原始文本"]
+
+
+# ---------------------------------------------------------------------------
+# 批4（D2026-1008-01）：AI 分析/一键修复可停止 + 登记治理 + 启动自愈。
+# 真子进程以 ``sys.executable -c "import time; time.sleep(30)"`` 制造
+# （-c 串尾注释携带 "subtransjav <kind 旗标>"，cmdline 身份核验第③重
+# 可命中的最小真实载体）；finally 全量兜底回收，防测试进程外泄。
+# ---------------------------------------------------------------------------
+
+def _spawn_marker_proc(marker: str, **popen_kw) -> subprocess.Popen:
+    """起一个安静长睡的真子进程（cmdline 含项目标记与 kind 旗标）。"""
+    kw = dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+              text=True, encoding="utf-8", errors="replace")
+    kw.update(popen_kw)
+    proc = subprocess.Popen(
+        [sys.executable, "-c",
+         f"import time; time.sleep(30)  # subtransjav {marker}"], **kw)
+    _wait_proc_alive(proc)
+    return proc
+
+
+def _wait_proc_alive(proc: subprocess.Popen, timeout: float = 10.0) -> None:
+    """等待子进程完全就绪（psutil 可查询 create_time/cmdline）。"""
+    import psutil
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            psutil.Process(proc.pid).create_time()
+            return
+        except psutil.Error:
+            pass
+        if proc.poll() is not None:
+            raise AssertionError("子进程提前退出，测试环境异常")
+        time.sleep(0.05)
+    raise AssertionError("子进程未在超时内进入存活状态")
+
+
+def _wait_dead(proc: subprocess.Popen, timeout: float = 10.0) -> None:
+    """断言子进程在短窗口内退出（防取消链退化成只登记不杀）。"""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            return
+        time.sleep(0.05)
+    raise AssertionError("子进程未在超时窗口内退出")
+
+
+def _ensure_reaped(proc: subprocess.Popen) -> None:
+    """兜底清理：整树击杀 + 回收（照 test_process_manager 先例防外泄）。"""
+    try:
+        import psutil
+        for child in psutil.Process(proc.pid).children(recursive=True):
+            with contextlib.suppress(Exception):
+                child.kill()
+    except Exception:
+        pass
+    try:
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait(timeout=10)
+    except Exception:
+        pass
+
+
+def _install_real_sleep_spawn(monkeypatch, marker: str = "--ai-analyze"):
+    """替身 spawn_refine_cli：返回真长睡子进程（登记/取消链全真实）。"""
+    import subtransjav.webview_gui.api as api_mod
+    procs: list[subprocess.Popen] = []
+
+    def _fake_spawn(args, **kwargs):
+        proc = _spawn_marker_proc(marker)
+        procs.append(proc)
+        return proc
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake_spawn)
+    return procs
+
+
+def _start_analyze_thread(gui_api_obj, report_path: Path, box: dict):
+    th = threading.Thread(
+        target=lambda: box.update(
+            gui_api_obj.refine_ai_analyze(str(report_path))),
+        daemon=True)
+    th.start()
+    return th
+
+
+def _wait_registered(gui_api_obj, attr: str = "_ai_analyze_proc",
+                     timeout: float = 10.0) -> dict:
+    """等待登记槽出现（spawn+注册完成；上限保护防 CI 挂死）。"""
+    gui_api_obj._init_ai_state()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        entry = getattr(gui_api_obj, attr)
+        if entry is not None:
+            return entry
+        time.sleep(0.05)
+    raise AssertionError(f"登记槽 {attr} 未在超时内出现")
+
+
+def test_ai_analyze_cancel_kills_proc_and_reports_cancelled(
+        gui_api_obj, monkeypatch, tmp_path):
+    """取消链全真实：取消桥 → 身份核验树杀 → cancelled 结果 + 进程短窗
+    退出 + 登记/台账收尾。"""
+    import subtransjav.webview_gui.api as api_mod
+    report = _make_ai_report(tmp_path, with_companion=False)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    procs = _install_real_sleep_spawn(monkeypatch)
+    box: dict = {}
+    th = _start_analyze_thread(gui_api_obj, report, box)
+    try:
+        entry = _wait_registered(gui_api_obj)
+        assert entry["pid"] == procs[0].pid
+        rc = gui_api_obj.refine_cancel_ai_analyze()
+        assert rc.get("success") is True and rc.get("cancelled") is True
+        th.join(timeout=20)
+        assert not th.is_alive(), "refine_ai_analyze 未在取消后及时返回"
+        assert box.get("success") is False and box.get("cancelled") is True
+        _wait_dead(procs[0], timeout=10)
+        # reap：登记槽清位 + 台账条目移除（覆盖式写=空快照）
+        assert gui_api_obj._ai_analyze_proc is None
+        assert api_mod._ledger_read_entries(
+            api_mod._child_procs_ledger_path()) == []
+    finally:
+        for p in procs:
+            _ensure_reaped(p)
+
+
+def test_ai_analyze_single_flight_refuses_second_call(
+        gui_api_obj, monkeypatch, tmp_path):
+    """单飞守卫：分析进行中二次调用 → 人话拒绝且不再 spawn。"""
+    report = _make_ai_report(tmp_path, with_companion=False)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    procs = _install_real_sleep_spawn(monkeypatch)
+    box: dict = {}
+    th = _start_analyze_thread(gui_api_obj, report, box)
+    try:
+        _wait_registered(gui_api_obj)
+        r2 = gui_api_obj.refine_ai_analyze(str(report))
+        assert r2["success"] is False
+        assert "进行中" in r2["error"]
+        assert len(procs) == 1, "单飞拒绝必须发生在 spawn 之前"
+    finally:
+        gui_api_obj.refine_cancel_ai_analyze()
+        th.join(timeout=20)
+        for p in procs:
+            _ensure_reaped(p)
+
+
+def test_ai_analyze_cancel_latch_blocks_spawn_before_start(
+        gui_api_obj, monkeypatch, tmp_path):
+    """取消竞态（用户秒点停止）：spawn 前置闩 → 不 spawn 直接 cancelled，
+    闩一次性消费（后续调用不再被拦）。"""
+    report = _make_ai_report(tmp_path, with_companion=False)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    procs = _install_real_sleep_spawn(monkeypatch)
+    try:
+        gui_api_obj._init_ai_state()
+        # 未 spawn 前先调取消（此刻槽为空）→ 置闩
+        r0 = gui_api_obj.refine_cancel_ai_analyze()
+        assert r0.get("success") is True
+        assert r0.get("cancelled_pending") is True
+        r = gui_api_obj.refine_ai_analyze(str(report))
+        assert r["success"] is False and r.get("cancelled") is True
+        assert procs == [], "置闩状态下不得 spawn"
+        assert not gui_api_obj._ai_analyze_cancel.is_set(), \
+            "闩应一次性消费"
+    finally:
+        for p in procs:
+            _ensure_reaped(p)
+
+
+def test_terminate_registered_kills_matching_entry():
+    """身份核验命中：create_time/cmdline 全匹配 → 真实整树击杀。"""
+    import psutil
+
+    import subtransjav.webview_gui.api as api_mod
+    proc = _spawn_marker_proc("--ai-analyze")
+    try:
+        entry = {"proc": proc, "pid": proc.pid,
+                 "create_time": psutil.Process(proc.pid).create_time(),
+                 "kind": "ai_analyze", "marker": "--ai-analyze"}
+        r = api_mod.terminate_registered(entry)
+        assert r["success"] is True and r["skipped"] is False
+        _wait_dead(proc, timeout=10)
+    finally:
+        _ensure_reaped(proc)
+
+
+def test_terminate_registered_skips_on_create_time_mismatch():
+    """身份核验不命中（create_time 与登记不符，疑似 PID 复用）→ 不杀、
+    只报 skipped 原因。"""
+    import psutil
+
+    import subtransjav.webview_gui.api as api_mod
+    proc = _spawn_marker_proc("--ai-analyze")
+    try:
+        entry = {"proc": proc, "pid": proc.pid,
+                 "create_time": psutil.Process(proc.pid).create_time() - 999,
+                 "kind": "ai_analyze", "marker": "--ai-analyze"}
+        r = api_mod.terminate_registered(entry)
+        assert r["success"] is False and r["skipped"] is True
+        assert "create_time" in r["reason"]
+        assert proc.poll() is None, "核验不命中不得误杀"
+    finally:
+        _ensure_reaped(proc)
+
+
+def test_child_ledger_write_on_register_and_remove_on_reap(
+        gui_api_obj, monkeypatch, tmp_path):
+    """台账契约：spawn 登记 → 覆盖写条目（pid/create_time/kind/marker）；
+    正常 reap → 条目移除。"""
+    import psutil
+
+    import subtransjav.webview_gui.api as api_mod
+    report = _make_ai_report(tmp_path, with_companion=False)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch)
+    procs = _install_real_sleep_spawn(monkeypatch)
+    box: dict = {}
+    th = _start_analyze_thread(gui_api_obj, report, box)
+    try:
+        _wait_registered(gui_api_obj)
+        path = api_mod._child_procs_ledger_path()
+        # 台账写在登记槽置位之后（同线程次序），短窗轮询等落盘
+        entries: list = []
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            entries = api_mod._ledger_read_entries(path)
+            if entries:
+                break
+            time.sleep(0.05)
+        assert len(entries) == 1
+        e = entries[0]
+        assert e["pid"] == procs[0].pid
+        assert e["kind"] == "ai_analyze" and e["marker"] == "--ai-analyze"
+        assert abs(e["create_time"]
+                   - psutil.Process(procs[0].pid).create_time()) < 1.5
+        # 正常 reap（此处以取消驱动收尾）→ 条目移除
+        gui_api_obj.refine_cancel_ai_analyze()
+        th.join(timeout=20)
+        assert api_mod._ledger_read_entries(path) == []
+    finally:
+        for p in procs:
+            _ensure_reaped(p)
+
+
+def test_selfheal_kills_matching_ledger_entries(gui_api_obj):
+    """启动自愈：台账条目（活进程+marker+create_time 匹配且早于本次启动）
+    → 树杀 + gui.log 一行 + 台账写空。"""
+    import psutil
+
+    import subtransjav.webview_gui.api as api_mod
+    proc = _spawn_marker_proc("--ai-analyze")
+    try:
+        path = api_mod._child_procs_ledger_path()
+        api_mod._ledger_write_entries(path, [{
+            "pid": proc.pid,
+            "create_time": psutil.Process(proc.pid).create_time(),
+            "kind": "ai_analyze", "marker": "--ai-analyze"}])
+        gui_api_obj._selfheal_stale_children()
+        _wait_dead(proc, timeout=10)
+        assert api_mod._ledger_read_entries(path) == []
+    finally:
+        _ensure_reaped(proc)
+
+
+def test_selfheal_skips_mismatched_ledger_entries(gui_api_obj):
+    """自愈防误杀：create_time 与登记不符（疑似 PID 复用）→ 跳过不杀；
+    台账仍写空。"""
+    import psutil
+
+    import subtransjav.webview_gui.api as api_mod
+    proc = _spawn_marker_proc("--ai-analyze")
+    try:
+        path = api_mod._child_procs_ledger_path()
+        api_mod._ledger_write_entries(path, [{
+            "pid": proc.pid,
+            "create_time": psutil.Process(proc.pid).create_time() + 999,
+            "kind": "ai_analyze", "marker": "--ai-analyze"}])
+        gui_api_obj._selfheal_stale_children()
+        time.sleep(0.3)
+        assert proc.poll() is None, "核验不命中不得误杀"
+        assert api_mod._ledger_read_entries(path) == []
+    finally:
+        _ensure_reaped(proc)
+
+
+def test_on_exit_cleanup_covers_all_three_slots(gui_api_obj):
+    """退出清理全覆盖：translate 走原分支（含 True 哨兵语义零变化）、
+    分析/修复槽走 terminate_registered；三进程全退出 + 台账清空。"""
+    gui_api_obj._translate_lock = threading.Lock()
+    gui_api_obj._init_translation_state()
+    gui_api_obj._init_ai_state()
+    tp = _spawn_marker_proc("translate-slot")     # 原分支不核验 cmdline
+    ai = _spawn_marker_proc("--ai-analyze")
+    bf = _spawn_marker_proc("--action-retranslate")
+    try:
+        gui_api_obj._translate_process = tp
+        gui_api_obj._register_child(ai, "ai_analyze")
+        gui_api_obj._register_child(bf, "batch_fix")
+        gui_api_obj._on_exit_cleanup()
+        for p in (tp, ai, bf):
+            _wait_dead(p, timeout=10)
+        assert gui_api_obj._translate_process is None
+        assert gui_api_obj._ai_analyze_proc is None
+        assert gui_api_obj._batch_fix_proc is None
+        import subtransjav.webview_gui.api as api_mod
+        assert api_mod._ledger_read_entries(
+            api_mod._child_procs_ledger_path()) == []
+        # _translate 哨兵语义零变化：True 哨兵被忽略且被清位（不炸）
+        gui_api_obj._translate_process = True
+        gui_api_obj._on_exit_cleanup()
+        assert gui_api_obj._translate_process is None
+    finally:
+        for p in (tp, ai, bf):
+            _ensure_reaped(p)
+
+
+def test_batch_fix_cancel_reports_cancelled_and_skips_verify(
+        gui_api_obj, monkeypatch, tmp_path):
+    """修复链取消：取消桥树杀执行器 → cancelled 结果，且绝不自动复跑
+    AI 分析（verify 键不得出现）。"""
+    import subtransjav.webview_gui.api as api_mod
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    _install_fake_stage3(gui_api_obj, monkeypatch)
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+    procs: list[subprocess.Popen] = []
+
+    def _fake_spawn(args, **kwargs):
+        proc = _spawn_marker_proc("--action-retranslate")
+        procs.append(proc)
+        return proc
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake_spawn)
+    box: dict = {}
+    th = threading.Thread(target=lambda: box.update(
+        gui_api_obj.refine_batch_fix(str(guide), [3])), daemon=True)
+    th.start()
+    try:
+        _wait_registered(gui_api_obj, attr="_batch_fix_proc")
+        rc = gui_api_obj.refine_cancel_batch_fix()
+        assert rc.get("success") is True and rc.get("cancelled") is True
+        th.join(timeout=20)
+        assert not th.is_alive(), "refine_batch_fix 未在取消后及时返回"
+        assert box.get("success") is False and box.get("cancelled") is True
+        assert "verify" not in box, "取消后不得自动复跑 AI 分析"
+        _wait_dead(procs[0], timeout=10)
+        assert gui_api_obj._batch_fix_proc is None
+    finally:
+        for p in procs:
+            _ensure_reaped(p)
 
 
 def test_refine_ai_apply_glossary_passes_entries(gui_api_obj, monkeypatch,
@@ -2339,15 +2748,16 @@ def _install_fake_bf_spawn(monkeypatch, *, lines=(), rc=0, ledger_path=None,
                            ledger_records=None, verify_suggestions=None,
                            verify_returncode=0):
     """替身 spawn_refine_cli：批修复走 Popen 流式路径（可选模拟执行器落
-    台账）；capture=True 的复验 --ai-analyze 路径可选覆写建议件后返回
-    CompletedProcess 形状（refine_ai_analyze 消费 .stderr/.returncode）。"""
+    台账）；复验 --ai-analyze 路径（批4 起为 Popen+communicate 形状，
+    按 argv 旗标识别）可选覆写建议件后返回 _FakeAnalyzeProc（refine_ai_analyze
+    消费 communicate 返回的 .stderr/.returncode）。"""
     import subtransjav.webview_gui.api as api_mod
     captured: dict = {}
 
     def _fake_spawn(args, **kwargs):
         captured.setdefault("calls", []).append(
             {"args": args, "kwargs": kwargs})
-        if kwargs.get("capture"):
+        if "--ai-analyze" in args:
             if verify_suggestions is not None:
                 report_arg = args[args.index("--ai-analyze") + 1]
                 stem = Path(report_arg).name[:-len("_质量报告.txt")]
@@ -2355,8 +2765,7 @@ def _install_fake_bf_spawn(monkeypatch, *, lines=(), rc=0, ledger_path=None,
                 out.write_text(json.dumps(
                     {"parse_ok": True, "suggestions": verify_suggestions},
                     ensure_ascii=False), encoding="utf-8")
-            return SimpleNamespace(returncode=verify_returncode,
-                                   stderr="", stdout="")
+            return _FakeAnalyzeProc(returncode=verify_returncode)
         if ledger_path is not None and ledger_records:
             existing = []
             if ledger_path.is_file():
@@ -2371,29 +2780,6 @@ def _install_fake_bf_spawn(monkeypatch, *, lines=(), rc=0, ledger_path=None,
         return _FakePopen(lines, rc=rc)
 
     monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake_spawn)
-    return captured
-
-
-def _install_fake_verify_run(monkeypatch, new_suggestions=None,
-                             returncode=0):
-    """替身 subprocess.run（复验 --ai-analyze 捕获路径）；可模拟复验后
-    建议件被覆写为新计数。"""
-    import subtransjav.webview_gui.api as api_mod
-    captured: dict = {}
-
-    def _fake_run(args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-        if new_suggestions is not None:
-            report_arg = args[args.index("--ai-analyze") + 1]
-            stem = Path(report_arg).name[:-len("_质量报告.txt")]
-            out = Path(report_arg).parent / f"{stem}_AI质量建议.json"
-            out.write_text(json.dumps(
-                {"parse_ok": True, "suggestions": new_suggestions},
-                ensure_ascii=False), encoding="utf-8")
-        return SimpleNamespace(returncode=returncode, stderr="", stdout="")
-
-    monkeypatch.setattr(api_mod.subprocess, "run", _fake_run)
     return captured
 
 
@@ -2479,7 +2865,8 @@ def test_batch_fix_success_and_ledger_delta(gui_api_obj, monkeypatch,
     assert args[args.index("--s3-provider") + 1] == "deepseek"
     assert args[args.index("--action-model") + 1] == "sb-model"
     assert b["kwargs"]["env_extra"].get("DEEPSEEK_API_KEY") == "sk-fake"
-    assert captured["calls"][1]["kwargs"].get("capture") is True
+    # 第 1 次=复验 --ai-analyze（批4 起 Popen 形态，按 argv 旗标识别）
+    assert "--ai-analyze" in captured["calls"][1]["args"]
     assert r["verify"]["before"] == {"glossary": 0, "tm": 0,
                                      "observations": 1}
     assert r["verify"]["after"] == {"glossary": 0, "tm": 0,
@@ -2494,12 +2881,12 @@ def test_batch_fix_exit1_skips_verify(gui_api_obj, monkeypatch, tmp_path):
     items = [_bf_item(3, _T3, "甲")]
     guide = _make_bf_guide(tmp_path, items)
     _install_fake_stage3(gui_api_obj, monkeypatch)
-    _install_fake_bf_spawn(monkeypatch, lines=["boom"], rc=1)
-    run_cap = _install_fake_verify_run(monkeypatch)
+    captured = _install_fake_bf_spawn(monkeypatch, lines=["boom"], rc=1)
     r = gui_api_obj.refine_batch_fix(str(guide), [3])
     assert r["success"] is False and r["exit_code"] == 1
     assert "verify" not in r
-    assert "args" not in run_cap          # 复验未发起
+    # 复验未发起：全程恰一次 spawn（批4：复验亦走 spawn 通道，按次数断言）
+    assert len(captured["calls"]) == 1
 
 
 def test_batch_fix_timeout_reports_ledger_semantics(gui_api_obj, monkeypatch,
@@ -2546,7 +2933,7 @@ def test_batch_fix_exit3_partial_with_verify(gui_api_obj, monkeypatch,
     assert r["applied"] == 1 and r["failed"] == 1
     assert r["source_partial"] == 1
     assert "verify" in r and "after" in r["verify"]
-    assert captured["calls"][0]["kwargs"].get("capture") is None
+    assert "--action-retranslate" in captured["calls"][0]["args"]
 
 
 def test_batch_fix_guard_path_missing(gui_api_obj, tmp_path):

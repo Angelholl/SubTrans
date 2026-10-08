@@ -466,7 +466,17 @@ const MSG = {
 
     // ---- AI 质量分析（D2026-0929 前后端接入）----
     aiAnalyzeBtn: 'AI 分析本报告',
-    aiAnalyzing: '分析中（可能需要 1-3 分钟）…',
+    // 批4（D2026-1008-01）：提示扩含 LM Studio JIT 按需加载说明
+    //（首次调用高负载来自 LM Studio 进程属正常，交待给用户）
+    aiAnalyzing: '分析中（可能需要 1-3 分钟）…首次调用 LM Studio 需按需加载大模型（大模型首次加载可能需数分钟，期间高负载来自 LM Studio 进程属正常）',
+    // 批4（D2026-1008-01）：分析/修复可停止——停止按钮与取消收口文案
+    //（C12：取消后 LM Studio 侧可能已完成 JIT 加载并常驻，如实交代）
+    aiStopBtn: '停止分析',
+    aiStopPending: '正在停止分析…',
+    aiCancelled: '已取消分析。LM Studio 侧可能已完成模型加载并常驻（后续分析会更快）；如需释放显存请在 LM Studio 中卸载模型。',
+    bfStopBtn: '停止修复',
+    bfStopPending: '正在停止修复…',
+    bfCancelled: '已取消批量修复。已落盘条目以重翻台账为准，可再次发起处理余量。',
     aiNeedGuide: '请先加载质量报告导读',
     aiPrivacyCloud: p => `⚠️ 分析内容（含字幕译文）将发送至 ${p}`,
     aiPrivacyLocal: '本地模型分析，内容不出本机',
@@ -6227,6 +6237,25 @@ function switchTab(tabId) {
     }
     const btn = $('refineAiAnalyzeBtn');
     if (btn) btn.disabled = true;
+    // 批4（D2026-1008-01）：分析中旁挂「停止分析」（class 锚零 id，
+    // 文案 JS 态 MSG；点击置 pending 态并发取消桥，最终结果由主调用
+    // 回包收口——回包 cancelled=True 时状态行显 C12 文案）
+    const stopBtn = document.querySelector('.ai-analyze-stop-btn');
+    if (stopBtn) {
+      stopBtn.textContent = MSG.aiStopBtn;
+      if (!stopBtn.dataset.stopBound) {
+        stopBtn.dataset.stopBound = '1';
+        stopBtn.addEventListener('click', () => {
+          if (!window.pywebview || !window.pywebview.api) return;
+          stopBtn.disabled = true;
+          aiStatus(MSG.aiStopPending);
+          Promise.resolve(window.pywebview.api.refine_cancel_ai_analyze())
+            .catch(() => {})
+            .finally(() => { stopBtn.disabled = false; });
+        });
+      }
+      stopBtn.style.display = '';
+    }
     aiStatus(MSG.aiAnalyzing);
     try {
       const r = await window.pywebview.api.refine_ai_analyze(
@@ -6237,6 +6266,8 @@ function switchTab(tabId) {
         aiRenderResult(r);
         aiStatus(MSG.aiDone + (r.crosscheck_segments
           ? MSG.asrCrosscheckNote(r.crosscheck_segments) : ''));
+      } else if (r && r.cancelled) {
+        aiStatus(MSG.aiCancelled);
       } else {
         // 修复B：分析失败时 stderr_tail 首行摘要进错误信息（截断 200 字符）
         let detail = (r && r.error) || MSG.unknown;
@@ -6249,6 +6280,8 @@ function switchTab(tabId) {
       aiStatus(MSG.aiFailed(e && e.message ? e.message : String(e)));
     } finally {
       if (btn) btn.disabled = false;
+      // 批4：停止按钮隐藏复位——取消/完成后均可重新发起
+      if (stopBtn) stopBtn.style.display = 'none';
     }
   }
 
@@ -6415,13 +6448,33 @@ function switchTab(tabId) {
     if (!go) return;
     const btn = $('refineBatchFixBtn');
     if (btn) btn.disabled = true;
+    // 批4（D2026-1008-01）：修复中旁挂「停止修复」（class 锚零 id；后端
+    // cancelled 分支保证取消后不再自动复跑 AI 分析）；轮询让位 pending 态
+    const stopBtn = document.querySelector('.batch-fix-stop-btn');
+    let stopRequested = false;
+    if (stopBtn) {
+      stopBtn.textContent = MSG.bfStopBtn;
+      if (!stopBtn.dataset.stopBound) {
+        stopBtn.dataset.stopBound = '1';
+        stopBtn.addEventListener('click', () => {
+          if (!window.pywebview || !window.pywebview.api) return;
+          stopRequested = true;
+          stopBtn.disabled = true;
+          bfStatus(MSG.bfStopPending);
+          Promise.resolve(window.pywebview.api.refine_cancel_batch_fix())
+            .catch(() => {})
+            .finally(() => { stopBtn.disabled = false; });
+        });
+      }
+      stopBtn.style.display = '';
+    }
     bfStatus(MSG.batchFixRunning(0, batch.length));
     const poll = setInterval(async () => {
       try {
         const p = await window.pywebview.api.refine_batch_fix_progress();
         if (p && p.running && p.phase === 'verify') {
-          bfStatus(MSG.batchFixVerifying);
-        } else if (p && p.running) {
+          if (!stopRequested) bfStatus(MSG.batchFixVerifying);
+        } else if (p && p.running && !stopRequested) {
           // 执行器无逐条进度输出契约——done=0 时用中性文案（评审修订）
           bfStatus(p.done > 0
             ? MSG.batchFixRunning(p.done, p.total)
@@ -6460,6 +6513,8 @@ function switchTab(tabId) {
           }
         }
         bfStatus(msg);
+      } else if (r && r.cancelled) {
+        bfStatus(MSG.bfCancelled);
       } else {
         bfStatus(MSG.batchFixFail + '：' + ((r && r.error) || ''));
       }
@@ -6469,6 +6524,8 @@ function switchTab(tabId) {
     } finally {
       clearInterval(poll);
       if (btn) btn.disabled = false;
+      // 批4：停止按钮隐藏复位——取消/完成后均可重新发起
+      if (stopBtn) stopBtn.style.display = 'none';
       batchFixRefresh();
     }
   }

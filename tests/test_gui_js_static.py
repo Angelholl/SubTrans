@@ -2962,3 +2962,57 @@ def test_batch3_trio_wiring_and_effective_lines_pinned():
     test_fix = _extract_function(src, "testTrioModel")
     assert "refine_test_stage" in test_fix, \
         "三件套测试必须复用阶段页 refine_test_stage 桥"
+
+
+# ---------------------------------------------------------------------------
+# 批4（D2026-1008-01）：AI 分析/一键修复可停止——停止按钮存在性与
+# C12 取消文案 / LM Studio JIT 说明文案钉。
+# ---------------------------------------------------------------------------
+
+def test_batch4_stop_buttons_pinned_and_wired():
+    """停止分析/停止修复：index.html 双按钮（class+data-testid 零 id、
+    零静态 data-i18n、初始隐藏）+ app.js 停止桥接线与复位。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for tid in ("ai-analyze-stop-btn", "batch-fix-stop-btn"):
+        m = re.search(rf'<button[^>]*data-testid="{tid}"[^>]*>', html)
+        assert m, f"index.html 缺少停止按钮: {tid}"
+        tag = m.group(0)
+        assert not re.search(r'\bid=', tag), \
+            f"{tid} 不得携带 id（批4 新增锚全 class+data-testid）"
+        assert "data-i18n" not in tag, f"{tid} 文案必须 JS 态 MSG 承接"
+        assert "display:none" in tag, "停止按钮初始隐藏（运行中才显示）"
+        cm = re.search(r'class="([^"]*)"', tag)
+        assert cm and tid in cm.group(1).split(), \
+            f"{tid} class 锚缺失（JS querySelector 依赖）"
+    body = _extract_function(_app_js_source(), "refineAiAnalyze")
+    assert "refine_cancel_ai_analyze" in body, "分析停止桥未接线"
+    assert "ai-analyze-stop-btn" in body, "停止分析按钮未接线"
+    assert "MSG.aiStopBtn" in body and "MSG.aiStopPending" in body
+    bfb = _extract_function(_app_js_source(), "batchFixRun")
+    assert "refine_cancel_batch_fix" in bfb, "修复停止桥未接线"
+    assert "batch-fix-stop-btn" in bfb, "停止修复按钮未接线"
+    assert "MSG.bfStopBtn" in bfb and "MSG.bfStopPending" in bfb
+    # 取消/完成后复位可重新发起（finally 中隐藏停止按钮）
+    fi = body.rindex("finally")
+    assert "stopBtn.style.display = 'none'" in body[fi:], \
+        "分析收尾必须复位停止按钮（可重新发起）"
+    fi_bf = bfb.rindex("finally")
+    assert "stopBtn.style.display = 'none'" in bfb[fi_bf:], \
+        "修复收尾必须复位停止按钮（可重新发起）"
+
+
+def test_batch4_cancel_and_jit_msg_keys_pinned():
+    """C12 取消文案 + LM Studio JIT 说明：MSG 键存在且关键语句逐字在表。"""
+    keys = _js_msg_keys()
+    for k in ("aiStopBtn", "aiStopPending", "aiCancelled",
+              "bfStopBtn", "bfStopPending", "bfCancelled", "aiAnalyzing"):
+        assert k in keys, f"MSG 缺少批4 键: {k}"
+    src = _app_js_source()
+    # C12：取消后 LM Studio 侧 JIT 负载如实交代
+    assert "已取消分析。LM Studio 侧可能已完成模型加载并常驻" in src, \
+        "C12 取消文案缺失"
+    assert "如需释放显存请在 LM Studio 中卸载模型" in src
+    # 分析中提示扩含 JIT 按需加载说明
+    assert "首次调用 LM Studio 需按需加载大模型" in src, \
+        "JIT 说明未并入分析中提示"
+    assert "期间高负载来自 LM Studio 进程属正常" in src

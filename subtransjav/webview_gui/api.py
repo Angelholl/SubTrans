@@ -630,6 +630,121 @@ def _load_dict_dir_override() -> None:
         _log_exc("_load_dict_dir_override")
 
 
+# ---------------------------------------------------------------------------
+# 登记子进程治理（批4 D2026-1008-01，HRO-1 方案A + owner 拍板⑤ P1-P4）：
+# 分析/修复子进程 spawn 时登记（槽 + 台账 child_procs.json），取消/退出
+# 一律走 terminate_registered 身份核验（PID 复用防误杀），GUI 启动时按
+# 台账自愈清理上次会话残留（P3 预案核心）。主翻译链不经此机制（语义零变化）。
+# ---------------------------------------------------------------------------
+
+# 台账文件名：数据根 config/child_procs.json（与 asr 探测快照/hardsub_last
+# 同 CONFIG_DIR 锚）；覆盖式原子写（fs_utils 既有），条目即当前登记快照。
+_CHILD_PROCS_LEDGER_NAME = "child_procs.json"
+# kind → 该类子进程必带的 CLI 旗标（身份核验第③重的一部分）
+_CHILD_KIND_MARKERS = {
+    "ai_analyze": "--ai-analyze",
+    "batch_fix": "--action-retranslate",
+}
+# 项目标记：cmdline 须含其一（源码形态模块名 / frozen CLI 可执行体名）
+_CHILD_PROJECT_TOKENS = ("subtransjav", "subtrans-cli")
+# create_time 匹配容差（秒）：同机时钟粒度内的两次采样视为同一进程
+_CHILD_CREATE_TIME_TOL_S = 1.5
+
+
+def _child_procs_ledger_path() -> str:
+    """子进程台账落点（函数化便于测试打桩隔离）。"""
+    from subtransjav.refine.config import CONFIG_DIR
+    return os.path.join(str(CONFIG_DIR), _CHILD_PROCS_LEDGER_NAME)
+
+
+def _ledger_read_entries(path: str) -> list[dict[str, Any]]:
+    """读台账条目；缺失/损坏一律回退空表（自愈宁漏勿滥）。"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [e for e in data if isinstance(e, dict)]
+
+
+def _ledger_write_entries(path: str, entries: list[dict[str, Any]]) -> None:
+    """台账覆盖式原子写（fs_utils 既有原子写；目录不存在则先建）。"""
+    from subtransjav.refine.fs_utils import _atomic_write_text
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_text(p, json.dumps(entries, ensure_ascii=False))
+
+
+def _registered_identity_reason(entry: dict[str, Any]) -> str:
+    """登记条目三重身份核验：空串=匹配，否则返回跳过原因（人话）。
+
+    ① psutil.Process(pid) 存在；② create_time 与登记值差 <1.5s；
+    ③ cmdline 含项目标记（subtransjav / subtrans-cli）与 kind 旗标。
+    ②③联合防 PID 复用误杀：操作系统分配复用 pid 时 create_time/cmdline
+    必不相同，届时拒绝击杀只清登记（安全方向正确）。
+    """
+    try:
+        import psutil
+    except ImportError:
+        return "psutil 不可用，无法核验身份"
+    try:
+        p = psutil.Process(int(entry.get("pid") or 0))
+    except Exception:
+        return "进程已不存在"
+    try:
+        actual_ct = float(p.create_time())
+    except Exception as e:
+        return f"进程信息读取失败: {e}"
+    if abs(actual_ct - float(entry.get("create_time") or 0.0)) \
+            > _CHILD_CREATE_TIME_TOL_S:
+        return "create_time 与登记值不符（疑似 PID 复用）"
+    try:
+        low = " ".join(str(x) for x in (p.cmdline() or [])).lower()
+    except Exception as e:
+        return f"cmdline 读取失败: {e}"
+    marker = str(entry.get("marker") or "").lower()
+    if marker and marker not in low:
+        return "cmdline 缺少 kind 旗标（疑似 PID 复用）"
+    if not any(t in low for t in _CHILD_PROJECT_TOKENS):
+        return "cmdline 缺少项目标记（疑似 PID 复用）"
+    return ""
+
+
+def terminate_registered(entry: dict[str, Any]) -> dict[str, Any]:
+    """身份核验后的登记子进程树杀（批4 D2026-1008-01）。
+
+    核验通过 → terminate_process_tree（未完全成功升级 robust 回退）；
+    任一不满足 → 不杀，仅返回 skipped + 原因（调用方只清登记）。
+    取消桥与退出清理一律走本函数。无 psutil：仅对本会话持有的活 Popen
+    句柄直接单杀（句柄对象无 PID 复用风险），无句柄则跳过。
+
+    返回 {"success": bool, "skipped": bool, "reason": str}。
+    """
+    proc = entry.get("proc")
+    if not PSUTIL_AVAILABLE:
+        poll = getattr(proc, "poll", None)
+        if proc is not None and callable(poll) and poll() is None:
+            with contextlib.suppress(Exception):
+                proc.kill()
+            return {"success": True, "skipped": False, "reason": ""}
+        return {"success": False, "skipped": True,
+                "reason": "psutil 不可用，无法核验身份"}
+    reason = _registered_identity_reason(entry)
+    if reason:
+        _log.info("terminate_registered 跳过（kind=%s pid=%s）: %s",
+                  entry.get("kind"), entry.get("pid"), reason)
+        return {"success": False, "skipped": True, "reason": reason}
+    pid = int(entry.get("pid") or 0)
+    result = terminate_process_tree(pid)
+    ok = bool(result.get("success"))
+    if not ok:
+        ok = bool(terminate_process_tree_robust(pid))
+    return {"success": ok, "skipped": False,
+            "reason": "" if ok else "进程树终止未完全成功"}
+
+
 class TranslateAPI:
     """
     API class exposed to JavaScript via PyWebView.
@@ -655,6 +770,12 @@ class TranslateAPI:
 
         # 批1b 件1：启动时装载持久化词典目录（user_dirs.dict_dir）注入生效
         _load_dict_dir_override()
+
+        # 批4（D2026-1008-01）：分析/修复子进程登记槽 + 启动自愈扫描
+        # （P3 预案：上次会话崩溃残留的登记子进程按台账三重核验后清理；
+        # 只跑一次=TranslateAPI 每次启动仅构造一个实例）
+        self._init_ai_state()
+        self._selfheal_stale_children()
 
     # ========================================================================
     # Version / misc
@@ -2197,6 +2318,109 @@ class TranslateAPI:
     # msg() 回退语义等价（fail 返回 error 字符串）。
     # ================================================================
 
+    # ----------------------------------------------------------------
+    # 登记子进程槽与台账（批4 D2026-1008-01）：分析/修复子进程可停止
+    # 与退出清理全覆盖的基础设施。槽=单条目 dict（proc/pid/create_time/
+    # kind/marker/cancelled），_ai_lock 保护；台账=槽快照覆盖式原子写。
+    # ----------------------------------------------------------------
+
+    def _init_ai_state(self):
+        """分析/修复登记槽惰性初始化（对齐 _init_translation_state 先例；
+        测试以 object.__new__ 构造实例不经 __init__，故取槽前必须先调）。"""
+        if not hasattr(self, "_ai_analyze_proc"):
+            self._ai_analyze_proc: dict[str, Any] | None = None
+            self._batch_fix_proc: dict[str, Any] | None = None
+            self._ai_analyze_running = False
+            self._ai_analyze_cancel = threading.Event()
+            self._ai_lock = threading.Lock()
+
+    def _register_child(self, proc: subprocess.Popen,
+                        kind: str) -> dict[str, Any]:
+        """登记子进程槽 + 台账同步（覆盖式原子写）。
+
+        create_time 经 psutil 采样（登记值=身份核验基准）；采样失败回退
+        time.time()——届时核验必因 create_time 不匹配拒绝击杀（安全方向）。
+        """
+        create_time = time.time()
+        try:
+            import psutil
+            create_time = float(psutil.Process(proc.pid).create_time())
+        except Exception:
+            pass
+        entry: dict[str, Any] = {
+            "proc": proc, "pid": int(proc.pid), "create_time": create_time,
+            "kind": kind, "marker": _CHILD_KIND_MARKERS.get(kind, ""),
+        }
+        with self._ai_lock:
+            if kind == "ai_analyze":
+                self._ai_analyze_proc = entry
+            else:
+                self._batch_fix_proc = entry
+        self._ledger_sync()
+        return entry
+
+    def _release_child_slot(self, kind: str, entry: dict[str, Any]) -> None:
+        """正常 reap 后清登记槽 + 台账同步（覆盖式写=条目移除）。"""
+        with self._ai_lock:
+            slot = "_ai_analyze_proc" if kind == "ai_analyze" \
+                else "_batch_fix_proc"
+            if getattr(self, slot, None) is entry:
+                setattr(self, slot, None)
+        self._ledger_sync()
+
+    def _ledger_entries(self) -> list[dict[str, Any]]:
+        """当前登记快照（台账持久化形状：仅 pid/create_time/kind/marker）。"""
+        with self._ai_lock:
+            slots = [getattr(self, "_ai_analyze_proc", None),
+                     getattr(self, "_batch_fix_proc", None)]
+        return [{"pid": e["pid"], "create_time": e["create_time"],
+                 "kind": e["kind"], "marker": e["marker"]}
+                for e in slots if e]
+
+    def _ledger_sync(self) -> None:
+        """台账覆盖式原子写当前快照（fail-soft：绝不因台账拖垮业务链）。"""
+        try:
+            _ledger_write_entries(_child_procs_ledger_path(),
+                                  self._ledger_entries())
+        except Exception:
+            _log_exc("_ledger_sync")
+
+    def _selfheal_stale_children(self) -> None:
+        """启动自愈扫描（批4 D2026-1008-01，P3 预案核心，只跑一次）。
+
+        读上次会话遗留台账 → 逐条三重核验（进程存在 + cmdline 含项目标记
+        与 kind 旗标 + create_time 与登记匹配且早于本次启动）→ 满足即
+        terminate_process_tree 并记 gui.log 一行；任一不满足跳过。结束写空
+        台账。全程异常吞掉不阻塞启动；psutil 缺失跳过并记 log。
+        """
+        try:
+            if not PSUTIL_AVAILABLE:
+                _log.info(msg("selfheal_psutil_missing"))
+                return
+            path = _child_procs_ledger_path()
+            entries = _ledger_read_entries(path)
+            if not entries:
+                return
+            t0 = time.time()
+            for e in entries:
+                try:
+                    pid = int(e.get("pid") or 0)
+                    reason = _registered_identity_reason(e)
+                    if reason:
+                        _log.info("自愈跳过残留条目（kind=%s pid=%s）: %s",
+                                  e.get("kind"), pid, reason)
+                        continue
+                    if float(e.get("create_time") or 0.0) >= t0:
+                        continue  # 晚于本次启动：非上次会话遗留，不碰
+                    terminate_process_tree(pid)
+                    _log.info(msg("selfheal_cleaned",
+                                  kind=e.get("kind"), pid=pid))
+                except Exception:
+                    _log_exc("_selfheal_stale_children.entry")
+            _ledger_write_entries(path, [])
+        except Exception:
+            _log_exc("_selfheal_stale_children")
+
     _AI_ANALYZE_TIMEOUT_S = 600
     _AI_REPORT_SUFFIX = "_质量报告.txt"
     _AI_SUGGESTION_SUFFIX = "_AI质量建议.json"
@@ -2265,12 +2489,14 @@ class TranslateAPI:
 
     def refine_ai_analyze(self, report_path: str, model: str = None,
                           ai_provider: str = None) -> dict[str, Any]:
-        """同步执行 AI 质量分析并读回建议件。
+        """同步执行 AI 质量分析并读回建议件（批4 起可停止，D2026-1008-01）。
 
-        流程：_resolve_safe_path 校验 → 同步 subprocess 跑
-        ``python -m subtransjav.refine.cli --ai-analyze <path>
-        [--ai-model m]``（cwd=项目根，timeout=600s）→ 成功后读回
-        ``{stem}_AI质量建议.json`` 解析返回。
+        流程：路径守卫链 → spawn Popen（双管道捕获）并登记槽+台账 →
+        worker 线程 communicate(timeout=600s) 排水（保 stdout 解析）→
+        主桥线程 join 等待 → 成功后读回 ``{stem}_AI质量建议.json`` 解析返回。
+        单飞守卫（进行中再调=拒绝）；取消闩（spawn 前秒点停止不 spawn）；
+        取消/超时 → 身份核验后 terminate_registered 树杀。
+        取消返回 {success:False, cancelled:True}；
         超时/非零退出/建议件缺失 → success=False + error。
         """
         p = str(report_path or "").strip()
@@ -2367,54 +2593,137 @@ class TranslateAPI:
                 if key:
                     env_extra[key_env] = key
 
+        # 批4（D2026-1008-01）：分析链可停止（HRO-1 方案A）。原
+        # spawn_refine_cli(capture=True)=subprocess.run 拿不到进程句柄无法
+        # 取消；改 Popen 双管道捕获 + worker 线程 communicate(timeout)
+        # 排水（stdout 解析输入原样保留），主桥线程 join 等待（600s+余量），
+        # 取消桥在另一桥线程并发可达。超时语义同现状（文案逐字不变）。
+        self._init_ai_state()
+        with self._ai_lock:
+            # 单飞守卫：分析进行中再次调用 → 拒绝且不再 spawn
+            if self._ai_analyze_running or self._ai_analyze_proc is not None:
+                return {"success": False,
+                        "error": msg("ai_analyze_in_progress")}
+            # 取消闩：用户在 spawn 前秒点停止的竞态 → 置闩状态下不 spawn
+            # 直接返回 cancelled（闩由本处消费）
+            if self._ai_analyze_cancel.is_set():
+                self._ai_analyze_cancel.clear()
+                return {"success": False, "cancelled": True,
+                        "error": msg("ai_analyze_cancelled")}
+            self._ai_analyze_running = True
         try:
-            proc = cast(subprocess.CompletedProcess, spawn_refine_cli(
-                args, capture=True, cwd=str(REPO_ROOT),
-                timeout=self._AI_ANALYZE_TIMEOUT_S,
-                encoding="utf-8", errors="replace",
-                env_extra=env_extra))
-        except subprocess.TimeoutExpired:
-            return {"success": False,
-                    "error": f"AI 分析超时（>{self._AI_ANALYZE_TIMEOUT_S}s）"}
-        stderr_tail = (proc.stderr or "")[-2000:]
-        if proc.returncode != 0:
-            return {"success": False,
-                    "error": msg("process_exit_code", code=proc.returncode),
-                    "stderr_tail": stderr_tail}
-        # 2.6.0 批 3 知情行（C6）：对照段数随成功返回（前端状态行提示）
-        crosscheck_segments = 0
-        m = re.search(r"\[crosscheck\] segments=(\d+)", proc.stdout or "")
-        if m:
-            crosscheck_segments = int(m.group(1))
+            try:
+                proc = cast(subprocess.Popen, spawn_refine_cli(
+                    args, cwd=str(REPO_ROOT),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, encoding="utf-8", errors="replace",
+                    env_extra=env_extra))
+            except Exception as e:
+                _log_exc("refine_ai_analyze.spawn")
+                return {"success": False,
+                        "error": f"AI 分析子进程启动失败: {e}"}
+            entry = self._register_child(proc, "ai_analyze")
+            # spawn 后二次闩检：覆盖 spawn 与登记间隙内到达的取消请求
+            with self._ai_lock:
+                if self._ai_analyze_cancel.is_set():
+                    self._ai_analyze_cancel.clear()
+                    entry["cancelled"] = True
+            if entry.get("cancelled"):
+                terminate_registered(entry)
 
-        companion = os.path.join(os.path.dirname(p),
-                                 stem + self._AI_SUGGESTION_SUFFIX)
-        if not os.path.isfile(companion):
-            return {"success": False,
-                    "error": "分析已结束但建议件缺失: "
-                             f"{os.path.basename(companion)}",
-                    "stderr_tail": stderr_tail}
-        try:
-            with open(companion, encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError) as e:
-            return {"success": False,
-                    "error": f"建议件读取/解析失败: {e}",
-                    "stderr_tail": stderr_tail}
-        if not isinstance(data, dict):
-            return {"success": False, "error": "建议件格式异常（非对象）",
-                    "stderr_tail": stderr_tail}
-        return {
-            "success": True,
-            "parse_ok": bool(data.get("parse_ok")),
-            "suggestions": (data.get("suggestions")
-                            if isinstance(data.get("suggestions"), dict)
-                            else {}),
-            "provider_name": provider,
-            "companion_path": companion,
-            "stderr_tail": stderr_tail,
-            "crosscheck_segments": crosscheck_segments,
-        }
+            run_box: dict[str, Any] = {}
+
+            def _drain() -> None:
+                """worker：排水两管道（保 stdout 解析输入）。取消/超时树杀后
+                管道关闭，本函数自然收敛——排水语义与原 subprocess.run 等价。"""
+                try:
+                    out, err = proc.communicate(
+                        timeout=self._AI_ANALYZE_TIMEOUT_S)
+                    run_box.update({"stdout": out or "", "stderr": err or "",
+                                    "rc": proc.returncode, "timed_out": False})
+                except subprocess.TimeoutExpired:
+                    # 超时：身份核验后树杀并排水残余（超时文案同现状）
+                    terminate_registered(entry)
+                    try:
+                        out, err = proc.communicate(timeout=5)
+                    except Exception:
+                        out, err = "", ""
+                    run_box.update({"stdout": out or "", "stderr": err or "",
+                                    "rc": proc.returncode, "timed_out": True})
+                except Exception as e:
+                    run_box.update({"stdout": "", "stderr": str(e),
+                                    "rc": proc.returncode, "timed_out": False,
+                                    "drain_error": True})
+
+            th = threading.Thread(target=_drain, daemon=True,
+                                  name="gui-ai-analyze-drain")
+            th.start()
+            th.join(self._AI_ANALYZE_TIMEOUT_S + 30)
+            if th.is_alive():
+                # 极端兜底：communicate 未按超时收敛 → 核验后强杀、放弃等待
+                terminate_registered(entry)
+                th.join(10)
+                return {"success": False,
+                        "error": f"AI 分析超时（>{self._AI_ANALYZE_TIMEOUT_S}s）"}
+            # reap：登记槽清位 + 台账同步（覆盖式写=条目移除）
+            self._release_child_slot("ai_analyze", entry)
+            if entry.get("cancelled"):
+                return {"success": False, "cancelled": True,
+                        "error": msg("ai_analyze_cancelled")}
+            if run_box.get("timed_out"):
+                return {"success": False,
+                        "error": f"AI 分析超时（>{self._AI_ANALYZE_TIMEOUT_S}s）"}
+            if run_box.get("drain_error"):
+                return {"success": False,
+                        "error": "AI 分析子进程异常: "
+                                 f"{run_box.get('stderr', '')}"}
+            stderr_tail = (run_box.get("stderr") or "")[-2000:]
+            if run_box.get("rc") != 0:
+                return {"success": False,
+                        "error": msg("process_exit_code",
+                                     code=run_box.get("rc")),
+                        "stderr_tail": stderr_tail}
+            # 2.6.0 批 3 知情行（C6）：对照段数随成功返回（前端状态行提示）
+            crosscheck_segments = 0
+            m = re.search(r"\[crosscheck\] segments=(\d+)",
+                          run_box.get("stdout") or "")
+            if m:
+                crosscheck_segments = int(m.group(1))
+
+            companion = os.path.join(os.path.dirname(p),
+                                     stem + self._AI_SUGGESTION_SUFFIX)
+            if not os.path.isfile(companion):
+                return {"success": False,
+                        "error": "分析已结束但建议件缺失: "
+                                 f"{os.path.basename(companion)}",
+                        "stderr_tail": stderr_tail}
+            try:
+                with open(companion, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, ValueError) as e:
+                return {"success": False,
+                        "error": f"建议件读取/解析失败: {e}",
+                        "stderr_tail": stderr_tail}
+            if not isinstance(data, dict):
+                return {"success": False, "error": "建议件格式异常（非对象）",
+                        "stderr_tail": stderr_tail}
+            return {
+                "success": True,
+                "parse_ok": bool(data.get("parse_ok")),
+                "suggestions": (data.get("suggestions")
+                                if isinstance(data.get("suggestions"), dict)
+                                else {}),
+                "provider_name": provider,
+                "companion_path": companion,
+                "stderr_tail": stderr_tail,
+                "crosscheck_segments": crosscheck_segments,
+            }
+        finally:
+            with self._ai_lock:
+                self._ai_analyze_running = False
+                # 本轮已收尾：未被消费的闩属陈旧请求（取消桥在登记前后
+                # 均可直达进程），清之防吞掉下一次分析
+                self._ai_analyze_cancel.clear()
 
     # ----------------------------------------------------------------
     # 质量闭环一键批次修复（2.6.0 批1，D2026-1002-02-批1：HRO-1 条件③
@@ -2871,6 +3180,7 @@ class TranslateAPI:
                 env_extra[key_env] = key
 
         prog = self._bf_progress()
+        self._init_ai_state()  # 批4：登记槽惰性初始化（先于 _register_child）
         prog.update({"running": True, "phase": "run", "done": 0,
                      "total": len(want), "last_line": ""})
         try:
@@ -2882,6 +3192,9 @@ class TranslateAPI:
             _log_exc("refine_batch_fix.spawn")
             prog.update({"running": False, "phase": "failed"})
             return {"success": False, "error": f"修复子进程启动失败: {e}"}
+        # 批4（D2026-1008-01）：登记槽+台账（取消桥/退出清理可达；
+        # 取消经 terminate_registered 身份核验后树杀）
+        entry = self._register_child(proc, "batch_fix")
 
         tail: list[str] = []
 
@@ -2905,11 +3218,22 @@ class TranslateAPI:
             except Exception:
                 with contextlib.suppress(Exception):
                     proc.kill()
+            self._release_child_slot("batch_fix", entry)
             prog.update({"running": False, "phase": "failed",
                          "last_line": "超时终止"})
             return {"success": False,
                     "error": f"批量修复超时（>{self._BATCH_FIX_TIMEOUT_S}s）；"
                              "已落盘条目以台账为准，可再次发起处理余量",
+                    "stdout_tail": "\n".join(tail[-40:])[-2000:]}
+        # reap：登记槽清位 + 台账同步（覆盖式写=条目移除）
+        self._release_child_slot("batch_fix", entry)
+        # 批4：取消收口——不再走退出码分账，且绝不自动复跑 AI 分析
+        #（修复子进程被杀的已落盘条目以重翻台账为准，可再次发起）
+        if entry.get("cancelled"):
+            prog.update({"running": False, "phase": "failed",
+                         "last_line": "已取消"})
+            return {"success": False, "cancelled": True,
+                    "error": msg("batch_fix_cancelled"),
                     "stdout_tail": "\n".join(tail[-40:])[-2000:]}
         prog.update({"running": False,
                      "phase": "done" if rc in (0, 3) else "failed"})
@@ -2985,6 +3309,53 @@ class TranslateAPI:
             _log_exc("refine_batch_fix_progress")
             return {"running": False, "phase": "failed", "done": 0,
                     "total": 0, "last_line": "", "error": str(e)}
+
+    def _cancel_registered(self, kind: str,
+                           no_entry: dict[str, Any]) -> dict[str, Any]:
+        """取消桥共用体（批4 D2026-1008-01）：置 cancelled 旗标 → 身份核验
+        后树杀 → 短窗等退出（保证调用方返回时进程已收尾）。
+
+        槽空（进程尚未 spawn/已收尾）→ 分析链置取消闩（spawn 前预检消费，
+        覆盖「用户秒点停止」竞态）；修复链无启动窗口竞态，不置闩。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            entry = self._ai_analyze_proc if kind == "ai_analyze" \
+                else self._batch_fix_proc
+        if entry is None:
+            if kind == "ai_analyze":
+                self._ai_analyze_cancel.set()
+            return no_entry
+        entry["cancelled"] = True
+        kill = terminate_registered(entry)
+        proc = entry.get("proc")
+        if proc is not None:
+            with contextlib.suppress(Exception):
+                proc.wait(timeout=5)
+        return {"success": True, "cancelled": True, "kill": kill}
+
+    def refine_cancel_ai_analyze(self) -> dict[str, Any]:
+        """停止进行中的 AI 分析（批4 D2026-1008-01，HRO-1 方案A）。
+
+        已登记 → 身份核验后树杀（worker communicate 因管道关闭返回，
+        分析桥线程以 cancelled 结果收尾，LM Studio 侧负载不受影响——
+        服务器侧 JIT 加载无法经本通道中止，前端文案如实交代）；
+        尚未 spawn（启动窗口内）→ 置取消闩，由 spawn 前预检消费。
+        """
+        r = self._cancel_registered(
+            "ai_analyze",
+            {"success": True, "cancelled_pending": True,
+             "message": msg("ai_analyze_cancel_pending")})
+        if r.get("cancelled_pending"):
+            return r
+        r["message"] = msg("ai_analyze_cancelled")
+        return r
+
+    def refine_cancel_batch_fix(self) -> dict[str, Any]:
+        """停止进行中的一键批量修复（批4 D2026-1008-01）。修复桥读
+        cancelled 旗标提前返回，保证取消后不再自动复跑 AI 分析。"""
+        return self._cancel_registered(
+            "batch_fix",
+            {"success": False, "error": msg("no_batch_fix_in_progress")})
 
     def _asr_probe_cache_path(self) -> str:
         """探测快照落点（tests 可 monkeypatch；fail-soft 返回 "" 禁用缓存）。"""
@@ -4259,6 +4630,22 @@ class TranslateAPI:
             pass
         with self._translate_lock:
             self._translate_process = None
+        # 批4（D2026-1008-01）：分析/修复登记槽全覆盖清理——上述 _translate
+        # 分支语义零变化；新槽锁下快照后逐个走 terminate_registered（身份
+        # 核验防 PID 复用误杀），随后台账覆盖写空（正常退出不留残留条目）
+        try:
+            self._init_ai_state()
+            with self._ai_lock:
+                pending = [e for e in (self._ai_analyze_proc,
+                                       self._batch_fix_proc) if e]
+                self._ai_analyze_proc = None
+                self._batch_fix_proc = None
+            for entry in pending:
+                with contextlib.suppress(Exception):
+                    terminate_registered(entry)
+            self._ledger_sync()
+        except Exception:
+            pass
         import shutil
         for d in dict.fromkeys(getattr(self, "_refine_tmp_dirs", [])):
             try:

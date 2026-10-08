@@ -351,6 +351,18 @@ MSG = {
     "encodeSummaryEmpty": "暂无已保存的压制参数（点「打开压制参数」设置）",
     "encodeSummaryVol": "音量 {db}dB",
     "encodeSummaryAt": "保存于 {t}",
+
+    # ---- 批4（D2026-1008-01）：AI 分析/一键修复可停止 + 启动自愈
+    #      （api.py 后端侧键：单飞拒绝/取消收口/取消闩/自愈 log；前端
+    #      展示文案走 app.js MSG 镜像键，不入本表）----
+    "ai_analyze_in_progress": "AI 分析已在进行中，请等待完成，或先停止当前分析再重新发起",
+    "ai_analyze_cancelled": "AI 分析已取消",
+    "ai_analyze_cancel_pending": "已收到停止请求，正在等待分析子进程退出…",
+    "batch_fix_cancelled": "批量修复已取消：已落盘条目以重翻台账为准，可再次发起处理余量",
+    "no_batch_fix_in_progress": "当前没有进行中的批量修复",
+    # 启动自愈（gui.log 一行；kind 取 ai_analyze/batch_fix 机器码）
+    "selfheal_cleaned": "已清理上次残留子进程（kind={kind} pid={pid}）",
+    "selfheal_psutil_missing": "psutil 不可用，跳过残留子进程自愈扫描",
 }
 
 
