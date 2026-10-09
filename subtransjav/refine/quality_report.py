@@ -1407,7 +1407,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
                 "category": sw.get("category") or "",
                 "message": sw.get("message") or "",
                 "current_text": (fe or {}).get("text"),
-                "source_excerpt": ((se or {}).get("text") or "")[:40],
+                "source_excerpt": (se or {}).get("text") or "",
                 "status": "open",
                 "severity": None,
             })
@@ -1421,7 +1421,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
                 "category": "untranslated",
                 "message": "整段未翻译",
                 "current_text": e.get("text") or "",   # 终稿块全文（含前缀）
-                "source_excerpt": ((se or {}).get("text") or "")[:40],
+                "source_excerpt": (se or {}).get("text") or "",
                 "status": "open",
                 "severity": None,
             })

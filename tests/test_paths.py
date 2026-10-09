@@ -250,3 +250,59 @@ def test_no_pointer_file_behavior_unchanged(monkeypatch, tmp_path):
     assert paths.data_root() == REPO_ROOT
     assert paths.data_root_source() == "legacy"
     assert paths.get_data_root_pointer() == ""
+
+
+# ---------------------------------------------------------------------------
+# 行动层修复源文三级定位（F1 批0，D2026-1009-01 条件 C1）
+# ---------------------------------------------------------------------------
+def test_resolve_action_source_path_l1_source_name_hit(tmp_path):
+    """L1：guide["source"] 指名文件存在于导读目录 → 原样返回该 Path。"""
+    from subtransjav.refine import pipeline_support as ps
+    src = tmp_path / "ep01.japanese.srt"
+    src.write_text("1\n00:00:01,000 --> 00:00:02,000\n甲\n", encoding="utf-8")
+    guide = tmp_path / "ep01_质量报告导读.json"
+    guide.write_text("{}", encoding="utf-8")
+    assert ps.resolve_action_source_path(str(guide), src.name) == src
+
+
+def test_resolve_action_source_path_l2_stem_srt_fallback(tmp_path):
+    """L2：source 指名文件不存在 → 兜底 {stem}.srt（导读文件名剥
+    _质量报告导读.json 后缀），str|Path 入参均可。"""
+    from subtransjav.refine import pipeline_support as ps
+    (tmp_path / "ep01.srt").write_text("", encoding="utf-8")
+    guide = tmp_path / "ep01_质量报告导读.json"
+    guide.write_text("{}", encoding="utf-8")
+    assert ps.resolve_action_source_path(guide, "missing.srt") == \
+        tmp_path / "ep01.srt"
+    assert ps.resolve_action_source_path(str(guide), "") == \
+        tmp_path / "ep01.srt"
+
+
+def test_resolve_action_source_path_empty_source_skips_l1(tmp_path):
+    """source_name 空串/空白：跳过 L1 直接走 L2（不拼 guide_dir/"" 目录）。"""
+    from subtransjav.refine import pipeline_support as ps
+    (tmp_path / "ep01.srt").write_text("", encoding="utf-8")
+    guide = tmp_path / "ep01_质量报告导读.json"
+    guide.write_text("{}", encoding="utf-8")
+    assert ps.resolve_action_source_path(guide, "   ") == \
+        tmp_path / "ep01.srt"
+
+
+def test_resolve_action_source_path_l1_wins_over_l2(tmp_path):
+    """L1 与 L2 同时可得 → L1（真实输入名）优先。"""
+    from subtransjav.refine import pipeline_support as ps
+    real_src = tmp_path / "movie_v2.srt"
+    real_src.write_text("", encoding="utf-8")
+    (tmp_path / "ep01.srt").write_text("", encoding="utf-8")
+    guide = tmp_path / "ep01_质量报告导读.json"
+    guide.write_text("{}", encoding="utf-8")
+    assert ps.resolve_action_source_path(guide, real_src.name) == real_src
+
+
+def test_resolve_action_source_path_none_when_unresolved(tmp_path):
+    """L3：两处皆无 → None（退化，调用方不传 --action-source）。"""
+    from subtransjav.refine import pipeline_support as ps
+    guide = tmp_path / "ep01_质量报告导读.json"
+    guide.write_text("{}", encoding="utf-8")
+    assert ps.resolve_action_source_path(guide, "missing.srt") is None
+    assert ps.resolve_action_source_path(guide, "") is None

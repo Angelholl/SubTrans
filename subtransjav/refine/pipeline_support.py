@@ -6,6 +6,7 @@ pipeline_v2（两阶段管线）复用的公共工具：
   - 翻译记忆库初始化（_init_tm）
   - 词库合并加载（load_glossary_merged / learned_glossary_path）
   - 阶段路径解析（_resolve_stage_paths / refine_tmp_dir / strip_lang_suffix）
+  - 行动层修复源文三级定位（resolve_action_source_path，F1 批0）
 legacy 管线（已删除）的编排器（run 流程与单文件执行及其阶段辅助函数）不再保留。
 """
 
@@ -57,6 +58,42 @@ def strip_lang_suffix(stem: str) -> str:
         if stem.endswith(suf):
             return stem[: -len(suf)]
     return stem
+
+
+# 导读 json 文件名后缀（F1 批0）：与 v2_outputs.py 清理/备份表中的
+# "_质量报告导读.json" 字面量（v2_outputs.py:177/:228 两处）同源；彼处为
+# 元组字面量、无可导入共享常量，故本模块单点定义，供
+# resolve_action_source_path 剥 stem 使用。
+GUIDE_JSON_SUFFIX = "_质量报告导读.json"
+
+
+def resolve_action_source_path(guide_path: str | Path,
+                               source_name: str) -> Path | None:
+    """行动层修复源文三级定位（F1，D2026-1009-01 条件 C1）。
+
+    为 ``--action-source`` 解析原始源文 SRT 路径（手动批量修复与自动链
+    共用），依次尝试（命中即返回）：
+      L1 ``guide_dir/source_name``——导读顶层 ``source`` 键（quality_report
+         落盘的真实输入名）非空且该文件存在；
+      L2 ``guide_dir/{stem}.srt``——stem 为导读文件名剥 GUIDE_JSON_SUFFIX
+         后缀所得（"输出目录≠输入目录"时 L1 失配的兜底）；
+      L3 两者皆不可得 → 返回 None（退化：调用方不追加 --action-source，
+         由 action_retranslate 侧"未提供/文件不存在"既有提示兜底）。
+
+    str|Path 入参均可；纯路径解析，零写入、不抛异常。
+    """
+    p = Path(guide_path)
+    gdir = p.parent
+    name = str(source_name or "").strip()
+    if name:
+        cand = gdir / name
+        if cand.is_file():
+            return cand
+    fname = p.name
+    stem = (fname[:-len(GUIDE_JSON_SUFFIX)]
+            if fname.endswith(GUIDE_JSON_SUFFIX) else p.stem)
+    cand = gdir / f"{stem}.srt"
+    return cand if cand.is_file() else None
 
 
 def _resolve_stage_paths(cfg: RefineConfig, in_path: str):

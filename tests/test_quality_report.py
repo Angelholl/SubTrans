@@ -452,9 +452,10 @@ def test_write_guide_json_roundtrip_and_empty_noop(tmp_path):
 def test_guide_items_v2_mixed_sources_sorted_and_resolved():
     """items v2：structured_warnings 与 untranslated 混合 → 八字段齐、
     index 升序稳定、current_text 经 resolve_final_block 精确映射、缺失
-    即 None（"不可自动重翻"，不另设字段）、source_excerpt 取源文前 40。"""
+    即 None（"不可自动重翻"，不另设字段）、source_excerpt 取源文全量
+    文本（批0 F1 截断消除，D2026-1009-02）。"""
     exp = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
-            "text": "あ" * 50},                    # 超 40 字符 → 截前 40
+            "text": "あ" * 50},                    # 超 40 字符 → 全量保留
            {"index": 2, "timing": "00:00:03,000 --> 00:00:04,000",
             "text": "汉字原文二"}]
     final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -482,7 +483,7 @@ def test_guide_items_v2_mixed_sources_sorted_and_resolved():
     assert sw1["category"] == "subject"
     assert sw1["current_text"] == "已译"           # 精确映射终稿块
     assert sw1["timing"] == "00:00:01,000 --> 00:00:02,000"
-    assert sw1["source_excerpt"] == "あ" * 40     # 源文前 40 字符
+    assert sw1["source_excerpt"] == "あ" * 50     # 源文全量文本（不再截 40）
     assert sw1["status"] == "open" and sw1["severity"] is None
     ut = items[1]
     assert ut["category"] == "untranslated"
@@ -495,6 +496,34 @@ def test_guide_items_v2_mixed_sources_sorted_and_resolved():
     assert missing["source_excerpt"] == ""        # 源条目也缺失
     assert missing["category"] == "antonym_saitei"
     assert missing["message"] == structured[0]["message"]
+
+
+def test_guide_items_v2_source_excerpt_full_text_no_truncation():
+    """批0 F1 截断消除（D2026-1009-02）：structured_warnings 与
+    untranslated 两分支 source_excerpt 均保留源文全量文本（>40 字样例
+    全等防回归）；single_line 分支 60 字符口径不在本测范围（既有断言钉
+    test_single_line_too_long_report_section_and_items）。"""
+    long_sw = "あ" * 63                        # structured 分支源文（>40）
+    long_ut = "原文" * 25                      # untranslated 分支源文（50）
+    exp = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+            "text": long_sw},
+           {"index": 2, "timing": "00:00:03,000 --> 00:00:04,000",
+            "text": long_ut}]
+    final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+              "text": "訳一"},
+             {"index": 2, "timing": "00:00:03,000 --> 00:00:04,000",
+              "text": "[未翻译]テスト"}]
+    structured = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+                   "severity": "warning", "message": "⚠️ #1 主语误判: x",
+                   "category": "subject"}]
+    sink: dict = {}
+    build_quality_report(exp, final, "demo",
+                         structured_warnings=structured, guide_sink=sink)
+    items = sink["items"]
+    sw = next(it for it in items if it["category"] == "subject")
+    ut = next(it for it in items if it["category"] == "untranslated")
+    assert sw["source_excerpt"] == long_sw        # structured 分支全量
+    assert ut["source_excerpt"] == long_ut        # untranslated 分支全量
 
 
 def test_guide_items_v2_structured_none_only_untranslated():
