@@ -3012,6 +3012,8 @@ owner 指示先出测试包实测。首构建 run 37149808709 失败＝smoke 中
 
 **五、决议影响**：D2026-1005-03/04 全部条件收口完毕；2.7.3 五件待 owner 真机走查后按发版 SOP 排期。
 
+**六、点亮勾账（2026-10-10，提交 77205ee）**：owner 上传两件原样字节副本至自建 HF 仓并全部核验——Angelholl/sudachidict-full（tip f9304753，zip 137,472,173B）+Angelholl/openai-whisper-pt（tip 7b3ad795，五档 .pt 全套，large-v2 3,086,999,982B）；HF API 清点字节全对+hf-mirror 全量回读 sha256 与 pin 双 MATCH。配置回填：dict_sources.json sudachi_full hf-mirror 条目 /resolve/f9304753/ 直链+sha256_verified=true（auto 链镜像优先）；asr_env.py large-v2 mirror 源 /resolve/7b3ad795/ 直链+pin+verified=True；asr_downloader._ASR_HOST_ALLOW 增 cas-bridge.xethub.hf.co（hf-mirror 308 终跳域，dict 层同款两域口径——实测 huggingface.co 中间跳仅出现在系统代理（境外出口）路由形态，直连生产形态无此跳，维持排除口径）。**点亮门（生产路径实下载）双 MATCH**：download_asr_model(whisper-large-v2, source=mirror) 落位 3.09G+dict _http_get 拉 zip 137,472,173B，sha256 各与 pin 一致（隔离数据根）。测试随修：dict 清单点亮钉+asr mirror 点亮断言+GUI has_mirror=True（基线只增不减：全量 .venv 2287+4=批0 基线一致，定向 128+1）；Mimosa deep 38=基线零新增（seal c0eb3fc5）；冒烟 --help exit 0。已知限制登记：①带系统代理（境外出口）环境经 hf-mirror 会被 302 回 huggingface.co 被墙源站（直连形态不受影响，代理路由维持排除）；②全量测试必须用 .venv 规范环境（G:\python 全局环境缺依赖约 49 环境性失败，勿误判基线）。
+
 ## [2026-10-06] [D2026-1006-01] 2.7.3 增补定版：Console 可视化+P1 启动缺陷修复全并 2.7.3（件⑥⑦⑧执行追记） [已拍板·已收口]
 
 **一、决策背景**：owner 真机两反馈——①翻译运行期 Console 无变化（问直接隐藏还是调整展示）；②「两阶段流水线」卡下条状物不动疑 BUG。勘探+替代评议（decision-critic 6 连挂→general-purpose 替代，先例 D2026-1004-263）结论「修改后支持」+4 修正。诊断新发现 **P1 启动缺陷**：`refreshPipelineMirror`（app.js 顶层，D2026-0930-09 批2 新增）引用 Refine UI IIFE 内私有 `function $`（:3081）→ `ReferenceError: $ is not defined` 以 unhandledrejection 静默杀两条启动链——镜像行永远空白（样式像 0% 死进度条，owner 误报来源）/初始化完成日志缺失/pywebviewready 链 await __refineLoadRemote 炸点后 FeatureStatus.init 语法徽章+3s ASR 预热全部跳过；2.7.2 安装版与 HEAD 均中招。
