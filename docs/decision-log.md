@@ -3357,3 +3357,12 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **验证链**：全量 **2266+4**（2246+4 只增，+20）；定向 591 passed；ruff/mypy 门禁过；Mimosa deep **37=基线零新增**（seal bb6ad87b…）；冒烟 --help 含 `--warmup-analysis`。
 - **GUI 黑盒（stub 桥 8643）3 点过**：触发点② Console「正在预热分析模型，可能切换 LM Studio 当前模型」+桥参 (model,provider) 单源实测；切走切回 5s 抑制（仅 1 次调用）；C21（预热态下分析按钮可用+分析链正常完成+不触发额外预热）。**声明**：G9 持有路径需真实文件+LOADING 态黑盒不可达，由前端静态钉（锁/恢复对称+第三态 failStreak）+后端 13 测试覆盖；IAB 输入层劣化声明同批2。
 - **G7 参数备注**：`preempt_abort_converge_timeout` 在 (c) 形态无承载点，登记为 (a)/(b) 形态预留名不实现（防死配置）。
+
+**执行追记（2026-10-09 批4 收口·真机二轮两问）[已完成]**
+
+- **owner 装机实测两问**（jur-531 导读，2.8.0.2 本地包）：①一键修复确认框「开始修复」无反应；②行动条目 66/待修复 46/只能看到 33。
+- **问①根因（实锤+黑盒复现）**：AppModal「一次性首绑互窃」——六处模态各自的 `dataset.bound` 绑定块 Enter/ok 语义不一，会话内首开的模态独占绑定；owner 先用了 TM 编辑（批2 tmEdit 抢首绑且其块不绑 okBtn）→ 后开批量修复确认框时 okBtn 绑定被跳过 →「开始修复」零处理器（程序化点击确证：弹窗不关/refine_batch_fix 零调用）。editor/encode 先开场景同理潜伏。隔离黑盒复现环境与 owner 截图逐像素一致。
+- **批4 修复**（4b28f3d，3 文件 +165/-158）：六处绑定块收敛为唯一 `_bindSkeletonOnce`（kind 感知 `_okValue` 矩阵：prompt 带值/encode 结算 params/其余 true/tmEdit-editor-download 防御返回；ESC=取消值 universal、各 kind 脏态守卫由 _settle 既有分支承接）；encode 暴露 `_encodeCollect`（结算置 null 防悬挂）；钉改写（Enter 逐块计数钉→唯一绑定+语义矩阵钉+互窃回归静态钉）。**两处偏差经规划员追认**：editor Enter 保留 no-op（旧状如此；按矩阵实现会每回车误弹放弃确认=实回归）；download Enter 收紧为仅取消/ESC 可关（入钉注记）。
+- **修复验证**：黑盒复测 tmEdit 首开→开始修复正常结算调 refine_batch_fix（修复前同路径零调用）；全量 **2266+4**（钉改写持平）；定向 132 passed；ruff/mypy 过。
+- **Mimosa +1 甄别**：38=37+1，新增项=`Temp/pyinstaller_dist/.../webview/js/api.js`（pywebview 官方运行时文件，**本地构建产物首次入扫**——昨日 coverage 无该目录实锤；Temp/ gitignored 不入库；anchor 2e7b5945…）→ 判定=扫描面扩大非源码新增，零放行阻断。secret 3 命中甄别=存量端点常量行（4475/4476/4695，diff 归属核对非新增）。
+- **问②核账（行为正确，33 未复现）**：66 行动条目=46 可修复（untranslated 26+cps_too_fast 20）+**20 疑似漏听（status=observation，设计上不进批量修复、仅供人工核对）**→下拉「全部待修复条目（46）」正确；确认框完整列出 46 条（黑盒实测）；导读查看器渲染前 50 条+「…其余 16 条见 json」（MAX_ITEMS=50 既有口径）。**"33"无法从数据/代码导出**（46 条去重后 45 个不同 index；50 渲染/16 隐藏），疑为长列表滚动计数偏差——请 owner 下次遇到给截图定位。
