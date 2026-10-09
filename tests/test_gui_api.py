@@ -2810,6 +2810,78 @@ def test_guide_action_items_marks_applied(gui_api_obj, tmp_path):
     assert r["open_items"][0]["excerpt"] == "甲"
 
 
+# ---------------------------------------------------------------------------
+# 批6（D2026-1008-02）：终态状态落盘的后端可见性
+# ---------------------------------------------------------------------------
+
+def test_guide_action_items_terminal_statuses_counted(gui_api_obj, tmp_path):
+    """终态（retranslated/nochange）只计数不进 open_items；未知 status
+    仍进 open_items（C2：未知默认可见，禁静默丢）。"""
+    items = [_bf_item(3, _T3, "甲", status="retranslated"),
+             _bf_item(7, _T7, "乙", status="nochange"),
+             _bf_item(9, "T9", "丙", status="weird"),
+             _bf_item(11, "T11", "丁")]
+    guide = _make_bf_guide(tmp_path, items)
+    r = gui_api_obj.refine_guide_action_items(str(guide))
+    assert r["success"] is True
+    assert r["retranslated_count"] == 1
+    assert r["nochange_count"] == 1
+    assert [it["index"] for it in r["open_items"]] == [9, 11]
+    assert r["cat_counts"] == {"cps_too_fast": 2}
+
+
+def test_ledger_top_reason_only_counts_failed(gui_api_obj, tmp_path):
+    """主因只统计 outcome==failed：nochange/applied 的 reason 不入选。"""
+    items = [_bf_item(3, _T3, "甲")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    ledger_path.write_text(json.dumps([
+        {"timing": _T3, "outcome": "nochange",
+         "reason": "已与现译一致，判无需改动"},
+        {"timing": _T3, "outcome": "applied", "reason": "不应入选"},
+    ], ensure_ascii=False), encoding="utf-8")
+    _make_bf_guide(tmp_path, items)
+    assert gui_api_obj._ledger_top_reason(str(tmp_path),
+                                          _BF_GUIDE_STEM) == ""
+    ledger_path.write_text(json.dumps([
+        {"timing": _T3, "outcome": "nochange",
+         "reason": "已与现译一致，判无需改动"},
+        {"timing": _T3, "outcome": "failed", "reason": "端点不通"},
+    ], ensure_ascii=False), encoding="utf-8")
+    assert gui_api_obj._ledger_top_reason(str(tmp_path),
+                                          _BF_GUIDE_STEM) == "端点不通"
+
+
+def test_batch_fix_result_counts_nochange(gui_api_obj, monkeypatch, tmp_path):
+    """批6：回包新增 nochange 计数（台账增量 outcome==nochange）。"""
+    items = [_bf_item(3, _T3, "甲")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    guide = _make_bf_guide(tmp_path, items, with_suggestion={
+        "glossary": [], "tm": [], "observations": []})
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+    _install_fake_bf_spawn(
+        monkeypatch, lines=["ok"], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "nochange",
+                         "source_partial": False}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    r = gui_api_obj.refine_batch_fix(str(guide), [3], "deepseek",
+                                     "sb-model")
+    assert r["success"] is True and r["exit_code"] == 0
+    assert r["nochange"] == 1
+    assert r["applied"] == 0 and r["failed"] == 0
+
+
+def test_batch_fix_skips_terminal_status_entries(gui_api_obj, tmp_path):
+    """终态守卫（批6）：导读 status 已终态的 index 被过滤；全被过滤→
+    可读拒绝且不 spawn。"""
+    items = [_bf_item(3, _T3, "甲", status="nochange"),
+             _bf_item(7, _T7, "乙", status="retranslated")]
+    guide = _make_bf_guide(tmp_path, items)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3, 7], "deepseek",
+                                     "sb-model")
+    assert r["success"] is False
+    assert "终态" in r["error"] and "无可修条目" in r["error"]
+
+
 def test_batch_fix_guards(gui_api_obj, tmp_path):
     """守卫链：空/非整数 entries、越 cap、观察类与未知条目、错误后缀。"""
     items = [_bf_item(3, _T3, "甲"),

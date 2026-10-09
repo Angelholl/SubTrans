@@ -3397,8 +3397,11 @@ def test_batch5_guide_item_applied_badge_pinned():
     assert "Number(it.index)" in gr and "Number(o.index)" in gr, \
         "index 匹配必须 Number 强转（防字符串/数字不一）"
     assert "Number.isFinite" in gr, "非有限 index 须守卫"
-    # 徽标条件渲染：未 applied 的 open 行不加（三元形态即现状守卫）
-    assert "+ (applied" in gr, "徽标必须条件渲染（未 applied 行保持现状）"
+    # 徽标条件渲染：未 applied 的 open 行不加（批6 起 status 终态优先，
+    # 台账 appliedSet 降为兜底轨，条件形态改为
+    # (applied || o.status === 'retranslated') 三元）
+    assert "(applied || o.status === 'retranslated')" in gr, \
+        "徽标必须条件渲染（未 applied 行保持现状）"
     assert "media-source-tag tag-auto" in gr, \
         "徽标须复用绿色 ok pill（零新增 CSS）"
     assert "MSG.guide_item_applied" in gr, "徽标文案未走 MSG 键"
@@ -3409,3 +3412,92 @@ def test_batch5_guide_item_applied_badge_pinned():
     html = INDEX_HTML.read_text(encoding="utf-8")
     for k in ("guide_item_applied", "batchFixRemaining"):
         assert f'data-i18n="{k}"' not in html, f"{k} 不得消耗静态 data-i18n"
+
+
+# ---------------------------------------------------------------------------
+# 批6（D2026-1008-02）：导读终态渲染——全量渲染/徽标 status 优先/头部计数
+# 分解/回包 nochange 计数（静态钉）
+# ---------------------------------------------------------------------------
+
+def test_batch6_guide_render_full_and_no_more_footnote():
+    """①guideRender 条目全量渲染：无 slice 截断、无 MAX_ITEMS 上限、
+    MSG.guide_items_more 尾注零调用点（键本身因
+    tests/test_strings_and_shortcut.py 既有正向钉保留于键表）。"""
+    gr = _extract_function(_app_js_source(), "guideRender")
+    assert "MAX_ITEMS" not in gr, "渲染上限常量未删除"
+    assert "items.slice(" not in gr, "条目渲染不得截断（须全量渲染）"
+    assert "items.map(it => {" in gr, "条目渲染须 items.map 全量"
+    src = _app_js_source()
+    assert "MSG.guide_items_more(" not in src, \
+        "MSG.guide_items_more 尾注调用点未清除"
+
+
+def test_batch6_status_badge_pinned():
+    """②徽标 status 优先：nochange 灰徽标（复用 bfp-cat-chip
+    bfp-cat-neutral）与 retranslated 绿徽标（复用 media-source-tag
+    tag-auto）两终态分支在位且互斥优先于 appliedSet 兜底；新 MSG 键存在
+    且零静态 data-i18n 消耗。"""
+    src = _app_js_source()
+    gr = _extract_function(src, "guideRender")
+    assert "o.status === 'nochange'" in gr, "nochange 徽标分支缺失"
+    assert "bfp-cat-chip bfp-cat-neutral" in gr, \
+        "灰徽标须复用 bfp-cat-chip bfp-cat-neutral（零新增 CSS）"
+    assert "esc(MSG.guide_item_nochange)" in gr, "灰徽标文案未走 MSG 键"
+    assert "(applied || o.status === 'retranslated')" in gr, \
+        "retranslated 须复用绿色已修徽标（台账 appliedSet 保留为兜底）"
+    keys = _js_msg_keys()
+    for k in ("guide_item_nochange", "guide_chip_fixable",
+              "guide_chip_applied", "guide_chip_nochange",
+              "guide_chip_observation"):
+        assert k in keys, f"MSG 缺少批6 键: {k}"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for k in ("guide_item_nochange", "guide_chip_fixable",
+              "guide_chip_applied", "guide_chip_nochange",
+              "guide_chip_observation"):
+        assert f'data-i18n="{k}"' not in html, f"{k} 不得消耗静态 data-i18n"
+
+
+def test_batch6_count_chip_decomposition_pinned():
+    """③头部计数五段式分解：guide_chip_* 四键在 chip 装配处接线；
+    待修/观察恒显；C4 统一去重公式（新/老/混合三形态一致）——已修=
+    status 终态 ∪ appliedSet 台账 timing 命中（同一 item 两源同真只计
+    一次），待修=补集式 total−已修−无需改动−观察（C2：open 与未知
+    status 天然计入待修）。"""
+    gr = _extract_function(_app_js_source(), "guideRender")
+    for k in ("guide_chip_fixable", "guide_chip_observation",
+              "guide_chip_applied", "guide_chip_nochange"):
+        assert "MSG." + k in gr, f"chip 装配未引用 MSG.{k}"
+    assert "segs.join(' · ')" in gr, "计数段须以「 · 」分隔装配"
+    # 统一去重公式：applied 为单条目级 OR 联合判定（status 终态或台账
+    # 命中，同一 item 同时满足两源只计一次——混合态不重不漏）
+    assert "statusOf(o) === 'retranslated'\n" \
+        "            || (appliedSet != null && Number.isFinite(k)" \
+        " && appliedSet.has(k))" in gr, \
+        "applied 须为终态∪台账的单条目联合判定（去重）"
+    # 补集式待修（C2：open/未知 status 天然落入待修；防御性钳 0）
+    assert "items.length - nFixed - nNochg - nObs" in gr, \
+        "待修须为补集式（total−已修−无需改动−观察）"
+    assert "Math.max(0," in gr, "补集式待修须防御性钳 0"
+    # 老文件退化：appliedSet 为空/无交集时 nFixed=0，「已修」段省略
+    # （纯台账轨=升级前行为）
+    assert "appliedSet != null" in gr, \
+        "appliedSet 须 null 先判（老文件无台账时不误计）"
+    assert "if (nFixed > 0)" in gr, "「已修」段为 0 时须省略"
+
+
+def test_batch6_batch_fix_nochange_pinned():
+    """④batchFixRun 成功分支：r.nochange>0 时在 batchFixDone 之后、
+    批5 剩余明细之前拼接 batchFixNochange 计数；键存在且零 data-i18n。"""
+    src = _app_js_source()
+    caller = _extract_function(src, "batchFixRun")
+    assert "MSG.batchFixNochange(r.nochange)" in caller, \
+        "nochange 计数未接线"
+    assert "r.nochange > 0" in caller, "nochange 须零值守卫"
+    assert caller.index("MSG.batchFixDone(") \
+        < caller.index("MSG.batchFixNochange(") \
+        < caller.index("MSG.batchFixRemaining("), \
+        "nochange 段须位于 batchFixDone 之后、批5 剩余明细之前"
+    assert "batchFixNochange" in _js_msg_keys(), "MSG 缺少 batchFixNochange"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'data-i18n="batchFixNochange"' not in html, \
+        "batchFixNochange 不得消耗静态 data-i18n"

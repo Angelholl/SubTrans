@@ -2767,6 +2767,9 @@ class TranslateAPI:
 
     _GUIDE_SUFFIX = "_质量报告导读.json"
     _LEDGER_SUFFIX = "_重翻记录.json"
+    # 批6（D2026-1008-02）：导读条目修复终态集合——retranslated/nochange
+    # 已有落盘结论，不再进 open_items；未知 status 默认可见（禁静默丢）
+    KNOWN_TERMINAL_STATUS = {"retranslated", "nochange"}
     _BATCH_FIX_MAX_ENTRIES = 50
     _BATCH_FIX_TIMEOUT_S = 1800
     _SUGGESTION_KEYS = ("glossary", "tm", "observations")
@@ -2922,6 +2925,8 @@ class TranslateAPI:
             for rec in self._read_ledger(guide_dir, stem):
                 if not isinstance(rec, dict):
                     continue
+                if rec.get("outcome") != "failed":
+                    continue   # 批6：主因只统计失败记录，nochange/applied 不入
                 reason = str(rec.get("reason") or "").strip()
                 if reason:
                     reasons.append(reason)
@@ -2995,6 +3000,8 @@ class TranslateAPI:
             open_items: list[dict[str, Any]] = []
             cat_counts: dict[str, int] = {}
             observation_count = 0
+            retranslated_count = 0
+            nochange_count = 0
             applied_open_count = 0
             for it in items:
                 if not isinstance(it, dict):
@@ -3003,7 +3010,13 @@ class TranslateAPI:
                 if status == "observation":
                     observation_count += 1
                     continue
-                if status != "open":
+                # 批6：终态（retranslated/nochange）只计数不进 open_items；
+                # 其余（open 或未知 status）一律可见（C2：未知默认可见）
+                if status in self.KNOWN_TERMINAL_STATUS:
+                    if status == "retranslated":
+                        retranslated_count += 1
+                    else:
+                        nochange_count += 1
                     continue
                 idx = it.get("index")
                 cur = it.get("current_text")
@@ -3031,6 +3044,8 @@ class TranslateAPI:
                 "cat_counts": cat_counts,
                 "applied_open_count": applied_open_count,
                 "observation_count": observation_count,
+                "retranslated_count": retranslated_count,
+                "nochange_count": nochange_count,
                 "direction": str(guide.get("direction") or ""),
                 "has_media": bool(guide.get("media_path")),
             }
@@ -3078,6 +3093,20 @@ class TranslateAPI:
             idx = it.get("index")
             if isinstance(idx, int):
                 fixable[idx] = str(it.get("timing") or "")
+        # 批6：终态守卫——导读 status 已是 retranslated/nochange 的 index
+        # 直接过滤（前端不会提交，防御直连 CLI/陈旧前端）；全被过滤即
+        # 无可修条目，给出可读原因
+        terminal_idx = {it.get("index") for it in items
+                        if isinstance(it, dict)
+                        and str(it.get("status") or "")
+                        in self.KNOWN_TERMINAL_STATUS}
+        terminal_hits = sorted(want & terminal_idx)
+        if terminal_hits:
+            want -= set(terminal_hits)
+        if not want:
+            return {"success": False,
+                    "error": "所选条目均已是修复终态（已重翻/无需改动），"
+                             "无可修条目"}
         unknown = sorted(want - set(fixable))
         if unknown:
             return {"success": False,
@@ -3227,6 +3256,7 @@ class TranslateAPI:
             "exit_code": rc,
             "applied": 0,
             "failed": 0,
+            "nochange": 0,
             "source_partial": 0,
             "stdout_tail": "\n".join(tail[-40:])[-2000:],
             "schema": 1,
@@ -3243,6 +3273,9 @@ class TranslateAPI:
         result["failed"] = sum(
             1 for r in new_records
             if isinstance(r, dict) and r.get("outcome") == "failed")
+        result["nochange"] = sum(
+            1 for r in new_records
+            if isinstance(r, dict) and r.get("outcome") == "nochange")
         result["source_partial"] = sum(
             1 for r in new_records
             if isinstance(r, dict) and r.get("source_partial"))

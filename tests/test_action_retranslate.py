@@ -206,20 +206,19 @@ def test_timing_ambiguity_miss_and_empty_recorded_failed(
 # ---------------------------------------------------------------------------
 
 def test_quality_gate_failures_keep_original_text(tmp_path, install_client):
+    """批6 改判后：真质量门失败（非合格中文）仍 failed；等值形态见
+    test_equal_translation_marks_nochange_rc0。"""
     _write_final(tmp_path, FINAL_ENTRIES)
     _write_guide(tmp_path, [
         _item(2, T2, "[未翻译] テスト"),
-        _item(3, T3, "前辈真厉害"),
     ])
-    # 纯 ASCII（非合格中文）与与旧文相同两种失败形态
-    install_client(responses=["123456", "前辈真厉害"])
+    install_client(responses=["123456"])
     rc = run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
     assert rc == 1
     assert _read_final(tmp_path) == parse_srt(build_srt(FINAL_ENTRIES))
     records = _read_ledger(tmp_path)
     assert all(r["outcome"] == "failed" for r in records)
     assert "合格中文" in records[0]["reason"]
-    assert "与现有译文相同" in records[1]["reason"]
     assert records[0]["new_text"] == "123456"        # 落选候选入台账供审计
 
 
@@ -588,3 +587,74 @@ def test_action_client_slot_a_isomorphism(monkeypatch):
     ])
     assert action_retranslate._resolve_action_model(cfg_default, "") == \
         "x-preview-f-free"                      # 服务商默认兜底
+
+
+# ---------------------------------------------------------------------------
+# 批6（D2026-1008-02）：等值终态 nochange——状态落盘 + rc 纪律
+# ---------------------------------------------------------------------------
+
+def _read_guide(tmp_path):
+    return json.loads(
+        (tmp_path / "ep01_质量报告导读.json").read_text(encoding="utf-8"))
+
+
+def test_equal_translation_marks_nochange_rc0(tmp_path, install_client):
+    """等值→outcome=nochange（非 failed）、rc=0、台账字段齐全、终稿不动，
+    导读 status 分别落盘 retranslated/nochange（C1/C3）。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [
+        _item(2, T2, "[未翻译] テスト"),
+        _item(3, T3, "前辈真厉害"),
+    ])
+    install_client(responses=["改正后的译文。", "前辈真厉害"])
+    rc = run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
+    assert rc == 0
+    assert _read_final(tmp_path)[2]["text"] == "前辈真厉害"   # 终稿不改
+    records = _read_ledger(tmp_path)
+    assert records[0]["outcome"] == "applied"
+    assert records[1]["outcome"] == "nochange"
+    assert records[1]["new_text"] == "前辈真厉害"
+    assert "已与现译一致" in records[1]["reason"]
+    assert set(records[1]) == LEDGER_FIELDS
+    statuses = {it["index"]: it["status"] for it in
+                _read_guide(tmp_path)["items"]}
+    assert statuses == {2: "retranslated", 3: "nochange"}
+
+
+def test_all_nochange_still_refreshes_guide(tmp_path, install_client):
+    """全 nochange（零终稿变更）：导读仍刷新且 status 全落盘 nochange
+    （critic C1：刷新触发与终稿写入解耦）。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [
+        _item(3, T3, "前辈真厉害"),
+        _item(4, T4, "四"),
+    ])
+    install_client(responses=["前辈真厉害", "四"])
+    rc = run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
+    assert rc == 0
+    assert _read_final(tmp_path) == parse_srt(build_srt(FINAL_ENTRIES))
+    records = _read_ledger(tmp_path)
+    assert all(r["outcome"] == "nochange" for r in records)
+    guide = _read_guide(tmp_path)
+    assert guide.get("retranslated_at")              # 顶层时间戳已刷
+    statuses = {it["index"]: it["status"] for it in guide["items"]}
+    assert statuses == {3: "nochange", 4: "nochange"}
+
+
+def test_mixed_fail_and_nochange_rc3(tmp_path, install_client):
+    """1 真失败 + N nochange：rc=3（部分降级），失败条目 status 不落终态。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [
+        _item(2, T2, "[未翻译] テスト"),
+        _item(3, T3, "前辈真厉害"),
+    ])
+    install_client(responses=[RuntimeError("boom"), "前辈真厉害"])
+    rc = run_action_retranslate(_cfg(), _args(tmp_path, apply=True))
+    assert rc == 3
+    records = _read_ledger(tmp_path)
+    assert records[0]["outcome"] == "failed"
+    assert "LLM 调用失败" in records[0]["reason"]
+    assert records[1]["outcome"] == "nochange"
+    statuses = {it["index"]: it["status"] for it in
+                _read_guide(tmp_path)["items"]}
+    assert statuses == {2: "open", 3: "nochange"}
