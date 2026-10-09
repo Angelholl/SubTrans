@@ -244,6 +244,13 @@ MSG = {
     #      JS 态零静态 i18n 消耗）----
     "encode_translate_conflict": "压制任务进行中，无法开始翻译——请等待压制完成，或在队列底条中取消压制任务",
     "translate_encode_conflict": "翻译任务进行中，无法加入压制队列——请等待翻译完成后再试",
+    # 批修复重入守卫（批1 a 段，D2026-1009-02：_batch_fix_running 在飞时
+    # 二次调用结构化拒绝；api.py refine_batch_fix 消费）
+    "batch_fix_running": "批量修复进行中，请等待当前批次完成后再发起新的修复",
+    # 全链互斥矩阵（批1 b 段，D2026-1009-02：_fullchain_running 在飞时手动
+    # 入口结构化拒绝；api.py start_translation/refine_batch_fix/
+    # refine_ai_analyze/encode_commit 消费，显式拒绝不排队）
+    "fullchain_running": "全链路自动化进行中，请稍后再试",
     "encode_jobs_invalid": "入队任务无效：{reason}",
     "encode_commit_rejected": "全部任务未能入队：{reason}",
     # 压制参数独立设置项（D2026-1008-01 批2：encode_save_params 失败 tip，
@@ -298,6 +305,9 @@ MSG = {
     "encodeKnobSharpen": "锐化量（0-2）",
     "encodeKnobVolume": "音量增益 dB（±12，≠0 需重编码音频）",
     "encodeAutoSwitch": "翻译完成后自动压制（硬字幕）",
+    # 全链自动化开关（批1 a 段，D2026-1009-02；app.js MSG 同键镜像，JS 态
+    # 零静态 i18n 消耗）：如实描述链内序=分析→批量修复→复验（含压制排布）
+    "fullchainAutoSwitch": "翻译完成后自动执行：分析→批量修复→复验（含自动压制排布）",
     "encodeAutoDoneLine": "[压制] 全部完成——可在队列底条「打开文件夹」",
     "encodeJobsLine": "共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边",
     "encodeEtaNone": "（时长预估需 ffmpeg 就绪后预检提供）",

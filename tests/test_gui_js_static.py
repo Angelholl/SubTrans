@@ -3219,16 +3219,21 @@ def test_p3_tm_edit_save_updates_memory_and_dom():
 def test_warmup_maybe_start_guards_order_and_bridge_call():
     """warmupMaybeStart 守卫顺序固定 + 桥调用参数同源（静态钉）。
 
-    守卫链：桥就绪 → 非翻译运行中 → 页面有报告 → 模型解析非空 →
-    生效 provider 本地 → 高频抑制；任一不满足直接 return（不触发）。
+    守卫链：全链开启短路（C-1，3.0 批1 a 段，D2026-1009-02 C5 复议——
+    全链开启时预热由后端状态机链首环承接）→ 桥就绪 → 非翻译运行中 →
+    页面有报告 → 模型解析非空 → 生效 provider 本地 → 高频抑制；
+    任一不满足直接 return（不触发）。
     """
     src = _app_js_source()
     body = _extract_function(src, "warmupMaybeStart")
-    marks = ["window.pywebview", "AppState.isRunning", "lastLoadedGuidePath",
+    marks = ["AppState.fullchainAutoEnabled", "window.pywebview",
+             "AppState.isRunning", "lastLoadedGuidePath",
              "lastLoadedReportTxtPath", "analyzeResolution()", "res.model",
              "AI_CLOUD_PROVIDERS.includes", "__warmupInflight"]
     pos = [body.index(m) for m in marks]
     assert pos == sorted(pos), f"warmupMaybeStart 守卫顺序漂移: {pos}"
+    assert body.index("AppState.fullchainAutoEnabled") \
+        < body.index("window.pywebview"), "C-1 全链短路必须是第一守卫"
     # 桥调用与分析同参源（C6 镜像：model + provider，provider 可为 null）
     assert "refine_warmup_analysis_model(" in body
     assert "res.model, res.provider" in body
@@ -3318,8 +3323,125 @@ def test_warmup_msg_keys_present():
     keys = _js_msg_keys()
     for k in ("warmupStarted", "warmupHot", "warmupAfterQueue",
               "warmupQueued", "warmupTimeout", "warmupUnknown",
-              "warmupDone", "warmupFailed", "warmupHoldBtn"):
-        assert k in keys, f"MSG 缺少预热键: {k}"
+              "warmupDone", "warmupFailed", "warmupHoldBtn",
+              "fullchainAutoSwitch"):
+        assert k in keys, f"MSG 缺少预热/全链键: {k}"
+
+
+def test_fullchain_switch_wiring_pinned():
+    """3.0 批1 a 段（D2026-1009-02）全链开关接线钉：index.html 开关行
+    （零 id/零 data-i18n，data-testid 锚）+ EncodeDock.init 接线（文案/
+    保存 KV/启动回填/AppState 镜像维护）+ MSG 双表同键（app.js 与
+    strings.py，仿 warmup 存在性钉范式）。"""
+    src = _app_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # index.html 开关行：class 三件套 + data-testid，零 id/零 data-i18n
+    m = re.search(r'<label[^>]*class="fullchain-auto-row"[^>]*>', html)
+    assert m, "index.html 缺全链开关行"
+    tag = m.group(0)
+    assert 'data-testid="fullchain-auto-row"' in tag
+    assert not re.search(r'(?<![\w-])id="', tag) and "data-i18n" not in tag, \
+        "全链开关行不得带 id/data-i18n（FROZEN 契约，文案走 JS 态）"
+    row = html[m.start():html.index("</label>", m.start())]
+    assert 'class="fullchain-auto-switch"' in row
+    assert 'class="fullchain-auto-label"' in row
+    # 位置：紧随 encode-auto-row 之后（压制开关旁）
+    assert html.index('data-testid="fullchain-auto-row"') \
+        > html.index('data-testid="encode-auto-row"')
+    # EncodeDock.init 接线：文案 + 保存 KV + 回填 + AppState 镜像维护
+    init = _extract_function(_encode_dock_source(src), "init")
+    assert "fullchain-auto-row" in init
+    assert "MSG.fullchainAutoSwitch" in init
+    assert "fullchain_auto_enabled: fcBox.checked" in init, \
+        "change 须保存 KV fullchain_auto_enabled"
+    assert "r.settings.fullchain_auto_enabled" in init, \
+        "启动回填须读 fullchain_auto_enabled"
+    assert "AppState.fullchainAutoEnabled = fcBox.checked" in init, \
+        "AppState 镜像须同步维护（预热守卫 C-1 消费）"
+    # MSG 双表同键（strings.py 镜像同键中文文案）
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    assert re.search(r'"fullchainAutoSwitch":', sp), \
+        "strings.py MSG 表缺 fullchainAutoSwitch（双表同键纪律）"
+    assert "分析→批量修复→复验" in sp, "全链开关文案须如实描述链内序"
+
+
+# ---------------------------------------------------------------------------
+# GUI 黑盒缺陷回归（2.8.0 起存量）：refine_save_stage_settings 4 参调用
+# ---------------------------------------------------------------------------
+def _extract_call_args(source: str, open_pos: int) -> str:
+    """从 open_pos（须指向 '('）起做圆括号配平，返回括号内实参文本
+    （与 _extract_function 同款逐字符扫描范式）。"""
+    assert source[open_pos] == "(", "open_pos 未指向左圆括号"
+    depth = 0
+    for i in range(open_pos, len(source)):
+        ch = source[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return source[open_pos + 1:i]
+    raise AssertionError("调用圆括号未配平")
+
+
+def _split_top_level_args(args: str) -> list:
+    """按顶层逗号切分实参（()[]{}/引号串深度感知：嵌套内与串内的
+    逗号不切分）。"""
+    parts, buf, depth, quote = [], [], 0, None
+    i = 0
+    while i < len(args):
+        ch = args[i]
+        if quote:
+            if ch == "\\":
+                buf.append(args[i:i + 2])
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+        elif ch in "'\"`":
+            quote = ch
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append("".join(buf))
+            buf = []
+            i += 1
+            continue
+        buf.append(ch)
+        i += 1
+    parts.append("".join(buf))
+    return parts
+
+
+def test_save_stage_settings_calls_three_args():
+    """防复发钉：refine_save_stage_settings 全部调用点 ≤ 3 实参。
+
+    黑盒根因（2.8.0 起存量）：后端签名仅 3 形参（stages/keys/settings，
+    api.py 即正确形态），pywebview 真桥以 func(*params) 按位展开实参——
+    多传尾随第 4 参 null 必 TypeError，而 encode/fullchain 自动化开关的
+    change 监听用 catch 静默吞错（界面看似生效、重启即回缺省），
+    encode_auto_enabled（2.8.0 起）与 fullchain_auto_enabled（3.0 批1 起）
+    勾选因此从不落盘。"""
+    src = _app_js_source()
+    sites = list(re.finditer(r"refine_save_stage_settings\s*\(", src))
+    assert sites, "app.js 未找到 refine_save_stage_settings 调用点"
+    for m in sites:
+        args = _split_top_level_args(_extract_call_args(src, m.end() - 1))
+        line = src.count("\n", 0, m.start()) + 1
+        assert len(args) <= 3, (
+            f"app.js:{line} refine_save_stage_settings 传了 {len(args)} 个"
+            "实参：后端签名仅 3 形参，真桥 func(*params) 按位展开下第 4 参"
+            "必 TypeError 且被 change 监听 catch 静默吞掉（开关勾选从不"
+            "落盘）")
+    # 双锚精确文本钉：EncodeDock 两开关行须以 3 参对象收尾
+    # （防链式调用等变体形态下漏检）
+    init = _extract_function(_encode_dock_source(src), "init")
+    assert "{ encode_auto_enabled: box.checked });" in init, \
+        "encode 开关保存须为 3 参形态（尾随 , null 即 4 参缺陷）"
+    assert "{ fullchain_auto_enabled: fcBox.checked });" in init, \
+        "fullchain 开关保存须为 3 参形态（尾随 , null 即 4 参缺陷）"
 
 
 def test_warmup_engine_locked_style_present():

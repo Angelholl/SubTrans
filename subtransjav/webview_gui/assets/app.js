@@ -112,6 +112,8 @@ const MSG = {
     encodeKnobSharpen: '锐化量（0-2）',
     encodeKnobVolume: '音量增益 dB（±12，≠0 需重编码音频）',
     encodeAutoSwitch: '翻译完成后自动压制（硬字幕）',
+    // 全链自动化开关（3.0 批1 a 段，D2026-1009-02；strings.py MSG 同键镜像）
+    fullchainAutoSwitch: '翻译完成后自动执行：分析→批量修复→复验（含自动压制排布）',
     encodeAutoDoneLine: '[压制] 全部完成——可在队列底条「打开文件夹」',
     encodeJobsLine: '共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边',
     encodeSecBase: '基础',
@@ -883,6 +885,11 @@ const AppState = {
 
     // UI state
     isRunning: false,
+
+    // 全链自动化开关镜像（3.0 批1 a 段，D2026-1009-02）：EncodeDock.init
+    // 启动回填时同步维护；warmupMaybeStart 守卫消费（C-1：全链开启时前端
+    // 预热短路，预热由后端链首环承接）
+    fullchainAutoEnabled: false,
 
     // Default output directory
     outputDir: '',
@@ -6640,8 +6647,9 @@ function switchTab(tabId) {
   // ============================================================
   // P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）
   // ============================================================
-  // 触发守卫（顺序固定，静态钉）：桥就绪 → 非翻译运行中 → 页面有报告
-  // （导读或报告全文）→ 模型解析非空 → 生效 provider 为本地 → 高频抑制。
+  // 触发守卫（顺序固定，静态钉）：全链开启短路（C-1，3.0 批1 a 段）→
+  // 桥就绪 → 非翻译运行中 → 页面有报告（导读或报告全文）→ 模型解析非空
+  // → 生效 provider 为本地 → 高频抑制。
   // 后端桥内另有单飞+C4 在载探活+G3 指纹三层去重（前端 5s 抑制仅兜高频）。
   // C21：预热结果只进 Console/状态文案与 warmup 桥状态——不碰分析按钮
   //（refineAiAnalyzeBtn）可用性、不跳过分析时真实 ensure。
@@ -6649,6 +6657,10 @@ function switchTab(tabId) {
 
   function warmupMaybeStart() {
     try {
+      // C-1（D2026-1009-02 C5 复议三条件）：全链开启时前端预热短路——
+      // 预热由后端全链状态机链首环承接（后端同一 KV fullchain_auto_enabled
+      // 门控，钩子整体改道状态机）；两触发点①②均经本函数，一处守卫全覆盖
+      if (AppState.fullchainAutoEnabled) return;
       if (!window.pywebview || !window.pywebview.api) return;
       if (AppState.isRunning) return;                     // 翻译运行中跳过
       // 页面无报告不预热（触发点②前置条件；触发点①完成时报告已可加载）
@@ -8608,7 +8620,7 @@ const EncodeDock = {
                 if (!api2) return;
                 try {
                     await api2.refine_save_stage_settings(null, null,
-                        { encode_auto_enabled: box.checked }, null);
+                        { encode_auto_enabled: box.checked });
                 } catch (e) { /* 下次切换自愈 */ }
             });
             // 启动回填（桥就绪后异步读设置；失败保持缺省关）
@@ -8619,6 +8631,37 @@ const EncodeDock = {
                     const r = await api2.refine_get_stage_settings();
                     if (r && r.success && r.settings) {
                         box.checked = !!r.settings.encode_auto_enabled;
+                    }
+                } catch (e) { /* 保持缺省关 */ }
+            })();
+        }
+        // 全链自动化开关（3.0 批1 a 段，D2026-1009-02：管线设置
+        // fullchain_auto_enabled；缺省关。开启时后端会话钩子整体改道全链
+        // 状态机、前端预热经 AppState.fullchainAutoEnabled 短路——C-1/C-2
+        // 同门控；镜像同步维护 AppState 供 warmupMaybeStart 守卫消费）
+        const fullchainRow = document.querySelector('.fullchain-auto-row');
+        if (fullchainRow) {
+            const fcBox = fullchainRow.querySelector('.fullchain-auto-switch');
+            const fcLabel = fullchainRow.querySelector('.fullchain-auto-label');
+            fcLabel.textContent = MSG.fullchainAutoSwitch;
+            fcBox.addEventListener('change', async () => {
+                const api2 = self._api();
+                if (!api2) return;
+                AppState.fullchainAutoEnabled = fcBox.checked;
+                try {
+                    await api2.refine_save_stage_settings(null, null,
+                        { fullchain_auto_enabled: fcBox.checked });
+                } catch (e) { /* 下次切换自愈 */ }
+            });
+            // 启动回填（桥就绪后异步读设置；失败保持缺省关）
+            (async () => {
+                const api2 = self._api();
+                if (!api2) return;
+                try {
+                    const r = await api2.refine_get_stage_settings();
+                    if (r && r.success && r.settings) {
+                        fcBox.checked = !!r.settings.fullchain_auto_enabled;
+                        AppState.fullchainAutoEnabled = fcBox.checked;
                     }
                 } catch (e) { /* 保持缺省关 */ }
             })();

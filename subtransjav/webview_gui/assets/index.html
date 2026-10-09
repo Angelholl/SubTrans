@@ -1000,6 +1000,15 @@
                     <input type="checkbox" class="encode-auto-switch" style="margin:0;">
                     <span class="encode-auto-label"></span>
                 </label>
+                <!-- 全链自动化开关（3.0 批1 a 段，D2026-1009-02：状态存管线
+                     设置 fullchain_auto_enabled，缺省关；开启时翻译完成钩子
+                     整体改道全链状态机——分析→批量修复→复验→链尾压制，前端
+                     预热同门控短路。零 id 零静态 i18n，文案 EncodeDock.init
+                     JS 态填充；样式复用 encode-auto-row 内联样式族不另立 CSS） -->
+                <label class="fullchain-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;cursor:pointer;" data-testid="fullchain-auto-row">
+                    <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
+                    <span class="fullchain-auto-label"></span>
+                </label>
                 <!-- 压制参数入口（D2026-1008-01 批2）：「参数」文字小按钮同开
                      编辑模式弹窗；置于 label 外（label 内点击会透传切换开关）；
                      零 id 零静态 data-i18n，文案 EncodeDock.init JS 态承接 -->

@@ -5536,3 +5536,644 @@ def test_warmup_probe_miss_downgrades_stale_loaded_state(gui_api_obj,
     r2 = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
     assert r2["state"] == "loading"
     assert len(argvs) == 2, "TTL 卸载后须重新预热（C4 真值覆写指纹缓存）"
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批1 a 段（D2026-1009-02）：全链开关+会话完成状态机骨架+C7 时序门
+# +复验参数化+重入守卫+C5 三条件
+# ---------------------------------------------------------------------------
+
+def _fullchain_env(gui_api_obj, monkeypatch, tmp_path, *, settings,
+                   stage1=None):
+    """全链测试环境：CONFIG_DIR 打桩（开关 KV 真实读写走
+    refine_stage_settings.json 文件）+ refine_get_stage_settings 替身
+    （模型解析/回填读内存表，避 DPAPI 密钥库；仿 _install_fake_stages）
+    + 端点探活桩（C8 预检与预热 loaded 探测不真连 localhost:1234，
+    CI 无 LM Studio 也稳定；仿 test_batch_fix_probe_passes_then_spawns
+    假探活口径，非 2xx 也算通）。"""
+    import subtransjav.refine.config as cfg
+    d = tmp_path / "cfg"
+    d.mkdir(exist_ok=True)
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(d))
+    (d / "refine_stage_settings.json").write_text(
+        json.dumps({"stages": [], "settings": settings},
+                   ensure_ascii=False), encoding="utf-8")
+    stages = [{"stage": 1, **(stage1 or {})}] if stage1 is not None else []
+    monkeypatch.setattr(
+        gui_api_obj, "refine_get_stage_settings",
+        lambda: {"success": True, "stages": stages, "settings": settings,
+                 "key_status": {}, "first_run": False})
+    import subtransjav.translate.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "probe_endpoint_reachable",
+                        lambda endpoint, **kw: (True, "HTTP 404"))
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded",
+                        lambda endpoint: None)
+    return d
+
+
+def test_fullchain_switch_default_off_and_roundtrip(gui_api_obj, monkeypatch,
+                                                    tmp_path):
+    """开关缺省关 + 保存/读取 roundtrip（CONFIG_DIR 打桩）：KV
+    fullchain_auto_enabled 走 refine_save_stage_settings 持久化，与
+    encode_auto_enabled 同文件共存互不覆盖。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    gui = gui_api_obj
+    assert gui._fullchain_auto_enabled() is False      # 缺省关（无文件）
+    assert gui.refine_save_stage_settings(
+        None, None, {"fullchain_auto_enabled": True})["success"]
+    assert gui._fullchain_auto_enabled() is True
+    assert gui.refine_save_stage_settings(
+        None, None, {"encode_auto_enabled": True})["success"]
+    assert gui._fullchain_auto_enabled() is True       # 同 KV 文件共存
+    assert gui._encode_automation_enabled() is True
+    assert gui.refine_save_stage_settings(
+        None, None, {"fullchain_auto_enabled": False})["success"]
+    assert gui._fullchain_auto_enabled() is False
+    assert gui._encode_automation_enabled() is True    # 不连坐
+
+
+def test_fullchain_closed_state_hook_unchanged(gui_api_obj, monkeypatch,
+                                               tmp_path):
+    """C5/C-3 关闭态回归钉：fullchain 关（缺省）时钩子直调后
+    _fullchain_running 保持 False、链线程未创建、零 spawn；warmup daemon
+    仍触发（原 P1 形态；encode/warmup 逐字节路径另由
+    test_session_completed_triggers_warmup_hook / test_automation_* 钉住）。"""
+    gui_api_obj._init_ai_state()
+    _fullchain_env(gui_api_obj, monkeypatch, tmp_path, settings={})
+    monkeypatch.setattr(gui_api_obj, "_encode_automation_enabled",
+                        lambda: False)
+    warm = threading.Event()
+    monkeypatch.setattr(gui_api_obj, "_warmup_after_session",
+                        lambda: warm.set())
+    captured = _install_fake_bf_spawn(monkeypatch)
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed({})
+    assert warm.wait(5), "关闭态钩子尾部仍须 daemon 触发 _warmup_after_session"
+    assert getattr(gui_api_obj, "_fullchain_thread", None) is None, \
+        "关闭态不得创建全链线程"
+    with gui_api_obj._ai_lock:
+        assert gui_api_obj._fullchain_running is False
+    assert not captured.get("calls"), "关闭态钩子不得触发任何批修复/分析 spawn"
+
+
+def test_fullchain_chain_happy_path(gui_api_obj, monkeypatch, tmp_path):
+    """开启态钩子直调→链跑通：预热首环承接（C5）→单批修复（verify=False
+    无 --ai-analyze）→链级复验恰 1 次→链尾不压制（encode 关）→C9 落盘
+    ended_at/计数正确。"""
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, tmp_path,
+        settings={"fullchain_auto_enabled": True},
+        stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
+    items = [_bf_item(3, _T3, "甲"),
+             _bf_item(7, _T7, "乙", category="untranslated")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    _make_bf_guide(tmp_path, items, ledger=[],
+                   with_suggestion={"glossary": [], "tm": [],
+                                    "observations": []})
+    warmup_calls: list = []
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: warmup_calls.append((m, p))
+                        or {"success": True})
+    encode_calls: list = []
+    monkeypatch.setattr(gui_api_obj, "_run_encode_automation",
+                        lambda s: encode_calls.append(s))
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=["[1/2] ok"], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied"},
+                        {"index": 7, "timing": _T7, "outcome": "applied"}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed(
+        {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
+    assert getattr(gui_api_obj, "_fullchain_thread", None) is not None
+    gui_api_obj._fullchain_thread.join(15)
+    assert not gui_api_obj._fullchain_thread.is_alive()
+    bf = [c for c in captured["calls"]
+          if "--action-retranslate" in c["args"]]
+    an = [c for c in captured["calls"] if "--ai-analyze" in c["args"]]
+    assert len(bf) == 1 and len(an) == 1
+    assert bf[0]["args"][bf[0]["args"].index("--entries") + 1] == "3,7"
+    assert all("--ai-analyze" not in c["args"] for c in bf), \
+        "批内 verify=False 不得触发分析 spawn"
+    assert warmup_calls == [("qwen-m", "lmstudio")], \
+        "链首预热承接（C5）：解析结果同源 (model, provider)"
+    assert encode_calls == [], "C7：encode 关 → 链尾不压制"
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "done" and run["ended_at"]
+    assert run["files_total"] == 1 and run["files_done"] == 1
+    assert run["entries_fixed"] == 2 and run["entries_failed"] == 0
+    assert run["entries_pending"] == 0
+    assert gui_api_obj.fullchain_last_run_status()["unfinished"] is False
+    assert gui_api_obj.fullchain_automation_status()["running"] is False
+
+
+def test_fullchain_single_analyze_invariant(gui_api_obj, monkeypatch,
+                                            tmp_path):
+    """长期链级不变式钉（D2026-1009-02 批1 a 段）：一次会话完整链内
+    LLM 分析（--ai-analyze）spawn==1——批内 verify=False + 链级复验唯一；
+    复验 spawn 与链首解析同源（--ai-model/--s1-provider 显式透传）。"""
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, tmp_path,
+        settings={"fullchain_auto_enabled": True},
+        stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
+    items = [_bf_item(3, _T3, "甲"), _bf_item(7, _T7, "乙")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    _make_bf_guide(tmp_path, items, ledger=[],
+                   with_suggestion={"glossary": [], "tm": [],
+                                    "observations": []})
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=[], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied"}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed(
+        {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
+    gui_api_obj._fullchain_thread.join(15)
+    analyze_calls = [c for c in captured["calls"]
+                     if "--ai-analyze" in c["args"]]
+    assert len(analyze_calls) == 1, \
+        "链级不变式：--ai-analyze spawn 必须==1（复验参数化+链级唯一）"
+    a = analyze_calls[0]["args"]
+    assert a[a.index("--ai-model") + 1] == "qwen-m"
+    assert a[a.index("--s1-provider") + 1] == "lmstudio"
+
+
+def test_fullchain_batch_split_max_50(gui_api_obj, monkeypatch, tmp_path):
+    """60 条 fixable 切 2 批（≤_BATCH_FIX_MAX_ENTRIES/批）；批间独立进出
+    （重入守卫不嵌套），批内零 --ai-analyze（verify=False）。"""
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, tmp_path,
+        settings={"fullchain_auto_enabled": True},
+        stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
+    items = [_bf_item(i, f"00:00:{i:02d},000 --> 00:00:{i + 1:02d},000",
+                      f"t{i}") for i in range(60)]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    _make_bf_guide(tmp_path, items, ledger=[])
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=[], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"timing": "t", "outcome": "applied"}])
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed(
+        {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
+    gui_api_obj._fullchain_thread.join(15)
+    bf = [c for c in captured["calls"]
+          if "--action-retranslate" in c["args"]]
+    assert len(bf) == 2, "60 条须切 2 批"
+    sizes = [len(c["args"][c["args"].index("--entries") + 1].split(","))
+             for c in bf]
+    assert sizes == [50, 10], f"批大小须 ≤50 且整除切批: {sizes}"
+    assert all("--ai-analyze" not in c["args"] for c in bf)
+
+
+def test_fullchain_cloud_provider_gate(gui_api_obj, monkeypatch, tmp_path,
+                                       caplog):
+    """N-6 云端零出域：解析生效 provider 为云端 → 链不启动（零 spawn）、
+    人话通知落日志、C9 落 skipped+ended_at、运行标志复位。"""
+    import logging
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, tmp_path,
+        settings={"fullchain_auto_enabled": True},
+        stage1={"provider": "deepseek", "endpoint": "", "model": "cloud-m"})
+    captured = _install_fake_bf_spawn(monkeypatch)
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._session_hook_fired = False
+        gui_api_obj._on_translation_session_completed(
+            {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
+        gui_api_obj._fullchain_thread.join(10)
+    assert not captured.get("calls"), "云端 provider 链不得 spawn 任何子进程"
+    assert any("自动化未启动" in r.message for r in caplog.records), \
+        "不启动须人话通知（不静默）"
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "skipped" and run["ended_at"]
+    assert gui_api_obj.fullchain_automation_status()["running"] is False
+
+
+def test_fullchain_c7_encode_after_verify(gui_api_obj, _auto_env, monkeypatch):
+    """C7 时序门（双开）：压制入队发生在复验（--ai-analyze spawn）之后——
+    fake spawn 捕获序=批修复→分析→encode 标记；入队任务带 auto 标记。"""
+    import subtransjav.webview_gui.encode_queue as eq
+    gui_api_obj._init_ai_state()
+    # 双开 KV（真实文件：钩子入口 _fullchain_auto_enabled + 链尾
+    # _encode_automation_enabled 均直读文件；CONFIG_DIR 换独立目录）
+    import subtransjav.refine.config as cfg
+    cfgdir = _auto_env["media"].parent / "cfg_fc"
+    cfgdir.mkdir(exist_ok=True)
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(cfgdir))
+    (cfgdir / "refine_stage_settings.json").write_text(
+        json.dumps({"stages": [], "settings": {
+            "fullchain_auto_enabled": True, "encode_auto_enabled": True}},
+            ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(
+        gui_api_obj, "refine_get_stage_settings",
+        lambda: {"success": True,
+                 "stages": [{"stage": 1, "provider": "lmstudio",
+                             "endpoint": "", "model": "qwen-m"}],
+                 "settings": {"fullchain_auto_enabled": True,
+                              "encode_auto_enabled": True},
+                 "key_status": {}, "first_run": False})
+    # C8 端点预检桩（CI 无 LM Studio；与 _fullchain_env 同口径，
+    # 非 2xx 也算通——本测试未走 helper，须自打）
+    import subtransjav.translate.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "probe_endpoint_reachable",
+                        lambda endpoint, **kw: (True, "HTTP 404"))
+    media = _auto_env["media"]
+    # 导读/报告/空台账落媒体目录（done 键剥链候选 vid1.ja.whisperjav→
+    # vid1.ja→vid1 命中 vid1_质量报告导读.json，兼测剥链候选序）
+    (media / "vid1_质量报告导读.json").write_text(json.dumps(
+        {"version": 2, "stem": "vid1",
+         "items": [_bf_item(3, _T3, "甲")], "direction": "",
+         "media_path": ""}, ensure_ascii=False), encoding="utf-8")
+    (media / "vid1_质量报告.txt").write_text("【结论】x\n", encoding="utf-8")
+    ledger_path = media / "vid1_重翻记录.json"
+    ledger_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    monkeypatch.setattr(eq, "_spawn_ffmpeg",
+                        lambda argv: (_ for _ in ()).throw(
+                            OSError("no ffmpeg")))
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=[], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied"}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    orig_encode = TranslateAPI._run_encode_automation
+
+    def _encode_spy(summary, **kwargs):   # b 段：链尾透传 from_fullchain
+        captured["calls"].append({"args": ["__encode_tail__"], "kwargs": {}})
+        return orig_encode(gui_api_obj, summary, **kwargs)
+
+    monkeypatch.setattr(gui_api_obj, "_run_encode_automation", _encode_spy)
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed(
+        {"files": {_auto_env["srt"]: "done"}})
+    gui_api_obj._fullchain_thread.join(15)
+    seq = captured["calls"]
+    bf_idx = [i for i, c in enumerate(seq)
+              if "--action-retranslate" in c["args"]]
+    an_idx = next(i for i, c in enumerate(seq) if "--ai-analyze" in c["args"])
+    enc_idx = next(i for i, c in enumerate(seq)
+                   if c["args"] and c["args"][0] == "__encode_tail__")
+    assert bf_idx and an_idx > max(bf_idx), "复验须晚于全部批修复"
+    assert enc_idx > an_idx, "C7：压制排布须在复验之后（链尾）"
+    jobs = gui_api_obj.encode_status()["jobs"]
+    assert len(jobs) == 1 and jobs[0]["params"].get("auto") is True
+    eq.get_encode_queue().cancel(None)
+    eq.release_encode_slot()
+
+
+def test_batch_fix_verify_false_skips_analyze(gui_api_obj, monkeypatch,
+                                              tmp_path):
+    """复验参数化（批1 a 段）：verify=False 时无 --ai-analyze spawn 且
+    result.verify={"skipped": True}；缺省 True 行为由既有
+    test_batch_fix_success_and_ledger_delta 原样钉住（不动）。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items)
+    captured = _install_fake_bf_spawn(monkeypatch, lines=["ok"], rc=0)
+    r = gui_api_obj.refine_batch_fix(str(guide), [3], "deepseek",
+                                     "sb-model", verify=False)
+    assert r["success"] is True
+    assert r["verify"] == {"skipped": True}
+    assert all("--ai-analyze" not in c["args"] for c in captured["calls"])
+
+
+def test_batch_fix_reentry_guard_rejects_concurrent(gui_api_obj, monkeypatch,
+                                                    tmp_path):
+    """重入守卫（批1 a 段）：第一调用阻塞在 fake spawn wait 期间第二调用
+    被结构化拒绝（batch_fix_running，不二次 spawn）；finally 清位后可
+    再次发起。"""
+    import subtransjav.webview_gui.api as api_mod
+    gui_api_obj._init_ai_state()
+    release = threading.Event()
+    entered = threading.Event()
+
+    class _BlockingProc:
+        pid = 424242
+        stdout = iter([])
+
+        def __init__(self):
+            self.returncode = None
+
+        def wait(self, timeout=None):
+            entered.set()
+            release.wait(10)
+            self.returncode = 0
+            return 0
+
+        def kill(self):
+            pass
+
+    calls: list = []
+
+    def _fake_spawn(args, **kwargs):
+        calls.append(args)
+        return _BlockingProc()
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _fake_spawn)
+    # 模型解析打桩（云端 provider 跳过端点探活，零网络；守卫测试不消费
+    # 解析细节，只要 ok 即可走到 spawn wait）
+    monkeypatch.setattr(
+        gui_api_obj, "_resolve_ai_model_config",
+        lambda *a, **k: {"ok": True, "provider": "deepseek", "endpoint": "",
+                         "model": "m1", "source": "stage_a_follow",
+                         "notes": [], "reason": ""})
+    items = [_bf_item(3, _T3, "甲"), _bf_item(7, _T7, "乙")]
+    guide = _make_bf_guide(tmp_path, items, ledger=[])
+
+    box: dict = {}
+
+    def _first():
+        box["r"] = gui_api_obj.refine_batch_fix(str(guide), [3, 7],
+                                                verify=False)
+
+    t = threading.Thread(target=_first, daemon=True)
+    t.start()
+    assert entered.wait(10), "第一调用未到达 spawn wait"
+    r2 = gui_api_obj.refine_batch_fix(str(guide), [3], verify=False)
+    assert r2["success"] is False
+    assert "批量修复进行中" in r2["error"], "并发第二调用须结构化拒绝"
+    assert len(calls) == 1, "拒绝路径不得二次 spawn"
+    release.set()
+    t.join(10)
+    assert box["r"]["success"] is True
+    r3 = gui_api_obj.refine_batch_fix(str(guide), [3], verify=False)
+    assert r3["success"] is True
+    assert len(calls) == 2, "finally 清位后须可再次发起"
+
+
+def test_fullchain_c9_interrupted_last_run(gui_api_obj, monkeypatch,
+                                           tmp_path):
+    """C9「上次未完成」判定：fullchain_last_run.json 无 ended_at 且
+    phase!=done → unfinished True + entries_pending 透出；done 快照/缺失
+    快照 → False（不误报）。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    p = tmp_path / "fullchain_last_run.json"
+    p.write_text(json.dumps(
+        {"phase": "running", "files_total": 3, "files_done": 1,
+         "entries_fixed": 4, "entries_failed": 0, "entries_pending": 21,
+         "missed_skipped": 0, "started_at": "2026-10-10T00:00:00",
+         "ended_at": ""}, ensure_ascii=False), encoding="utf-8")
+    st = gui_api_obj.fullchain_last_run_status()
+    assert st["unfinished"] is True
+    assert st["last_run"]["entries_pending"] == 21
+    p.write_text(json.dumps({"phase": "done", "ended_at": "T1",
+                             "entries_pending": 0}, ensure_ascii=False),
+                 encoding="utf-8")
+    assert gui_api_obj.fullchain_last_run_status()["unfinished"] is False
+    p.unlink()
+    assert gui_api_obj.fullchain_last_run_status()["unfinished"] is False
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批1 b 段（D2026-1009-02 第二节批1 b 段）：互斥矩阵六对+云端零出域
+# 注入。纪律：每对断言拒绝先于 spawn（captured 空）=零出域承诺的测试面；
+# 链内调用携 from_fullchain=True 绕过全链在飞判定（仍受各自守卫约束）。
+# 互斥对⑤（前端预热抑制）由 tests/test_gui_js_static.py 既有静态钉覆盖
+#（warmupMaybeStart 守卫序/触发点①②），本文件不重复。
+# ---------------------------------------------------------------------------
+
+_FULLCHAIN_ERR = "全链路自动化进行中"
+
+
+def test_fullchain_blocks_start_translation(gui_api_obj, monkeypatch):
+    """互斥对①：全链在飞 → start_translation 结构化拒绝（fullchain_running
+    标记+人话 error）；已 claim 的翻译槽原路归还（防泄漏）；拒绝先于
+    spawn（零出域）。"""
+    import threading
+
+    import subtransjav.webview_gui.api as api_mod
+    import subtransjav.webview_gui.encode_queue as eq
+    monkeypatch.setattr(eq, "_encode_active", False)
+    monkeypatch.setattr(eq, "_translate_running", False)
+    gui_api_obj._init_ai_state()
+    # _translate_lock 由 __init__ 创建；object.__new__ 实例需手动补齐
+    gui_api_obj._translate_lock = threading.Lock()
+    no_spawn: list = []
+
+    def _no_spawn(args, **kwargs):
+        no_spawn.append(args)
+        raise AssertionError("拒绝路径不得 spawn")
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _no_spawn)
+    with gui_api_obj._ai_lock:
+        gui_api_obj._fullchain_running = True
+    try:
+        r = gui_api_obj.start_translation({"force": True, "inputs": []})
+        assert r["success"] is False
+        assert r["fullchain_running"] is True
+        assert _FULLCHAIN_ERR in r["error"]
+        assert no_spawn == [], "拒绝须先于 spawn（零出域测试面）"
+        assert eq.claim_translate_slot() is True, \
+            "拒绝路径须归还已 claim 的翻译槽（防泄漏）"
+        eq.release_translate_slot()
+    finally:
+        with gui_api_obj._ai_lock:
+            gui_api_obj._fullchain_running = False
+
+
+def test_fullchain_blocks_manual_batch_fix(gui_api_obj, monkeypatch, tmp_path):
+    """互斥对②：全链在飞 → 手动批量修复结构化拒绝（零 spawn）；链内调用
+    携 from_fullchain=True 放行（仍受重入守卫约束，行为=链内逐批）。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items, ledger=[])
+    captured = _install_fake_bf_spawn(monkeypatch, lines=["ok"], rc=0)
+    gui_api_obj._init_ai_state()
+    with gui_api_obj._ai_lock:
+        gui_api_obj._fullchain_running = True
+    try:
+        r = gui_api_obj.refine_batch_fix(str(guide), [3], verify=False)
+        assert r["success"] is False
+        assert r["fullchain_running"] is True
+        assert _FULLCHAIN_ERR in r["error"]
+        assert captured.get("calls") is None, \
+            "拒绝须先于 spawn（零出域测试面）"
+        r2 = gui_api_obj.refine_batch_fix(str(guide), [3], "deepseek",
+                                          "sb-model", verify=False,
+                                          from_fullchain=True)
+        assert r2["success"] is True, "链内调用（from_fullchain=True）须放行"
+        assert any("--action-retranslate" in c["args"]
+                   for c in captured["calls"])
+    finally:
+        with gui_api_obj._ai_lock:
+            gui_api_obj._fullchain_running = False
+
+
+def test_fullchain_blocks_manual_ai_analyze(gui_api_obj, monkeypatch,
+                                            tmp_path):
+    """互斥对④：全链在飞 → 手动 AI 分析结构化拒绝（零 spawn，显式拒绝
+    不排队）；链内复验携 from_fullchain=True 放行（captured 含
+    --ai-analyze）。"""
+    report = _make_ai_report(tmp_path)
+    _install_fake_stage_settings(gui_api_obj, monkeypatch, provider="zen")
+    captured = _install_fake_ai_run(monkeypatch)
+    gui_api_obj._init_ai_state()
+    with gui_api_obj._ai_lock:
+        gui_api_obj._fullchain_running = True
+    try:
+        r = gui_api_obj.refine_ai_analyze(str(report))
+        assert r["success"] is False
+        assert _FULLCHAIN_ERR in r["error"]
+        assert "args" not in captured, "拒绝须先于 spawn（零出域测试面）"
+        r2 = gui_api_obj.refine_ai_analyze(str(report), from_fullchain=True)
+        assert r2["success"] is True, "链内复验（from_fullchain=True）须放行"
+        assert "--ai-analyze" in captured["args"]
+    finally:
+        with gui_api_obj._ai_lock:
+            gui_api_obj._fullchain_running = False
+
+
+def test_fullchain_blocks_manual_encode(gui_api_obj):
+    """互斥对③：全链在飞 → 手动压制入队入口 encode_commit 结构化拒绝
+    （入口判定早于参数解析/落队，零入队零 spawn）。"""
+    gui_api_obj._init_ai_state()
+    with gui_api_obj._ai_lock:
+        gui_api_obj._fullchain_running = True
+    try:
+        r = gui_api_obj.encode_commit([], {})
+        assert r["success"] is False
+        assert r["fullchain_running"] is True
+        assert _FULLCHAIN_ERR in r["error"]
+        assert gui_api_obj.encode_status()["jobs"] == [], "拒绝须零入队"
+    finally:
+        with gui_api_obj._ai_lock:
+            gui_api_obj._fullchain_running = False
+
+
+def test_fullchain_tail_encode_skipped_when_manual_busy(gui_api_obj, _auto_env,
+                                                        monkeypatch, caplog):
+    """互斥对⑥反向：链尾压制前判定手动压制在飞（encode_active=互斥槽
+    已占）→ 跳过自动压制（不排队不重试）+人话通知；链本体照常完成
+    （复验恰 1 次、phase=done）。"""
+    import logging
+
+    import subtransjav.webview_gui.encode_queue as eq
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, _auto_env["media"].parent,
+        settings={"fullchain_auto_enabled": True, "encode_auto_enabled": True},
+        stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
+    media = _auto_env["media"]
+    (media / "vid1_质量报告导读.json").write_text(json.dumps(
+        {"version": 2, "stem": "vid1",
+         "items": [_bf_item(3, _T3, "甲")], "direction": "",
+         "media_path": ""}, ensure_ascii=False), encoding="utf-8")
+    (media / "vid1_质量报告.txt").write_text("【结论】x\n", encoding="utf-8")
+    ledger_path = media / "vid1_重翻记录.json"
+    ledger_path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=[], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied"}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    encode_calls: list = []
+    monkeypatch.setattr(gui_api_obj, "_run_encode_automation",
+                        lambda s, **k: encode_calls.append((s, k)))
+    assert eq.claim_encode_slot() is True, "预置：手动压制在飞（互斥槽已占）"
+    try:
+        with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+            gui_api_obj._session_hook_fired = False
+            gui_api_obj._on_translation_session_completed(
+                {"files": {_auto_env["srt"]: "done"}})
+            gui_api_obj._fullchain_thread.join(15)
+        assert encode_calls == [], \
+            "手动压制在飞须跳过自动压制（不排队不重试）"
+        assert any("压制被手动任务占用" in r.message for r in caplog.records), \
+            "占用跳过须人话通知（不静默）"
+        assert len([c for c in captured["calls"]
+                    if "--ai-analyze" in c["args"]]) == 1, \
+            "链本体不受影响：复验照常恰 1 次"
+        run = gui_api_obj._fullchain_read_last_run()
+        assert run["phase"] == "done" and run["ended_at"]
+    finally:
+        eq.release_encode_slot()
+
+
+def test_fullchain_verify_skipped_when_manual_analyze_busy(gui_api_obj,
+                                                           monkeypatch,
+                                                           tmp_path, caplog):
+    """互斥对④反向：手动分析在飞（_ai_analyze_running 预置）→ 链跑完、
+    链级复验跳过（零 --ai-analyze spawn、不重试）、notice 落 caplog、
+    last_run phase=done（链继续收尾）。"""
+    import logging
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, tmp_path,
+        settings={"fullchain_auto_enabled": True},
+        stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
+    items = [_bf_item(3, _T3, "甲")]
+    ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
+    _make_bf_guide(tmp_path, items, ledger=[],
+                   with_suggestion={"glossary": [], "tm": [],
+                                    "observations": []})
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=[], rc=0, ledger_path=ledger_path,
+        ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied"}],
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    with gui_api_obj._ai_lock:
+        gui_api_obj._ai_analyze_running = True   # 预置：手动分析在飞
+    try:
+        with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+            gui_api_obj._session_hook_fired = False
+            gui_api_obj._on_translation_session_completed(
+                {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
+            gui_api_obj._fullchain_thread.join(15)
+        assert not [c for c in captured["calls"]
+                    if "--ai-analyze" in c["args"]], \
+            "手动分析在飞 → 链级复验跳过（零 --ai-analyze spawn）"
+        assert any("复验跳过" in r.message for r in caplog.records), \
+            "复验占用跳过须人话通知（不静默）"
+        run = gui_api_obj._fullchain_read_last_run()
+        assert run["phase"] == "done" and run["ended_at"], \
+            "复验跳过后链继续收尾（phase=done）"
+    finally:
+        with gui_api_obj._ai_lock:
+            gui_api_obj._ai_analyze_running = False
+
+
+def test_fullchain_config_error_injection(gui_api_obj, monkeypatch, tmp_path,
+                                          caplog):
+    """云端零出域注入（N-6 补钉，双向）：_resolve_ai_model_config 打桩——
+    ①半配置 ok=False（provider 有 model 空）②ok=True 但 provider=云端
+    名单值 → 均链不启动（零 spawn）+notice+phase=skipped+运行标志复位。"""
+    import logging
+    gui_api_obj._init_ai_state()
+    _fullchain_env(gui_api_obj, monkeypatch, tmp_path,
+                   settings={"fullchain_auto_enabled": True})
+    captured = _install_fake_bf_spawn(monkeypatch)
+    cases = [
+        # 半配置：provider 有值 model 空 → ok=False
+        {"ok": False, "provider": "lmstudio", "endpoint": "", "model": "",
+         "source": "stage_a_follow", "notes": [], "reason": "半配置"},
+        # ok=True 但 provider 为云端名单值（N-6 云端零出域）
+        {"ok": True, "provider": "deepseek", "endpoint": "https://x/v1",
+         "model": "cloud-m", "source": "stage_a_follow", "notes": [],
+         "reason": ""},
+    ]
+    for case in cases:
+        monkeypatch.setattr(
+            gui_api_obj, "_resolve_ai_model_config",
+            lambda *a, _c=dict(case), **k: dict(_c))
+        with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+            gui_api_obj._session_hook_fired = False
+            gui_api_obj._on_translation_session_completed(
+                {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
+            gui_api_obj._fullchain_thread.join(10)
+        assert not captured.get("calls"), \
+            f"注入 {case['provider']!r} 链不得 spawn 任何子进程"
+        assert any("自动化未启动" in r.message for r in caplog.records), \
+            "不启动须人话通知（不静默）"
+        run = gui_api_obj._fullchain_read_last_run()
+        assert run["phase"] == "skipped" and run["ended_at"]
+        assert gui_api_obj.fullchain_automation_status()["running"] is False
+        caplog.clear()

@@ -659,6 +659,20 @@ def _child_procs_ledger_path() -> str:
     return os.path.join(str(CONFIG_DIR), _CHILD_PROCS_LEDGER_NAME)
 
 
+# 全链自动修复分类白名单（批1 a 段，D2026-1009-02 批1 a 段 d 项）：grep
+# quality_report.py 全部 guide item category 赋值点得闭集——来源 A
+# structured_warnings（post_validate.py _record 三处："dewei"/"subject"/
+# 动态规则名）、来源 B "untranslated"、来源 E "cps_too_fast"。来源 C
+# "single_line_too_long"（重翻无长度收敛保证）与来源 D
+# "suspected_missed_speech"（纯观测类 current_text=None）不入白名单。
+# fail-closed：未知/未列类别一律不自动修复（宁可漏修不误修）。
+_FULLCHAIN_AUTO_CATEGORIES = frozenset(
+    {"untranslated", "cps_too_fast", "dewei", "subject"})
+# structured_warnings 动态规则名族（B2 批 antonym_*/body_part_*/climax_*，
+# 规则名来自 YAML 规则表无法静态枚举，按前缀闭集匹配）
+_FULLCHAIN_AUTO_CATEGORY_PREFIXES = ("antonym_", "body_part_", "climax_")
+
+
 def _ledger_read_entries(path: str) -> list[dict[str, Any]]:
     """读台账条目；缺失/损坏一律回退空表（自愈宁漏勿滥）。"""
     try:
@@ -1090,11 +1104,21 @@ class TranslateAPI:
                 warmup_loading = ((self._warmup_state or {}).get("state")
                                   == "loading")
                 warmup_snapshot = dict(self._warmup_state or {})
+                # 批1 b 段（D2026-1009-02）互斥对①：全链自动化在飞拒启翻译
+                #（同锁原子读；判定位于 _session_hook_fired 复位前的启动序内）
+                fullchain_running = bool(self._fullchain_running)
             if warmup_loading:
                 from subtransjav.webview_gui.encode_queue import release_translate_slot
                 release_translate_slot()
                 return {"success": False, "warmup_loading": True,
                         "warmup_status": warmup_snapshot}
+            # 全链在飞：已 claim 的槽原路归还防泄漏；不置哨兵（进程尚未启动，
+            # 与 warmup 互锁同 rationale）
+            if fullchain_running:
+                from subtransjav.webview_gui.encode_queue import release_translate_slot
+                release_translate_slot()
+                return {"success": False, "fullchain_running": True,
+                        "error": msg("fullchain_running")}
             # Sentinel: mark "starting" to block double-start while Popen runs
             #（True 哨兵仅作占位，消费侧均先判 `is True`；cast 仅为类型清零）
             self._translate_process = cast(subprocess.Popen, True)
@@ -2352,6 +2376,11 @@ class TranslateAPI:
             self._warmup_state: dict[str, Any] = {}
             self._ai_analyze_running = False
             self._ai_analyze_cancel = threading.Event()
+            # 批1 a 段（D2026-1009-02）：全链状态机运行标志（防重叠；b 段
+            # 互斥矩阵消费）+ 批修复重入守卫标志（refine_batch_fix 入口
+            # 同步置位/finally 清位，覆盖链/手动互斥）
+            self._fullchain_running = False
+            self._batch_fix_running = False
             self._ai_lock = threading.Lock()
 
     def _register_child(self, proc: subprocess.Popen,
@@ -2517,7 +2546,8 @@ class TranslateAPI:
         return ""
 
     def refine_ai_analyze(self, report_path: str, model: str = None,
-                          ai_provider: str = None) -> dict[str, Any]:
+                          ai_provider: str = None,
+                          from_fullchain: bool = False) -> dict[str, Any]:
         """同步执行 AI 质量分析并读回建议件（批4 起可停止，D2026-1008-01）。
 
         流程：路径守卫链 → spawn Popen（双管道捕获）并登记槽+台账 →
@@ -2527,7 +2557,10 @@ class TranslateAPI:
         取消/超时 → 身份核验后 terminate_registered 树杀。
         取消返回 {success:False, cancelled:True}；
         超时/非零退出/建议件缺失 → success=False + error。
-        """
+        批1 b 段（D2026-1009-02）互斥对④：from_fullchain 形参（缺省
+        False=手动路径）——全链在飞时手动分析显式拒绝（msg
+        fullchain_running，不排队）；链级复验调用传 True 绕过全链判定
+        （仍受单飞守卫约束）。"""
         p = str(report_path or "").strip()
         if not p:
             return {"success": False, "error": msg("guide_path_empty")}
@@ -2630,6 +2663,12 @@ class TranslateAPI:
         # 取消桥在另一桥线程并发可达。超时语义同现状（文案逐字不变）。
         self._init_ai_state()
         with self._ai_lock:
+            # 批1 b 段互斥对④（前置判定）：全链在飞拒绝手动 AI 分析——
+            # 显式拒绝+明确提示，不排队；链内复验携 from_fullchain=True
+            # 绕过本判定（仍受单飞守卫约束）
+            if self._fullchain_running and not from_fullchain:
+                return {"success": False,
+                        "error": msg("fullchain_running")}
             # 单飞守卫：分析进行中再次调用 → 拒绝且不再 spawn
             if self._ai_analyze_running or self._ai_analyze_proc is not None:
                 return {"success": False,
@@ -3055,7 +3094,9 @@ class TranslateAPI:
 
     def refine_batch_fix(self, guide_path: str, entries: Any,
                          ai_provider: str = None,
-                         ai_model: str = None) -> dict[str, Any]:
+                         ai_model: str = None,
+                         verify: bool = True,
+                         from_fullchain: bool = False) -> dict[str, Any]:
         """一键批次修复：确认与逐条预览在前端（AppModal），本方法执行。
 
         守卫链：路径/后缀 → entries 整数数组 ≤_BATCH_FIX_MAX_ENTRIES →
@@ -3067,7 +3108,40 @@ class TranslateAPI:
         _resolve_ai_model_config 解析（C6 单源）；拒绝即不 spawn 且
         reason 如实透出（C8，弃统一 generic 盖法）；台账先于终稿写序/
         恒等式断言在执行器侧原样生效）；复验=生效后重跑全片 AI 分析
-        恰 1 次做建议件三键计数 diff（复验与执行同一解析入参）。"""
+        恰 1 次做建议件三键计数 diff（复验与执行同一解析入参）。
+        批1 a 段（D2026-1009-02）增注：①重入守卫——方法最入口（早于
+        load/spawn）在 _ai_lock 下检查+置位 _batch_fix_running，进行中
+        再调=结构化拒绝（msg batch_fix_running），finally 清位覆盖全部
+        退出路径；锁内只做检查+置位/清理、不跨越 spawn wait 持有，链内
+        串行逐批调用=每批独立进出（无嵌套无死锁），b 段互斥矩阵按同
+        一标志消费。②verify 形参（缺省 True=手动路径零变化）——全链
+        状态机链内传 False 跳过内置复验，链级复验唯一一次在其收口，
+        保证长期链级不变式「LLM 分析（--ai-analyze）spawn==1」。
+        批1 b 段增注：③from_fullchain 形参（缺省 False=手动路径）——
+        互斥对②，全链在飞时手动批量修复结构化拒绝（msg fullchain_running，
+        不排队）；链内调用传 True 绕过全链判定（仍受 _batch_fix_running
+        重入守卫约束）。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            if self._batch_fix_running:
+                return {"success": False, "error": msg("batch_fix_running")}
+            # 批1 b 段互斥对②：全链在飞拒绝手动批量修复（不排队）
+            if self._fullchain_running and not from_fullchain:
+                return {"success": False, "fullchain_running": True,
+                        "error": msg("fullchain_running")}
+            self._batch_fix_running = True
+        try:
+            return self._refine_batch_fix_locked(
+                guide_path, entries, ai_provider, ai_model, verify)
+        finally:
+            with self._ai_lock:
+                self._batch_fix_running = False
+
+    def _refine_batch_fix_locked(self, guide_path: str, entries: Any,
+                                 ai_provider: str = None,
+                                 ai_model: str = None,
+                                 verify: bool = True) -> dict[str, Any]:
+        """refine_batch_fix 主体（重入守卫置位后调用；形参/语义同上游）。"""
         p, stem, guide, err = self._load_validated_guide(guide_path)
         if err is not None:
             return err
@@ -3302,29 +3376,36 @@ class TranslateAPI:
                 result["error"] += f"；主因：{top_reason}"
             return result
 
-        # 复验（恒开）：重跑全片 AI 分析恰 1 次，建议件三键计数 diff
-        report_txt = os.path.join(guide_dir, stem + self._AI_REPORT_SUFFIX)
-        prog.update({"phase": "verify"})
-        if not os.path.isfile(report_txt):
-            result["verify"] = {"error": "报告 txt 缺失，跳过复验"}
-            prog.update({"phase": "done"})
-            return result
-        vr = self.refine_ai_analyze(report_txt,
-                                    (ai_model or "").strip() or None,
-                                    ai_provider)
-        if vr.get("success"):
-            result["verify"] = {
-                "before": pre_counts,
-                "before_missing": pre_suggestion_missing,
-                "after": self._suggestion_counts(guide_dir, stem),
-                "provider_name": vr.get("provider_name"),
-                "parse_ok": vr.get("parse_ok"),
-            }
-            result["suggestions"] = vr.get("suggestions") or {}
+        # 复验（批1 a 段参数化：verify 缺省 True=手动路径原形态；链内传
+        # False 跳过——链级复验唯一一次在 _run_fullchain_automation 收口，
+        # 保证长期链级不变式「--ai-analyze spawn==1」）：重跑全片 AI 分析
+        # 恰 1 次，建议件三键计数 diff
+        if verify:
+            report_txt = os.path.join(guide_dir, stem + self._AI_REPORT_SUFFIX)
+            prog.update({"phase": "verify"})
+            if not os.path.isfile(report_txt):
+                result["verify"] = {"error": "报告 txt 缺失，跳过复验"}
+                prog.update({"phase": "done"})
+                return result
+            vr = self.refine_ai_analyze(report_txt,
+                                        (ai_model or "").strip() or None,
+                                        ai_provider)
+            if vr.get("success"):
+                result["verify"] = {
+                    "before": pre_counts,
+                    "before_missing": pre_suggestion_missing,
+                    "after": self._suggestion_counts(guide_dir, stem),
+                    "provider_name": vr.get("provider_name"),
+                    "parse_ok": vr.get("parse_ok"),
+                }
+                result["suggestions"] = vr.get("suggestions") or {}
+            else:
+                # refine_ai_analyze 失败不落写建议件——修复前建议件原样保留（R4）
+                result["verify"] = {"error": vr.get("error"),
+                                    "stderr_tail": vr.get("stderr_tail", "")}
         else:
-            # refine_ai_analyze 失败不落写建议件——修复前建议件原样保留（R4）
-            result["verify"] = {"error": vr.get("error"),
-                                "stderr_tail": vr.get("stderr_tail", "")}
+            # 链内跳过：显式标记（phase 不进 "verify"，直接终态）
+            result["verify"] = {"skipped": True}
         prog.update({"phase": "done"})
         return result
 
@@ -5203,8 +5284,21 @@ class TranslateAPI:
 
     def encode_commit(self, jobs: list[dict[str, Any]],
                       params: dict[str, Any],
-                      allow_overwrite: bool = False) -> dict[str, Any]:
-        """入队（D3：commit 时复验覆盖；互斥槽 check-and-set 后整批落队）。"""
+                      allow_overwrite: bool = False,
+                      from_fullchain: bool = False) -> dict[str, Any]:
+        """入队（D3：commit 时复验覆盖；互斥槽 check-and-set 后整批落队）。
+
+        批1 b 段（D2026-1009-02）互斥对③：手动压制与全链状态机互斥——
+        全链在飞时手动入队结构化拒绝（msg fullchain_running，不排队）；
+        链尾自动压制经 _run_encode_automation 携 from_fullchain=True 绕过
+        本判定（手动占用让位判定在链尾调用前完成=互斥对⑥反向）。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            # 批1 b 段互斥对③（入口判定，早于参数解析/落队）：全链在飞
+            # 拒绝手动压制
+            if self._fullchain_running and not from_fullchain:
+                return {"success": False, "fullchain_running": True,
+                        "error": msg("fullchain_running")}
         try:
             parsed = self._parse_encode_params(params)
         except ValueError as e:
@@ -5503,10 +5597,25 @@ class TranslateAPI:
         once 守卫见批1；cancelled/error 不触发（C9）。
         P1 批3 增：钩子尾部挂 G2 预热触发点①（会话级完成=整队列回 idle，
         "无自动继续"以会话级判据落实；压制自动化为 ffmpeg 非 LLM 消费者
-        不构成资源冲突，不抑制预热）。"""
+        不构成资源冲突，不抑制预热）。
+        批1 a 段（D2026-1009-02）C5/C-2 单通道：全链开关开启时整体改道
+        _run_fullchain_automation daemon 线程——旧 encode 分支与 warmup
+        daemon 均不执行（预热由链首环承接，压制改链尾 C7 时序门）；关闭
+        态下列路径逐字节不变（C-3 回归口径）。钩子被 get_translation_status
+        轮询线程同步调用，链必须 daemon 化防卡死前端轮询。"""
         if getattr(self, "_session_hook_fired", False):
             return
         self._session_hook_fired = True
+        if self._fullchain_auto_enabled():
+            try:
+                th = threading.Thread(target=self._run_fullchain_automation,
+                                      args=(summary,), daemon=True,
+                                      name="gui-fullchain-auto")
+                self._fullchain_thread = th   # 测试可显式 join（批1 a 段）
+                th.start()
+            except Exception:
+                _log_exc("_run_fullchain_automation")
+            return
         try:
             if self._encode_automation_enabled():
                 self._run_encode_automation(summary)
@@ -5531,9 +5640,376 @@ class TranslateAPI:
         except Exception:
             return False
 
-    def _run_encode_automation(self, summary: dict[str, Any]) -> None:
+    def _fullchain_auto_enabled(self) -> bool:
+        """管线设置 fullchain_auto_enabled（refine_save_stage_settings 同一
+        settings KV；缺省关）。全链自动化总开关（批1 a 段，
+        D2026-1009-02 批1 a 段）。"""
+        try:
+            with open(self._refine_stage_settings_path(), encoding="utf-8") as f:
+                data = json.load(f)
+            return bool(
+                (data.get("settings") or {}).get("fullchain_auto_enabled"))
+        except Exception:
+            return False
+
+    # ------------------------------------------------------------------
+    # 全链自动化状态机（批1 a 段骨架，D2026-1009-02 批1 a 段）
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _fullchain_now() -> str:
+        """C9 运行快照时间戳（本地时间，秒级 ISO 形态）。"""
+        return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    def _fullchain_last_run_path(self) -> str:
+        """全链上次运行落点（config/fullchain_last_run.json；CONFIG_DIR
+        同款锚 + 安全锚点校验，仿 _refine_stage_settings_path）。"""
+        try:
+            from subtransjav.refine.config import CONFIG_DIR
+        except Exception:
+            return os.path.join(os.getcwd(), "fullchain_last_run.json")
+        return str(_resolve_safe_path(
+            os.path.join(CONFIG_DIR, "fullchain_last_run.json")))
+
+    def _fullchain_read_last_run(self) -> dict[str, Any]:
+        """读上次运行快照（缺失/损坏回退空 dict——宁漏勿滥，与子进程
+        台账读口径一致）。"""
+        try:
+            with open(self._fullchain_last_run_path(),
+                      encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _fullchain_write_last_run(self, run: dict[str, Any]) -> None:
+        """覆盖式原子写运行快照（fs_utils 单一来源；fail-soft：落盘绝不
+        拖垮业务链）。字段语义：phase=running|skipped|done|failed；
+        files_total/files_done=会话完成文件数/已处理完文件数；
+        entries_fixed/failed=台账口径修复成败条数；entries_pending=已甄别
+        可修但未结算（含 nochange 等未入账量）；missed_skipped=漏听段
+        （F4）跳过/放弃数（a 段插缝恒 0，批3 接线）。"""
+        try:
+            from subtransjav.refine.fs_utils import _atomic_write_text
+            path = self._fullchain_last_run_path()
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            _atomic_write_text(
+                path, json.dumps(run, ensure_ascii=False, indent=2))
+        except Exception:
+            _log_exc("_fullchain_write_last_run")
+
+    def _resolve_guide_for_done_key(self, done_key: str) -> str:
+        """会话完成文件 → 导读 json 路径（同目录伴生成品命名口径）。
+
+        summary files 键=管线 phase 事件 file 字段（输入文件 basename，
+        event_stream.py per-file 通道现役形态）。stem 取 basename 剥扩展
+        → 剥 ``_final_`` 段（_resolve_final_subtitle 同法）→
+        strip_lang_suffix → _preview_stem_candidates 剥链闭集逐层试
+        ``{cand}_质量报告导读.json``，首个存在即返；全无返回空串（调用方
+        诚实跳过+通知，不静默不强制生成）。"""
+        from subtransjav.refine.pipeline_support import (
+            GUIDE_JSON_SUFFIX,
+            strip_lang_suffix,
+        )
+        key = str(done_key or "").strip()
+        base = os.path.basename(key)
+        if not base:
+            return ""
+        if base.endswith(GUIDE_JSON_SUFFIX):
+            return key                     # 键已是导读（防御）
+        stem = base[:-4] if base.lower().endswith(".srt") \
+            else os.path.splitext(base)[0]
+        if "_final_" in stem:
+            stem = stem[:stem.index("_final_")]
+        stem = strip_lang_suffix(stem)
+        directory = os.path.dirname(key) or "."
+        for cand in _preview_stem_candidates(stem):
+            gp = os.path.join(directory, cand + GUIDE_JSON_SUFFIX)
+            if os.path.isfile(gp):
+                return gp
+        return ""
+
+    def _fullchain_fixable_entries(self, p: str, stem: str,
+                                   guide: dict[str, Any]) -> list[dict[str, Any]]:
+        """逐文件 fixable 甄别（零 AI 调用；a 段 d 项）：status=="open" +
+        current_text 非空（无现译绝不自动，C6 同源）+ 台账未修
+        （_applied_timings 同源口径，与 refine_batch_fix 幂等守卫同法）+
+        分类白名单 fail-closed（_FULLCHAIN_AUTO_CATEGORIES 闭集，未知类别
+        不自动）。返回 [{index, timing}] 按 index 升序（供 ≤50 切批）。"""
+        applied = self._applied_timings(os.path.dirname(p), stem)
+        out: list[dict[str, Any]] = []
+        for it in guide.get("items") or []:
+            if not isinstance(it, dict) or it.get("status") != "open":
+                continue
+            cur = it.get("current_text")
+            if not isinstance(cur, str) or not cur.strip():
+                continue
+            cat = str(it.get("category") or "")
+            if (cat not in _FULLCHAIN_AUTO_CATEGORIES
+                    and not cat.startswith(
+                        _FULLCHAIN_AUTO_CATEGORY_PREFIXES)):
+                continue
+            idx = it.get("index")
+            if isinstance(idx, bool) or not isinstance(idx, int):
+                continue
+            if str(it.get("timing") or "") in applied:
+                continue                   # 台账已修：幂等跳过
+            out.append({"index": idx,
+                        "timing": str(it.get("timing") or "")})
+        out.sort(key=lambda e: e["index"])
+        return out
+
+    def _run_fullchain_missed_stage(self, files_ctx: list[dict[str, Any]]) -> None:
+        """F4 疑似漏听二级自动化插缝（批3 接入；a 段空位恒 None 零副作用）。
+
+        批3 计划（D2026-1009-02 第二节批3，C19 序=修复→漏听→复验）：
+        批量转写一次装载转 N 段（C17）→ asr_runner 透传 no_speech_prob/
+        avg_logprob（C13）三维置信门 + ≤1s 语音能量一律放弃 → 高置信自动
+        补行走独立插入通道（C15/C16；开工门=C22 校准达标）→ 放弃数计入
+        missed_skipped 与 digest/通知。files_ctx=a 段甄别产物（有导读
+        文件的 guide_path/p/stem 清单），批3 据此定位媒体与时间轴。"""
+        return None
+
+    def _run_fullchain_automation(self, summary: dict[str, Any]) -> None:
+        """全链自动化状态机主体（批1 a 段骨架）。
+
+        触发=翻译会话完成钩子 daemon 线程（钩子被 get_translation_status
+        轮询线程同步调用，链不得占桥线程）。链内序：
+        a) 入口重入判定（_fullchain_running，_ai_lock 保护）；
+        b) provider 单源门（_resolve_ai_model_config；未配置/云端不启动，
+           N-6 云端零出域）；
+        c) 预热首环（C5：全链开启时前端预热短路，由本环承接，等价
+           _warmup_after_session 主体；解析不可用=通知注明后跳过）；
+        d) 逐文件甄别（导读解析+fixable 过滤，零 AI 调用）；
+        e) 分批 refine_batch_fix(verify=False)（串行逐批独立进出；单批
+           失败计数后继续，不中断链、不重试）；
+        f) F4 漏听插缝（批3 接入，a 段空位）；
+        g) 复验恰 1 次（refine_ai_analyze 显式 provider/model，链级长期
+           不变式「--ai-analyze spawn==1」；失败如实计入不重试）；
+        h) 链尾压制（C7 时序门：encode 自动化在复验后排布，复用其内部
+           notice/unload；关闭态仅通知收尾）。
+
+        全程通知走 _automation_notice（不静默不强制生成）；C9 运行快照落
+        config/fullchain_last_run.json（启动写一次/每文件后更新/收尾补
+        ended_at）；finally 清 _fullchain_running。b 段互斥矩阵消费
+        _fullchain_running 标志（链在飞=手动入口显式拒绝，不排队；链内
+        调用携 from_fullchain=True 绕过，复验/压制占用让位见链内 b 段注）。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            if self._fullchain_running:
+                return                     # 防重叠：链已在飞直接返回
+            self._fullchain_running = True
+        # C9 运行快照：启动写一次（ended_at 空=未完成态），每文件后更新，
+        # 收尾（含异常）补 ended_at
+        run: dict[str, Any] = {
+            "phase": "running", "files_total": 0, "files_done": 0,
+            "entries_fixed": 0, "entries_failed": 0, "entries_pending": 0,
+            "missed_skipped": 0,
+            "started_at": self._fullchain_now(), "ended_at": ""}
+        try:
+            self._fullchain_write_last_run(run)
+            # b) provider 单源门（云端/未配置=通知不启动）
+            try:
+                cfg = self._resolve_ai_model_config()
+            except Exception as e:
+                _log_exc("_run_fullchain_automation.resolve")
+                cfg = {"ok": False, "reason": str(e)}
+            provider = str(cfg.get("provider") or "").strip().lower()
+            model = str(cfg.get("model") or "").strip()
+            if (not cfg.get("ok")
+                    or provider not in self._AI_LOCAL_PROVIDERS or not model):
+                self._automation_notice(
+                    "[全链] 自动化未启动：分析模型未配置或当前生效服务商为"
+                    "云端（全链自动化仅支持本地模型）")
+                run["phase"] = "skipped"
+                return
+            self._automation_notice(
+                "[全链] 自动化开始：分析→批量修复→复验"
+                "（自动压制排布视压制开关，于复验后执行）")
+            # c) 预热首环（C5：承接前端短路的预热；失败/跳过不阻断链）
+            cur = self._warmup_resolve_current()
+            if cur is not None:
+                try:
+                    wr = self.refine_warmup_analysis_model(cur[1], cur[0])
+                    _log.info("[fullchain] 链首预热: supported=%s "
+                              "already_hot=%s", wr.get("supported"),
+                              wr.get("already_hot"))
+                except Exception:
+                    _log_exc("_run_fullchain_automation.warmup")
+            else:
+                self._automation_notice(
+                    "[全链] 预热跳过：当前分析模型配置不可用（链照常继续）")
+            # d/e) 逐文件甄别 + 分批修复
+            files_status = dict(summary.get("files") or {})
+            done_keys = [str(k) for k, st in files_status.items()
+                         if st == "done"]
+            run["files_total"] = len(done_keys)
+            self._fullchain_write_last_run(run)
+            planned = 0                    # 累计甄别可修条数（pending 分母）
+            verify_target: str = ""        # g) 复验目标=首个有导读文件的报告 txt
+            files_ctx: list[dict[str, Any]] = []   # f) F4 插缝上下文
+            for key in done_keys:
+                guide_path = self._resolve_guide_for_done_key(key)
+                if not guide_path:
+                    self._automation_notice(
+                        f"[全链] 跳过 {key}：未找到导读 json（诚实跳过）")
+                    run["files_done"] = int(run["files_done"]) + 1
+                    self._fullchain_write_last_run(run)
+                    continue
+                p, stem, guide, err = self._load_validated_guide(guide_path)
+                if err is not None:
+                    self._automation_notice(
+                        f"[全链] 跳过 {os.path.basename(guide_path)}："
+                        f"{err.get('error') or '导读校验失败'}")
+                    run["files_done"] = int(run["files_done"]) + 1
+                    self._fullchain_write_last_run(run)
+                    continue
+                files_ctx.append({"guide_path": guide_path, "p": p,
+                                  "stem": stem})
+                if not verify_target:
+                    verify_target = os.path.join(
+                        os.path.dirname(p), stem + self._AI_REPORT_SUFFIX)
+                fixable = self._fullchain_fixable_entries(p, stem, guide)
+                planned += len(fixable)
+                run["entries_pending"] = planned - int(run["entries_fixed"]) \
+                    - int(run["entries_failed"])
+                if not fixable:
+                    self._automation_notice(
+                        f"[全链] {stem}：无可自动修复条目，跳过")
+                    run["files_done"] = int(run["files_done"]) + 1
+                    self._fullchain_write_last_run(run)
+                    continue
+                file_fixed = 0
+                file_failed = 0
+                batches = [fixable[i:i + self._BATCH_FIX_MAX_ENTRIES]
+                           for i in range(0, len(fixable),
+                                          self._BATCH_FIX_MAX_ENTRIES)]
+                for batch in batches:
+                    try:
+                        # 批1 b 段互斥对②：链内调用携 from_fullchain=True
+                        # 绕过全链在飞判定（仍受重入守卫约束）
+                        r = self.refine_batch_fix(
+                            guide_path, [e["index"] for e in batch],
+                            verify=False, from_fullchain=True)
+                    except Exception:
+                        _log_exc("_run_fullchain_automation.batch")
+                        r = {"success": False}
+                    if r.get("success"):
+                        file_fixed += int(r.get("applied") or 0)
+                        file_failed += int(r.get("failed") or 0)
+                    else:
+                        # 单批失败：计数后继续下一批（不中断链、不重试；
+                        # 失败主因已由 refine_batch_fix 落 gui.log）
+                        file_failed += len(batch)
+                run["entries_fixed"] = int(run["entries_fixed"]) + file_fixed
+                run["entries_failed"] = int(run["entries_failed"]) + file_failed
+                run["entries_pending"] = planned - int(run["entries_fixed"]) \
+                    - int(run["entries_failed"])
+                self._automation_notice(
+                    f"[全链] {stem}：修复完成 {file_fixed} 条，"
+                    f"失败 {file_failed} 条")
+                run["files_done"] = int(run["files_done"]) + 1
+                self._fullchain_write_last_run(run)
+            # f) F4 漏听插缝（批3 接入：批量转写→置信门→补行/放弃）
+            self._run_fullchain_missed_stage(files_ctx)
+            # g) 复验恰 1 次（链级不变式：--ai-analyze spawn==1）。与批内
+            # 修复同 model/provider 源（链首单源解析结果显式透传，绕开
+            # refine_ai_analyze 内联决策歧义；报告 txt 与手动复验同源=
+            # 导读 companions _AI_REPORT_SUFFIX）
+            if verify_target and os.path.isfile(verify_target):
+                # 批1 b 段互斥对④反向：手动 AI 分析在飞 → 复验跳过（不排队
+                # 不重试），链继续收尾；链内调用携 from_fullchain=True 绕过
+                # b 段新增的全链在飞拒绝（仍受 refine_ai_analyze 单飞守卫）
+                with self._ai_lock:
+                    manual_analyze_busy = bool(
+                        self._ai_analyze_running
+                        or self._ai_analyze_proc is not None)
+                if manual_analyze_busy:
+                    self._automation_notice(
+                        "[全链] 复验跳过：AI 分析正被手动任务占用（不排队不"
+                        "重试），可待其完成后手动发起全片分析")
+                else:
+                    self._automation_notice("[全链] 全片复验（恰 1 次）…")
+                    try:
+                        vr = self.refine_ai_analyze(
+                            verify_target, model, provider,
+                            from_fullchain=True)
+                    except Exception:
+                        _log_exc("_run_fullchain_automation.verify")
+                        vr = {"success": False}
+                    if vr.get("success"):
+                        self._automation_notice(
+                            "[全链] 复验完成，建议件已更新（仅供人工裁决）")
+                    else:
+                        self._automation_notice(
+                            "[全链] 复验失败（如实计入，不重试）："
+                            f"{str(vr.get('error') or '')[:120]}")
+            else:
+                self._automation_notice(
+                    "[全链] 复验跳过：质量报告 txt 缺失")
+            # h) 链尾压制（C7 时序门：压制排布在复验之后；全链开启时旧
+            # 钩子 encode 分支已短路，此处为唯一压制入口）。批1 b 段互斥对
+            # ⑥反向：手动压制在飞（encode 队列忙=互斥槽已占）→ 跳过自动
+            # 压制（不排队不重试）+通知；否则携 from_fullchain=True 入队
+            pending = int(run["entries_pending"])
+            done_note = (f"[全链] 收尾：文件 {run['files_done']}/"
+                         f"{run['files_total']}，修复 {run['entries_fixed']} 条"
+                         f"，失败 {run['entries_failed']} 条"
+                         + (f"，待处理 {pending} 条" if pending else ""))
+            if self._encode_automation_enabled():
+                from subtransjav.webview_gui.encode_queue import encode_active
+                manual_encode_busy = encode_active()
+                self._automation_notice(done_note)
+                if manual_encode_busy:
+                    self._automation_notice(
+                        "[全链] 全链完成，压制被手动任务占用，请手动压制")
+                else:
+                    self._run_encode_automation(summary, from_fullchain=True)
+            else:
+                self._automation_notice(
+                    done_note + "；未开启自动压制")
+            run["phase"] = "done"
+        except Exception:
+            _log_exc("_run_fullchain_automation")
+            run["phase"] = "failed"
+        finally:
+            run["ended_at"] = self._fullchain_now()
+            self._fullchain_write_last_run(run)
+            with self._ai_lock:
+                self._fullchain_running = False
+
+    def fullchain_last_run_status(self) -> dict[str, Any]:
+        """全链上次运行状态桥（批1 a 段 C9；公开桥方法=js_api 全量暴露，
+        批2 链级面板与黑盒断言消费）。
+
+        返回 {success, last_run（落盘快照，缺失/损坏=空 dict）, unfinished}；
+        「上次未完成」判定=有快照且读取时 ended_at 为空且 phase!="done"
+        （链中途进程终止的残迹；正常收尾含 failed 亦补 ended_at，不算
+        未完成；无快照/空快照=从未运行，不误报未完成）。"""
+        run = self._fullchain_read_last_run()
+        unfinished = (bool(run)
+                      and not str(run.get("ended_at") or "").strip()
+                      and str(run.get("phase") or "") != "done")
+        return {"success": True, "last_run": run, "unfinished": unfinished}
+
+    def fullchain_automation_status(self) -> dict[str, Any]:
+        """全链运行态查询桥（批1 a 段；公开桥方法）：running=状态机在飞
+        （_fullchain_running 标志，_ai_lock 下读取）；last_run=上次运行
+        快照（与 fullchain_last_run_status 同源读取）。批2 消费。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            running = bool(self._fullchain_running)
+        return {"success": True, "running": running,
+                "last_run": self._fullchain_read_last_run()}
+
+    def _run_encode_automation(self, summary: dict[str, Any],
+                               from_fullchain: bool = False) -> None:
         """自动压制主体（触发上下文=前端轮询 get_translation_status 的
-        GUI 桥线程：轻量文件操作+入队，可接受）。"""
+        GUI 桥线程：轻量文件操作+入队，可接受）。
+
+        批1 b 段（D2026-1009-02）互斥对③：from_fullchain 形参透传
+        encode_commit——链尾自动压制传 True 绕过全链在飞拒绝（手动入口
+        缺省 False，全链在飞时结构化拒绝）。"""
         files_status = dict(summary.get("files") or {})
         done_srts = [str(p) for p, st in files_status.items() if st == "done"]
         if not done_srts:
@@ -5569,7 +6045,8 @@ class TranslateAPI:
             self._automation_notice(notice)
             return
         # 槽占用由 encode_commit 内部 claim（预占会与自己撞锁）；失败即人话回报
-        commit = self.encode_commit(ready, params, allow_overwrite=False)
+        commit = self.encode_commit(ready, params, allow_overwrite=False,
+                                    from_fullchain=from_fullchain)
         if commit and commit.get("needs_confirm"):
             # 入队瞬间出现新成品：自动化语义=跳过不覆盖
             self._automation_notice("[encode] 自动压制：入队前出现新成品，按跳过处理（不覆盖）")
