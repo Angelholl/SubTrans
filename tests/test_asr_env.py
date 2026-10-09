@@ -813,3 +813,232 @@ def test_recommended_models_small_medium_verified_pins():
     assert m["url"].endswith("/medium.pt")
     assert m["sources"][0]["verified"] is True
     assert m["sources"][0]["sha256"] == m["sha256"]
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批3 3A：asr_runner 多段模式（C17+C13）与 batch_transcribe_clips
+# ---------------------------------------------------------------------------
+
+T1 = "00:00:05,000 --> 00:00:07,000"
+T2 = "00:00:20,000 --> 00:00:22,000"
+
+
+def _install_fake_whisper_multiclip(monkeypatch, responses):
+    """多段模式 fake whisper：load_model 计数一次；transcribe 逐次弹
+    responses 列表返回。返回 calls 状态 dict。"""
+    import sys
+    import types
+    state = {"loads": 0}
+
+    class _FakeModel:
+        def transcribe(self, audio, **kw):
+            state.setdefault("called", []).append(audio)
+            return responses.pop(0) if responses else {
+                "text": "", "segments": []}
+
+    fake = types.ModuleType("whisper")
+    fake.__version__ = "9.9"
+
+    def _load_model(name, **kwargs):
+        state["loads"] += 1
+        return _FakeModel()
+
+    fake.load_model = _load_model
+    monkeypatch.setitem(sys.modules, "whisper", fake)
+    return state
+
+
+def test_runner_clips_json_contract(monkeypatch, tmp_path, capsys):
+    """多段模式契约钉：单次 load_model→逐 clip 转写；stdout 单行 JSON
+    带 ok/language/device/clips；段级透传置信三维（C13）；坏 clip 如实
+    标 error 不静默。"""
+    import subtransjav.refine.asr_runner as runner
+    c1 = tmp_path / "c1.wav"
+    c1.write_bytes(b"wav")
+    state = _install_fake_whisper_multiclip(monkeypatch, [
+        {"text": "テスト", "segments": [
+            {"start": 0.0, "end": 1.0, "text": "テスト",
+             "no_speech_prob": 0.02, "avg_logprob": -0.25,
+             "compression_ratio": 1.2}]},
+    ])
+    manifest = [{"clip": str(c1), "timing": T1},
+                {"clip": str(tmp_path / "missing.wav"), "timing": T2}]
+    cj = tmp_path / "clips.json"
+    cj.write_text(json.dumps(manifest), encoding="utf-8")
+    rc = runner.main(["--clips-json", str(cj), "--model", "large-v2"])
+    out = json.loads(capsys.readouterr().out.strip())
+    assert rc == 0 and out["ok"] is True
+    assert out["language"] == "ja"
+    assert out["device"] in ("cuda", "cpu")
+    assert state["loads"] == 1            # C17：单次装载
+    assert len(out["clips"]) == 2
+    seg = out["clips"][0]["segments"][0]
+    assert seg["text"] == "テスト"
+    assert seg["no_speech_prob"] == 0.02  # C13 置信透传
+    assert seg["avg_logprob"] == -0.25
+    assert seg["compression_ratio"] == 1.2
+    assert out["clips"][1]["error"] \
+        and "音频不存在" in out["clips"][1]["error"]
+    assert out["clips"][1]["segments"] == []
+
+
+def test_runner_clips_json_empty_no_model_load(monkeypatch, tmp_path,
+                                               capsys):
+    """空 clips 列表：不加载模型直接返回 device（调用侧零成本设备探测）。"""
+    import subtransjav.refine.asr_runner as runner
+    state = _install_fake_whisper_multiclip(monkeypatch, [])
+    cj = tmp_path / "empty.json"
+    cj.write_text("[]", encoding="utf-8")
+    rc = runner.main(["--clips-json", str(cj)])
+    out = json.loads(capsys.readouterr().out.strip())
+    assert rc == 0 and out["ok"] is True and out["clips"] == []
+    assert out["device"] in ("cuda", "cpu")
+    assert state["loads"] == 0
+
+
+def test_runner_audio_and_clips_json_mutually_exclusive(monkeypatch,
+                                                        tmp_path, capsys):
+    import subtransjav.refine.asr_runner as runner
+    cj = tmp_path / "empty.json"
+    cj.write_text("[]", encoding="utf-8")
+    rc = runner.main(["--audio", str(tmp_path / "a.wav"),
+                      "--clips-json", str(cj)])
+    out = json.loads(capsys.readouterr().out.strip())
+    assert rc == 2 and "互斥" in out["error"]
+
+
+def test_runner_single_mode_segments_have_confidence_keys(monkeypatch,
+                                                          tmp_path,
+                                                          capsys):
+    """单 --audio 模式行为钉（向后兼容）：既有三键不变 + C13 追加置信
+    键（fake whisper 无置信键时保守透传 None，不误判）。"""
+    import subtransjav.refine.asr_runner as runner
+    _install_fake_whisper_multiclip(monkeypatch, [
+        {"text": "テスト",
+         "segments": [{"start": 0.0, "end": 1.0, "text": "テスト"}]},
+    ])
+    audio = tmp_path / "c.wav"
+    audio.write_bytes(b"wav")
+    rc = runner.main(["--audio", str(audio)])
+    out = json.loads(capsys.readouterr().out.strip())
+    assert rc == 0 and out["ok"] is True and out["text"] == "テスト"
+    seg = out["segments"][0]
+    assert seg["start"] == 0.0 and seg["end"] == 1.0
+    assert seg["text"] == "テスト"
+    assert set(seg) == {"start", "end", "text", "no_speech_prob",
+                        "avg_logprob", "compression_ratio"}
+    assert seg["no_speech_prob"] is None
+
+
+def _install_batch_env(monkeypatch, tmp_path, device_payload):
+    """batch_transcribe_clips 测试环境：slice_clips 替身 + 数据根重定向
+    + subprocess.run 替身（空清单=设备探测；非空=按清单回 payload）。"""
+    from types import SimpleNamespace
+    timings = [f"00:00:{i * 10:02d},000 --> 00:00:{i * 10 + 2:02d},000"
+               for i in range(10)]
+    clips = [{"path": str(tmp_path / f"c{i}.wav"), "timing": t}
+             for i, t in enumerate(timings)]
+    monkeypatch.setattr(asr_env, "slice_clips",
+                        lambda media, ts, max_clips=20: {
+                            "ok": True, "clips": clips, "error": "",
+                            "skipped": 0})
+    monkeypatch.setattr(asr_env, "paths",
+                        SimpleNamespace(
+                            data_subdir=lambda *p: str(
+                                tmp_path.joinpath(*p)),
+                            app_root=lambda: str(tmp_path)))
+    monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "py.exe"))
+    (tmp_path / "py.exe").write_text("", encoding="utf-8")
+    spawns = {"probe": 0, "batch": []}
+
+    def _fake_run(cmd, **kw):
+        cj = cmd[cmd.index("--clips-json") + 1]
+        items = json.loads(Path(cj).read_text(encoding="utf-8"))
+        if not items:                        # 设备探测
+            spawns["probe"] += 1
+            payload = device_payload
+            if callable(payload):
+                payload = payload()
+            return SimpleNamespace(returncode=0,
+                                   stdout=json.dumps(payload), stderr="")
+        spawns["batch"].append([it["timing"] for it in items])
+        return SimpleNamespace(returncode=0, stdout=json.dumps({
+            "ok": True, "language": "ja", "device": "cpu",
+            "clips": [{"timing": it["timing"], "segments": [
+                {"start": 0.0, "end": 1.0, "text": "テスト",
+                 "no_speech_prob": 0.02, "avg_logprob": -0.25,
+                 "compression_ratio": 1.2}],
+                       "text_all": "テスト", "error": ""}
+                      for it in items]}), stderr="")
+
+    monkeypatch.setattr(asr_env.subprocess, "run", _fake_run)
+    return timings, spawns
+
+
+def test_batch_transcribe_clips_cpu_chunk_cap(monkeypatch, tmp_path):
+    """无 GPU 保守上限：device=cpu 时 10 clip 分 2 次 spawn（cap=8）；
+    probe 走空清单不计入批 spawn。"""
+    timings, spawns = _install_batch_env(
+        monkeypatch, tmp_path,
+        {"ok": True, "language": "ja", "device": "cpu", "clips": []})
+    results = asr_env.batch_transcribe_clips("m.mp4", timings)
+    assert spawns["probe"] == 1
+    assert len(spawns["batch"]) == 2
+    assert all(len(c) <= asr_env._BATCH_CPU_CLIP_CAP
+               for c in spawns["batch"])
+    assert len(results) == 10
+    assert all(r["ok"] and r["text"] == "テスト" for r in results)
+    assert results[0]["segments"][0]["no_speech_prob"] == 0.02
+
+
+def test_batch_transcribe_clips_cuda_single_spawn(monkeypatch, tmp_path):
+    """GPU：单次 spawn 全量（单次 load_model 转 N 段，C17 主旨）。"""
+    timings, spawns = _install_batch_env(
+        monkeypatch, tmp_path,
+        {"ok": True, "language": "ja", "device": "cuda", "clips": []})
+    asr_env.batch_transcribe_clips("m.mp4", timings)
+    assert len(spawns["batch"]) == 1
+    assert len(spawns["batch"][0]) == 10
+
+
+def test_batch_transcribe_clips_probe_failure_conservative_cpu(monkeypatch,
+                                                               tmp_path):
+    """设备探测失败 → 保守按 cpu 分批（方向安全，不激进）。"""
+    timings, spawns = _install_batch_env(
+        monkeypatch, tmp_path, {"ok": False, "error": "boom"})
+    asr_env.batch_transcribe_clips("m.mp4", timings)
+    assert len(spawns["batch"]) == 2
+
+
+def test_batch_transcribe_clips_timeout_honest_failure(monkeypatch,
+                                                       tmp_path):
+    """批 spawn 超时 → 该批全部如实 ok=False（不静默）。"""
+    import subprocess
+    timings, spawns = _install_batch_env(
+        monkeypatch, tmp_path,
+        {"ok": True, "language": "ja", "device": "cuda", "clips": []})
+    real_run = asr_env.subprocess.run
+
+    def _run(cmd, **kw):
+        cj = cmd[cmd.index("--clips-json") + 1]
+        if json.loads(Path(cj).read_text(encoding="utf-8")):
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=kw["timeout"])
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(asr_env.subprocess, "run", _run)
+    results = asr_env.batch_transcribe_clips("m.mp4", timings)
+    assert len(results) == 10
+    assert all(r["ok"] is False and r["error"] for r in results)
+    del spawns
+
+
+def test_batch_transcribe_clips_slice_failure_honest(monkeypatch, tmp_path):
+    """切片全败 → 全部 timing 如实 ok=False。"""
+    monkeypatch.setattr(asr_env, "slice_clips",
+                        lambda media, ts, max_clips=20: {
+                            "ok": False, "clips": [],
+                            "error": "媒体文件不存在", "skipped": 2})
+    results = asr_env.batch_transcribe_clips("m.mp4", [T1, T2])
+    assert len(results) == 2
+    assert all(r["ok"] is False and "切片失败" in r["error"]
+               for r in results)

@@ -351,3 +351,57 @@ def detect_audio_insights(media_path: str, entries: list, *,
                 os.unlink(tmp_wav)
         except OSError:
             pass
+
+
+def detect_speech_windows(media_path: str,
+                          gap_timings: list[str],
+                          ) -> dict:
+    """语音窗口提取（3.0 批3 3A，漏听置信门 ≤1s 放弃判定数据源）。
+
+    抽一次 wav → RMS hop 序列 → 相对分位阈值 → 有声段，再对每个间隙
+    窗口（"HH:MM:SS,mmm --> HH:MM:SS,mmm"）取交集，返回
+    {timing: [(start_s, end_s), ...]}（窗口内语音段，窗口相对时间轴的
+    绝对秒）。检测原语与 detect_audio_insights 同源（_hop_rms_series/
+    _speech_segments/_percentile；timing 解析复用 v2_premerge._timing_span，
+    与全链路同口径）。
+
+    诚实退化（C18）：ffmpeg 缺失/媒体缺失/检测失败 → 仅返回
+    {"__error": reason}（各窗口键缺省），调用方据此跳过 ≤1s 能量门，
+    绝不静默当全静音。"""
+    try:
+        from .v2_premerge import _timing_span
+        ff = _find_ffmpeg()
+        if ff is None:
+            return {"__error": "未检测到 ffmpeg"}
+        if not media_path or not os.path.isfile(media_path):
+            return {"__error": "无媒体文件"}
+        tmp_wav = _wav_tmp_path(_detect_temp_root(), media_path)
+        try:
+            _extract_wav(ff, media_path, tmp_wav, 16000)
+            _rate, rms, _duration = _hop_rms_series(tmp_wav, 10)
+            threshold = _percentile(rms, 85)
+            segs = _speech_segments(rms, threshold, 10 / 1000.0)
+        finally:
+            try:
+                if os.path.isfile(tmp_wav):
+                    os.unlink(tmp_wav)
+            except OSError:
+                pass
+        out: dict[str, list[tuple[float, float]]] = {}
+        for timing in gap_timings:
+            s0, e0 = _timing_span(timing)
+            if s0 < 0:
+                # 无法解析的窗口如实缺省（不当全静音、不抛）
+                continue
+            out[timing] = [(round(max(s0, s), 3), round(min(e0, e), 3))
+                           for s, e in segs if min(e0, e) > max(s0, s)]
+        return out
+    except Exception as e:      # noqa: BLE001 语音窗口检测永不阻断主流程
+        return {"__error": f"语音窗口检测失败: {e}"}
+
+
+def _detect_temp_root() -> str:
+    """detect_speech_windows 的临时 wav 落点根（数据根 Temp，与切片
+    临时面同语义）。函数化便于测试 monkeypatch。"""
+    from subtransjav import paths
+    return paths.data_subdir("Temp")

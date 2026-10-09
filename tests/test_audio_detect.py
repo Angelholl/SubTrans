@@ -479,3 +479,57 @@ def test_percentile_bounds():
     assert ad._percentile(vals, 0) == 0.0
     assert ad._percentile(vals, 100) == 99.0
     assert ad._percentile([], 85) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批3 3A：detect_speech_windows（漏听置信门 ≤1s 判定数据源）
+# ---------------------------------------------------------------------------
+
+def test_detect_speech_windows_cuts_by_window(tmp_path, monkeypatch):
+    """窗口切割：抽一次 wav，语音段按间隙窗口取交集返回。"""
+    wav = tmp_path / "sp.wav"
+    _write_wav(wav, [(0.0, 1.0, 1.0), (5.0, 1.0, 1.0)])   # 两处语音
+    media = _mk_media(tmp_path)
+    _install_fake_ffmpeg(monkeypatch, str(wav))
+    monkeypatch.setattr(ad, "_detect_temp_root", lambda: str(tmp_path))
+    r = ad.detect_speech_windows(
+        media, ["00:00:00,000 --> 00:00:02,000",
+                "00:00:04,500 --> 00:00:07,000"])
+    assert "__error" not in r
+    w0 = r["00:00:00,000 --> 00:00:02,000"]
+    w1 = r["00:00:04,500 --> 00:00:07,000"]
+    assert w0 and w0[0][0] < 1.0                          # 0-1s 语音命中
+    assert w1 and any(4.5 <= s < 6.0 for s, _e in w1)     # 5-6s 语音命中
+    assert all(e <= 7.0 for _s, e in w1)                  # 交集不越窗
+
+
+def test_detect_speech_windows_no_speech_window_empty(tmp_path, monkeypatch):
+    wav = tmp_path / "sil.wav"
+    _write_wav(wav, [])                                   # 全静音
+    media = _mk_media(tmp_path)
+    _install_fake_ffmpeg(monkeypatch, str(wav))
+    monkeypatch.setattr(ad, "_detect_temp_root", lambda: str(tmp_path))
+    r = ad.detect_speech_windows(media, ["00:00:00,000 --> 00:00:02,000"])
+    assert "__error" not in r
+    assert r["00:00:00,000 --> 00:00:02,000"] == []
+
+
+def test_detect_speech_windows_error_degrades_honestly(tmp_path, monkeypatch):
+    """诚实退化（C18）：ffmpeg 缺失/媒体缺失 → 仅 {"__error": reason}。"""
+    monkeypatch.setattr(ad, "_find_ffmpeg", lambda: None)
+    r = ad.detect_speech_windows("m.mp4", ["00:00:00,000 --> 00:00:01,000"])
+    assert set(r) == {"__error"} and r["__error"]
+    r = ad.detect_speech_windows("", ["00:00:00,000 --> 00:00:01,000"])
+    assert set(r) == {"__error"} and r["__error"]
+
+
+def test_detect_speech_windows_unparseable_timing_skipped(tmp_path,
+                                                          monkeypatch):
+    """无法解析的窗口如实缺省（不当全静音、不抛）。"""
+    wav = tmp_path / "sp.wav"
+    _write_wav(wav, [(0.0, 1.0, 1.0)])
+    media = _mk_media(tmp_path)
+    _install_fake_ffmpeg(monkeypatch, str(wav))
+    monkeypatch.setattr(ad, "_detect_temp_root", lambda: str(tmp_path))
+    r = ad.detect_speech_windows(media, ["garbage"])
+    assert "__error" not in r and r == {}

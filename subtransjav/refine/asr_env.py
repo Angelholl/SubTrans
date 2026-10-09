@@ -31,6 +31,7 @@ resolve_model_dir 保证"探测枚举"与"运行加载"同序（缓存 ~/.cache/
 除外）。
 """
 
+import contextlib
 import json
 import os
 import shutil
@@ -49,6 +50,13 @@ _SELFCHECK_TIMEOUT_S = 60
 _MODEL_MIN_BYTES = 1024 * 1024 * 1024        # 1GB：防半截下载
 _CLIPS_SUBDIR = "media_clips"
 _MAX_CLIPS = 20
+# 3.0 批3（D2026-1009-02 批3 C17）：批量转写调用侧。无 GPU（device=cpu）
+# 保守上限：单次 spawn 最多转 _BATCH_CPU_CLIP_CAP 个 clip，超出分多次
+# spawn（防 CPU 大模型长批占死进程）；cuda 单次全量。超时按 spawn 内
+# clip 数线性放大（基值沿 run_transcription 缺省 300s，每 clip +60s）。
+_BATCH_CPU_CLIP_CAP = 8
+_BATCH_TIMEOUT_BASE_S = 300
+_BATCH_TIMEOUT_PER_CLIP_S = 60
 # 2.7.1（D2026-1005-01 承接批）：探测总预算（多候选慢启动叠加防护）、
 # HF hub 枚举限深/限时、stderr tail 截断长度
 _PROBE_TOTAL_BUDGET_S = 90.0
@@ -698,6 +706,164 @@ def run_transcription(clip_path: str, asr_python: str = "",
                 "error": str(payload.get("error") or "ASR 失败")}
     return {"ok": False, "text": "",
             "error": f"ASR 运行器无有效输出（rc={proc.returncode}）"}
+
+
+def _resolve_asr_python(asr_python: str) -> str:
+    """候选链解析第一个真实存在的上游 python（run_transcription 同序，
+    抽出复用；找不到返回 ""）。"""
+    for _src, cand in _candidate_pythons(asr_python):
+        if os.path.isfile(cand):
+            return cand
+    return ""
+
+
+def _spawn_runner(python: str, args: list[str], timeout: int) -> dict:
+    """spawn 上游 python 跑运行器并解析 stdout 单行 JSON（契约同
+    run_transcription：首个以 { 开头的可解析行）。spawn 失败/超时/
+    无有效输出返回 {"ok": False, "payload": None, "error": ...}。"""
+    cmd = _runner_command(python, *args)
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True, encoding="utf-8", errors="replace",
+            timeout=timeout, cwd=str(paths.app_root()),
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            creationflags=CREATE_NO_WINDOW)  # GUI windowed 防黑框（批0；POSIX=0 无操作）
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "payload": None,
+                "error": f"ASR 子进程失败: {e}"}
+    for line in (proc.stdout or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            payload = json.loads(line)
+        except ValueError:
+            continue
+        return {"ok": bool(payload.get("ok")), "payload": payload,
+                "error": "" if payload.get("ok")
+                else str(payload.get("error") or "ASR 失败")}
+    return {"ok": False, "payload": None,
+            "error": f"ASR 运行器无有效输出（rc={proc.returncode}）"}
+
+
+def batch_transcribe_clips(media_path: str, timings: list[str], *,
+                           model: str | None = None,
+                           model_dir: str | None = None,
+                           max_clips: int = _MAX_CLIPS,
+                           progress=None) -> list[dict]:
+    """批量转写（3.0 批3 C17 调用侧）：slice_clips 切片→组 clips-json→
+    spawn 上游 python（单次进程 load_model 一次转 N 段）→按 timing 对齐
+    返回 per-timing 转写。
+
+    - model/model_dir 缺省沿用 run_transcription 惯例（large-v2 /
+      resolve_model_dir 解析）；
+    - 无 GPU 保守上限：先以空 clips-json 探测 device（运行器空列表不
+      加载模型，零成本）；device=cpu 时每 spawn 最多 _BATCH_CPU_CLIP_CAP
+      个 clip（超出分多次 spawn）；device 探测失败保守按 cpu 处理；
+    - 超时＝_BATCH_TIMEOUT_BASE_S + per-clip 线性放大（spawn 内 clip 数
+      ×_BATCH_TIMEOUT_PER_CLIP_S）；失败/超时该批如实标记 ok=False
+      （不静默）；
+    - progress：可选回调 progress(done, total)（切片后可用数口径）；
+    - 切片失败/被 max_clips 截断的 timing 如实标记 ok=False；
+    - cleanup_clips 交调用方（保持现惯例）。
+
+    返回：与 timings 等长的 list[dict]，每项 {"timing", "ok", "text",
+    "segments", "error"}（segments 为含置信字段的段级数组，C13）。"""
+    model_name = model or "large-v2"
+    failed = lambda timing, err: {"timing": timing, "ok": False,  # noqa: E731
+                                  "text": "", "segments": [], "error": err}
+    sliced = slice_clips(media_path, timings, max_clips=max_clips)
+    clips = sliced.get("clips") or []
+    by_timing: dict[str, dict] = {}
+    for t in timings:
+        by_timing[t] = failed(t, "")      # 占位，成功后被覆盖
+    if not clips:
+        err = sliced.get("error") or "无可用切片"
+        for t in timings:
+            by_timing[t] = failed(t, f"切片失败: {err}")
+        return [by_timing[t] for t in timings]
+    # 切片成功但部分跳过（超 max_clips 截断/ffmpeg 单段失败）→ 如实标记
+    done_timings = {c["timing"] for c in clips}
+    skipped_note = (f"切片跳过 {sliced.get('skipped', 0)} 段"
+                    f"（超上限 {_MAX_CLIPS} 或 ffmpeg 失败）"
+                    if sliced.get("skipped") else "切片失败")
+    python = _resolve_asr_python("")
+    if not python:
+        for t in timings:
+            by_timing[t] = failed(t, "上游 ASR Python 不可用（探测降级）")
+        return [by_timing[t] for t in timings]
+
+    def _write_clips_json(chunk: list[dict]) -> str:
+        """组 clips-json 临时文件（与切片同目录 sha256 指纹名）。"""
+        import hashlib
+        d = Path(paths.data_subdir("Temp", _CLIPS_SUBDIR))
+        d.mkdir(parents=True, exist_ok=True)
+        fp = hashlib.sha256(    # 非加密用途：批清单临时名（sha256 同切片惯例）
+            json.dumps([c["path"] for c in chunk],
+                       ensure_ascii=False).encode()).hexdigest()[:12]
+        p = d / f"batch_{fp}.json"
+        p.write_text(json.dumps(
+            [{"clip": c["path"], "timing": c["timing"]} for c in chunk],
+            ensure_ascii=False), encoding="utf-8")
+        return str(p)
+
+    # 设备探测：空 clips-json（运行器空列表不加载模型）。探测失败保守
+    # 按 cpu 处理（分批上限方向安全，不激进）。
+    model_dir_resolved = (model_dir if model_dir is not None
+                          else resolve_model_dir(model_name))
+    probe_json = _write_clips_json([])
+    probe_args = ["--clips-json", probe_json, "--model", model_name]
+    if model_dir_resolved:
+        probe_args.extend(["--model-dir", model_dir_resolved])
+    probe = _spawn_runner(python, probe_args, _SELFCHECK_TIMEOUT_S)
+    device = "cpu"
+    if probe["ok"] and isinstance(probe["payload"], dict):
+        device = str(probe["payload"].get("device") or "cpu")
+    cap = len(clips) if device == "cuda" else _BATCH_CPU_CLIP_CAP
+    # cuda 单次全量（cap=len(clips)）＝单次 load_model 转 N 段（C17 主旨）
+    chunks = [clips[i:i + cap] for i in range(0, len(clips), cap)]
+    total = len(clips)
+    done = 0
+    for chunk in chunks:
+        cj = _write_clips_json(chunk)
+        args = ["--clips-json", cj, "--model", model_name]
+        if model_dir_resolved:
+            args.extend(["--model-dir", model_dir_resolved])
+        timeout = (_BATCH_TIMEOUT_BASE_S
+                   + _BATCH_TIMEOUT_PER_CLIP_S * len(chunk))
+        r = _spawn_runner(python, args, timeout)
+        got = (r["payload"] or {}).get("clips") if r["ok"] else None
+        if not isinstance(got, list):
+            # 整批失败如实标记（不静默）；同 timing 后续不覆盖
+            for c in chunk:
+                if c["timing"] in done_timings:
+                    by_timing[c["timing"]] = failed(
+                        c["timing"], f"批量转写失败: {r['error']}")
+        else:
+            for item in got:
+                t = str((item or {}).get("timing") or "")
+                if t not in done_timings:
+                    continue
+                segs = item.get("segments")
+                by_timing[t] = {
+                    "timing": t,
+                    "ok": not item.get("error"),
+                    "text": str(item.get("text_all") or ""),
+                "segments": segs if isinstance(segs, list) else [],
+                "error": str(item.get("error") or "")}
+        with contextlib.suppress(OSError):
+            os.unlink(cj)
+        done += len(chunk)
+        if progress is not None:
+            with contextlib.suppress(Exception):
+                progress(done, total)   # 进度回调故障不阻断
+    with contextlib.suppress(OSError):
+        os.unlink(probe_json)
+    for t in timings:
+        if t not in done_timings and not by_timing[t]["error"]:
+            by_timing[t] = failed(t, skipped_note)
+    return [by_timing[t] for t in timings]
 
 
 def build_crosscheck_block(clips: list[dict], asr_python: str = "",
