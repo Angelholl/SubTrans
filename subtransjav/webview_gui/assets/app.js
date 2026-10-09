@@ -463,6 +463,9 @@ const MSG = {
     guide_item_current_label: '现译: ',
     guide_item_unresolvable: '不可自动重翻',
     guide_items_more: n => `…其余 ${n} 条见 json`,
+    // 批5（D2026-1008-02）：行动条目台账已修徽标（JS 态；guideRender 按
+    // lastActionItems.applied_in_ledger 渲染，guide_path 一致才生效）
+    guide_item_applied: '✅ 已修',
 
     // ---- AI 质量分析（D2026-0929 前后端接入）----
     aiAnalyzeBtn: 'AI 分析本报告',
@@ -729,6 +732,9 @@ const MSG = {
     batchFixRunning: (done, total) => `批量修复中… ${done}/${total}`,
     batchFixRunningPlain: '批量修复中…（执行器逐条处理，完成后回显结果）',
     batchFixDone: (a, f) => `批量修复完成：成功 ${a} 条` + (f ? `，失败 ${f} 条` : ''),
+    // 批5（D2026-1008-02）：完成消息剩余明细（主行截断前 10 个条目号，
+    // 完整列表走 #refineBatchFixStatus title 悬停）
+    batchFixRemaining: (n, ids) => `未修复 ${n} 条：${ids}`,
     batchFixFail: '批量修复失败',
     batchFixVerifying: '复验中：重跑全片 AI 分析…',
     batchFixVerifyFail: '；复验失败（修复前建议已保留，可手动重跑 AI 分析）',
@@ -5847,6 +5853,24 @@ function switchTab(tabId) {
         const catCls = (c) => (c === 'cps_too_fast' ? 'bfp-cat-warn'
           : c === 'untranslated' ? 'bfp-cat-primary'
           : c === 'antonym_yamete' ? 'bfp-cat-danger' : 'bfp-cat-neutral');
+        // 批5（D2026-1008-02）：台账已修徽标——lastActionItems 存在且其
+        // guide_path 与当前导读一致才生效（后端 _validate_user_directory
+        // resolve 与前端拼接的分隔符/大小写形态可能不同，归一后比对）；
+        // applied 集合按 Number 强转 index 匹配（null 先判防
+        // Number(null)=0 误配）。无渲染源 seed 机制——每次渲染重算，
+        // 幂等；未 applied 的 open 行保持现状不加徽标
+        let appliedSet = null;
+        if (lastActionItems && lastLoadedGuidePath) {
+          const normPath = (s) =>
+            String(s || '').replace(/\\/g, '/').toLowerCase();
+          if (normPath(lastActionItems.guide_path)
+              === normPath(lastLoadedGuidePath)) {
+            appliedSet = new Set((lastActionItems.open_items || [])
+              .filter(it => it && it.index != null
+                && it.applied_in_ledger === true)
+              .map(it => Number(it.index)));
+          }
+        }
         // 条目行三段化（2.7.4 件1）：.item-head（#编号 mono + 分类徽标 +
         // mono timing ellipsis + 右对齐试听键）/.item-msg（message 全文）/
         // .item-cur（现译 · 状态 muted）。
@@ -5862,12 +5886,21 @@ function switchTab(tabId) {
           const isMissed = String(o.category || '')
             === 'suspected_missed_speech';
           const hasTiming = !!o.timing;
+          // 批5：台账已修行在 .item-head 追加绿色徽标（复用
+          // media-source-tag tag-auto ok 色 pill，零新增 CSS）
+          const idxKey = Number(o.index);
+          const applied = appliedSet != null && Number.isFinite(idxKey)
+            && appliedSet.has(idxKey);
           return '<div class="guide-item'
             + (isMissed ? ' guide-item-missed' : '') + '">'
             + '<div class="item-head">'
             + '<span class="idx-chip">#' + esc(o.index) + '</span>'
             + '<span class="bfp-cat-chip ' + catCls(String(o.category || ''))
             + '">' + esc(o.category) + '</span>'
+            + (applied
+              ? '<span class="media-source-tag tag-auto">'
+                + esc(MSG.guide_item_applied) + '</span>'
+              : '')
             + '<span class="item-timing">' + esc(o.timing) + '</span>'
             + (hasTiming
               ? '<button type="button" class="btn btn-ghost btn-sm'
@@ -6747,7 +6780,9 @@ function switchTab(tabId) {
   }
 
   function batchFixRefresh() {
-    // 使能钩子：导读 json 加载成功后拉取行动条目（含台账已修标记）
+    // 使能钩子：导读 json 加载成功后拉取行动条目（含台账已修标记）。
+    // 批5（D2026-1008-02）：返回拉取 promise（既有调用方均忽略返回值，
+    // 行为不变）——batchFixRun 成功分支 await 它后再算剩余明细
     const btn = $('refineBatchFixBtn');
     const scope = $('refineBatchFixScope');
     if (!btn || !window.pywebview || !window.pywebview.api) return;
@@ -6759,7 +6794,7 @@ function switchTab(tabId) {
       if (scope) { scope.style.display = 'none'; scope.innerHTML = ''; }
       return;
     }
-    window.pywebview.api.refine_guide_action_items(lastLoadedGuidePath)
+    return window.pywebview.api.refine_guide_action_items(lastLoadedGuidePath)
       .then((r) => {
         if (!r || !r.success) {
           lastActionItems = null;
@@ -6886,6 +6921,9 @@ function switchTab(tabId) {
       stopBtn.style.display = '';
     }
     bfStatus(MSG.batchFixRunning(0, batch.length));
+    // 批5（D2026-1008-02）：清上一轮剩余明细悬停残留（成功分支按新结果重挂）
+    const bfSt = $('refineBatchFixStatus');
+    if (bfSt) bfSt.title = '';
     const poll = setInterval(async () => {
       try {
         const p = await window.pywebview.api.refine_batch_fix_progress();
@@ -6899,11 +6937,14 @@ function switchTab(tabId) {
         }
       } catch (e) { /* 单次轮询失败静默，主调用最终回显为准 */ }
     }, 1000);
+    // 批5（D2026-1008-02）：修复结果对象提升出 try 块——finally 静默
+    // 重读导读快照需读成功态（块级 const 于 finally 不可见）
+    let r = null;
     try {
       // 修复执行/复验与确认框同一解析源（P2/D2026-1008-02：单源
       // analyzeResolution，后端共用 helper 同参语义）
       const runRes = analyzeResolution();
-      const r = await window.pywebview.api.refine_batch_fix(
+      r = await window.pywebview.api.refine_batch_fix(
         lastLoadedGuidePath, batch.map(it => it.index),
         runRes.provider, runRes.model);
       if (r && r.success) {
@@ -6927,7 +6968,30 @@ function switchTab(tabId) {
             aiRenderResult(lastAiSuggestions);
           }
         }
+        // 批5（D2026-1008-02）：完成消息含剩余未修复明细——先等行动
+        // 条目刷新（batchFixRefresh 后 lastActionItems 已含新
+        // applied_in_ledger 标记），再与本次提交集合求差集（Number
+        // 强转+null 先判，防 Number(null)=0 误配）。#refineBatchFixStatus
+        // 为单行 span：主行截断前 10 个条目号，完整列表走 title 悬停
+        //（截断上限常量形态，避开「预览列表禁截前 10」既有钉字面量）
+        const REMAINING_SHOW_MAX = 10;
+        await batchFixRefresh();
+        const submittedSet = new Set(batch.map(it => Number(it.index)));
+        const rem = ((lastActionItems && lastActionItems.open_items) || [])
+          .filter(it => it && it.index != null && !it.applied_in_ledger
+            && submittedSet.has(Number(it.index)));
+        const ids = rem.map(it => '#' + String(it.index));
+        if (ids.length) {
+          msg += '；' + MSG.batchFixRemaining(rem.length,
+            ids.slice(0, REMAINING_SHOW_MAX).join(' ')
+            + (ids.length > REMAINING_SHOW_MAX ? ' …' : ''));
+        }
         bfStatus(msg);
+        if (bfSt) {
+          bfSt.title = ids.length
+            ? MSG.batchFixRemaining(rem.length, ids.join(' '))
+            : '';
+        }
       } else if (r && r.cancelled) {
         bfStatus(MSG.bfCancelled);
       } else {
@@ -6942,6 +7006,23 @@ function switchTab(tabId) {
       // 批4：停止按钮隐藏复位——取消/完成后均可重新发起
       if (stopBtn) stopBtn.style.display = 'none';
       batchFixRefresh();
+      // 批5（D2026-1008-02）：修复成功且当前为 json 导读时静默重读导读
+      // 快照——只更新 lastGuideData 并重渲染导读（新终稿/generated_at
+      // 即时可见），禁走 loadGuide 全量链（会清空
+      // lastAiSuggestions 与 AI 结果区 DOM，抹掉刚重渲染的复验建议；
+      // 两容器互不相交，改内存+局部重渲染即可）。静默失败不提示（下次
+      // 打开导读自然刷新）；行动条目徽标取 lastActionItems 当前内存值，
+      // 不等待刷新时序
+      if (r && r.success && !lastLoadedIsTxt && lastLoadedGuidePath
+          && window.pywebview && window.pywebview.api) {
+        window.pywebview.api.read_output_artifact(lastLoadedGuidePath)
+          .then((rr) => {
+            if (!rr || !rr.success || rr.kind !== 'json' || !rr.data) return;
+            lastGuideData = rr.data;
+            guideRender(rr.data);
+          })
+          .catch(() => { /* 静默：下次打开导读自然刷新 */ });
+      }
     }
   }
 

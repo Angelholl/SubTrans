@@ -3327,3 +3327,85 @@ def test_warmup_engine_locked_style_present():
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     assert "#tab-engine.engine-locked" in css
     assert "pointer-events: none" in css
+
+
+# ---------------------------------------------------------------------------
+# 批5（D2026-1008-02）：批量修复结果可见性
+# （完成消息含剩余明细；修复后静默重读导读快照（禁 loadGuide 全量链，
+#   不清复验建议）；行动条目行渲染台账「✅ 已修」徽标。全部 JS 态键、
+#   零 index.html 改动——FROZEN 双钉 223/187 天然不漂移）
+# ---------------------------------------------------------------------------
+
+def test_batch5_fix_done_reread_and_remaining_pinned():
+    """①修复成功后 finally 静默重读导读快照：只更新 lastGuideData+
+    guideRender 局部重渲染，不走 loadGuide 全量链（不清 lastAiSuggestions/
+    不清 #refineAiResult，复验建议刚重渲染不能被抹）；③完成消息含剩余
+    未修复明细（submitted−applied 差集，主行截断+完整列表 title 悬停）。"""
+    src = _app_js_source()
+    caller = _extract_function(src, "batchFixRun")
+    # ① 重读存在且形态正确：finally 内 batchFixRefresh 之后触发
+    fin = caller[caller.rindex("} finally {"):]
+    assert "read_output_artifact(lastLoadedGuidePath)" in fin, \
+        "finally 缺少导读快照静默重读"
+    assert fin.index("batchFixRefresh();") \
+        < fin.index("read_output_artifact("), \
+        "重读必须位于 batchFixRefresh 之后（徽标数据先刷新）"
+    assert "lastGuideData = rr.data" in fin, "重读回包必须更新 lastGuideData"
+    assert "guideRender(rr.data)" in fin, "重读后必须局部重渲染导读"
+    assert "rr.kind !== 'json'" in fin, "重读回包须 kind=json 守卫"
+    assert "catch(() => {" in fin, "重读失败必须静默（不提示）"
+    # ① 禁全量链：不走 guideLoad，不清 AI 结果区/复验建议
+    assert "guideLoad(" not in caller, "重读不得走 loadGuide 全量链"
+    assert "refineAiResult" not in caller, \
+        "重读路径不得清空 #refineAiResult（复验建议刚重渲染）"
+    assert "lastAiSuggestions = null" not in caller, \
+        "重读路径不得清 lastAiSuggestions（复验重建属既有行为，清空禁止）"
+    # ③ 成功分支先等行动条目刷新再算差集（后端 applied_in_ledger 逐条标记）
+    assert "await batchFixRefresh();" in caller, \
+        "剩余明细必须以刷新后的 lastActionItems 为数据源"
+    assert "new Set(batch.map(it => Number(it.index)))" in caller, \
+        "本次提交集合缺失（Number 强转）"
+    assert "submittedSet.has(Number(it.index))" in caller, \
+        "差集匹配键必须 Number 强转"
+    assert "!it.applied_in_ledger" in caller, "差集须排除台账已修行"
+    assert "it.index != null" in caller, "index 须 null 先判（防 Number(null)=0）"
+    assert "MSG.batchFixRemaining" in caller, "剩余明细文案键未接线"
+    assert "ids.slice(0, REMAINING_SHOW_MAX)" in caller, \
+        "主行须截断前 10 个条目号（常量形态，避开预览禁截钉字面量）"
+    assert "MSG.batchFixRemaining(rem.length, ids.join(' '))" in caller, \
+        "完整列表必须放 title 悬停"
+    assert "if (bfSt) bfSt.title = ''" in caller, \
+        "开跑时须清上一轮剩余明细悬停残留"
+    # ③ 截断上限常量定义在位
+    assert "const REMAINING_SHOW_MAX = 10" in caller
+
+
+def test_batch5_guide_item_applied_badge_pinned():
+    """②guideRender 台账已修徽标：lastActionItems 存在且 guide_path 与
+    当前导读一致（分隔符/大小写归一比对）才生效；applied 集合 Number
+    强转 index 匹配；applied 行 .item-head 追加绿色徽标（复用
+    media-source-tag tag-auto，零新增 CSS），未 applied 行保持现状；
+    ④MSG 新键存在且零静态 data-i18n 消耗。"""
+    src = _app_js_source()
+    gr = _extract_function(src, "guideRender")
+    assert "appliedSet" in gr, "applied 集合构建缺失"
+    assert "normPath(lastActionItems.guide_path)" in gr \
+        and "normPath(lastLoadedGuidePath)" in gr, \
+        "guide_path 身份判定缺失（须归一后比对）"
+    assert "it.applied_in_ledger === true" in gr, \
+        "applied 行筛选缺失（严格 === true）"
+    assert "Number(it.index)" in gr and "Number(o.index)" in gr, \
+        "index 匹配必须 Number 强转（防字符串/数字不一）"
+    assert "Number.isFinite" in gr, "非有限 index 须守卫"
+    # 徽标条件渲染：未 applied 的 open 行不加（三元形态即现状守卫）
+    assert "+ (applied" in gr, "徽标必须条件渲染（未 applied 行保持现状）"
+    assert "media-source-tag tag-auto" in gr, \
+        "徽标须复用绿色 ok pill（零新增 CSS）"
+    assert "MSG.guide_item_applied" in gr, "徽标文案未走 MSG 键"
+    # ④ MSG 新键存在；全部 JS 态（零 data-i18n，FROZEN 双钉零消耗）
+    keys = _js_msg_keys()
+    for k in ("guide_item_applied", "batchFixRemaining"):
+        assert k in keys, f"MSG 缺少批5 键: {k}"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for k in ("guide_item_applied", "batchFixRemaining"):
+        assert f'data-i18n="{k}"' not in html, f"{k} 不得消耗静态 data-i18n"
