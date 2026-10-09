@@ -1,7 +1,7 @@
 # C2 实测报告：jur-531 timing 精确命中率与重号 timing（D2026-1009-01 C2 / D2026-1009-02 批0 收口门）
 
 - 实测日期：2026-10-09（批0 执行轮）
-- 数据：`E:\无字幕\新建文件夹\四次测试\`（owner 真机数据）——原始源文 `4k2.me@jur-531.ja.merged.whisperjav.srt`（1518 cue）+ 质量报告导读 json（66 条；树外留存副本 `D:\SubTransJAV-internal-archive\hro2-golden-inputs-20260925\` 含源文 SRT 与 sha256 清单）
+- 数据：`E:\无字幕\新建文件夹\四次测试\`（owner 真机数据）——原始源文 `4k2.me@jur-531.ja.merged.whisperjav.srt`（1518 cue）+ 质量报告导读 json（66 条；树外留存副本见 D 盘 `hro2-golden-inputs-20260925` 归档目录，含源文 SRT 副本与 sha256 清单）
 - 方法：与生产同源——复用 `subtransjav/refine/action_retranslate.py` 的 `_load_source_map`（timing→text 映射，`setdefault` 精确匹配首个）与 `refine/filters.py` 的 `parse_srt`；待修集合取 `_select_items` 缺省口径（`status=open` 且 `current_text` 非 None）。生产函数映射与独立复算逐键相等（`prod==manual: True`）。
 
 ## 结果
@@ -27,11 +27,10 @@
 ## 复现
 
 ```bash
-cd /d/SubTransJAV
+cd 仓库根
 .venv/Scripts/python.exe - <<'EOF'
-import json, sys
+import json
 from pathlib import Path
-sys.path.insert(0, r'D:\SubTransJAV')
 from subtransjav.refine.action_retranslate import _load_source_map
 D = Path(r'E:\无字幕\新建文件夹\四次测试')
 g = json.loads((D / '4k2.me@jur-531.ja.merged.whisperjav_质量报告导读.json').read_text(encoding='utf-8'))
