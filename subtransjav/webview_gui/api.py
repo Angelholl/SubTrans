@@ -3165,8 +3165,17 @@ class TranslateAPI:
                         "error": msg("fix_endpoint_unreachable",
                                      endpoint=endpoint)}
         args = ["--action-retranslate", p,
-                "--entries", ",".join(str(i) for i in sorted(want)),
-                "--apply"]
+                "--entries", ",".join(str(i) for i in sorted(want))]
+        # F1 修复源文增强（D2026-1009-02 批0 / D2026-1009-01 C1）：三级
+        # 定位原始源文 SRT，命中即透传 --action-source（按 timing 对齐恢复
+        # 完整源文）；解析退化（None）不追加，CLI 侧既有提示兜底，不新增
+        # 通知管线。source_name 取导读顶层 source（真实输入名落盘口径）。
+        from subtransjav.refine.pipeline_support import resolve_action_source_path
+        action_source = resolve_action_source_path(
+            p, str(guide.get("source") or ""))
+        if action_source is not None:
+            args.extend(["--action-source", str(action_source)])
+        args.append("--apply")
         provider = str(cfg.get("provider") or "")
         if provider:
             # P2（D2026-1008-02）：与 refine_ai_analyze 同源旗标——动作

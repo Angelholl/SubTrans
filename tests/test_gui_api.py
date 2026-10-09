@@ -2685,9 +2685,11 @@ def _bf_item(index, timing, text, category="cps_too_fast", status="open"):
 
 
 def _make_bf_guide(tmp_path: Path, items, ledger=None, with_report=True,
-                   with_suggestion=None) -> Path:
+                   with_suggestion=None, source="") -> Path:
     guide = {"version": 2, "stem": _BF_GUIDE_STEM, "items": items,
              "direction": "", "media_path": ""}
+    if source:
+        guide["source"] = source    # F1 批0：顶层 source（真实输入名口径）
     p = tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json"
     p.write_text(json.dumps(guide, ensure_ascii=False), encoding="utf-8")
     if ledger is not None:
@@ -2953,6 +2955,45 @@ def test_batch_fix_success_and_ledger_delta(gui_api_obj, monkeypatch,
     assert r["suggestions"] == {"glossary": [], "tm": [], "observations": []}
     p = gui_api_obj.refine_batch_fix_progress()
     assert p["running"] is False and p["phase"] == "done"
+
+
+def test_batch_fix_passes_action_source_when_resolved(gui_api_obj,
+                                                      monkeypatch,
+                                                      tmp_path):
+    """F1 批0（D2026-1009-01 C1）：三级定位命中 → spawn args 含
+    --action-source 指向已解析源文件，且位于 --entries 之后 --apply 之前。"""
+    src = tmp_path / "ep01.japanese.srt"
+    src.write_text(f"1\n{_T3}\n甲\n", encoding="utf-8")
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items, source=src.name)
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=["ok"], rc=0,
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    r = gui_api_obj.refine_batch_fix(str(guide), [3], "deepseek",
+                                     "sb-model")
+    assert r["success"] is True and r["exit_code"] == 0
+    args = captured["calls"][0]["args"]
+    assert args[args.index("--action-source") + 1] == str(src)
+    assert args.index("--entries") < args.index("--action-source") \
+        < args.index("--apply")
+
+
+def test_batch_fix_omits_action_source_when_unresolved(gui_api_obj,
+                                                       monkeypatch,
+                                                       tmp_path):
+    """F1 批0 退化（C1 第三级）：source 指名文件与 {stem}.srt 均不存在
+    → args 不含 --action-source（CLI 侧既有提示兜底，不新增通知管线）。"""
+    items = [_bf_item(3, _T3, "甲")]
+    guide = _make_bf_guide(tmp_path, items, source="missing.srt")
+    _install_fake_secret(monkeypatch, stored=("deepseek",))
+    captured = _install_fake_bf_spawn(
+        monkeypatch, lines=["ok"], rc=0,
+        verify_suggestions={"glossary": [], "tm": [], "observations": []})
+    r = gui_api_obj.refine_batch_fix(str(guide), [3], "deepseek",
+                                     "sb-model")
+    assert r["success"] is True and r["exit_code"] == 0
+    assert "--action-source" not in captured["calls"][0]["args"]
 
 
 def test_batch_fix_exit1_skips_verify(gui_api_obj, monkeypatch, tmp_path):
