@@ -6002,6 +6002,136 @@ class TranslateAPI:
         return {"success": True, "running": running,
                 "last_run": self._fullchain_read_last_run()}
 
+    # ------------------------------------------------------------------
+    # 一键回滚（3.0 批2，D2026-1009-02 批2）：改写恢复语义——把终稿译文
+    # 恢复为台账 outcome=="applied" 记录的修复前文本（old_text 是唯一
+    # 回滚依据，action_retranslate 写序契约保证台账先于终稿落盘）。删行
+    # 路径（auto_insert 回滚）批3 接线，本批跳过并如实计数。
+    # ------------------------------------------------------------------
+
+    def _rollback_candidates(self, guide_dir: str,
+                             stem: str) -> tuple[dict[str, str], int]:
+        """台账 → timing→old_text 恢复映射 + auto_insert 跳过计数。
+
+        只取 outcome=="applied" 且 old_text 非空的记录；同一 timing 多条
+        applied 时后者覆盖前者（最后一次修复的 old_text 即终稿当前文本）。
+        category=="auto_insert"（批3 插入行）不参与恢复，只计数。"""
+        restore: dict[str, str] = {}
+        auto_insert = 0
+        for rec in self._read_ledger(guide_dir, stem):
+            if not isinstance(rec, dict):
+                continue
+            if str(rec.get("category") or "") == "auto_insert":
+                auto_insert += 1
+                continue
+            if rec.get("outcome") != "applied":
+                continue
+            timing = str(rec.get("timing") or "").strip()
+            old_text = rec.get("old_text")
+            if not timing or not isinstance(old_text, str) or not old_text:
+                continue
+            restore[timing] = old_text
+        return restore, auto_insert
+
+    def fullchain_rollback_preview(self, guide_path: str) -> dict[str, Any]:
+        """回滚预检桥（前端确认框文案消费）：返回 {success, applied,
+        auto_insert}——applied=可恢复条数（去重后 timing 数），
+        auto_insert=台账中插入行条数（暂不支持恢复，确认框条件化提示）。"""
+        try:
+            from subtransjav.refine.action_retranslate import _load_guide
+            _, guide_dir, stem = _load_guide(guide_path)
+        except Exception as e:  # noqa: BLE001  结构化失败如实回传
+            return {"success": False, "error": str(e)}
+        restore, auto_insert = self._rollback_candidates(
+            str(guide_dir), stem)
+        return {"success": True, "applied": len(restore),
+                "auto_insert": auto_insert}
+
+    def fullchain_rollback(self, guide_path: str) -> dict[str, Any]:
+        """一键回滚桥（3.0 批2）：终稿译文恢复为台账修复前文本。
+
+        语义（D2026-1009-02 批2）：
+        - 预检：全链在飞（_fullchain_running）显式拒绝（互斥矩阵同源）；
+          台账无 applied 记录 → success+restored=0 如实返回；
+          终稿缺失 → 结构化失败（msg("fullchain_rollback_missing_final")）。
+        - 定位：parse_srt 终稿 → timing setdefault 单值映射（重号 timing
+          第一命中，与 action_retranslate._load_source_map 同口径）；
+          未命中 timing 计入 unmatched 如实返回，不猜测。
+        - 写序契约保持：回滚台账记录（outcome="rollback"，10 键齐，
+          old_text=回滚前当前文、new_text=恢复后文本、reason="manual
+          rollback"）先于终稿原子写落盘。
+        - auto_insert（批3 插入行）跳过不处理，计数 auto_insert_skipped
+          供前端条件化文案（删行接线批3）。"""
+        self._init_ai_state()
+        with self._ai_lock:
+            if self._fullchain_running:
+                return {"success": False, "error": msg("fullchain_running")}
+        try:
+            from subtransjav.refine.action_retranslate import (
+                _append_ledger,
+                _load_guide,
+            )
+            from subtransjav.refine.filters import build_srt, parse_srt
+            from subtransjav.refine.fs_utils import _atomic_write_text
+            from subtransjav.refine.v2_outputs import final_stem
+        except Exception as e:  # noqa: BLE001
+            return {"success": False, "error": str(e)}
+        try:
+            guide, guide_dir, stem = _load_guide(guide_path)
+        except Exception as e:  # noqa: BLE001  导读缺失/格式不符如实回传
+            return {"success": False, "error": str(e)}
+        restore, auto_insert = self._rollback_candidates(
+            str(guide_dir), stem)
+        ledger_path = os.path.join(guide_dir, stem + self._LEDGER_SUFFIX)
+        if not restore:
+            return {"success": True, "restored": 0, "unmatched": [],
+                    "auto_insert_skipped": auto_insert,
+                    "ledger_path": ledger_path}
+        final_path = os.path.join(guide_dir, f"{final_stem(stem)}.srt")
+        if not os.path.isfile(final_path):
+            return {"success": False,
+                    "error": msg("fullchain_rollback_missing_final",
+                                 path=final_path)}
+        try:
+            with open(final_path, encoding="utf-8") as f:
+                entries = parse_srt(f.read())
+        except Exception as read_err:  # noqa: BLE001
+            return {"success": False, "error": str(read_err)}
+        timing_map: dict[str, int] = {}
+        for i, blk in enumerate(entries):
+            timing_map.setdefault(str(blk.get("timing") or ""), i)
+        unmatched: list[str] = []
+        records: list[dict[str, Any]] = []
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for timing, old_text in restore.items():
+            pos = timing_map.get(timing)
+            if pos is None:
+                unmatched.append(timing)
+                continue
+            cur = entries[pos]["text"]
+            entries[pos]["text"] = old_text
+            records.append({"index": entries[pos].get("index"),
+                            "timing": timing, "category": "rollback",
+                            "old_text": cur, "new_text": old_text,
+                            "model_used": "", "outcome": "rollback",
+                            "reason": "manual rollback", "ts": ts,
+                            "source_partial": False})
+        if not records:
+            return {"success": True, "restored": 0, "unmatched": unmatched,
+                    "auto_insert_skipped": auto_insert,
+                    "ledger_path": ledger_path}
+        # 写序契约：台账先于终稿落盘（回滚记录的 old_text 是再次回滚的
+        # 依据；终稿写失败时台账已记录回滚动作不丢失）
+        _append_ledger(Path(ledger_path), records)
+        _atomic_write_text(final_path, build_srt(entries))
+        _log.info("[fullchain] 一键回滚: %s 恢复 %d 条（未命中 %d，"
+                  "插入行跳过 %d）", stem, len(records), len(unmatched),
+                  auto_insert)
+        return {"success": True, "restored": len(records),
+                "unmatched": unmatched,
+                "auto_insert_skipped": auto_insert,
+                "ledger_path": ledger_path}
+
     def _run_encode_automation(self, summary: dict[str, Any],
                                from_fullchain: bool = False) -> None:
         """自动压制主体（触发上下文=前端轮询 get_translation_status 的

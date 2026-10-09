@@ -6177,3 +6177,180 @@ def test_fullchain_config_error_injection(gui_api_obj, monkeypatch, tmp_path,
         assert run["phase"] == "skipped" and run["ended_at"]
         assert gui_api_obj.fullchain_automation_status()["running"] is False
         caplog.clear()
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批2（D2026-1009-02 批2）：一键回滚（改写恢复语义）
+# ---------------------------------------------------------------------------
+
+_RT1 = "00:00:01,000 --> 00:00:02,000"
+_RT2 = "00:00:03,000 --> 00:00:04,000"
+
+
+def _make_rollback_env(tmp_path: Path, ledger, final_texts=None):
+    """回滚夹具：导读（v2）+ 台账 + 终稿（final_stem 契约名）。
+
+    final_texts: {timing: text} 终稿两块（缺省甲/乙）。"""
+    from subtransjav.refine.filters import build_srt
+    from subtransjav.refine.v2_outputs import final_stem
+    guide = {"version": 2, "stem": _BF_GUIDE_STEM,
+             "items": [_bf_item(1, _RT1, ""), _bf_item(2, _RT2, "")],
+             "direction": "", "media_path": ""}
+    (tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json").write_text(
+        json.dumps(guide, ensure_ascii=False), encoding="utf-8")
+    if ledger is not None:
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").write_text(
+            json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
+    entries = [
+        {"index": 1, "timing": _RT1,
+         "text": (final_texts or {}).get(_RT1, "甲（已改）")},
+        {"index": 2, "timing": _RT2,
+         "text": (final_texts or {}).get(_RT2, "乙")},
+    ]
+    (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").write_text(
+        build_srt(entries), encoding="utf-8")
+    return tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json"
+
+
+def _applied_rec(timing, old, new):
+    return {"index": 1, "timing": timing, "category": "cps_too_fast",
+            "old_text": old, "new_text": new, "model_used": "m",
+            "outcome": "applied", "reason": "", "ts": "2026-10-10 00:00:00",
+            "source_partial": False}
+
+
+def _read_rollback_final(tmp_path: Path):
+    from subtransjav.refine.filters import parse_srt
+    from subtransjav.refine.v2_outputs import final_stem
+    return parse_srt(
+        (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+            encoding="utf-8"))
+
+
+def test_fullchain_rollback_happy_path(gui_api_obj, tmp_path, monkeypatch):
+    """回滚 happy path：applied 记录 old_text 回写终稿 + rollback 台账
+    追加（10 键齐）+ 写序契约保持（台账先于终稿落盘）。"""
+    import subtransjav.refine.fs_utils as fs_mod
+    from subtransjav.refine import action_retranslate as art
+    guide = _make_rollback_env(tmp_path, [
+        _applied_rec(_RT1, "甲（原）", "甲（已改）")])
+    order: list = []
+    real_append = art._append_ledger
+
+    def _append(path, records):
+        order.append("ledger")
+        return real_append(path, records)
+
+    _real_atomic = fs_mod._atomic_write_text
+
+    def _atomic(path, text, **kwargs):
+        # _append_ledger 内部的台账原子写也经 fs_utils._atomic_write_text，
+        # 探针按文件名区分（重翻记录.json=台账落盘，.srt=终稿落盘）
+        order.append("atomic:" + Path(path).name)
+        return _real_atomic(path, text)
+
+    monkeypatch.setattr(art, "_append_ledger", _append)
+    monkeypatch.setattr(fs_mod, "_atomic_write_text", _atomic)
+    r = gui_api_obj.fullchain_rollback(str(guide))
+    assert r["success"] is True and r["restored"] == 1
+    assert r["unmatched"] == [] and r["auto_insert_skipped"] == 0
+    # 终稿恢复为修复前文本
+    final = _read_rollback_final(tmp_path)
+    assert final[0]["text"] == "甲（原）" and final[1]["text"] == "乙"
+    # 台账追加 rollback 记录（10 键闭集；old_text=回滚前当前文）
+    ledger = json.loads(
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").read_text(
+            encoding="utf-8"))
+    assert len(ledger) == 2
+    rb = ledger[1]
+    assert set(rb) == {"index", "timing", "category", "old_text",
+                       "new_text", "model_used", "outcome", "reason",
+                       "ts", "source_partial"}
+    assert rb["outcome"] == "rollback" and rb["reason"] == "manual rollback"
+    assert rb["old_text"] == "甲（已改）" and rb["new_text"] == "甲（原）"
+    # 写序契约：台账先于终稿（order 细粒度=append 标记+两笔落盘文件名）
+    assert order == ["ledger",
+                     f"atomic:{_BF_GUIDE_STEM}_重翻记录.json",
+                     f"atomic:{_BF_GUIDE_STEM}_final_cn.srt"]
+
+
+def test_fullchain_rollback_unmatched_timing(gui_api_obj, tmp_path):
+    """timing 未命中终稿：不猜测，unmatched 如实返回且零写入。"""
+    guide = _make_rollback_env(tmp_path, [
+        _applied_rec("00:09:09,000 --> 00:09:10,000", "原", "改")])
+    r = gui_api_obj.fullchain_rollback(str(guide))
+    assert r["success"] is True and r["restored"] == 0
+    assert r["unmatched"] == ["00:09:09,000 --> 00:09:10,000"]
+    assert len(_read_rollback_final(tmp_path)) == 2            # 终稿未动
+    ledger = json.loads(
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").read_text(
+            encoding="utf-8"))
+    assert len(ledger) == 1                                    # 无 rollback 追加
+
+
+def test_fullchain_rollback_final_missing(gui_api_obj, tmp_path):
+    """终稿缺失：结构化失败（msg 人话文案），台账不被误追加。"""
+    from subtransjav.refine.v2_outputs import final_stem
+    guide = _make_rollback_env(tmp_path, [
+        _applied_rec(_RT1, "甲（原）", "甲（已改）")])
+    (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").unlink()
+    r = gui_api_obj.fullchain_rollback(str(guide))
+    assert r["success"] is False and "终稿字幕不存在" in r["error"]
+    ledger = json.loads(
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").read_text(
+            encoding="utf-8"))
+    assert len(ledger) == 1
+
+
+def test_fullchain_rollback_rejected_when_running(gui_api_obj):
+    """全链在飞（_fullchain_running）显式拒绝（互斥矩阵同源）。"""
+    gui_api_obj._init_ai_state()
+    with gui_api_obj._ai_lock:
+        gui_api_obj._fullchain_running = True
+    try:
+        r = gui_api_obj.fullchain_rollback("任意_质量报告导读.json")
+        assert r["success"] is False
+        assert r["error"] == "全链路自动化进行中，请稍后再试"
+    finally:
+        with gui_api_obj._ai_lock:
+            gui_api_obj._fullchain_running = False
+
+
+def test_fullchain_rollback_auto_insert_skipped(gui_api_obj, tmp_path):
+    """auto_insert（批3 插入行）跳过不处理并计数；applied 条目照常恢复。"""
+    guide = _make_rollback_env(tmp_path, [
+        _applied_rec(_RT1, "甲（原）", "甲（已改）"),
+        {"index": None, "timing": "00:00:09,000 --> 00:00:10,000",
+         "category": "auto_insert", "old_text": "",
+         "new_text": "补行文本", "model_used": "", "outcome": "applied",
+         "reason": "auto insert", "ts": "2026-10-10 00:00:00",
+         "source_partial": False},
+    ])
+    r = gui_api_obj.fullchain_rollback(str(guide))
+    assert r["success"] is True
+    assert r["restored"] == 1 and r["auto_insert_skipped"] == 1
+    final = _read_rollback_final(tmp_path)
+    assert final[0]["text"] == "甲（原）" and len(final) == 2  # 未增删条目
+
+
+def test_fullchain_rollback_empty_ledger(gui_api_obj, tmp_path):
+    """台账空：success+restored=0 如实返回，零写入。"""
+    guide = _make_rollback_env(tmp_path, [])
+    r = gui_api_obj.fullchain_rollback(str(guide))
+    assert r == {"success": True, "restored": 0, "unmatched": [],
+                 "auto_insert_skipped": 0, "ledger_path": r["ledger_path"]}
+    assert r["ledger_path"].endswith("ep01_重翻记录.json")
+
+
+def test_fullchain_rollback_preview(gui_api_obj, tmp_path):
+    """回滚预检桥：applied=可恢复 timing 数（去重），auto_insert=插入行数。"""
+    guide = _make_rollback_env(tmp_path, [
+        _applied_rec(_RT1, "甲（原）", "甲（已改）"),
+        _applied_rec(_RT1, "甲（更早）", "甲（原）"),      # 同 timing 去重
+        {"index": None, "timing": "", "category": "auto_insert",
+         "old_text": "", "new_text": "补", "model_used": "",
+         "outcome": "applied", "reason": "", "ts": "t",
+         "source_partial": False},
+    ])
+    r = gui_api_obj.fullchain_rollback_preview(str(guide))
+    assert r == {"success": True, "applied": 1, "auto_insert": 1}

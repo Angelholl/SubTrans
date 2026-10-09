@@ -114,6 +114,28 @@ const MSG = {
     encodeAutoSwitch: '翻译完成后自动压制（硬字幕）',
     // 全链自动化开关（3.0 批1 a 段，D2026-1009-02；strings.py MSG 同键镜像）
     fullchainAutoSwitch: '翻译完成后自动执行：分析→批量修复→复验（含自动压制排布）',
+    // 全链链级状态行+digest+一键回滚（3.0 批2，D2026-1009-02 批2；
+    // strings.py MSG 同键镜像双表，JS 态零静态 i18n 消耗）
+    fullchainRollbackBtn: '一键回滚',
+    fcStatusRunning: '全链自动化进行中：已处理 {d}/{t} 文件，修复 {f} 条',
+    fcStatusLast: '上次全链（{time}）：修复 {f} 条 · 失败 {m} · 待修 {p}（{phase}）',
+    fcStatusSkipped: '未启动全链（服务商原因）',
+    fcStatusUnfinished: '上次未完成：待修 {p} 条',
+    fcStatusNever: '全链自动化尚未运行',
+    fcStatusFail: '全链状态读取失败',
+    fcMissedSkipped: '漏听放弃 {k} 条（批3 填充）',
+    fcDigestTitle: '最近一次链摘要',
+    fcDigestSummary: '文件 {d}/{t} · 修复 {f} · 失败 {m} · 待修 {p}',
+    fcDigestVerifyNone: '复验三键计数差值：—（本链快照未记录复验前后计数）',
+    fcDigestLedgerNote: '逐条改动明细见各文件的重翻台账（{stem}_重翻记录.json）',
+    fcRollbackConfirmTitle: '一键回滚',
+    fcRollbackConfirmBody: '台账中可回滚的改写记录 {n} 条。\n确认后将把终稿译文恢复为修复前文本；自动插入行不支持恢复。',
+    fcRollbackAutoInsertNote: '检测到 {n} 条自动插入行，暂不支持恢复。',
+    fcRollbackNone: '台账中无可回滚的改写记录',
+    fcRollbackDone: '回滚完成：恢复 {n} 条',
+    fcRollbackUnmatched: '；未命中 {n} 条（timing 不在终稿中）',
+    fcRollbackSkipped: '；自动插入行跳过 {k} 条',
+    fcRollbackFail: '回滚失败',
     encodeAutoDoneLine: '[压制] 全部完成——可在队列底条「打开文件夹」',
     encodeJobsLine: '共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边',
     encodeSecBase: '基础',
@@ -4475,6 +4497,11 @@ function switchTab(tabId) {
     if (tabId === 'tab-guide' && typeof window.__warmupTabHook === 'function') {
         try { window.__warmupTabHook(); } catch (e) { /* 触发失败不阻断切页 */ }
     }
+    // 3.0 批2（D2026-1009-02 批2）：切入质量与建议页刷新全链链级状态行
+    // （fullchainStatusRefresh 静默态；失败不阻断切页）
+    if (tabId === 'tab-guide' && typeof window.__fullchainStatusHook === 'function') {
+        try { window.__fullchainStatusHook(); } catch (e) { /* 失败不阻断切页 */ }
+    }
 }
 
 // ===== Refine UI：模型刷新/测试 + 词库表格编辑器 + 角色卡编辑器 =====
@@ -6843,6 +6870,12 @@ function switchTab(tabId) {
     if (!btn || !window.pywebview || !window.pywebview.api) return;
     // 2.7.4 件C（D2026-1007-02）：明示行随刷新链同步（载入导读/修复结束共用）
     bfRefreshEffective();
+    // 3.0 批2：一键回滚按钮随导读加载态显隐（json 导读就绪才可用）
+    const rbBtn = document.querySelector('.fullchain-rollback-btn');
+    if (rbBtn) {
+      rbBtn.style.display =
+        (!lastLoadedGuidePath || lastLoadedIsTxt) ? 'none' : '';
+    }
     if (!lastLoadedGuidePath || lastLoadedIsTxt) {
       lastActionItems = null;
       btn.disabled = true;
@@ -6879,6 +6912,153 @@ function switchTab(tabId) {
         lastActionItems = null;
         if (btn) btn.disabled = true;
       });
+  }
+
+  // ===== 3.0 批2（D2026-1009-02 批2）：全链链级状态行+digest+一键回滚 =====
+  // {name} 占位符格式化 helper（MSG 模板串 + 参数对象 → 文案；未知名保留原样）
+  const fcFmt = (tpl, kw) => String(tpl).replace(/\{(\w+)\}/g, (m, k) =>
+    (Object.prototype.hasOwnProperty.call(kw, k) ? String(kw[k]) : m));
+
+  // 链级状态行刷新（silent=true 静默失败）：fullchain_automation_status →
+  // running=进行中文案；否则按 last_run 分形态（skipped=服务商原因 /
+  // ended_at 空=未完成 / 其余=上次结果一行+漏听放弃段）。展开区（details）
+  // 呈现最近一次链 digest：9 键汇总 + 漏听放弃（k=0 隐藏）+ 复验三键计数
+  // 差值（last_run 无 per-file/verify 明细，如实显示「—」）+ 台账指引。
+  async function fullchainStatusRefresh(silent) {
+    const line = document.querySelector('.fullchain-status-line');
+    if (!line || !window.pywebview || !window.pywebview.api) return;
+    let r = null;
+    try {
+      r = await window.pywebview.api.fullchain_automation_status();
+    } catch (e) { /* 桥异常按读取失败处理 */ }
+    if (!r || !r.success) {
+      if (!silent) {
+        line.hidden = false;
+        line.textContent = MSG.fcStatusFail;
+      }
+      return;
+    }
+    const run = r.last_run || {};
+    const hasRun = Object.keys(run).length > 0;
+    const k = Number(run.missed_skipped) || 0;
+    let text;
+    if (r.running) {
+      text = fcFmt(MSG.fcStatusRunning, {
+        d: run.files_done || 0, t: run.files_total || 0,
+        f: run.entries_fixed || 0 });
+    } else if (!hasRun) {
+      text = MSG.fcStatusNever;
+    } else if (String(run.phase || '') === 'skipped') {
+      text = MSG.fcStatusSkipped;
+    } else if (!String(run.ended_at || '').trim()) {
+      text = fcFmt(MSG.fcStatusUnfinished, { p: run.entries_pending || 0 });
+    } else {
+      // ended_at 形如 2026-10-10T12:34:56（本地秒级 ISO）→ hh:mm
+      text = fcFmt(MSG.fcStatusLast, {
+        time: String(run.ended_at).slice(11, 16),
+        f: run.entries_fixed || 0, m: run.entries_failed || 0,
+        p: run.entries_pending || 0, phase: String(run.phase || '') });
+      if (k > 0) text += ' · ' + fcFmt(MSG.fcMissedSkipped, { k });
+    }
+    line.hidden = false;
+    line.textContent = '';
+    const main = document.createElement('span');
+    main.className = 'fc-status-main';
+    main.textContent = text;
+    line.appendChild(main);
+    // digest 展开区（createElement 注入，零 innerHTML；重刷新整体重建幂等）
+    const det = document.createElement('details');
+    det.className = 'fc-status-digest';
+    const sum = document.createElement('summary');
+    sum.textContent = MSG.fcDigestTitle;
+    det.appendChild(sum);
+    const box = document.createElement('div');
+    box.className = 'fc-digest-body';
+    const rows = [];
+    if (hasRun) {
+      rows.push(fcFmt(MSG.fcDigestSummary, {
+        d: run.files_done || 0, t: run.files_total || 0,
+        f: run.entries_fixed || 0, m: run.entries_failed || 0,
+        p: run.entries_pending || 0 }));
+      if (k > 0) rows.push(fcFmt(MSG.fcMissedSkipped, { k }));
+    }
+    rows.push(MSG.fcDigestVerifyNone);
+    rows.push(fcFmt(MSG.fcDigestLedgerNote,
+      { stem: String(run.guide_stem || lastGuideData
+        && lastGuideData.stem || '') }));
+    rows.forEach((t) => {
+      const d = document.createElement('div');
+      d.textContent = t;
+      box.appendChild(d);
+    });
+    det.appendChild(box);
+    line.appendChild(det);
+  }
+  // 切页钩子（switchTab tab-guide 分支消费；失败不阻断切页）
+  window.__fullchainStatusHook = () => { fullchainStatusRefresh(true); };
+
+  // 一键回滚（改写恢复）：确认框（applied 条数+auto_insert 条件化提示，
+  // 文案不带内部批号）→ fullchain_rollback → 结果如实回显 → 静默重读导读
+  // （仿批5 batchFixRun finally 静默重读）+按钮/状态行刷新。
+  async function fullchainRollbackRun() {
+    if (!lastLoadedGuidePath || lastLoadedIsTxt) return;
+    if (!window.pywebview || !window.pywebview.api) {
+      bfStatus(MSG.api_not_ready);
+      return;
+    }
+    const rbBtn = document.querySelector('.fullchain-rollback-btn');
+    let pv = null;
+    try {
+      pv = await window.pywebview.api
+        .fullchain_rollback_preview(lastLoadedGuidePath);
+    } catch (e) { /* 预览失败按失败文案处理 */ }
+    if (!pv || !pv.success) {
+      bfStatus(MSG.fcRollbackFail + '：' + ((pv && pv.error) || ''));
+      return;
+    }
+    if (!pv.applied) { bfStatus(MSG.fcRollbackNone); return; }
+    let body = fcFmt(MSG.fcRollbackConfirmBody, { n: pv.applied });
+    if (pv.auto_insert > 0) {
+      body += '\n' + fcFmt(MSG.fcRollbackAutoInsertNote,
+        { n: pv.auto_insert });
+    }
+    const ok = await AppModal.confirm(MSG.fcRollbackConfirmTitle, body);
+    if (!ok) return;
+    if (rbBtn) rbBtn.disabled = true;
+    try {
+      const r = await window.pywebview.api
+        .fullchain_rollback(lastLoadedGuidePath);
+      if (r && r.success) {
+        let done = fcFmt(MSG.fcRollbackDone, { n: r.restored || 0 });
+        if (r.unmatched && r.unmatched.length) {
+          done += fcFmt(MSG.fcRollbackUnmatched,
+            { n: r.unmatched.length });
+        }
+        if (r.auto_insert_skipped > 0) {
+          done += fcFmt(MSG.fcRollbackSkipped,
+            { k: r.auto_insert_skipped });
+        }
+        bfStatus(done);
+        // 静默重读导读快照（只更新 lastGuideData+局部重渲染，禁走
+        // loadGuide 全量链——不抹 AI 结果区，同批5 口径）；静默失败不提示
+        window.pywebview.api.read_output_artifact(lastLoadedGuidePath)
+          .then((rr) => {
+            if (!rr || !rr.success || rr.kind !== 'json' || !rr.data) return;
+            lastGuideData = rr.data;
+            guideRender(rr.data);
+          })
+          .catch(() => { /* 静默：下次打开导读自然刷新 */ });
+        batchFixRefresh();
+        fullchainStatusRefresh(true);
+      } else {
+        bfStatus(MSG.fcRollbackFail + '：' + ((r && r.error) || ''));
+      }
+    } catch (e) {
+      bfStatus(MSG.fcRollbackFail + '：'
+        + (e && e.message ? e.message : String(e)));
+    } finally {
+      if (rbBtn) rbBtn.disabled = false;
+    }
   }
 
   async function batchFixRun() {
@@ -7066,6 +7246,8 @@ function switchTab(tabId) {
       // 批4：停止按钮隐藏复位——取消/完成后均可重新发起
       if (stopBtn) stopBtn.style.display = 'none';
       batchFixRefresh();
+      // 3.0 批2：修复完成后同步刷新链级状态行（last_run 计数可能变化）
+      fullchainStatusRefresh(true);
       // 批5（D2026-1008-02）：修复成功且当前为 json 导读时静默重读导读
       // 快照——只更新 lastGuideData 并重渲染导读（新终稿/generated_at
       // 即时可见），禁走 loadGuide 全量链（会清空
@@ -7535,6 +7717,13 @@ function switchTab(tabId) {
     // 质量闭环一键批次修复（2.6.0 批1）
     const bfBtn = $('refineBatchFixBtn');
     if (bfBtn) bfBtn.addEventListener('click', () => batchFixRun());
+    // 3.0 批2：一键回滚按钮（文案 JS 态填充零静态键；导读 json 就绪后
+    // 由 batchFixRefresh 显隐）
+    const rbBind = document.querySelector('.fullchain-rollback-btn');
+    if (rbBind) {
+      rbBind.textContent = MSG.fullchainRollbackBtn;
+      rbBind.addEventListener('click', () => fullchainRollbackRun());
+    }
     // ASR 模型管理（2.6.0 批3；批2 D2026-1002-12 卡重整：空态/说明/占位文案
     // JS 态填充，HTML 不留英文占位）
     const asrBtn = $('asrRefreshBtn');

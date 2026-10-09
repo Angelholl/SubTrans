@@ -658,3 +658,48 @@ def test_mixed_fail_and_nochange_rc3(tmp_path, install_client):
     statuses = {it["index"]: it["status"] for it in
                 _read_guide(tmp_path)["items"]}
     assert statuses == {2: "open", 3: "nochange"}
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批2（D2026-1009-02 批2）：auto_insert 台账 schema 契约（防无生产者漂移）
+# ---------------------------------------------------------------------------
+
+def test_auto_insert_ledger_schema_contract(tmp_path):
+    """auto_insert 台账 schema 契约钉（代表性夹具定形，批3 独立插入通道
+    落账须逐键吻合）。
+
+    - 生产者：批3 F4 独立插入通道（C15 恒等式独立/C16 台账记录，开工门
+      =C22 校准达标；禁复用改写通道的条目数不变断言）；
+    - 消费者：一键回滚（webview_gui.api.fullchain_rollback）——插入行
+      跳过不处理并计数 auto_insert_skipped，删行接线批3 交付；
+    - 语义：插入行无「修复前文」，old_text 恒为空串/None；记录必含
+      LEDGER_FIELDS 10 键闭集（与改写记录同构，category 区分）。"""
+    fixture = [
+        # 改写记录（既有生产者 action_retranslate 同形态）
+        {"index": 3, "timing": T3, "category": "cps_too_fast",
+         "old_text": "前辈真厉害", "new_text": "前辈真迅捷",
+         "model_used": "qwen-m", "outcome": "applied", "reason": "",
+         "ts": "2026-10-10 00:00:00", "source_partial": False},
+        # auto_insert 记录（批3 独立插入通道形态：插入行无修复前文）
+        {"index": None, "timing": "00:00:09,000 --> 00:00:10,000",
+         "category": "auto_insert", "old_text": "",
+         "new_text": "（补行）真的吗", "model_used": "whisper-local",
+         "outcome": "applied", "reason": "auto insert", "ts":
+         "2026-10-10 00:00:01", "source_partial": False},
+    ]
+    for rec in fixture:
+        assert set(rec) == LEDGER_FIELDS, \
+            "台账记录必须恰为 10 键闭集（index/timing/category/old_text/" \
+            "new_text/model_used/outcome/reason/ts/source_partial）"
+    ins = fixture[1]
+    assert ins["category"] == "auto_insert"
+    assert ins["old_text"] in (None, ""), \
+        "插入行无修复前文：old_text 语义恒为空串/None（回滚据此跳过）"
+    # 夹具可真实落盘并被台账读取通道消费（json round-trip）
+    p = tmp_path / "ep01_重翻记录.json"
+    p.write_text(json.dumps(fixture, ensure_ascii=False, indent=2),
+                 encoding="utf-8")
+    records = json.loads(p.read_text(encoding="utf-8"))
+    assert records == fixture
+    assert sum(1 for r in records
+               if r.get("category") == "auto_insert") == 1

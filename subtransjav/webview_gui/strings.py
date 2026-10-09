@@ -251,6 +251,8 @@ MSG = {
     # 入口结构化拒绝；api.py start_translation/refine_batch_fix/
     # refine_ai_analyze/encode_commit 消费，显式拒绝不排队）
     "fullchain_running": "全链路自动化进行中，请稍后再试",
+    # 一键回滚结构化失败（3.0 批2：api.fullchain_rollback 终稿缺失分支）
+    "fullchain_rollback_missing_final": "终稿字幕不存在，无法回滚：{path}",
     "encode_jobs_invalid": "入队任务无效：{reason}",
     "encode_commit_rejected": "全部任务未能入队：{reason}",
     # 压制参数独立设置项（D2026-1008-01 批2：encode_save_params 失败 tip，
@@ -308,6 +310,28 @@ MSG = {
     # 全链自动化开关（批1 a 段，D2026-1009-02；app.js MSG 同键镜像，JS 态
     # 零静态 i18n 消耗）：如实描述链内序=分析→批量修复→复验（含压制排布）
     "fullchainAutoSwitch": "翻译完成后自动执行：分析→批量修复→复验（含自动压制排布）",
+    # ---- 全链链级状态行+digest+一键回滚（3.0 批2，D2026-1009-02 批2；
+    #      app.js MSG 同键镜像双表，JS 态零静态 i18n 消耗）----
+    "fullchainRollbackBtn": "一键回滚",
+    "fcStatusRunning": "全链自动化进行中：已处理 {d}/{t} 文件，修复 {f} 条",
+    "fcStatusLast": "上次全链（{time}）：修复 {f} 条 · 失败 {m} · 待修 {p}（{phase}）",
+    "fcStatusSkipped": "未启动全链（服务商原因）",
+    "fcStatusUnfinished": "上次未完成：待修 {p} 条",
+    "fcStatusNever": "全链自动化尚未运行",
+    "fcStatusFail": "全链状态读取失败",
+    "fcMissedSkipped": "漏听放弃 {k} 条（批3 填充）",
+    "fcDigestTitle": "最近一次链摘要",
+    "fcDigestSummary": "文件 {d}/{t} · 修复 {f} · 失败 {m} · 待修 {p}",
+    "fcDigestVerifyNone": "复验三键计数差值：—（本链快照未记录复验前后计数）",
+    "fcDigestLedgerNote": "逐条改动明细见各文件的重翻台账（{stem}_重翻记录.json）",
+    "fcRollbackConfirmTitle": "一键回滚",
+    "fcRollbackConfirmBody": "台账中可回滚的改写记录 {n} 条。\n确认后将把终稿译文恢复为修复前文本；自动插入行不支持恢复。",
+    "fcRollbackAutoInsertNote": "检测到 {n} 条自动插入行，暂不支持恢复。",
+    "fcRollbackNone": "台账中无可回滚的改写记录",
+    "fcRollbackDone": "回滚完成：恢复 {n} 条",
+    "fcRollbackUnmatched": "；未命中 {n} 条（timing 不在终稿中）",
+    "fcRollbackSkipped": "；自动插入行跳过 {k} 条",
+    "fcRollbackFail": "回滚失败",
     "encodeAutoDoneLine": "[压制] 全部完成——可在队列底条「打开文件夹」",
     "encodeJobsLine": "共 {n} 个文件 · 硬字幕烧录 · 底端居中白字黑边",
     "encodeEtaNone": "（时长预估需 ffmpeg 就绪后预检提供）",

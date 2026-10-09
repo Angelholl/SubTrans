@@ -2351,8 +2351,9 @@ def test_batch_fix_run_uses_structured_preview():
     assert "Number.isFinite(k)" in caller, "textMap 键须 Number 强转守卫"
     # confirm 其余调用点零变化（原 7 处，2.7.4 件C 迁走批量修复一处→余 6；
     # 2.8.0 批1 EncodeDock 新增 4 处→10；批2 预设删除确认 +1→11；
-    # P3（D2026-1008-02）tmEdit 脏态守卫 +1→12，editor 守卫先例同款）
-    assert src.count("AppModal.confirm(") == 12, \
+    # P3（D2026-1008-02）tmEdit 脏态守卫 +1→12，editor 守卫先例同款；
+    # 3.0 批2（D2026-1009-02 批2）一键回滚确认框 +1→13）
+    assert src.count("AppModal.confirm(") == 13, \
         "AppModal.confirm 调用点数量漂移（增删须显式改钉并回评议）"
 
 
@@ -3623,3 +3624,69 @@ def test_batch6_batch_fix_nochange_pinned():
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'data-i18n="batchFixNochange"' not in html, \
         "batchFixNochange 不得消耗静态 data-i18n"
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批2（D2026-1009-02 批2）：链级状态行 + digest + 一键回滚 静态钉
+# ---------------------------------------------------------------------------
+
+def test_fullchain_status_line_and_rollback_pinned():
+    """批2 接线钉：index.html 状态行容器/回滚按钮（零 id/零 data-i18n，
+    data-testid 锚）+ app.js 刷新链挂点（switchTab/batchFixRun）+ 回滚
+    确认框链（preview→confirm→rollback→静默重读）+ MSG 双表同键。"""
+    src = _app_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # index.html：状态行容器（hidden 起步，零 id/零 data-i18n）
+    m = re.search(r'<div[^>]*class="fullchain-status-line"[^>]*>', html)
+    assert m, "index.html 缺全链链级状态行容器"
+    assert 'data-testid="fullchain-status-line"' in m.group(0)
+    assert "hidden" in m.group(0)
+    assert not re.search(r'(?<![\w-])id="', m.group(0)), \
+        "状态行容器不得带 id（FROZEN 契约）"
+    assert "data-i18n" not in m.group(0)
+    # index.html：一键回滚按钮（零 id/零 data-i18n，文案 JS 态填充）
+    mb = re.search(
+        r'<button[^>]*class="btn btn-secondary btn-compact '
+        r'fullchain-rollback-btn"[^>]*>', html)
+    assert mb, "index.html 缺一键回滚按钮"
+    assert 'data-testid="fullchain-rollback-btn"' in mb.group(0)
+    assert not re.search(r'(?<![\w-])id="', mb.group(0))
+    assert "data-i18n" not in mb.group(0)
+    # app.js：刷新函数 + 三挂点（切页/批修复完成/桥调用）
+    fn = _extract_function(src, "fullchainStatusRefresh")
+    assert "fullchain_automation_status" in fn
+    assert "fcStatusRunning" in fn and "fcStatusSkipped" in fn \
+        and "fcStatusUnfinished" in fn
+    assert "fcMissedSkipped" in fn
+    tab = _extract_function(src, "switchTab")
+    assert "__fullchainStatusHook" in tab, \
+        "switchTab tab-guide 分支须挂链级状态行刷新"
+    run_fn = _extract_function(src, "batchFixRun")
+    assert "fullchainStatusRefresh(true)" in run_fn, \
+        "batchFixRun 完成后须刷新链级状态行"
+    # 回滚流程：preview → confirm（条件化 auto_insert 提示）→ rollback →
+    # 静默重读导读 + 刷新
+    rb = _extract_function(src, "fullchainRollbackRun")
+    assert "fullchain_rollback_preview" in rb
+    assert "AppModal.confirm" in rb
+    assert "fcRollbackAutoInsertNote" in rb, \
+        "确认框须含 auto_insert 条件化提示"
+    assert "fullchain_rollback(" in rb
+    assert "read_output_artifact" in rb, "回滚成功后须静默重读导读"
+    # 按钮绑定与 MSG 填充（bindDom 区，零静态键）
+    assert "MSG.fullchainRollbackBtn" in src
+    # MSG 双表同键（strings.py 镜像）
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    for k in ("fullchainRollbackBtn", "fcStatusRunning", "fcStatusLast",
+              "fcStatusSkipped", "fcStatusUnfinished", "fcStatusNever",
+              "fcMissedSkipped", "fcRollbackConfirmBody",
+              "fcRollbackAutoInsertNote"):
+        assert k in _js_msg_keys(), f"app.js MSG 缺键: {k}"
+        assert re.search(rf'"{k}":', sp), f"strings.py MSG 表缺键: {k}"
+    # 回滚条件化文案不带内部批号（「漏听放弃」位的批3 填充字样除外）
+    mn = re.search(r'"fcRollbackAutoInsertNote": "([^"]*)"', sp)
+    assert mn and "批" not in mn.group(1), \
+        "回滚 auto_insert 提示文案不得带内部批号"
+    mb2 = re.search(r'fcRollbackConfirmBody: \'([^\']*)\'', src)
+    assert mb2 and "批" not in mb2.group(1), \
+        "回滚确认框正文不得带内部批号"
