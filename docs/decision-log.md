@@ -3367,6 +3367,15 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **Mimosa +1 甄别**：38=37+1，新增项=`Temp/pyinstaller_dist/.../webview/js/api.js`（pywebview 官方运行时文件，**本地构建产物首次入扫**——昨日 coverage 无该目录实锤；Temp/ gitignored 不入库；anchor 2e7b5945…）→ 判定=扫描面扩大非源码新增，零放行阻断。secret 3 命中甄别=存量端点常量行（4475/4476/4695，diff 归属核对非新增）。
 - **问②核账（行为正确，33 未复现）**：66 行动条目=46 可修复（untranslated 26+cps_too_fast 20）+**20 疑似漏听（status=observation，设计上不进批量修复、仅供人工核对）**→下拉「全部待修复条目（46）」正确；确认框完整列出 46 条（黑盒实测）；导读查看器渲染前 50 条+「…其余 16 条见 json」（MAX_ITEMS=50 既有口径）。**"33"无法从数据/代码导出**（46 条去重后 45 个不同 index；50 渲染/16 隐藏），疑为长列表滚动计数偏差——请 owner 下次遇到给截图定位。
 
+**执行追记（2026-10-09 批5 收口·批量修复结果可见性）[已完成]**
+
+- **批5 实现**（0c342e5，2 文件 +166/-3）：①完成消息含未修复明细——成功分支 await batchFixRefresh 后按 submit−applied 差集追加「未修复 N 条：#…」（主行截断前 10、完整列表 #refineBatchFixStatus title 悬停、开跑清上一轮残留）；②finally 静默重读导读快照（read_output_artifact→lastGuideData+guideRender 局部重渲染，禁走 loadGuide 全量链保住复验建议，静默失败）；③guideRender 台账「✅ 已修」绿徽标（lastActionItems.guide_path 归一比对一致才生效+Number 强转+null 先判，复用 media-source-tag tag-auto 零新增 CSS）；MSG 新 JS 态键 guide_item_applied/batchFixRemaining（零 data-i18n，FROZEN 双钉不漂移）；batchFixRefresh 返回 promise（既有调用方行为不变）；静态钉 +2。
+- **验证链**：定向 126 passed；全量 **2268+4**（2266+4 只增）；ruff/node --check/冒烟（CLI --help+GUI 模块导入）过；Mimosa 深扫 38 条 identity 集与批4 勾账封态全等零新增（seal sha256:a2ad3e43…）；secret 定向扫描零命中。
+- **GUI 黑盒**（web-gui-tester；有状态 stub 桥+8645 只读伺服直连工作树 app.js；样例=jur-531 真实导读 46 open+20 observation）：确认弹窗预估 44=46−2 台账已修（已修行不重复入批）；完成消息「成功 43 条，失败 1 条；复验建议差 Δ+0；未修复 2 条：#1501 #1501」+title 悬停（#1501 双行为样例数据同名 index，如实反映后端数据非应用缺陷）；徽标渲染（已修行 ✅/observation 行无）+范围下拉联动「全部待修复条目（2）」；静默重读后 #guideMeta 即为新快照且 TM 建议区保留。IAB 输入层劣化在册先例再现：Playwright click 全挂→cua 坐标+PageDown 翻页代理。
+- **code-review 双轴**（Standards/Spec 两并行子智能体）：采纳 3 小修=MSG 键 guideItemApplied→guide_item_applied（命名族一致）+finally 注释去 retranslated_at 夸大（全库无渲染点）+测试尾部悬空注释修剪；驳回/登记=成功路径 refine_guide_action_items 双拉取（finally 拉取系 HEAD 既有行为）、防御形状双 hunk 同构（提取共享 helper 会扩大钉面，不值得）。
+- **已知限制（登记不阻塞）**：①冷启动首开导读时历史台账已修行无徽标（guideRender 先于 refine_guide_action_items 返回且 refresh 不触发重渲染；本会话内修复后/重开导读即正常）——后续批可议「refresh 后按需重渲染」；②重读整体重渲染会复位分节卡展开态（规格明文两件套 lastGuideData+guideRender；C13 系 TM 表专项钉不同物）；③重读不刷新媒体来源条（规格只要求两件套）。
+- **余项**：owner 真机走查批5（含重建后本地包）；「33」悬置待 owner 截图（批4 勾账问②）；release/2.8.0.2 复验→tag→Release 严禁代行。
+
 ## [2026-10-09] D2026-1009-01 AI 分析+修复自动化（全链路自动化）+修复源文增强+F4 疑似漏听二级自动化 [已拍板·待开工]
 
 **评议方**：decision-critic（三轮：首评 F1/F2/F3 提 HRO-1/2；追加评 F4 提 HRO-3；复议 HRO-3 有条件解除；owner 终裁后定稿）
