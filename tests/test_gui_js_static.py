@@ -3664,13 +3664,18 @@ def test_fullchain_status_line_and_rollback_pinned():
     run_fn = _extract_function(src, "batchFixRun")
     assert "fullchainStatusRefresh(true)" in run_fn, \
         "batchFixRun 完成后须刷新链级状态行"
-    # 回滚流程：preview → confirm（条件化 auto_insert 提示）→ rollback →
-    # 静默重读导读 + 刷新
+    # 回滚流程：preview → confirm（条件化 auto_insert 删行提示，批3 3B：
+    # 删行已接线，fcRollbackAutoInsertNote「暂不支持恢复」退场）→
+    # rollback → 静默重读导读 + 刷新
     rb = _extract_function(src, "fullchainRollbackRun")
     assert "fullchain_rollback_preview" in rb
     assert "AppModal.confirm" in rb
-    assert "fcRollbackAutoInsertNote" in rb, \
-        "确认框须含 auto_insert 条件化提示"
+    assert "fcRollbackAutoInsertDelete" in rb, \
+        "确认框须含 auto_insert 删行条件化提示"
+    assert "fcRollbackAutoInsertNote" not in src, \
+        "「暂不支持恢复」旧文案须退场（删行已接线）"
+    assert "fcMissedSkipped: '漏听放弃 {k} 条'" in src, \
+        "漏听放弃文案不得再带批3 填充尾注"
     assert "fullchain_rollback(" in rb
     assert "read_output_artifact" in rb, "回滚成功后须静默重读导读"
     # 按钮绑定与 MSG 填充（bindDom 区，零静态键）
@@ -3680,11 +3685,13 @@ def test_fullchain_status_line_and_rollback_pinned():
     for k in ("fullchainRollbackBtn", "fcStatusRunning", "fcStatusLast",
               "fcStatusSkipped", "fcStatusUnfinished", "fcStatusNever",
               "fcMissedSkipped", "fcRollbackConfirmBody",
-              "fcRollbackAutoInsertNote"):
+              "fcRollbackAutoInsertDelete"):
         assert k in _js_msg_keys(), f"app.js MSG 缺键: {k}"
         assert re.search(rf'"{k}":', sp), f"strings.py MSG 表缺键: {k}"
-    # 回滚条件化文案不带内部批号（「漏听放弃」位的批3 填充字样除外）
-    mn = re.search(r'"fcRollbackAutoInsertNote": "([^"]*)"', sp)
+    assert "fcRollbackAutoInsertNote" not in sp, \
+        "strings.py 旧键须随退场摘除"
+    # 回滚条件化文案不带内部批号
+    mn = re.search(r'"fcRollbackAutoInsertDelete": "([^"]*)"', sp)
     assert mn and "批" not in mn.group(1), \
         "回滚 auto_insert 提示文案不得带内部批号"
     mb2 = re.search(r'fcRollbackConfirmBody: \'([^\']*)\'', src)

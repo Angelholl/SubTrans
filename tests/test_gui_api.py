@@ -5671,21 +5671,32 @@ def test_fullchain_chain_happy_path(gui_api_obj, monkeypatch, tmp_path):
 
 def test_fullchain_single_analyze_invariant(gui_api_obj, monkeypatch,
                                             tmp_path):
-    """长期链级不变式钉（D2026-1009-02 批1 a 段）：一次会话完整链内
-    LLM 分析（--ai-analyze）spawn==1——批内 verify=False + 链级复验唯一；
-    复验 spawn 与链首解析同源（--ai-model/--s1-provider 显式透传）。"""
+    """长期链级不变式钉（D2026-1009-02 批1 a 段；批3 3B 白名单化）：一次
+    会话完整链内 LLM 分析（--ai-analyze）spawn==1——批内 verify=False +
+    链级复验唯一。白名单语义：F4 whisper 批量转写走 asr_env 通道（本地
+    python 子进程），不计入分析不变式——本测试经 fake batch_transcribe_
+    clips 独立计数证明（无媒体=C18 跳过，转写 fake 零调用、分析 spawn
+    仍==1，两通道互不干扰）。"""
     gui_api_obj._init_ai_state()
     _fullchain_env(
         gui_api_obj, monkeypatch, tmp_path,
         settings={"fullchain_auto_enabled": True},
         stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
-    items = [_bf_item(3, _T3, "甲"), _bf_item(7, _T7, "乙")]
+    items = [_bf_item(3, _T3, "甲"), _bf_item(7, _T7, "乙"),
+             # F4 观察条目（无媒体 → C18 诚实退化，不 spawn 转写）
+             _bf_item(9, "00:00:09,000 --> 00:00:10,000", "",
+                      category="suspected_missed_speech")]
     ledger_path = tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json"
     _make_bf_guide(tmp_path, items, ledger=[],
                    with_suggestion={"glossary": [], "tm": [],
                                     "observations": []})
     monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
                         lambda m, p: {"success": True})
+    import subtransjav.refine.asr_env as asr_env_mod
+    batch_calls: list = []
+    monkeypatch.setattr(asr_env_mod, "batch_transcribe_clips",
+                        lambda media, timings, **kw:
+                        batch_calls.append(timings) or [])
     captured = _install_fake_bf_spawn(
         monkeypatch, lines=[], rc=0, ledger_path=ledger_path,
         ledger_records=[{"index": 3, "timing": _T3, "outcome": "applied"}],
@@ -5697,10 +5708,13 @@ def test_fullchain_single_analyze_invariant(gui_api_obj, monkeypatch,
     analyze_calls = [c for c in captured["calls"]
                      if "--ai-analyze" in c["args"]]
     assert len(analyze_calls) == 1, \
-        "链级不变式：--ai-analyze spawn 必须==1（复验参数化+链级唯一）"
+        "链级不变式（白名单语义）：LLM 分析 --ai-analyze spawn 必须==1" \
+        "（复验参数化+链级唯一；F4 转写走 asr_env 通道不计入）"
     a = analyze_calls[0]["args"]
     assert a[a.index("--ai-model") + 1] == "qwen-m"
     assert a[a.index("--s1-provider") + 1] == "lmstudio"
+    assert batch_calls == [], \
+        "转写 fake 独立计数：C18 无媒体不得触发批量转写（白名单通道）"
 
 
 def test_fullchain_batch_split_max_50(gui_api_obj, monkeypatch, tmp_path):
@@ -6316,8 +6330,10 @@ def test_fullchain_rollback_rejected_when_running(gui_api_obj):
             gui_api_obj._fullchain_running = False
 
 
-def test_fullchain_rollback_auto_insert_skipped(gui_api_obj, tmp_path):
-    """auto_insert（批3 插入行）跳过不处理并计数；applied 条目照常恢复。"""
+def test_fullchain_rollback_auto_insert_deleted(gui_api_obj, tmp_path):
+    """批3 3B 删行接线：auto_insert applied 记录按 timing 精确命中删除
+    终稿块+重编号；删除记录（new_text=None）追加入台账；applied 改写
+    照常恢复。"""
     guide = _make_rollback_env(tmp_path, [
         _applied_rec(_RT1, "甲（原）", "甲（已改）"),
         {"index": None, "timing": "00:00:09,000 --> 00:00:10,000",
@@ -6326,11 +6342,34 @@ def test_fullchain_rollback_auto_insert_skipped(gui_api_obj, tmp_path):
          "reason": "auto insert", "ts": "2026-10-10 00:00:00",
          "source_partial": False},
     ])
+    # 终稿含已插入行（auto_insert 记录 timing 处第三块）
+    from subtransjav.refine.filters import build_srt as _bsrt
+    from subtransjav.refine.v2_outputs import final_stem as _fstem
+    (tmp_path / f"{_fstem(_BF_GUIDE_STEM)}.srt").write_text(
+        _bsrt([
+            {"index": 1, "timing": _RT1, "text": "甲（已改）"},
+            {"index": 2, "timing": _RT2, "text": "乙"},
+            {"index": 3, "timing": "00:00:09,000 --> 00:00:10,000",
+             "text": "补行文本"},
+        ]), encoding="utf-8")
     r = gui_api_obj.fullchain_rollback(str(guide))
     assert r["success"] is True
-    assert r["restored"] == 1 and r["auto_insert_skipped"] == 1
+    assert r["restored"] == 1 and r["auto_insert_deleted"] == 1
+    assert r["auto_insert_skipped"] == 1   # 兼容键语义=实删数
     final = _read_rollback_final(tmp_path)
-    assert final[0]["text"] == "甲（原）" and len(final) == 2  # 未增删条目
+    assert final[0]["text"] == "甲（原）" and len(final) == 2  # 插入行已删
+    ledger = json.loads(
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").read_text(
+            encoding="utf-8"))
+    assert len(ledger) == 4   # 种子 2（applied+auto_insert）+改写 rollback+删行 rollback
+    dl = ledger[-1]
+    assert dl["category"] == "auto_insert" and dl["outcome"] == "rollback"
+    assert dl["new_text"] is None
+    assert dl["old_text"] == "补行文本"
+    assert dl["reason"] == "manual rollback (delete inserted row)"
+    assert set(dl) == {"index", "timing", "category", "old_text",
+                       "new_text", "model_used", "outcome", "reason",
+                       "ts", "source_partial"}
 
 
 def test_fullchain_rollback_empty_ledger(gui_api_obj, tmp_path):
@@ -6338,7 +6377,8 @@ def test_fullchain_rollback_empty_ledger(gui_api_obj, tmp_path):
     guide = _make_rollback_env(tmp_path, [])
     r = gui_api_obj.fullchain_rollback(str(guide))
     assert r == {"success": True, "restored": 0, "unmatched": [],
-                 "auto_insert_skipped": 0, "ledger_path": r["ledger_path"]}
+                 "auto_insert_skipped": 0, "auto_insert_deleted": 0,
+                 "ledger_path": r["ledger_path"]}
     assert r["ledger_path"].endswith("ep01_重翻记录.json")
 
 
@@ -6354,3 +6394,442 @@ def test_fullchain_rollback_preview(gui_api_obj, tmp_path):
     ])
     r = gui_api_obj.fullchain_rollback_preview(str(guide))
     assert r == {"success": True, "applied": 1, "auto_insert": 1}
+
+
+# ---------------------------------------------------------------------------
+# 3.0 批3 3B（D2026-1009-02 批3）：F4 链内接线+C22 门控+回滚删行+C23 四点
+# ---------------------------------------------------------------------------
+
+_MT = "00:00:05,000 --> 00:00:08,000"       # 漏听观察窗口（3s 语音能量）
+_MTEXT = "ありがとう"
+
+
+def _missed_item(index=9, timing=_MT, text=""):
+    return {"index": index, "timing": timing, "category":
+            "suspected_missed_speech", "message": "疑似漏听",
+            "current_text": text, "source_excerpt": "", "status": "open",
+            "severity": None}
+
+
+def _make_missed_env(tmp_path: Path, *, items=None, media=True,
+                     final=True, extras=None):
+    """漏听段夹具：导读（含 suspected_missed_speech 观察+media_path）+
+    哑媒体文件 + 终稿（final_stem 契约名）。"""
+    from subtransjav.refine.filters import build_srt
+    from subtransjav.refine.v2_outputs import final_stem
+    media_path = ""
+    if media:
+        media_path = str(tmp_path / "ep01.mp4")
+        Path(media_path).write_bytes(b"fake")
+    guide = {"version": 2, "stem": _BF_GUIDE_STEM,
+             "items": items if items is not None else [_missed_item()],
+             "direction": "", "media_path": media_path,
+             "language": "ja"}
+    if extras is not None:
+        guide["extras"] = extras
+    p = tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json"
+    p.write_text(json.dumps(guide, ensure_ascii=False), encoding="utf-8")
+    if final:
+        entries = [
+            {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+             "text": "甲"},
+            {"index": 2, "timing": "00:00:10,000 --> 00:00:11,000",
+             "text": "乙"},
+        ]
+        (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").write_text(
+            build_srt(entries), encoding="utf-8")
+    return p
+
+
+def _install_missed_stubs(monkeypatch, *, text=_MTEXT):
+    """打桩 detect_speech_windows（每窗口 3s 语音）+ batch_transcribe_
+    clips（高置信段，三维全过门）；返回 (detect 调用, batch 调用)。"""
+    import subtransjav.refine.asr_env as asr_mod
+    import subtransjav.refine.audio_detect as ad_mod
+    detect_calls: list = []
+    batch_calls: list = []
+
+    def _detect(media_path, gap_timings):
+        detect_calls.append(list(gap_timings))
+        return {t: [(5.0, 8.0)] for t in gap_timings}
+
+    def _batch(media_path, timings, **kw):
+        batch_calls.append(list(timings))
+        return [{"timing": t, "ok": True, "text": text,
+                 "segments": [{"no_speech_prob": 0.0,
+                               "avg_logprob": -0.1,
+                               "compression_ratio": 1.0}],
+                 "error": ""} for t in timings]
+
+    monkeypatch.setattr(ad_mod, "detect_speech_windows", _detect)
+    monkeypatch.setattr(asr_mod, "batch_transcribe_clips", _batch)
+    monkeypatch.setattr(asr_mod, "cleanup_clips", lambda *a, **kw: 0)
+    return detect_calls, batch_calls
+
+
+def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
+                                               tmp_path):
+    """_fullchain_c22_enabled fail-closed：缺失/损坏/enabled 非 True 均
+    False；enabled is True 才放行（CONFIG_DIR 打桩）。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    gui = gui_api_obj
+    assert gui._fullchain_c22_enabled() is False       # 缺失
+    p = tmp_path / "fullchain_c22.json"
+    p.write_text("{broken", encoding="utf-8")
+    assert gui._fullchain_c22_enabled() is False       # 损坏
+    p.write_text(json.dumps({"enabled": False, "precision_lb": 0.9}),
+                 encoding="utf-8")
+    assert gui._fullchain_c22_enabled() is False       # 非 True
+    p.write_text(json.dumps({"enabled": True, "precision_lb": 0.96,
+                             "n": 60}), encoding="utf-8")
+    assert gui._fullchain_c22_enabled() is True
+
+
+def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
+                                                tmp_path, caplog):
+    """门控缺省关：high 也全放弃——零终稿写入/零台账 auto_insert，
+    notice 明示放弃数，last_run.missed_skipped 如实计数。"""
+    import logging
+
+    from subtransjav.refine.v2_outputs import final_stem
+    guide = _make_missed_env(tmp_path)
+    _install_missed_stubs(monkeypatch)
+    final_before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
+                    ).read_text(encoding="utf-8")
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide), "stem":
+              _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
+            ).read_text(encoding="utf-8") == final_before
+    assert not (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").exists()
+    assert any("C22 校准门未通过" in r.message and "全部放弃：1 条"
+               in r.message for r in caplog.records), "放弃数须明示不静默"
+
+
+def test_fullchain_missed_gate_on_inserts(gui_api_obj, monkeypatch,
+                                          tmp_path):
+    """门控开（CONFIG_DIR 打桩写 fullchain_c22.json enabled=true）：
+    high 补行——终稿 +1 行且重编号/台账 auto_insert 10 键/写序契约
+    （ledger 先于 final 落盘）/guide extras.auto_insert 标记/SRT 正文
+    零标记。"""
+    import subtransjav.refine.fs_utils as fs_mod
+    from subtransjav.refine import action_retranslate as art
+    from subtransjav.refine.filters import parse_srt
+    from subtransjav.refine.v2_outputs import final_stem
+    import subtransjav.refine.config as _cfg
+    monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path, extras={"对齐率": "98.0%"})
+    _install_missed_stubs(monkeypatch)
+    (tmp_path / "fullchain_c22.json").write_text(
+        json.dumps({"enabled": True, "precision_lb": 0.97, "n": 65}),
+        encoding="utf-8")
+    order: list = []
+    real_append = art._append_ledger
+
+    def _append(path, records):
+        order.append("ledger")
+        return real_append(path, records)
+
+    _real_atomic = fs_mod._atomic_write_text
+
+    def _atomic(path, text, **kwargs):
+        order.append("atomic:" + Path(path).name)
+        return _real_atomic(path, text)
+
+    monkeypatch.setattr(art, "_append_ledger", _append)
+    monkeypatch.setattr(fs_mod, "_atomic_write_text", _atomic)
+    run = {"missed_skipped": 0}
+    gui_api_obj._run_fullchain_missed_stage(
+        [{"guide_path": str(guide), "p": str(guide), "stem":
+          _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 0
+    final = parse_srt(
+        (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+            encoding="utf-8"))
+    assert len(final) == 3
+    # 插入按时间序落位（00:00:05 在两既有块之间），非追加队尾；
+    # 时长经 CPS 压缩（5 字 ÷ 9.2 CPS ≈ 0.543s < 3s 窗口，防挤压）
+    assert final[1]["text"] == _MTEXT
+    assert final[1]["timing"] == "00:00:05,000 --> 00:00:05,543"
+    assert final[2]["text"] == "乙"
+    assert [e["timing"] for e in final] == [
+        "00:00:01,000 --> 00:00:02,000",
+        "00:00:05,000 --> 00:00:05,543",
+        "00:00:10,000 --> 00:00:11,000"]
+    # 台账 10 键闭集 + auto_insert 形态
+    ledger = json.loads(
+        (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").read_text(
+            encoding="utf-8"))
+    assert len(ledger) == 1
+    rec = ledger[0]
+    assert set(rec) == {"index", "timing", "category", "old_text",
+                        "new_text", "model_used", "outcome", "reason",
+                        "ts", "source_partial"}
+    assert rec["category"] == "auto_insert" and rec["index"] is None
+    assert rec["old_text"] == "" and rec["new_text"] == _MTEXT
+    assert rec["outcome"] == "applied"
+    assert rec["reason"] == "fullchain auto insert"
+    # 写序契约：ledger 先于 final（其后为 guide extras 标记写回）
+    assert order[:3] == ["ledger",
+                         f"atomic:{_BF_GUIDE_STEM}_重翻记录.json",
+                         f"atomic:{_BF_GUIDE_STEM}_final_cn.srt"]
+    # guide extras.auto_insert 标记 + SRT 正文零标记
+    guide_data = json.loads(guide.read_text(encoding="utf-8"))
+    assert guide_data["extras"]["auto_insert"] == [
+        {"timing": final[1]["timing"], "text": _MTEXT}]
+    assert "auto_insert" not in (
+        tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+            encoding="utf-8")
+
+
+def test_fullchain_missed_gate_on_invariant_failure_abandons(
+        gui_api_obj, monkeypatch, tmp_path, caplog):
+    """插入恒等式失败防御（C15）：篡改 assert 抛 AssertionError → 该
+    文件放弃，终稿/台账/extras 零落盘。"""
+    import logging
+
+    from subtransjav.refine import missed_insert as mi
+    from subtransjav.refine.v2_outputs import final_stem
+    import subtransjav.refine.config as _cfg
+    monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path)
+    _install_missed_stubs(monkeypatch)
+    (tmp_path / "fullchain_c22.json").write_text(
+        json.dumps({"enabled": True}), encoding="utf-8")
+
+    def _boom(o, n, p):
+        raise AssertionError("injected")
+
+    monkeypatch.setattr(mi, "assert_insert_invariants", _boom)
+    final_before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
+                    ).read_text(encoding="utf-8")
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide), "stem":
+              _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
+            ).read_text(encoding="utf-8") == final_before
+    assert not (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").exists()
+    assert not (tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json"
+                ).is_file() or "auto_insert" not in json.loads(
+        (tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json").read_text(
+            encoding="utf-8")).get("extras", {})
+    assert any("恒等式校验失败" in r.message for r in caplog.records)
+
+
+def test_fullchain_missed_c21_first_20(gui_api_obj, monkeypatch, tmp_path,
+                                       caplog):
+    """C21 仅前 20 明示：25 条观察 → 转写仅前 20 个 timing+notice。"""
+    import logging
+    guide = _make_missed_env(
+        tmp_path,
+        items=[_missed_item(100 + i,
+                            f"00:00:{i + 5:02d},000 --> 00:00:{i + 6:02d},000")
+               for i in range(25)])
+    detect_calls, batch_calls = _install_missed_stubs(monkeypatch)
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide), "stem":
+              _BF_GUIDE_STEM}], run)
+    assert len(detect_calls) == 1 and len(detect_calls[0]) == 20
+    assert batch_calls and len(batch_calls[0]) == 20
+    assert any("仅处理前 20 条" in r.message and "共 25 条"
+               in r.message for r in caplog.records)
+
+
+def test_fullchain_missed_c18_no_media(gui_api_obj, monkeypatch, tmp_path,
+                                       caplog):
+    """C18 媒体缺失：notice 无音频对照+零 spawn（detect/batch 均不调）。"""
+    import logging
+    guide = _make_missed_env(tmp_path, media=False)
+    detect_calls, batch_calls = _install_missed_stubs(monkeypatch)
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide), "stem":
+              _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert detect_calls == [] and batch_calls == []
+    assert any("无音频对照" in r.message for r in caplog.records)
+
+
+def test_fullchain_rollback_delete_clears_extras(gui_api_obj, tmp_path):
+    """回滚删行收口：guide extras.auto_insert 同步清空；timing 未命中的
+    插入行计入 unmatched。"""
+    ins_t = "00:00:09,000 --> 00:00:10,000"
+    guide = _make_rollback_env(tmp_path, [
+        {"index": None, "timing": ins_t, "category": "auto_insert",
+         "old_text": "", "new_text": "补行文本", "model_used": "",
+         "outcome": "applied", "reason": "fullchain auto insert",
+         "ts": "t", "source_partial": False},
+    ], final_texts={_RT1: "甲（已改）"})
+    # 种子 extras.auto_insert 标记 + 终稿含插入行
+    gdata = json.loads(guide.read_text(encoding="utf-8"))
+    gdata["extras"] = {"auto_insert": [{"timing": ins_t,
+                                        "text": "补行文本"}]}
+    guide.write_text(json.dumps(gdata, ensure_ascii=False),
+                     encoding="utf-8")
+    from subtransjav.refine.filters import build_srt
+    from subtransjav.refine.v2_outputs import final_stem
+    (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").write_text(
+        build_srt([
+            {"index": 1, "timing": _RT1, "text": "甲（已改）"},
+            {"index": 2, "timing": _RT2, "text": "乙"},
+            {"index": 3, "timing": ins_t, "text": "补行文本"},
+        ]), encoding="utf-8")
+    r = gui_api_obj.fullchain_rollback(str(guide))
+    assert r["success"] is True
+    assert r["restored"] == 0 and r["auto_insert_deleted"] == 1
+    final = _read_rollback_final(tmp_path)
+    assert [e["text"] for e in final] == ["甲（已改）", "乙"]  # 删行+重编号
+    gdata = json.loads(guide.read_text(encoding="utf-8"))
+    assert gdata["extras"]["auto_insert"] == []
+    # 未命中：台账中 auto_insert timing 不在终稿 → unmatched（零删行）
+    ins_miss = "00:00:20,000 --> 00:00:21,000"
+    ledger = [{"index": None, "timing": ins_miss, "category":
+               "auto_insert", "old_text": "", "new_text": "x",
+               "model_used": "", "outcome": "applied", "reason": "r",
+               "ts": "t", "source_partial": False}]
+    (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").write_text(
+        json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
+    r2 = gui_api_obj.fullchain_rollback(str(guide))
+    assert r2["unmatched"] == [ins_miss]
+    assert r2["auto_insert_deleted"] == 0
+    assert len(_read_rollback_final(tmp_path)) == 2            # 终稿未动
+
+
+def _encode_env(gui_api_obj, monkeypatch, tmp_path):
+    """C23 压制测试环境：视频/终稿伴生 + out_dir/commit 打桩。
+    返回 (commits, params_box)。"""
+    from subtransjav.refine.v2_outputs import final_stem
+    monkeypatch.setattr(gui_api_obj, "encode_get_last_params",
+                        lambda: {"params": {"out_dir": str(tmp_path)}})
+    commits: list = []
+
+    def _commit(jobs, params, allow_overwrite=False, from_fullchain=False):
+        commits.append({"jobs": [dict(j) for j in jobs],
+                        "allow_overwrite": allow_overwrite,
+                        "from_fullchain": from_fullchain})
+        return {"success": True}
+
+    monkeypatch.setattr(gui_api_obj, "encode_commit", _commit)
+    return commits, final_stem
+
+
+def test_encode_skip_existing_mtime_requeue(gui_api_obj, monkeypatch,
+                                            tmp_path, caplog):
+    """C23③ skip-existing mtime 语义：成品旧于终稿 → 不跳过重新入队
+    +notice；成品不旧于终稿 → 照旧跳过。"""
+    import logging
+
+    from subtransjav.refine.v2_outputs import final_stem
+    _encode_env(gui_api_obj, monkeypatch, tmp_path)
+    video = tmp_path / "ep01.mp4"
+    video.write_bytes(b"v")
+    sub = tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
+    sub.write_text("1\n00:00:01,000 --> 00:00:02,000\n甲\n\n",
+                   encoding="utf-8")
+    out = tmp_path / "ep01_hardsub.mp4"
+    summary = {"files": {str(sub): "done"}}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        # 成品较新 → 跳过
+        out.write_bytes(b"new")
+        future = time.time() + 100
+        os.utime(out, (future, future))
+        gui_api_obj._run_encode_automation(summary, from_fullchain=True)
+        # 成品较旧 → 重新入队+notice
+        out.write_bytes(b"old")
+        os.utime(out, (time.time() - 100, time.time() - 100))
+        gui_api_obj._run_encode_automation(summary, from_fullchain=True)
+    notices = [r.message for r in caplog.records]
+    assert any("成品已存在" in m for m in notices), "成品不旧于字幕照旧跳过"
+    assert any("重新压制" in m for m in notices), "终稿晚于成品须重压通知"
+
+
+def test_encode_auto_insert_sorted_last_and_checkpoint(
+        gui_api_obj, monkeypatch, tmp_path, caplog):
+    """C23①②：含 auto_insert 标记文件排队尾；标记有台账无 → 排除出
+    自动压制+告警。"""
+    import logging
+
+    from subtransjav.refine.pipeline_support import GUIDE_JSON_SUFFIX
+    from subtransjav.refine.v2_outputs import final_stem
+    commits, _ = _encode_env(gui_api_obj, monkeypatch, tmp_path)
+    # 两个文件：ep01（普通）、ep02（含 auto_insert 标记）
+    jobs = []
+    for stem, marks in (("ep01", None), ("ep02", [{"timing": "t",
+                                                   "text": "补"}])):
+        v = tmp_path / f"{stem}.mp4"
+        v.write_bytes(b"v")
+        sub = tmp_path / f"{final_stem(stem)}.srt"
+        sub.write_text("1\n00:00:01,000 --> 00:00:02,000\n甲\n\n",
+                       encoding="utf-8")
+        gdata = {"version": 2, "stem": stem, "items": [], "direction": "",
+                 "media_path": ""}
+        if marks is not None:
+            gdata["extras"] = {"auto_insert": marks}
+        (tmp_path / f"{stem}{GUIDE_JSON_SUFFIX}").write_text(
+            json.dumps(gdata, ensure_ascii=False), encoding="utf-8")
+        jobs.append(str(sub))
+    summary = {"files": {jobs[0]: "done", jobs[1]: "done"}}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        # 第一轮：ep02 标记有+台账无 → 排除+告警；仅 ep01 入队
+        gui_api_obj._run_encode_automation(summary, from_fullchain=True)
+        # 修复一致性（补台账）后：两文件入队且 ep02 排队尾
+        ledger = [{"index": None, "timing": "t", "category":
+                   "auto_insert", "old_text": "", "new_text": "补",
+                   "model_used": "", "outcome": "applied", "reason": "r",
+                   "ts": "t", "source_partial": False}]
+        (tmp_path / "ep02_重翻记录.json").write_text(
+            json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
+        gui_api_obj._run_encode_automation(summary, from_fullchain=True)
+    notices = [r.message for r in caplog.records]
+    assert any("来源不一致" in m and "ep02" in m for m in notices), \
+        "标记有台账无不一致须告警"
+    assert len(commits) == 2
+    assert len(commits[0]["jobs"]) == 1, "不一致文件须排除出自动压制"
+    order = [Path(j["subtitle_path"]).stem
+             for j in commits[1]["jobs"]]
+    assert order == [final_stem("ep01"), final_stem("ep02")], \
+        f"含 auto_insert 标记文件须排队尾: {order}"
+
+
+def test_encode_needs_confirm_mtime_requeue(gui_api_obj, monkeypatch,
+                                            tmp_path, caplog):
+    """C23③ 第二处：commit needs_confirm（入队瞬间出现新成品）时，终稿
+    晚于成品 → allow_overwrite=True 重新入队；不旧 → 照旧跳过。"""
+    import logging
+
+    from subtransjav.refine.v2_outputs import final_stem
+    calls: list = []
+
+    def _commit(jobs, params, allow_overwrite=False, from_fullchain=False):
+        calls.append({"n": len(jobs), "allow_overwrite": allow_overwrite})
+        if len(calls) == 1 and not allow_overwrite:
+            return {"success": False, "needs_confirm": True}
+        return {"success": True}
+
+    monkeypatch.setattr(gui_api_obj, "encode_get_last_params",
+                        lambda: {"params": {"out_dir": str(tmp_path)}})
+    monkeypatch.setattr(gui_api_obj, "encode_commit", _commit)
+    video = tmp_path / "ep01.mp4"
+    video.write_bytes(b"v")
+    sub = tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
+    sub.write_text("1\n00:00:01,000 --> 00:00:02,000\n甲\n\n",
+                   encoding="utf-8")
+    out = tmp_path / "ep01_hardsub.mp4"
+    out.write_bytes(b"old")
+    os.utime(out, (time.time() - 100,) * 2)
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_encode_automation({"files": {str(sub): "done"}},
+                                           from_fullchain=True)
+    assert calls == [{"n": 1, "allow_overwrite": False},
+                     {"n": 1, "allow_overwrite": True}]
+    assert any("重新压制" in r.message for r in caplog.records)

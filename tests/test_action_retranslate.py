@@ -670,8 +670,10 @@ def test_auto_insert_ledger_schema_contract(tmp_path):
 
     - 生产者：批3 F4 独立插入通道（C15 恒等式独立/C16 台账记录，开工门
       =C22 校准达标；禁复用改写通道的条目数不变断言）；
-    - 消费者：一键回滚（webview_gui.api.fullchain_rollback）——插入行
-      跳过不处理并计数 auto_insert_skipped，删行接线批3 交付；
+    - 消费者：一键回滚（webview_gui.api.fullchain_rollback）——批3 3B
+      删行接线已交付：applied 记录按 timing 精确命中删除终稿块并追加
+      outcome=rollback（new_text=None）删除记录；auto_insert_skipped
+      键保留兼容（语义=auto_insert_deleted 实删数）；
     - 语义：插入行无「修复前文」，old_text 恒为空串/None；记录必含
       LEDGER_FIELDS 10 键闭集（与改写记录同构，category 区分）。"""
     fixture = [

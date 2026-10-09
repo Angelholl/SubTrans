@@ -5688,7 +5688,8 @@ class TranslateAPI:
         files_total/files_done=会话完成文件数/已处理完文件数；
         entries_fixed/failed=台账口径修复成败条数；entries_pending=已甄别
         可修但未结算（含 nochange 等未入账量）；missed_skipped=漏听段
-        （F4）跳过/放弃数（a 段插缝恒 0，批3 接线）。"""
+        （F4）放弃/C18 跳过数（批3 3B 接线，_run_fullchain_missed_stage
+        更新）。"""
         try:
             from subtransjav.refine.fs_utils import _atomic_write_text
             path = self._fullchain_last_run_path()
@@ -5697,6 +5698,29 @@ class TranslateAPI:
                 path, json.dumps(run, ensure_ascii=False, indent=2))
         except Exception:
             _log_exc("_fullchain_write_last_run")
+
+    def _fullchain_c22_path(self) -> str:
+        """C22 校准门落点（config/fullchain_c22.json；CONFIG_DIR 同款锚
+        + 安全锚点校验，仿 _fullchain_last_run_path / :5664 打桩范式）。
+
+        写入方=tools/c22_calibration.py（--enable 达标后落
+        {"enabled": true, "measured_at", "precision_lb", "n"}）。"""
+        try:
+            from subtransjav.refine.config import CONFIG_DIR
+        except Exception:
+            return os.path.join(os.getcwd(), "fullchain_c22.json")
+        return str(_resolve_safe_path(
+            os.path.join(CONFIG_DIR, "fullchain_c22.json")))
+
+    def _fullchain_c22_enabled(self) -> bool:
+        """C22 校准门读取（fail-closed）：仅 enabled is True 才开自动补行；
+        文件缺失/损坏/字段缺失一律 False（宁可全放弃，不无证放行）。"""
+        try:
+            with open(self._fullchain_c22_path(), encoding="utf-8") as f:
+                data = json.load(f)
+            return isinstance(data, dict) and data.get("enabled") is True
+        except Exception:
+            return False
 
     def _resolve_guide_for_done_key(self, done_key: str) -> str:
         """会话完成文件 → 导读 json 路径（同目录伴生成品命名口径）。
@@ -5759,16 +5783,211 @@ class TranslateAPI:
         out.sort(key=lambda e: e["index"])
         return out
 
-    def _run_fullchain_missed_stage(self, files_ctx: list[dict[str, Any]]) -> None:
-        """F4 疑似漏听二级自动化插缝（批3 接入；a 段空位恒 None 零副作用）。
+    def _run_fullchain_missed_stage(self, files_ctx: list[dict[str, Any]],
+                                    run: dict[str, Any]) -> None:
+        """F4 疑似漏听二级自动化插缝（3.0 批3 3B，D2026-1009-02 第二节批3；
+        C19 序=修复→漏听→复验，本段在链内复验之前执行）。
 
-        批3 计划（D2026-1009-02 第二节批3，C19 序=修复→漏听→复验）：
-        批量转写一次装载转 N 段（C17）→ asr_runner 透传 no_speech_prob/
-        avg_logprob（C13）三维置信门 + ≤1s 语音能量一律放弃 → 高置信自动
-        补行走独立插入通道（C15/C16；开工门=C22 校准达标）→ 放弃数计入
-        missed_skipped 与 digest/通知。files_ctx=a 段甄别产物（有导读
-        文件的 guide_path/p/stem 清单），批3 据此定位媒体与时间轴。"""
-        return None
+        链路（逐文件）：导读 observation（category=="suspected_missed_speech"）
+        → C21 仅前 20 明示 → C18 媒体缺失/检测转写失败诚实退化（notice
+        明示「无音频对照，跳过」，不静默）→ batch_transcribe_clips 批量
+        转写（C17 一次装载转 N 段）→ detect_speech_windows 语音窗口 →
+        classify_transcript 三维置信门（判空/≤1s 能量/三维置信/重复/荒谬/
+        语言/拟声）→ 门控分叉：
+        - C22 未通过（缺省）：全部放弃（high 也不补），notice 明示放弃数；
+        - C22 通过：high picks → 终稿 insert_candidates 插入 →
+          assert_insert_invariants（失败=该文件放弃，零落盘）→ 写序契约
+          （先 _append_ledger 逐 pick 一条 auto_insert 记录，再原子写终稿）
+          → 导读顶层 extras.auto_insert 标记（SRT 正文零标记）。
+
+        missed_skipped=放弃数（low/empty/门控放弃/≤1s）+C18 跳过数；补行
+        数经 notice 汇报；每文件一条汇总 notice；stage 收尾刷 last_run。
+        files_ctx=a 段甄别产物（guide_path/p/stem 清单）。"""
+        from subtransjav.refine import asr_env
+        from subtransjav.refine.action_retranslate import _append_ledger
+        from subtransjav.refine.audio_detect import detect_speech_windows
+        from subtransjav.refine.filters import build_srt, parse_srt
+        from subtransjav.refine.fs_utils import _atomic_write_text
+        from subtransjav.refine.missed_insert import (
+            assert_insert_invariants,
+            classify_transcript,
+            insert_candidates,
+        )
+        from subtransjav.refine.v2_outputs import final_stem
+        gate_on = self._fullchain_c22_enabled()
+        for ctx in files_ctx:
+            guide_path = str(ctx.get("guide_path") or "")
+            p, stem, guide, err = self._load_validated_guide(guide_path)
+            if err is not None:
+                self._automation_notice(
+                    f"[全链] 漏听段跳过 {os.path.basename(guide_path)}："
+                    f"{err.get('error') or '导读校验失败'}")
+                continue
+            items = [it for it in guide.get("items") or []
+                     if isinstance(it, dict)
+                     and str(it.get("category") or "")
+                     == "suspected_missed_speech"]
+            if not items:
+                continue               # 无漏听观察：正常形态，不通知
+            # C21 仅前 20（明示，不静默截断）
+            cap = 20
+            total_n = len(items)
+            if total_n > cap:
+                items = items[:cap]
+                self._automation_notice(
+                    f"[全链] {stem}：疑似漏听观察共 {total_n} 条，"
+                    f"仅处理前 {cap} 条")
+            # C18 媒体缺失诚实退化
+            media = str(guide.get("media_path") or "").strip()
+            skipped = 0
+            if not media or not os.path.isfile(media):
+                skipped = len(items)
+                run["missed_skipped"] = int(run.get("missed_skipped") or 0) \
+                    + skipped
+                self._automation_notice(
+                    f"[全链] {stem}：无音频对照（媒体缺失），漏听观察 "
+                    f"{skipped} 条跳过（C18 诚实退化）")
+                self._fullchain_write_last_run(run)
+                continue
+            timings = [str(it.get("timing") or "") for it in items
+                       if str(it.get("timing") or "")]
+            try:
+                windows = detect_speech_windows(media, timings)
+            except Exception:
+                _log_exc("_run_fullchain_missed_stage.detect")
+                windows = {"__error": "语音窗口检测失败"}
+            try:
+                transcripts = asr_env.batch_transcribe_clips(
+                    media, timings)
+            except Exception:
+                _log_exc("_run_fullchain_missed_stage.batch")
+                transcripts = [{"timing": t, "ok": False, "text": "",
+                                "segments": [],
+                                "error": "批量转写失败"} for t in timings]
+            finally:
+                try:
+                    asr_env.cleanup_clips()   # 切片清理归调用方（3A 契约）
+                except Exception:
+                    _log_exc("_run_fullchain_missed_stage.cleanup")
+            if not isinstance(windows, dict) or windows.get("__error") \
+                    or not any(t.get("ok") for t in transcripts
+                               if isinstance(t, dict)):
+                skipped = len(items)
+                run["missed_skipped"] = int(run.get("missed_skipped") or 0) \
+                    + skipped
+                self._automation_notice(
+                    f"[全链] {stem}：无音频对照（检测/转写失败），漏听观察 "
+                    f"{skipped} 条跳过（C18 诚实退化）")
+                self._fullchain_write_last_run(run)
+                continue
+            tr_by_timing = {str(t.get("timing") or ""): t
+                            for t in transcripts if isinstance(t, dict)}
+            language = str(guide.get("language") or "ja")
+            picks: list[dict[str, str]] = []
+            for it in items:
+                timing = str(it.get("timing") or "")
+                if not timing:
+                    skipped += 1
+                    continue
+                tr = tr_by_timing.get(timing) or {}
+                if not tr.get("ok"):
+                    skipped += 1            # 转写失败如实放弃
+                    continue
+                grade = classify_transcript(
+                    timing, tr.get("segments") or [],
+                    str(tr.get("text") or ""), windows, language=language)
+                if grade.get("grade") != "high":
+                    skipped += 1            # low/empty（含 ≤1s 一律放弃）
+                    continue
+                picks.append({"timing": timing,
+                              "text": str(tr.get("text") or "").strip()})
+            if picks and not gate_on:
+                # 门控分叉（缺省关）：high 也不补，notice 明示放弃数不静默
+                skipped += len(picks)
+                self._automation_notice(
+                    f"[全链] {stem}：自动补行未启用（C22 校准门未通过），"
+                    f"漏听条目按既定策略全部放弃：{len(picks)} 条")
+                picks = []
+            inserted = 0
+            if gate_on and picks:
+                final_path = os.path.join(
+                    os.path.dirname(p), f"{final_stem(stem)}.srt")
+                ok_write = False
+                if not os.path.isfile(final_path):
+                    self._automation_notice(
+                        f"[全链] {stem}：终稿缺失，自动补行放弃 "
+                        f"{len(picks)} 条（零写入）")
+                else:
+                    try:
+                        with open(final_path, encoding="utf-8") as f:
+                            entries = parse_srt(f.read())
+                        new_entries = insert_candidates(entries, picks)
+                        # C15 独立恒等式：失败=程序 bug，该文件整体放弃
+                        assert_insert_invariants(entries, new_entries, picks)
+                    except Exception:
+                        _log_exc("_run_fullchain_missed_stage.insert")
+                        self._automation_notice(
+                            f"[全链] {stem}：插入恒等式校验失败，本文件"
+                            f"自动补行放弃 {len(picks)} 条（零落盘）")
+                        entries = None
+                    if entries is not None:
+                        orig_set = {(e.get("timing"), e.get("text"))
+                                    for e in entries}
+                        added = [e for e in new_entries
+                                 if (e.get("timing"), e.get("text"))
+                                 not in orig_set]
+                        ts = self._fullchain_now()
+                        records = [
+                            {"index": None, "timing": blk.get("timing"),
+                             "category": "auto_insert", "old_text": "",
+                             "new_text": str(blk.get("text") or ""),
+                             "model_used": "", "outcome": "applied",
+                             "reason": "fullchain auto insert", "ts": ts,
+                             "source_partial": False}
+                            for blk in added]
+                        ledger_path = os.path.join(
+                            os.path.dirname(p),
+                            stem + self._LEDGER_SUFFIX)
+                        # 写序契约：先台账追加，再原子写终稿
+                        try:
+                            _append_ledger(Path(ledger_path), records)
+                            _atomic_write_text(
+                                final_path, build_srt(new_entries))
+                            ok_write = True
+                        except Exception:
+                            _log_exc("_run_fullchain_missed_stage.write")
+                        if ok_write:
+                            inserted = len(records)
+                            # guide 顶层 extras.auto_insert 标记（SRT
+                            # 正文零标记）原子写回
+                            try:
+                                extras = guide.get("extras")
+                                if not isinstance(extras, dict):
+                                    extras = {}
+                                marks = extras.get("auto_insert")
+                                marks = marks if isinstance(marks, list) \
+                                    else []
+                                marks.extend(
+                                    {"timing": blk.get("timing"),
+                                     "text": blk.get("text")}
+                                    for blk in added)
+                                extras["auto_insert"] = marks
+                                guide["extras"] = extras
+                                _atomic_write_text(
+                                    p, json.dumps(
+                                        guide, ensure_ascii=False,
+                                        indent=2))
+                            except Exception:
+                                _log_exc(
+                                    "_run_fullchain_missed_stage.extras")
+            if inserted:
+                self._automation_notice(
+                    f"[全链] {stem}：自动补行 {inserted} 条")
+            if gate_on and picks and not inserted:
+                skipped += len(picks)   # 终稿缺失/恒等式失败/写盘失败=放弃
+            run["missed_skipped"] = int(run.get("missed_skipped") or 0) \
+                + skipped
+            self._fullchain_write_last_run(run)
 
     def _run_fullchain_automation(self, summary: dict[str, Any]) -> None:
         """全链自动化状态机主体（批1 a 段骨架）。
@@ -5910,8 +6129,9 @@ class TranslateAPI:
                     f"失败 {file_failed} 条")
                 run["files_done"] = int(run["files_done"]) + 1
                 self._fullchain_write_last_run(run)
-            # f) F4 漏听插缝（批3 接入：批量转写→置信门→补行/放弃）
-            self._run_fullchain_missed_stage(files_ctx)
+            # f) F4 漏听插缝（批3 3B：批量转写→置信门→门控分叉补行/放弃；
+            # missed_skipped 由此更新并刷 last_run）
+            self._run_fullchain_missed_stage(files_ctx, run)
             # g) 复验恰 1 次（链级不变式：--ai-analyze spawn==1）。与批内
             # 修复同 model/provider 源（链首单源解析结果显式透传，绕开
             # refine_ai_analyze 内联决策歧义；报告 txt 与手动复验同源=
@@ -6003,26 +6223,29 @@ class TranslateAPI:
                 "last_run": self._fullchain_read_last_run()}
 
     # ------------------------------------------------------------------
-    # 一键回滚（3.0 批2，D2026-1009-02 批2）：改写恢复语义——把终稿译文
-    # 恢复为台账 outcome=="applied" 记录的修复前文本（old_text 是唯一
-    # 回滚依据，action_retranslate 写序契约保证台账先于终稿落盘）。删行
-    # 路径（auto_insert 回滚）批3 接线，本批跳过并如实计数。
+    # 一键回滚（3.0 批2 改写恢复 + 批3 3B 删行接线，D2026-1009-02）：把
+    # 终稿译文恢复为台账 outcome=="applied" 记录的修复前文本（old_text
+    # 是唯一回滚依据），并按 timing 精确命中删除 auto_insert 插入行
+    # （写序契约保持：先台账追加再原子写终稿）。
     # ------------------------------------------------------------------
 
-    def _rollback_candidates(self, guide_dir: str,
-                             stem: str) -> tuple[dict[str, str], int]:
-        """台账 → timing→old_text 恢复映射 + auto_insert 跳过计数。
+    def _rollback_candidates(
+            self, guide_dir: str,
+            stem: str) -> tuple[dict[str, str], list[dict[str, Any]]]:
+        """台账 → timing→old_text 恢复映射 + auto_insert 待删记录列表。
 
         只取 outcome=="applied" 且 old_text 非空的记录；同一 timing 多条
         applied 时后者覆盖前者（最后一次修复的 old_text 即终稿当前文本）。
-        category=="auto_insert"（批3 插入行）不参与恢复，只计数。"""
+        category=="auto_insert"（批3 插入行）：仅 outcome=="applied" 的
+        记录参与删行（已 rollback 的删除记录不重复处理）。"""
         restore: dict[str, str] = {}
-        auto_insert = 0
+        auto_insert: list[dict[str, Any]] = []
         for rec in self._read_ledger(guide_dir, stem):
             if not isinstance(rec, dict):
                 continue
             if str(rec.get("category") or "") == "auto_insert":
-                auto_insert += 1
+                if rec.get("outcome") == "applied":
+                    auto_insert.append(rec)
                 continue
             if rec.get("outcome") != "applied":
                 continue
@@ -6036,7 +6259,7 @@ class TranslateAPI:
     def fullchain_rollback_preview(self, guide_path: str) -> dict[str, Any]:
         """回滚预检桥（前端确认框文案消费）：返回 {success, applied,
         auto_insert}——applied=可恢复条数（去重后 timing 数），
-        auto_insert=台账中插入行条数（暂不支持恢复，确认框条件化提示）。"""
+        auto_insert=将删除的插入行条数（确认框条件化提示）。"""
         try:
             from subtransjav.refine.action_retranslate import _load_guide
             _, guide_dir, stem = _load_guide(guide_path)
@@ -6045,23 +6268,26 @@ class TranslateAPI:
         restore, auto_insert = self._rollback_candidates(
             str(guide_dir), stem)
         return {"success": True, "applied": len(restore),
-                "auto_insert": auto_insert}
+                "auto_insert": len(auto_insert)}
 
     def fullchain_rollback(self, guide_path: str) -> dict[str, Any]:
-        """一键回滚桥（3.0 批2）：终稿译文恢复为台账修复前文本。
+        """一键回滚桥（3.0 批2 改写恢复 + 批3 3B 删行接线）。
 
-        语义（D2026-1009-02 批2）：
+        语义（D2026-1009-02 批2/批3）：
         - 预检：全链在飞（_fullchain_running）显式拒绝（互斥矩阵同源）；
           台账无 applied 记录 → success+restored=0 如实返回；
           终稿缺失 → 结构化失败（msg("fullchain_rollback_missing_final")）。
-        - 定位：parse_srt 终稿 → timing setdefault 单值映射（重号 timing
-          第一命中，与 action_retranslate._load_source_map 同口径）；
+        - 改写恢复：parse_srt 终稿 → timing setdefault 单值映射（重号
+          timing 第一命中，与 action_retranslate._load_source_map 同口径）；
           未命中 timing 计入 unmatched 如实返回，不猜测。
-        - 写序契约保持：回滚台账记录（outcome="rollback"，10 键齐，
-          old_text=回滚前当前文、new_text=恢复后文本、reason="manual
-          rollback"）先于终稿原子写落盘。
-        - auto_insert（批3 插入行）跳过不处理，计数 auto_insert_skipped
-          供前端条件化文案（删行接线批3）。"""
+        - 删行（批3）：auto_insert 台账 applied 记录按 timing 精确命中
+          删除终稿块（未命中计入 unmatched），build_srt 重编号；逐删行
+          追加 category="auto_insert"/outcome="rollback"/old_text=被删行
+          文本/new_text=None/reason="manual rollback (delete inserted
+          row)" 的台账记录；guide 顶层 extras.auto_insert 同步清空。
+        - 写序契约保持：台账先于终稿原子写落盘。
+        - 返回键：auto_insert_skipped 保留兼容（语义=auto_insert_deleted
+          实删数）+ auto_insert_deleted 如实新增。"""
         self._init_ai_state()
         with self._ai_lock:
             if self._fullchain_running:
@@ -6083,11 +6309,11 @@ class TranslateAPI:
         restore, auto_insert = self._rollback_candidates(
             str(guide_dir), stem)
         ledger_path = os.path.join(guide_dir, stem + self._LEDGER_SUFFIX)
-        if not restore:
-            return {"success": True, "restored": 0, "unmatched": [],
-                    "auto_insert_skipped": auto_insert,
-                    "ledger_path": ledger_path}
         final_path = os.path.join(guide_dir, f"{final_stem(stem)}.srt")
+        if not restore and not auto_insert:
+            return {"success": True, "restored": 0, "unmatched": [],
+                    "auto_insert_skipped": 0, "auto_insert_deleted": 0,
+                    "ledger_path": ledger_path}
         if not os.path.isfile(final_path):
             return {"success": False,
                     "error": msg("fullchain_rollback_missing_final",
@@ -6103,6 +6329,7 @@ class TranslateAPI:
         unmatched: list[str] = []
         records: list[dict[str, Any]] = []
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # ① 改写恢复（批2 语义原样）
         for timing, old_text in restore.items():
             pos = timing_map.get(timing)
             if pos is None:
@@ -6116,21 +6343,95 @@ class TranslateAPI:
                             "model_used": "", "outcome": "rollback",
                             "reason": "manual rollback", "ts": ts,
                             "source_partial": False})
+        # ② 删行（批3 3B）：auto_insert applied 记录按 timing 精确命中
+        # 删除终稿块；重号 timing 只删第一命中（单值映射同口径），已删
+        # 块从映射摘除防重复命中
+        deleted = 0
+        dropped: list[int] = []
+        for rec in auto_insert:
+            timing = str(rec.get("timing") or "").strip()
+            if not timing:
+                unmatched.append(timing)
+                continue
+            pos = timing_map.get(timing)
+            if pos is None or pos in dropped:
+                unmatched.append(timing)
+                continue
+            dropped.append(pos)
+            records.append({"index": None, "timing": timing,
+                            "category": "auto_insert",
+                            "old_text": entries[pos].get("text"),
+                            "new_text": None, "model_used": "",
+                            "outcome": "rollback",
+                            "reason": "manual rollback (delete inserted row)",
+                            "ts": ts, "source_partial": False})
+            deleted += 1
+        if dropped:
+            dropped_set = set(dropped)
+            entries = [e for i, e in enumerate(entries)
+                       if i not in dropped_set]
         if not records:
             return {"success": True, "restored": 0, "unmatched": unmatched,
-                    "auto_insert_skipped": auto_insert,
+                    "auto_insert_skipped": 0, "auto_insert_deleted": 0,
                     "ledger_path": ledger_path}
         # 写序契约：台账先于终稿落盘（回滚记录的 old_text 是再次回滚的
         # 依据；终稿写失败时台账已记录回滚动作不丢失）
         _append_ledger(Path(ledger_path), records)
         _atomic_write_text(final_path, build_srt(entries))
+        if deleted:
+            # guide 顶层 extras.auto_insert 同步清空（来源标记收口）
+            try:
+                extras = guide.get("extras")
+                if isinstance(extras, dict) and extras.get("auto_insert"):
+                    extras["auto_insert"] = []
+                    guide["extras"] = extras
+                    guide_json = os.path.join(
+                        str(guide_dir), stem + self._GUIDE_SUFFIX)
+                    _atomic_write_text(
+                        guide_json,
+                        json.dumps(guide, ensure_ascii=False, indent=2))
+            except Exception:
+                _log_exc("fullchain_rollback.extras")
         _log.info("[fullchain] 一键回滚: %s 恢复 %d 条（未命中 %d，"
-                  "插入行跳过 %d）", stem, len(records), len(unmatched),
-                  auto_insert)
-        return {"success": True, "restored": len(records),
+                  "插入行删除 %d）", stem, len(records) - deleted,
+                  len(unmatched), deleted)
+        return {"success": True, "restored": len(records) - deleted,
                 "unmatched": unmatched,
-                "auto_insert_skipped": auto_insert,
+                "auto_insert_skipped": deleted,
+                "auto_insert_deleted": deleted,
                 "ledger_path": ledger_path}
+
+    def _subtitle_auto_insert_state(self, subtitle_path: str) -> tuple[int, bool]:
+        """C23 检查点数据源：终稿字幕 → 导读 extras.auto_insert 标记数
+        与台账 auto_insert 记录一致性（标记有而台账无 → False）。
+
+        路径解析：终稿名剥 ``_final_`` 段回 stem → 同目录
+        ``{stem}_质量报告导读.json``（GUIDE_JSON_SUFFIX 单点）+ 同款
+        ``{stem}_重翻记录.json`` 台账；导读/台账缺失或损坏按「无标记/
+        无记录」处理（不误杀无补行文件）。"""
+        try:
+            from subtransjav.refine.pipeline_support import GUIDE_JSON_SUFFIX
+            sp = Path(subtitle_path)
+            stem = sp.stem
+            if "_final_" in stem:
+                stem = stem[:stem.index("_final_")]
+            guide_path = sp.with_name(stem + GUIDE_JSON_SUFFIX)
+            if not guide_path.is_file():
+                return 0, True
+            data = json.loads(
+                guide_path.read_text(encoding="utf-8"))
+            extras = data.get("extras")
+            marks = extras.get("auto_insert") if isinstance(extras, dict) \
+                else None
+            marks = marks if isinstance(marks, list) else []
+            ledger = self._read_ledger(str(sp.parent), stem)
+            n_rec = sum(1 for r in ledger
+                        if isinstance(r, dict)
+                        and str(r.get("category") or "") == "auto_insert")
+            return len(marks), (len(marks) == 0 or n_rec > 0)
+        except Exception:
+            _log_exc("_subtitle_auto_insert_state")
+            return 0, True
 
     def _run_encode_automation(self, summary: dict[str, Any],
                                from_fullchain: bool = False) -> None:
@@ -6139,7 +6440,15 @@ class TranslateAPI:
 
         批1 b 段（D2026-1009-02）互斥对③：from_fullchain 形参透传
         encode_commit——链尾自动压制传 True 绕过全链在飞拒绝（手动入口
-        缺省 False，全链在飞时结构化拒绝）。"""
+        缺省 False，全链在飞时结构化拒绝）。
+
+        C23 四点（批3 3B）：①含 auto_insert 补行的文件排队列尾；
+        ②入队前检查点——导读 extras.auto_insert 标记与台账 auto_insert
+        记录不一致（标记有台账无）→ 该文件排除出自动压制+告警；
+        ③skip-existing 不吞重压——成品已存在时比对 mtime：终稿字幕晚于
+        成品 → 不跳过、重新入队+notice（skip-existing 语义只对「成品不
+        旧于字幕」成立）；④来源标记已落 guide extras+台账（无 SRT 正文
+        标记，D2026-1009-02 拍板）。"""
         files_status = dict(summary.get("files") or {})
         done_srts = [str(p) for p, st in files_status.items() if st == "done"]
         if not done_srts:
@@ -6151,6 +6460,7 @@ class TranslateAPI:
         out_dir = str(params.get("out_dir") or "")
         ready: list[dict[str, str]] = []
         skipped: list[str] = []
+        inconsistent: list[str] = []
         for job in self._normalize_encode_jobs(
                 [{"srt_path": p} for p in done_srts]):
             video = job["video_path"]
@@ -6162,11 +6472,39 @@ class TranslateAPI:
             if not subtitle or not os.path.isfile(subtitle):
                 skipped.append(f"{label}（终稿字幕不存在）")
                 continue
+            # C23② 检查点：标记↔台账一致性（不一致排除+告警，不静默）
+            marks, consistent = self._subtitle_auto_insert_state(subtitle)
+            if not consistent:
+                inconsistent.append(label)
+                continue
             out_path = self._encode_out_path(video, out_dir)
             if os.path.isfile(out_path):
-                skipped.append(f"{os.path.basename(out_path)}（成品已存在）")
-                continue
-            ready.append({"video_path": video, "subtitle_path": subtitle})
+                # C23③ skip-existing mtime 语义：成品不旧于字幕才跳过
+                try:
+                    stale_ok = (os.path.getmtime(subtitle)
+                                <= os.path.getmtime(out_path))
+                except OSError:
+                    stale_ok = True
+                if stale_ok:
+                    skipped.append(
+                        f"{os.path.basename(out_path)}（成品已存在）")
+                    continue
+                self._automation_notice(
+                    f"[encode] {label}：检测到终稿晚于成品（含补行），"
+                    f"重新压制")
+            ready.append({"video_path": video, "subtitle_path": subtitle,
+                          "out_path": out_path})
+        if inconsistent:
+            self._automation_notice(
+                "[encode] 自动压制告警：以下文件导读含自动补行标记但台账"
+                f"无对应记录（来源不一致），已排除出自动压制，请人工核对："
+                f"{'；'.join(inconsistent[:3])}"
+                f"{'…' if len(inconsistent) > 3 else ''}")
+        # C23① 排后：含 auto_insert 标记的文件排队尾（稳定排序，其余
+        # 相对序不变）
+        ready.sort(key=lambda j: 1 if j.get("out_path")
+                   and self._subtitle_auto_insert_state(
+                       j["subtitle_path"])[0] else 0)
         notice = f"[encode] 自动压制：完成 {len(done_srts)} 个文件，入队 {len(ready)}"
         if skipped:
             notice += (f"，跳过 {len(skipped)}"
@@ -6178,9 +6516,27 @@ class TranslateAPI:
         commit = self.encode_commit(ready, params, allow_overwrite=False,
                                     from_fullchain=from_fullchain)
         if commit and commit.get("needs_confirm"):
-            # 入队瞬间出现新成品：自动化语义=跳过不覆盖
-            self._automation_notice("[encode] 自动压制：入队前出现新成品，按跳过处理（不覆盖）")
-            return
+            # C23③：入队瞬间出现新成品时仍按 mtime 语义——终稿晚于成品
+            # 的文件重新压制（覆盖入队），其余按跳过处理（不覆盖）
+            def _newer(job: dict[str, str]) -> bool:
+                try:
+                    return (os.path.isfile(job["out_path"])
+                            and os.path.getmtime(job["subtitle_path"])
+                            > os.path.getmtime(job["out_path"]))
+                except OSError:
+                    return False
+            retry = [j for j in ready if _newer(j)]
+            if retry:
+                self._automation_notice(
+                    "[encode] 自动压制：检测到终稿晚于成品（含补行），"
+                    f"重新压制 {len(retry)} 个文件")
+                commit = self.encode_commit(
+                    retry, params, allow_overwrite=True,
+                    from_fullchain=from_fullchain)
+            else:
+                self._automation_notice(
+                    "[encode] 自动压制：入队前出现新成品，按跳过处理（不覆盖）")
+                return
         if not (commit and commit.get("success")):
             _log.info("[encode] 自动压制入队失败：%s", (commit or {}).get("error"))
             return
