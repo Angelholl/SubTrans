@@ -6516,11 +6516,11 @@ def test_fullchain_missed_gate_on_inserts(gui_api_obj, monkeypatch,
     high 补行——终稿 +1 行且重编号/台账 auto_insert 10 键/写序契约
     （ledger 先于 final 落盘）/guide extras.auto_insert 标记/SRT 正文
     零标记。"""
+    import subtransjav.refine.config as _cfg
     import subtransjav.refine.fs_utils as fs_mod
     from subtransjav.refine import action_retranslate as art
     from subtransjav.refine.filters import parse_srt
     from subtransjav.refine.v2_outputs import final_stem
-    import subtransjav.refine.config as _cfg
     monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path, extras={"对齐率": "98.0%"})
     _install_missed_stubs(monkeypatch)
@@ -6592,9 +6592,9 @@ def test_fullchain_missed_gate_on_invariant_failure_abandons(
     文件放弃，终稿/台账/extras 零落盘。"""
     import logging
 
+    import subtransjav.refine.config as _cfg
     from subtransjav.refine import missed_insert as mi
     from subtransjav.refine.v2_outputs import final_stem
-    import subtransjav.refine.config as _cfg
     monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
