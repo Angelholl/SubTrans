@@ -466,6 +466,12 @@ const MSG = {
     // 批5（D2026-1008-02）：行动条目台账已修徽标（JS 态；guideRender 按
     // lastActionItems.applied_in_ledger 渲染，guide_path 一致才生效）
     guide_item_applied: '✅ 已修',
+    // 批6（D2026-1008-02）：终态徽标与头部计数分解（JS 态；零 data-i18n）
+    guide_item_nochange: '已一致',
+    guide_chip_fixable: '待修',
+    guide_chip_applied: '已修',
+    guide_chip_nochange: '无需改动',
+    guide_chip_observation: '观察',
 
     // ---- AI 质量分析（D2026-0929 前后端接入）----
     aiAnalyzeBtn: 'AI 分析本报告',
@@ -732,6 +738,8 @@ const MSG = {
     batchFixRunning: (done, total) => `批量修复中… ${done}/${total}`,
     batchFixRunningPlain: '批量修复中…（执行器逐条处理，完成后回显结果）',
     batchFixDone: (a, f) => `批量修复完成：成功 ${a} 条` + (f ? `，失败 ${f} 条` : ''),
+    // 批6（D2026-1008-02）：已与现译一致条目单独计数（后端 r.nochange）
+    batchFixNochange: n => `${n} 条已与现译一致，无需改动`,
     // 批5（D2026-1008-02）：完成消息剩余明细（主行截断前 10 个条目号，
     // 完整列表走 #refineBatchFixStatus title 悬停）
     batchFixRemaining: (n, ids) => `未修复 ${n} 条：${ids}`,
@@ -5833,6 +5841,26 @@ function switchTab(tabId) {
       // 行动条目标题提级 + 条数 chip（2.7.4 件1）：标题 h4 为静态节点，
       // JS 动态加 .block-title.main 与 .count-chip（applyI18n 首屏已跑完，
       // 动态子节点不会被 i18n 重写抹除；幂等——重渲染仅更新计数）
+      // 批5（D2026-1008-02）：台账已修徽标——lastActionItems 存在且其
+      // guide_path 与当前导读一致才生效（后端 _validate_user_directory
+      // resolve 与前端拼接的分隔符/大小写形态可能不同，归一后比对）；
+      // applied 集合按 Number 强转 index 匹配（null 先判防
+      // Number(null)=0 误配）。无渲染源 seed 机制——每次渲染重算，
+      // 幂等；未 applied 的 open 行保持现状不加徽标。
+      // 批6：计算提级至条数 chip 之前——头部计数「已修」段在老文件
+      // （无 status 终态）时复用本集合（C4 双源口径见下方 chip 注释）
+      let appliedSet = null;
+      if (lastActionItems && lastLoadedGuidePath) {
+        const normPath = (s) =>
+          String(s || '').replace(/\\/g, '/').toLowerCase();
+        if (normPath(lastActionItems.guide_path)
+            === normPath(lastLoadedGuidePath)) {
+          appliedSet = new Set((lastActionItems.open_items || [])
+            .filter(it => it && it.index != null
+              && it.applied_in_ledger === true)
+            .map(it => Number(it.index)));
+        }
+      }
       const itemsHead = divI.previousElementSibling;
       if (itemsHead && itemsHead.tagName === 'H4') {
         itemsHead.classList.add('block-title', 'main');
@@ -5842,41 +5870,52 @@ function switchTab(tabId) {
           chip.className = 'count-chip';
           itemsHead.appendChild(chip);
         }
-        chip.textContent = String(items.length) + ' 条';
+        // 批6（D2026-1008-02）头部计数五段式分解（决策 C-②）：待修/观察
+        // 恒显。C4 统一去重公式（新/老/混合三文件形态全一致）：
+        // applied = (status==='retranslated') ∪ appliedSet 台账 timing
+        // 命中——同一 item 两源同真只计一次；已修=applied 计数；无需改动
+        // =status==='nochange' 计数（>0 才显）；观察=status===
+        // 'observation'；待修=total−已修−无需改动−观察（补集式恒 ≥0，
+        // C2：open 与未知 status 天然落入待修）。老文件（无终态值）退化
+        // 为纯台账轨
+        const statusOf = (o) => String((o && o.status) || '');
+        const nFixed = items.filter((o) => {
+          const k = Number(o && o.index);
+          return statusOf(o) === 'retranslated'
+            || (appliedSet != null && Number.isFinite(k) && appliedSet.has(k));
+        }).length;
+        const nNochg = items.filter((o) => statusOf(o) === 'nochange').length;
+        const nObs = items.filter((o) => statusOf(o) === 'observation').length;
+        // 补集式待修：去重后的已修不与待修重复扣减（Math.max 防御性钳 0）
+        const nFixable = Math.max(0,
+          items.length - nFixed - nNochg - nObs);
+        const segs = [String(items.length) + ' 条',
+          MSG.guide_chip_fixable + ' ' + nFixable,
+          MSG.guide_chip_observation + ' ' + nObs];
+        if (nFixed > 0) {
+          segs.push(MSG.guide_chip_applied + ' ' + nFixed);
+        }
+        if (nNochg > 0) {
+          segs.push(MSG.guide_chip_nochange + ' ' + nNochg);
+        }
+        chip.textContent = segs.join(' · ');
       }
       if (!items.length) {
         divI.innerHTML = '<div>' + MSG.guide_items_none + '</div>';
       } else {
-        const MAX_ITEMS = 50;
+        // 批6（决策 C-④）：去渲染上限——行动条目全量渲染（原 50 条
+        // 截断上限与「其余 N 条见 json」尾注删除）
         // 分类徽标复用件3 bfp-cat-chip 色系类（cps=warn/untranslated=
         // primary/antonym=danger，映射缺失回退中性 bfp-cat-neutral）
         const catCls = (c) => (c === 'cps_too_fast' ? 'bfp-cat-warn'
           : c === 'untranslated' ? 'bfp-cat-primary'
           : c === 'antonym_yamete' ? 'bfp-cat-danger' : 'bfp-cat-neutral');
-        // 批5（D2026-1008-02）：台账已修徽标——lastActionItems 存在且其
-        // guide_path 与当前导读一致才生效（后端 _validate_user_directory
-        // resolve 与前端拼接的分隔符/大小写形态可能不同，归一后比对）；
-        // applied 集合按 Number 强转 index 匹配（null 先判防
-        // Number(null)=0 误配）。无渲染源 seed 机制——每次渲染重算，
-        // 幂等；未 applied 的 open 行保持现状不加徽标
-        let appliedSet = null;
-        if (lastActionItems && lastLoadedGuidePath) {
-          const normPath = (s) =>
-            String(s || '').replace(/\\/g, '/').toLowerCase();
-          if (normPath(lastActionItems.guide_path)
-              === normPath(lastLoadedGuidePath)) {
-            appliedSet = new Set((lastActionItems.open_items || [])
-              .filter(it => it && it.index != null
-                && it.applied_in_ledger === true)
-              .map(it => Number(it.index)));
-          }
-        }
         // 条目行三段化（2.7.4 件1）：.item-head（#编号 mono + 分类徽标 +
         // mono timing ellipsis + 右对齐试听键）/.item-msg（message 全文）/
         // .item-cur（现译 · 状态 muted）。
         // 契约红线：.btn-audio-preview class 与 data-timing 属性必须原样
         // 保留（bindDom 事件委托锚点，试听链路依赖）
-        divI.innerHTML = items.slice(0, MAX_ITEMS).map(it => {
+        divI.innerHTML = items.map(it => {
           const o = it || {};
           const cur = (o.current_text == null)
             ? MSG.guide_item_unresolvable
@@ -5888,6 +5927,10 @@ function switchTab(tabId) {
           const hasTiming = !!o.timing;
           // 批5：台账已修行在 .item-head 追加绿色徽标（复用
           // media-source-tag tag-auto ok 色 pill，零新增 CSS）
+          // 批6（决策 C①）：徽标 status 优先——retranslated 复用绿色
+          // 已修徽标；nochange 灰徽标（复用 bfp-cat-chip bfp-cat-neutral，
+          // 零新增 CSS）；两终态互斥且优先于 appliedSet 台账兜底
+          //（老文件台账轨），未命中终态且未 applied 保持无徽标
           const idxKey = Number(o.index);
           const applied = appliedSet != null && Number.isFinite(idxKey)
             && appliedSet.has(idxKey);
@@ -5897,10 +5940,13 @@ function switchTab(tabId) {
             + '<span class="idx-chip">#' + esc(o.index) + '</span>'
             + '<span class="bfp-cat-chip ' + catCls(String(o.category || ''))
             + '">' + esc(o.category) + '</span>'
-            + (applied
-              ? '<span class="media-source-tag tag-auto">'
-                + esc(MSG.guide_item_applied) + '</span>'
-              : '')
+            + (o.status === 'nochange'
+              ? '<span class="bfp-cat-chip bfp-cat-neutral">'
+                + esc(MSG.guide_item_nochange) + '</span>'
+              : (applied || o.status === 'retranslated')
+                ? '<span class="media-source-tag tag-auto">'
+                  + esc(MSG.guide_item_applied) + '</span>'
+                : '')
             + '<span class="item-timing">' + esc(o.timing) + '</span>'
             + (hasTiming
               ? '<button type="button" class="btn btn-ghost btn-sm'
@@ -5912,10 +5958,7 @@ function switchTab(tabId) {
             + '<div class="item-cur">' + MSG.guide_item_current_label + cur
             + ' · ' + esc(o.status) + '</div>'
             + '</div>';
-        }).join('')
-          + (items.length > MAX_ITEMS
-            ? '<div>' + MSG.guide_items_more(items.length - MAX_ITEMS) + '</div>'
-            : '');
+        }).join('');
       }
     }
     if (ulP) {
@@ -6949,6 +6992,11 @@ function switchTab(tabId) {
         runRes.provider, runRes.model);
       if (r && r.success) {
         let msg = MSG.batchFixDone(r.applied || 0, r.failed || 0);
+        // 批6（D2026-1008-02）：已与现译一致条目单独计数——open_items 已
+        // 排除终态（retranslated/nochange），批5 剩余明细不会误报这类条目
+        if (r && r.nochange > 0) {
+          msg += '；' + MSG.batchFixNochange(r.nochange);
+        }
         if (r.source_partial) msg += MSG.batchFixSourcePartial;
         const vfy = r.verify || {};
         if (vfy.error) {

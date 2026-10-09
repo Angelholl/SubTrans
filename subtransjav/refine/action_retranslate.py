@@ -274,18 +274,28 @@ def _append_ledger(ledger_path: Path, records: list) -> int:
 
 
 def _refresh_guide(guide: dict, out_dir: str, stem: str,
-                   new_entries: list) -> None:
+                   new_entries: list,
+                   applied_indexes: set | None = None,
+                   nochange_indexes: set | None = None) -> None:
     """导读 json 快照刷新：generated_at 换当前同源时间串、items 的
     current_text 按新 final 重定位（resolve_final_block 精确 index 匹配，
-    未命中保持原值不猜）、顶层加 retranslated_at；conclusions/sections/
-    extras 原样保留。companions 六件存在性由 write_guide_json 统一重算。"""
+    未命中保持原值不猜）、顶层加 retranslated_at；status 终态落盘（批6
+    D2026-1008-02）：applied_indexes→"retranslated"、nochange_indexes→
+    "nochange"；conclusions/sections/extras 原样保留。companions 六件
+    存在性由 write_guide_json 统一重算。"""
     now = datetime.now().strftime(_TS_FMT)
+    applied_indexes = applied_indexes or set()
+    nochange_indexes = nochange_indexes or set()
     guide["generated_at"] = now
     guide["retranslated_at"] = now
     for it in guide.get("items") or []:
         idx = it.get("index")
         if idx is None:
             continue
+        if idx in applied_indexes:
+            it["status"] = "retranslated"
+        elif idx in nochange_indexes:
+            it["status"] = "nochange"
         fe = resolve_final_block(new_entries, idx)
         if fe is not None:
             it["current_text"] = fe.get("text")
@@ -338,6 +348,8 @@ def run_action_retranslate(cfg, args) -> int:
     # ---- apply：串行逐条重翻（并发 1，永不写 TM）----
     new_entries = [dict(e) for e in old_entries]
     applied_positions: set[int] = set()
+    applied_indexes: set = set()
+    nochange_indexes: set = set()
     records: list[dict] = []
     client: LLMClient | None = None
     client_err: BaseException | None = None
@@ -407,6 +419,14 @@ def run_action_retranslate(cfg, args) -> int:
 
         new_text = _clean_response(raw)
         base["new_text"] = new_text
+        # 批6（D2026-1008-02）：等值=无需改动的终态，显式独立于质量门
+        # 失败路径——不算 failed、不进质量门、不改终稿
+        if new_text == old_text:
+            base["outcome"] = "nochange"
+            base["reason"] = "已与现译一致，判无需改动"
+            nochange_indexes.add(index)
+            records.append(base)
+            continue
         # 方向取值：导读 json 方向字段（run 侧写入）优先，缺省回退执行器
         # cfg（离线 CLI 缺省 zh，行为不变）
         _tgt = ((guide or {}).get("direction") or "").split("→")[-1] \
@@ -421,12 +441,14 @@ def run_action_retranslate(cfg, args) -> int:
 
         new_entries[pos]["text"] = new_text
         applied_positions.add(pos)
+        applied_indexes.add(index)
         base["outcome"] = "applied"
         records.append(base)
         print(f"   ✅ #{index} 重翻应用: {old_text[:30]} -> {new_text[:30]}")
 
     n_applied = len(applied_positions)
-    n_failed = len(records) - n_applied
+    n_nochange = sum(1 for r in records if r["outcome"] == "nochange")
+    n_failed = sum(1 for r in records if r["outcome"] == "failed")
 
     if applied_positions:
         new_srt = build_srt(new_entries)
@@ -439,19 +461,26 @@ def run_action_retranslate(cfg, args) -> int:
         total = _append_ledger(ledger_path, records)
         print(f"📒 [行动层] 重翻台账已更新: {ledger_path.name}（累计 {total} 条）")
 
-    if applied_positions:
-        _atomic_write_text(str(final_path), new_srt)
-        _refresh_guide(guide, out_dir, stem, new_entries)
+    # 批6（critic C1）：刷新触发与终稿写入解耦——applied 或 nochange 任一
+    # 非空即刷新导读（全 nochange 无终稿变更，导读 status 仍落盘）
+    if applied_positions or nochange_indexes:
+        if applied_positions:
+            _atomic_write_text(str(final_path), new_srt)
+        _refresh_guide(guide, out_dir, stem, new_entries,
+                       applied_indexes, nochange_indexes)
         print(f"📖 [行动层] 导读快照已刷新: {stem}_质量报告导读.json")
+    if applied_positions:
         print("🏷️ [行动层] 已标陈旧（重翻后需重跑管线重算，离线不可得）：")
         for suffix in _STALE_AFTER_RETRANSLATE:
             print(f"   - {stem}{suffix}")
         print("   详见 docs/行动层可离线重建与标陈旧清单.md")
 
-    print(f"🏁 [行动层] 完成: 应用 {n_applied} / 失败 {n_failed}"
-          f" / 选中 {len(selected)}")
-    if n_applied == len(selected):
+    print(f"🏁 [行动层] 完成: 应用 {n_applied} / 失败 {n_failed} / "
+          f"无需改动 {n_nochange} / 选中 {len(selected)}")
+    # 批6（critic C3）rc 纪律：无失败即 0（含全 nochange/混合）；
+    # 部分失败 3；全败 1
+    if n_failed == 0:
         return 0
-    if n_applied:
+    if n_failed < len(selected):
         return 3
     return 1
