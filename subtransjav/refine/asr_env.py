@@ -225,9 +225,10 @@ ASR_RECOMMENDED_MODELS: list[dict] = [
                 "81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56effd0b6a"
                 "73e524/large-v2.pt"),
         "support": "available",
-        # 2.6.3 批B（D2026-1003-01 ②）：多源元信息。mirror 条目 PENDING：
-        # url/sha256 留空 + verified=False（下载器候选只收 verified==True，
-        # 空 URL 硬拒不下；上架门=实下载 sha256 与官方 pin 字节级一致）
+        # 2.6.3 批B（D2026-1003-01 ②）：多源元信息。mirror 条目已点亮
+        # （D2026-1005-05，2026-10-10）：owner 上传原样字节副本至
+        # Angelholl/openai-whisper-pt，hf-mirror 全量回读 sha256 与官方
+        # pin 字节级一致，verified=True 入下载池。
         "license": "MIT（openai/whisper 上游模型卡口径）",
         "sources": [
             {"source": "official", "label": "官方源",
@@ -238,8 +239,15 @@ ASR_RECOMMENDED_MODELS: list[dict] = [
                         "ffd0b6a73e524"),
              "verified": True},
             {"source": "mirror", "label": "国内加速源",
-             "url": "", "sha256": "", "verified": False,
-             "note": "需实测下载比对验证后才能启用，当前版本不可用"},
+             "url": ("https://hf-mirror.com/Angelholl/openai-whisper-pt/"
+                     "resolve/7b3ad79575c53f369fbdb17060e6cf14c66cdc96/"
+                     "large-v2.pt"),
+             "sha256": ("81f7c96c852ee8fc832187b0132e569d6c3065a3252ed18e56e"
+                        "ffd0b6a73e524"),
+             "verified": True,
+             "note": "已点亮 2026-10-10：owner 仓 Angelholl/openai-whisper-pt"
+                     "（tip 7b3ad795）原样字节副本，hf-mirror 全量回读 "
+                     "sha256 与官方 pin 一致"},
         ],
         "variants": [
             {"name": "原版 .pt", "state": "ready"},

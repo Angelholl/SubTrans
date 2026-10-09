@@ -42,8 +42,11 @@ from subtransjav.refine.dict_manager import _sha256_file, _unlink_quiet
 # 回退提示 logger（D2026-1003-06 条件①：回退必须可见——进度 note + 日志双通道）
 logger = logging.getLogger("subtransjav.asr_downloader")
 
-# host 小名单（层3；与清单 URL 精确匹配双层并行，重定向逐跳复用本名单）
-_ASR_HOST_ALLOW = {"openaipublic.azureedge.net", "hf-mirror.com"}
+# host 小名单（层3；与清单 URL 精确匹配双层并行，重定向逐跳复用本名单）。
+# cas-bridge.xethub.hf.co：hf-mirror.com 镜像 URL 会 308 跳该域（签名 URL），
+# 与 dict 层 D2026-1005-05 白名单同款两域口径（hf-mirror.com + cas-bridge）
+_ASR_HOST_ALLOW = {"openaipublic.azureedge.net", "hf-mirror.com",
+                   "cas-bridge.xethub.hf.co"}
 _MAX_REDIRECTS = 5               # 评议员条件④：默认最多 5 跳
 _CONNECT_TIMEOUT_S = 10
 _CHUNK = 1024 * 1024             # 1MB 分块（仿 dict_manager._http_get）

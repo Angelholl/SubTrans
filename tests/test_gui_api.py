@@ -4177,7 +4177,7 @@ def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     got = gui_api_obj.refine_dict_status()
     assert got["success"] is True
-    assert got["sources"]["sudachi_full"]["has_mirror"] is False
+    assert got["sources"]["sudachi_full"]["has_mirror"] is True
     assert got["sources"]["sudachi"]["has_mirror"] is True
     assert got["sources"]["sudachi"]["has_official"] is True
 

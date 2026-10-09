@@ -200,8 +200,9 @@ def test_recommended_models_shape():
 
 def test_recommended_models_sources_and_license():
     """2.6.3 批B（D2026-1003-01 ②）：whisper 条目增 license/sources 双源——
-    official verified 且 url/sha256 与条目 pin 原样一致；mirror PENDING
-    （url/sha256 留空 + verified=False + note）。qwen 条目不动。"""
+    official verified 且 url/sha256 与条目 pin 原样一致；mirror 已点亮
+    （D2026-1005-05，2026-10-10：verified=True + hf-mirror 直链 + sha256
+    与官方 pin 字节级一致）。qwen 条目不动。"""
     w = next(e for e in asr_env.ASR_RECOMMENDED_MODELS
              if e["name"] == "whisper-large-v2")
     assert w["license"] == "MIT（openai/whisper 上游模型卡口径）"
@@ -210,9 +211,11 @@ def test_recommended_models_sources_and_license():
     off, mir = srcs
     assert off["label"] == "官方源" and off["verified"] is True
     assert off["url"] == w["url"] and off["sha256"] == w["sha256"]
-    assert mir["label"] == "国内加速源" and mir["verified"] is False
-    assert mir["url"] == "" and mir["sha256"] == ""
-    assert mir["note"] == "需实测下载比对验证后才能启用，当前版本不可用"
+    assert mir["label"] == "国内加速源" and mir["verified"] is True
+    assert mir["url"] == ("https://hf-mirror.com/Angelholl/openai-whisper-pt"
+                          "/resolve/7b3ad79575c53f369fbdb17060e6cf14c66cdc96"
+                          "/large-v2.pt")
+    assert mir["sha256"] == w["sha256"]
     q = next(e for e in asr_env.ASR_RECOMMENDED_MODELS
              if e["name"] == "qwen3-asr-1.7b")
     assert "sources" not in q and "license" not in q

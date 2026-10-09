@@ -662,12 +662,26 @@ def test_download_dict_source_official_keeps_cloudfront(monkeypatch, tmp_path):
     assert calls == ["https://d2ej7fkh96fzlu.cloudfront.net/full.zip"]
 
 
-def test_download_dict_source_mirror_full_no_mirror(monkeypatch, tmp_path):
-    """真实清单事实（2.7.3 件②只接线不点亮）：sudachi_full 的 hf-mirror
-    条目 sha256_verified=false 未点亮，不入镜像池——mirror 模式显式报错。"""
+def test_download_dict_source_mirror_full_lit_hf_mirror_real_manifest(
+        monkeypatch, tmp_path):
+    """真实清单点亮钉（D2026-1005-05 勾账 2026-10-10）：sudachi_full 的
+    hf-mirror 条目已点亮（sha256_verified=true + /resolve/f9304753 直链 +
+    sha256 与 cloudfront pin 一致），mirror 模式入池且唯一候选即 hf-mirror
+    直链（mirror 池只收 role=mirror，不回官方——回退仅 auto 链语义）。"""
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-    with pytest.raises(dm.DictDownloadError, match="无镜像源"):
+    calls = []
+
+    def _fail_get(url, dest, progress=None, stop_event=None):
+        calls.append(url)
+        raise dm.DictDownloadError(f"模拟网络失败: {url}")
+
+    monkeypatch.setattr(dm, "_http_get", _fail_get)
+    with pytest.raises(dm.DictDownloadError, match="模拟网络失败"):
         dm.download_dict("sudachi_full", source="mirror")
+    assert calls == [
+        "https://hf-mirror.com/Angelholl/sudachidict-full/resolve/"
+        "f9304753140e6dc3166790f50a2b12bb024dea5e/"
+        "sudachi-dictionary-20260723-full.zip"]
 
 
 def test_mirror_pool_excludes_empty_url_placeholder(monkeypatch):
@@ -773,7 +787,7 @@ def test_dict_status_sources_summary(monkeypatch, tmp_path):
     st = dm.dict_status()
     s = st["sources"]
     assert s["sudachi"] == {"has_official": True, "has_mirror": True}
-    assert s["sudachi_full"] == {"has_official": True, "has_mirror": False}
+    assert s["sudachi_full"] == {"has_official": True, "has_mirror": True}
     assert "jieba" not in s and "english_rules" not in s
 
 
@@ -802,8 +816,9 @@ def _manifest_full_with_mirror(monkeypatch, sha: str,
 
 def test_source_manifest_mirror_role_pinned():
     """清单钉：core 的 tuna 带 role=mirror（pypi 无 role=官方）；sudachi_full
-    在 cloudfront 之前有未点亮 hf-mirror 条目（url 待填、sha256 同 pin——
-    列表序=点亮后 auto 链镜像优先的实现机制）。"""
+    在 cloudfront 之前有已点亮 hf-mirror 条目（D2026-1005-05 勾账
+    2026-10-10：owner 仓 Angelholl/sudachidict-full 原样字节副本，hf-mirror
+    全量回读 sha256 与 pin 一致；列表序=auto 链镜像优先的实现机制）。"""
     m = dm.load_source_manifest()
     core = m["dicts"]["sudachi"]["downloads"]
     assert core[0].get("role") is None, "pypi 官方条目不得带 mirror role"
@@ -812,8 +827,11 @@ def test_source_manifest_mirror_role_pinned():
     assert [d["source"] for d in full] == ["hf-mirror", "cloudfront-cdn"]
     mirror = full[0]
     assert mirror.get("role") == "mirror"
-    assert mirror["url"] == "", "未点亮镜像 url 必须为空（待 owner 上传后填）"
-    assert mirror["sha256_verified"] is False
+    assert mirror["url"] == (
+        "https://hf-mirror.com/Angelholl/sudachidict-full/resolve/"
+        "f9304753140e6dc3166790f50a2b12bb024dea5e/"
+        "sudachi-dictionary-20260723-full.zip")
+    assert mirror["sha256_verified"] is True
     assert mirror["sha256"] == full[1]["sha256"], "镜像须与官方源同 pin"
     assert mirror["sha256"] == \
         "eb6d02206e93f1b62508c9f2d4d4940d6f82c7f63c630bc0c1c4f9c50b7e871e"
