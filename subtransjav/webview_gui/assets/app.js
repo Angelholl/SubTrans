@@ -936,6 +936,7 @@ const AppModal = {
     _edOpts: null,       // 批D：editor(opts) 暂存（onSave/onStageChange/onDiscard/onClose）
     _tmSaving: false,    // P3：tmEdit 保存进行中（禁关，editor 同款）
     _tmOpts: null,       // P3：tmEdit(opts) 暂存（onSaved）
+    _encodeCollect: null,// 2.8.0.2：encode 闭包 collect（打开赋值/结算置 null，防悬挂引用）
 
     _settle(value) {
         if (!this._busy) return;
@@ -970,6 +971,63 @@ const AppModal = {
 
     _cancelValue() { return AppModal._kind === 'prompt' ? null : false; },
 
+    // ok/Enter 确认值分派（2.8.0.2「首绑互窃」类级根治）：事件时刻读 _kind，
+    // kind→语义矩阵——
+    //   tmEdit/editor/download/models：ok 键在这些 kind 下隐藏、Enter 无确认
+    //     语义（tmEdit/editor textarea 回车=换行不提交）→ undefined（调用方
+    //     no-op 且不 preventDefault）；
+    //   prompt：带输入值结算；encode：按当前表单值结算（_resolve 包装器落
+    //     {ok, params}，collect 闭包经 _encodeCollect 暴露、关闭置 null）；
+    //   其余（alert/confirm/batchfix）：true（确认）。
+    _okValue(input) {
+        if (this._kind === 'tmEdit' || this._kind === 'editor'
+            || this._kind === 'download' || this._kind === 'models') {
+            return undefined;
+        }
+        if (this._kind === 'prompt') return (input && input.value) || '';
+        if (this._kind === 'encode') {
+            const collect = this._encodeCollect;
+            return collect ? { ok: true, params: collect() } : true;
+        }
+        return true;
+    },
+
+    // 统一骨架一次性绑定（2.8.0.2）：原各模态方法各自携带 dataset.bound
+    // 一次性绑定块、运行时只注册会话首个打开模态的那一份，而各块 ok/Enter 语义互异
+    // （editor/tmEdit 排除 Enter、encode ok 结算 params）——首绑归属谁，后续
+    // 所有模态的骨架语义就被谁定格（实锤：tmEdit 先开后，批量修复确认框
+    // okBtn 零处理器，「开始修复」无反应）。现收敛为唯一一处 kind 感知绑定：
+    // 每个模态打开路径都先经本方法补绑（守卫保证整个会话只执行一次），
+    // ok/Enter 事件时刻经 _okValue() 按 _kind 分派；ESC/遮罩/取消键一律
+    // _cancelValue()（download 下载中 no-op 与 editor/tmEdit 脏态放弃确认
+    // 均由 _settle 既有分支承接）。
+    _bindSkeletonOnce(root) {
+        if (root.dataset.bound) return;
+        root.dataset.bound = '1';
+        root.addEventListener('click', (e) => {
+            if (e.target === root) AppModal._settle(AppModal._cancelValue());   // 遮罩取消
+        });
+        root.querySelector('.modal-ok').addEventListener('click', () => {
+            const v = AppModal._okValue(root.querySelector('.modal-input'));
+            if (v !== undefined) AppModal._settle(v);
+        });
+        root.querySelector('.modal-cancel').addEventListener('click', () =>
+            AppModal._settle(AppModal._cancelValue()));
+        document.addEventListener('keydown', (e) => {
+            if (!AppModal._busy) return;
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                AppModal._settle(AppModal._cancelValue());
+            } else if (e.key === 'Enter') {
+                const v = AppModal._okValue(root.querySelector('.modal-input'));
+                if (v !== undefined) {
+                    e.preventDefault();
+                    AppModal._settle(v);
+                }
+            }
+        });
+    },
+
     _open(kind, title, body, def, opts) {
         if (this._busy) {
             // 重入：单例不叠加——在途调用方仍持原 Promise，新调用立即按取消结算
@@ -994,26 +1052,7 @@ const AppModal = {
         cancelBtn.style.display = kind === 'alert' ? 'none' : '';   // 硬性条款②：alert 无取消键
         input.style.display = kind === 'prompt' ? '' : 'none';
         input.value = kind === 'prompt' ? (def || '') : '';
-        if (!root.dataset.bound) {          // 静态 DOM 一次性绑定
-            root.dataset.bound = '1';
-            root.addEventListener('click', (e) => {
-                if (e.target === root) AppModal._settle(AppModal._cancelValue());   // 遮罩取消
-            });
-            okBtn.addEventListener('click', () => {
-                AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
-            });
-            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
-            document.addEventListener('keydown', (e) => {
-                if (!AppModal._busy) return;
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
-                }
-            });
-        }
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
         this._busy = true;
         this._kind = kind;
         root.style.display = 'flex';        // 等效 .modal-overlay.active（inline 覆盖基类 display:none）
@@ -1030,9 +1069,9 @@ const AppModal = {
     // download 模态（2.6.3 批B，D2026-1003-01 ②）：源单选卡+meta 行+无取消
     // 声明+全宽开始键+进度区一体化。复用 #appModal 骨架（title/关闭键），
     // body 内容全 createElement 注入（FROZEN_IDS 冻结：零新增 id/data-i18n）。
-    // 不走 _open 三分支（alert/confirm/prompt 行为零变化），但复用其
-    // dataset.bound 一次性监听绑定（遮罩/取消/ESC→_settle，_settle 内
-    // _dlRunning 守卫承载"下载中 no-op"）。
+    // 不走 _open 三分支（alert/confirm/prompt 行为零变化），但经
+    // _bindSkeletonOnce 统一骨架绑定（2.8.0.2：遮罩/取消/ESC→_settle，
+    // _settle 内 _dlRunning 守卫承载"下载中 no-op"；ok/Enter 无确认语义）。
     // opts = {title, sources:[{key,label,hint,disabled}],
     //         meta:[{label,value,copyable}], notice,
     //         onStart(sourceKey, update)->Promise<{ok,message}>, onClose?}
@@ -1055,23 +1094,7 @@ const AppModal = {
         okBtn.textContent = '';
         cancelBtn.style.display = '';
         cancelBtn.textContent = MSG.ui_cancel;
-        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
-            root.dataset.bound = '1';
-            root.addEventListener('click', (e) => {
-                if (e.target === root) AppModal._settle(AppModal._cancelValue());
-            });
-            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
-            document.addEventListener('keydown', (e) => {
-                if (!AppModal._busy) return;
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
-                }
-            });
-        }
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
 
         // —— 源单选卡（label+radio；disabled 卡灰态，radio 默认选第一个非禁用）——
         const sources = o.sources || [];
@@ -1250,7 +1273,8 @@ const AppModal = {
     // 原序 appendChild 进 modal-body（textarea 包一层 .editor-ta-wrap
     // 弹性层），关闭/确认放弃时逐个 append 回 vault——appendChild 即复位，
     // 幂等可逆（FROZEN_IDS 零变更：vault 与其内 id/data-i18n 全部原样）。
-    // 复用 dataset.bound 一次性监听（遮罩/取消/ESC→_settle）；modal-card
+    // 经 _bindSkeletonOnce 统一骨架监听（2.8.0.2：遮罩/取消/ESC→_settle，
+    // Enter 无确认语义——textarea 回车=换行）；modal-card
     // 打开加 .modal-lg、body 加 .modal-editor-body，关闭自清理（download
     // 同款自管 body 模式，防污染后续 alert/confirm/prompt）。
     // dirty 守卫：textarea input 置 _edDirty；_settle 编辑器分支——有未
@@ -1280,23 +1304,7 @@ const AppModal = {
         okBtn.textContent = '';
         cancelBtn.style.display = '';
         cancelBtn.textContent = MSG.ui_cancel;
-        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
-            root.dataset.bound = '1';
-            root.addEventListener('click', (e) => {
-                if (e.target === root) AppModal._settle(AppModal._cancelValue());
-            });
-            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
-            document.addEventListener('keydown', (e) => {
-                if (!AppModal._busy) return;
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
-                }
-            });
-        }
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
         // —— 节点搬入：vault → modal-body（原序；textarea 包弹性层）——
         this._editorUnstash();
         // —— textarea dirty 一次性监听（搬入搬出不卸载）——
@@ -1537,26 +1545,7 @@ const AppModal = {
         okBtn.textContent = '';
         cancelBtn.style.display = '';
         cancelBtn.textContent = MSG.ui_cancel;
-        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定
-            root.dataset.bound = '1';
-            root.addEventListener('click', (e) => {
-                if (e.target === root) AppModal._settle(AppModal._cancelValue());
-            });
-            cancelBtn.addEventListener('click', () =>
-                AppModal._settle(AppModal._cancelValue()));
-            document.addEventListener('keydown', (e) => {
-                if (!AppModal._busy) return;
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert'
-                           && AppModal._kind !== 'editor'
-                           && AppModal._kind !== 'tmEdit') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                }
-            });
-        }
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
 
         // —— 轮询登记表（关面板统一清理；进度数据在 _ASR_DOWNLOAD_PROGRESS）——
         const polls = {};
@@ -1880,9 +1869,10 @@ const AppModal = {
     // 压制参数弹窗（2.8.0 批1 件5，D2026-1007-03）：kind='encode' 三分区
     // 容器（批1/批2 共用骨架，开工门 C8——高级区批1 置空禁用占位，批2
     // 扩展不重建）。body 全 createElement 注入（全 class+data-testid，
-    // 零新增 id/data-i18n）。okBtn.onclick 赋值式绑定（防叠加）→
-    // _settle(true)；resolve 包装器把 true（含 Enter 键）转 {ok, params}
-    // ——Enter=按当前表单值确认。取消/ESC/遮罩=resolve(null)。
+    // 零新增 id/data-i18n）。ok/Enter 走 _bindSkeletonOnce 统一 kind 感知
+    // 绑定（2.8.0.2：_okValue encode 分支 → _settle({ok:true, params:
+    // collect()})，collect 闭包经 _encodeCollect 暴露、结算置 null）；
+    // resolve 包装器保持 {ok, params}/null 形态。取消/ESC/遮罩=resolve(null)。
     // opts = {jobs:[{name, out_path, eta_s, video_exists, subtitle_exists}],
     //         totalEtaS, last:<encode_get_last_params 的 params>}
     // 参数编辑模式（D2026-1008-01 批2：压制参数独立设置项）：opts.editOnly
@@ -1917,6 +1907,7 @@ const AppModal = {
         // 另设「保存参数」按钮于分区 3 尾部（下文 saveParamsBtn）
         okBtn.style.display = editOnly ? 'none' : '';
         okBtn.textContent = MSG.encodeOk + '（' + jobs.length + '）';
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
         const last = o.last || {};
 
         const mk = (tag, cls, parent) => {
@@ -2271,17 +2262,20 @@ const AppModal = {
             out_dir: elOutDir.value.trim(),
             custom_params: elCustom.value.trim(),
         });
-        okBtn.onclick = () => AppModal._settle(true);
+        // 2.8.0.2：闭包 collect 暴露给统一骨架 ok/Enter 分派（_okValue 的
+        // encode 分支），结算经 _resolve 包装器置 null 防悬挂引用
+        this._encodeCollect = collect;
 
         this._busy = true;
         this._kind = 'encode';
         root.style.display = 'flex';
         return new Promise((resolve) => {
             this._resolve = (value) => {
-                okBtn.onclick = null;
-                // true（确认键/Enter）→ 按当前表单值结算；falsy（取消/ESC/遮罩）→ null。
-                // 编辑模式确认键隐藏、Enter=关闭不保存（保存只经「保存参数」
-                // 按钮——失败反馈须留在可见状态行，结算后弹窗已收起）
+                this._encodeCollect = null;
+                // truthy（确认键/Enter，统一分派已按当前表单结算 {ok,params}）
+                // → 按当前表单值结算；falsy（取消/ESC/遮罩）→ null。
+                // 编辑模式确认键隐藏、Enter=关闭（返回值弃置不保存，保存只经
+                // 「保存参数」按钮——失败反馈须留在可见状态行，结算后弹窗已收起）
                 resolve(value ? { ok: true, params: collect() } : null);
             };
         });
@@ -2290,8 +2284,8 @@ const AppModal = {
     // ============================================================
     // 批量修复确认框（2.7.4 件3，D2026-1007-01）：结构化确认弹窗，取代
     // batchFixRun 原纯文本 AppModal.confirm（slice(0,10) 只列前 10 条）。
-    // 复用 #appModal 骨架 + dataset.bound 一次性绑定（download 先例；
-    // 绑定块与 _open confirm 同款：Enter=确认/ESC=取消/遮罩=取消）；
+    // 复用 #appModal 骨架 + _bindSkeletonOnce 统一骨架绑定（2.8.0.2：
+    // Enter=确认/ESC=取消/遮罩=取消，kind 感知分派语义不变）；
     // kind='batchfix' 不命中 _settle 任何阻塞分支（_dlRunning/_edSaving
     // 仅 download/editor kind），关闭永不阻塞。
     // 结算三态（钉）：确认键/Enter=resolve(true)；取消键/ESC/遮罩点击=
@@ -2333,26 +2327,7 @@ const AppModal = {
         okBtn.textContent = o.okText || MSG.ui_ok;
         cancelBtn.style.display = '';
         cancelBtn.textContent = MSG.ui_cancel;
-        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
-            root.dataset.bound = '1';
-            root.addEventListener('click', (e) => {
-                if (e.target === root) AppModal._settle(AppModal._cancelValue());
-            });
-            okBtn.addEventListener('click', () => {
-                AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
-            });
-            cancelBtn.addEventListener('click', () => AppModal._settle(AppModal._cancelValue()));
-            document.addEventListener('keydown', (e) => {
-                if (!AppModal._busy) return;
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert' && AppModal._kind !== 'editor' && AppModal._kind !== 'tmEdit') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._kind === 'prompt' ? input.value : true);
-                }
-            });
-        }
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
 
         const el = (tag, cls, text) => {
             const n = document.createElement(tag);
@@ -2462,8 +2437,8 @@ const AppModal = {
     // editor 先例 .editor-ta-wrap）；理由只读小字；「仅本次会话有效」
     // 提示行（G6）。脏态守卫同 editor：textarea input 置 _edDirty（共用
     // 布尔，kind 互斥安全），Esc/遮罩/取消键经 _settle tmEdit 分支先弹
-    // 放弃确认；Enter 不提交（全局 keydown 六处条件同 editor 排除
-    // 'tmEdit'——dataset.bound 首绑归属任意模态，须全部排除）。
+    // 放弃确认；Enter 不提交（2.8.0.2 起走 _okValue tmEdit 分支 return
+    // undefined——统一 kind 感知绑定后不再依赖逐块排除条件）。
     // 保存校验：译文 trim 非空（原文只读不需要），不合法在弹窗状态行
     // 显错（G6）。opts = {entry:<tm[i]>, onSaved(next)->void}
     // ============================================================
@@ -2485,26 +2460,7 @@ const AppModal = {
         okBtn.textContent = '';
         cancelBtn.style.display = '';
         cancelBtn.textContent = MSG.ui_cancel;
-        if (!root.dataset.bound) {          // 与 _open 同款一次性绑定（首个打开的可能是本模态）
-            root.dataset.bound = '1';
-            root.addEventListener('click', (e) => {
-                if (e.target === root) AppModal._settle(AppModal._cancelValue());
-            });
-            cancelBtn.addEventListener('click', () =>
-                AppModal._settle(AppModal._cancelValue()));
-            document.addEventListener('keydown', (e) => {
-                if (!AppModal._busy) return;
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                } else if (e.key === 'Enter' && AppModal._kind !== 'alert'
-                           && AppModal._kind !== 'editor'
-                           && AppModal._kind !== 'tmEdit') {
-                    e.preventDefault();
-                    AppModal._settle(AppModal._cancelValue());
-                }
-            });
-        }
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
 
         const el = (tag, cls, text) => {
             const n = document.createElement(tag);

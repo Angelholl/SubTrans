@@ -1899,27 +1899,69 @@ def test_batch_d_app_modal_editor_pinned():
         assert key in keys, f"MSG 缺少批D新键: {key}"
 
 
-def test_batch_d_modal_enter_branch_excludes_editor_pinned():
-    """批D 回归钉⑤：appModal 共享 keydown 监听 Enter 分支条件必须同时
-    排除 alert 与 editor——编辑器 textarea 敲回车是换行，不得触发
-    _settle（keydown 先于 input 事件，首个回车 dirty 尚未置位会静默
-    关闭；已有 dirty 则每次回车误弹放弃确认）。_open/download/editor
-    四处同款绑定运行时只注册最先打开的一份，故逐一断言防单点回改；
-    alert/download 既有行为零变化。2.7.1：models 面板同款绑定（Enter=关闭，
-    面板无文本输入语义）。2.7.4 件3（D2026-1007-01）：batchFixPreview
-    同款绑定（Enter=确认，列表容器零键盘监听，语义保持全局），四处→五处。
-    P3（D2026-1008-02）：tmEdit 同款绑定（textarea 回车=换行不提交），
-    五处→六处；tmEdit 排除的逐条断言在
-    test_p3_tm_edit_modal_pinned（本钉只守 editor 排除不回归）。"""
+def test_appmodal_unified_skeleton_binding_pinned():
+    """2.8.0.2「首绑互窃」根治钉：AppModal 骨架一次性绑定收敛为唯一一处
+    kind 感知绑定（_bindSkeletonOnce，dataset.bound 守卫）——原各模态方法
+    各自携带绑定块、运行时只注册首个打开模态的那一份，而各块 ok/Enter 语义
+    互异（editor/tmEdit 排除 Enter、encode ok 结算 params），首绑归属谁后续
+    所有模态骨架语义即被定格（实锤：tmEdit 先开后批量修复确认框 okBtn 零
+    处理器，「开始修复」无反应）。本钉取代原批D「Enter 分支逐块排除」钉：
+    ① 全文件 root.dataset.bound 赋值恰一处且在 _bindSkeletonOnce 内，
+       逐模态绑定块绝迹；
+    ② 七个模态打开路径（_open/download/editor/models/encode/
+       batchFixPreview/tmEdit）逐一含 _bindSkeletonOnce(root)（首开是谁
+       都由它补绑）；
+    ③ Enter/ok 语义矩阵（_okValue 事件时刻读 _kind）：tmEdit/editor/
+       download/models → undefined（no-op，tmEdit/editor textarea 回车=
+       换行不提交，download 无确认语义）；prompt → 输入值；encode →
+       {ok:true, params:_encodeCollect()}；其余（alert/confirm/batchfix）
+       → true（确认）；
+    ④ keydown ESC 一律 _cancelValue()（download 下载中 no-op 与 editor/
+       tmEdit 脏态放弃确认由 _settle 既有分支承接）；Enter 仅分派有值时
+       preventDefault+_settle（no-op kind 的回车默认行为不被吞）；
+    ⑤ encode 生命周期：打开赋 _encodeCollect、结算置 null 防悬挂引用，
+       okBtn.onclick 自绑绝迹（统一分派承接）。"""
     src = _app_js_source()
-    conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
-    assert len(conds) == 6, \
-        f"keydown Enter 分支应恰六处（_open/download/editor/models/batchFixPreview/tmEdit），实得 {len(conds)}"
-    for cond in conds:
-        assert "AppModal._kind !== 'alert'" in cond, \
-            f"Enter 分支缺 alert 排除: {cond}"
-        assert "AppModal._kind !== 'editor'" in cond, \
-            f"Enter 分支缺 editor 排除: {cond}"
+    binder = _extract_function(src, "_bindSkeletonOnce")
+    okv = _extract_function(src, "_okValue")
+    # ① 唯一绑定块
+    assert src.count("root.dataset.bound = '1'") == 1, \
+        "root.dataset.bound 赋值必须恰一处（首绑互窃根源回归）"
+    assert "root.dataset.bound = '1'" in binder, \
+        "唯一赋值必须在 _bindSkeletonOnce 内"
+    assert "root.dataset.bound" in binder, "守卫必须在 _bindSkeletonOnce 内"
+    assert "if (!root.dataset.bound)" not in src, \
+        "逐模态绑定块必须绝迹（首绑互窃根源）"
+    # ② 七个打开路径逐一补绑
+    for method in ("_open", "download", "editor", "models", "encode",
+                   "batchFixPreview", "tmEdit"):
+        body = _extract_function(src, method)
+        assert "_bindSkeletonOnce(root)" in body, \
+            f"{method} 打开路径缺 _bindSkeletonOnce(root)（首开互窃回归）"
+    # ③ kind→语义矩阵
+    assert "this._kind === 'tmEdit' || this._kind === 'editor'" in okv \
+        and "this._kind === 'download' || this._kind === 'models'" in okv \
+        and "return undefined;" in okv, \
+        "矩阵缺 no-op 分支（tmEdit/editor Enter 不提交、download/models 无确认语义）"
+    assert "this._kind === 'prompt') return (input && input.value)" in okv, \
+        "prompt 须带输入值结算"
+    assert "this._kind === 'encode'" in okv and "_encodeCollect" in okv \
+        and "{ ok: true, params: collect() }" in okv, \
+        "encode 须按当前表单结算 {ok, params}（collect 经 _encodeCollect）"
+    assert "return true;" in okv, \
+        "其余 kind（alert/confirm/batchfix）须确认结算 true"
+    # ④ keydown 收口
+    assert "e.key === 'Escape'" in binder \
+        and "AppModal._settle(AppModal._cancelValue())" in binder, \
+        "ESC 须一律取消结算（脏态/下载中守卫由 _settle 承接）"
+    assert "e.key === 'Enter'" in binder and "v !== undefined" in binder, \
+        "Enter 须按分派结算（undefined no-op 且不 preventDefault）"
+    # ⑤ encode collect 生命周期
+    enc = _extract_function(src, "encode")
+    assert "this._encodeCollect = collect;" in enc, "encode 打开须暴露 collect"
+    assert "this._encodeCollect = null;" in enc, "结算须置 null（防悬挂引用）"
+    assert "okBtn.onclick" not in enc, \
+        "encode 不得再自绑 okBtn.onclick（统一分派承接，防双结算）"
 
 
 def test_batch_d_tpl_editor_entry_and_on_save_pinned():
@@ -2260,7 +2302,8 @@ def test_batch_fix_preview_modal_pinned():
     assert "bfp-item-head" in body and "bfp-idx" in body and "bfp-timing" in body, \
         "条目头行（编号+chip+timing）缺失"
     assert "modal-lg" in body, ".modal-lg 弹性滚动配方缺失"
-    assert "dataset.bound" in body, "须复用 dataset.bound 一次性绑定"
+    assert "_bindSkeletonOnce(root)" in body, \
+        "须走统一骨架绑定（2.8.0.2 互窃根治：kind 感知分派，首绑不锁语义）"
     # 结算三态：_busy 重入=resolve(false)（取消/ESC/遮罩走 _cancelValue=false）
     assert "if (this._busy) return Promise.resolve(false);" in body, \
         "_busy 重入必须立即 resolve(false)（单例不叠加）"
@@ -3076,8 +3119,8 @@ def test_p3_tm_edit_modal_pinned():
     createElement 注入零 id/零 data-i18n；原文只读、译文 textarea 可编辑
     （借 .editor-ta-wrap）；理由只读；「仅本次会话有效」提示行；脏态守卫
     （_settle tmEdit 分支+_tmEditDiscardGuard 经 confirm）；保存校验
-    trim 非空在状态行显错；保存成功自动关闭；Enter 排除扩至 tmEdit
-    （六处同款绑定，textarea 回车=换行）；MSG 全键在表。"""
+    trim 非空在状态行显错；保存成功自动关闭；Enter 不提交（2.8.0.2 起
+    走 _okValue 统一 kind 分派，textarea 回车=换行）；MSG 全键在表。"""
     src = _app_js_source()
     body = _extract_function(src, "tmEdit")
     assert "createElement" in body, "弹窗必须 createElement 注入"
@@ -3110,11 +3153,15 @@ def test_p3_tm_edit_modal_pinned():
         "译文 trim 非空校验缺失（不合法在状态行显错，G6）"
     assert "MSG.tmEditSaveFailed" in save, "保存失败状态行文案键缺失"
     assert "this._settle(false)" in save, "保存成功必须自动关闭"
-    conds = re.findall(r"e\.key === 'Enter' && ([^)]+)\)", src)
-    assert len(conds) == 6, f"Enter 分支应恰六处，实得 {len(conds)}"
-    for cond in conds:
-        assert "AppModal._kind !== 'tmEdit'" in cond, \
-            f"Enter 分支缺 tmEdit 排除（Enter 不提交）: {cond}"
+    # 2.8.0.2：Enter 不提交改走统一 kind 感知分派（_okValue tmEdit →
+    # undefined，textarea 回车=换行不结算）；原「六处逐块排除」钉随骨架
+    # 绑定收敛撤销，唯一绑定块+全 kind 矩阵在
+    # test_appmodal_unified_skeleton_binding_pinned。
+    okv = _extract_function(src, "_okValue")
+    assert "this._kind === 'tmEdit'" in okv and "return undefined;" in okv, \
+        "tmEdit Enter 须 no-op 分派（textarea 回车=换行不提交）"
+    assert "AppModal._kind !== 'tmEdit'" not in src, \
+        "逐块 Enter 排除条件应已由统一分派取代（残留即双轨漂移）"
     keys = _js_msg_keys()
     for key in ("aiTmEditBtn", "aiTmRestoreBtn", "aiTmStoredEdited",
                 "tmEditTitle", "tmEditSessionHint", "tmEditSave",
