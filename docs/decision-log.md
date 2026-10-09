@@ -3565,3 +3565,13 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **条件是否已闭环**：D2026-1009-01 C1-C23 仍待开工逐条闭环；批0 开工门=2.8.0.2 正式发布；批3 开工门=C22 校准；C5 复议三条件（C-1/C-2/C-3）转为批1 实施要求待施工验证。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：见第八节。
+
+### 十、批0 收口勾账（2026-10-09）
+
+- **开工门实测核验**：v2.8.0.2 已发布（tag→7e5223a、Release id 407740796、2026-10-09T09:06Z、setup 51,228,840B，公开 REST 复核）→ 走路径甲；**首笔提交=版本 bump（0cc90a1：pyproject+__version__ 三常量 3.0.0.dev0+CHANGELOG [2.8.0.2] 发版段回填+[3.0.0] 段另立+roadmap 2.8.0.2 发版行补登，版本三钉相对断言自动成立）**。
+- **四件落点**：①截断消除两点 quality_report.py:1410/:1424（single_line 60 字符口径未动）；②三级定位 helper `resolve_action_source_path`（pipeline_support.py:70，GUIDE_JSON_SUFFIX :67 单点定义注明与 v2_outputs.py:177/:228 同源）；③`--action-source` 接线 refine_batch_fix（api.py:3168-3179，命中插 --entries 与 --apply 之间，退化不追加、CLI 既有提示兜底）；④timing 命中行为复核（action_retranslate.py:210 setdefault 语义未动，cps_too_fast 恒空维持）。
+- **测试**：新增 8（三级定位×5/截断消除×1/传参接线×1/退化×1）+既有 40 截断钉改全量期望；全量 **2287+4**（批6 基线 2279+4 只增不减 ✓）。
+- **C2 报告（批0 收口门）PASS**：jur-531 实测 timing 精确命中 **46/46=100%**、重号 timing **0 组**、生产 `_load_source_map` 与独立复算逐键相等；报告入档 docs/c2-timing-hit-jur531-20261009.md（局限如实注明：N=1 部，重号折叠语义未被实际触发，留待批1 digest 观察退化/错配计数）。
+- **验证链六环**：①ruff（CI 口径 subtransjav+tests）clean（spike/fts5_spike.py 8 条为 main 存量、CI 范围外，stash 对照甄别）；②mypy 基线门禁通过（0/0/0）；③定向 352 passed；④全量 2287+4（首跑 1 失败 test_resume_after_rejected_rerun_reuses_stage_a_without_force，单跑/全文件/两态对照均过，甄别为全量上下文偶发、同 commit 重跑自愈，横切 flake 观察项续记）；⑤冒烟 --help+gui api 导入 OK；⑥Mimosa deep **38=基线 38 零新增**，seal sha256:df02ce76db54305bb6993656e0c9dd59884da10164991ceba9468bc53aa39f2b。
+- **已知限制（如实登记）**：非 SRT 真实输入（如 .ass）命中 L1 时映射为空且 CLI 不打提示（既有 CLI 行为，非本批引入）——批1 自动链甄别时观察；C2 N=1。
+- **批1 开工提示**：a/b 段与 C5 复议三条件（C-1 前端触发点同门控/C-2 钩子编排单一化/C-3 关闭态回归钉）、复验参数化（verify 形参）、重入守卫入口置位、C7 时序门按 D2026-1009-02 第二节执行；施工行号刷新（锚点见第二节，api.py 批0 后 +9 行左右漂移）。
