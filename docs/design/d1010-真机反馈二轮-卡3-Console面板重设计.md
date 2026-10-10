@@ -48,3 +48,12 @@ Refs: D2026-1010-01。owner 反馈原话「小窗高度可以加一点，宽度�
 - 遵守仓库 AGENTS.md：Conventional Commits 中文描述，正文含 `verify:` 与 `Refs: D2026-1010-01`；只 commit 不 push；禁止 `git add -A`。
 - 提交信息注明「GUI 未验证（黑盒由主审补跑）」。
 - 完成后在本卡末尾追加执行记录（改动文件/自测结果/遗留问题）。
+
+## 执行记录（2026-10-10，主审亲执——owner 令本轮写码不转 OpenCode）
+
+- **改动文件**：`subtransjav/webview_gui/assets/style.css`、`tests/test_gui_js_static.py`（未超出卡片点名范围）。
+- **实现要点**：①`.console-section .section-content` 增 `flex-direction: column; align-items: stretch;`（横排根因修复，#refineAiAnalyzeSection 既有补刀按卡片保留不删）；②`.console-activity` max-height 140→200px；③整区 min-height 150→180px / max-height 300→380px；④新钉 `test_console_section_layout_column_and_height_pins`（列向防回退+新数值）。
+- **既有钉更新（决策依据已归档）**：`test_batch3_console_ratio_and_section_overflow_pinned` 原 150/300 数值冻结与本次 owner 令的规格变更冲突——按 D2026-1010-01 更新为 180/380 并注记决策出处（钉只增不灭，30% 比例制保留）。
+- **先红后绿**：新钉先红 → 改后全绿。
+- **自测**：`pytest tests/test_gui_js_static.py` 135 passed。
+- **遗留**：GUI 黑盒由主审负责（见提交信息「GUI 已验证/未验证」注记）。
