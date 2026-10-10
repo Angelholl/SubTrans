@@ -475,9 +475,15 @@ button:focus { outline: none; }
 }
 
 .section-content { padding: var(--space-3) 14px; }
+/* 卡3（D2026-1010-01）：列向纵排——本规则原为行向 flex，2.7.3 件⑧给
+   Console 新增活动流兄弟节点后头部/活动流/原始日志被横排（活动流暗盒
+   缩成内容宽=owner 反馈「宽度太短/比例畸形」根因；#refineAiAnalyzeSection
+   补刀同款漏了正主），列向恢复纵向堆叠占满行宽 */
 .console-section .section-content {
     flex: 1;
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
     padding: 10px 12px 12px;   /* 批3（D2026-1002-12）：与 section-header 10px 统一节奏 */
 }
 /* 批3 补刀（D2026-1002-12 空载复测）：#refineAiAnalyzeSection 挂 .console-section
@@ -762,7 +768,7 @@ button:focus { outline: none; }
 }
 .console-activity {
     flex-shrink: 0;
-    max-height: 140px;
+    max-height: 200px;   /* 卡3（D2026-1010-01）：140→200（owner：高度加一点） */
     overflow-y: auto;
     background: var(--console-bg);
     border: 1px solid var(--console-border);
@@ -786,8 +792,8 @@ button:focus { outline: none; }
    .console-output 本体高度全交此处（min-height:0 防双滚动） */
 #tab-translate .console-collapsible:not(.collapsed) {
     flex: 0 1 30%;
-    min-height: 150px;
-    max-height: 300px;
+    min-height: 180px;   /* 卡3（D2026-1010-01）：150→180 */
+    max-height: 380px;   /* 卡3（D2026-1010-01）：300→380（随活动流加高） */
 }
 .console-collapsible.collapsed { flex: 0 0 auto; }
 .console-collapsible.collapsed .console-output { display: none; }

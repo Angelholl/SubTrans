@@ -707,7 +707,7 @@ const MSG = {
     raw_log_toggle: '原始日志',
     export_log: '导出日志',
     copy_log: '复制日志',
-    activity_stage_start: stage => `▶ ${stage} 开始`,
+    activity_stage_start: stage => `${stage} 开始`,
     activity_file_done: f => `✓ ${f} 完成`,
     activity_file_failed: f => `✗ ${f} 失败`,
     activity_risk_file: (f, phase, m) => `⚠ ${f}（${phase}）：${m}`,
@@ -3166,6 +3166,18 @@ const ConsoleManager = {
     // ---- 原始日志折叠（默认收起 + localStorage 持久化，定版 D4）----
     _RAWLOG_KEY: 'subtrans_rawlog_collapsed',
 
+    // 卡2（D2026-1010-01）：折叠期间新行未读计数（点击开关清零还原）
+    _rawLogUnread: 0,
+
+    _bumpRawLogUnread() {
+        const output = document.getElementById('consoleOutput');
+        const toggle = document.getElementById('rawLogToggleBtn');
+        if (!output || !toggle) return;
+        if (output.style.display !== 'none') return;   // 展开态不计数
+        this._rawLogUnread += 1;
+        toggle.textContent = `${MSG.raw_log_toggle} •${this._rawLogUnread}`;
+    },
+
     _initRawLogToggle() {
         const toggle = document.getElementById('rawLogToggleBtn');
         const output = document.getElementById('consoleOutput');
@@ -3198,6 +3210,9 @@ const ConsoleManager = {
             const next = output.style.display !== 'none';
             persist(next);
             apply(next);
+            // 卡2（D2026-1010-01）：点击开关即清零未读并还原按钮文案
+            this._rawLogUnread = 0;
+            toggle.textContent = MSG.raw_log_toggle;
         });
     },
 
@@ -3227,6 +3242,7 @@ const ConsoleManager = {
         output.appendChild(line);
         this._trimDom(output);
         this._scrollBottom(output);
+        this._bumpRawLogUnread();
     },
 
     clear() {
@@ -3251,6 +3267,7 @@ const ConsoleManager = {
         });
         this._trimDom(output);
         this._scrollBottom(output);
+        this._bumpRawLogUnread();
     },
 
     // ---- 导出 / 复制（空内容静默忽略）----
@@ -6919,6 +6936,12 @@ function switchTab(tabId) {
   const fcFmt = (tpl, kw) => String(tpl).replace(/\{(\w+)\}/g, (m, k) =>
     (Object.prototype.hasOwnProperty.call(kw, k) ? String(kw[k]) : m));
 
+  // 卡2（D2026-1010-01）：口径说明行（零 data-i18n，不入 i18n 冻结集）——
+  // 链白名单 fail-closed 口径可修数 < 导读页「待修」补集口径，属正常
+  const FULLCHAIN_SCOPE_NOTE =
+    '说明：全链仅自动修复白名单类目（且须有现译），'
+    + '可修数小于导读页「待修」数属正常';
+
   // 链级状态行刷新（silent=true 静默失败）：fullchain_automation_status →
   // running=进行中文案；否则按 last_run 分形态（skipped=服务商原因 /
   // ended_at 空=未完成 / 其余=上次结果一行+漏听放弃段）。展开区（details）
@@ -6949,7 +6972,10 @@ function switchTab(tabId) {
     } else if (!hasRun) {
       text = MSG.fcStatusNever;
     } else if (String(run.phase || '') === 'skipped') {
-      text = MSG.fcStatusSkipped;
+      // 卡2（D2026-1010-01）：透出 skip_reason 真因（原固定文案只说
+      // 「服务商原因」不透值，done-0 与 skipped 两侧原因可见性同补）
+      const why = String(run.skip_reason || '').trim();
+      text = why ? `未启动全链：${why}` : MSG.fcStatusSkipped;
     } else if (!String(run.ended_at || '').trim()) {
       text = fcFmt(MSG.fcStatusUnfinished, { p: run.entries_pending || 0 });
     } else {
@@ -6981,11 +7007,28 @@ function switchTab(tabId) {
         f: run.entries_fixed || 0, m: run.entries_failed || 0,
         p: run.entries_pending || 0 }));
       if (k > 0) rows.push(fcFmt(MSG.fcMissedSkipped, { k }));
+      // 卡2（D2026-1010-01）：全链原因只以 last_run 为载体（HRO：翻译
+      // 完成即停轮询，Console 对链 notice 是前端死信）——notices 逐条
+      // 渲染；done 且 0 修时取首条实质原因置顶（跳过「自动化开始」
+      // 泛化行），防「看起来 done 但 0 修」无声
+      const notices = Array.isArray(run.notices)
+        ? run.notices.map(String) : [];
+      if (String(run.phase || '') === 'done'
+          && (Number(run.entries_fixed) || 0) === 0 && notices.length) {
+        const reason = notices.find(
+          n => !n.includes('[全链] 自动化开始')) || notices[0];
+        rows.push(`原因：${reason}`);
+      }
+      notices.forEach((n) => rows.push(n));
+      if ((Number(run.notices_truncated) || 0) > 0) {
+        rows.push(`（另有 ${Number(run.notices_truncated)} 条通知未显示）`);
+      }
     }
     rows.push(MSG.fcDigestVerifyNone);
     rows.push(fcFmt(MSG.fcDigestLedgerNote,
       { stem: String(run.guide_stem || lastGuideData
         && lastGuideData.stem || '') }));
+    rows.push(FULLCHAIN_SCOPE_NOTE);
     rows.forEach((t) => {
       const d = document.createElement('div');
       d.textContent = t;

@@ -957,7 +957,7 @@ def test_batch3_console_ratio_and_section_overflow_pinned():
     - .console-output 圆角降为 --radius-sm、min-height:0（高度全交外层，
       180/420 定高删除）；
     - #tab-translate > .card 70% / .console-collapsible:not(.collapsed)
-      30%（150 保底 / 300 上限，替换原 160/220）；
+      30%（保底/上限：原 150/300 → D2026-1010-01 卡3 改 180/380）；
     - 空态（:not(.has-files)）文件卡退出比例分配且列表容器不滚动。
     """
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
@@ -972,10 +972,12 @@ def test_batch3_console_ratio_and_section_overflow_pinned():
         and "max-height: 420px" not in m.group(0), \
         ".console-output 定高未删净"
     assert "flex: 1 1 70%;" in css, "文件卡 70% 比例缺失"
+    # 30% 比例制保留；150/300 → 180/380（D2026-1010-01 卡3，owner 令
+    # 「高度加一点」的规格变更，决策已归档 docs/decision-log.md）
     assert re.search(
         r"#tab-translate \.console-collapsible:not\(\.collapsed\) \{"
-        r"[^}]*flex: 0 1 30%;[^}]*min-height: 150px;[^}]*max-height: 300px;",
-        css), "Console 30%/150/300 数值漂移"
+        r"[^}]*flex: 0 1 30%;[^}]*min-height: 180px;[^}]*max-height: 380px;",
+        css), "Console 30%/180/380 数值漂移"
     assert "#tab-translate:not(.has-files) > .card { flex: 0 0 auto; }" in css, \
         "缺空态文件卡收敛规则"
     assert re.search(
@@ -3697,3 +3699,50 @@ def test_fullchain_status_line_and_rollback_pinned():
     mb2 = re.search(r'fcRollbackConfirmBody: \'([^\']*)\'', src)
     assert mb2 and "批" not in mb2.group(1), \
         "回滚确认框正文不得带内部批号"
+
+
+def test_fullchain_reason_visibility_and_activity_stream_pins():
+    """D2026-1010-01 卡2 钉：全链原因可见化（last_run 载体——HRO 实锤
+    Console 对链 notice 是前端死信）+ 活动流去「▶」误导 + 原始日志未读
+    徽标。静态结构锚，不钉具体文案全文（防小改文案即碎）。"""
+    src = _app_js_source()
+    # 1) 活动流阶段行不得含「▶」（纯文本无点击 handler，箭头暗示可展开）
+    m = re.search(r"activity_stage_start: stage => `([^`]*)`", src)
+    assert m and "▶" not in m.group(1), "活动流阶段行前缀不得含 ▶"
+    # 2) digest 消费 last_run.notices / notices_truncated / skip_reason
+    fn = _extract_function(src, "fullchainStatusRefresh")
+    assert "run.notices" in fn, "digest 须渲染 last_run.notices 逐文件原因"
+    assert "notices_truncated" in fn, "digest 须透出截断计数"
+    assert "run.skip_reason" in fn, "skipped 形态须透出 skip_reason 真因"
+    # 3) 口径说明常量存在（零 data-i18n，不入 i18n 冻结集）
+    assert "FULLCHAIN_SCOPE_NOTE" in src
+    # 4) 原始日志未读徽标：计数 helper 被 log/appendRaw 调用，点击清零还原
+    assert "_bumpRawLogUnread" in src
+    assert "_bumpRawLogUnread" in _extract_function(src, "log"), \
+        "ConsoleManager.log 须计未读"
+    assert "_bumpRawLogUnread" in _extract_function(src, "appendRaw"), \
+        "ConsoleManager.appendRaw 须计未读"
+    toggle_fn = _extract_function(src, "_initRawLogToggle")
+    assert "_rawLogUnread = 0" in toggle_fn, "点击原始日志开关须清零未读"
+
+
+def test_console_section_layout_column_and_height_pins():
+    """D2026-1010-01 卡3 钉：Console 面板布局——.console-section 族已有
+    两次连带横排前科（2.6.2 批3 #refineAiAnalyzeSection、2.7.3 件⑧活动流
+    三兄弟节点被 style.css:478 行向 flex 横排=owner 反馈「宽度太短/比例
+    畸形」根因），钉列向修复防回退；高度加码钉（活动流 200px/整区
+    380px 上限）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.console-section \.section-content\s*\{([^}]*)\}", css)
+    assert m, "style.css 缺 .console-section .section-content 规则"
+    assert "flex-direction: column" in m.group(1), \
+        "Console 内容区须列向纵排（横排=活动流窄盒根因）"
+    ma = re.search(r"\.console-activity\s*\{([^}]*)\}", css)
+    assert ma and "max-height: 200px" in ma.group(1), \
+        "活动流盒上限 200px（owner：高度加一点）"
+    mc = re.search(
+        r"#tab-translate \.console-collapsible:not\(\.collapsed\)"
+        r"\s*\{([^}]*)\}", css)
+    assert mc, "style.css 缺 Console 整区高度规则"
+    assert "max-height: 380px" in mc.group(1), "Console 整区上限 380px"
+    assert "min-height: 180px" in mc.group(1), "Console 整区保底 180px"
