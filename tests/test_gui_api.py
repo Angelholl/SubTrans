@@ -6467,6 +6467,65 @@ def _install_missed_stubs(monkeypatch, *, text=_MTEXT):
     return detect_calls, batch_calls
 
 
+def test_session_stage_a_snapshot_fallback(gui_api_obj, monkeypatch,
+                                           tmp_path):
+    """批1 真机反馈修复：阶段A 设置从未落盘（refine_stage_settings.json
+    不存在）时，_stage_a_* 三兄弟回落会话快照——链 provider 门/手动修复
+    解析与翻译主流程同源，不再误判服务商原因。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    gui = gui_api_obj
+    gui._init_ai_state()
+    # 落盘为空（无文件）：无快照 → 拒绝（修复模型未设置）
+    r = gui._resolve_ai_model_config()
+    assert r["ok"] is False
+    # 有会话快照（本次翻译实值）→ ok 且三元组取快照
+    gui._session_stage_a = {"provider": "lmstudio",
+                            "model": "qwen3.8-27b",
+                            "endpoint": "http://localhost:1234/v1"}
+    r = gui._resolve_ai_model_config()
+    assert r["ok"] is True and r["source"] == "stage_a_follow"
+    assert r["provider"] == "lmstudio" and r["model"] == "qwen3.8-27b"
+    assert r["endpoint"] == "http://localhost:1234/v1"
+    assert gui._stage_a_provider_name() == "lmstudio"
+    assert gui._stage_a_model() == "qwen3.8-27b"
+
+
+def test_session_stage_a_save_settings_clears_snapshot(gui_api_obj,
+                                                       monkeypatch,
+                                                       tmp_path):
+    """保存阶段设置=用户显式表态：清会话快照，落盘值生效不被旧快照
+    遮蔽。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    gui = gui_api_obj
+    gui._init_ai_state()
+    gui._session_stage_a = {"provider": "lmstudio",
+                            "model": "qwen3.8-27b", "endpoint": ""}
+    r = gui.refine_save_stage_settings(
+        [{"stage": 1, "provider": "ollama", "endpoint": "",
+          "model": "qwen3:8b"}], None, None)
+    assert r["success"] is True
+    assert gui._session_stage_a == {}
+    assert gui._stage_a_provider_name() == "ollama"
+    assert gui._stage_a_model() == "qwen3:8b"
+
+
+def test_capture_session_stage_a_extracts_options(gui_api_obj):
+    """_capture_session_stage_a：从翻译 options 提取 s1 三元组（endpoint
+    键按 provider 名拼接）。"""
+    gui = gui_api_obj
+    gui._init_ai_state()
+    gui._capture_session_stage_a({
+        "s1_provider": "LMStudio",          # 大小写归一
+        "s1_model": "qwen3.8-27b",
+        "lmstudio_endpoint": "http://127.0.0.1:1234/v1",
+    })
+    assert gui._session_stage_a == {
+        "provider": "lmstudio", "model": "qwen3.8-27b",
+        "endpoint": "http://127.0.0.1:1234/v1"}
+
+
 def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
                                                tmp_path):
     """_fullchain_c22_enabled fail-closed：缺失/损坏/enabled 非 True 均

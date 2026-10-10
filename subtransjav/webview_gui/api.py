@@ -769,6 +769,10 @@ class TranslateAPI:
         pywebview.api.method_name(args)
     """
 
+    # 会话级阶段A 快照（本次翻译实值；保存阶段设置时清空，批1 真机
+    # 反馈修复：链 provider 门与翻译主流程同源）
+    _session_stage_a: dict[str, str]
+
     def __init__(self):
         """Initialize API state."""
         self.process: subprocess.Popen | None = None
@@ -1083,6 +1087,11 @@ class TranslateAPI:
                 }
 
         self._init_translation_state()
+        # 3.0 批1 真机反馈修复：会话级阶段A 快照——链 provider 门与手动
+        # 修复/分析的解析回落「本次翻译实际使用的服务商/模型」，与翻译
+        # 主流程同源（阶段A 设置从未保存落盘的机器上，翻译照常跑而链
+        # 误判"服务商原因"的根因即两侧数据源不一致）
+        self._capture_session_stage_a(options)
 
         with self._translate_lock:
             if self._translate_process is not None:
@@ -1910,6 +1919,10 @@ class TranslateAPI:
         saved_keys = 0
         saved_settings = 0
         try:
+            if stages:
+                # 保存阶段设置=用户显式表态，清会话快照（否则快照优先
+                # 语义会遮蔽新保存的阶段A 值，3.0 批1 真机反馈修复）
+                self._session_stage_a = {}
             if stages or settings:
                 path = self._refine_stage_settings_path()
                 data: dict[str, Any] = {"stages": [], "settings": {}}
@@ -2381,6 +2394,8 @@ class TranslateAPI:
             # 同步置位/finally 清位，覆盖链/手动互斥）
             self._fullchain_running = False
             self._batch_fix_running = False
+            # 会话级阶段A 快照（本次翻译实值；保存阶段设置时清空）
+            self._session_stage_a = {}
             self._ai_lock = threading.Lock()
 
     def _register_child(self, proc: subprocess.Popen,
@@ -2506,8 +2521,27 @@ class TranslateAPI:
         "custom": "CUSTOM_API_KEY",
     }
 
+    def _capture_session_stage_a(self, options: dict[str, Any]) -> None:
+        """记录本次翻译会话的阶段A 实参（前端下拉现值，不依赖落盘）。
+
+        消费方=_stage_a_provider_name/_model/_endpoint 的快照优先回落：
+        全链 provider 门、批量修复与分析解析在「阶段A 设置从未保存」的
+        安装形态下（refine_stage_settings.json 不存在，翻译经前端现值
+        直传照常可跑）与之同源，不再误判服务商原因。"""
+        provider = str(options.get("s1_provider") or "").strip().lower()
+        self._session_stage_a = {
+            "provider": provider,
+            "model": str(options.get("s1_model") or "").strip(),
+            "endpoint": str(options.get(f"{provider}_endpoint")
+                            or "").strip(),
+        }
+
     def _stage_a_provider_name(self) -> str:
-        """阶段A（槽0/存储 stage=1）provider 名；读取失败返回空串。"""
+        """阶段A provider 名：会话快照优先（本次翻译实值），回落存储
+        stage=1；读取失败返回空串。"""
+        snap = getattr(self, "_session_stage_a", None) or {}
+        if snap.get("provider"):
+            return str(snap["provider"])
         try:
             got = self.refine_get_stage_settings()
         except Exception:
@@ -2520,7 +2554,11 @@ class TranslateAPI:
         return ""
 
     def _stage_a_endpoint(self) -> str:
-        """阶段A（存储 stage=1）端点；读取失败/未存返回空串。"""
+        """阶段A 端点：会话快照优先，回落存储 stage=1；读取失败/未存
+        返回空串。"""
+        snap = getattr(self, "_session_stage_a", None) or {}
+        if snap.get("provider"):
+            return str(snap.get("endpoint") or "")
         try:
             got = self.refine_get_stage_settings()
         except Exception:
@@ -2533,7 +2571,11 @@ class TranslateAPI:
         return ""
 
     def _stage_a_model(self) -> str:
-        """阶段A（存储 stage=1）模型名；读取失败/未存返回空串。"""
+        """阶段A 模型名：会话快照优先，回落存储 stage=1；读取失败/未存
+        返回空串。"""
+        snap = getattr(self, "_session_stage_a", None) or {}
+        if snap.get("model"):
+            return str(snap["model"])
         try:
             got = self.refine_get_stage_settings()
         except Exception:
@@ -6037,10 +6079,15 @@ class TranslateAPI:
             model = str(cfg.get("model") or "").strip()
             if (not cfg.get("ok")
                     or provider not in self._AI_LOCAL_PROVIDERS or not model):
+                reason = str(cfg.get("reason") or "").strip()
+                cloud = provider and provider not in self._AI_LOCAL_PROVIDERS
+                why = ("生效服务商为云端（全链自动化仅支持本地模型）" if cloud
+                       else (reason or "分析模型未配置"))
                 self._automation_notice(
-                    "[全链] 自动化未启动：分析模型未配置或当前生效服务商为"
-                    "云端（全链自动化仅支持本地模型）")
+                    f"[全链] 自动化未启动：{why}")
                 run["phase"] = "skipped"
+                run["skip_reason"] = why
+                self._fullchain_write_last_run(run)
                 return
             self._automation_notice(
                 "[全链] 自动化开始：分析→批量修复→复验"
