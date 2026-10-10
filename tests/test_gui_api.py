@@ -5439,9 +5439,20 @@ def test_exit_cleanup_includes_warmup_slot(gui_api_obj):
         api_mod._child_procs_ledger_path()) == []
 
 
-def test_session_completed_triggers_warmup_hook(gui_api_obj, monkeypatch):
+def test_session_completed_triggers_warmup_hook(gui_api_obj, monkeypatch,
+                                                tmp_path):
     """G2 触发点①：会话级完成钩子尾部触发 _warmup_after_session（daemon），
-    后端自行按 ai_analyze_* KV 同源解析后调桥；解析失败静默跳过。"""
+    后端自行按 ai_analyze_* KV 同源解析后调桥；解析失败静默跳过。
+    CONFIG_DIR 打桩隔离本机真实设置（_fullchain_auto_enabled 直读文件
+    不过替身——owner 真机全链开关开启态会令钩子改道全链分支，warmup 由
+    链首承接，本测试须在隔离环境验证直调路径）。"""
+    import subtransjav.refine.config as cfg
+    cfgdir = tmp_path / "cfg"
+    cfgdir.mkdir()
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(cfgdir))
+    (cfgdir / "refine_stage_settings.json").write_text(
+        json.dumps({"stages": [], "settings": {}}, ensure_ascii=False),
+        encoding="utf-8")
     gui_api_obj._init_ai_state()
     calls: list = []
     monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
@@ -5768,7 +5779,124 @@ def test_fullchain_cloud_provider_gate(gui_api_obj, monkeypatch, tmp_path,
         "不启动须人话通知（不静默）"
     run = gui_api_obj._fullchain_read_last_run()
     assert run["phase"] == "skipped" and run["ended_at"]
+    assert any("自动化未启动" in n for n in run.get("notices") or []), \
+        "skipped 形态原因须落 last_run notices（D2026-1010-01 卡1）"
     assert gui_api_obj.fullchain_automation_status()["running"] is False
+
+
+# ---------------- D2026-1010-01 卡1：done key basename → 会话路径快照解析 ----------------
+
+
+def _resolve_key(gui, key, session_paths):
+    return gui._resolve_guide_for_done_key(key, session_paths=session_paths)
+
+
+def test_capture_session_paths_normalizes_source(gui_api_obj):
+    """会话路径快照：inputs 原样全路径；output_dir "source"/空白归一 ""
+    （语义=随输入父目录，与 pipeline_support._resolve_stage_paths 同源）。"""
+    gui_api_obj._capture_session_paths(
+        {"inputs": [r"E:\in\ep01.srt"], "output_dir": " source "})
+    assert gui_api_obj._session_paths == {
+        "inputs": [r"E:\in\ep01.srt"], "output_dir": ""}
+    gui_api_obj._capture_session_paths({"inputs": [], "output_dir": ""})
+    assert gui_api_obj._session_paths == {"inputs": [], "output_dir": ""}
+
+
+def test_fullchain_resolve_guide_basename_session_output_dir(gui_api_obj,
+                                                             tmp_path):
+    """T1（真机根因回归钉）：done key=纯 basename（生产事件流形态），
+    导读在会话输出目录 → 经会话快照命中（旧实现只在 CWD 找必落空）。"""
+    _make_bf_guide(tmp_path, [_bf_item(3, _T3, "甲")], with_report=False)
+    got = _resolve_key(
+        gui_api_obj, "ep01.ja.merged.whisperjav.srt",
+        {"inputs": [], "output_dir": str(tmp_path)})
+    assert got == str(tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json")
+
+
+def test_fullchain_resolve_guide_missing_returns_empty(gui_api_obj, tmp_path):
+    """T2：候选目录全空 → 返回 ""（诚实跳过语义不变）。"""
+    got = _resolve_key(
+        gui_api_obj, "ep01.srt",
+        {"inputs": [], "output_dir": str(tmp_path)})
+    assert got == ""
+
+
+def test_fullchain_resolve_guide_output_dir_source_normalize(gui_api_obj,
+                                                             tmp_path):
+    """T3：output_dir="source"/"" 归一 → 经输入父目录命中。"""
+    _make_bf_guide(tmp_path, [], with_report=False)
+    inp = tmp_path / "ep01.ja.merged.whisperjav.srt"
+    inp.write_text("x", encoding="utf-8")
+    for out in ("source", ""):
+        got = _resolve_key(
+            gui_api_obj, "ep01.ja.merged.whisperjav.srt",
+            {"inputs": [str(inp)], "output_dir": out})
+        assert got == str(tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json"), \
+            f"output_dir={out!r} 须归一输入父目录命中"
+
+
+def test_fullchain_resolve_guide_same_name_no_mismatch(gui_api_obj, tmp_path):
+    """T4（误配兜底）：同名输入双目录 → 唯一映射失效退回目录列表，A 目录
+    stem 不符诱饵导读被交叉校验拒绝、命中 B 目录正确导读；唯一候选目录
+    内 stem 不符 → 返回 ""（宁跳过不误配）。"""
+    dir_a = tmp_path / "a"
+    dir_b = tmp_path / "b"
+    dir_a.mkdir()
+    dir_b.mkdir()
+    (dir_a / "ep01.srt").write_text("x", encoding="utf-8")
+    (dir_b / "ep01.srt").write_text("x", encoding="utf-8")
+    (dir_a / f"{_BF_GUIDE_STEM}_质量报告导读.json").write_text(
+        json.dumps({"version": 2, "stem": "decoy", "items": []},
+                   ensure_ascii=False), encoding="utf-8")
+    _make_bf_guide(dir_b, [], with_report=False)
+    got = _resolve_key(
+        gui_api_obj, "ep01.srt",
+        {"inputs": [str(dir_a / "ep01.srt"), str(dir_b / "ep01.srt")],
+         "output_dir": ""})
+    assert got == str(dir_b / f"{_BF_GUIDE_STEM}_质量报告导读.json")
+    got = _resolve_key(
+        gui_api_obj, "ep01.srt",
+        {"inputs": [str(dir_a / "ep01.srt")], "output_dir": ""})
+    assert got == "", "唯一候选目录导读 stem 不符须视为未命中（防误配）"
+
+
+def test_fullchain_resolve_guide_fullpath_key_fallback(gui_api_obj, tmp_path):
+    """T6（兼容）：done key 带真实目录（既有 happy path 口径）→ key 自身
+    目录兜底候选仍命中。"""
+    _make_bf_guide(tmp_path, [], with_report=False)
+    got = _resolve_key(gui_api_obj, str(tmp_path / "ep01_final_cn.srt"), None)
+    assert got == str(tmp_path / f"{_BF_GUIDE_STEM}_质量报告导读.json")
+
+
+def test_fullchain_notices_record_skip_reason(gui_api_obj, monkeypatch,
+                                              tmp_path):
+    """T5（卡1 F2 后端）：done-0 形态（导读缺失诚实跳过）逐文件原因落
+    last_run notices——HRO 全链 notice 前端死信（D2026-1010-01），可见性
+    载体=last_run，GUI digest 呈现由卡2 承接。"""
+    gui_api_obj._init_ai_state()
+    _fullchain_env(
+        gui_api_obj, monkeypatch, tmp_path,
+        settings={"fullchain_auto_enabled": True},
+        stage1={"provider": "lmstudio", "endpoint": "", "model": "qwen-m"})
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    captured = _install_fake_bf_spawn(monkeypatch)
+    gui_api_obj._capture_session_paths(
+        {"inputs": [str(tmp_path / "ep01.ja.merged.whisperjav.srt")],
+         "output_dir": "source"})
+    gui_api_obj._session_hook_fired = False
+    gui_api_obj._on_translation_session_completed(
+        {"files": {"ep01.ja.merged.whisperjav.srt": "done"}})
+    gui_api_obj._fullchain_thread.join(15)
+    assert not captured.get("calls"), "导读缺失须诚实跳过零 spawn"
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "done"
+    assert run["files_total"] == 1 and run["files_done"] == 1
+    assert run["entries_fixed"] == 0
+    assert any("未找到导读 json" in n for n in run.get("notices") or []), \
+        "逐文件跳过原因须落 last_run notices"
+    assert any("复验跳过" in n for n in run.get("notices") or []), \
+        "复验跳过原因须落 last_run notices"
 
 
 def test_fullchain_c7_encode_after_verify(gui_api_obj, _auto_env, monkeypatch):

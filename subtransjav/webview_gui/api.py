@@ -773,6 +773,10 @@ class TranslateAPI:
     # 反馈修复：链 provider 门与翻译主流程同源）
     _session_stage_a: dict[str, str]
 
+    # 会话级路径快照（本次翻译输入/输出实值；D2026-1010-01 卡1：done key
+    # 为纯 basename 时链导读解析按会话目录定位，与翻译主流程同源）
+    _session_paths: dict[str, Any]
+
     def __init__(self):
         """Initialize API state."""
         self.process: subprocess.Popen | None = None
@@ -1092,6 +1096,9 @@ class TranslateAPI:
         # 主流程同源（阶段A 设置从未保存落盘的机器上，翻译照常跑而链
         # 误判"服务商原因"的根因即两侧数据源不一致）
         self._capture_session_stage_a(options)
+        # D2026-1010-01 卡1：会话级路径快照——done key 纯 basename 时链
+        # 导读解析按本次输入/输出目录定位（旧实现只在进程 CWD 找必落空）
+        self._capture_session_paths(options)
 
         with self._translate_lock:
             if self._translate_process is not None:
@@ -2534,6 +2541,22 @@ class TranslateAPI:
             "model": str(options.get("s1_model") or "").strip(),
             "endpoint": str(options.get(f"{provider}_endpoint")
                             or "").strip(),
+        }
+
+    def _capture_session_paths(self, options: dict[str, Any]) -> None:
+        """记录本次翻译会话的输入/输出目录实参（D2026-1010-01 卡1，与
+        _capture_session_stage_a 同款会话快照范式）。
+
+        消费方=_resolve_guide_for_done_key 多目录候选：done key=管线事件
+        file 字段（纯 basename），链解析导读须按会话目录回落。output_dir
+        为空/"source" 归一 ""（语义=随输入父目录，与 pipeline_support
+        _resolve_stage_paths 及 CLI 侧「仅非 source 才加 -o」同源）。"""
+        out = str(options.get("output_dir") or "").strip()
+        if out.lower() == "source":
+            out = ""
+        self._session_paths = {
+            "inputs": [str(p) for p in (options.get("inputs") or [])],
+            "output_dir": out,
         }
 
     def _stage_a_provider_name(self) -> str:
@@ -5731,7 +5754,10 @@ class TranslateAPI:
         entries_fixed/failed=台账口径修复成败条数；entries_pending=已甄别
         可修但未结算（含 nochange 等未入账量）；missed_skipped=漏听段
         （F4）放弃/C18 跳过数（批3 3B 接线，_run_fullchain_missed_stage
-        更新）。"""
+        更新）；notices=链内人话通知逐条快照（D2026-1010-01 卡1 F2 后端：
+        全链 notice 前端死信——fetchLogs 仅在 statusInterval，翻译完成即
+        停轮询先于链 daemon 产出，可见性载体=last_run，GUI digest 由卡2
+        呈现；每条截 200 字，上限 50 条，超出丢弃并计 notices_truncated）。"""
         try:
             from subtransjav.refine.fs_utils import _atomic_write_text
             path = self._fullchain_last_run_path()
@@ -5740,6 +5766,19 @@ class TranslateAPI:
                 path, json.dumps(run, ensure_ascii=False, indent=2))
         except Exception:
             _log_exc("_fullchain_write_last_run")
+
+    def _fullchain_notice(self, run: dict[str, Any], text: str) -> None:
+        """链内通知统一入口（卡1 F2 后端）：_automation_notice 既有通道
+        （gui.log 恒落+翻译日志队列尽力投）零变化，另同步追加进 run
+        notices（上限 50 条，超出丢弃并计 notices_truncated；每条截
+        200 字）。链内 _automation_notice 直调点一律改经本入口。"""
+        self._automation_notice(text)
+        notices = run.setdefault("notices", [])
+        if len(notices) < 50:
+            notices.append(text[:200])
+        else:
+            run["notices_truncated"] = \
+                int(run.get("notices_truncated") or 0) + 1
 
     def _fullchain_c22_path(self) -> str:
         """C22 校准门落点（config/fullchain_c22.json；CONFIG_DIR 同款锚
@@ -5764,15 +5803,30 @@ class TranslateAPI:
         except Exception:
             return False
 
-    def _resolve_guide_for_done_key(self, done_key: str) -> str:
+    def _resolve_guide_for_done_key(self, done_key: str,
+                                    session_paths: (dict[str, Any] |
+                                                    None) = None) -> str:
         """会话完成文件 → 导读 json 路径（同目录伴生成品命名口径）。
 
         summary files 键=管线 phase 事件 file 字段（输入文件 basename，
         event_stream.py per-file 通道现役形态）。stem 取 basename 剥扩展
         → 剥 ``_final_`` 段（_resolve_final_subtitle 同法）→
         strip_lang_suffix → _preview_stem_candidates 剥链闭集逐层试
-        ``{cand}_质量报告导读.json``，首个存在即返；全无返回空串（调用方
-        诚实跳过+通知，不静默不强制生成）。"""
+        ``{cand}_质量报告导读.json``。
+
+        候选目录有序去重（D2026-1010-01 卡1：旧实现只取 key 自身
+        dirname/CWD，done key 纯 basename 时=进程 CWD，导读实落输出
+        目录必落空→诚实跳过→0 修复）：
+          1) 会话输出目录（_capture_session_paths 快照，output_dir 归一
+             后非空时）；
+          2) 唯一同名映射输入目录（inputs 中 basename 与 done key 匹配
+             唯一时取其 dirname；多个同名不映射=防误配）；
+          3) 其余会话输入目录（去重）；
+          4) key 自身 dirname 或 "."（最后，兼容旧口径/全路径键）。
+
+        命中后轻量交叉校验导读顶层 stem（_guide_stem_matches，同名陈旧
+        导读防误配兜底），首个通过者即返；全无返回空串（调用方诚实跳过
+        +通知，不静默不强制生成）。"""
         from subtransjav.refine.pipeline_support import (
             GUIDE_JSON_SUFFIX,
             strip_lang_suffix,
@@ -5788,12 +5842,59 @@ class TranslateAPI:
         if "_final_" in stem:
             stem = stem[:stem.index("_final_")]
         stem = strip_lang_suffix(stem)
-        directory = os.path.dirname(key) or "."
-        for cand in _preview_stem_candidates(stem):
-            gp = os.path.join(directory, cand + GUIDE_JSON_SUFFIX)
-            if os.path.isfile(gp):
+        snap: dict[str, Any] = (
+            session_paths if session_paths is not None
+            else getattr(self, "_session_paths", None) or {})
+        dirs: list[str] = []
+        out_dir = str(snap.get("output_dir") or "").strip()
+        if out_dir and os.path.isdir(out_dir):
+            dirs.append(out_dir)
+        input_dirs: list[str] = []
+        mapped: list[str] = []
+        base_low = base.casefold()
+        for ip in (snap.get("inputs") or []):
+            ip = str(ip).strip()
+            if not ip:
+                continue
+            d = os.path.dirname(ip)
+            if d and d not in input_dirs:
+                input_dirs.append(d)
+            if d and os.path.basename(ip).casefold() == base_low \
+                    and d not in mapped:
+                mapped.append(d)
+        if len(mapped) == 1 and mapped[0] not in dirs:
+            dirs.append(mapped[0])         # 唯一同名映射才用（防误配）
+        for d in input_dirs:
+            if d not in dirs:
+                dirs.append(d)
+        key_dir = os.path.dirname(key) or "."
+        if key_dir not in dirs:
+            dirs.append(key_dir)
+        for directory in dirs:
+            for cand in _preview_stem_candidates(stem):
+                gp = os.path.join(directory, cand + GUIDE_JSON_SUFFIX)
+                if not os.path.isfile(gp):
+                    continue
+                if not self._guide_stem_matches(gp, stem):
+                    continue
                 return gp
         return ""
+
+    @staticmethod
+    def _guide_stem_matches(guide_path: str, expect_stem: str) -> bool:
+        """命中导读的轻量 stem 交叉校验（卡1 防误配兜底）：顶层 stem 字段
+        缺失（旧数据）→ 放行；非空且不在期望 stem 的剥链候选闭集内（同名
+        陈旧导读）→ 视为未命中；读取失败 → 视为未命中（_load_validated_
+        guide 校验链仍兜底，此处宁跳过不误配）。"""
+        try:
+            with open(guide_path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return False
+        if not isinstance(data, dict):
+            return False
+        got = str(data.get("stem") or "").strip()
+        return not got or got in _preview_stem_candidates(expect_stem)
 
     def _fullchain_fixable_entries(self, p: str, stem: str,
                                    guide: dict[str, Any]) -> list[dict[str, Any]]:
@@ -5861,7 +5962,8 @@ class TranslateAPI:
             guide_path = str(ctx.get("guide_path") or "")
             p, stem, guide, err = self._load_validated_guide(guide_path)
             if err is not None:
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     f"[全链] 漏听段跳过 {os.path.basename(guide_path)}："
                     f"{err.get('error') or '导读校验失败'}")
                 continue
@@ -5876,7 +5978,8 @@ class TranslateAPI:
             total_n = len(items)
             if total_n > cap:
                 items = items[:cap]
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     f"[全链] {stem}：疑似漏听观察共 {total_n} 条，"
                     f"仅处理前 {cap} 条")
             # C18 媒体缺失诚实退化
@@ -5886,7 +5989,8 @@ class TranslateAPI:
                 skipped = len(items)
                 run["missed_skipped"] = int(run.get("missed_skipped") or 0) \
                     + skipped
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     f"[全链] {stem}：无音频对照（媒体缺失），漏听观察 "
                     f"{skipped} 条跳过（C18 诚实退化）")
                 self._fullchain_write_last_run(run)
@@ -5917,7 +6021,8 @@ class TranslateAPI:
                 skipped = len(items)
                 run["missed_skipped"] = int(run.get("missed_skipped") or 0) \
                     + skipped
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     f"[全链] {stem}：无音频对照（检测/转写失败），漏听观察 "
                     f"{skipped} 条跳过（C18 诚实退化）")
                 self._fullchain_write_last_run(run)
@@ -5946,7 +6051,8 @@ class TranslateAPI:
             if picks and not gate_on:
                 # 门控分叉（缺省关）：high 也不补，notice 明示放弃数不静默
                 skipped += len(picks)
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     f"[全链] {stem}：自动补行未启用（C22 校准门未通过），"
                     f"漏听条目按既定策略全部放弃：{len(picks)} 条")
                 picks = []
@@ -5956,7 +6062,8 @@ class TranslateAPI:
                     os.path.dirname(p), f"{final_stem(stem)}.srt")
                 ok_write = False
                 if not os.path.isfile(final_path):
-                    self._automation_notice(
+                    self._fullchain_notice(
+                        run,
                         f"[全链] {stem}：终稿缺失，自动补行放弃 "
                         f"{len(picks)} 条（零写入）")
                 else:
@@ -5968,7 +6075,8 @@ class TranslateAPI:
                         assert_insert_invariants(entries, new_entries, picks)
                     except Exception:
                         _log_exc("_run_fullchain_missed_stage.insert")
-                        self._automation_notice(
+                        self._fullchain_notice(
+                            run,
                             f"[全链] {stem}：插入恒等式校验失败，本文件"
                             f"自动补行放弃 {len(picks)} 条（零落盘）")
                         entries = None
@@ -6023,8 +6131,8 @@ class TranslateAPI:
                                 _log_exc(
                                     "_run_fullchain_missed_stage.extras")
             if inserted:
-                self._automation_notice(
-                    f"[全链] {stem}：自动补行 {inserted} 条")
+                self._fullchain_notice(
+                    run, f"[全链] {stem}：自动补行 {inserted} 条")
             if gate_on and picks and not inserted:
                 skipped += len(picks)   # 终稿缺失/恒等式失败/写盘失败=放弃
             run["missed_skipped"] = int(run.get("missed_skipped") or 0) \
@@ -6065,7 +6173,7 @@ class TranslateAPI:
         run: dict[str, Any] = {
             "phase": "running", "files_total": 0, "files_done": 0,
             "entries_fixed": 0, "entries_failed": 0, "entries_pending": 0,
-            "missed_skipped": 0,
+            "missed_skipped": 0, "notices": [],
             "started_at": self._fullchain_now(), "ended_at": ""}
         try:
             self._fullchain_write_last_run(run)
@@ -6083,13 +6191,13 @@ class TranslateAPI:
                 cloud = provider and provider not in self._AI_LOCAL_PROVIDERS
                 why = ("生效服务商为云端（全链自动化仅支持本地模型）" if cloud
                        else (reason or "分析模型未配置"))
-                self._automation_notice(
-                    f"[全链] 自动化未启动：{why}")
+                self._fullchain_notice(run, f"[全链] 自动化未启动：{why}")
                 run["phase"] = "skipped"
                 run["skip_reason"] = why
                 self._fullchain_write_last_run(run)
                 return
-            self._automation_notice(
+            self._fullchain_notice(
+                run,
                 "[全链] 自动化开始：分析→批量修复→复验"
                 "（自动压制排布视压制开关，于复验后执行）")
             # c) 预热首环（C5：承接前端短路的预热；失败/跳过不阻断链）
@@ -6103,7 +6211,8 @@ class TranslateAPI:
                 except Exception:
                     _log_exc("_run_fullchain_automation.warmup")
             else:
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     "[全链] 预热跳过：当前分析模型配置不可用（链照常继续）")
             # d/e) 逐文件甄别 + 分批修复
             files_status = dict(summary.get("files") or {})
@@ -6117,14 +6226,16 @@ class TranslateAPI:
             for key in done_keys:
                 guide_path = self._resolve_guide_for_done_key(key)
                 if not guide_path:
-                    self._automation_notice(
+                    self._fullchain_notice(
+                        run,
                         f"[全链] 跳过 {key}：未找到导读 json（诚实跳过）")
                     run["files_done"] = int(run["files_done"]) + 1
                     self._fullchain_write_last_run(run)
                     continue
                 p, stem, guide, err = self._load_validated_guide(guide_path)
                 if err is not None:
-                    self._automation_notice(
+                    self._fullchain_notice(
+                        run,
                         f"[全链] 跳过 {os.path.basename(guide_path)}："
                         f"{err.get('error') or '导读校验失败'}")
                     run["files_done"] = int(run["files_done"]) + 1
@@ -6140,8 +6251,8 @@ class TranslateAPI:
                 run["entries_pending"] = planned - int(run["entries_fixed"]) \
                     - int(run["entries_failed"])
                 if not fixable:
-                    self._automation_notice(
-                        f"[全链] {stem}：无可自动修复条目，跳过")
+                    self._fullchain_notice(
+                        run, f"[全链] {stem}：无可自动修复条目，跳过")
                     run["files_done"] = int(run["files_done"]) + 1
                     self._fullchain_write_last_run(run)
                     continue
@@ -6171,7 +6282,8 @@ class TranslateAPI:
                 run["entries_failed"] = int(run["entries_failed"]) + file_failed
                 run["entries_pending"] = planned - int(run["entries_fixed"]) \
                     - int(run["entries_failed"])
-                self._automation_notice(
+                self._fullchain_notice(
+                    run,
                     f"[全链] {stem}：修复完成 {file_fixed} 条，"
                     f"失败 {file_failed} 条")
                 run["files_done"] = int(run["files_done"]) + 1
@@ -6192,11 +6304,12 @@ class TranslateAPI:
                         self._ai_analyze_running
                         or self._ai_analyze_proc is not None)
                 if manual_analyze_busy:
-                    self._automation_notice(
+                    self._fullchain_notice(
+                        run,
                         "[全链] 复验跳过：AI 分析正被手动任务占用（不排队不"
                         "重试），可待其完成后手动发起全片分析")
                 else:
-                    self._automation_notice("[全链] 全片复验（恰 1 次）…")
+                    self._fullchain_notice(run, "[全链] 全片复验（恰 1 次）…")
                     try:
                         vr = self.refine_ai_analyze(
                             verify_target, model, provider,
@@ -6205,15 +6318,17 @@ class TranslateAPI:
                         _log_exc("_run_fullchain_automation.verify")
                         vr = {"success": False}
                     if vr.get("success"):
-                        self._automation_notice(
+                        self._fullchain_notice(
+                            run,
                             "[全链] 复验完成，建议件已更新（仅供人工裁决）")
                     else:
-                        self._automation_notice(
+                        self._fullchain_notice(
+                            run,
                             "[全链] 复验失败（如实计入，不重试）："
                             f"{str(vr.get('error') or '')[:120]}")
             else:
-                self._automation_notice(
-                    "[全链] 复验跳过：质量报告 txt 缺失")
+                self._fullchain_notice(
+                    run, "[全链] 复验跳过：质量报告 txt 缺失")
             # h) 链尾压制（C7 时序门：压制排布在复验之后；全链开启时旧
             # 钩子 encode 分支已短路，此处为唯一压制入口）。批1 b 段互斥对
             # ⑥反向：手动压制在飞（encode 队列忙=互斥槽已占）→ 跳过自动
@@ -6226,15 +6341,16 @@ class TranslateAPI:
             if self._encode_automation_enabled():
                 from subtransjav.webview_gui.encode_queue import encode_active
                 manual_encode_busy = encode_active()
-                self._automation_notice(done_note)
+                self._fullchain_notice(run, done_note)
                 if manual_encode_busy:
-                    self._automation_notice(
+                    self._fullchain_notice(
+                        run,
                         "[全链] 全链完成，压制被手动任务占用，请手动压制")
                 else:
                     self._run_encode_automation(summary, from_fullchain=True)
             else:
-                self._automation_notice(
-                    done_note + "；未开启自动压制")
+                self._fullchain_notice(
+                    run, done_note + "；未开启自动压制")
             run["phase"] = "done"
         except Exception:
             _log_exc("_run_fullchain_automation")
