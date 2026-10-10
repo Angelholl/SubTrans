@@ -3609,4 +3609,11 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **验证链**：①ruff（subtransjav+tests+tools）clean ②mypy 0/0 ③定向 489 passed ④全量 2355+4 ⑤冒烟（CLI+api 导入+c22 harness --selftest rc=0）⑥Mimosa deep 38=基线零新增（seal 见提交 verify 行）。
 - **已知限制（如实登记）**：**C22 真机校准未做**（等 owner 样本：≥60 段非言语观察、真阳性混合、独立标注+≥20% 复标一致率≥90%——harness 与三步流程就绪，达标前自动补行缺省关=漏听条目按拍板全部放弃，仅计放弃数）；批量转写为同步阻塞调用（链 daemon 线程内，GUI 不卡但链内无进度条——批2 状态行呈现链级计数）；observation 精确语音窗口需逐文件重跑 RMS 检测（ffmpeg 抽 wav 一次性，无 LLM 成本）。
 - **3.0.0 剩余**：C22 校准实测（owner 样本到位后 harness 三步）→ owner 真机走查 → release/3.0.0 发版轮。
+
+### 十四、测试包真机反馈修复轮（2026-10-10，测试包 3.0.0.dev0-test 首轮反馈）
+
+- **反馈 1「2.8.0.2 修复内容没整合」甄别结论**：内容级 diff 实证（main vs release/2.8.0.2）——release 分支 4 提交为 cherry-pick（patch 内容与 main 4b28f3d/0c342e5/1612060 一致），**main 完整包含 2.8.0.2 全部修复且领先**（release 仍是 40 截断旧版+4 参 bug 旧版+双域镜像旧版）；测试包构建自 main@8160a41 工作树（干净）。观感来源待 owner 指认具体行为；已证事实=测试包安装建**全新数据根**（%LOCALAPPDATA%\SubTrans\config 空，两代数据根均无 refine_stage_settings.json——用户阶段A 模型一直是下拉临时选择从未落盘），2.8.0.2 时代用户配置/TM 本就不随安装包迁移（数据根设计内，非修复缺失）。
+- **反馈 2「勾选自动化报未启动全链（服务商原因）」根因+修复**：根因=全链 provider 门（`_resolve_ai_model_config`→`_stage_a_*` 三兄弟）只读落盘 settings，而翻译主流程走前端现值直传——**两侧数据源不一致**：设置从未落盘的机器上翻译照常跑、链必误判。修复=会话快照回落：①`_capture_session_stage_a(options)` 于 start_translation 记录本次翻译实值（s1_provider/s1_model/{provider}_endpoint，provider 归一小写）；②`_stage_a_provider_name/_model/_endpoint` 快照优先回落落盘（消费方=链门/批量修复解析/分析跟随/预热全量同源）；③`refine_save_stage_settings` 保存 stages 时清快照（落盘显式表态优先，防旧快照遮蔽）；④链门拒绝 notice 带 reason+last_run `skip_reason` 键（前端可透出真因）。类级注解 `_session_stage_a: dict[str, str]`（mypy var-annotated/no-redef 拉锯后归位：文件序首见点持注解）。
+- **测试**：+3（快照回落解析/保存清快照/捕获提取大小写归一）；全量 **2358+4**（批3 基线 2355+4 只增 ✓）。
+- **遗留**：反馈 1 若 owner 指认具体行为缺失再立案；前端 fcStatusSkipped 文案可透出 skip_reason（本轮 notice/last_run 已带，UI 呈现随批2 面板迭代）。
 - **推送后 CI 红两笔（均已闭）**：①6539493 全腿 Lint 红——根因=两处 gate_on 测试内联 `import ... as _cfg` 触发 I001（CI ruff 0.17.0 比本地 .venv 旧版严），ruff --fix 收敛+本地 ruff 升 0.17.0 对齐 CI 口径（6122109）；②6122109 windows-3.10 单腿 Test 红=已知 flake `test_effective_dir_blacklist_falls_back`（横切观察项在册第 3 例复发，与本批零交集），REST rerun-failed-jobs 201 重跑自愈 success。Mimosa 提交前扫描 enobufs 未完成→补扫 deep 38=基线零新增 seal sha256:a2db2bd8d183d7af9de053ed0c6b799c4abefcd6f7944f376895505c8a20578e。
