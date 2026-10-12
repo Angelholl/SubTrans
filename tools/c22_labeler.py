@@ -674,7 +674,10 @@ class _Handler(BaseHTTPRequestHandler):
                 _send_json(self, {"error": "首轮尚无已决条目，无法进入复标"}, 400)
                 return
             count = _ceil_20_percent(len(decided))
-            queue = [str(r.get("id")) for r in random.sample(decided, count)]
+            # SystemRandom：Mimosa insecure-randomness 钉（D2026-1012-03 验收轮）；
+            # 抽样虽非安全用途，加密级随机源零成本消除扫描噪声
+            queue = [str(r.get("id"))
+                     for r in random.SystemRandom().sample(decided, count)]
             for r in state.get("records") or []:
                 r["relabel"] = None  # 重开复标即清旧复标答案（不混算一致率）
             state["relabel_queue"] = queue
