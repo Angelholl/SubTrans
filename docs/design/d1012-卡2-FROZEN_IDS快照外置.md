@@ -42,3 +42,28 @@ cd /d D:\SubTransJAV
 - 提取正则与既有 `_current_ids()`/`_current_i18n_keys()` 逐字符一致；
 - 不改任何其他钉（钉①-④、钉⑤a/⑤b 语义层）；
 - 执行记录追加本卡末尾（改动/自测/遗留）。
+
+## 执行记录（2026-10-12，OpenCode 执行，commit 56c1520）
+
+**改动文件（恰三件，未越卡）**
+
+1. `tests/test_ui_phase3_redlines.py`：模块 docstring 内 FROZEN_IDS 解冻史块（原 :8-61）全量迁出、指向 JSON；`FROZEN_IDS`/`FROZEN_I18N_KEYS` 由多行内联字符串改为 `json.loads(tests/ui_contract_snapshot.json)` 构造 frozenset（提取正则 `_current_ids()`/`_current_i18n_keys()` 逐字符不动）；钉⑤a/⑤b 断言语义与 docstring 一字不动，仅错误消息追加指引「合法变更须跑 tools/ui_contract_snapshot.py --update 重生成快照 tests/ui_contract_snapshot.json，并人工审 diff + 二级评议」；新增 `import json`。
+2. `tools/ui_contract_snapshot.py`（新增，stdlib-only）：与测试逐字符同正则（模块常量 `ID_PATTERN`/`I18N_PATTERN`，与测试侧互注）提取两集合；与现有快照 diff 逐条打印 `+/-`；**仅 `--update` 写盘**（数组排序序列化，`_meta` 由人工维护不代写）；无漂移打印 `no drift`（exit 0），有漂移未带 `--update` 打清单 exit 1，快照缺失且未带 `--update` 报错 exit 2。
+3. `tests/ui_contract_snapshot.json`（生成物）：`ids` 223 / `i18n_keys` 187 排序序列化（生成前经引导脚本「当前内联集合 == index.html 提取结果」双源互证相等后落盘，集合零增减）；`_meta.frozen_at=2026-10-12`；`_meta.history` 16 条 = 原文件头解冻史 14 笔全量迁入（初始 190/192 → 2.7.3 217，逐笔含决策号）+ 补记仓库他处有据而原 docstring 漏记的 2 笔（2.7.4 件C 217→218，D2026-1007-02，配记 index.html:676-677；2.8.0 批1 218→223，D2026-1007-03，配记 index.html:1142 / test_gui_js_static.py 计数钉 223）+ 本卡外置记档 1 笔。
+
+（一次性引导/红验证脚本置于系统 Temp 目录，未入仓库；index.html/app.js/style.css 零改动。）
+
+**自测结果**
+
+- 先红：向 index.html 临时注入 `<div id="zzzCard2FakeId">`（卡片允许的红构造；验毕 `git checkout` 还原并核字节已变回）→ `test_r3_id_fullset_frozen` 必红，消息含漂移清单「新增=['zzzCard2FakeId'] 删除=[]」；再生工具同步打印 `ids 漂移：+ zzzCard2FakeId` 且 exit 1、未写盘。还原后复绿。
+- 定向：`pytest tests/test_ui_phase3_redlines.py tests/test_brand_allowlist.py tests/test_gui_js_static.py -q` → 152 passed + 1 failed（唯一红=遗留问题①，非本卡所致）。
+- 全量：`pytest -q` → **1 failed, 2396 passed, 4 skipped**；与本卡开工前同命令实测基线（1 failed, 2396 passed, 4 skipped）逐数一致，基线不降。
+- 工具：无参运行输出 `no drift`（exit 0）。
+- ruff：`ruff check subtransjav tests tools` → All checks passed。
+- 品牌钉：本卡三产出物 grep 旧品牌词零命中；提交入库（tracked）后品牌钉命中集合仍恰为既有 4 份卡文档，未新增。
+
+**遗留问题**
+
+1. 【卡外既有红，待主审裁决】`tests/test_brand_allowlist.py` 在 HEAD（fd87e1d）即红：4 份已 tracked 任务卡文档各含 1 处旧品牌词（均为其验收命令的 `cd /d <仓库根路径>` 行）未入 allowlist——`docs/design/d1012-卡2-…`（本卡）/`卡3-switchTab六钩子收编`/`卡4-active指示token归一`/`卡5-撞号消歧`；卡1 已按「验收命令含项目根路径」先例入册。修复需改 `tests/test_brand_allowlist.py`（本卡纪律①点名清单之外，故未动）；本卡未恶化（命中集合改动前后完全一致）。建议：按卡1 先例一次性补 4 条 allowlist 条目+理由，另卡授权执行。附注：本卡绿判据「品牌钉全绿 / 全量基线 2397+4」隐含该红已处置，与仓库事实（HEAD 上即红，实为 2396+4+1）冲突，口径以主审裁决为准。
+2. `pyproject.toml` per-file-ignores 仍留 `tests/test_ui_phase3_redlines.py = ["SIM905"]`（原为内联字符串 `.split()` 豁免，本卡后已无该形态）；纪律①禁改该文件故未清理——无害冗余豁免，建议随下一次触碰 pyproject 的批次顺手移除。
+3. 契约提取正则现为两处字面量（测试侧 `_current_ids()`/`_current_i18n_keys()` 与工具侧 `ID_PATTERN`/`I18N_PATTERN`），按卡片「逐字符一致」各持一份并互注；一致性靠人工 + 本工具 no drift 核验，未另立机器钉（本卡不新增钉）。
