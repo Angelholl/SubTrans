@@ -48,6 +48,10 @@ ALLOWLIST = frozenset({
     "docs/design/redesign-direction-v2.html",  # 3.1 阶段0a 方向稿（D2026-1012-01；标题/设计系统速览引用产品全称）
     "docs/design/d1012-阶段0a-静态设计审计报告.md",  # 3.1 阶段0a 交付物（D2026-1012-01；证据引用含产品全称）
     "docs/design/d1012-卡1-flake竞速修复.md",  # flake 修复任务卡（D2026-1012-01 A4；验收命令含项目根路径）
+    "docs/design/d1012-卡2-FROZEN_IDS快照外置.md",  # 3.1 地基批卡2（D2026-1012-01；验收命令含项目根路径）
+    "docs/design/d1012-卡3-switchTab六钩子收编.md",  # 3.1 地基批卡3（D2026-1012-01；验收命令含项目根路径）
+    "docs/design/d1012-卡4-active指示token归一.md",  # 3.1 地基批卡4（D2026-1012-01；验收命令含项目根路径）
+    "docs/design/d1012-卡5-撞号消歧.md",  # 3.1 地基批卡5（D2026-1012-01 A5；验收命令含项目根路径）
     "docs/design/ui-phase2-真机走查清单.md",  # 历史走查记录
     "docs/真机走查清单-262.md",             # 历史走查记录（旧名时期产出）
     "docs/真机走查清单-263.md",             # 历史走查记录（旧名时期产出）
