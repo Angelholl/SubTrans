@@ -4851,8 +4851,10 @@ class TranslateAPI:
     def refine_review_load_detections(self, guide_path: str) -> dict[str, Any]:
         """疑点段加载（批 3 D2026-1002-11）：复用 _load_validated_guide
         白名单读法 → 过滤 items 带 timing（无时间戳=非疑点段）→
-        8 字段透传 {index,timing,category,message,current_text,
-        source_excerpt,status,severity} + media_path（空串→None）。"""
+        9 字段透传 {index,item_id,timing,category,message,current_text,
+        source_excerpt,status,severity} + media_path（空串→None）。
+        item_id 为卡5 撞号消歧新增（D2026-1012-01 A5，additive 透传——
+        旧导读无该键=None，按 index 定位口径不变）。"""
         try:
             p, stem, guide, err = self._load_validated_guide(guide_path)
             if err:
@@ -4868,6 +4870,7 @@ class TranslateAPI:
                     continue
                 detections.append({
                     "index": it.get("index"),
+                    "item_id": it.get("item_id"),
                     "timing": timing,
                     "category": it.get("category"),
                     "message": it.get("message"),

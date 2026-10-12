@@ -272,7 +272,11 @@ def _select_items(items: list, wanted: set) -> list:
 
 def _print_plan(selected: list, source_map: dict, guide_path: Path,
                 final_path: Path, apply_mode: bool) -> None:
-    """dry-run 计划打印（零写入）：index/类别/timing/现译前 50 字/源文可得性。"""
+    """dry-run 计划打印（零写入）：身份码/类别/timing/现译前 50 字/源文可得性。
+
+    卡5（D2026-1012-01 A5）撞号消歧：条目号优先用 item_id（=类別码-index，
+    如 #UNTR-2）；旧导读无该键时退化为裸 index（既有打印形态不变）。
+    """
     mode = "apply（落盘改写）" if apply_mode else "dry-run（零写入，加 --apply 生效）"
     print(f"📋 [行动层] 重翻计划: 清单={guide_path.name} "
           f"终稿={final_path.name} | 模式: {mode} | 选中 {len(selected)} 条")
@@ -281,7 +285,8 @@ def _print_plan(selected: list, source_map: dict, guide_path: Path,
         src_avail = ("完整源文（--action-source 已对齐）"
                      if timing and timing in source_map else "仅导读摘录")
         preview = (it.get("current_text") or "")[:50]
-        print(f"   #{it.get('index')} [{it.get('category') or ''}] {timing}"
+        head = it.get("item_id") or it.get("index")
+        print(f"   #{head} [{it.get('category') or ''}] {timing}"
               f" | 现译: {preview} | 源文: {src_avail}")
 
 
@@ -418,6 +423,10 @@ def run_action_retranslate(cfg, args) -> int:
                 "old_text": None, "new_text": None,
                 "model_used": model_used, "outcome": "failed",
                 "reason": "", "ts": run_ts, "source_partial": True}
+        # 卡5 撞号消歧：item_id 有则透传（additive）——旧导读/无该键的
+        # 清单台账键集不变，10 键闭集契约对旧件逐字节等价。
+        if it.get("item_id"):
+            base["item_id"] = it["item_id"]
 
         if not timing:
             base["reason"] = "timing 为空，无法定位终稿块"
