@@ -25,6 +25,10 @@ _BINARY_EXTS = {
 # D2026-1004-04 批1 后重算：spec 改名/dist 目录/产物 exe 名/安装目录/数据根
 # 默认/AUMID/Documents 输出均已切 SubTrans，品牌串清空条目已删；剩余为
 # 历史文档、注释级残留与旧品牌清理锚。
+# D2026-1012-03：docs/design/** 整体豁免出判定面（_EXEMPT_PREFIXES，guard
+# 断言锁死）——任务卡验收命令需引用真实仓库根路径、批清单/原型引旧品牌串
+# 属引用非漂移；白名单只保留产品面与 docs 根级/历史档案（原 20 条
+# docs/design 条目随之移除）。
 ALLOWLIST = frozenset({
     # ---- CI/打包链（批1 后残余：历史注释 + 旧开始菜单组清理锚）----
     ".github/workflows/release.yml",       # 行1历史注释（发布定案号，不改史）；spec 名/dist 目录/产物 exe 名已随批1 改 SubTrans
@@ -38,28 +42,7 @@ ALLOWLIST = frozenset({
     "docs/decision-log.md",                # 决策历史记录，永不改写
     "docs/roadmap.md",                     # 历史规划文档
     "docs/B2-门②语料基线-20260926.md",     # 历史走查记录（树外归档绝对路径）
-    "docs/design/UI-REDESIGN-HANDOFF.md",  # 历史设计交接文档
-    "docs/design/ZCODE-MIGRATION-NOTES.md",  # 历史迁移笔记
-    "docs/design/d1d4-批清单.md",          # 历史设计批清单
-    "docs/design/d270-批1-批清单.md",      # 本批批清单（同提交入库，先例 d1d4-批清单；决策引文/禁区表引用旧品牌串，历史文档不改）
     "AGENTS.md",                            # 项目规则（标题/正文引用产品全称；仓库级权威文档）
-    "docs/design/d265-批1-UI复审原型.html",  # 历史设计原型快照
-    "docs/design/redesign-prototype.html",  # 历史设计原型快照
-    "docs/design/redesign-direction-v2.html",  # 3.1 阶段0a 方向稿（D2026-1012-01；标题/设计系统速览引用产品全称）
-    "docs/design/d1012-阶段0a-静态设计审计报告.md",  # 3.1 阶段0a 交付物（D2026-1012-01；证据引用含产品全称）
-    "docs/design/d1012-卡1-flake竞速修复.md",  # flake 修复任务卡（D2026-1012-01 A4；验收命令含项目根路径）
-    "docs/design/d1012-卡2-FROZEN_IDS快照外置.md",  # 3.1 地基批卡2（D2026-1012-01；验收命令含项目根路径）
-    "docs/design/d1012-卡3-switchTab六钩子收编.md",  # 3.1 地基批卡3（D2026-1012-01；验收命令含项目根路径）
-    "docs/design/d1012-卡4-active指示token归一.md",  # 3.1 地基批卡4（D2026-1012-01；验收命令含项目根路径）
-    "docs/design/d1012-卡5-撞号消歧.md",  # 3.1 地基批卡5（D2026-1012-01 A5；验收命令含项目根路径）
-    "docs/design/d1012-卡6-GUI黑盒夹具.md",  # 阶段2 首批卡6（黑盒夹具；验收命令含项目根路径）
-    "docs/design/d1012-卡7-B04进度定量反馈.md",  # 阶段2 首批卡7（B-04；验收命令含项目根路径）
-    "docs/design/d1012-卡8-B06卡3标题缩短.md",  # 阶段2 首批卡8（B-06；验收命令含项目根路径）
-    "docs/design/d1012-卡9-B07toggle滑块.md",  # 阶段2 首批卡9（B-07；验收命令含项目根路径）
-    "docs/design/d1012-卡10-B10七页页头.md",  # 阶段2 首批卡10（B-10；验收命令含项目根路径）
-    "docs/design/d1012-C22-卡1-回放labels数组.md",  # C22 校准批卡1（D2026-1009-02 执行；验收命令含项目根路径）
-    # 注：d1012-C22-卡2-听点标注器.md 入库时须与本白名单同提交增记（双向精度钉，未 tracked 不预加）
-    "docs/design/ui-phase2-真机走查清单.md",  # 历史走查记录
     "docs/真机走查清单-262.md",             # 历史走查记录（旧名时期产出）
     "docs/真机走查清单-263.md",             # 历史走查记录（旧名时期产出）
     "docs/模型测试两轮交接.md",             # 历史交接文档
@@ -93,6 +76,11 @@ ALLOWLIST = frozenset({
 # 显式自排除（tracked 前后行为一致），不入白名单集合。
 _SELF = "tests/test_brand_allowlist.py"
 
+# 豁免前缀（D2026-1012-03）：docs/design/** 为内部工作文档，整体移出判定面；
+# 产品面（源码/前端资产/打包/发布资产/根级文档）仍 default-deny 全量钉死。
+# guard 断言锁死豁免面：扩大豁免必须改断言、在 diff 里可见。
+_EXEMPT_PREFIXES = ("docs/design/",)
+
 
 def _tracked_text_files() -> list[str]:
     """git ls-files 全量 tracked 文件；排除二进制（NUL 字节探测 + 解码失败跳过）。"""
@@ -125,10 +113,17 @@ def _tracked_text_files() -> list[str]:
 
 
 def test_brand_subtransjav_only_in_allowlist():
-    """含旧品牌词 SubTransJAV 的 tracked 文本文件集合 == 白名单（防品牌漂移钉）。"""
+    """含旧品牌词 SubTransJAV 的 tracked 文本文件集合 == 白名单（防品牌漂移钉）。
+
+    docs/design/** 豁免出判定面（D2026-1012-03），豁免面由断言锁死。"""
+    assert _EXEMPT_PREFIXES == ("docs/design/",), (
+        "豁免前缀只允许 docs/design/；扩大豁免须先评议并改本断言（diff 可见）")
+    assert not any(rel.startswith(_EXEMPT_PREFIXES) for rel in ALLOWLIST), (
+        "白名单不得含豁免前缀内条目（保持钉的精度，豁免即出清）")
     hits = {
         rel for rel in _tracked_text_files()
         if rel != _SELF
+        and not rel.startswith(_EXEMPT_PREFIXES)
         and b"SubTransJAV" in (REPO_ROOT / rel).read_bytes()
     }
     unexpected = sorted(hits - ALLOWLIST)
