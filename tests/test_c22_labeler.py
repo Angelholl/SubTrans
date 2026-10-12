@@ -789,3 +789,11 @@ def test_c3_pin6_re_round_sounds_and_sync_label(live):
     assert mod._record_label(rec) == "no"
     assert mod._record_label(rec, re_round=True) == "no"
     assert mod._agreement(state)["disputed"] == []   # 派生一致 → 无争议
+
+
+def test_owner_feedback_autoplay_on_next_item_pinned():
+    """owner 2026-10-13 反馈钉：作答跳条后自动播放下一条（含策略拒绝静默降级）。"""
+    src = _TOOL_PATH.read_text(encoding="utf-8")
+    assert "const pp = a0.play()" in src, "渲染后缺少自动播放调用"
+    assert "pp.catch" in src, "自动播放被浏览器策略拒绝时须静默降级（不抛未捕获异常）"
+    assert "自动跳下一条并自动播放" in src, "提示文案未更新自动播放语义"
