@@ -1279,7 +1279,14 @@ def test_review_js_syntax_node_check():
 
 def test_review_page_structure_pinned():
     """tab-review 骨架钉：预算内 9 id、双 data-kind、review.js 挂载、
-    页内零 data-i18n（静态键 cap 零消耗硬约束）。"""
+    页内 data-i18n 仅页头复用既有 tabReview 键（静态键 cap 零消耗硬约束）。
+
+    卡10 B-10（D2026-1012-01）显式契约变更：原「区间零 data-i18n」收紧为
+    「区间 data-i18n 恰 1 处且键 == 导航既有 tabReview」——B-10 裁定七页页头
+    h1 复用导航既有 tabXxx 键（同键双元素），本页键集合零增减、静态键 cap
+    零消耗语义不变（全集冻结另由钉⑤a/⑤b 双集合快照自证）；页内其余区域
+    仍零 data-i18n（review.js REVIEW_MSG 注入口径不变）。
+    """
     html = INDEX_HTML.read_text(encoding="utf-8")
     for i in ("tabBtnReview", "tab-review", "reviewDropzone", "videoReviewPlayer",
               "reviewTranscodeBtn", "reviewStatusBar", "reviewStatusDot",
@@ -1288,12 +1295,15 @@ def test_review_page_structure_pinned():
     assert 'data-kind="video"' in html and 'data-kind="srt"' in html, \
         "导入按钮必须带 data-kind 双值（事件委托分流契约）"
     assert '<script src="review.js"></script>' in html, "review.js 未挂载"
-    # tab-review 区间（至 </main>）零 data-i18n
+    # tab-review 区间（至 </main>）data-i18n 仅页头复用键 tabReview
     m = re.search(
         r'<div class="tab-page" id="tab-review".*?</main>', html, re.S)
     assert m, "未找到 tab-review 页面区间"
-    assert "data-i18n" not in m.group(0), \
-        "tab-review 页内出现 data-i18n（静态键 cap 零消耗硬约束被破坏）"
+    keys = re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"', m.group(0))
+    assert keys == ["tabReview"], (
+        "tab-review 页内 data-i18n 必须恰为页头 h1 复用的既有键 tabReview"
+        f"（实测 {keys}）——静态键 cap 零消耗硬约束被破坏或页头被删"
+        "（卡10 B-10 契约：除页头复用键外页内零 data-i18n）")
 
 
 def test_review_enqueue_jump_contract_pinned():
@@ -4290,3 +4300,161 @@ def test_b07_toggle_zero_new_literals_pinned():
             assert "var(" in m.group(1), (
                 f"{sel.strip()} 圆角硬编码 {m.group(1).strip()}——"
                 "请引 --radius-pill/--radius-round token（P8 钉2 同口径）")
+
+
+# ---------------------------------------------------------------------------
+# 卡10 B-10（D2026-1012-01，阶段 2 首批）：七页页头 + tabpanel 语义——
+# 其余 6 页（engine/asrdict/glossary/guide/advanced/review）顶部各加与
+# tab-translate :108-113 同构的 .page-head（h1 复用导航既有 tabXxx 键，与
+# 导航按钮同键双元素，零新增键零新增 id）；7 个 .tab-page 补
+# role="tabpanel" + aria-label 静态文本（h1 无 id，不走 aria-labelledby，
+# 避免为 labelledby 新增 id）；7 个导航 .side-tab-btn 补 aria-controls 指向
+# 对应 .tab-page 既有 id（FROZEN_IDS 只引用不新增）；tab-translate 既有页头
+# （app_header_title + main_subtitle）原样不动。
+# ---------------------------------------------------------------------------
+
+# 新增页头的 6 页：tab-page id ->（页头 h1 data-i18n 键, 静态回退现值）
+_B10_NEW_HEADS = {
+    "tab-engine": ("tabEngine", "API 与模型选择"),
+    "tab-asrdict": ("tabAsrDict", "ASR 与词典"),
+    "tab-glossary": ("tabGlossary", "词库与模板"),
+    "tab-guide": ("tabGuide", "质量与建议"),
+    "tab-advanced": ("tabAdvanced", "高级参数"),
+    "tab-review": ("tabReview", "校对"),
+}
+
+# 七页 aria-label 静态文本（取对应 tabXxx 现值；含 tab-translate 共 7 页）
+_B10_PANEL_LABELS = {
+    "tab-translate": "字幕翻译",
+    "tab-review": "校对",
+    "tab-guide": "质量与建议",
+    "tab-engine": "API 与模型选择",
+    "tab-asrdict": "ASR 与词典",
+    "tab-glossary": "词库与模板",
+    "tab-advanced": "高级参数",
+}
+
+
+def _b10_tab_page_tag(html: str, tab_id: str) -> str:
+    """提取指定 .tab-page 容器开标签（跨行属性容忍）。"""
+    m = re.search(
+        r'<div class="tab-page(?: active)?" id="' + re.escape(tab_id)
+        + r'"[^>]*>', html, re.S)
+    assert m, f"index.html 未找到 .tab-page #{tab_id}"
+    return m.group(0)
+
+
+def _b10_tab_page_body(html: str, tab_id: str) -> str:
+    """提取指定 .tab-page 区间体（开标签之后至下一个 .tab-page 或 </main>）。"""
+    i = html.index(f'id="{tab_id}"')
+    start = html.index(">", i) + 1
+    nxt = [p for p in (html.find('<div class="tab-page', start),
+                       html.find("</main>", start)) if p != -1]
+    assert nxt, f"#{tab_id} 区间无终点锚"
+    return html[start:min(nxt)]
+
+
+def test_b10_six_page_heads_pinned():
+    """①其余 6 页顶部各一页头，结构与 tab-translate :108-113 同构：
+    .page-head > .page-head-text > h1.page-title（data-i18n=tabXxx + 静态回退现值）。
+
+    人工推演（先红场景）：临时删除任一新增页头 → 本钉红（页头缺失或页头
+    不再是页内首个非注释元素）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for tab_id, (key, text) in _B10_NEW_HEADS.items():
+        head = re.match(
+            r'\s*(?:<!--.*?-->\s*)*<div class="page-head">\s*'
+            r'<div class="page-head-text">\s*'
+            r'<h1 class="page-title" data-i18n="([^"]+)">([^<]*)</h1>\s*'
+            r'</div>\s*</div>',
+            _b10_tab_page_body(html, tab_id), re.S)
+        assert head, f"#{tab_id} 顶部缺少与 tab-translate 同构的 .page-head 页头"
+        assert (head.group(1), head.group(2)) == (key, text), (
+            f"#{tab_id} 页头 h1 键/静态回退文本漂移: "
+            f"{head.group(1)}/{head.group(2)}（应为 {key}/{text}）")
+
+
+def test_b10_translate_page_head_untouched_pinned():
+    """②tab-translate 既有页头（app_header_title + main_subtitle）原样保留不动。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    frag = _b10_tab_page_body(html, "tab-translate")
+    m = re.search(r'<div class="page-head">.*?</div>\s*</div>', frag, re.S)
+    assert m, "tab-translate 既有页头缺失"
+    assert 'data-i18n="app_header_title"' in m.group(0), \
+        "tab-translate 页头缺 app_header_title 键"
+    assert 'data-i18n="main_subtitle"' in m.group(0), \
+        "tab-translate 页头缺 main_subtitle 副标题"
+    assert 'data-i18n="tabTranslate"' not in m.group(0), \
+        "tab-translate 页头不得改挂 tabTranslate 键（既有页头原样保留）"
+
+
+def test_b10_tabpanels_role_and_label_pinned():
+    """③7 个 .tab-page 均带 role="tabpanel" + aria-label（静态文本=对应
+    tabXxx 现值；h1 无 id 故不走 aria-labelledby，避免为 labelledby 新增 id）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for tab_id, label in _B10_PANEL_LABELS.items():
+        tag = _b10_tab_page_tag(html, tab_id)
+        assert 'role="tabpanel"' in tag, f"#{tab_id} 容器缺 role=tabpanel"
+        assert f'aria-label="{label}"' in tag, \
+            f"#{tab_id} aria-label 缺失或非 tabXxx 现值: {label}"
+        assert "aria-labelledby" not in tag, \
+            f"#{tab_id} 走了 aria-labelledby（须 aria-label 静态文本，禁新增 id）"
+    panel_count = html.count('role="tabpanel"')
+    assert panel_count == 7, f"role=tabpanel 应恰 7 处（实测 {panel_count}）"
+
+
+def test_b10_nav_aria_controls_pinned():
+    """④7 个导航 .side-tab-btn 的 aria-controls 与 .tab-page id 一一对应
+    （同一按钮 data-tab == aria-controls == 目标页既有 id；集合双向相等）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    tags = re.findall(r'<button[^>]*data-tab="([^"]+)"[^>]*>', html, re.S)
+    assert len(tags) == 7, f"带 data-tab 的按钮应恰 7 个（实测 {len(tags)}）"
+    controls = []
+    for m in re.finditer(
+            r'<button[^>]*class="side-tab-btn[^"]*"[^>]*data-tab="([^"]+)"[^>]*>',
+            html, re.S):
+        tag, tab_id = m.group(0), m.group(1)
+        cm = re.search(r'aria-controls="([^"]+)"', tag)
+        assert cm, f"导航按钮 data-tab={tab_id} 缺 aria-controls"
+        assert cm.group(1) == tab_id, \
+            f"aria-controls 与 data-tab 不一致: {cm.group(1)} != {tab_id}"
+        controls.append(cm.group(1))
+    assert len(controls) == 7, \
+        f".side-tab-btn 应恰 7 个且均带 aria-controls（实测 {len(controls)}）"
+    assert set(controls) == set(_B10_PANEL_LABELS), \
+        f"aria-controls 与 .tab-page id 集合不一一对应: {sorted(set(controls) ^ set(_B10_PANEL_LABELS))}"
+
+
+def test_b10_zero_new_id_zero_new_key_pinned():
+    """⑤零新增 id / 零新增键（钉⑤双集合自证的本卡局部前置）：页头块内零 id；
+    7 个页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=223 /
+    FROZEN_I18N_KEYS=187 全等冻结另由钉⑤a/⑤b 快照自证）；aria-controls 只
+    引用既有 .tab-page id，容器不新增 data-i18n。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    nav = re.search(r'<nav class="rail-nav".*?</nav>', html, re.S)
+    assert nav, "未找到 rail-nav 导航块"
+    nav_html = nav.group(0)
+    msg_keys = _js_msg_keys()
+    head_count = html.count('<div class="page-head">')
+    assert head_count == 7, f"页头应恰 7 处（7 页各一，实测 {head_count}）"
+    for tab_id, (key, _text) in _B10_NEW_HEADS.items():
+        frag = _b10_tab_page_body(html, tab_id)
+        block = re.search(
+            r'<div class="page-head">.*?</div>\s*</div>', frag, re.S)
+        assert block and f'data-i18n="{key}"' in block.group(0), \
+            f"#{tab_id} 页头块解析失败"
+        assert 'id="' not in block.group(0), \
+            f"#{tab_id} 页头携带 id（FROZEN_IDS 钉⑤a 集合漂移）"
+        assert key in msg_keys, f"页头键 {key} 不在 app.js MSG 键表（新增键嫌疑）"
+        assert f'data-i18n="{key}"' in nav_html, \
+            f"页头键 {key} 非导航既有键（须与导航按钮同键双元素复用）"
+    for tab_id in _B10_PANEL_LABELS:
+        tag = _b10_tab_page_tag(html, tab_id)
+        id_count = len(re.findall(r'(?<![\w-])id="', tag))
+        assert id_count == 1, f"#{tab_id} 容器 id 数漂移（应恰 1，实测 {id_count}）"
+        assert 'data-i18n' not in tag, \
+            f"#{tab_id} 容器挂了 data-i18n（aria-label 静态文本形态，禁新键）"
+    for ctl in re.findall(r'aria-controls="([^"]+)"', html):
+        assert re.search(
+            r'<div class="tab-page[^>]*\bid="' + re.escape(ctl) + r'"', html), \
+            f"aria-controls 引用了不存在的既有 id: {ctl}"
