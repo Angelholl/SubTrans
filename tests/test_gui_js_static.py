@@ -4047,3 +4047,35 @@ def test_p8_no_new_component_color_literals():
         f"组件规则内出现冻结清单外的新色值字面量：{sorted(new)}——"
         "请引用语义 token（--text-*/--ok/--warn/--danger 等）或在 :root 定义新 token"
     )
+
+
+# ============================================================================
+# D2026-1012-01 地基批 卡4：组件 active 指示 token 归一（别名层静态钉）
+# 阶段 2 统一调激活态只动 :root 别名层一处；收编规则体内禁止回退直引品牌 token。
+# ============================================================================
+
+_ACTIVE_ALIAS_TOKENS = ("--active-bg", "--active-text", "--active-border", "--active-bar")
+# 三条收编规则；.feature-badge.active 是语义态（--ok-soft/--ok）不收编，故不在清单
+_ACTIVE_RULE_SELECTORS = (".side-tab-btn.active", ".review-page-btn.active",
+                          ".dict-kind-chip.active")
+_ACTIVE_BANNED_REFS = ("--primary-soft", "--primary-strong", "--primary-border")
+
+
+def test_active_indicator_tokens_alias_layer():
+    """卡4：:root 含四个 --active-* 别名定义；三条 active 规则体内不再直引品牌 token。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    root = re.search(r":root\s*\{([^}]*)\}", css)
+    assert root, "style.css 缺 :root token 定义块"
+    for token in _ACTIVE_ALIAS_TOKENS:
+        assert re.search(rf"{re.escape(token)}\s*:", root.group(1)), (
+            f":root 缺组件激活指示别名 token {token} 定义——"
+            "阶段 2 调激活态须只动 :root 别名层一处"
+        )
+    for sel in _ACTIVE_RULE_SELECTORS:
+        m = re.search(re.escape(sel) + r"\s*\{([^}]*)\}", css)
+        assert m, f"style.css 缺 {sel} 规则"
+        for banned in _ACTIVE_BANNED_REFS:
+            assert banned not in m.group(1), (
+                f"{sel} 规则体残留直引 {banned}：请改引 --active-* 别名"
+                "（.feature-badge.active 语义态不收编，保持 --ok-*）"
+            )
