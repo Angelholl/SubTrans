@@ -3583,16 +3583,37 @@ const ProgressManager = {
     init() {
         this.progressBar = document.getElementById('progressBar');
         this.progressFill = document.getElementById('progressFill');
+        this.progressMeta = document.querySelector('.progress-meta');
         this.statusLabel = document.getElementById('statusLabel');
         this.statusDot = document.getElementById('statusDot');
+        this.lastStage = null;
+        // 预创建两个 span 供 CSS flex 两端布局（左段阶段+批次，右段百分比）
+        if (this.progressMeta) {
+            this.progressMetaLeft = document.createElement('span');
+            this.progressMetaRight = document.createElement('span');
+            this.progressMeta.appendChild(this.progressMetaLeft);
+            this.progressMeta.appendChild(this.progressMetaRight);
+        }
     },
 
     setIndeterminate(active) {
         if (this.progressBar) this.progressBar.classList.toggle('indeterminate', active);
     },
 
-    setProgress(percent) {
+    setProgress(percent, stageName, batchNo, batchTotal) {
         if (this.progressFill) this.progressFill.style.width = `${percent}%`;
+        if (this.progressMeta) {
+            const pct = `${Math.round(percent)}%`;
+            let left = stageName || this.lastStage || '';
+            if (stageName) this.lastStage = stageName;
+            if (batchNo !== undefined && batchNo !== null && batchTotal) {
+                left = `${left} · 批次 ${batchNo} / ${batchTotal}`;
+            }
+            // idle 态（无阶段名且百分比为 0）整行留空
+            const isEmpty = !left && percent === 0;
+            this.progressMetaLeft.textContent = isEmpty ? '' : left;
+            this.progressMetaRight.textContent = isEmpty ? '' : pct;
+        }
     },
 
     setStatus(text) {
@@ -4337,7 +4358,8 @@ const TranslatorManager = {
 
                 if (status.progress !== undefined && status.progress > 0) {
                     ProgressManager.setIndeterminate(false);
-                    this.setProgress(status.progress);
+                    this.setProgress(status.progress, status.current_stage,
+                                     status.batch, status.batch_total);
                 }
 
                 if (status.status === 'completed') {
