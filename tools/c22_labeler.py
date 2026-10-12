@@ -567,7 +567,7 @@ function render() {
   }
   html += '<p class="hint">' +
           (isRe ? '复标轮盲标：不回显首轮选择，请凭听感独立点选组合（只按派生 label 计，无「稍后再听」）。'
-                : '单击任一组合即提交并自动跳下一条；判错了可回退改判。') + '</p>';
+                : '单击任一组合即提交，自动跳下一条并自动播放；判错了可回退改判。') + '</p>';
   el("main").innerHTML = html;
   el("btnPlay").onclick = function () {
     const a = el("au"); a.loop = true; a.play();
@@ -575,6 +575,11 @@ function render() {
   el("btnRestart").onclick = function () {
     const a = el("au"); a.currentTime = 0; a.play();
   };
+  // 作答跳条后自动播放下一条（owner 2026-10-13 试听反馈）；页面刚打开尚无
+  // 用户手势时浏览器自动播放策略会拒绝，静默降级为手动点播放
+  const a0 = el("au"); a0.loop = true;
+  const pp = a0.play();
+  if (pp && pp.catch) { pp.catch(function () {}); }
   if (el("btnPrev")) { el("btnPrev").onclick = goPrev; }
   wireCombos(el("answerBtns"), answer);
   if (el("btnSkip")) { el("btnSkip").onclick = function () { answer(null); }; }
