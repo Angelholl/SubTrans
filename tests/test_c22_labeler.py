@@ -14,6 +14,16 @@
 
 钉外补测：首页内嵌 HTML 全中文/零外链/按钮 ≥44px/顶部进度常显。
 全程离线：ffmpeg 走 subprocess 打桩，不起真实切片；server 只绑回环。
+
+卡3 声源组合勾选（d1012-C22-卡3，听感事实与派生真值分离）六钉：
+  c3钉1 派生规则：sounds.speech=true→label yes；仅 moan/prop/bg→no；
+  c3钉2 旧记录兼容：label 有值无 sounds（缺键/null 两态）→ 读取不崩、
+       UI 状态「旧口径…可重答」、重答新组合覆盖 label 并补 sounds；
+  c3钉3 组合表穷举与向量映射：C(4,0)~C(4,4) 每按钮→唯一 sounds 向量，
+       含台词组合派生 yes、其余 no（含静音），分组/文案/图例与卡面枚举一致；
+  c3钉4 复标一致率按派生值（两轮向量不同但派生相同=一致）；
+  c3钉5 merge 声源组合分布（含台词+道具/背景叠加单列小计）与 labels=派生值；
+  c3钉6 /api/answer 接收 sounds 且原子落盘（含一致性/键位/skip 校验与复标轮）。
 """
 
 from __future__ import annotations
@@ -96,11 +106,19 @@ def _write_state(pkg: Path, records: list[dict],
 
 
 def _record(pkg: Path, idx: int, guide: Path, media: Path, timing: str,
-            label=None, relabel=None, run: int = 1) -> dict:
+            label=None, relabel=None, run: int = 1, sounds=None,
+            relabel_sounds=None) -> dict:
+    """state 记录。sounds/relabel_sounds 缺省不写键（=卡2 旧口径记录形态）。"""
     rid = f"run{run}-{idx}"
-    return {"id": rid, "run": f"run{run}",
-            "wav": str(pkg / "clips" / f"{rid}.wav"), "media": str(media),
-            "guide": str(guide), "timing": timing, "label": label, "relabel": relabel}
+    rec = {"id": rid, "run": f"run{run}",
+           "wav": str(pkg / "clips" / f"{rid}.wav"), "media": str(media),
+           "guide": str(guide), "timing": timing, "label": label,
+           "relabel": relabel}
+    if sounds is not None:
+        rec["sounds"] = sounds
+    if relabel_sounds is not None:
+        rec["relabel_sounds"] = relabel_sounds
+    return rec
 
 
 def _spy_replace(monkeypatch) -> list:
@@ -501,3 +519,273 @@ def test_serve_clips_route_serves_wav(live, tmp_path):
     with urlopen(base + "/clips/run1-1.wav", timeout=10) as resp:
         assert resp.status == 200
         assert resp.read() == b"RIFF0000WAVE"
+
+
+# ==================== 卡3：声源组合勾选（C(4,0)~C(4,4) 穷举）六钉 ====================
+# 卡面标题写「17 态」，但其枚举 = 无声源1 + C(4,1)4 + C(4,2)6 + C(4,3)4 + C(4,4)1 = 16，
+# 且钉3 要求「每按钮→唯一 sounds 向量」（4 位向量空间恰 16 个，17 钮无法双射）——
+# 按 16 组合钮执行（作答区按钮 17 = 16 组合 + 「稍后再听」次按钮），矛盾登记于卡面执行记录。
+
+_SND = ("speech", "moan", "prop", "bg")
+
+
+def _sounds(**flags: bool) -> dict:
+    """4 布尔声源向量（未点名的声源取 False）：_sounds(speech=True, prop=True)。"""
+    return {k: bool(flags.get(k, False)) for k in _SND}
+
+
+# ------------------------------------------------------------- c3钉1 派生规则
+
+def test_c3_pin1_derive_rule_from_sounds():
+    """钉1 派生规则：sounds.speech=true→label yes；仅 moan/prop/bg→no。"""
+    assert mod._derive_label(_sounds(speech=True)) == "yes"
+    assert mod._derive_label(_sounds(speech=True, moan=True, prop=True, bg=True)) == "yes"
+    for only in ("moan", "prop", "bg"):
+        assert mod._derive_label(_sounds(**{only: True})) == "no"
+    assert mod._derive_label(_sounds()) == "no"      # 静音=无对话
+    assert mod._derive_label(None) is None           # 缺 sounds → 不派生
+    assert mod._derive_label("非对象") is None
+    # 记录级：有 sounds 以 sounds 为准（可覆盖矛盾的存量 label），无 sounds 退回存量
+    assert mod._record_label({"sounds": _sounds(speech=True), "label": "no"}) == "yes"
+    assert mod._record_label({"sounds": _sounds(prop=True), "label": "yes"}) == "no"
+    assert mod._record_label({"label": "yes"}) == "yes"
+    assert mod._record_label({"label": None}) is None
+    # 复标轮同口径：relabel_sounds → relabel
+    assert mod._record_label({"relabel_sounds": _sounds(moan=True),
+                              "relabel": "yes"}, re_round=True) == "no"
+    assert mod._record_label({"relabel": "no"}, re_round=True) == "no"
+    assert mod._record_label({}, re_round=True) is None
+
+
+# --------------------------------------------------- c3钉2 旧记录兼容（零迁移）
+
+def test_c3_pin2_legacy_record_compat_zero_migration(tmp_path):
+    """钉2 旧记录（有 label 无 sounds）→ 读取不崩、UI「旧口径」、重答覆盖。"""
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    no_key = _record(pkg, 1, guide, media, T_A, label="no")      # 卡2 旧态：整键缺失
+    null_key = _record(pkg, 2, guide, media, T_B, label="yes")   # 卡3 新态：显式 null
+    null_key["sounds"] = None
+    undecided = _record(pkg, 3, guide, media, T_C, label=None)
+    _write_state(pkg, [no_key, null_key, undecided])
+
+    # ① 零迁移读取：缺键 / 为 null 都不崩不丢，已决语义保持
+    state = mod._read_state(pkg)
+    assert state is not None and len(state["records"]) == 3
+    assert [mod._record_label(r) for r in state["records"]] == ["no", "yes", None]
+    # 两条已决旧记录不算待定；未作答那条仍是 pending
+    assert [r["id"] for r in mod._pending(state)] == ["run1-3"]
+
+    httpd = mod.create_server(pkg)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        status, raw = _get(base, "/api/state")
+        assert status == 200
+        api_records = json.loads(raw)["records"]
+        assert "sounds" not in api_records[0]          # 旧态整键缺失原样透出
+        assert api_records[1]["sounds"] is None         # null 不被吞
+        # ② UI 状态：「旧口径已标…（可重答）」文案在内嵌页面
+        status, html = _get(base, "/")
+        assert status == 200
+        assert "旧口径已标：有对话（可重答）" in html
+        assert "旧口径已标：无对话（可重答）" in html
+        # ③ 重答新组合 → 覆盖 label 并补 sounds（原子落盘）
+        status, body = _post(base, "/api/answer",
+                             {"id": "run1-1", "round": "first", "value": "no",
+                              "sounds": _sounds(prop=True, bg=True)})
+        assert status == 200 and body.get("ok") is True
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=10)
+
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    rec = state["records"][0]
+    assert rec["label"] == "no" and rec["sounds"] == _sounds(prop=True, bg=True)
+    assert not list(pkg.glob("*.tmp"))
+
+
+# -------------------------------------------- c3钉3 组合表穷举与向量一一映射
+
+def test_c3_pin3_combo_table_exhaustive_unique_mapping():
+    """钉3 C(4,0)~C(4,4) 每按钮→唯一 sounds 向量；含台词派生 yes、其余 no。"""
+    table = mod._combo_table()
+    # 1+4+6+4+1 = 16 态，与 4 位向量空间一一双射（卡面「17」笔误见本节头注）
+    assert len(table) == 16
+    vecs = [tuple(c["sounds"][k] for k in _SND) for c in table]
+    assert len(set(vecs)) == 16
+    assert set(vecs) == {tuple(bool(mask >> i & 1) for i in range(4)) for mask in range(16)}
+    # 分组序（按声源数）与卡面枚举文案逐条对齐
+    assert [c["n"] for c in table] == [0] + [1] * 4 + [2] * 6 + [3] * 4 + [4]
+    by_n = {n: [c["text"] for c in table if c["n"] == n] for n in range(5)}
+    assert by_n[0] == ["🔇 静音"]
+    assert by_n[1] == ["台词", "呻吟喘息", "道具声", "背景声"]
+    assert by_n[2] == ["台词+呻吟", "台词+道具", "台词+背景",
+                       "呻吟+道具", "呻吟+背景", "道具+背景"]
+    assert by_n[3] == ["台词+呻吟+道具", "台词+呻吟+背景",
+                       "台词+道具+背景", "呻吟+道具+背景"]
+    assert by_n[4] == ["台词+呻吟+道具+背景"]
+    # 含台词→yes、其余 no（含静音）；表内 derived 与派生函数、向量命名同源
+    for c in table:
+        expect = "yes" if c["sounds"]["speech"] else "no"
+        assert c["derived"] == expect
+        assert mod._derive_label(c["sounds"]) == expect
+        assert mod._combo_name(c["sounds"]) == c["text"]
+    # 内嵌页面吃同一张表（前端/服务端同源）+ 分组图例 + 页首名词解释 + 次按钮
+    page = mod._PAGE
+    assert page.count('"text":') == 16
+    for c in table:
+        assert c["text"] in page
+    assert "含台词=有对话" in page
+    assert all(f"C(4,{n})" in page for n in range(1, 5))
+    for term in ("台词（含小声/气声台词）", "呻吟喘息（非言语人声）",
+                 "道具声（衣物门脚步等）", "背景声（音乐·环境音）"):
+        assert term in page
+    assert "稍后再听" in page
+
+
+# --------------------------------------------------- c3钉4 复标一致率按派生值
+
+def test_c3_pin4_agreement_counts_derived_label(tmp_path):
+    """钉4 两轮 sounds 不同但派生相同=一致；派生不同=争议（不依赖 label 缓存列）。"""
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    records = [
+        # 向量不同（speech+prop vs speech+bg）但都含台词 → 派生同=一致；
+        # label/relabel 缓存列为 null（只落向量）——一致率必须按派生值，不读缓存列
+        _record(pkg, 1, guide, media, T_A, label=None,
+                sounds=_sounds(speech=True, prop=True),
+                relabel=None, relabel_sounds=_sounds(speech=True, bg=True)),
+        # 首轮含台词、复标只有道具声 → 派生不同=争议
+        _record(pkg, 2, guide, media, T_B, label="yes", sounds=_sounds(speech=True),
+                relabel="no", relabel_sounds=_sounds(prop=True)),
+        # 旧口径首轮（无 sounds，存量 label）+ 复标向量含台词 → 派生同=一致
+        _record(pkg, 3, guide, media, T_C, label="yes",
+                relabel="yes", relabel_sounds=_sounds(speech=True, moan=True)),
+    ]
+    _write_state(pkg, records, [r["id"] for r in records])
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+
+    result = mod._agreement(state)
+    assert result["total"] == 3 and result["agree"] == 2
+    assert result["pct"] == 66.67
+    assert result["disputed"] == ["run1-2"]
+
+
+# ------------------------------------------------ c3钉5 merge 分布统计与派生值
+
+def test_c3_pin5_merge_distribution_and_derived_labels(tmp_path, capsys):
+    """钉5 merge 输出声源组合分布（叠加小计单列），labels 数组=派生值。"""
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    _write_state(pkg, [
+        _record(pkg, 1, guide, media, T_A, label="yes", sounds=_sounds(speech=True)),
+        _record(pkg, 2, guide, media, T_B, label="yes",
+                sounds=_sounds(speech=True, prop=True)),
+        _record(pkg, 3, guide, media, T_C, label="yes", sounds=_sounds(speech=True, bg=True)),
+        _record(pkg, 4, guide, media, T_A, label="yes",
+                sounds=_sounds(speech=True, prop=True, bg=True)),
+        # 存量 label 与 sounds 矛盾 → 以 sounds 派生为准（no）
+        _record(pkg, 5, guide, media, T_B, label="yes", sounds=_sounds(prop=True)),
+        _record(pkg, 6, guide, media, T_C, label="no"),   # 旧口径未记声源
+    ])
+
+    rc = mod.main(["--merge", "--package", str(pkg)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert _has_chinese(out)
+
+    manifest = json.loads(
+        (pkg / "c22_manifest_labeled.json").read_text(encoding="utf-8"))
+    # labels 数组 = 派生值（bool，harness 零改动）
+    assert manifest[0]["labels"] == [True, True, True, True, False, False]
+
+    # 分布统计：16 组合各自计数 + 「台词+道具/背景叠加」小计单列 + 旧口径单列
+    assert "声源组合分布" in out
+    assert "静音=0" in out and "台词=1" in out and "道具声=1" in out
+    assert "台词+道具=1" in out and "台词+背景=1" in out
+    assert "台词+道具+背景=1" in out and "台词+呻吟+道具+背景=0" in out
+    assert "「台词+道具/背景叠加」小计：3 条" in out
+    assert "旧口径未记声源：1 条" in out
+    assert "c22_manifest_labeled.json" in out
+
+
+# -------------------------------------------- c3钉6 /api/answer 收 sounds 原子落盘
+
+def test_c3_pin6_answer_accepts_sounds_atomic(live, monkeypatch):
+    """钉6 sounds 随点击原子落盘；只给 sounds 时由服务端派生 label。"""
+    pkg, base = live
+    calls = _spy_replace(monkeypatch)
+
+    status, body = _post(base, "/api/answer",
+                         {"id": "run1-1", "round": "first", "value": "yes",
+                          "sounds": _sounds(speech=True, prop=True)})
+    assert status == 200 and body.get("ok") is True
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    rec = state["records"][0]
+    assert rec["label"] == "yes"
+    assert rec["sounds"] == _sounds(speech=True, prop=True)
+    assert (str(pkg / "state.json.tmp"), str(pkg / "state.json")) in calls
+    assert not list(pkg.glob("*.tmp"))
+
+    # 只给 sounds 不给 value → 按派生 label 落盘
+    status, body = _post(base, "/api/answer",
+                         {"id": "run1-2", "round": "first", "sounds": _sounds(moan=True)})
+    assert status == 200 and body.get("ok") is True
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    assert state["records"][1]["label"] == "no"
+    assert state["records"][1]["sounds"] == _sounds(moan=True)
+
+
+def test_c3_pin6_answer_sounds_validation(live):
+    """sounds 校验：派生不一致/缺键/未知键/非布尔/skip 一律 400 中文且不落盘。"""
+    _pkg_dir, base = live
+
+    def ans(payload):
+        return _post(base, "/api/answer", payload)
+
+    status, body = ans({"id": "run1-1", "round": "first", "value": "yes",
+                        "sounds": _sounds(prop=True)})
+    assert status == 400 and _has_chinese(body.get("error", ""))
+    status, body = ans({"id": "run1-1", "round": "first", "value": "no",
+                        "sounds": {"speech": False}})          # 缺 3 键
+    assert status == 400 and _has_chinese(body.get("error", ""))
+    status, body = ans({"id": "run1-1", "round": "first", "value": "no",
+                        "sounds": {**_sounds(), "voice": False}})  # 未知键
+    assert status == 400 and "voice" in body.get("error", "")
+    status, body = ans({"id": "run1-1", "round": "first", "value": "no",
+                        "sounds": {**_sounds(), "bg": 1}})      # 非布尔
+    assert status == 400 and _has_chinese(body.get("error", ""))
+    status, body = ans({"id": "run1-1", "round": "first", "value": "skip",
+                        "sounds": _sounds()})                   # skip 不记声源
+    assert status == 400 and _has_chinese(body.get("error", ""))
+    # 400 全程未落盘
+    state = json.loads((_pkg_dir / "state.json").read_text(encoding="utf-8"))
+    assert all(r.get("sounds") is None for r in state["records"])
+
+
+def test_c3_pin6_re_round_sounds_and_sync_label(live):
+    """钉6 复标轮写 relabel_sounds（派生 relabel），sync_label 一并覆盖首轮。"""
+    pkg, base = live
+    _post(base, "/api/answer", {"id": "run1-1", "round": "first", "value": "yes",
+                                "sounds": _sounds(speech=True)})
+    status, body = _post(base, "/api/relabel/start", {})
+    assert status == 200
+    rid = body["queue"][0]
+    status, body = _post(base, "/api/answer",
+                         {"id": rid, "round": "re", "value": "no",
+                          "sounds": _sounds(bg=True), "sync_label": True})
+    assert status == 200 and body.get("ok") is True
+
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    rec = next(r for r in state["records"] if r["id"] == rid)
+    assert rec["relabel"] == "no" and rec["relabel_sounds"] == _sounds(bg=True)
+    assert rec["label"] == "no" and rec["sounds"] == _sounds(bg=True)  # 首轮同步覆盖
+    assert mod._record_label(rec) == "no"
+    assert mod._record_label(rec, re_round=True) == "no"
+    assert mod._agreement(state)["disputed"] == []   # 派生一致 → 无争议
