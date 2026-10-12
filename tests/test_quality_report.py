@@ -72,8 +72,10 @@ def test_warning_location_duplicate_index_takes_first_block():
     report = build_quality_report(
         [{"index": 1, "timing": t1, "text": "源文"}], final, "demo",
         validator_warnings=["⚠️ #2 某规则告警"])
-    assert "[校验告警] #2 00:00:01,000 --> 00:00:02,000" in report
-    assert "[校验告警] #2 00:00:03,000" not in report
+    # 卡5（D2026-1012-01 A5）：来源 A 行带码——身份=类别码 PW+index
+    assert "[校验告警] #PW-2 00:00:01,000 --> 00:00:02,000" in report
+    assert "[校验告警] #PW-2 00:00:03,000" not in report
+    assert "[校验告警] #2 00:00:01,000" not in report   # 裸 #N 形态废止
 
 
 # ----------------------------------------------------------------------
@@ -450,10 +452,11 @@ def test_write_guide_json_roundtrip_and_empty_noop(tmp_path):
 # ----------------------------------------------------------------------
 
 def test_guide_items_v2_mixed_sources_sorted_and_resolved():
-    """items v2：structured_warnings 与 untranslated 混合 → 八字段齐、
-    index 升序稳定、current_text 经 resolve_final_block 精确映射、缺失
-    即 None（"不可自动重翻"，不另设字段）、source_excerpt 取源文全量
-    文本（批0 F1 截断消除，D2026-1009-02）。"""
+    """items v2：structured_warnings 与 untranslated 混合 → 九字段齐
+    （八既有字段 + 卡5 新增 item_id）、index 升序稳定、current_text 经
+    resolve_final_block 精确映射、缺失即 None（"不可自动重翻"，不另设
+    字段）、source_excerpt 取源文全量文本（批0 F1 截断消除，
+    D2026-1009-02）。"""
     exp = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
             "text": "あ" * 50},                    # 超 40 字符 → 全量保留
            {"index": 2, "timing": "00:00:03,000 --> 00:00:04,000",
@@ -476,7 +479,7 @@ def test_guide_items_v2_mixed_sources_sorted_and_resolved():
     assert sink["version"] == 2
     items = sink["items"]
     assert [it["index"] for it in items] == [1, 2, 99]   # index 升序
-    fields = {"index", "timing", "category", "message",
+    fields = {"index", "item_id", "timing", "category", "message",
               "current_text", "source_excerpt", "status", "severity"}
     assert all(set(it) == fields for it in items)
     sw1 = items[0]
@@ -555,7 +558,8 @@ def test_single_line_too_long_report_section_and_items():
     assert "【语速与间隙观测】" in report
     # 观测行统一"时间轴在前、条目号在后"（刻意区分 "#N <timing>" 形态，
     # 防撞既有计数断言）；行长与阈值同现
-    assert f"{t} #1 行长 45（阈值 30）" in report
+    assert f"{t} #SLN-1 行长 45（阈值 30）" in report     # 来源 C 行带码
+    assert f"{t} #1 行长 45" not in report                 # 裸 #N 形态废止
     items = [it for it in sink["items"]
              if it["category"] == "single_line_too_long"]
     assert len(items) == 1
@@ -565,7 +569,7 @@ def test_single_line_too_long_report_section_and_items():
     assert it["current_text"] == long_line       # 终稿全文（可重翻）
     assert it["source_excerpt"] == long_line[:60]
     assert it["status"] == "open" and it["severity"] is None
-    fields = {"index", "timing", "category", "message",
+    fields = {"index", "item_id", "timing", "category", "message",
               "current_text", "source_excerpt", "status", "severity"}
     assert set(it) == fields
 
@@ -629,6 +633,75 @@ def test_guide_items_mixed_sources_ascending():
     assert [it["index"] for it in items] == [1, 3]
     assert [it["category"] for it in items] == [
         "single_line_too_long", "untranslated"]
+
+
+# ----------------------------------------------------------------------
+# 卡5（D2026-1012-01 A5）guide items 撞号消歧：身份=类别码+index
+# ----------------------------------------------------------------------
+
+def test_guide_items_item_id_disambiguates_index_collision():
+    """撞号消歧：同 index 多类别条目 item_id 两两不同（=类別码-index），
+    既有 index/category/message 键值零改动（additive 只加不减）；txt 行
+    同码可区分。夹具同构真机 11 对撞号（D2026-1010-03 遗留②：全部
+    cps_too_fast×untranslated/suspected_missed_speech/single_line_too_long
+    各自独立编号相撞）。"""
+    t3 = "00:00:01,000 --> 00:00:02,500"      # 1.5s → CPS 行动层命中
+    t7 = "00:00:10,000 --> 00:00:11,000"      # 1.0s
+    exp = [{"index": 3, "timing": t3, "text": "ソ"},
+           {"index": 7, "timing": t7, "text": "ソ"}]
+    final = [
+        # index 3：同一条目四类别标记（未译+单行超长+CPS+漏听候选）+PW 同号
+        {"index": 3, "timing": t3, "text": "[未翻译] " + "あ" * 60},
+        # index 7：真机主撞形态 cps_too_fast×untranslated
+        {"index": 7, "timing": t7, "text": "[未翻译] " + "あ" * 20},
+    ]
+    structured = [{"index": 3, "timing": t3, "severity": "warning",
+                   "message": "⚠️ #3 主语误判待复核: x", "category": "subject"}]
+    audio = {"available": True, "reason": "",
+             "candidates": [{"index": 3, "timing": t3, "gap_ms": 900,
+                             "speech_overlap_s": 0.5,
+                             "message": "字幕间隙 900ms 内检测到语音能量"}],
+             "metrics": {"threshold_pct": 85, "duration_s": 9.0,
+                         "truncated": False, "total_candidates": 1}}
+    sink: dict = {}
+    report = build_quality_report(
+        exp, final, "demo", guide_sink=sink,
+        structured_warnings=structured,
+        validator_warnings=["⚠️ #3 antonym_yamete: x"],
+        audio_insights=audio, cps_action={"threshold": 5.0, "max_items": 20})
+    items = sink["items"]
+    by_index: dict = {}
+    for it in items:
+        by_index.setdefault(it["index"], []).append(it)
+    assert sorted(len(v) for v in by_index.values()) == [2, 5]
+    pairs = sum(n * (n - 1) // 2 for n in (len(v) for v in by_index.values()))
+    assert pairs == 11                        # 同真机 11 对撞号形态
+    assert sorted(it["item_id"] for it in items) == [
+        "CPS-3", "CPS-7", "PW-3", "SLN-3", "SMS-3", "UNTR-3", "UNTR-7"]
+    for v in by_index.values():               # 同 index 组内两两不同
+        ids = [it["item_id"] for it in v]
+        assert len(set(ids)) == len(ids)
+    # 既有键值零改动 + item_id 纯新增（九字段闭集）
+    for it in items:
+        assert it["index"] in (3, 7)
+        assert set(it) == {"index", "item_id", "timing", "category",
+                           "message", "current_text", "source_excerpt",
+                           "status", "severity"}
+    # 码表：cps_too_fast→CPS / untranslated→UNTR / single_line→SLN /
+    # suspected_missed_speech→SMS / post_validate 告警→PW
+    assert {it["category"]: it["item_id"] for it in by_index[3]} == {
+        "cps_too_fast": "CPS-3", "untranslated": "UNTR-3",
+        "single_line_too_long": "SLN-3",
+        "suspected_missed_speech": "SMS-3", "subject": "PW-3"}
+    # txt 行带码：同 index 的五处引用不再互相撞号
+    assert f"[校验告警] #PW-3 {t3}" in report      # 来源 A
+    assert "#SLN-3 行长" in report                 # 来源 C
+    assert "（疑似（粗筛）#SMS-3）" in report       # 来源 D 交叉引用
+    assert f"  #3 {t3} 原文: ソ [#UNTR-3]" in report   # 来源 B（见下注）
+    assert f"  #7 {t7} 原文: ソ [#UNTR-7]" in report
+    # 来源 E（cps_too_fast）txt 无逐条行（仅计数提示行），身份只落 json。
+    # 观测行（CPS 观测/间隙）非 guide items，保持裸 #N——其码不在码表内。
+    assert f"{t3} #3 CPS " in report
 
 
 # ----------------------------------------------------------------------
@@ -744,7 +817,7 @@ def test_single_line_whitelist_no_file_unchanged(monkeypatch, tmp_path):
     exp = [{"index": 1, "timing": t, "text": "ソ"}]
     sink: dict = {}
     report = build_quality_report(exp, final, "demo", guide_sink=sink)
-    assert f"{t} #1 行长 45（阈值 30）" in report
+    assert f"{t} #SLN-1 行长 45（阈值 30）" in report
     assert "白名单豁免" not in report
     assert [it["category"] for it in sink["items"]].count(
         "single_line_too_long") == 1
@@ -760,7 +833,7 @@ def test_single_line_whitelist_empty_file_zero_change(monkeypatch, tmp_path):
     exp = [{"index": 1, "timing": t, "text": "ソ"}]
     sink: dict = {}
     report = build_quality_report(exp, final, "demo", guide_sink=sink)
-    assert f"{t} #1 行长 45（阈值 30）" in report
+    assert f"{t} #SLN-1 行长 45（阈值 30）" in report
     assert "白名单豁免" not in report
     assert [it["category"] for it in sink["items"]].count(
         "single_line_too_long") == 1
@@ -779,8 +852,8 @@ def test_single_line_whitelist_exempts_entry(monkeypatch, tmp_path):
            {"index": 2, "timing": t2, "text": "ソ"}]
     sink: dict = {}
     report = build_quality_report(exp, final, "demo", guide_sink=sink)
-    assert f"{t2} #2 行长 45（阈值 30）" in report
-    assert "#1 行长" not in report
+    assert f"{t2} #SLN-2 行长 45（阈值 30）" in report
+    assert "#SLN-1 行长" not in report
     assert "白名单豁免 1 条" in report
     items = [it for it in sink["items"]
              if it["category"] == "single_line_too_long"]
@@ -855,7 +928,7 @@ def test_cps_action_build_report_items_and_note():
     assert it["index"] == 1 and it["status"] == "open"
     assert it["current_text"] == text
     assert "CPS 30.00（行动阈值 5）" in it["message"]
-    fields = {"index", "timing", "category", "message",
+    fields = {"index", "item_id", "timing", "category", "message",
               "current_text", "source_excerpt", "status", "severity"}
     assert set(it) == fields
     sink2: dict = {}
