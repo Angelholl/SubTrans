@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTransJAV · 3.1 方向稿 v2（修正式）</title>
+<!--
+  3.1 UI 重塑计划 · 阶段 0a 方向稿（design-expert 2026-10-12）
+  性质：修正式方向稿，非生产代码。单文件 / 内联 CSS+JS+SVG / 零外部依赖 / file:// 双击可开。
+  沿用先例：docs/design/redesign-prototype.html（设计系统速览页 + 双主题）。
+  方向已锁：现代极简 SaaS / Notion-Vercel / #3B82F6，本稿不做新风格提案。
+  体现的修正：P0-1 表面三层只改层分配(A1-②) / P0-2 字号 14/13/12 无 11px /
+    P0-3 字重只 400+700 / P1-1 七页统一页头 / P1-3 文件卡标题+计数 /
+    P1-4 拖拽区主次按钮+图标 / P1-5 Console 吸收余量 / P1-9 空态设计 /
+    P2-2 进度定量反馈 / P0-4 焦点环 / P0-5 小字用 --text-2。
+  Tier 2 需 S6 复议项见 docs/design/d1012-阶段0a-token归一提案.md。
+  Icons: Lucide 内联 SVG（ISC 声明见生产 index.html:16-34）。
+-->
+<style>
+:root{
+  --bg:#F3F4F6; --surface:#FFFFFF; --surface-2:#F9FAFB; --surface-3:#F3F4F6;
+  --border:#E5E7EB; --border-strong:#D1D5DB;
+  --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+  --primary:#3B82F6; --primary-strong:#2563EB; --primary-soft:#EFF6FF; --primary-border:#BFDBFE;
+  --on-primary:var(--surface);
+  --ok:#10B981; --ok-soft:#ECFDF5;
+  --warn:#F59E0B; --warn-soft:#FFFBEB; --status-warn:#B26A00;
+  --danger:#DC2626; --danger-soft:#FEF2F2; --danger-border:#FECACA;
+  --console-bg:#0F172A; --console-border:#1E293B; --console-text:#CBD5E1;
+  --cl-info:#94A3B8; --cl-ok:#34D399; --cl-warn:#FBBF24; --cl-err:#F87171; --cl-dim:#64748B;
+  --dropzone-border:#93C5FD;
+  --radius-sm:8px; --radius:12px; --radius-lg:16px; --radius-pill:999px;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
+  --h-ctl:36px; --h-ctl-sm:30px;
+  --dur-fast:.12s; --dur:.15s;
+  --w-reg:400; --w-bold:700;
+  --font:14px; --font-sm:13px; --font-xs:12px; --font-display:18px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --shadow-md:0 2px 4px rgba(16,24,40,.06),0 4px 12px rgba(16,24,40,.08);
+  --focus-outline:2px solid var(--primary);
+  --focus-ring:0 0 0 3px var(--primary-soft);
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:"Cascadia Code",Consolas,"JetBrains Mono",monospace;
+}
+[data-theme="dark"]{
+  --bg:#0B0F17; --surface:#141821; --surface-2:#1A202B; --surface-3:#1F2530;
+  --border:#262D3B; --border-strong:#333C4D;
+  --text-1:#E5E7EB; --text-2:#9CA3AF; --text-3:#6B7280;
+  --primary:#60A5FA; --primary-strong:#3B82F6; --primary-soft:rgba(59,130,246,.14); --primary-border:rgba(96,165,250,.35);
+  --on-primary:var(--bg);
+  --ok:#34D399; --ok-soft:rgba(16,185,129,.12);
+  --warn:#FBBF24; --warn-soft:rgba(245,158,11,.12); --status-warn:var(--warn);
+  --danger:#F87171; --danger-soft:rgba(239,68,68,.12); --danger-border:rgba(248,113,113,.35);
+  --console-bg:#0D1117; --console-border:#1B2330; --console-text:#C4CFDB;
+  --dropzone-border:rgba(96,165,250,.5);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 2px 4px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:var(--font)}
+body{font-family:var(--font-sans);font-size:var(--font);line-height:1.55;color:var(--text-1);background:var(--bg);height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font-family:inherit}
+/* P0-4 修正：焦点环不得被 button:focus{outline:none} 吃掉（生产 style.css:172 缺陷） */
+:focus-visible{outline:var(--focus-outline);outline-offset:2px}
+svg{display:block}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+/* 三栏骨架 A1-②：灰 / 白 / 灰 */
+.workbench{display:grid;grid-template-columns:220px minmax(0,1fr) 316px;grid-template-rows:minmax(0,1fr);height:100vh}
+.rail{background:var(--bg);border-right:1px solid var(--border-strong);display:flex;flex-direction:column;padding:var(--space-4) var(--space-3);gap:var(--space-1)}
+.main{background:var(--surface);overflow-y:auto;padding:var(--space-5) 28px var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)}
+.aside{background:var(--bg);border-left:1px solid var(--border-strong);overflow-y:auto;padding:var(--space-5) 20px 28px;display:flex;flex-direction:column;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;padding:var(--space-1) var(--space-2) 18px}
+.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--primary);color:#fff;display:grid;place-items:center;flex-shrink:0;box-shadow:0 2px 6px rgba(59,130,246,.35)}
+.brand-name{font-size:var(--font-sm);font-weight:var(--w-bold);letter-spacing:-.2px;line-height:1.25;min-width:0}
+.rail-nav{display:flex;flex-direction:column;gap:2px}
+.nav-section{font-size:var(--font-xs);font-weight:var(--w-bold);color:var(--text-2);letter-spacing:.4px;padding:14px 10px 6px}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;color:var(--text-2);font-size:var(--font-sm);font-weight:var(--w-reg);padding:var(--space-2) 10px;border-radius:var(--radius-sm);text-align:left;transition:background var(--dur) ease,color var(--dur) ease}
+.nav-item:hover{background:var(--surface-3);color:var(--text-1)}
+.nav-item.active{background:var(--primary-soft);color:var(--primary-strong);font-weight:var(--w-bold);box-shadow:inset 2px 0 0 var(--primary-strong)}
+.nav-item .n-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail-foot{margin-top:auto;position:relative;display:flex;flex-direction:column;gap:6px;padding:var(--space-1) 2px 0}
+.theme-btn{width:30px;height:30px;display:grid;place-items:center;border-radius:var(--radius-sm);color:var(--text-2);align-self:flex-start}
+.theme-btn:hover{background:var(--surface-3);color:var(--text-1)}
+.rail-note{font-size:var(--font-xs);color:var(--text-2);line-height:1.5}
+/* P1-1 七页统一页头 */
+.tab-page{display:none;flex-direction:column;gap:var(--space-4);flex:1 0 auto;min-height:0}
+.tab-page.active{display:flex}
+.page-head{display:flex;align-items:flex-start;gap:var(--space-3);padding-bottom:var(--space-3);border-bottom:1px solid var(--border)}
+.page-head-text{display:flex;flex-direction:column;gap:3px;min-width:0}
+.page-title{font-size:var(--font-display);font-weight:var(--w-bold);letter-spacing:-.3px;line-height:1.3}
+.page-subtitle{font-size:var(--font-sm);color:var(--text-2)}
+.page-head-actions{margin-left:auto;display:flex;gap:var(--space-2);align-items:center}
+/* P1-2 卡头收敛为 2 种：分区标题(带拉线) / 卡标题(带副信息) */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.main .card{background:var(--surface-2)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.card-title{font-size:var(--font-sm);font-weight:var(--w-bold);color:var(--text-1);display:flex;align-items:baseline;gap:var(--space-2)}
+.card-title .meta{font-size:var(--font-xs);font-weight:var(--w-reg);color:var(--text-2)}
+.card-actions{display:flex;align-items:center;gap:var(--space-2);margin-left:auto}
+.card-body{padding:var(--space-3) 14px}
+.group-title{font-size:var(--font-sm);font-weight:var(--w-bold);color:var(--text-2);display:flex;align-items:center;gap:10px}
+.group-title::after{content:"";flex:1;height:1px;background:var(--border)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:var(--h-ctl);padding:0 14px;font-size:var(--font-sm);font-weight:var(--w-bold);border-radius:var(--radius-sm);border:1px solid transparent;transition:all var(--dur) ease;white-space:nowrap}
+.btn-primary{background:var(--primary-strong);color:var(--on-primary);box-shadow:0 1px 2px rgba(37,99,235,.3)}
+.btn-primary:hover:not(:disabled){filter:brightness(.94)}
+.btn-secondary{background:var(--surface);color:var(--text-1);border-color:var(--border-strong)}
+.btn-secondary:hover:not(:disabled){background:var(--surface-3)}
+.btn-ghost{color:var(--text-2)}
+.btn-ghost:hover:not(:disabled){background:var(--surface-3);color:var(--text-1)}
+.btn-danger{background:var(--danger-soft);color:var(--danger);border-color:var(--danger-border)}
+.btn-sm{min-height:var(--h-ctl-sm);padding:0 10px;font-size:var(--font-xs)}
+.form-input,.form-select{height:var(--h-ctl);padding:0 var(--space-3);border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-1);font-size:var(--font-sm);transition:border-color var(--dur) ease,box-shadow var(--dur) ease}
+.form-input:focus,.form-select:focus{outline:none;border-color:var(--primary);box-shadow:var(--focus-ring)}
+.form-input.compact,.form-select.compact{height:var(--h-ctl-sm);padding:0 10px;font-size:var(--font-xs)}
+.form-select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:var(--space-5)}
+.form-input::placeholder{color:var(--text-2);opacity:1}
+input[type=checkbox]{accent-color:var(--primary);width:15px;height:15px;margin:0;flex-shrink:0}
+.field-label{font-size:var(--font-xs);font-weight:var(--w-bold);color:var(--text-2);white-space:nowrap}
+.muted{font-size:var(--font-sm);color:var(--text-2)}
+.hint{font-size:var(--font-xs);color:var(--text-2)}
+/* P1-4 拖拽区：操作性标题 + 主次按钮 + 图标 */
+.dropzone{border:1.5px dashed var(--dropzone-border);border-radius:var(--radius-lg);background:var(--primary-soft);padding:var(--space-4);display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--space-2);transition:border-color var(--dur) ease}
+.dropzone:hover{border-color:var(--primary)}
+.dz-title{font-size:var(--font);font-weight:var(--w-bold)}
+.dz-hint{font-size:var(--font-xs);color:var(--text-2)}
+.dz-actions{display:flex;gap:var(--space-2);flex-wrap:wrap;justify-content:center;margin-top:var(--space-1)}
+/* P1-3 文件列表：行 + 三态 chip */
+.file-row{display:flex;align-items:center;gap:10px;padding:var(--space-2) 10px;border-radius:var(--radius-sm);transition:background var(--dur-fast) ease}
+.file-row:hover{background:var(--surface-3)}
+.file-ico{width:30px;height:30px;border-radius:var(--radius-sm);background:var(--primary-soft);color:var(--primary-strong);display:grid;place-items:center;flex-shrink:0}
+.file-grow{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.file-name{font-size:var(--font-sm);font-weight:var(--w-bold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-path{font-size:var(--font-xs);color:var(--text-2);font-family:var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-size:var(--font-xs);font-weight:var(--w-bold);padding:2px 9px;border-radius:var(--radius-pill);white-space:nowrap;flex-shrink:0}
+.chip-pending{background:var(--surface-3);color:var(--text-2)}
+.chip-running{background:var(--primary-soft);color:var(--primary-strong)}
+.chip-done{background:var(--ok-soft);color:var(--ok)}
+.chip-resume{background:var(--warn-soft);color:var(--status-warn)}
+/* P1-5/P1-9 空态设计 */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--text-2);padding:var(--space-5) var(--space-4);gap:var(--space-2);min-height:150px}
+.empty .e-ico{width:44px;height:44px;border-radius:var(--radius-pill);background:var(--surface-3);color:var(--text-2);display:grid;place-items:center}
+.empty .e-title{font-size:var(--font);font-weight:var(--w-bold);color:var(--text-1)}
+.empty .e-desc{font-size:var(--font-sm);color:var(--text-2);max-width:46ch;line-height:1.6}
+.empty .e-act{display:flex;gap:var(--space-2);margin-top:var(--space-1)}
+/* P2-2 进度定量反馈 */
+.progress-track{width:100%;height:8px;background:var(--surface-3);border-radius:var(--radius-pill);overflow:hidden}
+.progress-fill{height:100%;width:62%;background:var(--primary);border-radius:var(--radius-pill)}
+.progress-meta{display:flex;justify-content:space-between;gap:var(--space-2);font-size:var(--font-xs);color:var(--text-2);margin-top:6px}
+.progress-meta .pct{font-weight:var(--w-bold);color:var(--primary-strong)}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-idle{background:var(--border-strong)}
+.dot-run{background:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.dot-err{background:var(--danger);box-shadow:0 0 0 3px var(--danger-soft)}
+/* Console：P1-5 吸收剩余高度 */
+.console{flex:1 1 auto;min-height:180px;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+.console-out{flex:1;background:var(--console-bg);border-top:1px solid var(--console-border);color:var(--console-text);font-family:var(--font-mono);font-size:var(--font-xs);padding:var(--space-3) 14px;line-height:1.55;overflow-y:auto;min-height:0;white-space:pre-wrap}
+.cl-info{color:var(--cl-info)} .cl-ok{color:var(--cl-ok)} .cl-warn{color:var(--cl-warn)} .cl-err{color:var(--cl-err)}
+/* 右栏卡片 */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3)}
+.panel-title{font-size:var(--font-sm);font-weight:var(--w-bold);display:flex;align-items:center;gap:var(--space-2)}
+.panel-title .meta{margin-left:auto;font-size:var(--font-xs);font-weight:var(--w-reg);color:var(--text-2)}
+.row{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
+.row-tight{gap:var(--space-1)}
+.stack{display:flex;flex-direction:column;gap:var(--space-3)}
+/* 引擎页阶段组：分区标题 + 表单卡（卡头统一为 group-title） */
+.stage-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:var(--space-3) 14px;display:flex;flex-direction:column;gap:var(--space-3)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--space-3)}
+/* 表格 */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:var(--font-xs);font-weight:var(--w-bold);color:var(--text-2);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+.tbl td{font-size:var(--font-sm);padding:8px 10px;border-bottom:1px solid var(--border)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--surface-3)}
+/* 空态引导（虚线） */
+.guide-empty{border:1px dashed var(--border-strong);border-radius:var(--radius);padding:var(--space-3) 14px;font-size:var(--font-sm);color:var(--text-2);line-height:1.6;display:flex;gap:var(--space-2);align-items:flex-start}
+/* ========== 设计系统速览 ========== */
+.ds-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--space-4)}
+.ds-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3)}
+.ds-card h3{font-size:var(--font-sm);font-weight:var(--w-bold)}
+.ds-note{font-size:var(--font-xs);color:var(--text-2);line-height:1.7}
+.swatches{display:flex;flex-direction:column;gap:6px}
+.sw{display:flex;align-items:center;gap:var(--space-2);font-size:var(--font-xs)}
+.sw i{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
+.sw code{font-family:var(--font-mono);color:var(--text-2)}
+.type-row{display:flex;align-items:baseline;gap:var(--space-3);border-bottom:1px dashed var(--border);padding:6px 0}
+.type-row .t-meta{margin-left:auto;font-size:var(--font-xs);color:var(--text-2);font-family:var(--font-mono)}
+.pill-note{display:inline-block;font-size:var(--font-xs);padding:2px 8px;border-radius:var(--radius-pill);background:var(--primary-soft);color:var(--primary-strong);font-weight:var(--w-bold)}
+</style>
+</head>
+<body>
+<div class="workbench">
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+      <div class="brand-name">净语翻译 · SubTrans<br>Translate</div>
+    </div>
+    <nav class="rail-nav" role="tablist" aria-label="导航">
+      <div class="nav-section">工作区</div>
+      <button class="nav-item active" data-tab="p-translate"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span class="n-txt">字幕翻译</span></button>
+      <button class="nav-item" data-tab="p-review"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg><span class="n-txt">校对</span></button>
+      <button class="nav-item" data-tab="p-guide"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg><span class="n-txt">质量与建议</span></button>
+      <div class="nav-section">设置</div>
+      <button class="nav-item" data-tab="p-engine"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="n-txt">API 与模型选择</span></button>
+      <button class="nav-item" data-tab="p-asr"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg><span class="n-txt">ASR 与词典</span></button>
+      <button class="nav-item" data-tab="p-gloss"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span class="n-txt">词库与模板</span></button>
+      <button class="nav-item" data-tab="p-adv"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="n-txt">高级参数</span></button>
+      <div class="nav-section">设计</div>
+      <button class="nav-item" data-tab="p-ds"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="n-txt">设计系统速览</span></button>
+    </nav>
+    <div class="rail-foot">
+      <button class="theme-btn" id="themeBtn" title="切换浅色 / 深色主题" aria-label="切换主题">
+        <svg id="iMoon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <svg id="iSun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </button>
+      <p class="rail-note">3.1 方向稿 v2 · 修正式<br>非生产代码，仅供评审</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 1. 字幕翻译：完整示范页（页头 / 拖拽 / 文件卡 / Console 吸收余量） -->
+    <section class="tab-page active" id="p-translate" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">字幕翻译</h1>
+          <div class="page-subtitle">一站式 AI 字幕翻译与校对 · 拖入字幕开始</div>
+        </div>
+        <div class="page-head-actions">
+          <span class="hint">P1-1 七页统一页头示范</span>
+        </div>
+      </header>
+
+      <div class="dropzone">
+        <div class="dz-title">把字幕文件拖到这里</div>
+        <div class="dz-hint">支持 .srt / .ass / .ssa / .vtt，可批量拖入 · 产物自动命名，已完成自动跳过</div>
+        <div class="dz-actions">
+          <button class="btn btn-primary btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6M12 12v6"/></svg>添加文件</button>
+          <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6M9 13h6"/></svg>添加文件夹</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">待翻译文件 <span class="meta">已选 2 个 · 共 1.4 MB</span></div>
+          <div class="card-actions">
+            <button class="btn btn-ghost btn-sm">移除选中</button>
+            <button class="btn btn-ghost btn-sm">清空</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="file-row">
+            <div class="file-ico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8M8 17h5"/></svg></div>
+            <div class="file-grow">
+              <div class="file-name">SSIS-001_final_cn.srt</div>
+              <div class="file-path">D:\Media\SSIS-001\SSIS-001_final_cn.srt · 812 KB</div>
+            </div>
+            <span class="chip chip-running">翻译中</span>
+            <button class="btn btn-ghost btn-sm" aria-label="移除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="file-row">
+            <div class="file-ico"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8M8 17h5"/></svg></div>
+            <div class="file-grow">
+              <div class="file-name">STARS-431.ass</div>
+              <div class="file-path">D:\Media\STARS-431\STARS-431.ass · 610 KB</div>
+            </div>
+            <span class="chip chip-pending">等待中</span>
+            <button class="btn btn-ghost btn-sm" aria-label="移除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="console">
+        <div class="card-head">
+          <div class="card-title">Console <span class="meta">活动流 3 条</span></div>
+          <div class="card-actions">
+            <button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+            <button class="btn btn-ghost btn-sm">清空</button>
+            <button class="btn btn-ghost btn-sm">导出日志</button>
+          </div>
+        </div>
+        <div class="console-out"><span class="cl-info">[INFO] 读取字幕 SSIS-001_final_cn.srt（812 KB）</span>
+<span class="cl-ok">[SUCCESS] 阶段A 净语+翻译 完成 · 批次 27/43</span>
+<span class="cl-warn">[WARN] 第 18 行术语「彼女」未命中词库，按默认策略处理</span>
+<span class="cl-err">[ERROR] STARS-431.ass 第 4 行时间轴重叠，已跳过该行</span>
+<span class="cl-info">[INFO] 阶段B 审校+抛光 进行中…</span></div>
+      </div>
+    </section>
+
+    <!-- 2. 质量与建议：P1-11 修正示范（有内容高度 = 内容本身，不靠 flex 撑高） -->
+    <section class="tab-page" id="p-guide" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">质量与建议</h1>
+          <div class="page-subtitle">加载质量报告导读、运行 AI 分析与一键修复</div>
+        </div>
+      </header>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">质量报告导读</div>
+          <div class="card-actions">
+            <button class="btn btn-ghost btn-sm">打开其他报告</button>
+            <button class="btn btn-secondary btn-sm">加载导读</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- P1-9 空态设计：卡高由内容决定，不再是 380px 纯白空盒 -->
+          <div class="empty">
+            <div class="e-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8M8 17h5"/></svg></div>
+            <div class="e-title">还没有质量报告</div>
+            <div class="e-desc">先完成一次翻译，导读 JSON 会自动生成；也可以点击右上角「加载导读」手动选择已有报告。</div>
+            <div class="e-act"><button class="btn btn-secondary btn-sm">去字幕翻译</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">AI 质量分析</div>
+          <div class="card-actions"><span class="pill-note">未运行</span></div>
+        </div>
+        <div class="card-body stack">
+          <div class="row">
+            <button class="btn btn-primary btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>AI 分析本报告</button>
+            <button class="btn btn-secondary btn-sm">一键修复建议</button>
+          </div>
+          <div class="grid2">
+            <label class="stack" style="gap:4px"><span class="field-label">分析服务商</span>
+              <select class="form-select compact"><option>跟随阶段A（默认）</option></select></label>
+            <label class="stack" style="gap:4px"><span class="field-label">分析模型</span>
+              <select class="form-select compact"><option>跟随阶段A（默认）</option></select></label>
+            <label class="stack" style="gap:4px"><span class="field-label">跨片统计窗口</span>
+              <select class="form-select compact"><option>7 天</option></select></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. API 与模型选择：P1-8 修正示范（不截断、地址行进卡） -->
+    <section class="tab-page" id="p-engine" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">API 与模型选择</h1>
+          <div class="page-subtitle">两阶段流水线：阶段A 净语+翻译 → 阶段B 审校+抛光</div>
+        </div>
+      </header>
+      <div class="stack" style="gap:12px">
+        <div class="group-title">阶段A · 净语+翻译（日译中）</div>
+        <div class="stage-card">
+          <div class="row">
+            <label class="row row-tight"><input type="checkbox" checked><span class="field-label">启用阶段A</span></label>
+            <select class="form-select compact" style="min-width:138px"><option>本地 LM Studio</option></select>
+            <select class="form-select compact grow" style="flex:1;min-width:180px"><option>点击右侧刷新获取模型列表</option></select>
+            <button class="btn btn-secondary btn-sm" title="刷新模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+            <button class="btn btn-secondary btn-sm">测试连通</button>
+          </div>
+          <div class="row">
+            <span class="field-label" style="min-width:64px">API Key</span>
+            <input class="form-input compact" style="flex:1;min-width:200px" placeholder="留空用已保存密钥（本地模型免填）">
+            <button class="btn btn-ghost btn-sm">保存</button>
+          </div>
+          <!-- P1-8：地址行归入卡内，不再坐在灰底上 -->
+          <div class="row">
+            <span class="field-label" style="min-width:64px">地址</span>
+            <input class="form-input compact" style="flex:1;min-width:200px" placeholder="阶段A 服务商的接口地址">
+            <button class="btn btn-primary btn-sm">保存接口配置</button>
+            <span class="hint">已保存</span>
+          </div>
+        </div>
+        <div class="group-title">阶段B · 审校+抛光（中文）</div>
+        <div class="stage-card">
+          <div class="row">
+            <label class="row row-tight"><input type="checkbox" checked><span class="field-label">启用阶段B</span></label>
+            <select class="form-select compact" style="min-width:138px"><option>本地 LM Studio</option></select>
+            <select class="form-select compact" style="flex:1;min-width:180px"><option>qwen2.5-14b-instruct</option></select>
+            <span class="hint">连通正常 · 42 tok/s</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 校对（示意：本页生产环境会隐藏右栏） -->
+    <section class="tab-page" id="p-review" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">校对</h1>
+          <div class="page-subtitle">导入视频与字幕，逐段对照校对 · 本页隐藏右栏，专注对照</div>
+        </div>
+      </header>
+      <div class="dropzone">
+        <div class="dz-title">导入视频与字幕开始校对</div>
+        <div class="dz-hint">拖入视频（mp4 / mkv / webm / mov / avi）与字幕（srt），或点击下方按钮选择</div>
+        <div class="dz-actions">
+          <button class="btn btn-secondary btn-sm">导入视频</button>
+          <button class="btn btn-secondary btn-sm">导入字幕</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">疑点段</div><div class="card-actions"><span class="hint">P1-9 空态：给说明，不给裸按钮</span></div></div>
+        <div class="card-body">
+          <div class="empty">
+            <div class="e-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+            <div class="e-title">尚未载入疑点段</div>
+            <div class="e-desc">导入字幕与视频后，可载入疑点段并运行 ASR 对照；字幕列表会显示在下方并支持搜索定位。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. ASR 与词典 -->
+    <section class="tab-page" id="p-asr" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">ASR 与词典</h1>
+          <div class="page-subtitle">媒体重点对照的 ASR 模型管理 · 日/中/英词典管理</div>
+        </div>
+      </header>
+      <div class="stack" style="gap:12px">
+        <div class="group-title">ASR 模型（媒体重点对照）</div>
+        <div class="stage-card">
+          <div class="row"><span class="dot dot-err" style="width:8px;height:8px;border-radius:50%;background:var(--border-strong);display:inline-block"></span><span class="muted">未探测 —— 点击「重新探测」检测本机 ASR 环境</span></div>
+          <div class="row"><select class="form-select compact" style="min-width:240px"><option>选择 ASR 模型（媒体重点对照用）</option></select><button class="btn btn-secondary btn-sm">重新探测</button><button class="btn btn-ghost btn-sm">模型管理</button></div>
+        </div>
+        <div class="group-title">词典管理（日 / 中 / 英）</div>
+        <div class="stage-card">
+          <!-- P1-9：词典空态给完整引导，不是一个空下拉 -->
+          <div class="empty" style="min-height:120px">
+            <div class="e-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+            <div class="e-title">尚未安装词典</div>
+            <div class="e-desc">选择一个词典查看说明与下载源；内置 english_rules 开箱可用，其余三类需下载后启用。</div>
+            <div class="e-act"><button class="btn btn-primary btn-sm">下载所选词典</button><button class="btn btn-ghost btn-sm">打开文件夹</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. 词库与模板 -->
+    <section class="tab-page" id="p-gloss" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">词库与模板</h1>
+          <div class="page-subtitle">角色卡目录、全局词库与学习词库</div>
+        </div>
+      </header>
+      <div class="stack" style="gap:12px">
+        <div class="group-title">全局词库编辑</div>
+        <div class="stage-card">
+          <div class="row">
+            <button class="btn btn-secondary btn-sm">＋添加</button>
+            <button class="btn btn-ghost btn-sm">删除选中</button>
+            <button class="btn btn-ghost btn-sm">导入 CSV/TXT</button>
+            <span class="hint" style="margin-left:auto">0 条 · 绑定文件：（未加载）</span>
+            <button class="btn btn-primary btn-sm">保存词库</button>
+          </div>
+          <div class="guide-empty"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>词库为空：点击「＋添加」新增词条，或「导入 CSV/TXT」批量导入；保存后翻译时自动生效。</span></div>
+        </div>
+        <div class="group-title">学习词库</div>
+        <div class="stage-card">
+          <div class="row"><span class="hint">自学习写入，优先级低于全局词库。</span></div>
+          <table class="tbl"><thead><tr><th>原文词条</th><th>期望译文</th><th>别名</th></tr></thead>
+            <tbody><tr><td colspan="3" style="color:var(--text-2);text-align:center;padding:20px">完成一次翻译后引擎自动学习写入，届时点击「刷新」查看</td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. 高级参数 -->
+    <section class="tab-page" id="p-adv" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">高级参数</h1>
+          <div class="page-subtitle">进阶选项，默认值已适配绝大多数使用场景，通常无需改动</div>
+        </div>
+      </header>
+      <div class="grid2">
+        <div class="stage-card">
+          <div class="group-title">翻译与词库</div>
+          <div class="row"><label class="row row-tight"><input type="checkbox" checked><span class="field-label">词库→阶段A</span></label><label class="row row-tight"><input type="checkbox" checked><span class="field-label">词库→阶段B</span></label><label class="row row-tight"><input type="checkbox"><span class="field-label">阈值自适应</span></label></div>
+        </div>
+        <div class="stage-card">
+          <div class="group-title">断点与日志</div>
+          <div class="row"><label class="row row-tight"><input type="checkbox"><span class="field-label">断点恢复</span></label><label class="row row-tight"><input type="checkbox"><span class="field-label">强制断点恢复</span></label><label class="row row-tight"><input type="checkbox"><span class="field-label">详细日志</span></label></div>
+        </div>
+        <!-- P1-9：即便文案待 JS 注入，也给静态兜底（本示范直接给静态标题） -->
+        <div class="stage-card">
+          <div class="group-title">硬字幕压制</div>
+          <div class="muted">压制参数随管线设置保存；此处为摘要行。</div>
+          <div class="row"><button class="btn btn-secondary btn-sm">编辑压制参数</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. 设计系统速览（沿用 redesign-prototype.html:743-745 先例） -->
+    <section class="tab-page" id="p-ds" role="tabpanel">
+      <header class="page-head">
+        <div class="page-head-text">
+          <h1 class="page-title">设计系统速览</h1>
+          <div class="page-subtitle">3.1 方向稿 v2 所用 token 与组件规格 · 其余页面同一体系</div>
+        </div>
+        <div class="page-head-actions"><span class="pill-note">Tier 1 零复议 / Tier 2 需 S6</span></div>
+      </header>
+      <div class="ds-grid">
+        <div class="ds-card">
+          <h3>表面三层（P0-1 · A1-② · Tier 2）</h3>
+          <div class="swatches">
+            <div class="sw"><i style="background:var(--surface)"></i><span>中栏 <code>--surface #FFFFFF</code></span></div>
+            <div class="sw"><i style="background:var(--bg)"></i><span>左栏 / 右栏 <code>--bg #F3F4F6</code></span></div>
+            <div class="sw"><i style="background:var(--surface-2)"></i><span>中栏内卡片 <code>--surface-2 #F9FAFB</code></span></div>
+            <div class="sw"><i style="background:var(--border-strong)"></i><span>栏分隔线 <code>--border-strong #D1D5DB</code></span></div>
+          </div>
+          <p class="ds-note">现状三栏为 #F9FAFB / #F3F4F6 / #F3F4F6（中↔右 1.000:1）。归一后栏间 1.108:1，靠"灰 / 白 / 灰"建立分区；<b>只改层分配，不改任何色值</b>。须与裁定表 B-18 一并拍板。</p>
+        </div>
+        <div class="ds-card">
+          <h3>字级（P0-2 · Tier 1 维持 / Tier 2 归位）</h3>
+          <div class="type-row"><span style="font-size:18px;font-weight:700">页面标题</span><span class="t-meta">18 / 700</span></div>
+          <div class="type-row"><span style="font-size:14px;font-weight:700">区块标题</span><span class="t-meta">--font / 700</span></div>
+          <div class="type-row"><span style="font-size:14px">正文与控件</span><span class="t-meta">--font / 400</span></div>
+          <div class="type-row"><span style="font-size:13px;color:var(--text-2)">次级说明</span><span class="t-meta">--font-sm / 400</span></div>
+          <div class="type-row"><span style="font-size:12px;color:var(--text-2)">元信息（路径 / 表头 / chip）</span><span class="t-meta">--font-xs / 400</span></div>
+          <p class="ds-note"><b>只有 14 / 13 / 12 三档 + 展示级 18</b>；生产中 22 处 11px、2 处 10px、5 处 12.5px 全部归位到 --font-xs / --font-sm（Tier 2，需 S6）。<b>禁止再出现裸 px 字号。</b></p>
+        </div>
+        <div class="ds-card">
+          <h3>字重（P0-3 · Tier 1 零复议）</h3>
+          <div class="type-row"><span style="font-weight:400">常规 400 —— 正文 / 控件 / 表格</span><span class="t-meta">400</span></div>
+          <div class="type-row"><span style="font-weight:700">强调 700 —— 标题 / 按钮 / 表头 / chip</span><span class="t-meta">700</span></div>
+          <p class="ds-note">Windows 仅 Segoe UI + 微软雅黑两档字重，生产 46 处 550/600/650 声明实际全渲染为 700、500 渲染为 400。<b>本稿显式只声明 400/700，渲染结果与现状一致 → 不需复议</b>；层级改由字级 + 颜色 + 留白承担。</p>
+        </div>
+        <div class="ds-card">
+          <h3>按钮层级（P1-4）</h3>
+          <div class="row">
+            <button class="btn btn-primary btn-sm">主操作</button>
+            <button class="btn btn-secondary btn-sm">次要</button>
+            <button class="btn btn-ghost btn-sm">幽灵</button>
+            <button class="btn btn-danger btn-sm">停止</button>
+          </div>
+          <p class="ds-note">主按钮底 <code>--primary-strong #2563EB</code> + 白字 = <b>5.12:1 达 AA</b>（现状 #3B82F6 + 白字仅 3.68）。深色下底 <code>--primary-strong #3B82F6</code> + <code>--on-primary = --bg</code> = <b>5.15:1</b>。<b>一个操作区只允许一枚主按钮</b>。</p>
+        </div>
+        <div class="ds-card">
+          <h3>状态 chip 四态（P0-5）</h3>
+          <div class="row">
+            <span class="chip chip-pending">等待中</span>
+            <span class="chip chip-running">翻译中</span>
+            <span class="chip chip-done">已完成</span>
+            <span class="chip chip-resume">可续传</span>
+          </div>
+          <p class="ds-note">琥珀文字改用 <code>--status-warn #B26A00</code>（4.09:1）替代 <code>--warn #F59E0B</code>（2.07:1 不达标）。若要达 4.5:1 需新增深琥珀 token → <b>Tier 2，入归一包</b>。</p>
+        </div>
+        <div class="ds-card">
+          <h3>空态四态（P1-9）</h3>
+          <div class="empty" style="min-height:120px;border:1px dashed var(--border-strong);border-radius:12px">
+            <div class="e-ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+            <div class="e-title">图标 + 标题 + 一句说明 + 动作</div>
+            <div class="e-desc">四态齐全：首次进入 / 加载中 / 失败 / 暗色。可复用母版：校对页四态状态条、词典失败诊断。</div>
+          </div>
+          <p class="ds-note">凡"零静态文案、JS 态填充"的控件，<b>必须同时设计三态兜底</b>，否则 hook 失败即裸控件（空复选框 / 蓝空药丸 / 空圆角框）。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="aside">
+    <div class="panel">
+      <div class="row">
+        <span class="field-label">翻译服务</span>
+        <select class="form-select compact" style="flex:1;min-width:150px"><option>本地 LM Studio</option></select>
+      </div>
+      <div class="row"><span class="chip chip-running">AI 大模型</span><span class="hint">需本机启动 LM Studio 并加载模型</span></div>
+      <div class="row">
+        <button class="btn btn-primary" style="flex:1"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></svg>开始净语翻译</button>
+        <button class="btn btn-danger" disabled><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>停止</button>
+      </div>
+      <div class="stack" style="gap:6px">
+        <div class="progress-track"><div class="progress-fill"></div></div>
+        <!-- P2-2 进度定量反馈（基线 prototype:853-855 有，生产已丢） -->
+        <div class="progress-meta"><span>阶段A · 批次 27 / 43</span><span class="pct">62%</span></div>
+        <div class="row" style="gap:6px"><span class="status-dot dot-run"></span><span class="hint">翻译中 · 预计剩余 4 分 12 秒</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">输出目录</div>
+      <label class="row row-tight"><input type="checkbox" checked><span class="field-label">保存到字幕同目录</span></label>
+      <div class="row">
+        <input class="form-input compact" style="flex:1;min-width:0" placeholder="输出目录…">
+        <button class="btn btn-secondary btn-sm">浏览</button>
+        <button class="btn btn-ghost btn-sm">打开</button>
+      </div>
+    </div>
+
+    <!-- P2-8：标题缩短，完整句移入 title 悬停 -->
+    <div class="panel" title="点击前往「API 与模型选择」页修改" style="cursor:pointer">
+      <div class="panel-title">两阶段流水线<span class="meta">前往引擎页修改 ›</span></div>
+      <div class="row" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px">
+        <span class="hint">阶段A 模型：qwen2.5-14b · 并行 3</span>
+      </div>
+      <label class="row row-tight"><input type="checkbox"><span class="field-label">翻译完成后自动压制</span></label>
+      <div class="row"><input type="checkbox"><span class="field-label">全链自动化（分析→修复→复验→压制）</span></div>
+      <span class="hint">产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过</span>
+    </div>
+
+    <div class="panel" style="margin-top:auto">
+      <div class="panel-title">系统状态<span class="meta">2.7.4</span></div>
+      <div class="row" style="justify-content:space-between"><span class="hint">数据保存目录</span></div>
+      <div class="file-path" style="white-space:normal;overflow-wrap:anywhere">D:\SubTransJAV\.data</div>
+      <div class="row" style="justify-content:space-between;border-top:1px solid var(--border);padding-top:8px"><span class="hint">翻译记忆库</span><span class="hint" style="color:var(--text-1)">1 284 条 · 命中 312 次</span></div>
+      <div class="row" style="justify-content:space-between;border-top:1px solid var(--border);padding-top:8px"><span class="hint">词典管理</span><span class="hint" style="color:var(--text-1)">3 / 4 可用</span></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var btn=document.getElementById('themeBtn'),m=document.getElementById('iMoon'),s=document.getElementById('iSun');
+  btn.addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark';
+    root.setAttribute('data-theme',dark?'light':'dark');
+    m.style.display=dark?'block':'none';
+    s.style.display=dark?'none':'block';
+  });
+  var items=document.querySelectorAll('.nav-item');
+  var pages=document.querySelectorAll('.tab-page');
+  items.forEach(function(it){
+    it.addEventListener('click',function(){
+      items.forEach(function(x){x.classList.remove('active');});
+      it.classList.add('active');
+      var id=it.getAttribute('data-tab');
+      pages.forEach(function(p){p.classList.toggle('active',p.id===id);});
+      var m2=document.querySelector('.main'); if(m2) m2.scrollTop=0;
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+# Mimosa 扫描发现三态甄别表（v1.3.1 D7a-3，D2026-0925-02）
+
+- **数据源**：`C:\Users\57850\.mimosa\security-scans\project-84b400c5f32332301acf457f\scan-2026-09-24T17-54-12.317Z-a0276cc48beb\findings.json`
+- **Seal digest（2026-10-07 2.8.0 批2/批3 复扫）**：`sha256:fc8f5bcbe3a6e5e56a4d2e5f5d3c737e01300751bbcdf1986a3796359c911912`，findingCount=**37**（scan-2026-10-07T17-37-04.353Z-434792762c3d）；批2/批3 14 文件（GPU 双检/预设体系/自动化钩子/音量与增强链旋钮）零新 anchor 族——实例级 NEW2/GONE3 均为已甄别留痕族行移位（#30 anchor sha256:44aca6d2… 在 ffmpeg_supply 扩段后漂移；#31 注 api anchor sha256:7f49388a… 两实例随 api 增段漂移其一）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-07 2.8.0 批1 复扫）**：`sha256:a13bc88b375051d30c6b561c440f5204e552520263ad4bc67050b15daf13523d`，findingCount=**38**（36+2 入账 #30/#31，scan-2026-10-07T16-56-12.216Z-46c18e0ac4ca）；本批 12 文件（hardsub/ffmpeg_supply/encode_queue 三新件+api 接线+前端底条/弹窗）——ffmpeg_supply×2 为新件首入深扫面（pin 制品+固定文件名集合封死，见 #30/#31）；api.py 两条既有发现行号漂移（1773→1796/2092→2115，anchor 同）；消除 2 条（gone）= 旧行号位置实例替换，anchor 族延续；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（历史锚：2026-09-24 首扫基线，下表甄别结论即对该次快照作出）**：`sha256:53010c48d878099dfb2c3b91443593f3654baf79619c60063efbaa44bae080da`（seal.json，artifacts 含 findings.json sha256:51623f83…）
+- **Seal digest（2026-09-26 复扫后新基线）**：`sha256:79eae27d882b5b250dc2bac8574dd2ed3accd42cc29adbf0fa19f485bedecd2e`，findingCount=**24**，零新增；净减 2 = `tools/tm_promote.py` SQL 字面量化与 `create_shortcut.py` 换 `subprocess` 两处修复在复扫中兑现消除；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1。
+- **Seal digest（2026-10-04 v2.6.5 发版门复扫）**：`sha256:9cc727ed019e27e76920428178b43466003b61deb0b2d3ae5074cc4da16ae722`，findingCount=**36**，零新增（scan-2026-10-04T08-12-17.465Z-1daa7de837c4，release/2.6.5 分支树）；2.6.5 全批次（段1 词典链+安装器/段2 UI 三项/品牌第 1 层）三轮扫描 36 恒定——改动面 dict_manager×3/subtitle_convert×1/cli×1 均既有留痕族行号漂移（#27/#28/#29 anchor 逐一相同），树外 9 条=Temp 瞬态既签注；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-27 v1.3.2 七任务批后复扫）**：`sha256:c397561fa4ee3cf155b699aa8a7472e08f88f94e798046c89cd32835bddb645a`，findingCount=**24**，零新增（scan-2026-09-27T13-21-25.294Z-4be51437f721）；本批 17 文件（进程治理两原语/分歧复核修复/GUI 折叠与并发/README 修订）未引入新发现，taskkill 原语（process_manager.py）列表参数形态未被标记；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1 同前。本批 push 时 git-gate L3 拦截的 26 高危+2 低危即本表已裁定各条（行号随代码演进漂移，以 identity.anchor 为准）。
+- **Seal digest（2026-09-27 发布阻塞批复扫）**：`sha256:6b29e4581ac2de21c5fe7f4e57c46abbc6ce975322104f24530556fb4d0b9d2e`，findingCount=**24**，零新增（scan-2026-09-27T14-29-31.995Z-aa372695b084）；本批 5 文件（taskkill 测试平台护栏+POSIX 测试 psutil 闸/版本号 1.3.2 清算/cli help 漂移/classifiers 3.13/本甄别表增记）未引入新发现；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-28 全面审计修复批复扫）**：`sha256:f7dc8d18200988680472dc82f8a8dc023285da9194847f0c91ce0570a0ac39d9`，findingCount=**24**，零新增（scan-2026-09-27T17-40-19.478Z-bcdf72a3f62e）；本批 16 文件（四路审计修复：管线核心 4/支撑层 6/GUI 6，含 resume 索引重对齐、导读路径拼接、TM db_path 锚点校验）未引入新发现；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-28 v1.4 主体批复扫）**：`sha256:882e374b12f23a54d7d05ea9f5a83c09b42bea6738201e0745ba465921ece513`，findingCount=**24**，零新增（scan-2026-09-28T06-22-52.179Z-f3e39b59055f）；本批 24 文件（v1.4 主体：借鉴 4 点+L1 钉+文本层巡检+轨道 A 缺省重绑定+GUI 画像/主题，含 tools/cps_distribution.py 新增）未引入新发现；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-29 GUI 外壳重构批复扫）**：`sha256:5e8713acc02fd1d82e20aeeaf20e9c298e08dea27b6b90f45a1608abadc63454`，findingCount=**24**，零新增（scan-2026-09-28T09-43-53.871Z-e3ff960c4121）；本批 4 文件（左侧 TAB 外壳：index.html 全量重排+app.js 用户模式/引导卡移除+两测试文件重构）未引入新发现；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-29 AI 质量分析批复扫）**：`sha256:63f6552aa3402de56b385c7b0e41851d633cc2e7eb5de55534e3739b1d92211d`，findingCount=**24**，零新增（scan-2026-09-28T10-32-14.057Z-ed4b92e7f157）；本批 16 文件（AI 质量分析后端 quality_advisor.py+CLI 子命令+词库锁定追加+伴生件清理表收编+GUI 三端点与导读页接入）未引入新发现；依赖扫描 completion=completed / packagesScanned=60 / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-30 2.1 中英分词提示批复扫）**：`sha256:630632eed4af335c5bb8f227cba2700d6070302a8a4fd9b6c3b41b8cc97ca96a`，findingCount=**26 = 基线 24 零新增 + 树外签注 +2**（scan-2026-09-29T15-00-53.441Z-9d6d2c84f058）；本批 7 文件（token_hint.py 新增/pipeline_v2.py 源语言分派/test_token_hint.py 17 用例/决策日志/测试基线分类表/CHANGELOG/roadmap）未引入新发现。+2 均为 `Temp/pyinstaller_dist{,_lite}/SubTransJAV/_internal/webview/js/api.js` 的 high code-injection——**本地 onedir 构建产物中的 pywebview 自带资产拷贝**（verdictEffect=none，static-finding），按 ②树外签注 处置（Temp 瞬态构建目录不入库；留存期间深扫面不减，清理构建目录后自然消除）；基线 24 条（20 路径穿越+2 SSRF+2 弱随机）identity 逐一比对无变化；依赖扫描 completion=completed / matchedAdvisories=1（离线快照 context-only）同前。
+- **Seal digest（2026-09-30 zh→en 冒烟三缺陷修复批复扫）**：`sha256:c9ec5c0a1347e236834721c9df0bf693f49c3fd0aeba6b535464b99be9f17e21`，findingCount=**26 = 基线 24 零新增 + 同上树外签注 +2**（scan-2026-09-29T16-10-31.452Z-8817050201b5）；本批 12 文件（回显修复：pipeline_v2/cleaner_rules/test_token_hint/test_direction_batch2；TM 方向接线：tm/cli/pipeline_support/test_tm_direction；generic B 协议：pipeline_v2/test_direction_batch2；docs 四件）未引入新发现，identity 清单与前扫完全一致（+2 仍为 pyinstaller_dist 构建产物签注项）；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-30 词典下载进度反馈批复扫）**：`sha256:b0cabf9f6e1ad767b86f3d56965fa4c6674cf42c819ff0cf23c91ff5fffde56c`，findingCount=**26**，与前扫身份级比对**零新增零消除**（scan-2026-09-29T17-36-40.294Z-aa0a8c4e4811）；本批 6 文件（dict_manager 分块下载+phase 进度/api.py 进度端点/app.js 轮询渲染/strings.py 两 MSG 键/两测试文件）未引入新发现（+2 树外签注项同前）；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-30 GUI 翻译方向控件批复扫）**：`sha256:ca9417263ebf2a119e0a3fe345cfdfcd410b384936dd3bac2926268785a22751`，findingCount=**26**，与前扫身份级比对**零新增零消除**（scan-2026-09-29T18-12-32.001Z-d31eb6de57d8）；本批 8 文件（api.py 方向/指令卡 args/index.html 方向行/app.js 控件绑定与持久化+input 防抖/strings.py 9 MSG 键/test_gui_api 4 用例/docs 三件）未引入新发现（+2 树外签注项同前）；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **Seal digest（2026-09-30 UI 改版轮批后复扫）**：`sha256:be233bd34a9dc7602686774642cab229d9b8e35c1408c02d11f8ef2dd3ba2539`，findingCount=**27 = 基线 24 零新增 + 树外签注 +3**（scan-2026-09-30T03-19-08.400Z-5bd2e5f730b1）；本批 6 文件（assets 四件 app.js/index.html/style.css/style.dark.css+tests 两件）未引入新发现，仓库面 identity 与前扫逐一比对完全一致（旧 `Temp/pyinstaller_dist*` 两条签注项随 D2026-0930-06 清理兑现消除）。+3 变动均为树外瞬态：①②原 pywebview api.js code-injection 构建产物拷贝在 `Temp/artifact_210/pyinstaller_dist{,_lite}/` 原样重现（2.1.0 artifact 校验工作区，同 findingId:aa82e57a/499491ab，verdictEffect=none，不入库）；③`Temp/b2_html.py:242` high path-traversal=本轮批 2 执行者的一次性 HTML 批量替换助手脚本（写目标为 Temp 内自产路径，UNTRACKED），按"Temp 瞬态脚本不修、留存期间深扫面不减"既定惯例树外签注；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **行号声明**：下表 line 号为扫描时点快照，会随代码演进而漂移；以 `identity.anchor`（findings.json 内 sha256 锚）为准做身份比对，行号仅作定位便利。
+- **口径修正声明（双基线并列）**：旧基线（2026-09-24 首扫，即上行历史锚 seal）——主控下发口径按 :786 分类相加为 25≠26；该次以 findings.json 实际数据为准：**20 路径穿越 + 2 SSRF + 1 SQL 注入 + 1 命令注入 + 2 弱随机 = 26 条（历史口径，仅指首扫快照）**。新基线（2026-09-26 复扫，即上新基线 seal）——findingCount=**24 条**，零新增，净减 2 = tm_promote.py SQL 注入 1 条与 create_shortcut.py 命令注入 1 条兑现消除。两引擎口径差异分列有先例：**D2026-0921-03 27/26 分列**。
+
+三态定义：
+1. **已修复**：本轮改动消除（入库）。
+2. **树外签注**：目标文件 UNTRACKED/.gitignore，不入仓库基线；本机一次性处置/留存声明，不构成仓库基线修复面（UNTRACKED 2 文件 3 条统一用此表述；Temp 瞬态脚本不修，留存期间深扫面不减）。
+3. **留痕维持**：本地单机工具，无不可信输入面，维持现状并留痕判据。
+- **Seal digest（2026-09-30 UI 改版阶段1 批后复扫）**：`sha256:6b709035a51d87b1b3b3f6cadd8c89d1c87dc0e2cafa5e9a819b7f79089e1c31`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-09-30T09-17-01.062Z-e8aa1f6a371b）；本批 9 文件（assets 四件 index.html/app.js/style.css/style.dark.css+删 3 套过时主题 css+tests 钉修订+docs 两件）未引入新发现——api.py 两条 path-traversal 为行号漂移（1226→1260/1453→1579），按 identity.anchor 逐一比对与基线完全相同；仓库面净变动=删 3 主题 css（不在扫描面）。+5 树外签注：`Temp/build_blind_pack.py` 弱随机 2 条与 `Temp/b2_html.py` 路径穿越 1 条均沿既有签注不变；新增 2 条为 `Temp/release-211/pyinstaller_dist{,_lite}/SubTransJAV/_internal/webview/js/api.js:75` code-injection（findingId:dbb7ea9e/c98151da）——2.1.1 发版构建产物中的 pywebview 自带资产拷贝，同 artifact_210 既签注项同源同判据（verdictEffect=none，Temp 瞬态构建目录不入库，清理后自然消除）；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-01 2.2.0 发版批复扫）**：`sha256:2aec3abd7ec19fa030e409bd9786041d65a964d612b9bec6af08b0401e76dead`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-09-30T18-46-09.990Z-a43db1291801）；与阶段1 批后复扫（e8aa1f6a371b）identity 级逐一比对**零新增零消除**——本批扫描面含阶段2 批2/批3 与真机反馈批五提交（文件行 chip/摘要卡/app.js innerHTML 存还/布局 CSS）后的首次复扫，innerHTML 用法未被标记（四处均为静态模板存还且有静态钉守护）；+5 树外签注项同前（Temp/build_blind_pack.py×2+b2_html.py×1+release-211 构建产物 api.js×2）；依赖扫描 completion=completed / matchedAdvisories=1 同前。本批 tag push 时 git-gate L3 拦截的 31 高危+2 低危即本表已裁定各条（钩子行内计数口径差异，以 identity 比对为准）。
+- **Seal digest（2026-10-01 D2026-1001-03 挂账清零批复扫）**：`sha256:57d9356f0f45ef3737fff24c663f373ba0cf0d075c0e1173da3ce11e05d6e0ef`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T06-43-53.542Z-dde0c1240e68）；本批 8 文件（版本三件 __version__.py/pyproject.toml/test_version_consistency.py+gui-probe.yml+docs 四件 decision-log/roadmap/真机走查清单/使用与维护手册；批后另建 docs/release-checklist.md 纯新文档）未引入新发现，findingCount 与 2.2.0 发版批复扫（2aec3abd）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。本批 ZCode 内 git commit 首次遭 git-gate 全库拦截（同 31 高危+2 低危，即本表既裁各条）——standing mode「commit+push 恒由 owner 终端」通道执行，钩子行为变化已录 D2026-1001-03 备查。
+- **Seal digest（2026-10-01 2.3.0 三批批复扫）**：`sha256:222cff75c7b5a083743cbf1fff6eb1ff0c47d4fb8e51b61071cade3cb61a2e42`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T07-52-27.693Z-c620c4f4ad16）；本批 15 代码/测试/打包文件（GUI 三件+两钉修订+打包四件 spec/iss/release.yml/ci.yml+后端文案四件 dict_manager/pipeline_v2/grammar_hint/cli+新钉 test_pyproject_meta）未引入新发现，与挂账清零批复扫（57d9356f）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-01 2.3.0 发版批复扫）**：`sha256:60f64fb4faf31554c5bddfbbfed023501a7da1be55142fd95224db585347b723`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T08-37-58.436Z-61cf190580e9，release/2.3.0 分支态）；本批 5 文件（setup.iss [Files] 修复+release.yml 安装器断言+版本三常量/pyproject bump 2.3.0+CHANGELOG [2.3.0]）未引入新发现，与前扫（222cff75）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-01 2.3.1 收尾批复扫）**：`sha256:2eafa4997a9543fbaeb61e995cfe40094e116de02f4eb46b31dcf43670d8205c`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T11-14-46.753Z-1a739c391a34）；本批 4 文件（GUI 三件 index.html/app.js/style.css+钉文件 test_ui_phase3_redlines.py）未引入新发现，与前扫（60f64fb4）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-01 2.4.0 收口批复扫）**：`sha256:9204801222213de4fabb24bb3a61a46756f1fd0f0350c59f2d648640cc329f38`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T13-41-39.845Z-dd96fb6c839b）；本批 4 文件（GUI 三件+钉文件 test_ui_phase3_redlines.py）未引入新发现，与前扫（2eafa499）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-01 2.5.0 修复批复扫）**：`sha256:3762f3cf2b7e1a766a182bbd3e24378c90bc3474f73791e210f6bdbfe3dfcc9d`，findingCount=**31 = 上扫 29 + 新增签注 1 + 树外路径漂移口径 1**（scan-2026-10-01T15-38-48.385Z-5acb18308d8e）；**identity 级新增 1 条：`subtransjav/refine/dict_manager.py:249` path-traversal high——判误报留痕维持**：:249 `z.open(names[0])` 为 zip 归档内寻址（非文件系统路径拼接），写出目标=调用方锚定 tmp+原子改名（落位守卫『必须包含于数据根 dict/ 之内』覆盖），member 选取受 manifest archive_member 后缀+下载 sha256 pin 双校验（篡改 zip 先死哈希），2.5.0 流式解压加固为本批引入的新代码面、扫描器静态模式误判；行内计数差 1 系树外项 Temp 路径漂移口径（identity+path 比对 GONE=0 佐证非消除）；本批 14 文件其余未引入新发现；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.5.0 发版批复扫）**：`sha256:61eea2c6d7c136d776504eb1b23f15dfc1ca220c415e3bf7421c0a62a2b70313`，findingCount=**31 = 基线 24 + 树外签注 5 + 新签注 1（dict_manager.py:249 误报，见上行）+1 口径**（scan-2026-10-01T16-12-36.530Z-20b9ddc376b8，批 5 AI 独立设置后）；本批 6 文件（AI 设置 DOM/app.js/api.py/钉文件/批清单/评估文档）未引入新发现，与前扫（3762f3cf）identity 级零新增；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。：`sha256:9204801222213de4fabb24bb3a61a46756f1fd0f0350c59f2d648640cc329f38`，findingCount=**29 = 基线 24 零新增 + 树外签注 +5**（scan-2026-10-01T13-41-39.845Z-dd96fb6c839b）；本批 4 文件（GUI 三件+钉文件 test_ui_phase3_redlines.py）未引入新发现，与前扫（2eafa499）同数零新增；+5 树外签注沿袭（Temp 瞬态项构成以当次 findings.json 为准）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批0 复扫）**：`sha256:a4eb06899d04f561457407eca5510be5cdcbab8a0b56acdf9b16399d78d45120`，findingCount=**31**，与前扫（20b9ddc3）identity 级比对零新增零消除（scan-2026-10-02T16-44-52.246Z-d4964c0bf1fc）；本批 6 文件（批0 CREATE_NO_WINDOW：subprocess_flags.py 新增+process_manager/api/asr_env/audio_detect+钉测）未引入新发现；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批1 复扫）**：`sha256:0443fe088a17c457ae162a991e69fda55463a9f08740b7e88ca0032f0ccdde99`，findingCount=**32 = 上扫 31 + 新签注 1**（scan-2026-10-02T18-01-20.377Z-7333379f4e3e，批1a+1b 后）；identity 级新增 1 条＝`subtransjav/refine/dict_manager.py` path-traversal high（findingId:finding:b50deb159fa0c0bdb4967000，3 occurrence 写位 :352 下载临时写/:406 解压写/:628 迁移复制写，行号为当次快照）——**判留痕维持+已加固**：写位路径源=词典目录（用户经原生对话框自选任意盘目录=D2026-1002-12 拍板点3/5 产品语义；持久化于本机 config/user_dirs.json，威胁模型与 .data-root 指针同级=本机可信配置）；批1b 已附消费面净化守卫 `_ensure_safe_dict_dir`（四系统根黑名单+`\\?\` 扩展前缀还原+resolve 后大小写不敏感前缀判定，口径对齐 security.py `_validate_user_directory`），JSON 损坏/空白/黑名单命中均静默回退数据根默认，静态污点规则不识别该守卫故仍标记；本批其余 10 文件未引入新发现；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批1 提交前终扫）**：`sha256:dc58a64180f108b3c4d6fa349a13c76dd55e68ec7e5a2515482a2519d56ae534`，findingCount=**32**，与批1 复扫（0443fe08）identity 级零新增零消除（scan-2026-10-02T18-24-51.078Z-26c77de71964）；本扫描面增量仅 tests/test_gui_js_static.py +2 静态钉（T3 复测归档件，见决策日志）与 GUI 黑盒三轮（含两处桩环境修复），代码面零变动；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批4 复扫）**：`sha256:1c8ecf25a1daf1c717baf9bc76d03f620fbc364c53aa010a6de18f1932d3423c`，findingCount=**32**，与批1 终扫（dc58a641）identity 级零新增零消除（scan-2026-10-02T18-57-33.942Z-ed19abbfc287）；本批 6 文件（审计②③④：cleaner_rules parse_srt 宽容重写/api.py 转码清理+cache 完整性+在飞锁+sanitize/review.js error 监听+dirty 确认/三测试文件）未引入新发现；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **Seal digest（2026-10-02 2.6.2 批2/批3 复扫）**：`sha256:62cbbfac8410b316945ed981df409940ea381ca5c04b00dad4f4f62953bbc348`（批2，scan-2026-10-02T19-24-35.300Z-dee5e7279bb3）与 `sha256:f2fce83fac2dc9c3374cea6ace7b917a8551c5186a7ba5b0bece79977b68f253`（批3，scan-2026-10-02T20-00-15.609Z-b27b1dea9a5e）均 findingCount=**32**，identity 级零新增零消除；批2 4 文件（app.js 模型下拉去自动拉取/ASR 卡重整+index.html+两测试）与批3 4 文件（AI 分析区 field-col+列向覆盖/Console 占比/系统状态卡 JS 动态两行+label 中文填充+测试）未引入新发现；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+- **树外签注追记（2026-10-03 本地测试包构建后）**：owner 要本地包，按发版 workflow 同款流程本地重建 `Temp/pyinstaller_dist/SubTransJAV/`（onedir 103M）→ pywebview 自带资产 `_internal/webview/js/api.js:75` code-injection **原样重现**（Stop-hook L2 复查报出，同 findingId 类，verdictEffect=none）——与 2.1.0/2.1.1/阶段1 三次既签注项同源同判据（构建产物拷贝、不入库、清理构建目录后自然消除），沿 ②树外签注 处置不另修；下次正式深扫树外构成以当次 findings.json 为准。安装器 `Temp/innoinstall/SubTransJAV-setup-2.6.2.dev0.exe`（SHA256 1108cbba…77cbb32）已交 owner 真机验收。
+- **Seal digest（2026-10-03 2.6.2 热修批复扫）**：`sha256:9f615086f69b7cf086d2138fd476dda1a9a996d7d286b3962f63f094092e8139`，findingCount=**33 = 上扫 32 + 树外签注入账 1**（scan-2026-10-03T08-52-06.784Z-3bfa1672ff14，热修 R3/R4 后）；identity 级新增 1 条＝`Temp/pyinstaller_dist/SubTransJAV/_internal/webview/js/api.js:75` code-injection（anchor:0e45e446）——上扫（b27b1dea，2026-10-02T20:00）早于本地测试包构建时点，本扫首次把上行树外签注追记的构建产物拷贝纳入深扫面，属**既签注项的预期入账非新发现**（同源同判据：pywebview 自带资产、不入库、清理构建目录后自然消除）；本批 5 文件（assets 两件 app.js/style.css+tests/test_gui_js_static.py +3 回归钉+pyproject.toml/__version__.py 版本 2.6.2.dev1）未引入新发现，仓库面 identity 与前扫零差异；依赖扫描 completion=completed / matchedAdvisories=1（离线快照 context-only）同前。
+- **Seal digest（2026-10-03 2.6.3 批B 批复扫）**：`sha256:7b80735414a2dee1f35aaef7ae354b96094f4b79d67e4c7d70827504725c1412`，findingCount=**34 = 上扫 33 + 新签注 1**（scan-2026-10-03T11-03-45.180Z-838614cbbb54，批B ASR 下载器+词典源后）；identity 级新增 1 条＝`subtransjav/refine/asr_downloader.py:217` path-traversal high（anchor:b887809d，本批新文件新代码面）——**判留痕维持**：见上新表 #28（.part 写位派生链全白名单+三层 URL 校验+symlink 守卫，静态规则不识别上游白名单链）；其余差异均为行号漂移（dict_manager :352/:406/:628→:378/:432/:684 与 api.py :1565/:1884→:1619/:1938，identity.anchor 逐一相同=既裁 #27 等项）；本批 9 文件（asr_downloader 新增/dict_manager source 参数/asr_env sources+license/api 两端点/app.js AppModal.download+词典双按钮/style.css/四测试文件）未引入其他新发现；依赖扫描 completion=completed / matchedAdvisories=1 同前。
+
+## 三态统计（双基线并列）：旧基线（2026-09-24 首扫，26 条，历史口径）：①已修复 1 ｜ ②树外签注 3 ｜ ③留痕维持 22 ｜ 新基线（2026-09-26 复扫，24 条）：上式净减 ①中 tm_promote.py SQL 1 条与 ②中 create_shortcut.py 1 条（兑现消除，①已从扫描面消除）→ ②剩 2（Temp/build_blind_pack.py 弱随机）｜ ③ 22 不变
+
+---
+
+## ① 已修复（1 条）
+
+| # | file:line | publicClass | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|---|
+| 1 | tools/tm_promote.py:51 | sql-injection | high | finding:f3e2befa37d0938f19301e67 | 原 `f"SELECT {cols} FROM {TABLE}…"` f-string SQL 三处（:51/:64/:96 附近）已改字面量 SQL（7a-1，先例 7f1c0c1 v2_manifest_fp），插值面清零，数据一律参数化 `?`。 |
+
+## ② 树外签注（3 条，UNTRACKED 2 文件）
+
+| # | file:line | publicClass | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|---|
+| 2 | create_shortcut.py:11 | command-injection | high | finding:e9281db5d22bac827e16b3c9 | 原 `os.system(f'"{sys.executable}" -m pip install pywin32')` 已改 `subprocess.call([sys.executable, "-m", "pip", "install", "pywin32"])`（7a-2）；文件 UNTRACKED/.gitignore，本机一次性处置，**不构成仓库基线（D2026-0925-02 D7a）**，故记树外签注。 |
+| 3 | Temp/build_blind_pack.py:10 | insecure-randomness | low | finding:0bdd4fe29173e436783d1499 | `rng = random.Random(42)`：固定种子盲测打包器，弱随机反而是确定性重放需要；瞬态脚本不修，留存期间深扫面不减。 |
+| 4 | Temp/build_blind_pack.py:57 | insecure-randomness | low | finding:0bdd4fe29173e436783d1499 | `random.Random(7).sample(rest, …)`：同上，抽样盲测集用固定种子可复现是特性不是缺陷。 |
+
+## ③ 留痕维持（22 条）
+
+### refine 面 10 条路径穿越（本地单机工具构造路径，无不可信输入面）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 5 | subtransjav/refine/cli.py:329 | high | finding:bafa083aed72363167807da2 | `from .config import LOGS_DIR`：日志目录为程序内常量构造路径，非用户穿越面。 |
+| 6 | subtransjav/refine/filters.py:91 | high | finding:7cc1ebfc7715bc5ca435880d | `open(srt_path, "w", …)`：输出路径由本地 CLI 参数链（操作者本人）构造，单机无跨信任边界调用方。 |
+| 7 | subtransjav/refine/glossary_conflict.py:164 | high | finding:821a7f08ca21f75982bc1e1c | `open(p, "w", encoding="utf-8-sig", …)`：冲突报告路径同上，操作者 CLI 参数链。 |
+| 8 | subtransjav/refine/glossary.py:60 | high | finding:aea75b4fd802834ad18b95ad | `open(path, "w", encoding="utf-8-sig", …)`：术语表导出路径由本地 config/参数构造，无不可信输入。 |
+| 9 | subtransjav/refine/instructions.py:87 | high | finding:ec34fe6407d2dfef39e7ec56 | `open(path, "w", encoding="utf-8")`：提示词文件路径为程序内派生路径。 |
+| 10 | subtransjav/refine/language_validator.py:274 | high | finding:e65e93ab1230f3b6ecbff2aa | `open(srt_path, "w", encoding="utf-8")`：校验器写回路径，操作者本人指定。 |
+| 11 | subtransjav/refine/manifest.py:131 | high | finding:dc990779a13a808494c43465 | `open(tmp, "w", encoding="utf-8")`：manifest 临时文件路径程序内构造（tmp→rename 模式）。 |
+| 12 | subtransjav/refine/quality_report.py:404 | high | finding:98f2b0aac98b7d33e7e57033 | 质量报告产物路径枚举（`[(r, "已过滤") for r in artifacts]` 一带）：报告目录本地派生，无外部输入。 |
+| 13 | subtransjav/refine/runlog.py:148 | high | finding:1f68310dd90cadd7dbf5bafa | `open(target, 'w', encoding='utf-8')`：错误日志归档目标路径由 Logs/ 常量目录派生。 |
+| 14 | subtransjav/refine/tm.py:331 | high | finding:a14e3c7d40ccc72049c86bb3 | `open(path, "w", encoding="utf-8-sig", …)`：TM 导出路径，操作者 CLI 参数链。 |
+
+### api 面 2 条路径穿越（本地 GUI 回环，路径来自本地配置/会话内自产数据）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 15 | subtransjav/webview_gui/api.py:1057 | high | finding:ccbcb5d0b3d2c98620b1b856 | `by_stage = {s.get("stage"): s for s in data["stages"]…}`：本地 webview GUI 只回环服务本机会话，路径/阶段数据自产自用，无远程不可信客户端。 |
+| 16 | subtransjav/webview_gui/api.py:1193 | high | finding:ccbcb5d0b3d2c98620b1b856 | `if not os.path.isfile(p):`：同 finding 同源，`p` 为本地会话内工作目录派生路径。 |
+
+### tools 面 8 条路径穿越（操作者 CLI 参数链）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 17 | tools/ab_compare_srt.py:318 | high | finding:a5484d1c0947dfeb4d24d39b | `open(OUT_TXT, "w", encoding="utf-8")`：A/B 对比输出为脚本内常量路径。 |
+| 18 | tools/bench_refine.py:122 | high | finding:f78a5359eef3855f194e9521 | `open(in_path, "w", encoding="utf-8")`：基准输入构造，操作者本人指定路径。 |
+| 19 | tools/context_review.py:906 | high | finding:af160b62079add92c8d6b247 | `open(out_path, "w", encoding="utf-8-sig", …)`：复核报告输出，操作者 CLI 参数链。 |
+| 20 | tools/glossary_learned_reset.py:71 | high | finding:4f8c0efde120d7f5a26517c3 | `open(p, "w", encoding="utf-8-sig", …)`：学习术语表重置目标路径，config 常量派生。 |
+| 21 | tools/model_matrix_run.py:121 | high | finding:9e4a8467fa88a394ea68d158 | `open(tmp, "w", encoding="utf-8")`：矩阵评测临时文件，程序内构造。 |
+| 22 | tools/model_matrix_run.py:403 | high | finding:9e4a8467fa88a394ea68d158 | `logf = open(log_path, "w", …)`：评测日志路径，操作者 CLI 参数链。 |
+| 23 | tools/model_matrix_run.py:1069 | high | finding:9e4a8467fa88a394ea68d158 | 同上（第二处日志句柄），同源同判据。 |
+| 24 | tools/tm_purge.py:348 | high | finding:ce19f1834895030d6d709990 | `open(path, "w", encoding="utf-8-sig", …)`：清理工具导出路径，操作者本人指定。 |
+
+### SSRF 2 条（本地回环探测，无远程攻击者可控 URL）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 25 | subtransjav/refine/glossary_learn.py:91 | high | finding:f47d894d666709fe19ea5304 | `r = requests.get(probe_url, timeout=timeout_probe)`：probe URL 为本地词典服务健康探测（本机回环），目标由本地配置给出。 |
+| 26 | tools/model_matrix_run.py:221 | high | finding:0f0d5e2b912d2f7d0cc88f80 | `with _urlreq.urlopen(req, timeout=60) as resp:`：请求本地 LM Studio/模型服务端点（127.0.0.1 回环），端点来自本地配置。 |
+
+### 词典目录写位 1 条路径穿越（用户自选目录=产品语义，已附净化守卫；2.6.2 批1）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 27 | subtransjav/refine/dict_manager.py:352/406/628 | high | finding:b50deb159fa0c0bdb4967000 | 下载临时写/zip 解压写/迁移复制写三 occurrence 同锚：落位目录=词典目录，用户经原生对话框自选任意盘（D2026-1002-12 拍板点3/5），持久化本机 user_dirs.json，与 .data-root 指针同威胁模型；已附 `_ensure_safe_dict_dir` 消费面守卫（四系统根黑名单+扩展前缀还原+resolve 后前缀判定），损坏/黑名单值静默回退默认；无跨信任边界输入方，留痕维持。 |
+
+### ASR 下载器 .part 写位 1 条路径穿越（清单白名单+三层 URL 校验上游封死；2.6.3 批B）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 28 | subtransjav/refine/asr_downloader.py:217 | high | finding:b887809d9db1487d7383759338c3933b7afbaf25eb1f566e5932f83e9f5cfefe（anchor sha256:b887809d…，_open_part 的 `open(tmp,"wb")` 写位） | tmp=.part 临时件路径，派生链全白名单：落位目录=数据根 models/asr（paths.data_subdir 派生）；文件名由清单 ASR_RECOMMENDED_MODELS 的 model 字段派生且 model 参数先过条目白名单（路径注入面封死）；下载 URL 先经三层校验（https+清单 URL 规范化精确匹配+host 小名单与 getaddrinfo 全量 IP 私网/环回/保留拒绝）+重定向逐跳守卫；写前 symlink 守卫+目录真实目录判定。静态污点规则不识别上游白名单链，与 #27 同威胁模型（本地单机、无跨信任边界输入方），留痕维持。 |
+
+### 多格式导入 conv.srt 写位 1 条路径穿越（操作者输入信任模型；2.6.4 批2）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 29 | subtransjav/refine/subtitle_convert.py:141 | high | finding:c86cea32cfe8dfacba098141（anchor sha256:11933a66…，convert_file 的 `open(srt_path,"w")` 写位） | srt_path=`path.with_name(path.name+".conv.srt")`——产物与输入同目录同名派生，**不构造任何父目录引用**；输入路径来自操作者本人 CLI `-i` / GUI 原生文件对话框（本地单机，无跨信任边界不可信输入方），`-i` 任意路径历来即产品语义（与 #27 词典目录同威胁模型）。硬化尝试记录：L2 复查挂旗后尝试四种守卫变体（入口 os.pardir 拒绝/resolve+包含校验/最终 resolve/整文件 Write 重投）均被 Write 期静态模式拦截（行号 141→146→11→153→8 无规律漂移，同一 open 构造在首轮建文件时通过），判定为候选期模式误报循环；按留痕维持处置，若未来引入不可信输入方（如远端推送转换）须先补守卫再接线。另本扫既签注入账 2 条：#28（批B 文件首入深扫面）+Temp/release-263 构建产物 api.js（既签注类，瞬态不入库）。 |
+
+### ffmpeg 供给层 2 条路径穿越（pin 制品+固定文件名集合；2.8.0 批1）
+
+| # | file:line | severity | findingId | 证据行与判据 |
+|---|---|---|---|---|
+| 30 | subtransjav/refine/ffmpeg_supply.py:356 | high | anchor sha256:44aca6d2…（_fetch 的 `open(dest,"wb")` 下载写位） | dest=dest_dir/ffmpeg-full.zip.downloading 固定名派生；dest_dir 唯一调用点=api.ffmpeg_supply_download 传 paths.data_root()（程序内常量，非用户自由输入），与 #28 ASR .part 同构造同信任模型；上游=github.com/release-assets 域白名单逐跳守卫+TOFU sha256 pin+Content-Length/zipfile EOCD 双完整性门，写位内容不可控面封死；留痕维持。 |
+| 31 | subtransjav/refine/ffmpeg_supply.py:448 | high | anchor sha256:44aca6d2…（zip 解压 `os.path.join(out_bin, base)` 写位） | base 来自 zip namelist 但**先经固定集合过滤**（仅 basename ∈ {ffmpeg.exe, ffprobe.exe} 入 targets，其余成员全忽略），join 的第二段只能是这两个字面量之一，无遍历面；out_bin=data_root/ffmpeg/bin 程序常量；与 #27 词典 zip 解压写位同判据（member 名过滤+固定落位目录），留痕维持。另注：本扫 api.py 两条（:1796/:2115，anchor sha256:7f49388a…）为既有发现行号漂移（原 :1773/:2092，批1 api 增段致 +23 行），identity 同前非新增。 |
+
+---
+
+**留痕维持总判据**：本项目为本地单机工具链（CLI + 本地 webview 回环），上述路径/URL 全部来自操作者本人 CLI 参数、程序内常量或本地配置文件派生，不存在跨信任边界的不可信输入方；边界加固以守卫脚本（tools/guard_banned_paths.py，D10）+ 敏感路径名单制承接（decision-log :139 契约）。

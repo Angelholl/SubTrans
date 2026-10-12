@@ -1,0 +1,20 @@
+[PASS] 编码探测: 自动探测不可靠（自动探测异常：UnicodeDecodeError: 'utf-8' codec can't decode byte 0xbd in position 542: invalid start byte）→ 显式 encoding 可靠=True → 规格必须自持探测梯（BOM→UTF-8 严→GBK 回退），不能交给库自动探测
+[FAIL] ASS Format 行驱动: 标准序='' 变体序='' → 库按 Format 行解析（头驱动成立），规格仍要求对未知字段容错并记告警
+[PASS] VTT 非载荷行: 事件数=3 注释/样式/区域/id 行全部未入载荷=True
+[PASS] voice span: <v> 标签泄漏=False → 丢弃标签归单轨（说话人名是否保留为前缀属规格画押点，草稿按'丢弃'裁定）
+[FAIL] 内嵌时间戳标签: 内嵌时间戳泄漏=True（逐字高亮时间轴信息在 SRT 无承载，裁定丢弃）
+[PASS] 换行三态: 硬换行行='' 软换行行='' → 库统一转真实换行/空格；规格按'硬换行→换行保留，软换行\n→空格，\h→空格'裁定并与库行为对表
+Traceback (most recent call last):
+  File "D:\SubTrans-d264-pre\spike\pysubs2_spike.py", line 136, in <module>
+    srt_out = out(pysubs2.load(str(cs_ass)))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\SubTrans-d264-pre\spike\pysubs2_spike.py", line 26, in out
+    subs.save(buf, format_="srt")
+  File "D:\SubTrans-d264-pre\.venv-spike\Lib\site-packages\pysubs2\ssafile.py", line 261, in save
+    outpath = Path(path)
+              ^^^^^^^^^^
+  File "G:\python\Lib\pathlib.py", line 1162, in __init__
+    super().__init__(*args)
+  File "G:\python\Lib\pathlib.py", line 373, in __init__
+    raise TypeError(
+TypeError: argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'StringIO'

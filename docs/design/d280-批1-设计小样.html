@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>d280 批1 设计小样 · 压制队列底条 + 三分区参数面板容器(静态稿)</title>
+<style>
+:root{
+  --bg:#f5f6f8;--card:#ffffff;--line:#e2e5ea;--txt:#1c2330;--muted:#6b7482;
+  --accent:#3b6ef5;--accent-weak:#e8eefe;--ok:#2f9e63;--err:#d64545;--warn:#c98a12;
+  --radius:10px;--shadow:0 8px 28px rgba(20,30,60,.14);
+}
+html.dark{
+  --bg:#14171d;--card:#1d222b;--line:#2c3340;--txt:#e8ebf1;--muted:#9aa3b2;
+  --accent:#5b8bff;--accent-weak:#22304d;--ok:#4cc38a;--err:#ef6b6b;--warn:#e2b34a;
+  --shadow:0 8px 28px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif;padding:24px;min-height:100vh}
+h1{font-size:17px;margin-bottom:4px}
+.note{color:var(--muted);font-size:12.5px;margin-bottom:20px}
+.section-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:26px 0 10px}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{background:transparent;border-color:var(--err);color:var(--err)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11.5px;background:var(--accent-weak);color:var(--accent)}
+
+/* ===== 1. 全局队列底条(queue-dock 组件族) ===== */
+.queue-dock{
+  position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+  width:min(720px,94vw);background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);z-index:40;overflow:hidden;
+}
+.queue-dock-main{display:flex;align-items:center;gap:10px;padding:9px 14px}
+.queue-dock-state{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none}
+.queue-dock-state.running{background:var(--accent);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.queue-dock-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.queue-dock-label b{font-weight:600}
+.queue-dock-label .muted{color:var(--muted)}
+.track{flex:0 0 180px;height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.fill{height:100%;width:46%;border-radius:99px;background:var(--accent);transition:width .4s}
+/* error 变体(交付闭环三件套之一) */
+.fill.err{background:var(--err)}
+.queue-dock-actions{display:flex;gap:6px;flex:none}
+.queue-dock-panel{border-top:1px solid var(--line);padding:6px 14px 10px;max-height:260px;overflow:auto}
+.queue-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:12.8px}
+.queue-item:last-child{border-bottom:0}
+.queue-item .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
+.queue-item .dot.done{background:var(--ok)}.queue-item .dot.failed{background:var(--err)}
+.queue-item .dot.running{background:var(--accent)}.queue-item .dot.queued{background:var(--muted)}
+.queue-item .name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.queue-item .track{flex:0 0 120px}
+.queue-item .act{flex:none}
+.queue-item .errtext{color:var(--err);font-size:12px}
+/* 磁盘预检 danger 行 */
+.danger-row{display:flex;gap:8px;align-items:center;background:color-mix(in srgb,var(--err) 10%,transparent);
+  border:1px solid var(--err);border-radius:8px;padding:7px 10px;font-size:12.8px;color:var(--err);margin-top:8px}
+
+/* ===== 2. 三分区参数面板容器(AppModal kind='encode' 批1/批2 共用) ===== */
+.modal-mask{position:fixed;inset:0;background:rgba(10,14,22,.45);z-index:50;display:flex;align-items:center;justify-content:center}
+.modal-card{width:min(680px,92vw);max-height:88vh;display:flex;flex-direction:column;background:var(--card);
+  border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.modal-head h2{font-size:15px}
+.modal-body{padding:16px 18px;overflow:auto}
+.modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+/* 分区 */
+.enc-section{margin-bottom:14px}
+.enc-section>h3{font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:8px;letter-spacing:.04em}
+.enc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12.5px;color:var(--muted)}
+.field select,.field input{border:1px solid var(--line);background:var(--bg);color:var(--txt);
+  border-radius:8px;padding:6px 9px;font-size:13px}
+.field .derive{font-size:12px;color:var(--muted)}
+.field.full{grid-column:1/-1}
+/* 高级折叠区:批1 置空禁用占位(C8) */
+.enc-section.disabled{opacity:.55;pointer-events:none}
+.enc-section .placeholder{border:1px dashed var(--line);border-radius:8px;padding:12px;text-align:center;color:var(--muted);font-size:12.5px}
+/* 预估行(长任务硬性规定之一) */
+.eta-row{display:flex;gap:8px;align-items:center;background:var(--accent-weak);border-radius:8px;padding:7px 10px;font-size:12.8px;margin-top:4px}
+.switch{display:flex;align-items:center;gap:8px;font-size:13px}
+.switch .tk{width:34px;height:19px;border-radius:99px;background:var(--line);position:relative;cursor:pointer}
+.switch .tk::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .2s}
+.switch.on .tk{background:var(--ok)}
+.switch.on .tk::after{left:17px}
+</style>
+</head>
+<body>
+<h1>d280 批1 设计小样(静态稿)</h1>
+<div class="note">压制队列底条 + 三分区参数面板容器。token/按钮族照抄 style.css 既有变量(此处为示意复刻);实现走 createElement 注入+FROZEN_IDS 预算(底条 6 id)。批1 点亮=基础区+字幕音频区(字号/音频);高级折叠区置空禁用占位,批2 扩展不重建(C8)。</div>
+
+<div class="section-title">1 · 全局队列底条(常驻,有任务时显示;展开浮层含交付闭环)</div>
+<div class="queue-dock">
+  <div class="queue-dock-main">
+    <span class="queue-dock-state running"></span>
+    <span class="queue-dock-label"><b>压制中</b> <span class="muted">mufr-006_hardsub.mp4</span> · H.265 均衡 1080p</span>
+    <span class="track"><span class="fill" style="width:46%"></span></span>
+    <span class="muted" style="font-size:12px">46% · ETA 12分</span>
+    <span class="queue-dock-actions">
+      <button class="btn danger">取消</button>
+      <button class="btn ghost">展开 ▴</button>
+    </span>
+  </div>
+  <div class="queue-dock-panel">
+    <div class="queue-item"><span class="dot running"></span><span class="name">mufr-006_hardsub.mp4</span><span class="pill">H.265 · 均衡 · 1080p</span><span class="track"><span class="fill" style="width:46%"></span></span><span class="act"><button class="btn danger">取消</button></span></div>
+    <div class="queue-item"><span class="dot queued"></span><span class="name">abc-001_hardsub.mp4</span><span class="pill">AV1 · 高压缩 · 720p</span><span class="muted">排队中 · 预计 38分</span></div>
+    <div class="queue-item"><span class="dot failed"></span><span class="name">xyz-009_hardsub.mp4</span><span class="errtext">字幕文件不存在</span><span class="act"><button class="btn">重试</button></span></div>
+    <div class="queue-item"><span class="dot done"></span><span class="name">def-002_hardsub.mp4</span><span class="muted">已完成 · 01:2x:xx</span><span class="act"><button class="btn">打开文件夹</button></span></div>
+  </div>
+</div>
+
+<div class="section-title">2 · 磁盘预检 danger 行(弹窗内,失败禁开始)</div>
+<div class="modal-card" style="position:relative;max-width:560px">
+  <div class="modal-body">
+    <div class="danger-row">⚠ 磁盘剩余 1.2GB,预计需要 4.8GB——请清理或更换输出目录</div>
+    <div class="eta-row">⏱ 预计时长:约 42 分钟(视频 21 分钟 × AV1 CPU 系数)· 完成前请勿关闭程序</div>
+  </div>
+</div>
+
+<div class="section-title">3 · 三分区参数面板容器(AppModal kind='encode';批1/批2 共用骨架)</div>
+<div class="modal-mask" style="position:relative;inset:auto;width:fit-content;margin:0 auto">
+  <div class="modal-card">
+    <div class="modal-head"><h2>压制成品</h2><span class="muted" style="font-size:12px">3 个文件 · 硬字幕烧录</span></div>
+    <div class="modal-body">
+      <div class="enc-section">
+        <h3>基础</h3>
+        <div class="enc-grid">
+          <div class="field"><label>格式</label><select><option>H.264(兼容性最好)</option><option selected>H.265(体积更小)</option><option>AV1(体积最小·耗时最长)</option></select></div>
+          <div class="field"><label>后端</label><select><option>自动</option><option>CPU</option><option disabled>GPU(2.8.0 批2 提供)</option></select></div>
+          <div class="field"><label>画质</label><select><option>高压缩(体积优先)</option><option selected>均衡(推荐)</option><option>高画质(观感优先)</option></select></div>
+          <div class="field"><label>分辨率</label><select><option>保持原样</option><option>720p</option><option selected>1080p</option><option>1440p</option><option>2160p</option></select></div>
+          <div class="field"><label>码控</label><select><option>按画质档(推荐)</option><option>目标码率</option></select><span class="derive">目标码率模式:3113 kbps(上限 4513 · 缓冲 9027)</span></div>
+          <div class="field"><label>输出目录</label><input value="D:\Videos\SubTrans" readonly><button class="btn" style="align-self:end">…</button></div>
+        </div>
+        <div class="eta-row">⏱ 预计总时长:约 1 小时 26 分(3 个文件串行)</div>
+      </div>
+      <div class="enc-section">
+        <h3>字幕与音频</h3>
+        <div class="enc-grid">
+          <div class="field"><label>字幕字号(缺省 22)</label><input type="number" value="22" min="12" max="72"></div>
+          <div class="field"><label>音频</label><select><option>直接复制(推荐)</option><option>AAC 96k</option><option>AAC 128k</option><option>AAC 192k</option></select></div>
+          <div class="field full"><div class="switch on"><span class="tk"></span>画质增强(降噪+锐化,与原 AV1 预设一致;关闭=忠实源)</div></div>
+        </div>
+      </div>
+      <div class="enc-section disabled">
+        <h3>高级(批2 启用)</h3>
+        <div class="placeholder">自定义参数 / 滤镜链参数微调 / 预设管理 —— 批2 三分区面板完整化时启用</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn">取消</button>
+      <button class="btn primary">加入压制队列(3)</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

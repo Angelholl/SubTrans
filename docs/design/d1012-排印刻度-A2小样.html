@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2 排印刻度小样 · 两档对比（P0-2 / P0-3 / 钉④ S6）</title>
+<!--
+  3.1 UI 重塑计划 · 阶段 0a 交付物之八（design-expert 2026-10-12）
+  用途：拍板 d1012-阶段0a-token归一提案.md 的 Tier 2/Tier 3（字号归位与是否新增 15px 大标题档）。
+  单文件 / 内联零依赖 / file:// 双击可开 / 浅深双主题 / 两档同页并排。
+  两档共同前提（Tier 1，零复议）：字重只 400/700；钉④ 四条核心值不动。
+  档 A = 14/13/12 三档收敛（推荐）；档 B = 引入 15px 大标题档（--font-lg，Tier 3）。
+-->
+<style>
+:root{
+  --bg:#F3F4F6; --surface:#FFFFFF; --surface-2:#F9FAFB; --surface-3:#F3F4F6;
+  --border:#E5E7EB; --border-strong:#D1D5DB;
+  --text-1:#111827; --text-2:#6B7280; --text-3:#9CA3AF;
+  --primary:#3B82F6; --primary-strong:#2563EB; --primary-soft:#EFF6FF; --primary-border:#BFDBFE;
+  --ok:#10B981; --ok-soft:#ECFDF5; --warn-soft:#FFFBEB; --status-warn:#B26A00;
+  --danger:#DC2626; --danger-soft:#FEF2F2; --danger-border:#FECACA;
+  --radius-sm:8px; --radius:12px; --radius-pill:999px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --font:14px; --font-sm:13px; --font-xs:12px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:"Cascadia Code",Consolas,"JetBrains Mono",monospace;
+}
+[data-theme="dark"]{
+  --bg:#0B0F17; --surface:#141821; --surface-2:#1A202B; --surface-3:#1F2530;
+  --border:#262D3B; --border-strong:#333C4D;
+  --text-1:#E5E7EB; --text-2:#9CA3AF; --text-3:#6B7280;
+  --primary:#60A5FA; --primary-strong:#3B82F6; --primary-soft:rgba(59,130,246,.14); --primary-border:rgba(96,165,250,.35);
+  --ok:#34D399; --ok-soft:rgba(16,185,129,.12); --warn-soft:rgba(245,158,11,.12); --status-warn:var(--warn);
+  --danger:#F87171; --danger-soft:rgba(239,68,68,.12); --danger-border:rgba(248,113,113,.35);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-sans);font-size:var(--font);line-height:1.55;color:var(--text-1);background:var(--bg);padding:24px 28px 60px}
+h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+h2{font-size:15px;font-weight:700;margin:0 0 10px}
+.sub{font-size:13px;color:var(--text-2);margin-top:6px;max-width:96ch}
+.top{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.top .spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;font-size:13px;font-weight:700;border-radius:var(--radius-sm);border:1px solid var(--border-strong);background:var(--surface);color:var(--text-1);cursor:pointer}
+.note{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:14px 16px;font-size:13px;color:var(--text-2);line-height:1.75;margin-bottom:20px}
+.note b{color:var(--text-1)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:18px;margin-bottom:22px}
+.col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+.col-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.col-tag{font-size:11px;font-weight:700;color:#fff;background:var(--primary-strong);border-radius:999px;padding:2px 9px}
+.col-tag.rec{background:var(--ok)}
+.col-name{font-size:14px;font-weight:700}
+.col-badge{margin-left:auto;font-size:11px;color:var(--text-2)}
+.col-body{padding:16px}
+/* 同一段 UI，两档只换 --fs-* 与字重常量（两档字重都是 400/700） */
+.tA{--fs-display:14px;--fs-block:14px;--fs-body:14px;--fs-sub:13px;--fs-meta:12px}
+.tB{--fs-display:15px;--fs-block:14px;--fs-body:14px;--fs-sub:13px;--fs-meta:12px}
+.demo .page-title{font-size:var(--fs-display);font-weight:700;letter-spacing:-.3px;line-height:1.3}
+.demo .page-sub{font-size:var(--fs-sub);font-weight:400;color:var(--text-2);margin-top:3px}
+.demo .blk{font-size:var(--fs-block);font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:10px;margin:16px 0 8px}
+.demo .blk::after{content:"";flex:1;height:1px;background:var(--border)}
+.demo .body{font-size:var(--fs-body);font-weight:400}
+.demo .meta{font-size:var(--fs-meta);font-weight:400;color:var(--text-2)}
+.demo .lbl{font-size:var(--fs-meta);font-weight:700;color:var(--text-2)}
+.demo .path{font-family:var(--font-mono);font-size:var(--fs-meta);color:var(--text-2)}
+.demo .btnp{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;font-size:var(--fs-meta);font-weight:700;border-radius:var(--radius-sm);background:var(--primary-strong);color:#fff;border:none}
+.demo .btns{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;font-size:var(--fs-meta);font-weight:700;border-radius:var(--radius-sm);background:var(--surface);color:var(--text-1);border:1px solid var(--border-strong)}
+.demo .chip{display:inline-block;font-size:var(--fs-meta);font-weight:700;padding:2px 9px;border-radius:999px;background:var(--primary-soft);color:var(--primary-strong)}
+.demo .chip-amber{background:var(--warn-soft);color:var(--status-warn)}
+.demo .field{display:flex;align-items:center;gap:8px;margin-top:8px}
+.demo .input{flex:1;height:30px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);display:flex;align-items:center;padding:0 10px;font-size:var(--fs-meta);color:var(--text-2)}
+.demo table{width:100%;border-collapse:collapse;margin-top:6px}
+.demo th{font-size:var(--fs-meta);font-weight:700;color:var(--text-2);text-align:left;padding:7px 10px;border-bottom:1px solid var(--border)}
+.demo td{font-size:var(--fs-body);padding:7px 10px;border-bottom:1px solid var(--border)}
+.demo tr:last-child td{border-bottom:none}
+.badge-s6{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+.s6-no{background:var(--ok-soft);color:var(--ok)}
+.s6-yes{background:var(--warn-soft);color:var(--status-warn)}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1>A2 排印刻度小样 · 两档对比</h1>
+    <p class="sub">对应审计报告 <b>P0-2</b>（49 处硬编码字号、24 处低于 12px）与 <b>P0-3</b>（Windows 字重只剩 400/700，46 处声明塌成 2 档）。两档<b>唯一差别是是否新增 15px 大标题档</b>，其余完全相同。</p>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="themeBtn">切换深浅色</button>
+</div>
+
+<div class="note">
+  <b>两档共同前提（Tier 1 · 零复议，今天即可执行）</b>：① 钉④ 四条核心值一字不动 —— <code>--font:14px / --font-sm:13px / --font-xs:12px / html font-size / body line-height:1.55</code>；② 字重<b>显式</b>只写 400 与 700（Windows 上 550/600/650 本就渲染成 700、500 渲染成 400 → <b>视觉零变化，不需 S6</b>）；③ 层级改由<b>字级 + 颜色 + 留白</b>承担，不再假装有中间字重。<br>
+  <b>两档差别</b>：档 A 只有 <b>14 / 13 / 12</b> 三档正文级 + 现状 18px 页头<b>降为 14/700</b>（Tier 2，需 S6）；档 B <b>保留页头独立层级并新增 <code>--font-lg:15px</code></b>（Tier 3，需 S6 + 新增 token）。<br>
+  <b>共同的 Tier 2 归位</b>（两档都要做，需 S6）：22 处 <code>11px</code> → <code>--font-xs</code>、2 处 <code>10px</code> → <code>--font-xs</code>、5 处 <code>12.5px</code>（内联）→ <code>--font-sm</code>、6 处裸 <code>12px</code> 与 4 处裸 <code>13px</code> 改为引用 token。<br>
+  <b>走查提醒</b>：下方两栏是<b>同一段 UI</b>，只换刻度；请重点看「页面标题 vs 区块标题 vs 正文」三级能否拉开距离。
+</div>
+
+<div class="cols">
+  <!-- 档 A -->
+  <div class="col tA">
+    <div class="col-head"><span class="col-tag rec">A</span><span class="col-name">14 / 13 / 12 三档收敛</span><span class="col-badge">design-expert 推荐</span></div>
+    <div class="col-body demo">
+      <div class="page-title">字幕翻译</div>
+      <div class="page-sub">一站式 AI 字幕翻译与校对 · 拖入字幕开始</div>
+      <div class="blk">待翻译文件 <span class="meta">已选 2 个 · 共 1.4 MB</span></div>
+      <div class="body">SSIS-001_final_cn.srt　<span class="chip">翻译中</span>　<span class="chip chip-amber">可续传</span></div>
+      <div class="path">D:\Media\SSIS-001\SSIS-001_final_cn.srt</div>
+      <div class="field"><span class="lbl">API Key</span><span class="input">留空用已保存密钥（本地模型免填）</span></div>
+      <table><thead><tr><th>原文词条</th><th>期望译文</th></tr></thead>
+        <tbody><tr><td>彼女</td><td>她</td></tr><tr><td>桜</td><td>樱花</td></tr></tbody></table>
+      <div class="field"><button class="btnp">保存词库</button><button class="btns">导入 CSV</button></div>
+      <div class="meta" style="margin-top:10px">页头 14/700 · 区块 14/700（靠颜色区分）· 正文 14/400 · 次级 13/400 · 元信息 12/400</div>
+    </div>
+  </div>
+
+  <!-- 档 B -->
+  <div class="col tB">
+    <div class="col-head"><span class="col-tag">B</span><span class="col-name">新增 15px 大标题档</span><span class="col-badge">Tier 3 · 需 S6 + 新增 token</span></div>
+    <div class="col-body demo">
+      <div class="page-title">字幕翻译</div>
+      <div class="page-sub">一站式 AI 字幕翻译与校对 · 拖入字幕开始</div>
+      <div class="blk">待翻译文件 <span class="meta">已选 2 个 · 共 1.4 MB</span></div>
+      <div class="body">SSIS-001_final_cn.srt　<span class="chip">翻译中</span>　<span class="chip chip-amber">可续传</span></div>
+      <div class="path">D:\Media\SSIS-001\SSIS-001_final_cn.srt</div>
+      <div class="field"><span class="lbl">API Key</span><span class="input">留空用已保存密钥（本地模型免填）</span></div>
+      <table><thead><tr><th>原文词条</th><th>期望译文</th></tr></thead>
+        <tbody><tr><td>彼女</td><td>她</td></tr><tr><td>桜</td><td>樱花</td></tr></tbody></table>
+      <div class="field"><button class="btnp">保存词库</button><button class="btns">导入 CSV</button></div>
+      <div class="meta" style="margin-top:10px">页头 <b>15/700</b> · 区块 14/700（靠颜色区分）· 正文 14/400 · 次级 13/400 · 元信息 12/400</div>
+    </div>
+  </div>
+</div>
+<h2>归位映射与 S6 判定</h2>
+<div class="cols">
+  <div class="col tA">
+    <div class="col-head"><span class="col-tag rec">A</span><span class="col-name">档 A · 三档收敛</span></div>
+    <div class="col-body" style="font-size:13px;color:var(--text-2);line-height:1.8">
+      <div><span class="badge-s6 s6-no">Tier 1 零复议</span> 钉④ 四条核心值全维持；字重显式 400/700（渲染不变）</div>
+      <div><span class="badge-s6 s6-yes">Tier 2 需 S6</span> 22×11px、2×10px、5×12.5px 归位到 <code>--font-xs/-sm</code></div>
+      <div><span class="badge-s6 s6-yes">Tier 2 需 S6</span> 页头 <b>18px → 14/700</b>（与区块标题同字级，靠颜色与留白区分）</div>
+      <div><span class="badge-s6 s6-no">不新增</span> 无新 token，刻度即 handoff §5 既有三档</div>
+      <div style="margin-top:10px"><b style="color:var(--text-1)">收益</b>：刻度闭合、零新增、实现最简；<br><b style="color:var(--text-1)">代价</b>：页头与区块标题同为 14/700，<b>层级只差颜色（text-1 vs text-2）与一条分隔线</b>——若 owner 觉得"进页没大标题"，这档会显平。</div>
+    </div>
+  </div>
+  <div class="col tB">
+    <div class="col-head"><span class="col-tag">B</span><span class="col-name">档 B · 新增 15px</span></div>
+    <div class="col-body" style="font-size:13px;color:var(--text-2);line-height:1.8">
+      <div><span class="badge-s6 s6-no">Tier 1 零复议</span> 同档 A（钉④ 核心值 + 字重显式化）</div>
+      <div><span class="badge-s6 s6-yes">Tier 2 需 S6</span> 同档 A（11/10/12.5px 归位）</div>
+      <div><span class="badge-s6 s6-yes">Tier 3 需 S6</span> <b>新增 <code>--font-lg:15px</code></b>，页头用 15/700</div>
+      <div><span class="badge-s6 s6-yes">刻度扩一档</span> 15 / 14 / 13 / 12 四档（注意：<b>不触及钉④ 的三条字号 token 值</b>，但属节奏扩档）</div>
+      <div style="margin-top:10px"><b style="color:var(--text-1)">收益</b>：页头有独立层级，"进页有大标题"，与 13/400 副标题拉得开；<br><b style="color:var(--text-1)">代价</b>：多一个 token 要长期维护，且与钉④"字号节奏禁区"立法意图最接近 → <b>必须走显式复议</b>，不能顺手加。</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>design-expert 判定：推荐档 A。</b>理由：① owner 痛点集中在"字太小、看不清"（P0-2 的 24 处低于 12px），不在"标题不够大"——先把 11px 抬到 12px 就能解决主诉，没必要为页头单开一档；② 档 A 让刻度<b>完全闭合在 handoff §5 既有三档内</b>，新增 token 数为 0，后续维护与静态钉实现都最简单；③ 字重只剩两档后，页头与区块标题同字级靠颜色区分是<b>Notion/Vercel 系的常规做法</b>（方向已锁的风格里本就不用超大标题），不违背 brief。<br>
+  <b>档 A 仍需一次 S6</b>：因为 11px→12px、10px→12px、页头 18→14 都<b>改变渲染结果</b>（保守口径：改渲染即视为动节奏）。触发源 = owner 在《G 节痛点点选表》勾中的 <b>P0-2 / P1-10</b>。<br>
+  <b>若 owner 勾选"页头必须明显大于正文"</b> → 改选档 B，并把 <code>--font-lg:15px</code> 写入归一提案 §4 的 Tier 3 表格后一并复议。<br>
+  <b>两者都不改变</b>：钉④ 四条核心值、400/700 两档字重、12px 元信息下限。
+</div>
+
+<script>
+document.getElementById('themeBtn').addEventListener('click',function(){
+  var r=document.documentElement;
+  r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');
+});
+</script>
+</body>
+</html>

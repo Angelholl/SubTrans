@@ -1,0 +1,743 @@
+{
+  "generated_at": "2026-10-02T18:16:52",
+  "load_mode": "file-url",
+  "ffmpeg": "D:\\jellyfin\\Server\\ffmpeg.exe",
+  "synth": {
+    "drawtext": true
+  },
+  "summary": {
+    "fps_measured": 30.0,
+    "frame_period_ms": 33.333,
+    "A_direct_playback": {
+      "ok": true,
+      "videoWidth": 640,
+      "load_ms": 222,
+      "err": null,
+      "visibility": "visible",
+      "hidden_dropped": 0
+    },
+    "B_timeupdate": {
+      "count": 49,
+      "gap_median_ms": 265.5,
+      "gap_p90_ms": 266.6,
+      "max_currentTime_decimals": 6,
+      "timeout": false
+    },
+    "C_seek": {
+      "rVFC_used": true,
+      "note": "seeked 延迟分布见 raw.D.direct[].elapsedMs"
+    },
+    "D_compensation": {
+      "direct": {
+        "n_total": 30,
+        "n_ok": 12,
+        "n_visible": 12,
+        "median_abs_err_ms": 0.0,
+        "p90_abs_err_ms": 0
+      },
+      "plus10": {
+        "n_total": 30,
+        "n_ok": 12,
+        "n_visible": 12,
+        "median_abs_err_ms": 0.0,
+        "p90_abs_err_ms": 0
+      },
+      "plus50": {
+        "n_total": 30,
+        "n_ok": 12,
+        "n_visible": 12,
+        "median_abs_err_ms": 33.33,
+        "p90_abs_err_ms": 33.33
+      }
+    },
+    "D_verdict": "insufficient_data"
+  },
+  "raw": {
+    "visibility": "visible",
+    "hiddenDropped": 0,
+    "hasRVFC": true,
+    "A": {
+      "ok": true,
+      "loadMs": 221.5,
+      "visibility": "visible",
+      "videoWidth": 640,
+      "duration": 13
+    },
+    "B": {
+      "gapCount": 49,
+      "gapMedian": 265.5,
+      "gapSamples": [
+        165.60000002384186,
+        257.7000000476837,
+        266.6999999284744,
+        265,
+        264.90000009536743,
+        266.1999999284744,
+        265.2000000476837,
+        266.6999999284744,
+        265.10000002384186,
+        264.89999997615814,
+        266.60000002384186,
+        265.8000000715256,
+        265.5,
+        265.5,
+        265.7999999523163,
+        265.5,
+        265.10000002384186,
+        266.1999999284744,
+        265.3000000715256,
+        265.10000002384186,
+        266.09999990463257,
+        265.5,
+        265.8000000715256,
+        265.10000002384186,
+        266.2999999523163,
+        265.5,
+        266.10000002384186,
+        265.1999999284744,
+        266.40000009536743,
+        264.7999999523163,
+        265.10000002384186,
+        266.2999999523163,
+        265.5,
+        264.89999997615814,
+        266.60000002384186,
+        264.8000000715256,
+        266.6999999284744,
+        265,
+        265.8000000715256,
+        265.89999997615814,
+        265.89999997615814,
+        265.2000000476837,
+        265,
+        266.59999990463257,
+        265.3000000715256,
+        264.60000002384186,
+        266.2999999523163,
+        265,
+        267.2000000476837
+      ],
+      "maxDecimals": 6
+    },
+    "D": {
+      "direct": [
+        {
+          "targetMs": 500,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 500",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 1200,
+          "rVFC": true,
+          "elapsedMs": 18.199999928474426,
+          "targetMs": 1200,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 2000,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 2000",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 3100,
+          "rVFC": true,
+          "elapsedMs": 19,
+          "targetMs": 3100,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 4200,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 4200",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 5000,
+          "rVFC": true,
+          "elapsedMs": 18.5,
+          "targetMs": 5000,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 6100",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 7200",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 8300,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 8300",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 9000,
+          "rVFC": true,
+          "elapsedMs": 18.40000009536743,
+          "targetMs": 9000,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 500,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 500",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 1200,
+          "rVFC": true,
+          "elapsedMs": 18.200000047683716,
+          "targetMs": 1200,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 2000,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 2000",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 3100,
+          "rVFC": true,
+          "elapsedMs": 18.90000009536743,
+          "targetMs": 3100,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 4200,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 4200",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 5000,
+          "rVFC": true,
+          "elapsedMs": 55.300000071525574,
+          "targetMs": 5000,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 6100",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 7200",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 8300,
+          "rVFC": true,
+          "elapsedMs": 26.5,
+          "targetMs": 8300,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 9000,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 9000",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 500,
+          "rVFC": true,
+          "elapsedMs": 18.5,
+          "targetMs": 500,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 1200,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 1200",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 2000,
+          "rVFC": true,
+          "elapsedMs": 18.899999976158142,
+          "targetMs": 2000,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 3100,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 3100",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 4200,
+          "rVFC": true,
+          "elapsedMs": 19,
+          "targetMs": 4200,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 5000,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 5000",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 6100",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 7200",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 8300,
+          "rVFC": true,
+          "elapsedMs": 37.10000002384186,
+          "targetMs": 8300,
+          "offsetMs": 0,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 9000,
+          "offsetMs": 0,
+          "error": "Error: seek timeout 9000",
+          "visibility": "visible"
+        }
+      ],
+      "plus10": [
+        {
+          "presentedMediaTimeMs": 500,
+          "rVFC": true,
+          "elapsedMs": 18.100000023841858,
+          "targetMs": 500,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 1200,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 1210",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 2000,
+          "rVFC": true,
+          "elapsedMs": 18,
+          "targetMs": 2000,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 3100,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 3110",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 4200,
+          "rVFC": true,
+          "elapsedMs": 18.600000023841858,
+          "targetMs": 4200,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 5000,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 5010",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 6110",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 7210",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 8300,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 8310",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 9000,
+          "rVFC": true,
+          "elapsedMs": 18.600000023841858,
+          "targetMs": 9000,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 500,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 510",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 1200,
+          "rVFC": true,
+          "elapsedMs": 18.5,
+          "targetMs": 1200,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 2000,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 2010",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 3100,
+          "rVFC": true,
+          "elapsedMs": 18.09999990463257,
+          "targetMs": 3100,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 4200,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 4210",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 5000,
+          "rVFC": true,
+          "elapsedMs": 18.5,
+          "targetMs": 5000,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 6110",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 7210",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 8300,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 8310",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 9000,
+          "rVFC": true,
+          "elapsedMs": 18.200000047683716,
+          "targetMs": 9000,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 500,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 510",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 1200,
+          "rVFC": true,
+          "elapsedMs": 18,
+          "targetMs": 1200,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 2000,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 2010",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 3100,
+          "rVFC": true,
+          "elapsedMs": 19,
+          "targetMs": 3100,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 4200,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 4210",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 5000,
+          "rVFC": true,
+          "elapsedMs": 19.100000023841858,
+          "targetMs": 5000,
+          "offsetMs": 10,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 6110",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 7210",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 8300,
+          "offsetMs": 10,
+          "error": "Error: seek timeout 8310",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 9000,
+          "rVFC": true,
+          "elapsedMs": 19.299999952316284,
+          "targetMs": 9000,
+          "offsetMs": 10,
+          "visibility": "visible"
+        }
+      ],
+      "plus50": [
+        {
+          "targetMs": 500,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 550",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 1233.333,
+          "rVFC": true,
+          "elapsedMs": 18.600000023841858,
+          "targetMs": 1200,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 2000,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 2050",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 3133.333,
+          "rVFC": true,
+          "elapsedMs": 18.600000023841858,
+          "targetMs": 3100,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 4200,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 4250",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 5033.333,
+          "rVFC": true,
+          "elapsedMs": 19,
+          "targetMs": 5000,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 6150",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 7250",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 8333.333,
+          "rVFC": true,
+          "elapsedMs": 19.59999990463257,
+          "targetMs": 8300,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 9000,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 9050",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 533.333,
+          "rVFC": true,
+          "elapsedMs": 18.199999928474426,
+          "targetMs": 500,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 1200,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 1250",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 2033.3329999999999,
+          "rVFC": true,
+          "elapsedMs": 18.600000023841858,
+          "targetMs": 2000,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 3100,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 3150",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 4233.333,
+          "rVFC": true,
+          "elapsedMs": 18.5,
+          "targetMs": 4200,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 5000,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 5050",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 6150",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 7250",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 8333.333,
+          "rVFC": true,
+          "elapsedMs": 18.699999928474426,
+          "targetMs": 8300,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 9000,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 9050",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 533.333,
+          "rVFC": true,
+          "elapsedMs": 19.100000023841858,
+          "targetMs": 500,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 1200,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 1250",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 2033.3329999999999,
+          "rVFC": true,
+          "elapsedMs": 18,
+          "targetMs": 2000,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 3100,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 3150",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 4233.333,
+          "rVFC": true,
+          "elapsedMs": 18,
+          "targetMs": 4200,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 5000,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 5050",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 6100,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 6150",
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 7200,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 7250",
+          "visibility": "visible"
+        },
+        {
+          "presentedMediaTimeMs": 8333.333,
+          "rVFC": true,
+          "elapsedMs": 19.100000023841858,
+          "targetMs": 8300,
+          "offsetMs": 50,
+          "visibility": "visible"
+        },
+        {
+          "targetMs": 9000,
+          "offsetMs": 50,
+          "error": "Error: seek timeout 9050",
+          "visibility": "visible"
+        }
+      ]
+    }
+  }
+}
