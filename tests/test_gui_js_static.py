@@ -4061,6 +4061,78 @@ _ACTIVE_RULE_SELECTORS = (".side-tab-btn.active", ".review-page-btn.active",
 _ACTIVE_BANNED_REFS = ("--primary-soft", "--primary-strong", "--primary-border")
 
 
+# ---------------------------------------------------------------------------
+# D2026-1012-01 阶段 2 首批 B-04：进度定量反馈（.progress-meta 恢复）
+# ---------------------------------------------------------------------------
+
+def test_progress_meta_div_in_place():
+    """B-04 钉①：.progress-meta div 在位（data-testid 承载，零 id 零 data-i18n）。
+
+    人工推演（缺失场景）：progress-container 内无 .progress-meta div 时，
+    ProgressManager.init() 的 document.querySelector('.progress-meta') 返回
+    null，setProgress 内 progressMeta 分支整段跳过——进度条宽度正常但
+    阶段名/批次/百分比定量行永远不显示（静默失效）。修复后 div 常驻，
+    init 取得到，setProgress 每拍填充。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<div class="progress-meta" data-testid="progress-meta">',
+                  html)
+    assert m, "index.html 缺少 .progress-meta div（data-testid 承载）"
+    # 零 id 零 data-i18n（class+testid 承载，FROZEN 契约不动）
+    # 注意：用 \bid=" 而非 'id=' 避免误匹配 data-testid= 子串
+    tag = m.group(0)
+    assert not re.search(r'\bid="', tag), \
+        ".progress-meta 不得携带 id（FROZEN_IDS 冻结）"
+    assert 'data-i18n' not in tag, ".progress-meta 不得携带 data-i18n（键冻结）"
+
+
+def test_app_js_set_progress_updates_meta():
+    """B-04 钉②：app.js setProgress 更新点含 progress-meta 赋值。
+
+    人工推演（缺失场景）：setProgress 只写 progressFill 宽度、不碰
+    progressMeta 时，定量行永远空白（同钉① 静默失效）。修复后
+    setProgress 内 progressMetaLeft/Right 双 span 同步填充，且
+    idle 态（无阶段名且百分比为 0）整行留空。
+    """
+    src = _app_js_source()
+    body = _extract_function(src, "setProgress")
+    # setProgress 必须同时驱动 progressFill 与 progressMeta（同一更新点）
+    assert "this.progressFill.style.width" in body, \
+        "setProgress 必须保留 progressFill 宽度驱动（同源更新点）"
+    assert "this.progressMetaLeft.textContent" in body and \
+        "this.progressMetaRight.textContent" in body, \
+        "setProgress 必须同步填充 progressMeta 双 span（左段+右段）"
+    # 右段百分比取整（与 fill 宽度同一数值源）
+    assert "Math.round(percent)" in body, \
+        "右段百分比必须由 fill 宽度同一数值源取整"
+    # 左段批次格式：阶段名 · 批次 N / M（无批次态只给阶段名）
+    assert "批次 ${batchNo} / ${batchTotal}" in body, \
+        "左段批次文案格式不符（阶段名 · 批次 N / M）"
+    # idle 态整行留空
+    assert "isEmpty" in body and "percent === 0" in body, \
+        "idle 态（无阶段名且百分比为 0）必须整行留空"
+    # 批次号取自 status 对象（与 progressFill 同源）
+    assert "status.batch" in src and "status.batch_total" in src, \
+        "批次号必须取自 status 对象（与 progressFill 同源）"
+
+
+def test_progress_meta_no_id_no_i18n():
+    """B-04 钉③：progress-meta 行零 id 零 data-i18n（防解冻漂移）。
+
+    人工推演（漂移场景）：.progress-meta 携带 id 或 data-i18n 时，
+    FROZEN_IDS/FROZEN_I18N_KEYS 钉⑤双集合自证失败（集合漂移）。
+    修复后 .progress-meta 只以 class+testid 承载，双集合零增减。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<div class="progress-meta"[^>]*>', html)
+    assert m, "index.html 缺少 .progress-meta div"
+    tag = m.group(0)
+    assert not re.search(r'\bid="', tag), \
+        ".progress-meta 携带 id（FROZEN_IDS 钉⑤双集合自证失败）"
+    assert 'data-i18n' not in tag, \
+        ".progress-meta 携带 data-i18n（FROZEN_I18N_KEYS 钉⑤双集合自证失败）"
+
+
 def test_active_indicator_tokens_alias_layer():
     """卡4：:root 含四个 --active-* 别名定义；三条 active 规则体内不再直引品牌 token。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")

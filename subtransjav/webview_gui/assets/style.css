@@ -1799,6 +1799,17 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     margin-top: var(--space-3);
 }
 
+/* 进度定量反馈（B-04 恢复）：flex 两端布局——左段阶段+批次文案，右段百分比。
+   零新字面色值（P8 钉3 口径）：字号 var(--font-xs)、色 var(--text-2)，
+   亮暗主题经 token 自动适配 */
+.progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: var(--font-xs);
+    color: var(--text-2);
+}
+
 .progress-bar {
     width: 100%;
     height: 8px;
