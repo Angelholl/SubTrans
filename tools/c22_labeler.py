@@ -11,10 +11,16 @@
   {id, run, source, guide_path, media_path, timing, message, label:null}，
   逐间隙粒度如 id="run1-29"）。逐条在位校验 guide/media 存在（缺失汇总中文
   报错退出码 1）→ ffmpeg 切片（resolve_ffmpeg 定位；-ss 前置快 seek，
-  起-3 clamp≥0、时长 min(止-起+6, 20)；CREATE_NO_WINDOW + capture_output
+  起-3 clamp≥0、时长 min(止-起+6, 30)；CREATE_NO_WINDOW + capture_output
   + timeout）→ 原子写 state.json（records=[{id, run, wav, media, guide,
-  timing, label:null, relabel:null, sounds:null, relabel_sounds:null}]）→
-  写 开始标注.bat → 打印中文摘要；
+  timing, message, seek_in, label:null, relabel:null, sounds:null,
+  relabel_sounds:null}]）→ 写 开始标注.bat → 打印中文摘要。
+  **幂等保标注（卡4 硬约束）**：state.json 已存在时，新 records 按 id 继承旧
+  记录的 label/sounds/relabel/relabel_sounds（id 匹配即继承，旧记录缺字段
+  不崩，manifest 外旧条目不复活），已标注计数按合并后 records 重算并打印
+  「已保留 N 条既有标注」；clips 重切覆盖（文件名=id 稳定）。message 为粗筛
+  提示透传（缺省 null），serve 页 meta 第二行显示；seek_in=播放起点（timing
+  起<3s 起点被 clamp→0.0 从头播，否则 3.0 跳过前缓冲直达间隙本体）。
 - --serve：http.server 只绑 127.0.0.1，端口 8765 被占则 +1 重试至 8774，
   启动后自动开页。路由：GET /（内嵌单页 HTML，全中文零外链）、
   GET /api/state、GET /clips/<id>.wav、POST /api/answer（每次点击原子落盘，
@@ -64,7 +70,8 @@ _PORT_START = 8765
 _PORT_END = 8774
 _PAD_BEFORE_S = 3          # 切片前置留白（起-3，clamp≥0）
 _PAD_TOTAL_S = 6           # 切片总留白（止-起+6）
-_CLIP_CAP_S = 20           # 单片段时长上限（秒）
+_CLIP_CAP_S = 30           # 单片段时长上限（秒；卡4 20→30，30s≈940KB 16k 单声道）
+_SEEK_IN_S = 3.0           # 播放起点=间隙本体：起点未 clamp 时跳过前 3s 缓冲
 _FFMPEG_TIMEOUT_S = 120    # 单次切片超时兜底
 _ATOMIC_RETRY = 5          # 原子写 Windows 瞬时占用重试次数
 _ATOMIC_RETRY_DELAY_S = 0.05
@@ -74,6 +81,8 @@ _FIRST = "first"
 _RE = "re"
 _DECIDED = ("yes", "no")
 _ALL_VALUES = ("yes", "no", "skip")
+# 幂等保标注（卡4）：重跑 --prepare 时按 id 从旧 state 继承的标注字段
+_KEEP_FIELDS = ("label", "sounds", "relabel", "relabel_sounds")
 
 # 声源向量四键（C22-卡3）：(单源全名, 组合短名)
 _SOUNDS = ("speech", "moan", "prop", "bg")
@@ -88,6 +97,9 @@ _GROUP_NAMES = {0: "无声源", 1: "单声源 C(4,1)", 2: "双声源 C(4,2)",
 _GLOSSARY = ("名词解释：台词（含小声/气声台词）/呻吟喘息（非言语人声）/"
              "道具声（衣物门脚步等）/背景声（音乐·环境音）")
 _OVERLAY_CN = "「台词+道具/背景叠加」"   # 台词叠加道具声或背景声的组合小计
+# 缓冲说明（卡4）：切片首尾各约 3s 是缓冲上下文，只判间隙本体（作答区提示行前一行）
+_BUFFER_HINT = ("片段首尾各约 3 秒为缓冲上下文：只判间隙本体内是否有台词；"
+                "边缘与既有字幕对齐的台词不算漏听")
 
 _TIMING_RE = re.compile(
     r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*"
@@ -127,6 +139,25 @@ def _read_state(package: Path) -> dict | None:
     except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def _merge_annotations(records: list[dict], prev: dict | None) -> int:
+    """幂等保标注（卡4 硬约束）：新 records 按 id 继承旧 state 记录的标注字段
+    （label/sounds/relabel/relabel_sounds——id 匹配即继承，旧记录缺字段不崩，
+    manifest 外旧条目自然不复活）；返回已保留既有标注的条数（四字段任一非
+    null 计 1，供摘要「已保留 N 条既有标注」与已标注重算使用）。"""
+    prev_by_id = ({str(r.get("id")): r for r in (prev.get("records") or [])
+                   if isinstance(r, dict)} if isinstance(prev, dict) else {})
+    kept = 0
+    for rec in records:
+        old = prev_by_id.get(str(rec.get("id")))
+        if isinstance(old, dict):
+            for field in _KEEP_FIELDS:
+                if field in old:
+                    rec[field] = old[field]
+        if any(rec.get(f) is not None for f in _KEEP_FIELDS):
+            kept += 1
+    return kept
 
 
 # ------------------------------------------------ 声源组合与派生（卡3）
@@ -260,6 +291,12 @@ def _parse_timing(timing: str) -> tuple[float, float] | None:
 
 def _fmt_seconds(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.3f}"
+
+
+def _seek_in(start: float) -> float:
+    """播放起点（卡4）：timing 起≥前置留白 → 片段头部有完整 3s 缓冲，跳 3.0
+    直达间隙本体；起<3s 时起点被 clamp（缓冲不完整）→ 0.0 从片段头播。"""
+    return 0.0 if start < _PAD_BEFORE_S else _SEEK_IN_S
 
 
 def _run_ffmpeg(cmd: list[str]) -> tuple[int, str]:
@@ -540,6 +577,17 @@ function renderFirstDone() {
   if (el("btnRelabel")) { el("btnRelabel").onclick = startRelabel; }
   if (el("btnResume")) { el("btnResume").onclick = resumeRelabel; }
 }
+function seekToGap(a, seekIn) {
+  // 卡4 播放起点=间隙本体：片段时长 >6.5s 且未被起点 clamp（seek_in=3.0）时在
+  // play 前跳过前 3s 缓冲；重听按钮不走本函数（保持从头）。片段元数据未加载时
+  // 挂一次性 loadedmetadata 监听，避免 duration 为 NaN 时漏跳。
+  if (!(seekIn > 0)) { return; }
+  const apply = function () {
+    if (a.duration > 6.5) { a.currentTime = seekIn; }
+  };
+  if (isFinite(a.duration) && a.duration > 0) { apply(); }
+  else { a.addEventListener("loadedmetadata", apply, {once: true}); }
+}
 function render() {
   refreshProgress();
   if (mode === "done") { renderAgreement(); return; }
@@ -552,13 +600,17 @@ function render() {
   const isRe = mode === "re";
   let html = '<div class="meta">条目 <b>' + esc(rec.id) + '</b> · 轮次 ' +
              esc(rec.run) + ' · 判读区间：' + esc(rec.timing) +
-             (isRe ? '' : ' · 首轮标注：<b>' + firstStateText(rec) + '</b>') + '</div>';
+             (isRe ? '' : ' · 首轮标注：<b>' + firstStateText(rec) + '</b>') +
+             // 卡4：粗筛提示透传（manifest samples[].message，有则显、esc 转义）
+             (rec.message ? '<br>粗筛提示：' + esc(rec.message) : '') + '</div>';
   html += '<audio id="au" preload="auto" loop src="/clips/' +
           encodeURIComponent(rec.id) + '.wav"></audio>';
   html += '<div><button class="b-main" id="btnPlay">▶ 播放（默认循环）</button>' +
           '<button id="btnRestart">重听</button>' +
           ((isRe ? qpos : idx) > 0
             ? '<button id="btnPrev">← 上一条（回退改判）</button>' : '') + '</div>';
+  // 卡4：作答区提示行前追加缓冲说明（首尾各约 3s 为缓冲上下文，只判间隙本体）
+  html += '<p class="hint">__BUFFER_HINT__。</p>';
   html += '<p class="hint">点选声源组合即提交：绿色+「有对话」角标=组合含台词（派生有对话）；' +
           '中性色+「无对话」角标=不含台词（静音同样为无对话）。</p>';
   html += '<div id="answerBtns">' + combosHtml() + '</div>';
@@ -569,15 +621,17 @@ function render() {
           (isRe ? '复标轮盲标：不回显首轮选择，请凭听感独立点选组合（只按派生 label 计，无「稍后再听」）。'
                 : '单击任一组合即提交，自动跳下一条并自动播放；判错了可回退改判。') + '</p>';
   el("main").innerHTML = html;
+  // 卡4：播放起点=间隙本体（seek_in 由服务端按 clamp 规则注入 records）；重听保持从头
+  const seekIn = Number(rec.seek_in || 0);
   el("btnPlay").onclick = function () {
-    const a = el("au"); a.loop = true; a.play();
+    const a = el("au"); seekToGap(a, seekIn); a.loop = true; a.play();
   };
   el("btnRestart").onclick = function () {
     const a = el("au"); a.currentTime = 0; a.play();
   };
   // 作答跳条后自动播放下一条（owner 2026-10-13 试听反馈）；页面刚打开尚无
   // 用户手势时浏览器自动播放策略会拒绝，静默降级为手动点播放
-  const a0 = el("au"); a0.loop = true;
+  const a0 = el("au"); a0.loop = true; seekToGap(a0, seekIn);
   const pp = a0.play();
   if (pp && pp.catch) { pp.catch(function () {}); }
   if (el("btnPrev")) { el("btnPrev").onclick = goPrev; }
@@ -647,9 +701,11 @@ init();
 </html>
 """
 
-# 模板注入：页首名词解释与声源组合表与服务端同源（同一份 _GLOSSARY / _COMBOS）
+# 模板注入：页首名词解释、声源组合表与作答区缓冲说明与服务端同源
+# （同一份 _GLOSSARY / _COMBOS / _BUFFER_HINT）
 _PAGE = (_PAGE_TMPL.replace("__GLOSSARY__", _GLOSSARY)
-         .replace("__COMBOS__", json.dumps(_COMBOS, ensure_ascii=False)))
+         .replace("__COMBOS__", json.dumps(_COMBOS, ensure_ascii=False))
+         .replace("__BUFFER_HINT__", _BUFFER_HINT))
 
 
 # ------------------------------------------------------------- 子命令：prepare
@@ -696,6 +752,7 @@ def cmd_prepare(package: Path) -> int:
 
     clips_dir = package / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
+    prev_state = _read_state(package)   # 幂等保标注（卡4）：重跑前先读旧 state
     records: list[dict] = []
     failures: list[str] = []
     for i, s in enumerate(samples, 1):
@@ -716,10 +773,13 @@ def cmd_prepare(package: Path) -> int:
             tail = (err or "").strip()[-200:]
             failures.append(f"{sid}：ffmpeg 切片失败（退出码 {rc}）{('｜' + tail) if tail else ''}")
             continue
+        msg = s.get("message")   # 粗筛提示透传（卡4）：缺省 null，serve 页 meta 显示
         records.append({"id": sid, "run": str(s.get("run") or ""),
                         "wav": str(wav), "media": str(s.get("media_path") or ""),
                         "guide": str(s.get("guide_path") or ""),
                         "timing": str(s.get("timing") or ""),
+                        "message": None if msg is None else str(msg),
+                        "seek_in": _seek_in(start),   # 播放起点（卡4）
                         "label": None, "relabel": None,
                         "sounds": None, "relabel_sounds": None})
     if failures:
@@ -729,6 +789,8 @@ def cmd_prepare(package: Path) -> int:
         print(f"共 {len(failures)} 处失败，请检查媒体与 timing 后重跑 --prepare")
         return 1
 
+    kept = _merge_annotations(records, prev_state)   # 幂等保标注（卡4 硬约束）
+    labeled = sum(1 for r in records if _record_label(r) in _DECIDED)
     _atomic_write_json(package / _STATE_NAME,
                        {"records": records, "relabel_queue": []})
 
@@ -742,6 +804,11 @@ def cmd_prepare(package: Path) -> int:
     print(f"✅ 标注包准备完成：共 {len(records)} 段切片，"
           f"涉及轮次 {len(runs)} 个（{'、'.join(runs) or '未标轮次'}），"
           f"媒体 {len(medias)} 个 / 导读 {len(guides)} 个")
+    print(f"📝 已标注 {labeled} 条 / 待定 {len(records) - labeled} 条"
+          "（首轮已决口径，按合并后 records 重算）")
+    if prev_state is not None:
+        print(f"🔁 幂等合并：已保留 {kept} 条既有标注"
+              "（按 id 继承 label/sounds/relabel/relabel_sounds，clips 已重切覆盖）")
     print(f"📄 标注状态：{package / _STATE_NAME}（每次作答原子落盘，断电不丢）")
     print("🎧 下一步：双击标注包内的「开始标注.bat」开标"
           "（网页只绑本机 127.0.0.1，零外发零遥测）")
