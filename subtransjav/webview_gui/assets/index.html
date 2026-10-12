@@ -51,19 +51,23 @@
 
                 <button type="button" class="side-tab-btn active" id="tabBtnTranslate"
                         data-tab="tab-translate" role="tab" aria-selected="true"
+                        aria-controls="tab-translate"
                         data-i18n-title="tabTranslate" title="字幕翻译"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="side-tab-text" data-i18n="tabTranslate">字幕翻译</span></button>
                 <!-- 校对 TAB（2.6.1 批 2a D2026-1002-09）：批 1 占位项按预算表程序
                      转正为 .side-tab-btn（tabReview 键沿用批 1，零新增键） -->
                 <button type="button" class="side-tab-btn" id="tabBtnReview"
                         data-tab="tab-review" role="tab" aria-selected="false"
+                        aria-controls="tab-review"
                         data-i18n-title="tabReview" title="校对"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg></span><span class="side-tab-text" data-i18n="tabReview">校对</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnGuide"
                         data-tab="tab-guide" role="tab" aria-selected="false"
+                        aria-controls="tab-guide"
                         data-i18n-title="tabGuide" title="质量与建议"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span class="side-tab-text" data-i18n="tabGuide">质量与建议</span></button>
                 <div class="nav-section" data-i18n="nav_group_quality">设置</div>
 
                 <button type="button" class="side-tab-btn" id="tabBtnEngine"
                         data-tab="tab-engine" role="tab" aria-selected="false"
+                        aria-controls="tab-engine"
                         data-i18n-title="tabEngine" title="API 与模型选择"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabEngine">API 与模型选择</span></button>
                 <!-- ASR 与词典 TAB（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡
                      与词典卡自引擎页整体迁出为独立页；唯一新 i18n 键 tabAsrDict
@@ -71,12 +75,15 @@
                      （与引擎页齿轮语义区分，同款 stroke 视觉语言） -->
                 <button type="button" class="side-tab-btn" id="tabBtnAsrdict"
                         data-tab="tab-asrdict" role="tab" aria-selected="false"
+                        aria-controls="tab-asrdict"
                         data-i18n-title="tabAsrDict" title="ASR 与词典"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span><span class="side-tab-text" data-i18n="tabAsrDict">ASR 与词典</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnGlossary"
                         data-tab="tab-glossary" role="tab" aria-selected="false"
+                        aria-controls="tab-glossary"
                         data-i18n-title="tabGlossary" title="词库与模板"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="side-tab-text" data-i18n="tabGlossary">词库与模板</span></button>
                 <button type="button" class="side-tab-btn" id="tabBtnAdvanced"
                         data-tab="tab-advanced" role="tab" aria-selected="false"
+                        aria-controls="tab-advanced"
                         data-i18n-title="tabAdvanced" title="高级参数"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg></span><span class="side-tab-text" data-i18n="tabAdvanced">高级参数</span></button>
 
             </nav>
@@ -102,7 +109,8 @@
         <main class="main">
 
             <!-- TAB 1: 字幕翻译（默认选中；骨架重做为 页头+拖拽区+文件列表卡+控制台） -->
-            <div class="tab-page active" id="tab-translate" data-testid="tab-translate">
+            <div class="tab-page active" id="tab-translate" data-testid="tab-translate"
+                 role="tabpanel" aria-label="字幕翻译">
 
                 <!-- 页头（标题复用既有键 app_header_title；阶段2 批1 加副标题） -->
                 <div class="page-head">
@@ -197,7 +205,16 @@
             </div>
 
 
-            <div class="tab-page" id="tab-engine" data-testid="tab-engine">
+            <div class="tab-page" id="tab-engine" data-testid="tab-engine"
+                 role="tabpanel" aria-label="API 与模型选择">
+                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabEngine，
+                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabEngine">API 与模型选择</h1>
+                    </div>
+                </div>
+
                 <div class="block-title" data-i18n="refine_panel_title">两阶段流水线</div>
 
                 <!-- 2.6.5 段2（D2026-1004-01 #3）：引擎页去 seg 外壳——原三段
@@ -363,7 +380,16 @@
             <!-- ASR 与词典页（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡与
                  词典卡自引擎页整体迁入（注释/卡内 id/结构/顺序原样保留），
                  上下单列相邻，两卡自带 header 不加额外 block-title -->
-            <div class="tab-page" id="tab-asrdict" data-testid="tab-asrdict">
+            <div class="tab-page" id="tab-asrdict" data-testid="tab-asrdict"
+                 role="tabpanel" aria-label="ASR 与词典">
+                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabAsrDict，
+                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabAsrDict">ASR 与词典</h1>
+                    </div>
+                </div>
+
                 <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.7.1 重整
                      D2026-1005-01 承接批：删说明独立行（asr_entry 提示并入
                      asrCrosscheckToggle 的 title 悬停）、删推荐清单折叠区
@@ -441,7 +467,16 @@
             </div>
 
 
-            <div class="tab-page" id="tab-glossary" data-testid="tab-glossary">
+            <div class="tab-page" id="tab-glossary" data-testid="tab-glossary"
+                 role="tabpanel" aria-label="词库与模板">
+                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabGlossary，
+                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabGlossary">词库与模板</h1>
+                    </div>
+                </div>
+
                 <input type="hidden" id="refineTemplatesDir">
                 <input type="hidden" id="refineGlossary">
 
@@ -593,7 +628,16 @@
             </div>
 
 
-            <div class="tab-page" id="tab-guide" data-testid="tab-guide">
+            <div class="tab-page" id="tab-guide" data-testid="tab-guide"
+                 role="tabpanel" aria-label="质量与建议">
+                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabGuide，
+                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabGuide">质量与建议</h1>
+                    </div>
+                </div>
+
                 <!-- 2g（D2026-0930-07）：媒体来源/其他导读/自定义导读 三个来源入口归组；
                      2.6.1 批1（D2026-1002-07）：独立来源卡撤编，来源条折叠进导读卡头
                      summary 行（单行紧凑），编辑行与状态行随折叠体展开后可见 -->
@@ -725,7 +769,16 @@
             </div>
 
 
-            <div class="tab-page" id="tab-advanced" data-testid="tab-advanced">
+            <div class="tab-page" id="tab-advanced" data-testid="tab-advanced"
+                 role="tabpanel" aria-label="高级参数">
+                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabAdvanced，
+                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabAdvanced">高级参数</h1>
+                    </div>
+                </div>
+
                 <div class="muted" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
 
                 <!-- 数据保存目录（owner 反馈②：用户可选数据根；写入 .data-root 指针，重启生效；
@@ -842,10 +895,20 @@
             </div>
 
             <!-- ============ TAB 5: 校对（2.6.1 批 2a D2026-1002-09 校对容器） ============
-                 页内零 data-i18n（静态键 cap 零消耗硬约束，HTML 悬空钉保护）；
+                 页头 h1 复用导航既有 tabReview 键（卡10 B-10 D2026-1012-01：同键双
+                 元素，键集合零增减）；除页头外页内零 data-i18n（静态键 cap 零消耗
+                 硬约束，HTML 悬空钉保护）；
                  全部文案由 review.js 的 REVIEW_MSG 注入 textContent；
                  本页激活时 JS 给 .workbench 挂 no-aside 隐藏右栏。 -->
-            <div class="tab-page" id="tab-review" data-testid="tab-review">
+            <div class="tab-page" id="tab-review" data-testid="tab-review"
+                 role="tabpanel" aria-label="校对">
+                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabReview，
+                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabReview">校对</h1>
+                    </div>
+                </div>
 
                 <!-- 状态条（D2026-1002-08 定案四 id + reviewProgressFill；
                      2px 底部轨道用真实子元素供 JS 设宽，伪元素无法由 JS 控宽） -->
