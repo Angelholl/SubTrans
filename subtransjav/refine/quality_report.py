@@ -84,6 +84,30 @@ _CPS_MIN_DURATION_S = 0.5
 # 相邻条目时间轴间隙观测阈值（秒；只观测不行动）
 _GAP_MAX_SECONDS = 5.0
 
+# 导读条目身份码（卡5 撞号消歧，D2026-1012-01 A5）：item_id = "码-index"。
+# 真机 6/7 运行 11 对重复 index 全为 cps_too_fast×其他类别各自独立编号相撞，
+# 裸 #N 无法区分"哪一条导读条目"——身份改为 类别码+index（additive 双写，
+# 既有 index/category 键零改动）。键=来源名/类别，来源 A（post_validate
+# 告警）的 category 是动态规则名（subject/dewei/antonym_*…），按来源取码。
+_GUIDE_ITEM_CODES: dict[str, str] = {
+    "cps_too_fast": "CPS",
+    "untranslated": "UNTR",
+    "single_line_too_long": "SLN",
+    "suspected_missed_speech": "SMS",
+    "post_validate": "PW",
+}
+
+
+def _guide_item_id(source_key: str, index) -> str | None:
+    """guide item 身份串 `类別码-index`（撞号消歧）。
+
+    index 缺失（None）返回 None——不产 "PW-None" 假串；txt 渲染侧的
+    index 来自终稿条目/候选，恒有号，f-string 直接可得 `#CODE-N`。
+    """
+    if index is None:
+        return None
+    return f"{_GUIDE_ITEM_CODES[source_key]}-{index}"
+
 
 def _weight(text: str) -> float:
     """粗略字重：CJK 记 1，其余记 0.5。"""
@@ -581,7 +605,9 @@ def render_observation_section(single_line: list | None,
     豁免时整节省略（返回空串）。whitelist_exempt>0 时节首加一行豁免计数
     （2.0.1 先摘除后计量），为 0 时不输出（无白名单场景输出与旧版
     逐字节一致）。观测行统一"时间轴在前、条目号在后"排版（与复核
-    清单 "#N <timing>" 形态刻意区分）。
+    清单 "#N <timing>" 形态刻意区分）。单行超长行属导读来源 C，条目号
+    带类别码（#SLN-N，卡5 撞号消歧）；语速/间隙观测行非 guide items，
+    保持裸 #N（码表无对应码）。
     """
     single_line = single_line or []
     cps_obs = cps_obs or []
@@ -597,7 +623,9 @@ def render_observation_section(single_line: list | None,
         lines.append(f"单行超长（阈值 {_SINGLE_LINE_MAX_CHARS} 字符，不含空白；"
                      "只检测与建议，处理走导读行动条目）:")
         for v in single_line:
-            lines.append(f"  {_fmt_timing(v['timing'])} #{v['index']} "
+            # 卡5：观测行内条目号带类别码（SLN）——本行为来源 C 导读条目行
+            lines.append(f"  {_fmt_timing(v['timing'])} "
+                         f"#{_guide_item_id('single_line_too_long', v['index'])} "
                          f"行长 {v['max_len']}"
                          f"（阈值 {_SINGLE_LINE_MAX_CHARS}）: {v['excerpt']}")
     if cps_obs:
@@ -629,7 +657,8 @@ def render_audio_insight_section(audio_insights: dict | None) -> str:
     audio_insights 为 None（无媒体/开关关/旧调用方）时整节省略；
     available=False 时输出一行不可用说明；有候选时逐条列出（标注
     "疑似（粗筛）"），零候选显示"未发现疑似漏听段"。wave 级 VAD
-    降级声明恒有（RMS 能量代理，非神经 VAD，只观测不重翻）。
+    降级声明恒有（RMS 能量代理，非神经 VAD，只观测不重翻）。候选逐条
+    引用带类别码（#SMS-N，卡5 撞号消歧——本行为导读来源 D 的交叉引用）。
     """
     if audio_insights is None:
         return ""
@@ -645,10 +674,12 @@ def render_audio_insight_section(audio_insights: dict | None) -> str:
     if candidates:
         lines.append("疑似漏听候选（粗筛，供对照音频人工确认）:")
         for c in candidates:
+            # 卡5：交叉引用带类别码（SMS）——本行为来源 D 导读条目引用
             lines.append(f"  {_fmt_timing(c['timing'])} "
                          f"间隙 {c['gap_ms']}ms 内语音能量约 "
                          f"{c['speech_overlap_s']:.2f}s "
-                         f"（疑似（粗筛）#{c['index']}）")
+                         f"（疑似（粗筛）"
+                         f"#{_guide_item_id('suspected_missed_speech', c.get('index'))}）")
         if metrics.get("truncated"):
             lines.append(f"  （已达截断上限 "
                          f"{metrics.get('total_candidates', '?')} 条中的"
@@ -1012,8 +1043,11 @@ def build_quality_report(orig_entries: list, final_entries: list,
         raw = raw[len("[未翻译]"):].strip() if raw.startswith("[未翻译]") \
             else raw
         src_show = src if src else (raw or "（无对应期望条目）")
+        # 卡5：行尾追加身份码 [#UNTR-N]——行首 `#N <timing>` 原样保留
+        # （tests/test_pipeline_v2.py 钉既有子串，卡外文件不改；见卡5 执行记录）
         untranslated_lines.append(
-            f"  #{e['index']} {_fmt_timing(e['timing'])} 原文: {src_show[:60]}")
+            f"  #{e['index']} {_fmt_timing(e['timing'])} 原文: {src_show[:60]}"
+            f" [#{_guide_item_id('untranslated', e['index'])}]")
 
     # 3) 实义内容漏覆盖（含汉字原文行），按终稿成因拆两个口径：
     #    - missing_entry（整条缺失）：终稿该时间轴 span 完全无条目（原口径）；
@@ -1064,7 +1098,9 @@ def build_quality_report(orig_entries: list, final_entries: list,
         if m:
             fe = final_idx.get(int(m.group(1)))
             if fe:
-                loc = f" #{fe['index']} {_fmt_timing(fe['timing'])}"
+                # 卡5 撞号消歧：定位带类别码（PW），告警文案 w 本身冻结不动
+                pw_id = _guide_item_id("post_validate", fe["index"])
+                loc = f" #{pw_id} {_fmt_timing(fe['timing'])}"
         label = "主语误判" if w in subject_warns else "校验告警"
         items.append((label, [
             f"[{label}]{loc}",
@@ -1392,6 +1428,9 @@ def build_quality_report(orig_entries: list, final_entries: list,
         # 导读 items[]（version 2，D11）：机器可消费的结构化复核条目。
         # current_text=None 即"不可自动重翻"（终稿无该 index 的官方块，
         # 如被并/被删/被隔离移出），不另设字段。txt 渲染路径不感知本段。
+        # 卡5（D2026-1012-01 A5）：每条目新增 item_id=类別码-index（additive
+        # 纯新增，index/category/message 既有键值零改动）——同 index 多类别
+        # 撞号时身份可区分（真机 11 对撞号全部 cps_too_fast×其他）。
         src_by_idx: dict = {}
         for e in expected:
             src_by_idx.setdefault(e.get("index"), e)   # 同 index 取列表首个
@@ -1403,6 +1442,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
             se = src_by_idx.get(sw_idx)
             guide_items.append({
                 "index": sw_idx,
+                "item_id": _guide_item_id("post_validate", sw_idx),
                 "timing": sw.get("timing") or "",
                 "category": sw.get("category") or "",
                 "message": sw.get("message") or "",
@@ -1417,6 +1457,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
             se = src_by_idx.get(e.get("index"))
             guide_items.append({
                 "index": e.get("index"),
+                "item_id": _guide_item_id("untranslated", e.get("index")),
                 "timing": e.get("timing") or "",
                 "category": "untranslated",
                 "message": "整段未翻译",
@@ -1432,6 +1473,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
             fe = resolve_final_block(final_entries, v["index"])
             guide_items.append({
                 "index": v["index"],
+                "item_id": _guide_item_id("single_line_too_long", v["index"]),
                 "timing": v["timing"],
                 "category": "single_line_too_long",
                 "message": v["message"],
@@ -1448,6 +1490,8 @@ def build_quality_report(orig_entries: list, final_entries: list,
             for c in audio_insights.get("candidates") or []:
                 guide_items.append({
                     "index": c.get("index"),
+                    "item_id": _guide_item_id("suspected_missed_speech",
+                                              c.get("index")),
                     "timing": c.get("timing") or "",
                     "category": "suspected_missed_speech",
                     "message": c.get("message") or "疑似漏听（粗筛）",
@@ -1464,6 +1508,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
             fe = resolve_final_block(final_entries, c["index"])
             guide_items.append({
                 "index": c["index"],
+                "item_id": _guide_item_id("cps_too_fast", c["index"]),
                 "timing": c["timing"],
                 "category": "cps_too_fast",
                 "message": (f"语速偏快 CPS {c['cps']:.2f}"
