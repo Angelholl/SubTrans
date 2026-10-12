@@ -7,7 +7,11 @@
 
 - manifest json＝[{"guide": 导读 json 路径, "media": 媒体路径,
   "label": true|false}, ...]（label=该间隙确有台词的真值，owner 独立
-  标注，与阈值测算方分离——防循环自证）；
+  标注，与阈值测算方分离——防循环自证）；条目可带两个可选键（均缺省或
+  null=旧行为）："labels"=bool 数组逐 timing 取 labels[i] 作该行真值
+  （逐间隙口径，D2026-1009-02 §三）；"timings"=SRT 区间字符串数组，显式
+  清单取代导读派生（标注包只截前 20 条，显式清单才精确对齐）。两者长度
+  必须相等，不匹配即 raise 中文 ValueError → main 退出码 1（fail-closed）；
 - 流程：逐样本读导读 observation 条目（category=suspected_missed_speech）
   → slice+batch_transcribe_clips → classify_transcript 三维分档 → 聚合：
   高置信桶精确率（判 high 中 label=true 占比）+Wilson 95% 置信下界+
@@ -75,9 +79,26 @@ def _observation_timings(guide_path: str) -> list[str]:
 def _replay_sample(sample: dict) -> list[dict]:
     """单样本回放：切片批量转写→逐 timing 三维分档。
 
-    返回 [{"timing", "grade", "label"}]；切片/转写失败→grade="empty"
-    （不静默：错误进样本明细 reasons）。"""
-    timings = _observation_timings(str(sample.get("guide") or ""))
+    返回 [{"timing", "grade", "label", "reasons", "asr_error"}]；切片/
+    转写失败→grade="empty"（不静默：错误进样本明细 reasons）。
+    可选键（缺省或 null=旧行为）："labels"=逐 timing 真值数组，
+    "timings"=显式清单（取代导读派生，标注包只截前 20 条观测）；
+    len(timings 或导读派生) != len(labels) → ValueError 中文（fail-closed，
+    不静默截断/不循环补齐），由 main 捕获转退出码 1。"""
+    raw_timings = sample.get("timings")
+    if raw_timings is not None and not isinstance(raw_timings, list):
+        raise ValueError(f"manifest 条目 timings 须为 SRT 区间字符串数组，"
+                         f"实际为 {type(raw_timings).__name__}")
+    derived = _observation_timings(str(sample.get("guide") or ""))
+    timings = [str(t) for t in raw_timings] if raw_timings else derived
+    labels = sample.get("labels")
+    if labels is not None and not isinstance(labels, list):
+        raise ValueError(f"manifest 条目 labels 须为 bool 数组，"
+                         f"实际为 {type(labels).__name__}")
+    if labels is not None and len(timings) != len(labels):
+        raise ValueError(f"labels 与 timings 长度不匹配："
+                         f"len(timings)={len(timings)} != "
+                         f"len(labels)={len(labels)}，拒绝回放")
     label = bool(sample.get("label"))
     if not timings:
         return [{"timing": "", "grade": "empty", "label": label,
@@ -86,12 +107,13 @@ def _replay_sample(sample: dict) -> list[dict]:
     windows = detect_speech_windows(media, timings)
     transcripts = batch_transcribe_clips(media, timings)
     rows: list[dict] = []
-    for t, tr in zip(timings, transcripts, strict=True):
+    for i, (t, tr) in enumerate(zip(timings, transcripts, strict=True)):
         verdict = classify_transcript(
             t, tr.get("segments") or [], tr.get("text") or "", windows,
             language="ja")
         rows.append({"timing": t, "grade": verdict["grade"],
-                     "label": label, "reasons": verdict["reasons"],
+                     "label": label if labels is None else labels[i],
+                     "reasons": verdict["reasons"],
                      "asr_error": tr.get("error") or ""})
     return rows
 
@@ -217,7 +239,13 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(sample, dict) or not sample.get("guide"):
                 print(f"❌ manifest 第 {i} 项缺 guide 路径")
                 return 1
-            rows.extend(_replay_sample(sample))
+            try:
+                rows.extend(_replay_sample(sample))
+            except ValueError as e:
+                # fail-closed：labels/timings 校验失败直接中止（不静默截断、
+                # 不循环补齐），退出码 1
+                print(f"❌ manifest 第 {i} 项回放失败：{e}")
+                return 1
         cleanup_clips()
 
     agg = _aggregate(rows)
