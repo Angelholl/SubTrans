@@ -1,0 +1,76 @@
+/*
+ * SubTransJAV Web GUI - Dark Theme (modern dark overlay)
+ * ---------------------------------------------------------------
+ * UI 改版阶段1 重写（D2026-0930-08，编码 B）。
+ * 机制：@import 浅色基础层（style.css，已全量 token 化），
+ *       本文件只覆盖变量层 —— 色值逐字对照
+ *       docs/design/redesign-prototype.html 的 [data-theme="dark"] 段。
+ *
+ * 旧版 11 项硬编码组件消单（旧 style.dark.css:64-151）结论：
+ *   1. .app-header            元素已随三栏骨架删除，无需覆盖
+ *   2. .theme-button          已 token 化（--text-2/--surface-3），深色自动适配
+ *   3. .feature-badge 三态    已 token 化（--ok-soft/--surface-3 等），自动适配
+ *   4. .btn-secondary         已 token 化（--surface/--border-strong/--text-1），自动适配
+ *   5. .btn-ghost             已 token 化（--text-2/--surface-3），自动适配
+ *   6. .btn:focus             已 token 化（--focus-ring = 3px --primary-soft），自动适配
+ *   7. .file-list:focus-within已 token 化（同上），自动适配
+ *   8. .file-item.selected    已 token 化（--primary-soft 深色为半透明蓝），自动适配
+ *   9. .console-output        已 token 化（--console-bg 深色覆盖为 #0D1117），自动适配
+ *  10. .guide-txt-view        已 token 化（--surface-2/--border/--text-1），自动适配
+ *  11. 滚动条                 已 token 化（--border-strong/--text-3），自动适配
+ * 唯一保留的暗色特判：--status-warn（浅色 #B26A00 琥珀在深底不可读，改用 --warn）。
+ *
+ * 已知取舍：select 自定义箭头 data-uri 描边 #6B7280（原型同款，深色下可辨识）；
+ * 正文对比度：--text-1 #E5E7EB on --surface #141821 ≈ 12:1，辅助 --text-2 #9CA3AF ≈ 6:1。
+ */
+
+@import url("style.css");
+
+/* ============================================================
+   Dark palette overrides（原型 [data-theme="dark"] 逐字映射）
+   ============================================================ */
+:root {
+    /* 表面与背景 */
+    --bg:        #0B0F17;
+    --surface:   #141821;
+    --surface-2: #1A202B;
+    --surface-3: #1F2530;
+
+    /* 边框 */
+    --border:        #262D3B;
+    --border-strong: #333C4D;
+
+    /* 文字 */
+    --text-1: #E5E7EB;
+    --text-2: #9CA3AF;
+    --text-3: #6B7280;
+
+    /* 品牌 */
+    --primary:        #60A5FA;
+    --primary-strong: #3B82F6;
+    --primary-soft:   rgba(59,130,246,.14);
+    --primary-border: rgba(96,165,250,.35);
+
+    /* 语义 */
+    --ok:          #34D399;  --ok-soft:     rgba(16,185,129,.12);
+    --warn:        #FBBF24;  --warn-soft:   rgba(245,158,11,.12);
+    --danger:      #F87171;  --danger-soft: rgba(239,68,68,.12);
+    --danger-soft-hover: rgba(239,68,68,.22);
+    --danger-border: rgba(248,113,113,.35);
+
+    /* 控制台（深色下更深一档，保持终端质感） */
+    --console-bg:    #0D1117;
+    --console-border:#1B2330;
+    --console-text:  #C4CFDB;
+    --console-muted: #5B6675;
+
+    /* 拖拽区虚线：深色下半透明蓝 */
+    --dropzone-border: rgba(96,165,250,.5);
+
+    /* 阴影加深 */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-md: 0 2px 4px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.4);
+
+    /* 状态文字：浅色琥珀 #B26A00 深底不可读 → 用亮 --warn */
+    --status-warn: var(--warn);
+}

@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="doc_title">净语翻译 · SubTrans Translate</title>
+    <!-- Theme stylesheet (swappable at runtime) -->
+    <link id="themeStylesheet" rel="stylesheet" href="style.css">
+    <!-- UI 改版阶段1（D2026-0930-08）：三栏工作台骨架 rail | main | aside，
+         视觉与结构目标见 docs/design/redesign-prototype.html。
+         - 主题收敛为 default / dark 两套（旧 google/carbon/primer 菜单项已删，
+           旧存主题名静默回落 default）；
+         - 全部既有元素 id / data-i18n* 属性 / 13 处测试锚 与 app.js 依赖 class
+           （.side-tab-btn/.tab-page/.file-item 容器/.console-section/.gl-* 族/
+           .modal-overlay 等）原样保留，仅重组位置；
+         - 运行控制/输出设置/两阶段流水线说明迁入右栏 .aside（所有页可见）；
+         - 阶段2 引入 Lucide 图标时须在本注释块补写完整 ISC 声明全文
+           （D2026-0930-08 F 项），本阶段仅复用既有 SVG 与通用图形。
+
+         Icons: Lucide (https://lucide.dev)
+         Copyright (c) 2025 Lucide Contributors
+
+         Permission to use, copy, modify, and/or distribute this software for any
+         purpose with or without fee is hereby granted, provided that the above
+         copyright notice and this permission notice appear in all copies.
+
+         THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+         WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+         MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+         ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+         WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+         ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+         OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. -->
+</head>
+<body>
+    <!-- ============ 三栏工作台 ============ -->
+    <div class="workbench">
+
+        <!-- ============ 左栏：品牌 + 功能导航 + 主题切换 ============ -->
+        <aside class="rail">
+            <div class="brand">
+                <div class="brand-mark">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                </div>
+                <div class="brand-name" data-i18n="doc_title">净语翻译 · SubTrans Translate</div>
+            </div>
+
+            <nav class="rail-nav" role="tablist" aria-label="Function tabs">
+
+                <div class="nav-section" data-i18n="nav_group_workspace">工作区</div>
+
+                <button type="button" class="side-tab-btn active" id="tabBtnTranslate"
+                        data-tab="tab-translate" role="tab" aria-selected="true"
+                        data-i18n-title="tabTranslate" title="字幕翻译"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="side-tab-text" data-i18n="tabTranslate">字幕翻译</span></button>
+                <!-- 校对 TAB（2.6.1 批 2a D2026-1002-09）：批 1 占位项按预算表程序
+                     转正为 .side-tab-btn（tabReview 键沿用批 1，零新增键） -->
+                <button type="button" class="side-tab-btn" id="tabBtnReview"
+                        data-tab="tab-review" role="tab" aria-selected="false"
+                        data-i18n-title="tabReview" title="校对"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg></span><span class="side-tab-text" data-i18n="tabReview">校对</span></button>
+                <button type="button" class="side-tab-btn" id="tabBtnGuide"
+                        data-tab="tab-guide" role="tab" aria-selected="false"
+                        data-i18n-title="tabGuide" title="质量与建议"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span class="side-tab-text" data-i18n="tabGuide">质量与建议</span></button>
+                <div class="nav-section" data-i18n="nav_group_quality">设置</div>
+
+                <button type="button" class="side-tab-btn" id="tabBtnEngine"
+                        data-tab="tab-engine" role="tab" aria-selected="false"
+                        data-i18n-title="tabEngine" title="API 与模型选择"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabEngine">API 与模型选择</span></button>
+                <!-- ASR 与词典 TAB（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡
+                     与词典卡自引擎页整体迁出为独立页；唯一新 i18n 键 tabAsrDict
+                     （189→190，配记=D2026-1003-01 归档段④）；图标=Lucide mic
+                     （与引擎页齿轮语义区分，同款 stroke 视觉语言） -->
+                <button type="button" class="side-tab-btn" id="tabBtnAsrdict"
+                        data-tab="tab-asrdict" role="tab" aria-selected="false"
+                        data-i18n-title="tabAsrDict" title="ASR 与词典"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span><span class="side-tab-text" data-i18n="tabAsrDict">ASR 与词典</span></button>
+                <button type="button" class="side-tab-btn" id="tabBtnGlossary"
+                        data-tab="tab-glossary" role="tab" aria-selected="false"
+                        data-i18n-title="tabGlossary" title="词库与模板"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="side-tab-text" data-i18n="tabGlossary">词库与模板</span></button>
+                <button type="button" class="side-tab-btn" id="tabBtnAdvanced"
+                        data-tab="tab-advanced" role="tab" aria-selected="false"
+                        data-i18n-title="tabAdvanced" title="高级参数"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg></span><span class="side-tab-text" data-i18n="tabAdvanced">高级参数</span></button>
+
+            </nav>
+
+            <div class="rail-foot">
+                <button id="themeBtn" class="theme-button" aria-label="Theme" data-i18n-title="theme_label" title="Theme">
+                    <!-- Lucide: moon（浅色主题时显示）/ sun（深色主题时显示，JS 切换） -->
+                    <svg id="iconMoon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                    <svg id="iconSun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                </button>
+                <!-- 主题菜单：5 套收敛为 2 套（google/carbon/primer 已删） -->
+                <div id="themeMenu" class="theme-menu" role="menu" aria-label="Select theme">
+                    <button class="theme-option" data-theme="default" role="menuitem" data-i18n="theme_default">Default Theme</button>
+                    <button class="theme-option" data-theme="dark" role="menuitem" data-i18n="theme_dark">暗色主题</button>
+                </div>
+                <p class="rail-foot-note"><span data-i18n="footer_brand">净语翻译 · SubTrans Translate |</span>
+                   <a href="#" onclick="showAbout(); return false;" style="color: var(--primary-color); text-decoration: none;" data-i18n="about_link">关于</a>
+                </p>
+            </div>
+        </aside>
+
+        <!-- ============ 中栏：主工作区 ============ -->
+        <main class="main">
+
+            <!-- TAB 1: 字幕翻译（默认选中；骨架重做为 页头+拖拽区+文件列表卡+控制台） -->
+            <div class="tab-page active" id="tab-translate" data-testid="tab-translate">
+
+                <!-- 页头（标题复用既有键 app_header_title；阶段2 批1 加副标题） -->
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="app_header_title">净语翻译 · SRT</h1>
+                        <div class="page-subtitle" data-i18n="main_subtitle">一站式 AI 字幕翻译与校对</div>
+                    </div>
+                </div>
+
+                <!-- 首启引导横幅（2.4.0 批2 S2）：first_run marker 一次性消费，
+                     文案/关闭按钮文字 JS 填充（first_run_guide/ui_ok 均 JS 态键） -->
+                <div id="firstRunBanner" class="first-run-banner" style="display:none;">
+                    <span class="first-run-text"></span>
+                    <button type="button" class="btn btn-ghost btn-compact first-run-close"></button>
+                </div>
+
+                <!-- 拖拽 / 上传区（蓝色虚线大圆角，对照原型 .dropzone；
+                     拖拽事件与 .drag-over class 由 app.js 绑定在 #fileList 上，
+                     高亮规则见 style.css .file-list.drag-over） -->
+                <div class="dropzone" id="dropzone">
+                    <div class="dz-icon">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>
+                    </div>
+                    <div class="dz-title" data-i18n="source_header">Source（.srt / .ass / .ssa / .vtt 字幕）</div>
+                    <div class="dz-hint" data-i18n="empty_hint">点击上方按钮或拖入文件开始</div>
+                    <div class="dz-actions">
+                        <button type="button" class="btn btn-primary" id="addFilesBtn" data-i18n="add_files">
+                            添加文件
+                        </button>
+                        <button type="button" class="btn btn-primary" id="addFolderBtn" data-i18n="add_folder">
+                            添加文件夹
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 文件列表卡片（.file-item 由 app.js 动态生成，此处仅容器；
+                     阶段2 批1：移除选中/清空两按钮自 dropzone 迁入 card-head 右侧） -->
+                <div class="card">
+                    <div class="card-head">
+                        <div class="card-head-actions">
+                            <button type="button" class="btn btn-secondary" id="removeSelectedBtn" disabled data-i18n="remove_selected">
+                                移除选中
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="clearBtn" disabled data-i18n="clear_btn">
+                                清空
+                            </button>
+                        </div>
+                    </div>
+                    <div class="file-list-container" id="fileListContainer">
+                        <div class="file-list" id="fileList" tabindex="0" data-testid="file-list">
+                            <div class="empty-state" id="emptyState">
+                                <span class="empty-icon"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
+                                <p data-i18n="no_files_selected">暂未选择文件</p>
+                                <p class="empty-hint" data-i18n="empty_hint">点击上方按钮或拖入文件开始</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Console Section -->
+
+                <section class="section console-section console-collapsible">
+                    <div class="section-header">
+                        <h2 data-i18n="console_header">Console</h2>
+                        <div class="action-row">
+                            <button type="button" class="btn btn-ghost btn-sm console-collapse-btn" id="consoleCollapseBtn"
+                                    aria-expanded="true" data-i18n-title="console_collapse" title="折叠控制台">
+                                <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                            </button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
+                                Clear
+                            </button>
+                            <!-- 2.7.3 件⑧批 8b：导出/复制按钮（i18n 冻结，零 data-i18n，文案 JS 填） -->
+                            <button type="button" class="btn btn-ghost btn-sm" id="exportConsoleBtn"></button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="copyConsoleBtn"></button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <!-- 2.7.3 件⑧批 8b：结构化活动流（原始日志上方，行全由 JS 渲染）；
+                             头部=活动流标题+「原始日志」折叠开关，均零 data-i18n -->
+                        <div class="console-activity-header">
+                            <span class="console-activity-title"></span>
+                            <button type="button" class="btn btn-ghost btn-sm" id="rawLogToggleBtn" aria-expanded="false"></button>
+                        </div>
+                        <div class="console-activity" id="consoleActivity"></div>
+                        <div class="console-output" id="consoleOutput" data-testid="console">
+                            <div class="console-line" data-i18n="ready">Ready.</div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+
+
+            <div class="tab-page" id="tab-engine" data-testid="tab-engine">
+                <div class="block-title" data-i18n="refine_panel_title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
+
+                <!-- 2.6.5 段2（D2026-1004-01 #3）：引擎页去 seg 外壳——原三段
+                     分段控件（D2026-1003-01 P4）改纵向堆叠组 stage-group
+                     （阶段A→阶段B→兜底），组头纯中文零 i18n 键（中文豁免
+                     名单 seg-btn→stage-group-title）；页首标题与段内结构/
+                     顺序零改动 -->
+                <section class="stage-group">
+                    <div class="stage-group-title">阶段A · 净语+翻译</div>
+                <!-- 阶段A 完整行 -->
+                <div class="form-card">
+                    <div class="stage-row">
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineS1Enabled" checked> <span data-i18n="stage_a_label">阶段A 净语+翻译（日译中）</span>
+                        </label>
+                        <select id="refineS1Provider" class="form-select compact">
+                            <option value="deepseek">DeepSeek API</option>
+                            <option value="zen" data-i18n="provider_zen">Zen 免费</option>
+                            <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
+                            <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
+                            <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
+                            <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
+                        </select>
+                        <select id="refineS1Model" class="form-select compact grow">
+                            <!-- 批2（D2026-1002-12 拍板点2）：空态占位 option（文案走
+                                 JS 态键 model_list_empty_hint，bindDom 填充，不挂静态
+                                 data-i18n）；已存模型由 applySavedStageSettings 注入
+                                 标记 option 选中，无硬默认预选 -->
+                            <option value="" disabled selected></option>
+                        </select>
+                        <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                        <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                        <span id="refineTestS1Status" class="muted stage-test-status"></span>
+                    </div>
+                    <div class="alt-row">
+                        <label class="field-label">API Key</label>
+                        <input type="password" id="refineS1Key" class="form-input compact grow"
+                               data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
+                        <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
+                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
+                    </div>
+                </div>
+
+                <!-- 阶段A 地址（2.6.3 批C IA 重排：自接口地址卡迁入；
+                     #refineSaveEndpointsBtn 唯一保留在阶段A 段） -->
+                <div class="action-row">
+                    <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s1_endpoint_label">阶段A 地址</label>
+                    <input id="refineS1Endpoint" class="form-input compact grow"
+                           data-i18n-placeholder="s1_endpoint_placeholder" placeholder="阶段A 服务商的接口地址">
+                    <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
+                    <span id="refineEndpointStatus" class="muted"></span>
+                </div>
+                </section>
+
+                <section class="stage-group">
+                    <div class="stage-group-title">阶段B · 审校+抛光</div>
+                <!-- 阶段B 完整行 -->
+                <div class="form-card">
+                    <div class="stage-row">
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineS3Enabled" checked> <span data-i18n="stage_b_label">阶段B 审校+抛光（中文）</span>
+                        </label>
+                        <select id="refineS3Provider" class="form-select compact">
+                            <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
+                            <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
+                            <option value="deepseek">DeepSeek API</option>
+                            <option value="zen" data-i18n="provider_zen">Zen 免费</option>
+                            <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
+                            <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
+                        </select>
+                        <select id="refineS3Model" class="form-select compact grow">
+                            <!-- 同 refineS1Model：空态占位 + 已存值注入，无硬默认预选 -->
+                            <option value="" disabled selected></option>
+                        </select>
+                        <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                        <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                        <span id="refineTestS3Status" class="muted stage-test-status"></span>
+                    </div>
+                    <div class="alt-row">
+                        <label class="field-label">API Key</label>
+                        <input type="password" id="refineS3Key" class="form-input compact grow"
+                               data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
+                        <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
+                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
+                    </div>
+                </div>
+
+                <!-- 阶段B 地址（2.6.3 批C IA 重排：自接口地址卡迁入；保存键为
+                     class-only 孪生按钮（无 id），与主保存键绑同一 handler） -->
+                <div class="action-row">
+                    <label class="field-label" style="min-width:var(--w-endpoint-label);" data-i18n="s3_endpoint_label">阶段B 地址</label>
+                    <input id="refineS3Endpoint" class="form-input compact grow"
+                           data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
+                    <button type="button" class="btn btn-primary btn-compact endpoint-save-twin" data-testid="endpoint-save-b"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口配置</span></button>
+                </div>
+                </section>
+
+                <section class="stage-group">
+                    <div class="stage-group-title">兜底与容错</div>
+                <!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->
+                <div class="form-card">
+                    <label class="inline-field field-label"
+                           data-i18n-title="profile_title" title="本地模型选 local 清理与拦截更严格，云端强模型选 cloud 宽松以免误伤正常译文。
+技术细节：local=strict（cleaner_rules+误译拦截）；cloud=lenient（仅零维护通用校验）">
+                        <span data-i18n="profile_label">兜底档位</span>
+                        <select id="refineProfile" class="form-select compact">
+                            <option value="local" selected data-i18n="profile_local">本地·严格</option>
+                            <option value="cloud" data-i18n="profile_cloud">云端·宽松</option>
+                        </select>
+                    </label>
+                    <label class="inline-field field-label"
+                           data-i18n-title="ctx_title" title="模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；只有当翻译报错提示文字被截断或超长时，才需要把它调大。">
+                        <span data-i18n="ctx_label">上下文窗口</span>
+                        <input type="number" id="refineV2Ctx" class="form-input compact"
+                               value="" min="4096" step="1024"
+                               data-i18n-placeholder="ctx_placeholder" placeholder="缺省 16384">
+                    </label>
+                    <label class="path-row grow">
+                        <span class="path-row-label" data-i18n="cleaner_dir_label">净语配置目录</span>
+                        <input type="hidden" id="refineCleanerConfig">
+                        <input id="refineCleanerConfigShow" class="form-input compact grow" readonly
+                               data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=自动查找（config/templates→包内默认）">
+                        <span class="field-btn-row"><button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
+                        <button type="button" id="refineOpenCleanerDir" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button></span>
+                    </label>
+                </div>
+
+                <!-- 兜底与并发（原高级设置第四组迁入） -->
+                <div class="stack form-card">
+                    <div class="group-title" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
+                    <div class="field-row">
+                        <label class="inline-field"><span data-i18n="fallback_model_label">接管模型</span>
+                            <select id="refineFallbackModel" class="form-input compact" style="width:var(--w-fallback);">
+                                <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
+                            </select>
+                            <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
+                                    data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                        </label>
+                        <label class="inline-field"
+                               data-i18n-title="fallback_local_title" title="云端翻译失败时自动用本地模型补完失败的部分；只救云端，需先配好本地兜底模型。
+技术细节：失败行级接管重跑一次；仅对云端服务商阶段生效；未配置 --fallback-model 时启动即校验拒绝">
+                            <input type="checkbox" id="refineFallbackLocal"> <span data-i18n="fallback_local_label">云端故障时本地接管</span>
+                        </label>
+                        <label><span data-i18n="batch_local_label">批量·本地</span> <input id="refineBatchLocal" class="form-input compact" type="number"
+                                min="1" max="50" value="30" style="width:var(--w-batch);"></label>
+                        <label><span data-i18n="batch_cloud_label">批量·云端</span> <input id="refineBatchCloud" class="form-input compact" type="number"
+                                min="1" max="50" value="30" style="width:var(--w-batch);"></label>
+                        <label class="inline-field"
+                               data-i18n-title="concurrency_title" title="批间并发数（1-5），默认 1"><span data-i18n="concurrency_label">并行</span>
+                            <select id="refineConcurrency" class="form-select compact" style="width:var(--w-concurrency);">
+                                <option value="1" selected>1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                </section>
+            </div>
+
+            <!-- ASR 与词典页（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡与
+                 词典卡自引擎页整体迁入（注释/卡内 id/结构/顺序原样保留），
+                 上下单列相邻，两卡自带 header 不加额外 block-title -->
+            <div class="tab-page" id="tab-asrdict" data-testid="tab-asrdict">
+                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.7.1 重整
+                     D2026-1005-01 承接批：删说明独立行（asr_entry 提示并入
+                     asrCrosscheckToggle 的 title 悬停）、删推荐清单折叠区
+                     （模型管理能力迁 AppModal models 面板；入口按钮走
+                     .asr-models-btn class 锚，零新增 id）。asrEnvStatus 状态行
+                     前置三色状态点由 JS 注入（.status-dot.asr-dot，复用既有
+                     状态点类，零新增 id/静态键）。
+                     结构序：header 行（标题+模型管理+重新探测）→ 状态行
+                     （asrEnvStatus）→ 模型行 → 开关行；文案全 JS 态填充
+                     （bindDom），HTML 不留英文占位 -->
+                <div class="form-card">
+                    <div class="action-row">
+                        <div class="form-card-header" data-i18n="asr_panel_title">ASR 模型（媒体重点对照）</div>
+                        <button type="button" class="btn btn-secondary btn-compact asr-models-btn" data-testid="asr-models-btn"><span></span></button>
+                        <button type="button" id="asrRefreshBtn" class="btn btn-compact"><span></span></button>
+                    </div>
+                    <div class="section-content">
+                        <div class="action-row">
+                            <span id="asrEnvStatus" class="muted"></span>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <select id="asrModelSel" class="form-select compact" style="width:auto;"><option value="" disabled selected></option></select>
+                            <span id="asrStatus" class="muted"></span>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
+                            <input id="asrPythonInput" class="form-input compact" style="width:auto; flex:1;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
+                     2.6.5 段2（D2026-1004-01 #4/#5）：空态引导条 #dictEmpty 显式删除
+                     （FROZEN_IDS 215→214 / FROZEN_I18N_KEYS 189→187 双重钉），空态
+                     语义由 JS 注入的四 kind 摘要行 + pill-warning「未安装」+ warn-soft
+                     hint 条承接；词典下拉 → 详情区，JS 只填充不建行；
+                     dict_redownload/dict_status_builtin 为 JS 态键，不落 data-i18n（R6）） -->
+                <div class="form-card" data-testid="dict-panel">
+                    <div class="form-card-header" data-i18n="dict_panel_title">词典管理（日/中/英）</div>
+                    <div id="dictRows" style="display:flex; flex-direction:column; gap:8px;">
+                        <label class="field-label" data-i18n="dict_select_label">选择词典查看详情</label>
+                        <select id="dictSelect" class="form-select compact" style="width:100%;"></select>
+                        <div id="dictDetail" style="display:none;" class="dict-detail">
+                            <div class="dict-detail-head">
+                                <span id="dictPill" class="pill"></span>
+                            </div>
+                            <div id="dictDesc" class="muted"></div>
+                            <div id="dictPathRow" class="path-row">
+                                <span id="dictPath" class="muted grow" style="min-width:0;"></span>
+                                <!-- 批1b 件1/件2（D2026-1002-12）：词典目录行扩容——
+                                     浏览/恢复默认/迁移三键均 JS 态标签（MSG 键零静态 i18n 消耗），
+                                     迁移键仅 needs_migration 时显示；id +3 走批清单预算程序 -->
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictBrowseBtn"></button>
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictRestoreBtn" style="display:none;"></button>
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictOpenDir" data-i18n="dict_open_dir">打开文件夹</button>
+                                <button type="button" class="btn btn-primary btn-compact" id="dictMigrateBtn" style="display:none;"></button>
+                            </div>
+                            <!-- 下载进度（2.3.1 批1）：.progress-text 独立于 .progress-bar 之外
+                                 （bar 8px 高 overflow:hidden，文本内嵌必裁切）；复用既有进度类零新增 -->
+                            <div id="dictProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill"></div></div>
+                                <span class="progress-text"></span>
+                            </div>
+                            <!-- 2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：
+                                 #dictActionBtn 静态入 .dict-action-row（官方│镜像
+                                 双源键 JS 注入，插入序=官方│镜像；「下载源」前缀
+                                 标签走 JS 态 MSG，禁 index.html 静态中文） -->
+                            <div class="dict-action-row">
+                                <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="dictStatus" class="muted" style="margin-top:6px; min-height:1em;"></div>
+                </div>
+            </div>
+
+
+            <div class="tab-page" id="tab-glossary" data-testid="tab-glossary">
+                <input type="hidden" id="refineTemplatesDir">
+                <input type="hidden" id="refineGlossary">
+
+                <!-- 角色卡目录 -->
+                <div class="path-row">
+                    <label class="path-row-label" style="min-width:var(--w-templates-label);" data-i18n="templates_dir_label">角色卡目录</label>
+                    <input id="refineTemplatesDirShow" class="form-input compact grow" readonly
+                           style="min-width:var(--w-templates);" data-i18n-placeholder="templates_dir_placeholder" placeholder="（未设置，使用默认）">
+                    <button type="button" id="refinePickDirBtn" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
+                    <button type="button" id="refineOpenDirBtn" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button>
+                </div>
+
+                <!-- 角色卡编辑器入口（2.6.3 批D D2026-1003-01 P5）：编辑区整体
+                     收缩为一行入口；按钮文案 JS 态填充（MSG.tplOpenEditor，零
+                     静态 i18n 消耗），全部新锚 class+data-testid 承载零 id
+                     （FROZEN_IDS 215 零变更） -->
+                <div class="action-row" data-testid="tpl-editor-entry-row">
+                    <button type="button" class="btn btn-primary btn-compact tpl-editor-entry-btn" data-testid="tpl-editor-entry"></button>
+                    <span class="muted" data-testid="tpl-entry-status"></span>
+                    <span class="muted" data-testid="tpl-entry-hint"></span>
+                </div>
+
+                <!-- 角色卡模板编辑 vault（2.6.3 批D：原编辑区 + 自高级参数页
+                     整体迁入的「翻译方向与角色卡」组置入隐藏容器；AppModal.editor
+                     打开时节点按原序搬入 modal-body，关闭按原序 append 搬回——
+                     幂等可逆。vault hidden 常驻与弹窗互斥；其内全部既有 id/
+                     data-i18n 属性原样保留（FROZEN 集合零变更的关键）） -->
+                <div class="tpl-editor-vault" hidden>
+                <div class="stack">
+                    <div class="block-title" data-i18n="tpl_editor_summary">角色卡模板编辑</div>
+                    <div class="muted" data-i18n="tpl_explicit_card_hint">若在高级参数页为当前方向指定了显式角色卡路径，以其为准；此处编辑的是角色卡目录下的同名文件。</div>
+                    <div class="action-row">
+                        <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);"></select>
+                        <button type="button" id="refineTemplateReload" class="btn btn-secondary btn-compact" data-i18n="tpl_reload">重新加载</button>
+                        <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="tpl_save">保存角色卡</span></button>
+                        <span id="refineTemplateStatus" class="muted"></span>
+                    </div>
+                    <div id="refineTplLoadedPath" class="muted" style="font-size:11px; word-break:break-all;"></div>
+                    <textarea id="refineTemplateText" class="form-input" rows="9"
+                        style="width:var(--w-full); font-family:Consolas,monospace; font-size:12px;"
+                        data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
+                </div>
+
+                <!-- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐；批1 D2026-0930-07 统一叙述）
+                     ——2.6.3 批D：组整体自高级参数页迁入 vault（随角色卡编辑器
+                     模态编辑）；组元素与 id/data-i18n 原样保留，directionCardList
+                     datalist 随组迁入（list= 引用按 id 不因搬家失效） -->
+                <div class="group-title" data-i18n="direction_block_title">翻译方向与角色卡</div>
+                <div class="field-row">
+                    <label class="inline-field"
+                           data-i18n-title="direction_title" title="缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝">
+                        <span data-i18n="direction_label">翻译方向</span>
+                        <select id="directionSource" class="form-select compact" style="width:5.5em;">
+                            <option value="ja" selected data-i18n="lang_ja">日文</option>
+                            <option value="zh" data-i18n="lang_zh">中文</option>
+                            <option value="en" data-i18n="lang_en">英文</option>
+                        </select>
+                        <span>→</span>
+                        <select id="directionTarget" class="form-select compact" style="width:5.5em;">
+                            <option value="ja" data-i18n="lang_ja">日文</option>
+                            <option value="zh" selected data-i18n="lang_zh">中文</option>
+                            <option value="en" data-i18n="lang_en">英文</option>
+                        </select>
+                    </label>
+                    <label class="field-col">
+                        <span data-i18n="direction_card_s1_label">阶段A 角色卡（可选，留空=自动查找）</span>
+                        <input id="directionCardS1" class="form-input compact grow" style="min-width:var(--w-model);"
+                               list="directionCardList"
+                               data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                        <!-- 2.5.0 修复D：去编辑跳转（class 承载零 id 预算；文字 JS 填 MSG.tpl_goto_edit；
+                             批D 弹窗内由 .modal-body .tpl-goto-btn{display:none} 隐藏） -->
+                        <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S1"></button>
+                    </label>
+                    <label class="field-col">
+                        <span data-i18n="direction_card_s3_label">阶段B 角色卡（可选，留空=自动查找）</span>
+                        <input id="directionCardS3" class="form-input compact grow" style="min-width:var(--w-model);"
+                               list="directionCardList"
+                               data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                        <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S3"></button>
+                    </label>
+                </div>
+                <datalist id="directionCardList"></datalist>
+                <div class="muted" data-i18n="direction_hint">缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错</div>
+                <div class="muted" data-i18n="direction_card_fallback_hint">角色卡查找：显式路径优先，其次角色卡目录下同名文件，最后使用内置默认。注意：净语配置目录是另一套独立查找规则，互不关联。</div>
+                </div>
+
+                <!-- 全局词库编辑（原 details 平铺；2.1.1 加折叠：默认展开，标题行常驻） -->
+                <div class="stack gl-collapsible">
+                    <div class="action-row gl-collapse-header">
+                        <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
+                        <!-- 行数计数（2.3.1 批2 悬空修复）：元素恢复即生效，glRender/glDel null-guarded 更新点沿用 -->
+                        <span id="refineGlCount" class="muted"></span>
+                        <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
+                                aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
+                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                        </button>
+                    </div>
+                    <div class="gl-tab-content gl-collapsible-content" style="padding:6px 0;">
+                        <!-- 翻译术语 Tab（legacy 性暗示替换 Tab 已随 legacy 管线删除） -->
+                        <div id="glTabGlossary">
+                            <table id="refineGlossTable" class="gl-table">
+                                <thead><tr>
+                                    <th data-i18n="th_source">原文词条</th>
+                                    <th data-i18n="th_target">期望译文</th>
+                                    <th></th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                            <div class="action-row" style="margin-top:6px;">
+                                <button type="button" id="refineGlAdd" class="btn btn-secondary btn-compact" data-i18n="gl_add">＋添加</button>
+                                <button type="button" id="refineGlDel" class="btn btn-secondary btn-compact" data-i18n="gl_del">删除选中</button>
+                                <button type="button" id="refineGlImport" class="btn btn-secondary btn-compact" data-i18n="gl_import">导入CSV/TXT</button>
+                                <button type="button" id="refineGlExport" class="btn btn-secondary btn-compact" data-i18n="gl_export">导出CSV</button>
+                                <button type="button" id="refineGlSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="gl_save">保存词库</span></button>
+                                <span id="refineGlStatus" class="muted"></span>
+                            </div>
+                            <div class="empty-guide" id="glEmptyHint" data-i18n="gl_empty_hint">词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。</div>
+                            <div class="muted" style="margin-top:4px;">
+                                <span data-i18n="gl_scope_note">生效范围用下方"词库→阶段A/阶段B"勾选控制；绑定文件：</span><span id="refineGlPath" data-i18n="gl_path_empty">（未加载）</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学习词库只读查看（自学习写入 config/glossary_learned.csv；2.1.1 加折叠：默认展开，标题行含刷新按钮与状态 span 常驻） -->
+                <div class="stack gl-collapsible" style="margin-top:10px;">
+                    <div class="action-row gl-collapse-header">
+                        <div class="block-title" data-i18n="gl_learned_title">学习词库</div>
+                        <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
+                                aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
+                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                        </button>
+                        <button type="button" id="glLearnedReloadBtn" class="btn btn-ghost btn-sm" data-i18n="gl_learned_reload">刷新</button>
+                        <span id="glLearnedStats" class="muted"></span>
+                        <span id="glLearnedStatus" class="muted status-err"></span>
+                    </div>
+                    <div class="muted gl-collapsible-content" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
+                    <table id="glLearnedTable" class="gl-collapsible-content gl-table">
+                        <thead><tr>
+                            <th data-i18n="th_source">原文词条</th>
+                            <th data-i18n="th_target">期望译文</th>
+                            <th data-i18n="gl_learned_col_aliases">别名</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="empty-guide gl-collapsible-content" id="glLearnedEmpty" style="display:none;" data-i18n="gl_learned_empty">尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。</div>
+                    <div id="glLearnedMore" class="muted gl-collapsible-content" style="display:none;"></div>
+                </div>
+            </div>
+
+
+            <div class="tab-page" id="tab-guide" data-testid="tab-guide">
+                <!-- 2g（D2026-0930-07）：媒体来源/其他导读/自定义导读 三个来源入口归组；
+                     2.6.1 批1（D2026-1002-07）：独立来源卡撤编，来源条折叠进导读卡头
+                     summary 行（单行紧凑），编辑行与状态行随折叠体展开后可见 -->
+                <!-- 3.0 批2（D2026-1009-02 批2）：全链链级状态行（进度/上次
+                     结果一行+digest 展开区；文案与结构全 JS 态填充，零 id/
+                     零 data-i18n——FROZEN 契约同全链开关行） -->
+                <div class="fullchain-status-line" data-testid="fullchain-status-line" hidden style="padding:4px 12px; line-height:1.6; font-size:12px; color:var(--muted, #888);"></div>
+                <section class="section console-section">
+                    <details id="refineGuideViewer">
+                        <summary style="cursor:pointer; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span data-i18n="guide_summary">质量报告导读</span>
+                            <!-- 媒体来源条（D2026-0929-09：契约内选择，无文件对话框）；批1 折叠入卡头 -->
+                            <div class="media-source-bar" id="mediaSourceBar" style="display:none;">
+                                <span class="media-source-label" data-i18n="media_source_label">媒体来源</span>
+                                <span class="media-source-tag" id="mediaSourceTag"></span>
+                                <span class="media-source-path" id="mediaSourcePath"></span>
+                                <button type="button" id="mediaSourceToggleBtn" class="btn btn-ghost btn-sm" data-i18n="media_source_change_btn">更换</button>
+                            </div>
+                            <!-- 其他质量报告导读入口（D2026-0930-07 owner 痛点批：
+                                 点击弹原生文件对话框选择导读 json，选中即加载；
+                                 选中路径与加载状态回显到折叠体内 status span） -->
+                            <span class="guide-summary-actions">
+                                <button type="button" id="guideOpenOtherBtn" class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span data-i18n="guide_open_other_btn">打开其他质量报告导读</span></button>
+                                <button type="button" class="btn btn-ghost btn-sm" id="refineGuideLoadBtn" data-i18n="guide_load_btn">加载导读</button>
+                                <!-- 压制辅入口（2.8.0 批1 件5）：文案 JS 态填充零 id -->
+                                <button type="button" class="btn btn-ghost btn-sm encode-entry-btn" data-testid="encode-entry-guide"></button>
+                            </span>
+                        </summary>
+                        <div class="section-content" style="padding-top:8px;">
+                            <span id="guideCustomStatus" class="muted"></span>
+                            <div class="media-source-edit-row" id="mediaSourceEditRow" style="display:none;">
+                                <input type="text" id="mediaOverrideInput" class="form-input compact grow" style="min-width:var(--w-key-input);"
+                                       data-i18n-placeholder="media_override_placeholder" placeholder="输入媒体文件完整路径（等价 --media-path，仅本报告会话内生效）" autocomplete="off">
+                                <button type="button" id="mediaOverrideApplyBtn" class="btn btn-secondary btn-compact" data-i18n="media_override_apply">应用</button>
+                                <span id="mediaOverrideStatus" class="muted"></span>
+                            </div>
+                            <div class="empty-guide" id="guideEmptyHint"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span data-i18n="guide_empty_hint">暂无导读数据：先完成一次翻译，然后点击「加载导读」查看质量报告导读；也可直接点击「AI 分析本报告」前先加载导读。</span></div>
+                            <div><span id="guideStatus"></span></div>
+                            <!-- 只读报告全文文本块（*_质量报告.txt：等宽/可滚动/保留换行） -->
+                            <div id="guideTxtView" class="guide-txt-view" style="display:none;"></div>
+                            <!-- 结构化导读块（*_质量报告导读.json） -->
+                            <div id="guideJsonBlocks">
+                                <h4 data-i18n="guide_conclusions">结论</h4>
+                                <ul id="guideConclusions"></ul>
+                                <h4 data-i18n="guide_sections">章节导读</h4>
+                                <dl id="guideSections"></dl>
+                                <h4 data-i18n="guide_items_title">行动条目</h4>
+                                <div id="guideItems"></div>
+                                <h4 data-i18n="guide_companions">伴生文件</h4>
+                                <ul id="guideCompanions"></ul>
+                                <div><span id="guideMeta"></span></div>
+                            </div>
+                        </div>
+                    </details>
+                </section>
+
+                <!-- AI 质量分析（D2026-0929：--ai-analyze 前后端接入） -->
+                <section class="section console-section" id="refineAiAnalyzeSection">
+                    <div class="section-content" style="padding-top:8px;">
+                        <div class="action-row">
+                            <button type="button" id="refineAiAnalyzeBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span data-i18n="aiAnalyzeBtn">AI 分析本报告</span></button>
+                            <!-- 批4（D2026-1008-01）：分析中旁挂「停止分析」（class+
+                                 data-testid 零 id，文案 JS 态 MSG 承接，运行中才显示） -->
+                            <button type="button" class="btn btn-secondary btn-compact ai-analyze-stop-btn" data-testid="ai-analyze-stop-btn" style="display:none;"></button>
+                            <span id="refineAiAnalyzeStatus" class="muted"></span>
+                        </div>
+                        <!-- 2.6.0 批1（D2026-1002-02-批1）：质量闭环一键批次修复
+                             （确认弹窗逐条预览+预估，无无人值守自动写盘） -->
+                        <div class="action-row" style="margin-top:6px;">
+                            <button type="button" id="refineBatchFixBtn" class="btn btn-primary btn-compact" disabled><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span data-i18n="batchFixBtn">一键修复建议</span></button>
+                            <!-- 批4（D2026-1008-01）：修复中旁挂「停止修复」（同上零 id） -->
+                            <button type="button" class="btn btn-secondary btn-compact batch-fix-stop-btn" data-testid="batch-fix-stop-btn" style="display:none;"></button>
+                            <!-- 3.0 批2（D2026-1009-02 批2）：一键回滚（文案 JS 态
+                                 MSG 填充，json 导读就绪后由 batchFixRefresh 显隐；
+                                 零 id/零 data-i18n） -->
+                            <button type="button" class="btn btn-secondary btn-compact fullchain-rollback-btn" data-testid="fullchain-rollback-btn" style="display:none;"></button>
+                            <select id="refineBatchFixScope" class="form-select compact" style="width:auto; display:none;" aria-label="fix scope"></select>
+                            <span id="refineBatchFixStatus" class="muted"></span>
+                        </div>
+                        <!-- D2026-1007-02 件C：修复生效配置明示行（FROZEN_IDS
+                             217→218 显式解冻，批准依据=决策 D2026-1007-02；
+                             文案 JS 态 MSG 键承接，零 data-i18n） -->
+                        <div id="batchFixEffectiveLine" class="muted" style="display:none;"></div>
+                        <!-- 2.5.0 批5（D2026-1001-07）：AI 分析独立配置（缺省跟随阶段A；custom 无默认端点已排除）
+                             批3（D2026-1002-12）：平铺六件套改 3 组顶置标签列（.field-col），
+                             橙色提示移入行尾独立成行（order:99 对齐 .stage-row .muted 先例） -->
+                        <div class="ai-config-row">
+                            <div class="field-col">
+                                <label class="muted" for="aiProviderSel">Analysis provider</label>
+                                <select id="aiProviderSel" class="form-select compact">
+                                    <option value="follow">Follow stage A (default)</option>
+                                    <option value="lmstudio">LM Studio (local)</option>
+                                    <option value="ollama">Ollama (local)</option>
+                                    <option value="deepseek">DeepSeek API</option>
+                                    <option value="siliconflow">SiliconFlow</option>
+                                    <option value="zen">Zen (free)</option>
+                                </select>
+                            </div>
+                            <div class="field-col">
+                                <label class="muted" for="aiModelInput">Analysis model</label>
+                                <!-- 批3（D2026-1008-01）：模型文本框→下拉三件套（下拉+
+                                     刷新+测试，对齐阶段页 refineS* 先例）；aiModelInput
+                                     id 保留（FROZEN_IDS 契约，只换标签类型）；刷新/测试
+                                     按钮 class+data-testid 零 id、零静态 data-i18n（文案/
+                                     图标 bindDom JS 态填充）；follow 态=禁用+占位（JS 态
+                                     ai_model_follow_hint），空态占位对齐阶段页骨架 -->
+                                <div class="model-trio">
+                                    <select id="aiModelInput" class="form-select compact">
+                                        <option value="" disabled selected></option>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary btn-compact ai-model-refresh" data-testid="ai-model-refresh"></button>
+                                    <button type="button" class="btn btn-secondary btn-compact ai-model-test" data-testid="ai-model-test"></button>
+                                    <span class="muted ai-model-status" data-testid="ai-model-status"></span>
+                                </div>
+                            </div>
+                            <!-- 2.6.0 批2 修订（D2026-1002-05）：跨片统计窗口三档（JS 填充，零静态键） -->
+                            <div class="field-col">
+                                <label class="muted" for="aggregateWindowSel">Cross-film window</label>
+                                <select id="aggregateWindowSel" class="form-select compact"></select>
+                            </div>
+                            <div id="refineAiPrivacy" class="muted hint-warn" style="display:none;"></div>
+                        </div>
+                        <!-- P2（D2026-1008-02）：修复模型独立配置行已删除——
+                             一键修复与 AI 分析模型完全统一（同独立分析配置→
+                             同回退链），生效模型在修复明示行直出 -->
+                        <div id="refineAiResult" style="margin-top:8px;"></div>
+                    </div>
+                </section>
+            </div>
+
+
+            <div class="tab-page" id="tab-advanced" data-testid="tab-advanced">
+                <div class="muted" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
+
+                <!-- 数据保存目录（owner 反馈②：用户可选数据根；写入 .data-root 指针，重启生效；
+                     浏览选择目录（与角色卡同款原生目录对话框），复用媒体源暗色 token 类） -->
+                <div class="path-row" id="dataRootBar">
+                    <span class="media-source-label" data-i18n="data_root_title">数据保存目录</span>
+                    <span class="media-source-path" id="dataRootCurrentPath"></span>
+                    <span class="media-source-tag" id="dataRootSourceTag"></span>
+                    <button type="button" id="dataRootToggleBtn" class="btn btn-secondary btn-sm" data-i18n="data_root_change_btn">浏览…</button>
+                    <button type="button" id="dataRootRestoreBtn" class="btn btn-ghost btn-sm" data-i18n="data_root_restore_btn">恢复默认</button>
+                    <span id="dataRootStatus" class="muted"></span>
+                </div>
+
+                <div class="adv-grid">
+                    <div class="adv-group">
+                    <div class="group-title" data-i18n="adv_group_translation_glossary">翻译与词库</div>
+                    <div class="field-row">
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineGl1" checked> <span data-i18n="gl1_label">词库→阶段A</span>
+                        </label>
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineGl2" checked> <span data-i18n="gl2_label">词库→阶段B</span>
+                        </label>
+                        <label class="inline-field" data-i18n-title="sf_title" title="翻译前自动清理原文里的乱码、复读等可疑内容。严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。">
+                            <span data-i18n="source_filter_label">源侧检测</span>
+                            <select id="refineSourceFilter" class="form-select compact" style="width:var(--w-batch);">
+                                <option value="strict" data-i18n="sf_strict">严格</option>
+                                <option value="default" selected data-i18n="sf_default">标准</option>
+                                <option value="off" data-i18n="sf_off">关闭</option>
+                            </select>
+                        </label>
+                        <label class="inline-field" data-i18n-title="synopsis_title" title="剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容">
+                            <input type="checkbox" id="refineAutoSynopsis" checked> <span data-i18n="synopsis_label">剧情自摘要</span>
+                        </label>
+                        <label class="inline-field" data-i18n-title="adaptive_thresholds_title" title="按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。
+技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注">
+                            <input type="checkbox" id="refineAdaptiveThresholds"> <span data-i18n="adaptive_thresholds_label">阈值自适应</span>
+                        </label>
+                    </div>
+
+                    <!-- 翻译方向与角色卡（2.6.3 批D D2026-1003-01 P5）：组整体
+                         迁入词库与模板页 .tpl-editor-vault（随 AppModal.editor
+                         模态编辑），原位留指引行+编辑器入口；指引行为纯中文
+                         静态行（同 seg-btn 先例，拍板配记 D2026-1003-01 归档
+                         段④，静态 i18n 键冻结零消耗）；入口按钮文案 JS 态填
+                         MSG.tplOpenEditor（零静态键），class+data-testid 承载
+                         零 id（FROZEN_IDS 215 零变更） -->
+                    <div class="muted" data-testid="direction-moved-hint">翻译方向与角色卡设置已并入角色卡编辑器（词库与模板 → 打开编辑器）。</div>
+                    <button type="button" class="btn btn-ghost btn-compact tpl-editor-entry-btn tpl-editor-entry-adv" data-testid="tpl-editor-entry-adv"></button>
+
+                    </div>
+
+                    <div class="adv-group">
+                    <div class="group-title" data-i18n="adv_group_tm_learn_gate">TM 与学习闸</div>
+                    <div class="field-row">
+                        <label class="inline-field"
+                               data-i18n-title="tm_enable_title" title="开启后翻译时可复用以往积累的译文记忆，取消后本次完全不读写记忆库，一般保持勾选。
+技术细节：取消勾选时向管线传递 --no-tm（不读取也不写入翻译记忆库）">
+                            <input type="checkbox" id="refineTmEnable" checked> <span data-i18n="tm_enable_label">翻译记忆库</span>
+                        </label>
+                        <label class="inline-field grow">
+                            <span data-i18n="tm_db_label">TM 库路径</span>
+                            <input id="refineTmDb" class="form-input compact grow" style="min-width:var(--w-tm-db);"
+                                   data-i18n-placeholder="tm_db_placeholder" placeholder="留空=使用默认 TM 库">
+                        </label>
+                        <label class="inline-field"
+                               data-i18n-title="tm_threshold_title" title="控制复用记忆库译文的匹配严格程度，调低会更宽松、也更容易套用不贴切的旧译文，留空即用默认值，一般无需填写。
+技术细节：模糊匹配阈值 0-1（步进 0.05），越低越宽松；留空=使用管线默认">
+                            <span data-i18n="tm_threshold_label">TM 阈值</span>
+                            <input type="number" id="refineTmThreshold" class="form-input compact" style="width:var(--w-tm-threshold);"
+                                   min="0" max="1" step="0.05" data-i18n-placeholder="tm_threshold_placeholder" placeholder="默认">
+                        </label>
+                        <label class="inline-field"
+                               data-i18n-title="glossary_learn_title" title="开启后翻译命中将写入学习词库（默认关闭）；学习词库与手动词库分层生效，可在词库页查看">
+                            <input type="checkbox" id="refineGlossaryLearn"> <span data-i18n="glossary_learn_label">learned 词库自学习</span>
+                        </label>
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineGlossaryConflictBlock"> <span data-i18n="glossary_conflict_block_label">冲突条目禁入 TM（默认仅观察）</span>
+                        </label>
+                    </div>
+
+                    </div>
+
+                    <div class="adv-group">
+                    <div class="group-title" data-i18n="adv_group_resume_logging">断点与日志</div>
+                    <div class="field-row">
+                        <label class="inline-field"
+                               data-i18n-title="resume_title" title="上次中断后重跑时，自动接着上次的进度继续，只处理没做完的部分，一般保持勾选。
+技术细节：中断后重跑时，检测到 *_manifest.json 即复用已完成阶段，仅续跑剩余阶段">
+                            <input type="checkbox" id="resumeToggle" data-testid="resume-toggle"> <span data-i18n="resume_label">断点恢复（复用已完成阶段）</span>
+                        </label>
+                        <label class="inline-field"
+                               data-i18n-title="force_resume_title" title="上次中断后重跑时，即使检测到改动也接着上次的进度继续，可能用到过期的中间结果。
+技术细节：覆盖清单指纹校验；会复用可能过期的阶段A产物">
+                            <input type="checkbox" id="refineForceResume" data-testid="force-resume-toggle"> <span data-i18n="force_resume_label">强制断点恢复（指纹不匹配仍复用）</span>
+                        </label>
+                        <label class="inline-field" data-i18n-title="verbose_title" title="向子进程传递 --verbose 输出调试日志">
+                            <input type="checkbox" id="debugLogging"> <span data-i18n="verbose_label">详细日志</span>
+                        </label>
+                    </div>
+                    </div>
+
+                    <!-- 压制参数独立设置项（D2026-1008-01 批2）：仿「断点与日志」组
+                         结构；组内零 id/零静态 data-i18n（FROZEN_IDS/FROZEN_I18N_KEYS
+                         冻结），全部文案由 EncodeDock.init JS 态 MSG 承接；摘要行由
+                         EncodeDock.renderParamsSummary 渲染（保存成功后同步刷新） -->
+                    <div class="adv-group" data-testid="encode-adv-group">
+                    <div class="group-title encode-adv-title" data-testid="encode-adv-group-title"></div>
+                    <div class="muted encode-adv-desc" data-testid="encode-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact encode-params-open-btn" data-testid="encode-params-open-btn"></button>
+                    <div class="muted encode-params-summary" data-testid="encode-params-summary"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ TAB 5: 校对（2.6.1 批 2a D2026-1002-09 校对容器） ============
+                 页内零 data-i18n（静态键 cap 零消耗硬约束，HTML 悬空钉保护）；
+                 全部文案由 review.js 的 REVIEW_MSG 注入 textContent；
+                 本页激活时 JS 给 .workbench 挂 no-aside 隐藏右栏。 -->
+            <div class="tab-page" id="tab-review" data-testid="tab-review">
+
+                <!-- 状态条（D2026-1002-08 定案四 id + reviewProgressFill；
+                     2px 底部轨道用真实子元素供 JS 设宽，伪元素无法由 JS 控宽） -->
+                <div class="review-status-bar review-st-idle" id="reviewStatusBar" style="display:none;">
+                    <span class="review-status-dot" id="reviewStatusDot" aria-hidden="true"></span>
+                    <span class="review-status-label" id="reviewStatusLabel" role="status"></span>
+                    <span class="review-status-spacer"></span>
+                    <span class="review-status-percent" style="display:none;"></span>
+                    <div class="review-status-track"><div class="review-status-track-fill" id="reviewProgressFill" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div></div>
+                </div>
+
+                <!-- 导入区（复用全局 .dropzone 家族结构；按钮经事件委托 data-kind 分流） -->
+                <div class="dropzone" id="reviewDropzone">
+                    <div class="dz-icon">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>
+                    </div>
+                    <div class="dz-title"></div>
+                    <div class="dz-hint"></div>
+                    <div class="dz-actions">
+                        <button type="button" class="btn btn-secondary btn-sm review-import-btn" data-kind="video"></button>
+                        <button type="button" class="btn btn-secondary btn-sm review-import-btn" data-kind="srt"></button>
+                    </div>
+                </div>
+
+                <!-- 播放器（direct 态或转码产物就绪后显示） -->
+                <div class="review-player-wrap" style="display:none;">
+                    <video id="videoReviewPlayer" controls preload="metadata"></video>
+                </div>
+
+                <!-- 手动转码区（clip-audio/error 态显现；reviewTranscodeBtn 为预算内 id，
+                     提示行走 class 由 JS 查询） -->
+                <div class="action-row review-transcode-row" style="display:none;">
+                    <button type="button" id="reviewTranscodeBtn" class="btn btn-warning" style="display:none;"></button>
+                    <span class="review-transcode-hint muted" style="display:none;"></span>
+                </div>
+
+                <!-- 硬字幕压制入口（2.8.0 批1 件5）：校对页主入口（决策 UI=B+）；
+                     按钮文案 JS 态填充零静态 i18n、零 id（FROZEN_IDS 契约） -->
+                <div class="action-row encode-entry-row" style="margin-top:6px;">
+                    <button type="button" class="btn btn-primary btn-compact encode-entry-btn" data-testid="encode-entry-review"></button>
+                    <span class="muted encode-entry-hint"></span>
+                </div>
+
+                <!-- 疑点段面板（批 3 D2026-1002-11）：折叠容器+行 class 委托零 id；
+                     引导卡=ASR 可选能力说明；文案全 JS 注入 -->
+                <div class="review-det-tools">
+                    <button type="button" id="reviewDetLoadBtn" class="btn btn-ghost btn-sm"></button>
+                    <button type="button" id="reviewAsrBtn" class="btn btn-ghost btn-sm"></button>
+                    <span class="review-det-summary muted" style="display:none;"></span>
+                </div>
+                <div class="review-detections" id="reviewDetectionsWrap" style="display:none;">
+                    <div class="review-asr-card" style="display:none;">
+                        <div class="review-asr-card-text"></div>
+                        <button type="button" class="btn btn-secondary btn-sm review-asr-goto"></button>
+                    </div>
+                    <div id="reviewDetList" class="review-det-list"></div>
+                </div>
+
+                <!-- 字幕列表（批 2b D2026-1002-10）：工具条+列表容器；
+                     行/页码 class 委托零 id；文案全 JS 注入 -->
+                <div class="review-list-tools" style="display:none;">
+                    <input type="text" id="reviewSearchInput" class="form-input compact grow" autocomplete="off">
+                    <button type="button" id="reviewLocateBtn" class="btn btn-ghost btn-sm"></button>
+                    <div id="reviewPager" class="review-pager"></div>
+                    <span class="review-list-actions">
+                        <button type="button" id="reviewSaveBtn" class="btn btn-primary btn-sm"></button>
+                        <button type="button" id="reviewSaveAsBtn" class="btn btn-ghost btn-sm"></button>
+                    </span>
+                </div>
+                <div class="review-list" id="reviewListWrap" style="display:none;"></div>
+            </div>
+
+        </main>
+
+        <!-- ============ 右栏：全局配置面板（所有页可见；运行控制自 tab-translate 迁入） ============ -->
+        <aside class="aside">
+
+            <!-- 卡1：运行控制（服务下拉 + 开始/停止 + 进度） -->
+            <div class="panel-card">
+
+                <div class="service-quick-bar">
+                    <label for="refineServiceQuick" class="service-quick-label" data-i18n="serviceQuickLabel">翻译服务</label>
+                    <select id="refineServiceQuick" class="form-select compact" style="min-width:var(--w-quick-service);">
+                        <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
+                        <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
+                        <option value="deepseek">DeepSeek API</option>
+                        <option value="zen" data-i18n="provider_zen">Zen 免费</option>
+                        <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
+                        <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
+                    </select>
+                    <span class="service-quick-badge" data-i18n="serviceQuickBadge">AI 大模型</span>
+                </div>
+                <div id="refineServiceQuickLocalHint" class="service-quick-local-hint" data-i18n="serviceQuickHintLocal">需本机安装并启动 LM Studio（或 Ollama）并加载模型</div>
+
+                <div class="action-row">
+
+                    <button type="button" id="refineStartBtn" class="btn btn-primary" data-testid="btn-start"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg><span data-i18n="start_btn">开始净语翻译</span></button>
+                    <button type="button" id="refineCancelBtn" class="btn btn-danger" data-testid="btn-stop" disabled><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span data-i18n="stop_btn">停止</span></button>
+
+                </div>
+
+
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-dot dot-idle" id="statusDot" aria-hidden="true"></span>
+                        <span class="status-label" id="statusLabel" data-testid="status-bar" data-i18n="status_idle">Idle</span>
+                    </div>
+                </div>
+
+
+            </div>
+
+            <!-- 卡2：输出设置（自 tab-translate 迁入，内部结构原样） -->
+            <div class="panel-card">
+
+                <section class="section destination-section">
+                    <div class="section-header">
+                        <h2 data-i18n="output_header">输出目录</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="output-source-toggle">
+                            <input type="checkbox" id="outputToSource" checked>
+                            <label for="outputToSource" data-i18n="save_to_source_dir">保存到字幕同目录</label>
+                        </div>
+                        <div class="path-row">
+                            <label for="outputDir" class="path-row-label" data-i18n="output_label">输出:</label>
+                            <input
+                                type="text"
+                                id="outputDir"
+                                class="output-path"
+                                readonly
+                                data-i18n-placeholder="output_placeholder"
+                                placeholder="输出目录..."
+                            >
+                            <button type="button" class="btn btn-secondary" id="browseOutputBtn" data-i18n="browse_btn">
+                                浏览
+                            </button>
+                            <button type="button" class="btn btn-ghost" id="openOutputBtn" data-i18n="open_btn">
+                                打开
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- 卡3：两阶段流水线只读镜像（D2026-0930-09：整卡点击跳引擎页，无双向同步） -->
+            <div class="panel-card panel-card-link" id="pipelineCard" data-i18n-title="pipeline_card_hint" title="点击前往「引擎与模型」页修改" tabindex="0" role="link">
+                <div class="block-title" data-i18n="refine_panel_title">净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）</div>
+
+                <div class="pipeline-mirror" id="pipelineMirrorLine"></div>
+
+                <!-- 自动压制开关（2.8.0 批3，D2026-1007-03 决策八-4：用户勾选
+                     决定是否启用自动化；状态存管线设置 encode_auto_enabled；
+                     零 id 零静态 i18n，文案 JS 态填充） -->
+                <label class="encode-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;cursor:pointer;" data-testid="encode-auto-row">
+                    <input type="checkbox" class="encode-auto-switch" style="margin:0;">
+                    <span class="encode-auto-label"></span>
+                </label>
+                <!-- 全链自动化开关（3.0 批1 a 段，D2026-1009-02：状态存管线
+                     设置 fullchain_auto_enabled，缺省关；开启时翻译完成钩子
+                     整体改道全链状态机——分析→批量修复→复验→链尾压制，前端
+                     预热同门控短路。零 id 零静态 i18n，文案 EncodeDock.init
+                     JS 态填充；样式复用 encode-auto-row 内联样式族不另立 CSS） -->
+                <label class="fullchain-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;cursor:pointer;" data-testid="fullchain-auto-row">
+                    <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
+                    <span class="fullchain-auto-label"></span>
+                </label>
+                <!-- 压制参数入口（D2026-1008-01 批2）：「参数」文字小按钮同开
+                     编辑模式弹窗；置于 label 外（label 内点击会透传切换开关）；
+                     零 id 零静态 data-i18n，文案 EncodeDock.init JS 态承接 -->
+                <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link" style="margin-top:4px;"></button>
+
+                <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
+                    <span class="feature-badge" id="grammarHintBadge" style="display:none;">
+                        <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>
+                        <span class="feature-text" data-i18n="grammar_hint_text">语法提示</span>
+                    </span>
+                </div>
+
+                <span class="muted footnote" data-i18n="artifact_note">
+
+                    产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过
+
+                </span>
+            </div>
+
+            <!-- 卡4：系统状态摘要（D2026-1001 批3 owner 拍板 A 案；只读现成接口，逐项降级。
+                 2.6.5 段2 D2026-1004-01 #2 两行式改版：版本入标题行（id 保留仅移动，
+                 sys_summary_version 键随行保留使 FROZEN_I18N_KEYS 恰 189→187）、
+                 TM/词典统计升 keyrow 右 stat 槽、路径值行全宽 wbr 折行、行间 hairline） -->
+            <div class="panel-card" id="systemSummaryCard">
+                <div class="sys-summary-title-row">
+                    <div class="block-title" data-i18n="sys_summary_title">系统状态</div>
+                    <span class="sys-summary-key" data-i18n="sys_summary_version">版本</span>
+                    <span class="sys-summary-stat" id="sysSummaryVersion">—</span>
+                </div>
+                <div class="sys-summary-row">
+                    <div class="sys-summary-keyrow">
+                        <span class="sys-summary-key" data-i18n="data_root_title">数据保存目录</span>
+                    </div>
+                    <div class="sys-summary-val" id="sysSummaryDataRoot">—</div>
+                </div>
+                <div class="sys-summary-row">
+                    <div class="sys-summary-keyrow">
+                        <span class="sys-summary-key" data-i18n="tm_enable_label">翻译记忆库</span>
+                        <span class="sys-summary-stat"></span>
+                    </div>
+                    <div class="sys-summary-val" id="sysSummaryTm">—</div>
+                </div>
+                <div class="sys-summary-row">
+                    <div class="sys-summary-keyrow">
+                        <span class="sys-summary-key" data-i18n="dict_panel_title">词典管理（日/中/英）</span>
+                        <span class="sys-summary-stat"></span>
+                    </div>
+                    <div class="sys-summary-val" id="sysSummaryDict">—</div>
+                </div>
+            </div>
+
+        </aside>
+    </div>
+
+    <!-- 快速试听浮层（D2026-0929-09：底部固定条，关闭/错误提示内联） -->
+
+    <div class="audio-preview-bar" id="audioPreviewBar" style="display:none;">
+        <div class="audio-preview-error" id="audioPreviewError" style="display:none;"></div>
+        <div class="audio-preview-main">
+            <span class="audio-preview-timing" id="audioPreviewTiming"></span>
+            <audio id="audioPreviewPlayer" controls></audio>
+            <button type="button" id="audioPreviewCloseBtn" class="btn btn-ghost btn-sm" data-i18n="audio_preview_close">关闭</button>
+        </div>
+    </div>
+
+
+    <!-- About Dialog Modal -->
+
+    <div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)closeAbout()">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2 data-i18n="about_title">关于</h2>
+                <button class="modal-close" onclick="closeAbout()" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="about-logo"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
+                <div class="about-title" data-i18n="doc_title">净语翻译 · SubTrans Translate</div>
+                <div class="about-version" id="aboutVersion"></div>
+
+                <div class="about-section">
+                    <h3 data-i18n="about_intro">简介</h3>
+                    <p data-i18n="about_intro_text">SubTrans 是一款 .srt 字幕翻译与精修桌面工具，支持本地与云端双引擎推理。
+                       自带通用角色卡与三语词典，日→中为主，可经翻译方向参数化切换中→英、英→中。
+                       采用 v2 两阶段流水线：阶段A 净语+翻译（一次调用完成文本清洗与翻译）→
+                       阶段B 审校+抛光（对照原文审核、补译、润色）。</p>
+                </div>
+
+                <div class="about-section">
+                    <ul>
+                        <li data-i18n="feat_tm">TM 翻译记忆库（三层准入门槛，防止低质翻译入库）</li>
+                        <li data-i18n="feat_report">双引擎分歧质量报告与伪影/幻觉过滤（删除台账见报告【处置】章节）</li>
+                        <li data-i18n="feat_glossary_learn">词库自动学习（带准入门槛，防止污染词库）</li>
+                        <li data-i18n="feat_fallback">云端故障本地接管（云端限流/宕机时自动切换本地模型）</li>
+                        <li data-i18n="feat_context_review">双语字幕上下文预审（context_review 分歧复核工具）</li>
+                    </ul>
+                </div>
+
+                <div class="about-section">
+                    <h3 data-i18n="shortcuts_title">快捷键</h3>
+                    <ul>
+                        <li data-i18n="sc_ctrl_o">Ctrl+O - 添加文件</li>
+                        <li data-i18n="sc_ctrl_r">Ctrl+R - 开始翻译</li>
+                        <li data-i18n="sc_escape">Escape - 取消/关闭对话框</li>
+                        <li data-i18n="sc_f1">F1 - 显示本对话框</li>
+                    </ul>
+                </div>
+
+                <div class="about-section">
+                    <p style="text-align: center; margin-top: 20px;">
+                        <a href="https://github.com/Angelholl/SubTrans" class="about-link" target="_blank" data-i18n="project_home_link">SubTrans 项目主页</a>
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeAbout()" data-i18n="close_btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 硬字幕压制全局队列底条（2.8.0 批1 件5，D2026-1007-03）：常驻骨架，
+         有任务时由 JS 显现；文案 JS 态填充零静态 i18n；5 个预算内 id
+         （FROZEN_IDS 218→223 显式解冻），列表项 createElement 注入零 id -->
+    <div id="encodeDock" class="queue-dock" style="display:none;" data-testid="encode-dock">
+        <div class="queue-dock-main">
+            <span class="queue-dock-state" data-testid="encode-dock-state"></span>
+            <span id="encodeDockLabel" class="queue-dock-label"></span>
+            <span class="queue-dock-track"><span id="encodeDockFill" class="progress-fill" style="width:0%"></span></span>
+            <span class="queue-dock-eta muted"></span>
+            <button type="button" id="encodeDockToggle" class="btn btn-ghost btn-sm"></button>
+            <button type="button" class="btn btn-danger btn-sm queue-dock-cancel" style="display:none;"></button>
+            <button type="button" class="btn btn-ghost btn-sm queue-dock-dismiss" data-testid="encode-dock-dismiss"></button>
+        </div>
+        <div id="encodeDockList" class="queue-dock-panel" style="display:none;"></div>
+    </div>
+
+    <!-- 自制通用模态（2.4.0 批1 S1）：替换原生 alert/confirm/prompt（宿主无关+防 prompt null）；
+         class-only 承载（复用 .modal-overlay 体系），按钮文字 JS 填 MSG.ui_ok/ui_cancel（静态键 +0） -->
+    <div id="appModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true">
+        <div class="modal-card" data-testid="app-modal-card">
+            <div class="modal-title" data-testid="app-modal-title"></div>
+            <div class="modal-body" data-testid="app-modal-body"></div>
+            <input type="text" class="form-input modal-input" style="display:none;" data-testid="app-modal-input">
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost modal-cancel" data-testid="app-modal-cancel"></button>
+                <button type="button" class="btn btn-primary modal-ok" data-testid="app-modal-ok"></button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JavaScript -->
+    <script src="app.js"></script>
+    <script src="review.js"></script>
+</body>
+</html>
+

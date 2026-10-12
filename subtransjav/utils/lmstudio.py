@@ -1,0 +1,278 @@
+"""
+LM Studio 预检与自动加载
+========================
+解决：中途停止任务并卸载模型后，续跑因"模型未加载"而失败且无提示。
+
+策略：
+  1. 查询 /v1/models（仅含已加载模型），目标模型在列 → 检查引擎参数是否对齐
+  2. 未对齐（未加载 / ctx 不符 / 并发不符）→
+     先 `lms unload --all` 清场（16GB 单卡装不下两个大模型），再
+     `lms load` 带参加载（-y --gpu max -c <ctx> --parallel <并发>）
+  3. lms 不可用 → 给出明确的人工处理指引
+
+引擎参数以管线配置为唯一事实来源（ctx=v2_ctx_local、parallel=v2_concurrency），
+GUI 侧保存的同名参数会在加载时被覆盖——两侧同步由本函数构造性保证。
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import time
+
+import requests
+
+from subtransjav.utils.process_manager import run_with_timeout_tree
+
+_PS_TIMEOUT_S = 30  # lms ps 探测专用短超时，避免 ps 挂死拖满 load 超时
+
+# 件⑨（D2026-1006-01，owner 真机 mufr-006 现场）：LM Studio 空闲 TTL 自动
+# 卸载会在阶段间隙把大模型卸掉（阶段 A 只用小模型，不重置大模型空闲计时）。
+# 无 lms CLI 时无法自动加载，改为有限等待复查：每 WAIT_INTERVAL_S 秒重查
+# 一次在载状态，共 WAIT_RECHECKS 次，给"在 LM Studio 手动加载"一个
+# 自动检测续跑窗口；复查耗尽仍不在载则落回原失败路径。
+WAIT_RECHECKS = 3
+WAIT_INTERVAL_S = 15.0
+
+_LMS_CANDIDATES = (
+    os.path.expanduser(r"~\.lmstudio\bin\lms.exe"),
+    r"C:\Program Files\LM Studio\lms.exe",
+)
+
+
+def _root_from_endpoint(endpoint: str) -> str:
+    """'http://localhost:1234/v1' -> 'http://localhost:1234'"""
+    root = (endpoint or "").rstrip("/")
+    if root.endswith("/v1"):
+        root = root[:-3]
+    return root
+
+
+def _find_lms() -> str:
+    found = shutil.which("lms")
+    if found:
+        return found
+    for cand in _LMS_CANDIDATES:
+        if os.path.isfile(cand):
+            return cand
+    return ""
+
+
+def _loaded_ids(root: str) -> set:
+    """/v1/models 只含已加载模型；服务不可达抛异常由调用方处理。"""
+    r = requests.get(f"{root}/v1/models", timeout=5)
+    return {m.get("id") for m in r.json().get("data", [])}
+
+
+def _loaded_ctx(root: str, model: str, log=None) -> int:
+    """读取已载模型的实际上下文长度；拿不到（旧版无 v0 API / 字段缺失）返回 0。
+
+    v0 API 字段名无正式兼容承诺，按 observed 命名取值并全面容错：
+    读不到 ≠ 0 不对齐，宁可放过也不误判重载。
+    """
+    warn = log or (lambda m: None)
+    try:
+        r = requests.get(f"{root}/api/v0/models", timeout=5)
+        for m in r.json().get("data", []):
+            if m.get("id") != model:
+                continue
+            for key in ("loaded_context_length", "context_length"):
+                try:
+                    v = int(m.get(key) or 0)
+                except (TypeError, ValueError):
+                    continue
+                if v > 0:
+                    return v
+            warn("   ⚠️ ctx 检测跳过: /api/v0/models 条目无有效上下文长度，无法核对")
+            return 0
+        warn("   ⚠️ ctx 检测跳过: /api/v0/models 未返回该模型条目，无法核对")
+    except Exception:
+        warn("   ⚠️ ctx 检测跳过: /api/v0/models 不可达或响应异常，无法核对")
+    return 0
+
+
+def _loaded_parallel(lms: str, model: str, log=None) -> int:
+    """读取已载模型的实际并发数（lms ps --json 条目顶层 parallel 字段）。
+
+    ps schema 无正式兼容承诺，全面容错：条目未找到 / 字段缺失 /
+    值非数值（null/字符串/布尔）/ 非正数 / JSON 解析失败 / 超时 /
+    非零退出码 → 一律返回 0（拿不到 ≠ 失配，宁可放过也不误判重载）。
+    ps 探测超时由模块常量 _PS_TIMEOUT_S 统一控制（本函数不收超时参数）。
+    """
+    warn = log or (lambda m: None)
+    if not lms:
+        warn("   ⚠️ 并发检测跳过: 未找到 lms CLI，无法读取引擎并发实值")
+        return 0
+    try:
+        proc = _run_lms(lms, ["ps", "--json"], _PS_TIMEOUT_S)
+        if getattr(proc, "timed_out", False):
+            warn("   ⚠️ 并发检测跳过: lms ps 超时，无法核对")
+            return 0
+        if proc.returncode != 0:
+            warn(f"   ⚠️ 并发检测跳过: lms ps 退出码非零 (exit {proc.returncode})")
+            return 0
+        data = json.loads(proc.stdout or "[]")
+        if isinstance(data, dict):
+            data = data.get("data")
+        for entry in data or []:
+            if not isinstance(entry, dict):
+                continue
+            if model not in {str(entry.get(k, "")) for k in
+                             ("identifier", "modelKey",
+                              "indexedModelIdentifier")}:
+                continue
+            v = entry.get("parallel")
+            if isinstance(v, bool) or not isinstance(v, int):
+                warn(f"   ⚠️ 并发检测跳过: ps 条目 parallel 值非法 ({v!r})")
+                return 0
+            if v <= 0:
+                warn(f"   ⚠️ 并发检测跳过: ps 条目 parallel 非正数 ({v})")
+                return 0
+            return v
+        warn("   ⚠️ 并发检测跳过: lms ps 未找到该模型的在载条目，无法核对")
+    except Exception as e:
+        warn(f"   ⚠️ 并发检测跳过: lms ps 输出无法解析 ({e})")
+    return 0
+
+
+def _run_lms(lms: str, args: list, timeout: float) -> subprocess.CompletedProcess:
+    # 必须显式 encoding="utf-8"：缺省时 Windows 按 locale（cp936）解码
+    # 子进程输出，模型名/输出含非 GBK 字符会条件性 UnicodeDecodeError，
+    # 且不被上层 except 捕获；lms 输出为 UTF-8，errors="replace" 兜底
+    # 保证任何字节序列都可解码（钉死见 tests/test_lmstudio_encoding.py）。
+    # v1.3.2 task4：改走 run_with_timeout_tree 统一入口——超时不再抛
+    # TimeoutExpired，而是整树击杀（含孙进程）后返回 timed_out=True 的结果。
+    return run_with_timeout_tree(
+        [lms, *args], timeout,
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace")
+
+
+def ensure_lmstudio_model(endpoint: str, model: str,
+                          load_timeout: float = 600,
+                          log=None,
+                          ctx_tokens: int | None = None,
+                          parallel: int | None = None,
+                          gpu: str = "max",
+                          evict_others: bool = True) -> tuple:
+    """确保 LM Studio 已按管线配置加载指定模型（含槽位切换自动卸载）。
+
+    返回 (ok: bool, message: str)。失败时 message 为可直接展示的原因。
+    对齐判定：未在载 / 已载但 ctx 与 ctx_tokens 不符 / 已载但并发与
+    parallel 不符，满足任一即"卸载全部 → 带参加载"。
+
+    TTL 卸载等待复查（D2026-1006-01 件⑨，owner 真机 mufr-006 现场）：
+    模型已下载但不在载（疑似 LM Studio 空闲 TTL 自动卸载——阶段 A 只用
+    小模型不重置大模型空闲计时）且无 lms CLI 时，不立即失败，而是有限
+    等待复查（WAIT_RECHECKS × WAIT_INTERVAL_S）：期间在 LM Studio 中
+    手动加载即自动检测并续跑（检测到的 ctx 与管线配置不符仅告警放行，
+    无 CLI 无法重载对齐）；复查耗尽仍不在载则落回原失败路径并在消息末尾
+    追加等待时长。等待仅发生在该分支，CLI 存在 / 模型未下载 / 服务器
+    不可达等其余路径零变化。
+    """
+    log = log or (lambda m: None)
+    root = _root_from_endpoint(endpoint)
+    if not root:
+        return False, "LM Studio 接口地址为空"
+
+    # 1) 服务器可达性 + 已加载检查
+    try:
+        loaded = _loaded_ids(root)
+    except Exception:
+        return False, f"LM Studio 未运行或无法连接（{root}）"
+
+    # 2) 模型是否已下载（v0 API 含全部已下载模型）
+    downloaded = set()
+    try:
+        r0 = requests.get(f"{root}/api/v0/models", timeout=5)
+        downloaded = {m.get("id") for m in r0.json().get("data", [])}
+    except Exception:
+        pass  # 旧版无 v0 API 时跳过该检查，交给 lms load 报错
+
+    if downloaded and model not in downloaded:
+        return False, (f"模型 {model} 未在 LM Studio 中下载，"
+                        f"可用模型: {', '.join(sorted(downloaded)) or '（未知）'}")
+
+    # 3) 对齐判定（未载 / ctx 不符 / 并发不符）
+    need_load = model not in loaded
+    ctx_mismatch = False
+    if (not need_load) and ctx_tokens:
+        actual = _loaded_ctx(root, model, log=log)
+        ctx_mismatch = actual > 0 and actual != int(ctx_tokens)
+    parallel_mismatch = False
+    parallel_actual = 0
+    if (not need_load) and parallel is not None and int(parallel) > 0:
+        parallel_actual = _loaded_parallel(_find_lms(), model, log=log)
+        parallel_mismatch = (parallel_actual > 0
+                             and parallel_actual != int(parallel))
+
+    if not (need_load or ctx_mismatch or parallel_mismatch):
+        return True, "模型已加载"
+
+    # 4) 清场 + 带参加载
+    lms = _find_lms()
+    if not lms:
+        # 件⑨（D2026-1006-01）：无 CLI 且模型已下载但不在载（疑似空闲 TTL
+        # 自动卸载）→ 有限等待复查，给"手动加载"一个自动续跑窗口
+        wait_total_s = int(WAIT_RECHECKS * WAIT_INTERVAL_S)
+        log(f"   ⏳ 模型 {model} 当前不在载（疑似 LM Studio 空闲 TTL 自动卸载）。"
+            f"若在 LM Studio 中手动加载，将在 {wait_total_s}s 内自动检测并续跑；"
+            f"超时按失败跳过。")
+        for i in range(1, WAIT_RECHECKS + 1):
+            log(f"   ⏳ 等待模型重新就绪…（第 {i}/{WAIT_RECHECKS} 次复查）")
+            time.sleep(WAIT_INTERVAL_S)
+            try:
+                loaded = _loaded_ids(root)
+            except Exception:
+                continue  # 等待窗口内服务器抖动不立即判死，继续下一次复查
+            if model in loaded:
+                log(f"   ✅ 模型 {model} 已重新就绪（检测到手动加载），继续")
+                actual = _loaded_ctx(root, model, log=log)
+                if actual > 0 and ctx_tokens and actual != int(ctx_tokens):
+                    log(f"   ⚠️ 手动加载的 ctx 与管线配置不符"
+                        f"（实际 {actual} ≠ 配置 {ctx_tokens}），"
+                        f"无 CLI 无法重载对齐，按当前加载状态继续")
+                return True, "模型已重新就绪（等待手动加载）"
+        return False, (f"模型 {model} 未按配置就绪，且未找到 lms CLI 无法自动加载。"
+                        f"请在 LM Studio 中手动加载该模型，"
+                        f"或开启 Just-in-Time 自动加载"
+                        f"（已等待 {wait_total_s}s 未恢复）")
+    try:
+        if evict_others and loaded:
+            unloaded = _run_lms(lms, ["unload", "--all"], load_timeout)
+            if getattr(unloaded, "timed_out", False):
+                # v1.3.2 task4：卸载超时按失败处理（原实现无捕获直接上抛）
+                return False, "自动卸载超时，请手动检查 LM Studio"
+            log(f"   ♻️ 已卸载在载模型（清场换载）: {', '.join(sorted(x for x in loaded if x))}")
+        load_args = ["load", model, "-y", "--gpu", gpu]
+        if ctx_tokens:
+            load_args += ["-c", str(int(ctx_tokens))]
+        if parallel:
+            load_args += ["--parallel", str(int(parallel))]
+        reload_reason = ""
+        if parallel_mismatch:
+            reload_reason = f"（并发 {parallel_actual}≠{int(parallel)}，重载对齐）"
+        log(f"   ⏳ LM Studio 引擎对齐: 加载 {model} "
+            f"(ctx={ctx_tokens}, parallel={parallel}, gpu={gpu}) {reload_reason}...")
+        proc = _run_lms(lms, load_args, load_timeout)
+    except OSError as e:
+        return False, f"lms CLI 调用失败: {e}"
+    if getattr(proc, "timed_out", False):
+        return False, f"自动加载 {model} 超时（>{load_timeout:.0f}s），请手动加载"
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip()[-200:]
+        return False, f"自动加载 {model} 失败: {tail or f'exit {proc.returncode}'}"
+
+    # 5) 复核
+    try:
+        loaded = _loaded_ids(root)
+        if model in loaded:
+            if parallel is not None:
+                p_actual = _loaded_parallel(lms, model, log=log)
+                if p_actual > 0 and p_actual != int(parallel):
+                    log(f"   ⚠️ 引擎未兑现并发配置: 请求 parallel={int(parallel)}，"
+                        f"实际 {p_actual}（可能被引擎钳制），不二次重载")
+            return True, "模型已按管线配置加载"
+    except Exception:
+        pass
+    return False, f"自动加载命令已执行但模型仍未就绪: {model}"

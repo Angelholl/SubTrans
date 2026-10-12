@@ -1,0 +1,222 @@
+"""refine.glossary_learn 单元测试（P0 #5：原子写；P1 #3：词库写锁）"""
+import logging
+import os
+from pathlib import Path
+
+import pytest
+
+from subtransjav.refine import glossary_learn as gl
+from subtransjav.refine.glossary_learn import (
+    _acquire_glossary_lock,
+    _ensure_http_url,
+    _release_glossary_lock,
+    load_learned_glossary,
+    save_learned_glossary,
+)
+
+
+def test_save_load_roundtrip(tmp_path):
+    p = str(tmp_path / "learned.csv")
+    rows = [("むらむら", "心痒"), ("IKU", "去了")]
+    save_learned_glossary(p, rows)
+    assert load_learned_glossary(p) == rows
+
+
+def test_save_dedup(tmp_path):
+    p = str(tmp_path / "learned.csv")
+    save_learned_glossary(p, [("a", "b"), ("a", "b"), ("c", "d")])
+    assert load_learned_glossary(p) == [("a", "b"), ("c", "d")]
+
+
+def test_save_no_temp_leftover(tmp_path):
+    p = str(tmp_path / "learned.csv")
+    save_learned_glossary(p, [("a", "b")])
+    leftovers = [n for n in os.listdir(str(tmp_path)) if n != "learned.csv"]
+    assert leftovers == [], "原子写不应残留临时文件"
+
+
+def test_lock_acquire_and_release(tmp_path):
+    p = str(tmp_path / "learned.csv")
+    lock = _acquire_glossary_lock(p)
+    assert lock is not None
+    assert os.path.isfile(lock), "应创建锁文件"
+    _release_glossary_lock(lock)
+    assert not os.path.isfile(lock), "释放后锁文件应被移除"
+
+
+def test_lock_prevents_second_acquisition(tmp_path):
+    p = str(tmp_path / "learned.csv")
+    lock = _acquire_glossary_lock(p)
+    assert lock is not None
+    # 同一路径在持有锁期间再次获取应超时返回 None
+    assert _acquire_glossary_lock(p, timeout=0.2) is None
+    _release_glossary_lock(lock)
+
+
+def test_lock_stale_cleared(tmp_path):
+    p = str(tmp_path / "learned.csv")
+    lock = _acquire_glossary_lock(p)
+    # 人为将锁文件 mtime 设为很久以前，模拟崩溃残留的陈旧锁
+    old = 0
+    os.utime(lock, (old, old))
+    _release_glossary_lock(lock)
+    # 陈旧锁已被清除，应能再次获取
+    lock2 = _acquire_glossary_lock(p, timeout=1.0)
+    assert lock2 is not None
+    _release_glossary_lock(lock2)
+
+
+# ---------------------------------------------------------------------------
+# 学习保存防丢：损坏词库中止保存（M）；锁超时不做无锁写入（L）
+# ---------------------------------------------------------------------------
+
+def _s2_files(tmp_path, src="新词", dst="新译"):
+    """构造 S2 输入/输出文本对（通过防污染校验：词对须真实出现）。"""
+    in_f = tmp_path / "s2_in.txt"
+    in_f.write_text(src, encoding="utf-8")
+    out_f = tmp_path / "s2_out.txt"
+    out_f.write_text(dst, encoding="utf-8")
+    return str(in_f), str(out_f)
+
+
+def test_corrupt_learned_file_aborts_save(tmp_path, monkeypatch, caplog):
+    """learned 词库存在但读取/解析失败：中止本次学习保存并告警，
+    绝不把旧库当空库做全量写回（否则既有学习条目被清空）。"""
+    p = tmp_path / "learned.csv"
+    p.write_bytes(b"\xff\xfe\x00bad-bytes")      # 非 UTF-8，解析必失败
+    before = p.read_bytes()
+    in_f, out_f = _s2_files(tmp_path, src="新しい", dst="術語")
+    monkeypatch.setattr(gl, "extract_glossary_from_pair",
+                        lambda *a, **k: [("新しい", "術語")])
+    with caplog.at_level(logging.WARNING, logger="subtransjav.refine.glossary_learn"):
+        n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
+    assert n == 0
+    assert p.read_bytes() == before              # 既有文件未被清空覆盖
+    assert "learned" in caplog.text              # 有告警，非静默
+
+
+def test_lock_timeout_skips_save(tmp_path, monkeypatch, caplog):
+    """锁获取超时（返回 None）：跳过本次写入并告警，不做无锁
+    load-merge-save（否则并发下仍会互相覆盖）。"""
+    p = tmp_path / "learned.csv"
+    p.write_text("旧词,旧译\n", encoding="utf-8-sig")
+    before = p.read_bytes()
+    in_f, out_f = _s2_files(tmp_path)
+    monkeypatch.setattr(gl, "_acquire_glossary_lock", lambda *a, **k: None)
+    monkeypatch.setattr(gl, "extract_glossary_from_pair",
+                        lambda *a, **k: [("新词", "新译")])
+    with caplog.at_level(logging.WARNING, logger="subtransjav.refine.glossary_learn"):
+        n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
+    assert n == 0
+    assert p.read_bytes() == before              # 无锁不写
+    assert not (tmp_path / "learned.csv.lock").exists()
+    assert "锁" in caplog.text
+
+
+def test_learn_dedup_by_ascii_lowercase_src(tmp_path, monkeypatch):
+    """手册 §11.5 回归钉：truly_new 按 ascii 小写 src 过滤——已有 IKU
+    时候选 iku 不重复学，只有全新 src 入库。"""
+    p = tmp_path / "learned.csv"
+    p.write_text("IKU,去了\n", encoding="utf-8-sig")
+    in_f, out_f = _s2_files(tmp_path, src="iku と新词", dst="去了二 与新译")
+    monkeypatch.setattr(gl, "extract_glossary_from_pair",
+                        lambda *a, **k: [("iku", "去了二"), ("新词", "新译")])
+    n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
+    assert n == 1                               # 仅 新词 入库
+    assert gl.load_learned_glossary(str(p)) == [
+        ("IKU", "去了"), ("新词", "新译")]
+
+
+# ---------------------------------------------------------------------------
+# _ensure_http_url：端点 scheme 白名单（设计决策：不拦截 localhost/私有地址，
+# 连接本地 LM Studio/Ollama 是核心功能）
+# ---------------------------------------------------------------------------
+
+def test_ensure_http_url_rejects_non_http():
+    for url in ("file:///C:/Windows/System32/config",
+                "javascript:alert(1)",
+                "ftp://example.com/v1",
+                "localhost:1234/v1",
+                ""):
+        with pytest.raises(ValueError):
+            _ensure_http_url(url)
+
+
+def test_ensure_http_url_allows_local_http():
+    assert _ensure_http_url("http://localhost:1234/v1") == "http://localhost:1234/v1"
+    assert _ensure_http_url("http://127.0.0.1:11434/v1")
+    assert _ensure_http_url("https://api.example.com/v1")
+    assert _ensure_http_url("HTTPS://api.example.com/v1")
+
+
+# ---------------------------------------------------------------------------
+# D2026-0929：glossary.append_glossary_entries（锁定追加，AI 质量建议落库）
+# ---------------------------------------------------------------------------
+
+def _hold_artifact_lock(path):
+    from subtransjav.refine.artifact_lock import acquire_artifact_lock
+    return acquire_artifact_lock(path, os.path.dirname(os.path.abspath(path)))
+
+
+def test_append_glossary_entries_added(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    p = str(tmp_path / "glossary.csv")
+    statuses = append_glossary_entries(
+        [{"src": "先生", "target": "老师"}], glossary_path=p)
+    assert statuses == [{"src": "先生", "target": "老师", "status": "added"}]
+    rows = load_glossary_ex(p)
+    assert rows == [("先生", "老师", ())]
+
+
+def test_append_glossary_entries_existing_not_overwritten(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    p = str(tmp_path / "glossary.csv")
+    save_learned_glossary(p, [("先生", "老师")])
+    statuses = append_glossary_entries(
+        [{"src": "先生", "target": "老师"},
+         {"src": "先生", "target": "另一个译法"}],
+        glossary_path=p)
+    assert [s["status"] for s in statuses] == ["exists", "exists_diff"]
+    # 同 src 不覆盖：原译法保持
+    assert load_glossary_ex(p) == [("先生", "老师", ())]
+
+
+def test_append_glossary_entries_ascii_case_insensitive(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries
+    p = str(tmp_path / "glossary.csv")
+    save_learned_glossary(p, [("IKU", "去了")])
+    statuses = append_glossary_entries(
+        [{"src": "iku", "target": "去了"}], glossary_path=p)
+    assert statuses[0]["status"] == "exists"
+
+
+def test_append_glossary_entries_aliases_third_column(tmp_path):
+    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    p = str(tmp_path / "glossary.csv")
+    append_glossary_entries(
+        [{"src": "先生", "target": "老师", "aliases": ["师傅", "讲师"]}],
+        glossary_path=p)
+    rows = load_glossary_ex(p)
+    assert rows == [("先生", "老师", ("师傅", "讲师"))]
+
+
+def test_append_glossary_entries_locked_no_write(tmp_path):
+    """并发锁语义：他方持锁时追加返回全部 locked，文件内容不变。"""
+    from subtransjav.refine.glossary import append_glossary_entries
+    p = str(tmp_path / "glossary.csv")
+    save_learned_glossary(p, [("既有", "词条")])
+    before = Path(p).read_bytes()
+    handle = _hold_artifact_lock(p)
+    assert handle is not None
+    try:
+        statuses = append_glossary_entries(
+            [{"src": "新", "target": "条目"}], glossary_path=p)
+        assert statuses == [{"src": "新", "target": "条目",
+                             "status": "locked"}]
+        assert Path(p).read_bytes() == before
+    finally:
+        handle.release()
+    # 释放锁后可正常追加
+    statuses = append_glossary_entries(
+        [{"src": "新", "target": "条目"}], glossary_path=p)
+    assert statuses[0]["status"] == "added"
