@@ -45,3 +45,31 @@ cd /d D:\SubTransJAV
 - 视觉零变化：computed-style 前后等值由主审 GUI 黑盒复核（web-gui-tester）；
 - 不新增字面色值（P8 钉3 口径）；
 - 执行记录追加本卡末尾（改动/自测/遗留）。
+
+## 执行记录（2026-10-12，OpenCode 执行）
+
+**改动文件（恰两件，未越卡）**
+
+1. `subtransjav/webview_gui/assets/style.css`
+   - `:root` 品牌组之后（:root 41-46）新增 4 个别名 token，注释逐字照卡片：`--active-bg: var(--primary-soft);`、`--active-text: var(--primary-strong);`、`--active-border: var(--primary-border);`、`--active-bar: var(--primary-strong);`——别名直指原值，值语义零变化；
+   - 三条 active 规则改引别名：`.side-tab-btn.active`（style.css:255-261，bg/text/bar）、`.dict-kind-chip.active`（:1102-1106，border/bg/text）、`.review-page-btn.active`（:2298-2302，bg/text）；`.feature-badge.active`（:1577-1580，--ok-soft/--ok 语义态）零接触；规则体内其余声明（font-weight:600 等）逐字未动；
+   - 未新增任何字面色值（全部 var() 引用，P8 钉3 口径不受影响，钉1/钉2/钉3 随全量绿）。
+2. `tests/test_gui_js_static.py`（选此文件：P8 token 收口静态钉（钉1-3，:4006-4049）所在文件，口径最近）
+   - 文件末尾追加 `_ACTIVE_ALIAS_TOKENS`/`_ACTIVE_RULE_SELECTORS`/`_ACTIVE_BANNED_REFS` 三常量（:4053-4062）与新钉 `test_active_indicator_tokens_alias_layer`（:4065-4082）：①`:root` 块含四个 `--active-*` 定义；②三条收编规则体内不得出现 `--primary-soft`/`--primary-strong`/`--primary-border` 直引（`.feature-badge.active` 语义态不收编，不在清单内，注释注明）。
+
+**暗色自查（grep 证实，零改动）**
+
+- `style.dark.css` 全文件 grep `\.active` 零命中（无直改上述三条规则的规则体）；`--primary-*` 仅在 :root 重映射 4 个同名 token（style.dark.css:49-52）——别名经 `var()` 间接求值，暗色下自动跟随重映射值，`style.dark.css` 按卡片免改。
+
+**自测结果**
+
+- 先红（卡片允许的红构造）：临时删除 `:root` 的 `--active-bg` 定义 → 定向 `pytest tests/test_gui_js_static.py::test_active_indicator_tokens_alias_layer -q` **1 failed**（`:root 缺组件激活指示别名 token --active-bg 定义`）；还原后复绿。
+- 定向：`pytest tests/test_gui_js_static.py tests/test_ui_phase3_redlines.py -q --basetemp=.pytest_card` → **154 passed**（卡前同命令基线 153，+1=本卡新增钉）。
+- 全量：`pytest -q --basetemp=.pytest_card` → **2399 passed, 4 skipped**；开工前同命令实测基线 **2398 passed, 4 skipped**，+1=本卡新增钉，基线不降（卡片"先红后绿"写 2397+4，系卡3 +1 前的旧读数，以本记录实测为准）。
+- ruff：`ruff check subtransjav tests` → All checks passed!。
+
+**遗留问题**
+
+1. computed-style 前后等值复核按卡片交主审 GUI 黑盒（web-gui-tester），本卡未自做运行时视觉比对（静态改动为纯 var() 等值替换，层叠顺序未变）。
+2. 阶段 2 视觉批统一调激活态时若需给三条规则差异化激活色，须在别名层拆分新 token，勿在组件规则体内回退直引品牌 token（新钉会红）。
+3. `.file-item.selected`（style.css:654）等其余选中态视觉与本别名同色但语义为"选中项"而非"激活指示"，卡片未点名，本卡不动；若阶段 2 决定收编须另立卡。
