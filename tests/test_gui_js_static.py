@@ -4151,3 +4151,66 @@ def test_active_indicator_tokens_alias_layer():
                 f"{sel} 规则体残留直引 {banned}：请改引 --active-* 别名"
                 "（.feature-badge.active 语义态不收编，保持 --ok-*）"
             )
+
+
+# ---------------------------------------------------------------------------
+# 卡8 B-06（D2026-1012-01，阶段 2 首批）：右栏卡3/引擎页主栏 标题缩短——
+# MSG.refine_panel_title 改短句「两阶段流水线」（改值不改键，键集零变化由
+# 钉⑤b 快照冻结自证）；完整句不落 index.html 静态属性（红线 title 中文须
+# data-i18n-title，而后者会被 MSG 短值覆写），改由 applyI18n 回填悬停
+# （引擎页主栏 :201 与右栏卡3 :1001 同键双渲染，两处同步）。
+# ---------------------------------------------------------------------------
+
+_B06_SHORT_TITLE = '两阶段流水线'
+_B06_FULL_TITLE = '净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）'
+
+
+def _b06_block_title_frags() -> list:
+    """index.html 两处 refine_panel_title block-title 的开标签+内联文本片段。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    frags = re.findall(
+        r'<div class="block-title" data-i18n="refine_panel_title"[^>]*>[^<]*',
+        html)
+    assert len(frags) == 2, \
+        "refine_panel_title block-title 应恰两处（引擎页主栏+右栏卡3），" \
+        f"实为 {len(frags)}"
+    return frags
+
+
+def test_b06_msg_refine_panel_title_shortened_pinned():
+    """①MSG 值改短句（键名/键数零变化；完整句不再由 MSG 渲染）。"""
+    m = re.search(r"^\s*refine_panel_title: '([^']*)'", _app_js_source(), re.M)
+    assert m and m.group(1) == _B06_SHORT_TITLE, \
+        f"MSG.refine_panel_title 值漂移: {m and m.group(1)}"
+
+
+def test_b06_index_block_titles_shortened_pinned():
+    """②index.html 两处静态回退文本同步缩短（防 data-i18n 未注入时长句回退折行）。"""
+    for frag in _b06_block_title_frags():
+        assert frag.endswith(">" + _B06_SHORT_TITLE), f"静态回退文本未缩短: {frag}"
+
+
+def test_b06_full_sentence_hover_pinned():
+    """③完整句悬停由 applyI18n 回填（引擎页主栏+右栏卡3 同键双渲染，两处同步）。
+
+    不写静态 title= 完整句：红线 test_html_has_no_unmarked_user_visible_chinese
+    的属性分支要求 title（含 *-title= 子串属性）中文须同标签 data-i18n-title，
+    而 data-i18n-title 会被 applyI18n 以 MSG 短值覆写（完整句失效）——故完整句
+    在 app.js 回填，index.html 零静态中文悬停（本卡为零 data-i18n 键改动）。"""
+    body = _extract_function(_app_js_source(), "applyI18n")
+    assert '[data-i18n="refine_panel_title"]' in body, \
+        "applyI18n 须定位两处 refine_panel_title 回填悬停"
+    assert _B06_FULL_TITLE in body, "applyI18n 缺完整句悬停文案"
+    for frag in _b06_block_title_frags():
+        assert _B06_FULL_TITLE not in frag, \
+            f"完整句不得静态落 index.html（红线 title 中文须 data-i18n-title）: {frag}"
+
+
+def test_b06_i18n_keyset_unchanged_pinned():
+    """④键名/键数零变化自证：refine_panel_title 仍被 index.html 引用两处、
+    本卡未新增任何 data-i18n* 键（187 全集冻结由钉⑤b 另行把关）。"""
+    assert "refine_panel_title" in _js_msg_keys()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert html.count('data-i18n="refine_panel_title"') == 2
+    assert 'data-i18n-title="refine_panel_title"' not in html, \
+        "本卡为零 data-i18n 键改动，不得挂 data-i18n-title（会被 MSG 短值覆写）"

@@ -232,7 +232,9 @@ const MSG = {
     open_btn: '打开',
 
     // ---- 净语翻译面板 ----
-    refine_panel_title: '净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）',
+    // 卡8 B-06（D2026-1012-01）：标题缩短防右栏 316px 折行（改值不改键），
+    // 完整句改走 applyI18n 内 JS 回填悬停（不落静态属性，见 applyI18n 注释）
+    refine_panel_title: '两阶段流水线',
     stage_a_label: '阶段A 净语+翻译（日译中）',
     stage_b_label: '阶段B 审校+抛光（中文）',
     provider_zen: 'Zen 免费',
@@ -904,6 +906,16 @@ function applyI18n() {
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         const v = MSG[el.dataset.i18nPlaceholder];
         if (typeof v === 'string') el.setAttribute('placeholder', v);
+    });
+    // 卡8 B-06（D2026-1012-01）：refine_panel_title 视觉标题缩短为
+    // 「两阶段流水线」（右栏 316px 防折行，改值不改键），完整句改由本处
+    // 回填悬停——引擎页主栏与右栏卡3 同键双渲染，两处同步。完整句不进
+    // index.html 静态属性：title=（含 *-title= 子串属性）中文须
+    // data-i18n-title 管理（红线 test_html_has_no_unmarked_user_visible_chinese），
+    // 而 data-i18n-title 又会被上一段以 MSG 短值覆写（完整句失效）；
+    // 卡面明令键集零变化，故此处以字面量承接而不新增 MSG 键。
+    document.querySelectorAll('[data-i18n="refine_panel_title"]').forEach(el => {
+        el.setAttribute('title', '净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）');
     });
 }
 
