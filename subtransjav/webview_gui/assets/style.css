@@ -38,6 +38,12 @@
     --primary-soft:   #EFF6FF;
     --primary-border: #BFDBFE;
 
+    /* 组件激活指示别名层（D2026-1012-01 地基批）：阶段 2 调激活态只动这里 */
+    --active-bg:    var(--primary-soft);
+    --active-text:  var(--primary-strong);
+    --active-border: var(--primary-border);
+    --active-bar:   var(--primary-strong);
+
     /* 语义 */
     --ok:          #10B981;
     --ok-soft:     #ECFDF5;
@@ -248,10 +254,10 @@ button:focus { outline: none; }
 }
 .side-tab-btn:hover { background: var(--surface-3); color: var(--text-1); }
 .side-tab-btn.active {
-    background: var(--primary-soft);
-    color: var(--primary-strong);
+    background: var(--active-bg);
+    color: var(--active-text);
     font-weight: 600;
-    box-shadow: inset 2px 0 0 var(--primary-strong);
+    box-shadow: inset 2px 0 0 var(--active-bar);
 }
 .side-tab-btn .side-tab-icon { display: flex; flex-shrink: 0; }
 .side-tab-btn .side-tab-text {
@@ -1094,9 +1100,9 @@ input[type="checkbox"] {
 .dict-kind-chip.on .dot { background: var(--ok); border-color: var(--ok); }
 .dict-kind-chip.builtin .dot { background: var(--primary); border-color: var(--primary); }
 .dict-kind-chip.active {
-    border-color: var(--primary-border);
-    background: var(--primary-soft);
-    color: var(--primary-strong);
+    border-color: var(--active-border);
+    background: var(--active-bg);
+    color: var(--active-text);
 }
 
 /* warn-soft 提示条（#4 空态三件套②，仅 downloadable&&!available 显示） */
@@ -2290,8 +2296,8 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 .review-page-btn:hover { background: var(--surface-3); color: var(--text-1); }
 .review-page-btn.active {
-    background: var(--primary-soft);
-    color: var(--primary-strong);
+    background: var(--active-bg);
+    color: var(--active-text);
     font-weight: 600;
 }
 .review-list {
