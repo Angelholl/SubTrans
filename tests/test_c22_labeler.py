@@ -3,8 +3,8 @@
 六钉（卡面「测试钉」；本地回放零第三方依赖，server 用线程+urllib 真请求）：
   1. prepare 解析实测包格式（dict+samples[]，2 run×2 sample → 4 records，
      id/顺序/wav 命名正确；guide/media 缺失 → 中文汇总报错退出码 1）；
-  2. 切片参数（-ss clamp≥0、时长 cap 20s、-ac 1 -ar 16000、-ss 前置、
-     CREATE_NO_WINDOW/capture_output/timeout）与 ffmpeg 缺失报错路径；
+  2. 切片参数（-ss clamp≥0、时长 cap 30s（卡4：20→30）、-ac 1 -ar 16000、
+     -ss 前置、CREATE_NO_WINDOW/capture_output/timeout）与 ffmpeg 缺失报错路径；
   3. answer 原子落盘（os.replace 后无 .tmp 残留）与 skip→pending 语义；
   4. merge：全决 → 按 (guide,media) 分组出 timings+labels 对齐数组 + 路径绝对；
      有 pending → 退出码 1；
@@ -24,6 +24,19 @@
   c3钉4 复标一致率按派生值（两轮向量不同但派生相同=一致）；
   c3钉5 merge 声源组合分布（含台词+道具/背景叠加单列小计）与 labels=派生值；
   c3钉6 /api/answer 接收 sounds 且原子落盘（含一致性/键位/skip 校验与复标轮）。
+
+卡4 长间隙判读辅助（d1012-C22-卡4，owner 2026-10-13 试听反馈）五钉：
+  c4钉1 message 透传：prepare 读 manifest samples[].message → records[].message
+       （缺省 null 不崩）；serve 页面 meta 第二行「粗筛提示：<message>」（esc 转义）
+       + /api/state 数据路由原样带 message；
+  c4钉2 prepare 幂等（保标注，硬约束）：state.json 已存在时重跑 prepare，
+       新 records 按 id 继承旧 label/sounds/relabel/relabel_sounds（旧记录缺字段
+       不崩、manifest 外旧条目不复活），labeled 按合并后 records 重算并打印
+       「已保留 N 条既有标注」；clips 重切覆盖（文件名=id 稳定）；
+  c4钉3 切片 cap 30：T_D（起100 止130）与更长间隙（起100 止140）都取 -t 30；
+  c4钉4 seek_in 规则：timing 起≥3s→3.0、起<3s→0.0（起点被 clamp）；
+       渲染 JS 在 play 前按 seek_in 设 currentTime（片段 >6.5s 才跳），重听保持从头；
+  c4钉5 缓冲说明文案：作答区提示行前「片段首尾各约 3 秒为缓冲上下文…」。
 """
 
 from __future__ import annotations
@@ -49,7 +62,7 @@ _spec.loader.exec_module(mod)
 T_A = "00:00:01,000 --> 00:00:03,000"
 T_B = "00:00:04,000 --> 00:00:06,000"
 T_C = "00:00:07,000 --> 00:00:09,000"
-T_D = "00:01:40,000 --> 00:02:10,000"  # 起=100s 止=130s：-ss 97、时长 cap 20
+T_D = "00:01:40,000 --> 00:02:10,000"  # 起=100s 止=130s：-ss 97、时长 cap 30（卡4）
 
 
 def _has_chinese(text: str) -> bool:
@@ -207,7 +220,7 @@ def test_pin2_slice_args_clamp_cap_and_flags(tmp_path, monkeypatch):
     guide = _touch(tmp_path / "导读" / "g1.json")
     media = _touch(tmp_path / "媒体" / "m1.mkv")
     samples = [_sample(1, 1, guide, media, T_A),   # 起 1s → -ss clamp 0、-t 6
-               _sample(2, 1, guide, media, T_D)]   # 起 100s → -ss 97、-t cap 20
+               _sample(2, 1, guide, media, T_D)]   # 起 100s → -ss 97、-t cap 30
     _touch(pkg / "c22_manifest.json",
            json.dumps(_measured_manifest(samples), ensure_ascii=False))
     calls: list = []
@@ -224,11 +237,11 @@ def test_pin2_slice_args_clamp_cap_and_flags(tmp_path, monkeypatch):
     assert first[3] == "0"
     assert first.index("-ss") < first.index("-i")
     assert float(_arg(first, "-ss")) >= 0
-    # 时长：早段 3-1+6 = 8s；长段 min(130-100+6, 20) = 20（cap 生效）
+    # 时长：早段 3-1+6 = 8s；长段 min(130-100+6, 30) = 30（cap 生效，卡4 20→30）
     assert _arg(first, "-t") == "8"
     assert second[second.index("-ss") + 1] == "97"
     dur = float(_arg(second, "-t"))
-    assert dur == 20 and dur <= 20
+    assert dur == 30 and dur <= 30
     # 单声道 16k + 指定媒体入参 + 落点 clips/<id>.wav
     assert _arg(first, "-ac") == "1" and _arg(first, "-ar") == "16000"
     assert _arg(first, "-i") == str(media)
@@ -797,3 +810,173 @@ def test_owner_feedback_autoplay_on_next_item_pinned():
     assert "const pp = a0.play()" in src, "渲染后缺少自动播放调用"
     assert "pp.catch" in src, "自动播放被浏览器策略拒绝时须静默降级（不抛未捕获异常）"
     assert "自动跳下一条并自动播放" in src, "提示文案未更新自动播放语义"
+
+
+# ==================== 卡4：长间隙判读辅助（d1012-C22-卡4）五钉 ====================
+# owner 2026-10-13 试听反馈：长间隙判读困难的三个根因（message 不上屏 / 切片 cap 20s
+# 截断长间隙尾部 / 缓冲语义无说明）+ prepare 重跑丢已标答案 → 本卡五钉钉住。
+
+T_E = "00:01:40,000 --> 00:02:20,000"   # 起=100s 止=140s：min(46,30)=30
+T_BOUND = "00:00:03,000 --> 00:00:05,000"  # 起=3.0s：不 clamp → seek_in 3.0
+
+
+# --------------------------------------------------------- c4钉1 message 透传
+
+def test_c4_pin1_message_passthrough_prepare_and_serve(tmp_path, monkeypatch):
+    """钉A prepare 透传 samples[].message → records[].message（缺省 null）；
+    serve meta 第二行「粗筛提示：<message>」（esc 转义）+ /api/state 原样带 message。"""
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    with_msg = _sample(1, 1, guide, media, T_A)
+    with_msg["message"] = "间隙 18046ms 内检测到语音能量约 0.10s（疑似漏听，粗筛）"
+    no_msg = _sample(2, 1, guide, media, T_B)
+    no_msg.pop("message")                     # manifest 缺 message 键 → 记录 null
+    _touch(pkg / "c22_manifest.json",
+           json.dumps(_measured_manifest([with_msg, no_msg]), ensure_ascii=False))
+    _stub_ffmpeg(monkeypatch)
+
+    assert mod.main(["--prepare", "--package", str(pkg)]) == 0
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    assert state["records"][0]["message"] == with_msg["message"]
+    assert state["records"][1]["message"] is None      # 缺省 null，不崩
+
+    httpd = mod.create_server(pkg)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        # 数据路由：/api/state 原样带 message（含 null）
+        status, raw = _get(base, "/api/state")
+        assert status == 200
+        api_records = json.loads(raw)["records"]
+        assert api_records[0]["message"] == with_msg["message"]
+        assert api_records[1]["message"] is None
+        # 页面：meta 第二行文案 + 走 esc 转义（不裸拼进 HTML）
+        status, html = _get(base, "/")
+        assert status == 200
+        assert "粗筛提示：" in html
+        assert "esc(rec.message)" in html
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=10)
+
+
+# ------------------------------------------- c4钉2 prepare 幂等（保标注，硬约束）
+
+def test_c4_pin2_prepare_idempotent_keeps_annotations(tmp_path, monkeypatch, capsys):
+    """钉B 重跑 prepare：新 records 按 id 继承旧 label/sounds/relabel/relabel_sounds
+    （旧记录缺字段不崩、manifest 外旧条目不复活），labeled 按合并后重算，clips 重切。"""
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    samples = [_sample(i, 1, guide, media, t)
+               for i, t in enumerate([T_A, T_B, T_C], 1)]
+    _touch(pkg / "c22_manifest.json",
+           json.dumps(_measured_manifest(samples), ensure_ascii=False))
+    calls: list = []
+    _stub_ffmpeg(monkeypatch, calls)
+    assert mod.main(["--prepare", "--package", str(pkg)]) == 0
+    capsys.readouterr()
+
+    # owner 已标：run1-1 新口径（label+sounds）、run1-2 旧口径（仅 label= no 且
+    # sounds=null）、run1-3 首轮 skip（待定）+ 复标答案；另有 manifest 外旧条目
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    state["records"][0].update({"label": "yes", "sounds": _sounds(speech=True)})
+    state["records"][1].update({"label": "no", "sounds": None})
+    state["records"][2].update({"label": "skip", "relabel": "yes",
+                                "relabel_sounds": _sounds(bg=True)})
+    state["records"].append(
+        _record(pkg, 9, guide, media, T_A, label="yes", run=9))  # id run9-9
+    _write_state(pkg, state["records"], state["relabel_queue"])
+
+    calls.clear()
+    assert mod.main(["--prepare", "--package", str(pkg)]) == 0
+    out = capsys.readouterr().out
+    assert "已保留 3 条既有标注" in out          # run9-9 不在 manifest → 不计
+    assert "已标注 2 条 / 待定 1 条" in out      # labeled 重算：skip 不算已决
+
+    state2 = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    recs = state2["records"]
+    assert [r["id"] for r in recs] == [s["id"] for s in samples]  # run9-9 不复活
+    by_id = {r["id"]: r for r in recs}
+    assert by_id["run1-1"]["label"] == "yes"
+    assert by_id["run1-1"]["sounds"] == _sounds(speech=True)
+    assert by_id["run1-2"]["label"] == "no" and by_id["run1-2"]["sounds"] is None
+    assert by_id["run1-3"]["label"] == "skip"
+    assert by_id["run1-3"]["relabel"] == "yes"
+    assert by_id["run1-3"]["relabel_sounds"] == _sounds(bg=True)
+    assert [mod._record_label(r) for r in recs] == ["yes", "no", "skip"]
+    assert len(calls) == 3                        # clips 重切覆盖（文件名=id）
+    assert not list(pkg.glob("*.tmp"))            # 原子写无残留
+
+    # 旧记录缺字段（卡2 旧态：整键无 sounds/relabel_sounds）→ 继承不崩
+    _write_state(pkg, [_record(pkg, 1, guide, media, T_A, label="yes"),
+                       _record(pkg, 2, guide, media, T_B, label=None, relabel="no")])
+    assert mod.main(["--prepare", "--package", str(pkg)]) == 0
+    out = capsys.readouterr().out
+    assert "已保留 2 条既有标注" in out          # 缺键字段按缺失处理，不崩不丢
+    state3 = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    # records 以 manifest 为权威（旧 state 缺的 run1-3 补为全新未标条目）
+    assert [r["label"] for r in state3["records"]] == ["yes", None, None]
+    assert [r["relabel"] for r in state3["records"]] == [None, "no", None]
+
+
+# ------------------------------------------------------------- c4钉3 切片 cap 30
+
+def test_c4_pin3_slice_cap_30_long_gap(tmp_path, monkeypatch):
+    """钉C 长间隙 -t 30（20→30）：起100止130 与 起100止140 都取 30，不截尾。"""
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    samples = [_sample(1, 1, guide, media, T_D),    # 36s → cap 30
+               _sample(2, 1, guide, media, T_E)]    # 46s → cap 30
+    _touch(pkg / "c22_manifest.json",
+           json.dumps(_measured_manifest(samples), ensure_ascii=False))
+    calls: list = []
+    _stub_ffmpeg(monkeypatch, calls)
+
+    assert mod.main(["--prepare", "--package", str(pkg)]) == 0
+    assert [_arg(c, "-t") for c, _ in calls] == ["30", "30"]
+    assert [_arg(c, "-ss") for c, _ in calls] == ["97", "97"]   # 前置 seek 不变
+
+
+# --------------------------------------------------------- c4钉4 seek_in 与渲染
+
+def test_c4_pin4_seek_in_rule_and_render_js(tmp_path, monkeypatch):
+    """钉D seek_in：timing 起≥3s→3.0、起<3s→0.0（起点被 clamp）；渲染 JS 在 play
+    前按 seek_in 设 currentTime（片段 >6.5s 才跳），重听按钮保持从头。"""
+    assert mod._seek_in(100.0) == 3.0
+    assert mod._seek_in(3.0) == 3.0            # 边界：起=3 不 clamp
+    assert mod._seek_in(2.999) == 0.0          # 起<3 被 clamp → 从头播
+    assert mod._seek_in(0.0) == 0.0
+
+    pkg = _pkg(tmp_path)
+    guide = _touch(tmp_path / "导读" / "g1.json")
+    media = _touch(tmp_path / "媒体" / "m1.mkv")
+    samples = [_sample(1, 1, guide, media, T_A),       # 起 1s → 0.0
+               _sample(2, 1, guide, media, T_BOUND),   # 起 3s → 3.0
+               _sample(3, 1, guide, media, T_D)]       # 起 100s → 3.0
+    _touch(pkg / "c22_manifest.json",
+           json.dumps(_measured_manifest(samples), ensure_ascii=False))
+    _stub_ffmpeg(monkeypatch)
+    assert mod.main(["--prepare", "--package", str(pkg)]) == 0
+    state = json.loads((pkg / "state.json").read_text(encoding="utf-8"))
+    assert [r["seek_in"] for r in state["records"]] == [0.0, 3.0, 3.0]
+
+    src = _TOOL_PATH.read_text(encoding="utf-8")
+    assert "rec.seek_in" in src                       # JS 从 records 取 clamp 信息
+    assert "currentTime = seekIn" in src              # play 前设起点（间隙本体）
+    assert "duration > 6.5" in src                    # 片段 >6.5s 才跳缓冲
+    assert "a.currentTime = 0" in src                 # 重听按钮保持从头
+
+
+# ------------------------------------------------------------- c4钉5 缓冲说明文案
+
+def test_c4_pin5_buffer_hint_text():
+    """钉E 作答区提示行前有缓冲说明：只判间隙本体，边缘对齐既有字幕的台词不算漏听。"""
+    assert mod._BUFFER_HINT in mod._PAGE
+    assert "片段首尾各约 3 秒为缓冲上下文" in mod._PAGE
+    assert "只判间隙本体内是否有台词" in mod._PAGE
+    assert "边缘与既有字幕对齐的台词不算漏听" in mod._PAGE
