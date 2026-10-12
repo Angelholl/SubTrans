@@ -47,6 +47,40 @@ def _extract_function(source: str, name: str) -> str:
     raise AssertionError(f"app.js 函数花括号未配平: {name}")
 
 
+def _tab_hooks_literal() -> str:
+    """提取 app.js 顶层 const TAB_HOOKS = {...}; 切页钩子注册表字面量
+    （3.1 地基批卡3 switchTab 六钩子收编；花括号配平口径同 _extract_function）。"""
+    src = _app_js_source()
+    m = re.search(r"const TAB_HOOKS\s*=\s*\{", src)
+    assert m, "app.js 未找到 const TAB_HOOKS 切页钩子注册表"
+    depth = 0
+    for i in range(m.end() - 1, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[m.start():i + 1]
+    raise AssertionError("app.js TAB_HOOKS 字面量花括号未配平")
+
+
+def _tab_hooks_group(tab_id: str) -> str:
+    """提取 TAB_HOOKS 注册表中指定 tab 分组的钩子数组源码（方括号配平），
+    供各切页钩子钉在收编后按分组断言语义（键缺失即断言失败）。"""
+    reg = _tab_hooks_literal()
+    m = re.search(rf"'{re.escape(tab_id)}'\s*:\s*\[", reg)
+    assert m, f"TAB_HOOKS 注册表缺 {tab_id} 分组"
+    depth = 0
+    for i in range(m.end() - 1, len(reg)):
+        if reg[i] == "[":
+            depth += 1
+        elif reg[i] == "]":
+            depth -= 1
+            if depth == 0:
+                return reg[m.start():i + 1]
+    raise AssertionError(f"app.js TAB_HOOKS[{tab_id}] 方括号未配平")
+
+
 def _js_msg_keys() -> set:
     """解析 app.js 顶部 const MSG = {...} 键名集合（同口径
     tests/test_strings_and_shortcut.py，本文件独立实现避免跨文件导入）。"""
@@ -252,6 +286,31 @@ def test_app_js_switch_tab_toggles_buttons_and_pages():
     assert "dataset.tab" in body, "必须按 data-tab 匹配"
     bind = _extract_function(source, "bindDom")
     assert "switchTab" in bind, "TAB 按钮必须在 bindDom 中绑定 click"
+
+
+# 3.1 地基批卡3（D2026-1012-01）：switchTab 六切页钩子收编——声明式注册表
+_TAB_HOOK_NAMES = ("__refineTplTabHook", "TmSearch.ensure", "__asrTabHook",
+                   "__warmupTabHook", "__fullchainStatusHook",
+                   "__guideStalenessHook")
+
+
+def test_switch_tab_hooks_registry_dispatch_pinned():
+    """switchTab 六钩子收编钉（D2026-1012-01 卡3）：函数体内只经 TAB_HOOKS
+    派发循环触发切页钩子（防收编回归为散落 if 内联块），六个钩子名在
+    TAB_HOOKS 字面量中各恰出现一次（缺=漏注册，重=重复触发），注册序=
+    原内联执行序 ①②词库页→③ASR→④⑤⑥质量与建议页。"""
+    body = _extract_function(_app_js_source(), "switchTab")
+    assert "const hooks = TAB_HOOKS[tabId]" in body, "switchTab 须取注册表分组"
+    assert "if (hooks) for (const h of hooks) h();" in body, "缺 TAB_HOOKS 派发循环"
+    assert "if (tabId ===" not in body, "禁止回退为散落 if 内联钩子"
+    reg = _tab_hooks_literal()
+    for name in _TAB_HOOK_NAMES:
+        assert reg.count(name) == 1, (
+            f"钩子 {name} 须在 TAB_HOOKS 中恰注册一次"
+            f"（实测 {reg.count(name)} 次）")
+    pos = [reg.index(name) for name in _TAB_HOOK_NAMES]
+    assert pos == sorted(pos), \
+        "TAB_HOOKS 注册序须与原内联执行序一致（①②→③→④⑤⑥）"
 
 
 # ---------------------------------------------------------------------------
@@ -748,9 +807,13 @@ def test_dir_hidden_carrier_only_backend_written_pinned():
 
 
 def test_switch_tab_glossary_refresh_hook_pinned():
-    """switchTab 到 tab-glossary 触发词库页初始化钩子（动态填充下拉）。"""
-    body = _extract_function(_app_js_source(), "switchTab")
-    assert "'tab-glossary'" in body and "__refineTplTabHook" in body, \
+    """switchTab 到 tab-glossary 触发词库页初始化钩子（动态填充下拉）。
+    卡3（D2026-1012-01）收编后钩子挂 TAB_HOOKS 的 tab-glossary 分组，
+    经 switchTab 派发循环触发。"""
+    src = _app_js_source()
+    body = _extract_function(src, "switchTab")
+    assert "TAB_HOOKS[tabId]" in body, "switchTab 须经注册表派发"
+    assert "__refineTplTabHook" in _tab_hooks_group("tab-glossary"), \
         "switchTab 必须带 tab-glossary 初始化钩子"
 
 
@@ -1795,8 +1858,10 @@ def test_tm_search_render_and_error_visible_pinned():
     assert "MSG.tmSearchCount" in body, "命中计数必须回显"
     assert "btn.disabled = true" in body, "查询中按钮必须禁用"
     assert "btn.disabled = false" in body, "finally 必须恢复按钮"
-    # 注入钩子：switchTab 打开词库页时懒注入
-    hook = _extract_function(src, "switchTab")
+    # 注入钩子：switchTab 打开词库页时懒注入（卡3 收编后挂 tab-glossary 分组）
+    assert "TAB_HOOKS[tabId]" in _extract_function(src, "switchTab"), \
+        "switchTab 须经注册表派发"
+    hook = _tab_hooks_group("tab-glossary")
     assert "TmSearch.ensure()" in hook, "switchTab 缺 TM 搜索区块懒注入"
 
 
@@ -3333,8 +3398,9 @@ def test_warmup_trigger_points_wired():
     姿势钩子（照 __asrTabHook 先例）触发。"""
     src = _app_js_source()
     switch_body = _extract_function(src, "switchTab")
-    assert "'tab-guide'" in switch_body, "switchTab 须挂 tab-guide 触发"
-    assert "__warmupTabHook" in switch_body, "switchTab 须经 __warmupTabHook 触发"
+    assert "TAB_HOOKS[tabId]" in switch_body, "switchTab 须经注册表派发"
+    assert "__warmupTabHook" in _tab_hooks_group("tab-guide"), \
+        "switchTab 须经 __warmupTabHook 触发"
     assert "window.__warmupTabHook = " in src, "IIFE 须导出 __warmupTabHook"
     # 触发点①：completed 分支内 _finish 之后调 __warmupMaybeStart()，
     # 且附 Console 一行 warmupAfterQueue
@@ -3754,7 +3820,8 @@ def test_fullchain_status_line_and_rollback_pinned():
         and "fcStatusUnfinished" in fn
     assert "fcMissedSkipped" in fn
     tab = _extract_function(src, "switchTab")
-    assert "__fullchainStatusHook" in tab, \
+    assert "TAB_HOOKS[tabId]" in tab, "switchTab 须经注册表派发"
+    assert "__fullchainStatusHook" in _tab_hooks_group("tab-guide"), \
         "switchTab tab-guide 分支须挂链级状态行刷新"
     run_fn = _extract_function(src, "batchFixRun")
     assert "fullchainStatusRefresh(true)" in run_fn, \
@@ -3851,7 +3918,8 @@ def test_guide_staleness_reread_and_items_modal_pins():
     试听契约锚（.btn-audio-preview + data-timing）原样保留。"""
     src = _app_js_source()
     tab = _extract_function(src, "switchTab")
-    assert "__guideStalenessHook" in tab, \
+    assert "TAB_HOOKS[tabId]" in tab, "switchTab 须经注册表派发"
+    assert "__guideStalenessHook" in _tab_hooks_group("tab-guide"), \
         "switchTab tab-guide 分支须挂导读陈旧检测钩子"
     fn = _extract_function(src, "guideStalenessCheck")
     assert "output_artifact_mtime" in fn, "陈旧检测须走轻量 mtime 探针"
