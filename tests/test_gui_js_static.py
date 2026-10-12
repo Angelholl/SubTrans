@@ -4214,3 +4214,79 @@ def test_b06_i18n_keyset_unchanged_pinned():
     assert html.count('data-i18n="refine_panel_title"') == 2
     assert 'data-i18n-title="refine_panel_title"' not in html, \
         "本卡为零 data-i18n 键改动，不得挂 data-i18n-title（会被 MSG 短值覆写）"
+
+
+# ---------------------------------------------------------------------------
+# 卡9 B-07（D2026-1012-01，阶段 2 首批）：checkbox → toggle 滑块（纯 CSS）——
+# accent-color 原生方案删净；appearance:none 轨道 + ::before 圆形滑块 +
+# :checked 位移变色；只用既有 token（零新字面色值，P8 钉3 口径）；
+# :focus-visible 焦点环保留（P0-4）。底层 input 与 id/事件零改动（纯视觉层）。
+# ---------------------------------------------------------------------------
+
+_B07_TOGGLE_BASE = re.compile(
+    r'input\[type="checkbox"\]\s*\{([^}]*)\}', re.S)
+
+
+def _b07_toggle_blocks(css: str) -> list:
+    """style.css 中 checkbox 相关规则块（选择器, 规则体）列表。"""
+    return re.findall(
+        r'(input\[type="checkbox"\][^{]*?)\s*\{([^}]*)\}', css, re.S)
+
+
+def test_b07_checkbox_toggle_pinned():
+    """卡9 B-07：checkbox 规则含 appearance:none 轨道 + ::before 圆形滑块 +
+    :checked 位移变色，且不含 accent-color 旧方案。
+
+    人工推演（缺失场景）：仅删 ::before 滑块规则时，:checked::before 的
+    transform 无作用对象——checked 后轨道变色但无滑块平移，toggle 语义
+    视觉丢失（新钉红）。accent-color 残留则与 appearance:none 双方案并存。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    # 旧方案删净
+    assert "accent-color" not in css, \
+        "style.css 残留 accent-color 原生方案（B-07 已改纯 CSS toggle）"
+    base = _B07_TOGGLE_BASE.search(css)
+    assert base, 'style.css 缺 input[type="checkbox"] 规则块'
+    body = base.group(1)
+    assert "appearance: none" in body, \
+        'checkbox 轨道必须 appearance:none（去原生形态）'
+    assert "border-radius: var(--radius-pill)" in body, \
+        "toggle 轨道圆角必须引 --radius-pill token"
+    # ::before 圆形滑块（伪元素规则块独立存在，先红场景即删此块）
+    knob = re.search(
+        r'input\[type="checkbox"\]::before\s*\{([^}]*)\}', css, re.S)
+    assert knob, '缺少 input[type="checkbox"]::before 滑块规则块'
+    assert "border-radius: var(--radius-round)" in knob.group(1), \
+        "滑块必须为圆形（--radius-round token）"
+    assert "position: absolute" in knob.group(1), \
+        "滑块必须绝对定位叠在轨道内"
+    # :checked 位移 + 变色
+    checked_move = re.search(
+        r'input\[type="checkbox"\]:checked::before\s*\{([^}]*)\}', css, re.S)
+    assert checked_move and "transform: translateX(" in checked_move.group(1), \
+        ":checked::before 必须 translateX 平移（无位移则 toggle 语义视觉丢失）"
+    checked_base = re.search(
+        r'input\[type="checkbox"\]:checked\s*\{([^}]*)\}', css, re.S)
+    assert checked_base and "var(--primary)" in checked_base.group(1), \
+        ":checked 轨道必须变色为 var(--primary)"
+    # 焦点环保留（P0-4）：不得 outline:none，focus-visible 环在位
+    fv = re.search(
+        r'input\[type="checkbox"\]:focus-visible\s*\{([^}]*)\}', css, re.S)
+    assert fv and "outline: var(--focus-outline)" in fv.group(1), \
+        "checkbox 必须保留 :focus-visible 焦点环（--focus-outline）"
+
+
+def test_b07_toggle_zero_new_literals_pinned():
+    """卡9 B-07 补钉：toggle 全部规则体内零字面量色值/零新圆角档——
+    轨道/滑块颜色与圆角只走既有 token（P8 钉3 同口径，范围收窄到本批规则）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    blocks = _b07_toggle_blocks(css)
+    assert blocks, "未匹配到任何 checkbox 规则块"
+    joined = "".join(body for _, body in blocks)
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", joined), \
+        "toggle 规则体内出现字面色值（应引 --primary/--surface-* 等既有 token）"
+    for sel, body in blocks:
+        for m in re.finditer(r"border-radius:\s*([^;]+);", body):
+            assert "var(" in m.group(1), (
+                f"{sel.strip()} 圆角硬编码 {m.group(1).strip()}——"
+                "请引 --radius-pill/--radius-round token（P8 钉2 同口径）")
