@@ -9,6 +9,9 @@ v2_manifest_fp / v2_outputs / v2_learn / v2_rules）每个模块至少一个
 
 import hashlib
 import json
+import os
+
+import pytest
 
 import subtransjav.refine.pipeline_v2 as pv
 import subtransjav.refine.v2_learn as v2_learn
@@ -292,6 +295,46 @@ class TestOutputs:
                                                 "00:00:01,000\n你好\n")
         assert target.read_text(encoding="utf-8") == (
             "1\n00:00:00,000 --> 00:00:01,000\n你好\n")
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_atomic_write_text_retry_on_permission_error(self, tmp_path,
+                                                        monkeypatch):
+        """_atomic_write_text：os.replace 遇 PermissionError（WinError 32/33
+        文件占用）时有界重试，最终成功且临时文件清理。"""
+        from subtransjav.refine import fs_utils
+
+        target = tmp_path / "out.srt"
+        calls = {"n": 0}
+        real_replace = os.replace
+
+        def flaky_replace(src, dst):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise PermissionError(
+                    32, "The process cannot access the file because it is "
+                        "being used by another process")
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(os, "replace", flaky_replace)
+        fs_utils._atomic_write_text(str(target), "hello")
+        assert target.read_text(encoding="utf-8") == "hello"
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_atomic_write_text_retry_exhausted_raises(self, tmp_path,
+                                                      monkeypatch):
+        """_atomic_write_text：重试耗尽后抛原异常（PermissionError）。"""
+        from subtransjav.refine import fs_utils
+
+        target = tmp_path / "out.srt"
+
+        def always_fail_replace(src, dst):
+            raise PermissionError(
+                32, "The process cannot access the file because it is "
+                    "being used by another process")
+
+        monkeypatch.setattr(os, "replace", always_fail_replace)
+        with pytest.raises(PermissionError):
+            fs_utils._atomic_write_text(str(target), "hello")
         assert list(tmp_path.glob("*.tmp")) == []
 
 
