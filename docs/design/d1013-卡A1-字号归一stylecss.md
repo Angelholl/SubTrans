@@ -50,4 +50,63 @@
 
 ## 执行记录
 
-（执行者追加）
+**执行者**：ZCode，2026-10-13
+
+### 改动文件
+
+1. `subtransjav/webview_gui/assets/style.css` — 40 处 font-size 硬编码归一：
+   - 11px → `var(--font-xs)` ×22（行 292/360/687/697/1047/1118/1198/1201/1244/1310/1536/1553/1579/1603/1617/1619/1682/1806/1866/1935/2708/2856）
+   - 10px → `var(--font-xs)` ×2（行 818/1211）
+   - 12.5px → `var(--font-xs)` ×5（行 2849/2868/2875/2877/2878）
+   - 裸 12px → `var(--font-xs)` ×6（行 2531/2536/2543/2844/2861/2871）
+   - 裸 13px → `var(--font-sm)` ×4（行 380/2532/2544/2840）
+   - 裸 14px → `var(--font)` ×1（行 663）
+   - 页头降档：行 377 `.page-title` 18px/650 → `var(--font)`/700
+2. `tests/test_gui_js_static.py` — 钉1 下调 + 新增字号白名单钉：
+   - `_FROZEN_FONT_PX_SMALL` 24 → 0，注释同步更新
+   - 新增 `test_font_size_scale_allowlist`（LC-3 白名单钉，判定面=style.css 去 :root + index.html 内联 style）
+
+### 自测结果
+
+| 验收项 | 结果 |
+|--------|------|
+| 1. `ruff check subtransjav tests` | ✅ All checks passed |
+| 2. `grep -o "font-size: *[0-9.]*px" style.css \| sort \| uniq -c` | ✅ 命中值集合 = {15px×1, 16px×2, 20px×2, 22px×1, 30px×1, 42px×1}，其余为零 |
+| 3. `pytest tests/test_gui_js_static.py tests/test_ui_phase3_redlines.py -q` | ✅ 170 passed |
+| 4. `pytest tests/ -q`（全量） | ⚠️ 2073 passed, 18 skipped, **46 failed** — 全部为 `ModuleNotFoundError: No module named 'pysubs2'`（环境缺依赖假失败，非本卡改动引起） |
+| 5. `python -m subtransjav.refine.cli --help` | ✅ 退出码 0 |
+| 6. GUI 黑盒 | 未跑（由主审验收） |
+
+### 红2 双态自证四步日志
+
+**步骤①**：临时在 `.page-head` 注入 `font-size: 11px;`
+
+**步骤②**：跑新钉断言红
+```
+>       assert not css_bad, (
+            f"style.css 出现白名单外 font-size 值：{css_bad}——"
+            "请引用 --font/--font-sm/--font-xs 或在豁免清单内（新增须回终审）"
+        )
+E       AssertionError: style.css 出现白名单外 font-size 值：['11px']——请引用 --font/--font-sm/--font-xs 或在豁免清单内（新增须回终审）
+E       assert not ['11px']
+
+tests\test_gui_js_static.py:4116: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_gui_js_static.py::test_font_size_scale_allowlist - Assertio...
+1 failed in 0.14s
+```
+
+**步骤③**：还原 `.page-head`（移除注入的 `font-size: 11px;`）
+
+**步骤④**：跑断言绿
+```
+.                                                                        [100%]
+1 passed in 0.04s
+```
+
+还原验证：`grep -n "font-size: 11px" style.css` 无输出（零残留）。
+
+### 遗留问题
+
+- 验收4 全量测试中 46 个 `ModuleNotFoundError: No module named 'pysubs2'` 失败为环境缺依赖所致，主审将以 .venv 复核。
+- index.html 内联 font-size 存量冻结 `_FROZEN_INLINE_FONT_PX = 5`（11px×1 + 12px×2 + 12.5px×2），待卡A2 回收内联后由卡B 顺带下调 0。
