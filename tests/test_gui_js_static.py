@@ -3174,7 +3174,9 @@ def test_batch3_ai_config_row_pins_survive():
     assert len(ids) == 223, f"id 全集数漂移（契约 223），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
-    assert len(i18n) == 187, f"data-i18n 键集数漂移（契约 187），实为 {len(i18n)}"
+    # 186=artifact_note 键退役后契约值（真机反馈 IA 重排轮，D2026-1013-01 追记；
+    # 快照钉⑤b 为全集全等断言，此行只锁计数，漂移细节归钉⑤b）
+    assert len(i18n) == 186, f"data-i18n 键集数漂移（契约 186），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -4752,7 +4754,8 @@ def test_b10_nav_aria_controls_pinned():
 def test_b10_zero_new_id_zero_new_key_pinned():
     """⑤零新增 id / 零新增键（钉⑤双集合自证的本卡局部前置）：页头块内零 id；
     7 个页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=223 /
-    FROZEN_I18N_KEYS=187 全等冻结另由钉⑤a/⑤b 快照自证）；aria-controls 只
+    FROZEN_I18N_KEYS=186 全等冻结另由钉⑤a/⑤b 快照自证；187→186=artifact_note
+    退役，D2026-1013-01 真机反馈轮）；aria-controls 只
     引用既有 .tab-page id，容器不新增 data-i18n。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     nav = re.search(r'<nav class="rail-nav".*?</nav>', html, re.S)

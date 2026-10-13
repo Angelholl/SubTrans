@@ -372,7 +372,6 @@ const MSG = {
     save_endpoints_btn: '保存接口',
     start_btn: '开始净语翻译',
     stop_btn: '停止',
-    artifact_note: '产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过',
     status_idle: 'Idle',
 
     // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
