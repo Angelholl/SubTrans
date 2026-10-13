@@ -9181,6 +9181,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         refreshPipelineCardHint();
     }
 
+    // 卡I（D2026-1013-01 真机反馈）：输出目录并入本卡，交互区域内阻断
+    // 整卡跳转冒泡（click 与键盘 Enter 均不触发 switchTab）
+    const destSection = document.querySelector('.destination-section');
+    if (destSection) {
+        destSection.addEventListener('click', (e) => e.stopPropagation());
+        destSection.addEventListener('keydown', (e) => e.stopPropagation());
+    }
+
     ConsoleManager.log(MSG.gui_initialized, 'success');
     ConsoleManager.log(MSG.gui_usage_hint, 'info');
 });
