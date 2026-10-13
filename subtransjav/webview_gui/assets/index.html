@@ -1046,26 +1046,42 @@
 
                 <div class="pipeline-mirror" id="pipelineMirrorLine"></div>
 
-                <!-- 自动压制开关（2.8.0 批3，D2026-1007-03 决策八-4：用户勾选
-                     决定是否启用自动化；状态存管线设置 encode_auto_enabled；
-                     零 id 零静态 i18n，文案 JS 态填充） -->
-                <label class="encode-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;" data-testid="encode-auto-row">
-                    <input type="checkbox" class="encode-auto-switch" style="margin:0;">
-                    <span class="encode-auto-label"></span>
-                </label>
-                <!-- 全链自动化开关（3.0 批1 a 段，D2026-1009-02：状态存管线
-                     设置 fullchain_auto_enabled，缺省关；开启时翻译完成钩子
-                     整体改道全链状态机——分析→批量修复→复验→链尾压制，前端
-                     预热同门控短路。零 id 零静态 i18n，文案 EncodeDock.init
-                     JS 态填充；样式复用 encode-auto-row 内联样式族不另立 CSS） -->
-                <label class="fullchain-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;" data-testid="fullchain-auto-row">
-                    <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
-                    <span class="fullchain-auto-label"></span>
-                </label>
-                <!-- 压制参数入口（D2026-1008-01 批2）：「参数」文字小按钮同开
-                     编辑模式弹窗；置于 label 外（label 内点击会透传切换开关）；
-                     零 id 零静态 data-i18n，文案 EncodeDock.init JS 态承接 -->
-                <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link" style="margin-top:4px;"></button>
+                <!-- 自动化小节（D2026-1013-01 A 案 / d1013-卡L：三小节分组——
+                     小节标题行 + 两个开关行 + 组尾参数钮；小节标题 span 为空壳
+                     零静态中文，文案卡M JS 态填充。镜像行仍留在小节结构外（只读区，
+                     点击仍跳引擎页——卡K 过滤清单不含 .pipeline-mirror）） -->
+                <div class="pipeline-subgroup" data-testid="pipeline-subgroup-auto">
+                    <div class="pipeline-subhead-row">
+                        <span class="pipeline-subhead-text" data-testid="pipeline-subhead-auto"></span>
+                    </div>
+                    <!-- 自动压制开关（2.8.0 批3，D2026-1007-03 决策八-4：用户勾选
+                         决定是否启用自动化；状态存管线设置 encode_auto_enabled；
+                         零 id 零静态 i18n，文案 JS 态填充。内联 display:flex /
+                         align-items:center / gap:6px / margin-top:6px 已删，
+                         布局归 style.css 的 #pipelineCard 作用域规则） -->
+                    <label class="encode-auto-row" data-testid="encode-auto-row">
+                        <input type="checkbox" class="encode-auto-switch" style="margin:0;">
+                        <span class="encode-auto-text"><span class="encode-auto-label"></span><span class="encode-auto-desc"></span></span>
+                    </label>
+                    <!-- 全链自动化开关（3.0 批1 a 段，D2026-1009-02：状态存管线
+                         设置 fullchain_auto_enabled，缺省关；开启时翻译完成钩子
+                         整体改道全链状态机——分析→批量修复→复验→链尾压制，前端
+                         预热同门控短路。零 id 零静态 i18n，文案 EncodeDock.init
+                         JS 态填充；样式与压制开关同走 #pipelineCard CSS 规则，
+                         不再复制内联样式族。desc 副行为空壳，文案卡M JS 态填充） -->
+                    <label class="fullchain-auto-row" data-testid="fullchain-auto-row">
+                        <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
+                        <span class="fullchain-auto-text"><span class="fullchain-auto-label"></span><span class="fullchain-auto-desc"></span></span>
+                    </label>
+                    <!-- 压制参数入口（D2026-1008-01 批2）：「参数」文字小按钮同开
+                         编辑模式弹窗；自原位迁入组尾行（仍置于 label 外——label 内
+                         点击会透传切换开关）；零 id 零静态 data-i18n，文案
+                         EncodeDock.init JS 态承接；内联 margin-top:4px 已删，
+                         归 style.css #pipelineCard .encode-params-link -->
+                    <div class="pipeline-subgroup-tail">
+                        <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link"></button>
+                    </div>
+                </div>
 
                 <!-- 输出目录已并入本卡（真机反馈第二轮，D2026-1013-01 追记 / 卡I：
                      自卡2 → 卡1（9ae5c9a）→ 本卡，owner 图示指明整合位为
@@ -1091,12 +1107,8 @@
                                 data-i18n-placeholder="output_placeholder"
                                 placeholder="输出目录..."
                             >
-                            <button type="button" class="btn btn-secondary" id="browseOutputBtn" data-i18n="browse_btn">
-                                浏览
-                            </button>
-                            <button type="button" class="btn btn-ghost" id="openOutputBtn" data-i18n="open_btn">
-                                打开
-                            </button>
+                            <button type="button" class="btn btn-secondary" id="browseOutputBtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 17.5a7 7 0 1 1 7-7 7 7 0 0 1-7 7Z"/><path d="m21 21-4.3-4.3"/><path d="M8 13V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v2"/></svg><span class="sr-only" data-i18n="browse_btn">浏览</span></button>
+                            <button type="button" class="btn btn-ghost" id="openOutputBtn"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg><span class="sr-only" data-i18n="open_btn">打开</span></button>
                         </div>
                     </div>
                 </section>
