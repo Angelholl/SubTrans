@@ -240,7 +240,6 @@
     "advanced_settings_notice",
     "aiAnalyzeBtn",
     "app_header_title",
-    "artifact_note",
     "asr_panel_title",
     "audio_preview_close",
     "batchFixBtn",
@@ -431,7 +430,8 @@
       "2.7.3 件⑧批 8b（D2026-1006-01 Console 结构化活动流）：FROZEN_IDS 213→217，四 id=consoleActivity/rawLogToggleBtn/exportConsoleBtn/copyConsoleBtn（全零 data-i18n，文案 JS 态 MSG 键承接）；FROZEN_I18N_KEYS 187 不动",
       "2.7.4 件C（D2026-1007-02）：FROZEN_IDS 217→218，+batchFixEffectiveLine（修复生效配置明示行，决策明示批准；零 data-i18n）",
       "2.8.0 批1（D2026-1007-03 压制队列底条）：FROZEN_IDS 218→223，五 id=encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/encodeDockToggle（零 data-i18n，文案 JS 态 MSG 键承接）；FROZEN_I18N_KEYS 187 不动——配记 index.html:1142 与 test_gui_js_static.py 计数钉 223",
-      "3.1 阶段1 地基批 卡2（D2026-1012-01）：快照外置 tests/ui_contract_snapshot.json + 再生工具 tools/ui_contract_snapshot.py，集合零增减（ids 223 / i18n_keys 187）；解冻史自本卡起只记本 _meta.history（测试文件头注释解冻史块全量迁入，含本卡据 index.html/decision-log/test_gui_js_static 补记的 217→218、218→223 两笔）"
+      "3.1 阶段1 地基批 卡2（D2026-1012-01）：快照外置 tests/ui_contract_snapshot.json + 再生工具 tools/ui_contract_snapshot.py，集合零增减（ids 223 / i18n_keys 187）；解冻史自本卡起只记本 _meta.history（测试文件头注释解冻史块全量迁入，含本卡据 index.html/decision-log/test_gui_js_static 补记的 217→218、218→223 两笔）",
+      "真机反馈 IA 重排轮（D2026-1013-01 追记，owner 2026-10-13 直接指示删除产物命名说明）：artifact_note 键退役（index.html footnote 元素删除+app.js MSG 键同步删），i18n_keys 187→186；ids 223 不动"
     ]
   }
 }
