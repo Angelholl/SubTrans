@@ -5247,3 +5247,154 @@ def test_pipeline_card_click_filter():
     for ev in ("click", "keydown"):
         assert re.search(r"addEventListener\(\s*['\"]" + ev + r"['\"]", dseg), \
             f".destination-section 阻断块未对 {ev} 事件阻断冒泡（卡K 不得删卡I 钉）"
+
+
+# ============================================================================
+# 卡M（D2026-1013-01 追记）：流水线卡文案回填——MSG 改值+三新键+主副行填充
+# ============================================================================
+
+
+def test_pipeline_card_copy_keys():
+    """d1013-卡M 新钉：流水线卡文案回填（MSG 改值不改键 + 新增 3 键 +
+    主副行回填调用在位）。
+
+    ①MSG 新增 3 键（encodeAutoShort/fullchainAutoShort/
+      pipelineGroupAuto，additive 合法，卡D 先例）在键表且值含中文
+      （test_strings_and_shortcut.py 有 MSG 全值中文钉，此处非空+
+      含中文自证）；
+    ②encodeParamsLink 改值不改键：值='压制参数'（B-06 先例，回填链
+      既有 init 填充自动生效）；
+    ③EncodeDock.init 回填调用在位——小节标题 .pipeline-subhead-text
+      填 MSG.pipelineGroupAuto；两开关主行 label 短句
+      （encodeAutoShort/fullchainAutoShort），desc 副行承接既有长句
+      （encodeAutoSwitch/fullchainAutoSwitch），全部 null 守卫
+      （照既有画法）。
+
+    先红后绿自证：先落本钉不动 app.js 时红（三新键未定义+回填调用
+    缺位）；完成卡M 改法 1-3 后转绿。"""
+    src = _app_js_source()
+    keys = _js_msg_keys()
+    for key in ("encodeAutoShort", "fullchainAutoShort",
+                "pipelineGroupAuto"):
+        assert key in keys, f"MSG 缺少 d1013-卡M 新键: {key}"
+        m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
+        assert m and m.group(1), f"MSG 键 {key} 文案为空"
+        assert any("一" <= ch <= "鿿" for ch in m.group(1)), (
+            f"MSG[{key!r}] 应为中文文案: {m.group(1)!r}")
+    # 改值不改键：encodeParamsLink 值='压制参数'
+    m = re.search(r"^\s*encodeParamsLink:\s*'([^']*)'", src, re.M)
+    assert m, "MSG 缺 encodeParamsLink 键"
+    assert m.group(1) == "压制参数", (
+        f"encodeParamsLink 值应为「压制参数」（改值不改键），"
+        f"实为「{m.group(1)}」")
+    # 回填调用在位（EncodeDock.init 内，全部 null 守卫）
+    init = _extract_function(_encode_dock_source(src), "init")
+    assert "querySelector('.pipeline-subhead-text')" in init, (
+        "init 缺小节标题 .pipeline-subhead-text 定位")
+    assert "MSG.pipelineGroupAuto" in init, (
+        "init 缺小节标题文案 MSG.pipelineGroupAuto")
+    for frag in (
+        "querySelector('.encode-auto-label')",
+        "label.textContent = MSG.encodeAutoShort",
+        "querySelector('.encode-auto-desc')",
+        "MSG.encodeAutoSwitch",
+        "querySelector('.fullchain-auto-label')",
+        "fcLabel.textContent = MSG.fullchainAutoShort",
+        "querySelector('.fullchain-auto-desc')",
+        "MSG.fullchainAutoSwitch",
+    ):
+        assert frag in init, f"EncodeDock.init 缺回填接线: {frag}"
+    assert "if (autoDesc)" in init and "if (fcDesc)" in init, (
+        "desc 副行填充须 null 守卫（照既有画法）")
+
+
+def test_pipeline_card_layout_structure():
+    """d1013-卡L 移交钉固化（D2026-1013-01 追记 / 卡M 卡面改法 4）：
+    流水线卡 A 案布局结构五断言（红相已由卡L 执行记录留证——卡面
+    「先红后绿回归测试」段因卡面矛盾落仓外临时文件跑红绿，本钉
+    固化入库时结构已在位，直接绿态）。
+
+    ①pipeline-subhead-text 在 index.html 恰 1 处且空壳
+      （>.*</span> 内无中文——文案卡M JS 态填充）；
+    ②encode-auto-desc/fullchain-auto-desc 文字栈在位
+      （label span 保留=JS 填充锚点，desc 空壳）；
+    ③参数钮在 pipeline-subgroup-tail 内且文档序在 encode-auto-row 后
+      （class 四类名序列逐字冻结：btn btn-ghost btn-compact
+      encode-params-link，零 id/零 data-i18n）；
+    ④sr-only 类两处（browse/open）且 svg 在 span 前
+      （图标化 C7 (ii) 方案：data-i18n 键随文本迁 span，applyI18n
+      只覆写 span.textContent 不抹 svg）；
+    ⑤style.css 含 .pipeline-subhead-text::after 尾 hairline /
+      #pipelineCard .section-content 缩进归零 / 输出区 h2 统一三件。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ①小节标题空壳：恰 1 处且无中文
+    n_subhead = html.count('class="pipeline-subhead-text"')
+    assert n_subhead == 1, (
+        f"pipeline-subhead-text 应恰 1 处（实测 {n_subhead} 处）")
+    m = re.search(
+        r'<span class="pipeline-subhead-text"[^>]*>(.*?)</span>',
+        html, re.S)
+    assert m, "未找到 pipeline-subhead-text span"
+    assert not re.search("[\u4e00-\u9fff]", m.group(1)), (
+        "小节标题空壳内不得有中文（文案卡M JS 态填充）")
+
+    # ②开关行文字栈在位（label 锚点 + desc 空壳同胞）
+    assert re.search(
+        r'<span class="encode-auto-text">'
+        r'<span class="encode-auto-label"></span>'
+        r'<span class="encode-auto-desc"></span></span>', html), (
+        "encode-auto 文字栈结构漂移（label/desc 栈须在位）")
+    assert re.search(
+        r'<span class="fullchain-auto-text">'
+        r'<span class="fullchain-auto-label"></span>'
+        r'<span class="fullchain-auto-desc"></span></span>', html), (
+        "fullchain-auto 文字栈结构漂移（label/desc 栈须在位）")
+
+    # ③参数钮在组尾行内且文档序在 encode-auto-row 之后
+    m = re.search(r'<div class="pipeline-subgroup-tail">(.*?)</div>',
+                  html, re.S)
+    assert m, "缺 pipeline-subgroup-tail 组尾行"
+    assert ('class="btn btn-ghost btn-compact '
+            'encode-params-link"') in m.group(1), (
+        "参数钮须在 pipeline-subgroup-tail 内"
+        "（class 四类名序列逐字冻结）")
+    tag = re.search(
+        r'<button[^>]*class="btn btn-ghost btn-compact '
+        r'encode-params-link"[^>]*>', m.group(1))
+    assert tag, "组尾行内参数钮标签解析失败"
+    assert not re.search(r'(?<![\w-])id="', tag.group(0)) \
+        and "data-i18n" not in tag.group(0), (
+        "参数钮不得带 id/data-i18n（FROZEN 契约）")
+    tail_at = html.index('class="pipeline-subgroup-tail"')
+    row_at = html.index('data-testid="encode-auto-row"')
+    assert tail_at > row_at, (
+        "参数钮组尾行文档序须在 encode-auto-row 之后")
+
+    # ④浏览/打开图标化：sr-only 恰两处且 svg 在 span 前
+    n_sr = html.count('class="sr-only"')
+    assert n_sr == 2, (
+        f"sr-only 类应恰两处（浏览/打开，实测 {n_sr} 处）")
+    for btn_id, i18n_key in (("browseOutputBtn", "browse_btn"),
+                             ("openOutputBtn", "open_btn")):
+        bm = re.search(rf'<button[^>]*id="{btn_id}"[^>]*>(.*?)</button>',
+                       html, re.S)
+        assert bm, f"缺 {btn_id} 按钮"
+        inner = bm.group(1)
+        assert "<svg" in inner, f"{btn_id} 缺 Lucide svg 图标"
+        assert f'class="sr-only" data-i18n="{i18n_key}"' in inner, (
+            f"{btn_id} 缺 sr-only 读屏文本（data-i18n={i18n_key}）")
+        assert inner.index("<svg") < inner.index("class=\"sr-only\""), (
+            f"{btn_id} svg 须在 sr-only span 前")
+
+    # ⑤style.css 三件：subhead 尾 hairline/缩进归零/h2 统一
+    assert ".pipeline-subhead-text::after" in css, (
+        "style.css 缺 .pipeline-subhead-text::after 尾 hairline")
+    assert "#pipelineCard .section-content" in css \
+        and "padding: var(--space-3) 0 var(--space-2);" in css, (
+        "style.css 缺 #pipelineCard .section-content 缩进归零")
+    assert ("#pipelineCard .destination-section .section-header "
+            "h2::after") in css, (
+        "style.css 缺输出区 h2 统一（h2::after 尾 hairline）")
