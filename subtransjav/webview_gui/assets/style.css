@@ -289,7 +289,7 @@ button:focus { outline: none; }
 
 /* 导航分组标题（原型 .nav-section；中文无大写效果无害） */
 .nav-section {
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-weight: 600;
     color: var(--text-3);
     letter-spacing: .4px;
@@ -357,7 +357,7 @@ button:focus { outline: none; }
 .theme-menu .theme-option:hover { background: var(--surface-2); }
 
 .rail-foot-note {
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-3);
     line-height: 1.5;
 }
@@ -374,10 +374,10 @@ button:focus { outline: none; }
 }
 
 .page-head { display: flex; align-items: baseline; gap: var(--space-3); }
-.page-title { font-size: 18px; font-weight: 650; letter-spacing: -.3px; }
+.page-title { font-size: var(--font); font-weight: 700; letter-spacing: -.3px; }
 /* 页头两行纵排（阶段2 批1：标题 + 副标题包同一列容器，spacer 类兄弟仍可用） */
 .page-head-text { display: flex; flex-direction: column; gap: 3px; }
-.page-subtitle { font-size: 13px; color: var(--text-2); }
+.page-subtitle { font-size: var(--font-sm); color: var(--text-2); }
 
 /* Tab 页机制：默认隐藏，.active 显示 */
 .tab-page { display: none; }
@@ -660,7 +660,7 @@ button:focus { outline: none; }
     border-radius: var(--radius-sm);
     background: var(--primary-soft);
     color: var(--primary);
-    font-size: 14px;
+    font-size: var(--font);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -684,7 +684,7 @@ button:focus { outline: none; }
 }
 
 .file-item .file-path {
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-3);
     font-family: var(--font-mono);
     white-space: nowrap;
@@ -694,7 +694,7 @@ button:focus { outline: none; }
 
 /* 三态 chip：等待灰 / 翻译中蓝 / 已完成绿 / 可续传琥珀 */
 .file-item .chip {
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-weight: 600;
     padding: 2px 9px;
     border-radius: var(--radius-pill);
@@ -815,7 +815,7 @@ button:focus { outline: none; }
     align-items: center;
     justify-content: center;
     transition: transform .2s ease;
-    font-size: 10px;
+    font-size: var(--font-xs);
     line-height: 1;
 }
 /* 阶段2 批1：▾ 换 Lucide chevron-down（svg 在 span 内，折叠旋转仍作用于 span） */
@@ -1044,7 +1044,7 @@ input[type="checkbox"]:focus-visible {
 .sys-summary-title-row .block-title { flex: 1; }
 .sys-summary-stat {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-2);
     margin-left: auto;
     white-space: nowrap;
@@ -1115,7 +1115,7 @@ input[type="checkbox"]:focus-visible {
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
     background: var(--surface);
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-2);
     cursor: pointer;
     font-family: inherit;
@@ -1195,10 +1195,10 @@ input[type="checkbox"]:focus-visible {
     max-height: 180px;
     overflow: auto;
 }
-.dict-diag-grid .k { font-size: 11px; color: var(--text-3); }
+.dict-diag-grid .k { font-size: var(--font-xs); color: var(--text-3); }
 .dict-diag-grid .v {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-1);
     overflow-wrap: anywhere;
     word-break: normal;
@@ -1208,7 +1208,7 @@ input[type="checkbox"]:focus-visible {
     background: var(--surface);
     color: var(--text-2);
     border-radius: 6px;
-    font-size: 10px;
+    font-size: var(--font-xs);
     padding: 1px 6px;
     cursor: pointer;
     font-family: inherit;
@@ -1241,7 +1241,7 @@ input[type="checkbox"]:focus-visible {
 .mp-path-label { font-size: var(--font-xs); color: var(--text-3); flex: none; }
 .mp-path-val {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-2);
     overflow-wrap: anywhere;
     word-break: break-all;
@@ -1307,7 +1307,7 @@ input[type="checkbox"]:focus-visible {
     padding: 1px 8px;
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
-    font-size: 11px;
+    font-size: var(--font-xs);
     line-height: 1.6;
     flex: none;
 }
@@ -1533,7 +1533,7 @@ input[type="checkbox"]:focus-visible {
     text-align: left;
 }
 #refineGlossTable th, #glLearnedTable th, .gl-table th {
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-weight: 600;
     color: var(--text-3);
     padding: 6px 10px;
@@ -1550,7 +1550,7 @@ input[type="checkbox"]:focus-visible {
 #refineGlossTable th:first-child, #glLearnedTable th:first-child { width: var(--w-gl-source); }
 #refineGlossTable th:last-child { width: var(--w-th-action); }
 .gl-table td.gl-sel-cell { text-align: center; }
-.gl-alias { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.gl-alias { font-size: var(--font-xs); color: var(--text-muted); margin-top: 1px; }
 
 /* 词库行内输入（app.js 模板生成） */
 input.gl-src, input.gl-dst { width: 100%; min-width: 0; }
@@ -1576,7 +1576,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     border-radius: var(--radius-pill);
     background: var(--primary-soft);
     color: var(--primary-strong);
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-weight: 600;
     line-height: 1.6;
     white-space: nowrap;
@@ -1600,7 +1600,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     padding: 2px var(--space-2);
     background: var(--surface-3);
     border-radius: var(--radius-pill);
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-weight: 550;
     color: var(--text-2);
     white-space: nowrap;
@@ -1614,9 +1614,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     color: var(--text-3);
     opacity: .8;
 }
-.feature-icon { font-size: 11px; display: inline-flex; align-items: center; }
+.feature-icon { font-size: var(--font-xs); display: inline-flex; align-items: center; }
 .feature-icon svg { display: block; }
-.feature-text { font-size: 11px; }
+.feature-text { font-size: var(--font-xs); }
 
 /* ============================================================
    14. 高级参数：adv-grid / adv-group（卡片化）
@@ -1679,7 +1679,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 
 .media-source-tag {
-    font-size: 11px;
+    font-size: var(--font-xs);
     padding: 1px var(--space-2);
     border-radius: var(--radius-pill);
     white-space: nowrap;
@@ -1803,7 +1803,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 .service-quick-label { font-size: var(--font-sm); font-weight: 600; white-space: nowrap; }
 .service-quick-badge {
-    font-size: 11px;
+    font-size: var(--font-xs);
     font-weight: 600;
     padding: 2px 9px;
     border-radius: var(--radius-pill);
@@ -1863,7 +1863,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
    +overflow:hidden，文本不得置于其内（二级评议条件 2）；token 变量亮暗主题自动适配 */
 .progress-text {
     display: block;
-    font-size: 11px;
+    font-size: var(--font-xs);
     color: var(--text-3);
     margin-top: 2px;
 }
@@ -1932,7 +1932,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     background: var(--surface-2);
     color: var(--text-2);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-xs);
     cursor: default;
 }
 
@@ -2528,20 +2528,20 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .dl-src-card:hover { border-color: var(--primary); }
 .dl-src-card.dl-src-selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
 .dl-src-card.dl-src-disabled { opacity: .55; cursor: not-allowed; background: var(--surface-2); }
-.dl-src-hint { flex-basis: 100%; font-size: 12px; }
-.dl-meta-row { display: flex; gap: var(--space-2); font-size: 13px; word-break: break-all; margin-bottom: 4px; }
+.dl-src-hint { flex-basis: 100%; font-size: var(--font-xs); }
+.dl-meta-row { display: flex; gap: var(--space-2); font-size: var(--font-sm); word-break: break-all; margin-bottom: 4px; }
 .dl-meta-label { color: var(--text-muted); flex-shrink: 0; }
 .dl-copyable { cursor: copy; }
 .dl-copyable:hover { color: var(--primary); }
-.dl-notice { font-size: 12px; margin: var(--space-2) 0; }
+.dl-notice { font-size: var(--font-xs); margin: var(--space-2) 0; }
 .modal-dl-start { width: 100%; margin-top: var(--space-3); }
 .dl-progress { margin-top: var(--space-3); }
 .dl-progress-bar { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
 .dl-progress-fill { height: 100%; width: 0; background: var(--primary); transition: width .2s ease; }
 .dl-progress-bar.indeterminate .dl-progress-fill { width: 30%; animation: dl-indeterminate 1.2s infinite linear; }
 @keyframes dl-indeterminate { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
-.dl-progress-text { margin-top: 4px; font-size: 12px; color: var(--text-muted); }
-.dl-result { margin-top: var(--space-3); font-size: 13px; word-break: break-all; }
+.dl-progress-text { margin-top: 4px; font-size: var(--font-xs); color: var(--text-muted); }
+.dl-result { margin-top: var(--space-3); font-size: var(--font-sm); word-break: break-all; }
 .dl-result-ok { color: var(--status-ok); }
 .dl-result-err { color: var(--status-err); }
 
@@ -2705,7 +2705,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .status-line.status-err .status-ico,
 .status-line.status-err .status-path { color: var(--status-err); }
 .status-line .status-path {
-    font-family: var(--font-mono); font-size: 11px;
+    font-family: var(--font-mono); font-size: var(--font-xs);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: 100%; min-width: 0; flex: 1;
 }
@@ -2837,45 +2837,45 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .queue-dock-state.failed { background: var(--danger); }
 @keyframes queue-dock-pulse { 50% { opacity: .35; } }
 .queue-dock-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; font-size: 13px; color: var(--text-1); }
+    text-overflow: ellipsis; font-size: var(--font-sm); color: var(--text-1); }
 .queue-dock-track { flex: 0 0 180px; height: 8px; border-radius: 99px;
     background: var(--surface-3); overflow: hidden; }
 .queue-dock-track .progress-fill { display: block; height: 100%; }
-.queue-dock-eta { font-size: 12px; flex: none; }
+.queue-dock-eta { font-size: var(--font-xs); flex: none; }
 .queue-dock-panel { border-top: 1px solid var(--border); padding: 4px 14px 8px;
     max-height: 260px; overflow: auto; }
 /* 队列项（.queue-item 族）：浮层列表行，createElement 注入零 id */
 .queue-item { display: flex; align-items: center; gap: 10px; padding: 6px 0;
-    border-bottom: 1px dashed var(--border); font-size: 12.5px; color: var(--text-1); }
+    border-bottom: 1px dashed var(--border); font-size: var(--font-xs); color: var(--text-1); }
 .queue-item:last-child { border-bottom: 0; }
 .queue-item-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-3); }
 .queue-item-dot.done { background: var(--ok); }
 .queue-item-dot.failed { background: var(--danger); }
 .queue-item-dot.running { background: var(--primary); }
 .queue-item-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.queue-item-pill { flex: none; border-radius: 999px; padding: 1px 8px; font-size: 11px;
+.queue-item-pill { flex: none; border-radius: 999px; padding: 1px 8px; font-size: var(--font-xs);
     background: var(--primary-soft); color: var(--primary-strong); }
 .queue-item-track { flex: 0 0 110px; height: 6px; border-radius: 99px;
     background: var(--surface-3); overflow: hidden; }
 .queue-item-track .progress-fill { display: block; height: 100%; }
-.queue-item-err { color: var(--danger); font-size: 12px; flex: 1; min-width: 0;
+.queue-item-err { color: var(--danger); font-size: var(--font-xs); flex: 1; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* error 进度变体（交付闭环三件套之一；VideoCaptioner 借鉴） */
 .progress-fill.err { background: var(--danger) !important; }
 
 /* ===== 压制参数弹窗三分区（AppModal kind='encode'；批1/批2 共用容器）===== */
 .enc-section { margin-bottom: 12px; }
-.enc-section h4 { font-size: 12.5px; color: var(--text-2); margin: 0 0 6px; font-weight: 600; }
+.enc-section h4 { font-size: var(--font-xs); color: var(--text-2); margin: 0 0 6px; font-weight: 600; }
 .enc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
 .enc-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.enc-field label { font-size: 12px; color: var(--text-2); }
+.enc-field label { font-size: var(--font-xs); color: var(--text-2); }
 .enc-field.full { grid-column: 1 / -1; }
 .enc-section.disabled { opacity: .55; pointer-events: none; }
 .enc-section .enc-placeholder { border: 1px dashed var(--border); border-radius: 8px;
-    padding: 10px; text-align: center; color: var(--text-2); font-size: 12.5px; }
+    padding: 10px; text-align: center; color: var(--text-2); font-size: var(--font-xs); }
 .enc-eta-row { display: flex; gap: 8px; align-items: center; background: var(--primary-soft);
-    border-radius: 8px; padding: 6px 10px; font-size: 12.5px; color: var(--text-1); margin-top: 8px; }
-.enc-jobs-line { font-size: 12.5px; color: var(--text-2); margin-bottom: 10px; }
+    border-radius: 8px; padding: 6px 10px; font-size: var(--font-xs); color: var(--text-1); margin-top: 8px; }
+.enc-jobs-line { font-size: var(--font-xs); color: var(--text-2); margin-bottom: 10px; }
 
 /* ===== P1 预热 G9 参数区锁定（D2026-1008-02 批3；TranslatorManager
    _lockEngineControls 挂/摘 .engine-locked，dim+锁定态）===== */
