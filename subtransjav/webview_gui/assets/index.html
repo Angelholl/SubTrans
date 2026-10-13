@@ -514,9 +514,9 @@
                         <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="tpl_save">保存角色卡</span></button>
                         <span id="refineTemplateStatus" class="muted"></span>
                     </div>
-                    <div id="refineTplLoadedPath" class="muted" style="font-size:11px; word-break:break-all;"></div>
+                    <div id="refineTplLoadedPath" class="muted" style="word-break:break-all;"></div>
                     <textarea id="refineTemplateText" class="form-input" rows="9"
-                        style="width:var(--w-full); font-family:Consolas,monospace; font-size:12px;"
+                        style="width:var(--w-full); font-family:var(--font-mono);"
                         data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
                 </div>
 
@@ -644,7 +644,7 @@
                 <!-- 3.0 批2（D2026-1009-02 批2）：全链链级状态行（进度/上次
                      结果一行+digest 展开区；文案与结构全 JS 态填充，零 id/
                      零 data-i18n——FROZEN 契约同全链开关行） -->
-                <div class="fullchain-status-line" data-testid="fullchain-status-line" hidden style="padding:4px 12px; line-height:1.6; font-size:12px; color:var(--muted, #888);"></div>
+                <div class="fullchain-status-line" data-testid="fullchain-status-line" hidden style="padding:4px 12px; line-height:1.6; color:var(--muted, #888);"></div>
                 <section class="section console-section">
                     <details id="refineGuideViewer">
                         <summary style="cursor:pointer; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -1068,7 +1068,7 @@
                 <!-- 自动压制开关（2.8.0 批3，D2026-1007-03 决策八-4：用户勾选
                      决定是否启用自动化；状态存管线设置 encode_auto_enabled；
                      零 id 零静态 i18n，文案 JS 态填充） -->
-                <label class="encode-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;cursor:pointer;" data-testid="encode-auto-row">
+                <label class="encode-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;" data-testid="encode-auto-row">
                     <input type="checkbox" class="encode-auto-switch" style="margin:0;">
                     <span class="encode-auto-label"></span>
                 </label>
@@ -1077,7 +1077,7 @@
                      整体改道全链状态机——分析→批量修复→复验→链尾压制，前端
                      预热同门控短路。零 id 零静态 i18n，文案 EncodeDock.init
                      JS 态填充；样式复用 encode-auto-row 内联样式族不另立 CSS） -->
-                <label class="fullchain-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12.5px;cursor:pointer;" data-testid="fullchain-auto-row">
+                <label class="fullchain-auto-row" style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;" data-testid="fullchain-auto-row">
                     <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
                     <span class="fullchain-auto-label"></span>
                 </label>

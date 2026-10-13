@@ -2880,3 +2880,10 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 /* ===== P1 预热 G9 参数区锁定（D2026-1008-02 批3；TranslatorManager
    _lockEngineControls 挂/摘 .engine-locked，dim+锁定态）===== */
 #tab-engine.engine-locked { opacity: .55; pointer-events: none; }
+
+/* ===== 字号归一（D2026-1013-01；index.html 内联 5 处删键移类）===== */
+#refineTplLoadedPath { font-size: var(--font-xs); }
+#refineTemplateText { font-size: var(--font-xs); }
+.fullchain-status-line { font-size: var(--font-xs); }
+.encode-auto-row { font-size: var(--font-xs); }
+.fullchain-auto-row { font-size: var(--font-xs); }
