@@ -450,53 +450,46 @@ button:focus { outline: none; }
     gap: var(--space-4);
 }
 
-/* ---------- 右栏折叠/展开钮（卡G1，D2026-1013-01 §2.2a）----------
+/* ---------- 双功能把手（卡N，D2026-1013-01 追记）：单钮双态——
+   展开态=右缘贴边竖条，折叠态=整条把手即按钮（件2 甲案落地）。
    零 id / 零 data-i18n / 零静态中文文案 / 零 title 文案：aria-label 与 title
-   以空值占位，卡G2 JS 回填既有 MSG.collapse_toggle（本卡零 JS）。
-   画法照既有图标钮（.btn-ghost / .btn-sm，§8 按钮区）：透明边 + 图标钮尺寸
-   + ghost 悬停；图标为 index.html 内联 Lucide（stroke currentColor）。 */
-.aside-collapse-btn,
-.aside-expand-btn {
+   空值占位，JS 回填既有 MSG.collapse_toggle（卡G2 行为面沿用）。
+   图标为 index.html 内联 Lucide chevrons-right / chevrons-left
+   （stroke currentColor），双 svg 按态显隐。 */
+.aside-toggle-btn {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 14px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--h-ctl-sm);
-    height: var(--h-ctl-sm);
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);   /* 真机反馈（D2026-1013-01 追记）：透明边+bg 底隐形，折叠入口须显眼 */
-    color: var(--text-2);
-    cursor: pointer;
-    flex-shrink: 0;
     transition: background var(--dur) ease, color var(--dur) ease;
 }
-.aside-collapse-btn:hover,
-.aside-expand-btn:hover {
-    background: var(--surface-2);
-    color: var(--text-1);
-}
+.aside-toggle-btn:hover { background: var(--surface-2); color: var(--text-1); }
+.aside-toggle-btn:focus-visible { outline: var(--focus-outline); outline-offset: -2px; }
+.aside-toggle-btn .toggle-ic-expand { display: none; }
 
-/* 展开态：收起钮 absolute 贴 aside 顶部右侧；展开钮默认不占位。
-   right 与 aside 右 padding（20px）对齐=钮右缘与首卡右缘齐平（真机反馈错位修正） */
-.aside-collapse-btn {
-    position: absolute;
-    top: var(--space-2);
-    right: 20px;
-    display: inline-flex;
+/* 折叠态：整条把手即按钮（件2 甲案落地） */
+.workbench.aside-collapsed .aside { padding: 0; }
+.workbench.aside-collapsed .aside-toggle-btn {
+    position: static;
+    width: 100%;
+    flex: 1 1 auto;
+    height: auto;
+    align-self: stretch;
 }
-.aside-expand-btn { display: none; }
+.workbench.aside-collapsed .aside-toggle-btn .toggle-ic-collapse { display: none; }
+.workbench.aside-collapsed .aside-toggle-btn .toggle-ic-expand { display: inline-flex; }
 
-/* 折叠态：把手条 44px —— 内卡全隐 + padding 收窄 + 居中竖排展开钮；
-   不放任何静态中文文案（纯图标 + aria-label，红线
-   test_html_has_no_unmarked_user_visible_chinese） */
+/* 折叠态：把手条 44px —— 内卡全隐（不放任何静态中文文案，纯图标 +
+   aria-label，红线 test_html_has_no_unmarked_user_visible_chinese） */
 .workbench.aside-collapsed .aside > .panel-card { display: none; }
-.workbench.aside-collapsed .aside {
-    padding: var(--space-2) 0;
-    align-items: center;
-    justify-content: center;
-}
-.workbench.aside-collapsed .aside-collapse-btn { display: none; }
-.workbench.aside-collapsed .aside-expand-btn { display: flex; }
 
 /* ============================================================
    4. 卡片与区块
