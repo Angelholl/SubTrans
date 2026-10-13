@@ -4085,7 +4085,9 @@ def test_gap_scale_allowlist():
     允许集：{var(--space-hair), var(--space-1), var(--space-2), var(--space-3),
     var(--space-4), var(--space-5), var(--space-6)};
     字面保留清单 = 空（本卡已将 4px/8px 字面全部映射为 var()）。
+    判定按空白切分逐分量进行（var 开头的混合字面双值同样逐分量核查）。
     """
+    allowed = {"var(--space-hair)"} | {f"var(--space-{i})" for i in range(1, 7)}
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     # 提取组件区 gap/row-gap/column-gap 声明，去除 :root 定义块
     css_scope = re.sub(r":root\s*\{[^}]*\}", "", css)
@@ -4093,38 +4095,14 @@ def test_gap_scale_allowlist():
     raw_vals = re.findall(r"(gap|row-gap|column-gap):\s*([^;]+);", css_scope)
     bad = []
     for decl, raw in raw_vals:
-        raw = raw.strip()
-        # 跳过已经是 var() 的值
-        if raw.startswith("var("):
+        parts = raw.strip().split()
+        if not parts:
             continue
-        # 只关注 px 分量的字面值
-        m = re.match(r"(\d+(?:\.\d+)?)px\s*(.*)", raw)
-        if not m:
-            # 非 px 形态（如 0, auto, %, flex 等）不计数
+        if all(p in allowed for p in parts):
             continue
-        px_val = m.group(1)
-        # 双值声明如 gap: 4px 10px，两个分量都要检查
-        remainder = m.group(2).strip()
-        # 检查主分量
-        if px_val not in {"var(--space-hair)", "var(--space-1)", "var(--space-2)",
-                          "var(--space-3)", "var(--space-4)", "var(--space-5)", "var(--space-6)"}:
-            main_bad = True
-        else:
-            main_bad = False
-        # 如果有 remainder，检查第二个分量
-        if remainder:
-            m2 = re.match(r"(\d+(?:\.\d+)?)px\s*(.*)", remainder)
-            if m2:
-                px_val2 = m2.group(1)
-                if px_val2 not in {"var(--space-hair)", "var(--space-1)", "var(--space-2)",
-                                   "var(--space-3)", "var(--space-4)", "var(--space-5)", "var(--space-6)"}:
-                    main_bad = True
-                else:
-                    main_bad = False
-            else:
-                main_bad = True
-        if main_bad:
-            bad.append(f"{decl}: {raw}")
+        # 非 px 形态分量（0 / auto / 百分比 / flex 值）不计数；px 字面分量即红
+        if any(re.fullmatch(r"\d+(?:\.\d+)?px", p) for p in parts):
+            bad.append(f"{decl}: {raw.strip()}")
     assert not bad, (
         f"style.css 组件区出现 gap 字面 px 值（不在允许集）：{bad}——"
         "允许集：{var(--space-hair), var(--space-1), ..., var(--space-6)}"
@@ -4132,7 +4110,12 @@ def test_gap_scale_allowlist():
 
 
 # ============================================================================
-# d1013-卡A1 字号白名单钉（LC-3，owner 拍板钉死口径）
+# 钉3：组件规则内色值字面量冻结（P8；d1013-卡C 验收修正恢复独立函数——
+# nemotron-3.5 落 gap 钉时误删 def 行致断言体并入 gap 钉，主审 2026-10-13 复原）
+# ============================================================================
+
+
+def test_p8_no_new_component_color_literals():
     """钉3：组件规则内色值字面量不得出现冻结清单外的新值（:root 定义不计数）。"""
     scope = _style_css_component_scope()
     actual = set(re.findall(r"(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))", scope))
