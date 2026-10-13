@@ -112,11 +112,12 @@
 
     /* ---- 内联宽度 token（index.html 内联样式逐字引用，勿删） ---- */
     --w-quick-service: 150px;      /* service quick select min-width */
-    --w-key-input: 150px;          /* API key input min-width */
+    --w-key-input: 200px;          /* API key input min-width */
     --w-stage-row: 340px;          /* stage row min-width */
     --w-stage-label: 148px;        /* stage checkbox label min-width */
     --w-provider: 138px;           /* stage provider select min-width */
-    --w-model: 160px;              /* stage model select min-width */
+    --w-model: 200px;              /* stage model select min-width */
+    --w-direction-sel: 5.5em;      /* direction source/target select width */
     --w-test-status: 200px;        /* test status span max-width */
     --w-alt-row: 250px;            /* stage key row min-width */
     --w-profile: 110px;            /* profile select min-width */
