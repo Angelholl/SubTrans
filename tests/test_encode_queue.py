@@ -136,8 +136,13 @@ def fake_env(monkeypatch):
     yield SimpleNamespace(killed=killed)
 
 
-def wait_until(cond, clock=None, timeout=5.0):
-    """轮询等待；clock 非 None 时每次轮询推进假钟 5 秒（驱动看门狗）。"""
+def wait_until(cond, clock=None, timeout=15.0):
+    """轮询等待；clock 非 None 时每次轮询推进假钟 5 秒（驱动看门狗）。
+
+    超时 15.0s 依据：test_total_timeout_fires 已使用 15.0s 作为安全上限；
+    全量 2400+ 用例负载下线程调度延迟可能超过 5s（worker 线程须完成
+    queued→running→done/failed/cancelled 状态转换）。
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if clock is not None:
