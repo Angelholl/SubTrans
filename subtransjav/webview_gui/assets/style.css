@@ -462,9 +462,9 @@ button:focus { outline: none; }
     width: var(--h-ctl-sm);
     height: var(--h-ctl-sm);
     padding: 0;
-    border: 1px solid transparent;
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--bg);   /* 不透明底：叠在首卡右上角时不透出卡描边 */
+    background: var(--surface);   /* 真机反馈（D2026-1013-01 追记）：透明边+bg 底隐形，折叠入口须显眼 */
     color: var(--text-2);
     cursor: pointer;
     flex-shrink: 0;
@@ -476,11 +476,12 @@ button:focus { outline: none; }
     color: var(--text-1);
 }
 
-/* 展开态：收起钮 absolute 贴 aside 顶部右侧；展开钮默认不占位 */
+/* 展开态：收起钮 absolute 贴 aside 顶部右侧；展开钮默认不占位。
+   right 与 aside 右 padding（20px）对齐=钮右缘与首卡右缘齐平（真机反馈错位修正） */
 .aside-collapse-btn {
     position: absolute;
     top: var(--space-2);
-    right: var(--space-2);
+    right: 20px;
     display: inline-flex;
 }
 .aside-expand-btn { display: none; }
@@ -1588,7 +1589,7 @@ input[type="checkbox"]:focus-visible {
 .stage-row .inline-field:first-child { min-width: var(--w-stage-label); }
 #refineS1Provider, #refineS3Provider { min-width: var(--w-provider); }
 #refineS1Model, #refineS3Model, #refineCleanerConfigShow { min-width: var(--w-model); }
-#refineS1Key, #refineS3Key { min-width: var(--w-key-input); }
+#refineS1Key, #refineS3Key { min-width: var(--w-key-input); max-width: 280px; }   /* 真机反馈：grow 封顶，保存钮紧随输入框不再贴行尾 */
 #refineProfile { min-width: var(--w-profile); }
 #refineV2Ctx { width: var(--w-ctx); }
 
