@@ -1095,6 +1095,21 @@ input[type="checkbox"]:focus-visible {
    ============================================================ */
 .muted { font-size: var(--font-sm); color: var(--text-2); }
 
+/* 读屏专用隐藏工具类（d1013-卡L / D2026-1013-01）：图标钮把 data-i18n 文本
+   收到 .sr-only span 上——视觉仅见 svg，读屏与翻译仍走既有键。零字号/零 gap/
+   零色值声明，三钉零涉 */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* 右栏卡 3 只读镜像（D2026-0930-09 批2）：整卡可点跳引擎页 */
 .panel-card-link { cursor: pointer; transition: border-color var(--dur) ease, box-shadow var(--dur) ease; }
 .panel-card-link:hover { border-color: var(--primary-border); box-shadow: var(--shadow-md); }
@@ -2972,3 +2987,89 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .fullchain-status-line { font-size: var(--font-xs); }
 .encode-auto-row { font-size: var(--font-xs); }
 .fullchain-auto-row { font-size: var(--font-xs); }
+
+/* ===== 流水线卡 A 案布局结构（d1013-卡L / D2026-1013-01）：三小节分组 +
+   开关文字栈 + 输出区缩进归零/标题统一。全部 #pipelineCard 作用域或新类，
+   零全局波及；小节标题并列挂 .stage-group-title 画法（本体不改，引擎页
+   「恰 3 条 stage-group-title」钉零涉）===== */
+
+/* 小节标题：复用 .stage-group-title 的「标题 + 尾 hairline」画法，禁复用其类名 */
+.pipeline-subhead-text {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text-2);
+}
+.pipeline-subhead-text::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+.pipeline-subhead-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+/* 组尾行：参数钮右挂（小节标题行当前未挂钮，尾行承接；文档序仍在 encode-auto-row 之后） */
+.pipeline-subgroup-tail {
+    display: flex;
+    justify-content: flex-end;
+}
+#pipelineCard .encode-params-link { margin: 0; }
+
+/* 开关行：承接 index.html 已删内联样式族（display/align-items/gap/margin-top/cursor） */
+#pipelineCard .encode-auto-row,
+#pipelineCard .fullchain-auto-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: 0;
+    padding: var(--space-1) 0;
+    cursor: pointer;
+}
+#pipelineCard .encode-auto-text,
+#pipelineCard .fullchain-auto-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-hair);
+    min-width: 0;
+}
+#pipelineCard .encode-auto-label,
+#pipelineCard .fullchain-auto-label {
+    font-size: var(--font-sm);
+    color: var(--text-1);
+}
+#pipelineCard .encode-auto-desc,
+#pipelineCard .fullchain-auto-desc {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+}
+
+/* 输出区：归零第三层缩进（卡 16px + section-content 14px = 左缩进 30px，
+   压得 #outputDir 只剩 ~62px），左边界回到与卡头/镜像行同一条线 */
+#pipelineCard .section-content { padding: var(--space-3) 0 var(--space-2); }
+
+/* 输出区 h2 与 .pipeline-subhead-text 视觉等值（标题 + 尾 hairline，作用域锁死） */
+#pipelineCard .destination-section .section-header { border-bottom: none; }
+#pipelineCard .destination-section .section-header h2 {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--text-2);
+    font-weight: 600;
+}
+#pipelineCard .destination-section .section-header h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* 图标钮（浏览/打开）收窄水平 padding，给路径输入框腾宽 */
+#pipelineCard .path-row .btn { padding: 0 var(--space-2); }
