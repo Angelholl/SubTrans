@@ -195,6 +195,14 @@ button:focus { outline: none; }
     height: 100vh;
 }
 
+/* 右栏折叠态三栏（卡G1，D2026-1013-01 §2.2c）：aside 收成 44px 把手条，
+   主区吃回 272px。类未挂时本规则不命中，基态三栏视觉零变化；
+   与 .no-aside 并存时 no-aside 规则源序在后 + aside 本体 display:none，
+   校对页不渲染折叠交互（本卡不触碰 no-aside）。窄窗支路见文末 @media1180。 */
+.workbench.aside-collapsed {
+    grid-template-columns: 220px minmax(0, 1fr) 44px;
+}
+
 /* ---------- 左栏：品牌 + 导航 + 主题 ---------- */
 .rail {
     background: var(--surface-2);
@@ -431,6 +439,7 @@ button:focus { outline: none; }
 
 /* ---------- 右栏：配置面板 ---------- */
 .aside {
+    position: relative;   /* 卡G1：折叠/展开钮 absolute 定位的定位锚 */
     border-left: 1px solid var(--border);
     background: var(--bg);
     overflow-y: auto;
@@ -439,6 +448,53 @@ button:focus { outline: none; }
     flex-direction: column;
     gap: var(--space-4);
 }
+
+/* ---------- 右栏折叠/展开钮（卡G1，D2026-1013-01 §2.2a）----------
+   零 id / 零 data-i18n / 零静态中文文案 / 零 title 文案：aria-label 与 title
+   以空值占位，卡G2 JS 回填既有 MSG.collapse_toggle（本卡零 JS）。
+   画法照既有图标钮（.btn-ghost / .btn-sm，§8 按钮区）：透明边 + 图标钮尺寸
+   + ghost 悬停；图标为 index.html 内联 Lucide（stroke currentColor）。 */
+.aside-collapse-btn,
+.aside-expand-btn {
+    align-items: center;
+    justify-content: center;
+    width: var(--h-ctl-sm);
+    height: var(--h-ctl-sm);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--bg);   /* 不透明底：叠在首卡右上角时不透出卡描边 */
+    color: var(--text-2);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--dur) ease, color var(--dur) ease;
+}
+.aside-collapse-btn:hover,
+.aside-expand-btn:hover {
+    background: var(--surface-2);
+    color: var(--text-1);
+}
+
+/* 展开态：收起钮 absolute 贴 aside 顶部右侧；展开钮默认不占位 */
+.aside-collapse-btn {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    display: inline-flex;
+}
+.aside-expand-btn { display: none; }
+
+/* 折叠态：把手条 44px —— 内卡全隐 + padding 收窄 + 居中竖排展开钮；
+   不放任何静态中文文案（纯图标 + aria-label，红线
+   test_html_has_no_unmarked_user_visible_chinese） */
+.workbench.aside-collapsed .aside > .panel-card { display: none; }
+.workbench.aside-collapsed .aside {
+    padding: var(--space-2) 0;
+    align-items: center;
+    justify-content: center;
+}
+.workbench.aside-collapsed .aside-collapse-btn { display: none; }
+.workbench.aside-collapsed .aside-expand-btn { display: flex; }
 
 /* ============================================================
    4. 卡片与区块
@@ -1826,6 +1882,13 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     color: var(--primary-strong);
     background: var(--primary-soft);
 }
+/* P2-1 两行布局子改（卡G1 可回退项，D2026-1013-01 §2.3 回退四要素）：
+   DOM 序 label→select→badge 经 order 重排为 label(order 0)+badge(order 1)
+   首行、select(order 2) 满宽第二行，消「AI 大模型」badge 必换行；
+   .service-quick-label 既有 nowrap 零改动，badge 字号零改动（卡A1 已抬升）。
+   回退=仅撤本段两条规则（badge 抬升保留）。 */
+.service-quick-bar .form-select { order: 2; flex-basis: 100%; }
+.service-quick-bar .service-quick-badge { order: 1; }
 .service-quick-local-hint {
     font-size: var(--font-xs);
     color: var(--text-3);
@@ -2519,6 +2582,11 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 
 @media (max-width: 1180px) {
     .workbench { grid-template-columns: 64px minmax(0, 1fr) 300px; }
+
+    /* 卡G1 折叠态窄栏支路（D2026-1013-01 §2.2c）：rail 64 + 把手 44。
+       卡面钉死：本 @media 块内展态沿用上方既有 300px 规则，
+       不另立任何新展态 300px 类规则（防实现者误加）。 */
+    .workbench.aside-collapsed { grid-template-columns: 64px minmax(0, 1fr) 44px; }
 
     .rail { padding: var(--space-4) var(--space-2); }
     .brand { justify-content: center; padding: var(--space-1) 0 18px; }

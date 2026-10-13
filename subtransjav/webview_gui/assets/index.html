@@ -986,6 +986,13 @@
         <!-- ============ 右栏：全局配置面板（所有页可见；运行控制自 tab-translate 迁入） ============ -->
         <aside class="aside">
 
+            <!-- 右栏折叠/展开钮（卡G1，D2026-1013-01 §2.2a）：零 id / 零 data-i18n /
+                 零静态中文文案 / 零 title 文案——aria-label、title 空值占位，
+                 文案由卡G2 JS 回填既有 MSG.collapse_toggle（本卡零 JS）。
+                 svg=Lucide panel-right-close / chevron-right，画法照 :93 内联先例 -->
+            <button type="button" class="aside-collapse-btn" data-testid="aside-collapse-btn" aria-label="" title=""><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/><path d="m8 9 3 3-3 3"/></svg></button>
+            <button type="button" class="aside-expand-btn" data-testid="aside-expand-btn" aria-label="" title=""><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+
             <!-- 卡1：运行控制（服务下拉 + 开始/停止 + 进度） -->
             <div class="panel-card">
 
