@@ -4866,3 +4866,233 @@ def test_inline_width_allowlist():
     assert not violations, (
         "白名单外内联宽度字面（应改走 var(--w-*) 引用；确需新增"
         "布局性字面先冻结进白名单）: " + "; ".join(violations))
+
+
+# ---------------------------------------------------------------------------
+# d1013-卡G2（回链 D2026-1013-01；规格=docs/design/d1013-S6复议-布局表面卷.md
+# §2.2c 折叠态结构 / §2.2d 启动默认 1240 阈值 / §2.2e localStorage 单写记忆 /
+# §2.2f 零 id 零键 / §2.5 阈值断言七条）：右栏折叠两钉——
+#   钉①结构钉（顺延自卡G1 无钉补落）：style.css 折叠态基态 grid + @media1180
+#       窄窗折叠支路 + index.html 两钮 class/data-testid 在位；@media 块内
+#       展态 grid 规则禁新增（防误加第二条 300px 类规则）。
+#   钉②行为钉：app.js localStorage 键串 / 1240 启动默认阈值 / MSG.collapse_toggle
+#       复用（零新增 MSG 键）/ aside-collapsed 类名串 / workbench null 守卫；
+#       运行期零 resize 驱动（窗口阈值只管启动默认，用户显式操作永久优先）。
+# ---------------------------------------------------------------------------
+
+# 卡G2 行为面的四个字面锚点（钉②断言用；与 app.js 实现逐字对应）
+_ASIDE_COLLAPSE_KEY = "subtransjav.aside.collapsed"
+_ASIDE_COLLAPSE_CLASS = "aside-collapsed"
+_ASIDE_COLLAPSE_MSEL = ".aside-collapse-btn, .aside-expand-btn"
+
+
+def _css_media_blocks(css: str, condition: str) -> list:
+    """按花括号配平提取 style.css 中指定 @media 条件的全部块源码
+    （style.css 有两个 @media (max-width:1180px) 块，:406 no-aside /
+    :2584 折叠支路，取块全文是断言语境所必需）。"""
+    blocks = []
+    for m in re.finditer(r"@media\s+" + re.escape(condition) + r"\s*\{", css):
+        depth = 0
+        for j in range(m.end() - 1, len(css)):
+            if css[j] == "{":
+                depth += 1
+            elif css[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    blocks.append(css[m.start():j + 1])
+                    break
+        else:
+            raise AssertionError(f"style.css @media {condition} 块花括号未配平")
+    return blocks
+
+
+def _js_block_from(source: str, start: int) -> str:
+    """取 app.js 中开括号位于 start 的花括号配平代码块（向后按配平取整块）
+    ——供行为钉按「折叠相关代码段」口径取片段，口径同 _extract_function /
+    _tab_hooks_literal。"""
+    depth = 0
+    for j in range(start, len(source)):
+        if source[j] == "{":
+            depth += 1
+        elif source[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start:j + 1]
+    raise AssertionError("app.js 代码块花括号未配平")
+
+
+def _js_block_at(source: str, pos: str) -> str:
+    """取 app.js 中位置 pos 所处最近一层花括号配平代码块。"""
+    return _js_block_from(source, source.rindex("{", 0, pos))
+
+
+# 语句级块开关键字：向前找「行为段边界」时跳过（try/if/catch 包裹的不是行为段）
+_JS_BLOCK_OPENERS = ("try", "else", "catch", "finally", "do", "if",
+                     "for", "while", "switch")
+
+
+def _js_opener_kind(source: str, brace_pos: int) -> str:
+    """判定 source[brace_pos] 处开括号的开关键字（先剥结尾括号组：
+    `if (cond) {` / `catch (e) {` → if/catch；`(function () {` → function；
+    `() => {` → 空串即函数边界）。"""
+    head = source[:brace_pos].rstrip()
+    while head.endswith(")"):
+        depth = 0
+        i = len(head) - 1
+        while i >= 0:
+            if head[i] == ")":
+                depth += 1
+            elif head[i] == "(":
+                depth -= 1
+                if depth == 0:
+                    break
+            i -= 1
+        if i < 0:
+            return ""
+        head = head[:i].rstrip()
+    m = re.search(r"([A-Za-z_$][\w$]*)$", head)
+    return m.group(1) if m else ""
+
+
+def _aside_collapse_segment(js: str) -> str:
+    """取 app.js 承载 aside 折叠行为的整段代码（以 localStorage 键串为锚点，
+    向前跳过 try/if 等语句级块取所属函数/IIFE 全段，向后按花括号配平）。
+    注意：锚点必须是**代码里**首次出现的键串——注释里先出现键串会把锚点
+    提前到块外，段会取错。"""
+    i = js.index(_ASIDE_COLLAPSE_KEY)
+    start = js.rindex("{", 0, i)
+    while _js_opener_kind(js, start) in _JS_BLOCK_OPENERS:
+        start = js.rindex("{", 0, start)
+    return _js_block_from(js, start)
+
+
+def test_aside_collapse_structure():
+    """卡G2 结构钉（D2026-1013-01 §2.2c，顺延自卡G1 无钉补落）：
+    ①style.css 基态 `.workbench.aside-collapsed` 折叠 grid（rail 220 + 把手 44）
+    与 `@media (max-width:1180px)` 内折叠支路（rail 64 + 把手 44）均在位；
+    ②index.html 两钮 class + data-testid 在位（零 id / 零 data-i18n 形态）；
+    ③@media 块内展态 grid 规则仍只有既有 300px 一条（卡G1 卡面钉死，防误加）。
+
+    先红场景：删任一折叠规则 / 任一钮 → 本钉红；@media 块内手加第二条
+    300px 展态类规则 → 断言③红。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # ①a 基态折叠 grid（非 @media 块内那条：取全文件首个选择器命中处）
+    m_base = re.search(
+        r"\.workbench\.aside-collapsed\s*\{([^}]*)\}", css)
+    assert m_base, "style.css 缺 .workbench.aside-collapsed 基态 grid 规则"
+    assert "grid-template-columns" in m_base.group(1), \
+        ".workbench.aside-collapsed 基态规则须声明 grid-template-columns"
+    assert "220px" in m_base.group(1) and "44px" in m_base.group(1), (
+        "基态折叠列宽漂移（应为 rail 220px + 把手 44px）: "
+        f"{m_base.group(1).strip()}")
+    # ①b @media1180 折叠支路（rail 64 + 把手 44）
+    narrow = [b for b in _css_media_blocks(css, "(max-width: 1180px)")
+              if _ASIDE_COLLAPSE_CLASS in b]
+    assert narrow, (
+        "@media (max-width:1180px) 内缺 .workbench.aside-collapsed 折叠支路")
+    m_narrow = re.search(
+        r"\.workbench\.aside-collapsed\s*\{([^}]*)\}", narrow[-1])
+    assert m_narrow and "64px" in m_narrow.group(1) \
+        and "44px" in m_narrow.group(1), (
+        "窄窗折叠支路列宽漂移（应为 rail 64px + 把手 44px）: "
+        f"{m_narrow.group(1).strip() if m_narrow else '未解析'}")
+    # ①c 折叠态内卡全隐（把手条形态，aside 内 panel-card 不占位）
+    assert re.search(
+        r"\.workbench\.aside-collapsed\s+\.aside\s*>\s*\.panel-card"
+        r"\s*\{[^}]*display:\s*none", css), \
+        "折叠态缺 .aside > .panel-card display:none（内卡未全隐）"
+    # ② 两钮 class + data-testid 在位，零 id / 零 data-i18n
+    for cls in ("aside-collapse-btn", "aside-expand-btn"):
+        tag = re.search(
+            r"<button[^>]*class=\"" + cls + r"\"[^>]*>", html, re.S)
+        assert tag, f"index.html 缺 .{cls} 按钮（卡G1 结构回退）"
+        assert f'data-testid="{cls}"' in tag.group(0), \
+            f"{cls} 缺 data-testid（黑盒锚点）"
+        assert not re.search(r"(?<![\w-])id=\"", tag.group(0)), \
+            f"{cls} 携带 id（FROZEN_IDS 零触碰）"
+        assert "data-i18n" not in tag.group(0), \
+            f"{cls} 携带 data-i18n（FROZEN_I18N 零触碰）"
+    # ③ @media 块内展态 grid 规则仍只有既有 300px 一条（卡G1 卡面钉死；
+    #    计数走 grid-template-columns 声明，注释内的 300px 字面不计）
+    media_body = re.sub(r"/\*.*?\*/", "", narrow[-1], flags=re.S)
+    media_body = media_body[media_body.index("{") + 1:]   # 去掉 @media 前导
+    wide_cols = [r for r in re.finditer(r"([^{}]+)\{([^}]*)\}", media_body)
+                 if "grid-template-columns" in r.group(2)
+                 and "300px" in r.group(2)]
+    assert len(wide_cols) == 1, (
+        "@media1180 块内 300px 展态 grid 规则被另立新条（卡G1 卡面钉死："
+        "块内展态沿用既有 300px 一条）: " + str(len(wide_cols)))
+    assert wide_cols[0].group(1).strip() == ".workbench", (
+        "@media1180 块内 300px 展态规则须为既有 .workbench 一条（不得改选择器）: "
+        + wide_cols[0].group(1).strip())
+
+
+def test_aside_collapse_behavior():
+    """卡G2 行为钉（D2026-1013-01 §2.2d/e/f + §2.5）：
+    ①app.js 含 localStorage 键串 `subtransjav.aside.collapsed`（单写记忆层）；
+    ②启动默认按窗口阈值 1240（innerWidth <= 1240 默认收起，记忆优先于阈值）；
+    ③两钮 aria-label/title 复用既有 MSG.collapse_toggle（零新增 MSG 键）；
+    ④workbench/按钮获取带 null 守卫（无 workbench 页面不崩）；
+    ⑤运行期零 resize 监听驱动折叠（阈值只管启动默认，用户显式操作永久优先）。
+
+    先红后绿自证：先落本钉不改 app.js 时，①②③④ 红（键串/1240 阈值/
+    collapse_toggle 回填/守卫均不在）；完成 app.js 改法 1-2 后转绿。"""
+    src = _app_js_source()
+    assert _ASIDE_COLLAPSE_KEY in src, (
+        "app.js 缺 localStorage 键串 subtransjav.aside.collapsed"
+        "（折叠记忆层未落，§2.2e localStorage 单写）")
+    seg = _aside_collapse_segment(src)
+    assert _ASIDE_COLLAPSE_CLASS in seg, \
+        "折叠代码段未出现 aside-collapsed 类名串（挂/摘类逻辑缺失）"
+    assert re.search(r"window\.innerWidth\s*<=\s*1240", seg), \
+        "折叠代码段缺 1240 启动默认阈值比较（应为 innerWidth <= 1240）"
+    assert re.search(r"localStorage\.getItem\(\s*['\"]"
+                     + re.escape(_ASIDE_COLLAPSE_KEY), seg), \
+        "折叠代码段未从 localStorage 读回折叠记忆（记忆优先于阈值）"
+    assert re.search(r"localStorage\.setItem\(\s*['\"]"
+                     + re.escape(_ASIDE_COLLAPSE_KEY), seg), \
+        "折叠代码段未写回 localStorage 折叠记忆（单写）"
+    assert "MSG.collapse_toggle" in seg, \
+        "两钮 aria-label/title 未复用既有 MSG.collapse_toggle"
+    for attr in ("aria-label", "title"):
+        assert re.search(r"setAttribute\(\s*['\"]" + attr + r"['\"]\s*,\s*"
+                         r"MSG\.collapse_toggle", seg), \
+            f"两钮 {attr} 未复用既有 MSG.collapse_toggle（零新增 MSG 键）"
+    used_keys = set(re.findall(r"MSG\.([A-Za-z_][A-Za-z0-9_]*)", seg))
+    assert used_keys == {"collapse_toggle"}, (
+        "折叠代码段引用了 collapse_toggle 之外的 MSG 键（卡面零新增 MSG 键）: "
+        f"{sorted(used_keys)}")
+    assert _ASIDE_COLLAPSE_MSEL in seg, \
+        "两钮未按 .aside-collapse-btn / .aside-expand-btn 双 class 选择器取"
+    assert re.search(r"if\s*\(\s*!\s*workbenchEl\s*\)", seg), \
+        "折叠代码段缺 workbench null 守卫（无 workbench 页面会崩）"
+    # 点击路径自证：click 回调体内挂/摘类 + 写回记忆 + aria-expanded 同步
+    assert "addEventListener('click'" in seg, "两钮未绑定 click 监听"
+    click_i = seg.index("addEventListener('click'")
+    click_open = seg.index("{", click_i)
+    assert "=>" in seg[click_i:click_open] or "function" in seg[click_i:click_open], \
+        "click 监听开括号定位失败（实现形态变化，请同步本钉解析口径）"
+    click = _js_block_from(seg, click_open)
+    assert re.search(r"classList\.toggle\(\s*['\"]" + _ASIDE_COLLAPSE_CLASS,
+                     click), \
+        "click 回调未挂/摘 aside-collapsed（折/展点击无效）"
+    assert "localStorage.setItem" in click, \
+        "click 回调未写回折叠记忆（显式操作不记忆）"
+    assert "aria-expanded" in click, \
+        "click 回调未同步 aria-expanded（无障碍态漂移）"
+    # 启动回填：记忆/阈值默认须在 click 绑定之前挂类（首屏默认失效红线）
+    assert re.search(r"classList\.toggle\(\s*['\"]" + _ASIDE_COLLAPSE_CLASS,
+                     seg[:click_i]), \
+        "启动回填未按记忆/阈值挂 aside-collapsed（首屏默认折叠失效）"
+    # ⑤ 运行期不挂 resize 自动切换：折叠代码段内零 resize 监听，
+    #    且 app.js 内任一 resize 监听所在代码块都不碰 aside 折叠
+    assert "addEventListener('resize'" not in seg \
+        and 'addEventListener("resize"' not in seg, \
+        "折叠代码段挂了 resize 监听（运行期自动切换，禁——用户显式操作优先）"
+    for m in re.finditer(
+            r"addEventListener\(\s*['\"]resize['\"]", src):
+        blk = _js_block_at(src, m.start())
+        assert _ASIDE_COLLAPSE_CLASS not in blk, (
+            "app.js 存在驱动 aside 折叠的 resize 监听（禁：1240 阈值只作用"
+            "启动默认，运行期不随窗口自动切换）")

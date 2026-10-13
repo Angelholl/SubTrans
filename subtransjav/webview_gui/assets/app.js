@@ -9113,6 +9113,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.addEventListener('change', refreshPipelineMirror);
     });
 
+    // 卡G2（D2026-1013-01 §2.2d/e/f）：右栏折叠行为——启动默认 + 两钮绑定 +
+    // localStorage 单写记忆（键串见下方 getItem，值 '1'/'0'）。
+    // - 1240 窗口阈值只作用启动默认：记忆优先，无记忆按 innerWidth <= 1240 收起；
+    //   运行期不挂 resize 自动切换（用户显式操作永久优先，粘滞不回弹）。
+    // - 降级三分支：a) 实测持久 OK 本路线即定案；b) 实测不持久由主审关记忆层
+    //   回落阈值默认；c) theme 式双写为休眠备选，启用须新的显式拍板。
+    // - 已知代价：升级或换数据目录可能清 localStorage → 记忆复位为默认（非丢数据）。
+    (function () {
+        const BTN_SEL = '.aside-collapse-btn, .aside-expand-btn';
+        let asideCollapsed = null;
+        try {
+            asideCollapsed = localStorage.getItem('subtransjav.aside.collapsed');
+        } catch (e) {
+            // private/无痕读不到 → 降级走窗口阈值默认
+        }
+        if (asideCollapsed !== '0' && asideCollapsed !== '1') {
+            asideCollapsed = window.innerWidth <= 1240 ? '1' : '0';
+        }
+        const startupCollapsed = asideCollapsed === '1';
+        document.querySelectorAll(BTN_SEL).forEach((btn) => {
+            const asideEl = btn.closest('.aside');
+            const workbenchEl = asideEl ? asideEl.closest('.workbench') : null;
+            if (!workbenchEl) return;
+            // 文案回填复用既有 MSG 键（零新增键；HTML 侧零 id 零 data-i18n）
+            btn.setAttribute('aria-label', MSG.collapse_toggle);
+            btn.setAttribute('title', MSG.collapse_toggle);
+            workbenchEl.classList.toggle('aside-collapsed', startupCollapsed);
+            btn.setAttribute('aria-expanded', startupCollapsed ? 'false' : 'true');
+            btn.addEventListener('click', () => {
+                const collapsed =
+                    !workbenchEl.classList.contains('aside-collapsed');
+                workbenchEl.classList.toggle('aside-collapsed', collapsed);
+                asideEl.querySelectorAll(BTN_SEL).forEach((b) => {
+                    b.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                });
+                try {
+                    localStorage.setItem('subtransjav.aside.collapsed',
+                                         collapsed ? '1' : '0');
+                } catch (e) {
+                    // 写入失败静默（private 模式降级为会话级折叠）
+                }
+            });
+        });
+    })();
+
     // 卡 3 提示态惰性求值：hover/focus 时按当前页切换提示文案（D2026-1012-01 ⑨）
     function refreshPipelineCardHint() {
         const el = document.getElementById('pipelineCard');
