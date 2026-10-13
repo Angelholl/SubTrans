@@ -1029,12 +1029,18 @@
                     </div>
                 </div>
 
+                <!-- 功能状态（真机反馈 IA 重排：语法提示 badge 自卡3 迁入——
+                     运行控制域显眼位；容器 id/badge 键零变，JS 按 id 消费不受影响） -->
+                <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
+                    <span class="feature-badge" id="grammarHintBadge" style="display:none;">
+                        <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>
+                        <span class="feature-text" data-i18n="grammar_hint_text">语法提示</span>
+                    </span>
+                </div>
 
-            </div>
-
-            <!-- 卡2：输出设置（自 tab-translate 迁入，内部结构原样） -->
-            <div class="panel-card">
-
+                <!-- 输出目录（真机反馈 IA 重排：自卡2 整卡迁入运行控制卡——
+                     选服务→选目录→开始同卡使用流；原卡2 容器删除，
+                     section 内部结构/id/data-i18n 键原样零变） -->
                 <section class="section destination-section">
                     <div class="section-header">
                         <h2 data-i18n="output_header">输出目录</h2>
@@ -1093,12 +1099,8 @@
                      零 id 零静态 data-i18n，文案 EncodeDock.init JS 态承接 -->
                 <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link" style="margin-top:4px;"></button>
 
-                <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
-                    <span class="feature-badge" id="grammarHintBadge" style="display:none;">
-                        <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>
-                        <span class="feature-text" data-i18n="grammar_hint_text">语法提示</span>
-                    </span>
-                </div>
+                <!-- 真机反馈 IA 重排：featureStatus（语法提示 badge）已迁至卡1
+                     运行控制卡；本卡保留流水线镜像+自动化开关+参数入口+产物命名 -->
 
                 <span class="muted footnote" data-i18n="artifact_note">
 
