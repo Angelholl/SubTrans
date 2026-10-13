@@ -9117,15 +9117,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.addEventListener('change', refreshPipelineMirror);
     });
 
-    // 卡G2（D2026-1013-01 §2.2d/e/f）：右栏折叠行为——启动默认 + 两钮绑定 +
-    // localStorage 单写记忆（键串见下方 getItem，值 '1'/'0'）。
+    // 卡G2（D2026-1013-01 §2.2d/e/f）：右栏折叠行为——启动默认 + 把手单钮绑定
+    // （卡N：两钮融合为单钮双态） + localStorage 单写记忆（键串见下方 getItem）。
     // - 1240 窗口阈值只作用启动默认：记忆优先，无记忆按 innerWidth <= 1240 收起；
     //   运行期不挂 resize 自动切换（用户显式操作永久优先，粘滞不回弹）。
     // - 降级三分支：a) 实测持久 OK 本路线即定案；b) 实测不持久由主审关记忆层
     //   回落阈值默认；c) theme 式双写为休眠备选，启用须新的显式拍板。
     // - 已知代价：升级或换数据目录可能清 localStorage → 记忆复位为默认（非丢数据）。
     (function () {
-        const BTN_SEL = '.aside-collapse-btn, .aside-expand-btn';
+        const BTN_SEL = '.aside-toggle-btn';
         let asideCollapsed = null;
         try {
             asideCollapsed = localStorage.getItem('subtransjav.aside.collapsed');

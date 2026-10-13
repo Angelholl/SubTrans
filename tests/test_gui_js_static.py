@@ -4875,8 +4875,9 @@ def test_inline_width_allowlist():
 # d1013-卡G2（回链 D2026-1013-01；规格=docs/design/d1013-S6复议-布局表面卷.md
 # §2.2c 折叠态结构 / §2.2d 启动默认 1240 阈值 / §2.2e localStorage 单写记忆 /
 # §2.2f 零 id 零键 / §2.5 阈值断言七条）：右栏折叠两钉——
-#   钉①结构钉（顺延自卡G1 无钉补落）：style.css 折叠态基态 grid + @media1180
-#       窄窗折叠支路 + index.html 两钮 class/data-testid 在位；@media 块内
+#   钉①结构钉（顺延自卡G1 无钉补落；卡N 修订：两钮融合为单钮
+#       .aside-toggle-btn）：style.css 折叠态基态 grid + @media1180
+#       窄窗折叠支路 + index.html 单钮 class/data-testid 在位；@media 块内
 #       展态 grid 规则禁新增（防误加第二条 300px 类规则）。
 #   钉②行为钉：app.js localStorage 键串 / 1240 启动默认阈值 / MSG.collapse_toggle
 #       复用（零新增 MSG 键）/ aside-collapsed 类名串 / workbench null 守卫；
@@ -4886,7 +4887,8 @@ def test_inline_width_allowlist():
 # 卡G2 行为面的四个字面锚点（钉②断言用；与 app.js 实现逐字对应）
 _ASIDE_COLLAPSE_KEY = "subtransjav.aside.collapsed"
 _ASIDE_COLLAPSE_CLASS = "aside-collapsed"
-_ASIDE_COLLAPSE_MSEL = ".aside-collapse-btn, .aside-expand-btn"
+# 卡N（D2026-1013-01 追记）：折叠把手双功能融合——两钮合并为单钮双态
+_ASIDE_COLLAPSE_MSEL = ".aside-toggle-btn"
 
 
 def _css_media_blocks(css: str, condition: str) -> list:
@@ -4973,7 +4975,8 @@ def test_aside_collapse_structure():
     """卡G2 结构钉（D2026-1013-01 §2.2c，顺延自卡G1 无钉补落）：
     ①style.css 基态 `.workbench.aside-collapsed` 折叠 grid（rail 220 + 把手 44）
     与 `@media (max-width:1180px)` 内折叠支路（rail 64 + 把手 44）均在位；
-    ②index.html 两钮 class + data-testid 在位（零 id / 零 data-i18n 形态）；
+    ②index.html 把手单钮 class + data-testid 在位（零 id / 零 data-i18n 形态；
+      卡N 修订：两钮融合为单钮 .aside-toggle-btn + 双态 svg 图标）；
     ③@media 块内展态 grid 规则仍只有既有 300px 一条（卡G1 卡面钉死，防误加）。
 
     先红场景：删任一折叠规则 / 任一钮 → 本钉红；@media 块内手加第二条
@@ -5005,17 +5008,20 @@ def test_aside_collapse_structure():
         r"\.workbench\.aside-collapsed\s+\.aside\s*>\s*\.panel-card"
         r"\s*\{[^}]*display:\s*none", css), \
         "折叠态缺 .aside > .panel-card display:none（内卡未全隐）"
-    # ② 两钮 class + data-testid 在位，零 id / 零 data-i18n
-    for cls in ("aside-collapse-btn", "aside-expand-btn"):
-        tag = re.search(
-            r"<button[^>]*class=\"" + cls + r"\"[^>]*>", html, re.S)
-        assert tag, f"index.html 缺 .{cls} 按钮（卡G1 结构回退）"
-        assert f'data-testid="{cls}"' in tag.group(0), \
-            f"{cls} 缺 data-testid（黑盒锚点）"
-        assert not re.search(r"(?<![\w-])id=\"", tag.group(0)), \
-            f"{cls} 携带 id（FROZEN_IDS 零触碰）"
-        assert "data-i18n" not in tag.group(0), \
-            f"{cls} 携带 data-i18n（FROZEN_I18N 零触碰）"
+    # ② 单钮 class + data-testid 在位，零 id / 零 data-i18n（卡N：两钮融合单钮）
+    cls = "aside-toggle-btn"
+    tag = re.search(
+        r"<button[^>]*class=\"" + cls + r"\"[^>]*>", html, re.S)
+    assert tag, f"index.html 缺 .{cls} 按钮（卡N 单钮双态回退）"
+    assert f'data-testid="{cls}"' in tag.group(0), \
+        f"{cls} 缺 data-testid（黑盒锚点）"
+    assert not re.search(r"(?<![\w-])id=\"", tag.group(0)), \
+        f"{cls} 携带 id（FROZEN_IDS 零触碰）"
+    assert "data-i18n" not in tag.group(0), \
+        f"{cls} 携带 data-i18n（FROZEN_I18N 零触碰）"
+    for svg_cls in ("toggle-ic-collapse", "toggle-ic-expand"):
+        assert f'class="{svg_cls}"' in html, \
+            f"index.html 缺 .{svg_cls} 双态图标（卡N 单钮双态）"
     # ③ @media 块内展态 grid 规则仍只有既有 300px 一条（卡G1 卡面钉死；
     #    计数走 grid-template-columns 声明，注释内的 300px 字面不计）
     media_body = re.sub(r"/\*.*?\*/", "", narrow[-1], flags=re.S)
@@ -5067,7 +5073,7 @@ def test_aside_collapse_behavior():
         "折叠代码段引用了 collapse_toggle 之外的 MSG 键（卡面零新增 MSG 键）: "
         f"{sorted(used_keys)}")
     assert _ASIDE_COLLAPSE_MSEL in seg, \
-        "两钮未按 .aside-collapse-btn / .aside-expand-btn 双 class 选择器取"
+        "app.js 未按 .aside-toggle-btn 单选择器取把手钮（卡N 双钮已融合）"
     assert re.search(r"if\s*\(\s*!\s*workbenchEl\s*\)", seg), \
         "折叠代码段缺 workbench null 守卫（无 workbench 页面会崩）"
     # 点击路径自证：click 回调体内挂/摘类 + 写回记忆 + aria-expanded 同步
@@ -5103,29 +5109,53 @@ def test_aside_collapse_behavior():
 
 # ============================================================================
 # 真机反馈回归钉（2026-10-13 走查轮，D2026-1013-01 追记）：三项修复防回潮
-# ① 折叠入口显眼化：两钮可见边框+surface 底、收起钮右缘与首卡对齐（right:20px）
+# ① 折叠入口显眼化（卡N 修订演进：两钮融合单钮双态，原「border+surface 防隐形」
+#    立法本意由「满条热区 + hover 提色 + 常驻图标」承接；owner 融合指令）；
+#    展开态形态=right:0 贴边 + 14px 竖条，折叠态整条可点（width:100% 满条热区）
 # ② API Key 输入 grow 封顶：保存钮紧随输入框不贴行尾
 # ③ 保存接口按钮文案：去「配置」二字（MSG 值与 index.html 静态回退同步）
 # ============================================================================
 
 
 def test_realdevice_feedback_pins():
-    """真机反馈三项修复钉（折叠钮显眼+对齐 / key input 封顶 / 保存接口文案）。"""
+    """真机反馈三项修复钉（把手单钮可点性+贴边形态【卡N 演进】/
+    key input 封顶 / 保存接口文案）。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    # ① 两钮可见边界+surface 底（折叠入口不隐形）
-    m = re.search(
-        r"\.aside-collapse-btn,\s*\.aside-expand-btn\s*\{[^}]*\}", css)
-    assert m, "折叠两钮共规缺失"
+    # ① 单钮可点性（卡N 修订演进：原「两钮 border+surface 防隐形」立法本意
+    #    由「满条热区 + hover 提色 + 常驻图标」承接——owner 融合指令，
+    #    D2026-1013-01 追记）
+    m = re.search(r"\.aside-toggle-btn\s*\{[^}]*\}", css)
+    assert m, "折叠把手单钮基础块缺失（卡N 双功能把手回退）"
     blk = m.group(0)
-    assert "border: 1px solid var(--border)" in blk, (
-        "折叠两钮边框回潮为透明（入口隐形）")
-    assert "background: var(--surface)" in blk, (
-        "折叠两钮底色回潮为 bg（与 aside 同色隐形）")
-    # ①' 收起钮 right 与 aside 右 padding 对齐（20px，卡右缘齐平）
+    assert "cursor: pointer" in blk, (
+        "把手单钮缺 cursor: pointer（可点 affordance 消失）")
+    assert re.search(
+        r"\.aside-toggle-btn:hover\s*\{[^}]*background:\s*var\(--surface-2\)",
+        css), "把手单钮缺 hover 提色（入口可点 affordance 回潮隐形）"
+    assert re.search(
+        r"\.workbench\.aside-collapsed\s+\.aside-toggle-btn\s*\{[^}]*"
+        r"width:\s*100%", css), (
+        "折叠态把手非整条可点（应 width:100% 满条热区，卡N 件2 甲案）")
+    # ①' 展开态贴边竖条形态（卡N 修订：原 right:20px 与首卡对齐由
+    #    right:0 贴边 + width:14px 竖条形态承接）
     m2 = re.search(
-        r"\.aside-collapse-btn\s*\{[^}]*position: absolute;[^}]*\}", css)
-    assert m2 and re.search(r"right:\s*20px", m2.group(0)), (
-        "收起钮 right 偏移漂移（应 20px 与首卡右缘对齐）")
+        r"\.aside-toggle-btn\s*\{[^}]*position: absolute;[^}]*\}", css)
+    assert m2 and re.search(r"right:\s*0\b", m2.group(0)) \
+        and re.search(r"width:\s*14px", m2.group(0)), (
+        "展开态把手形态漂移（应 right:0 贴边 + width:14px 竖条热区）")
+    # ⑥ 双图标态切换（卡N 修订：原两钮显隐互换改为单钮内双 svg 显隐——
+    #    默认显 collapse 图标，折叠态反转显 expand 图标）
+    assert re.search(
+        r"\.aside-toggle-btn\s+\.toggle-ic-expand\s*\{\s*display:\s*none",
+        css), "展开态未隐 .toggle-ic-expand（双图标显隐契约漂移）"
+    assert re.search(
+        r"\.workbench\.aside-collapsed\s+\.aside-toggle-btn\s+"
+        r"\.toggle-ic-collapse\s*\{\s*display:\s*none", css), \
+        "折叠态未隐 .toggle-ic-collapse（双图标显隐契约漂移）"
+    assert re.search(
+        r"\.workbench\.aside-collapsed\s+\.aside-toggle-btn\s+"
+        r"\.toggle-ic-expand\s*\{\s*display:\s*inline-flex", css), \
+        "折叠态未显 .toggle-ic-expand（双图标显隐契约漂移）"
     # ② key input grow 封顶（保存钮紧随输入框）
     assert re.search(
         r"#refineS1Key,\s*#refineS3Key\s*\{[^}]*max-width:\s*280px", css), (
