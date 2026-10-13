@@ -2835,11 +2835,34 @@ def test_resume_rejects_changed_stage_prompts(tmp_path, monkeypatch, capsys):
     """D1：V2_STAGE_PROMPTS 内容变化 → config 指纹失配 → --resume 拒绝复用阶段A。"""
     cfg = _make_cfg(tmp_path)
     _run_interrupted(tmp_path, monkeypatch, cfg)
+
+    # B3 加固①（中断现场前置钉）：中断轮必须留下 A=done / B=running 清单，
+    # 否则后续"不复用"断言会把中断侧异常误报成指纹失配，红点落不到根因上
+    m = load_manifest(tmp_path / "demo_manifest.json")
+    assert m is not None
+    assert m.stages["A"].status == "done"
+    assert m.stages["B"].status == "running"
+
+    # B3 加固②（指纹无时变字段钉）：中断轮落盘的 config_hash 必须等于当前
+    # 配置的独立复算值——指纹若掺 ts/mtime 等秒级时变字段，两轮间漂移即在此暴露
+    fp_before = compute_config_hash(cfg)
+    assert m.config_hash == fp_before, "config 指纹含时变字段或与中断轮不自洽"
+
     fake2 = FakeClient()
     monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: fake2)
     monkeypatch.setitem(pv.V2_STAGE_PROMPTS, "A", "changed prompt")
+
+    # B3 加固③（D1 机制钉）：提示词变更必须改变 config 指纹；方向分派走错/
+    # 延迟导入异常致 _v2_stage_prompts_sha1 恒 None 时，此处即红且理由明确
+    fp_after = compute_config_hash(cfg)
+    assert fp_after != fp_before, "V2_STAGE_PROMPTS 未参与 config 指纹（D1 失守）"
+
     cfg.resume = True
     pv.run_v2(cfg)
     out = capsys.readouterr().out
     assert "不复用" in out
+    assert "配置已变化" in out        # 只认 D1 原因，防其它指纹成分"代打"假绿
     assert len(fake2.calls) == 2      # 指纹失配：阶段A 重跑 + 阶段B
+    # B3 加固④（与 capsys 无关的拒绝复用证据）：首调须是阶段A（输入无 ||| 标记），
+    # 证明 A 确已重跑，不单凭 stdout 字符串判定
+    assert not any("|||" in e["text"] for e in fake2.entry_log[0])
