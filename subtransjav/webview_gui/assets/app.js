@@ -570,6 +570,7 @@ const MSG = {
     pipeline_mirror_model: '阶段A 模型',
     pipeline_mirror_conc: '并行',
     pipeline_card_hint: '点击前往「API 与模型选择」页修改',
+    pipeline_card_hint_here: '当前已在「API 与模型选择」页',
 
     // ---- 右栏系统状态摘要卡（D2026-1001 批3；strings.py 特批 2 键镜像 + JS-only 标签）----
     sys_summary_title: '系统状态',
@@ -9095,6 +9096,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (el) el.addEventListener('change', refreshPipelineMirror);
     });
 
+    // 卡 3 提示态惰性求值：hover/focus 时按当前页切换提示文案（D2026-1012-01 ⑨）
+    function refreshPipelineCardHint() {
+        const el = document.getElementById('pipelineCard');
+        if (!el) return;
+        const here = document.querySelector('.tab-page.active')?.id === 'tab-engine';
+        el.title = MSG[here ? 'pipeline_card_hint_here' : 'pipeline_card_hint'];
+    }
+
     // 卡 3 整卡跳转引擎页（只读镜像的修改入口）
     const pipelineCard = document.getElementById('pipelineCard');
     if (pipelineCard) {
@@ -9105,6 +9114,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 switchTab('tab-engine');
             }
         });
+        pipelineCard.addEventListener('mouseenter', refreshPipelineCardHint);
+        pipelineCard.addEventListener('focus', refreshPipelineCardHint);
+        refreshPipelineCardHint();
     }
 
     ConsoleManager.log(MSG.gui_initialized, 'success');
