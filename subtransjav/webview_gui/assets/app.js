@@ -235,6 +235,12 @@ const MSG = {
     // 卡8 B-06（D2026-1012-01）：标题缩短防右栏 316px 折行（改值不改键），
     // 完整句改走 applyI18n 内 JS 回填悬停（不落静态属性，见 applyI18n 注释）
     refine_panel_title: '两阶段流水线',
+    // d1013-卡D（D2026-1013-01）：AI 区英文 label/option 运行时 MSG 回填四键
+    // （index.html 零 data-i18n 新增，走 B-06 先例 MSG 运行时回填路线）
+    ai_provider_label: '分析提供方',
+    follow_stage_default: '跟随阶段 A（默认）',
+    ai_model_label: '分析模型',
+    cross_film_window: '跨片统计窗口',
     stage_a_label: '阶段A 净语+翻译（日译中）',
     stage_b_label: '阶段B 审校+抛光（中文）',
     provider_zen: 'Zen 免费',
@@ -918,6 +924,17 @@ function applyI18n() {
     document.querySelectorAll('[data-i18n="refine_panel_title"]').forEach(el => {
         el.setAttribute('title', '净语翻译 · 两阶段流水线（净语+翻译 → 审校+抛光）');
     });
+    // d1013-卡D（D2026-1013-01）：AI 区英文 label/option 运行时回填（B-06 先例）
+    // 目标：index.html:729 label[for=aiProviderSel]、:731 option[value=follow]、
+    // :740 label[for=aiModelInput]、:758 label[for=aggregateWindowSel]
+    const aiProviderLabel = document.querySelector('label[for="aiProviderSel"]');
+    if (aiProviderLabel) aiProviderLabel.textContent = MSG.ai_provider_label;
+    const followOption = document.querySelector('#aiProviderSel option[value="follow"]');
+    if (followOption) followOption.textContent = MSG.follow_stage_default;
+    const aiModelLabel = document.querySelector('label[for="aiModelInput"]');
+    if (aiModelLabel) aiModelLabel.textContent = MSG.ai_model_label;
+    const aggWindowLabel = document.querySelector('label[for="aggregateWindowSel"]');
+    if (aggWindowLabel) aggWindowLabel.textContent = MSG.cross_film_window;
 }
 
 // ============================================================
