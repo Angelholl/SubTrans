@@ -1954,6 +1954,27 @@ def test_batch_c_review_goto_asrdict_pinned():
     assert "API 与模型选择页" in src, "review_asr_card 缺「API 与模型选择页」表述"
 
 
+def test_pipeline_card_hint_here_pinned():
+    """d1013-卡1 新钉：pipelineCard 提示态惰性求值（D2026-1012-01 ⑨）。
+
+    - refreshPipelineCardHint 函数定义存在；
+    - pipelineCard 绑定了 mouseenter 与 focus 两事件且绑定行调用该函数；
+    - MSG 表含 pipeline_card_hint_here 键。
+    """
+    src = _app_js_source()
+    # 函数定义存在
+    assert "function refreshPipelineCardHint()" in src, \
+        "app.js 缺少 refreshPipelineCardHint 函数定义"
+    # 绑定 mouseenter 与 focus 事件且绑定行调用该函数
+    assert "pipelineCard.addEventListener('mouseenter', refreshPipelineCardHint)" in src, \
+        "pipelineCard 缺少 mouseenter 事件绑定"
+    assert "pipelineCard.addEventListener('focus', refreshPipelineCardHint)" in src, \
+        "pipelineCard 缺少 focus 事件绑定"
+    # MSG 表含 pipeline_card_hint_here 键
+    assert "pipeline_card_hint_here" in _js_msg_keys(), \
+        "MSG 表缺少 pipeline_card_hint_here 键"
+
+
 def _slice(text: str, start: str, end: str) -> str:
     i = text.index(start)
     j = text.index(end, i)
