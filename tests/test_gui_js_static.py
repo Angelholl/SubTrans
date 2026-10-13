@@ -5096,3 +5096,41 @@ def test_aside_collapse_behavior():
         assert _ASIDE_COLLAPSE_CLASS not in blk, (
             "app.js 存在驱动 aside 折叠的 resize 监听（禁：1240 阈值只作用"
             "启动默认，运行期不随窗口自动切换）")
+
+
+# ============================================================================
+# 真机反馈回归钉（2026-10-13 走查轮，D2026-1013-01 追记）：三项修复防回潮
+# ① 折叠入口显眼化：两钮可见边框+surface 底、收起钮右缘与首卡对齐（right:20px）
+# ② API Key 输入 grow 封顶：保存钮紧随输入框不贴行尾
+# ③ 保存接口按钮文案：去「配置」二字（MSG 值与 index.html 静态回退同步）
+# ============================================================================
+
+
+def test_realdevice_feedback_pins():
+    """真机反馈三项修复钉（折叠钮显眼+对齐 / key input 封顶 / 保存接口文案）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    # ① 两钮可见边界+surface 底（折叠入口不隐形）
+    m = re.search(
+        r"\.aside-collapse-btn,\s*\.aside-expand-btn\s*\{[^}]*\}", css)
+    assert m, "折叠两钮共规缺失"
+    blk = m.group(0)
+    assert "border: 1px solid var(--border)" in blk, (
+        "折叠两钮边框回潮为透明（入口隐形）")
+    assert "background: var(--surface)" in blk, (
+        "折叠两钮底色回潮为 bg（与 aside 同色隐形）")
+    # ①' 收起钮 right 与 aside 右 padding 对齐（20px，卡右缘齐平）
+    m2 = re.search(
+        r"\.aside-collapse-btn\s*\{[^}]*position: absolute;[^}]*\}", css)
+    assert m2 and re.search(r"right:\s*20px", m2.group(0)), (
+        "收起钮 right 偏移漂移（应 20px 与首卡右缘对齐）")
+    # ② key input grow 封顶（保存钮紧随输入框）
+    assert re.search(
+        r"#refineS1Key,\s*#refineS3Key\s*\{[^}]*max-width:\s*280px", css), (
+        "#refineS1Key/#refineS3Key 缺 max-width:280px 封顶（保存钮回潮贴行尾）")
+    # ③ 保存接口文案（MSG 值+index.html 静态回退两处）
+    js = _app_js_source()
+    assert re.search(r"save_endpoints_btn:\s*'保存接口'", js), (
+        "MSG save_endpoints_btn 文案漂移（应为「保存接口」）")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert html.count('data-i18n="save_endpoints_btn">保存接口</span>') == 2, (
+        "index.html 保存接口静态回退应恰两处且无「配置」二字")

@@ -369,7 +369,7 @@ const MSG = {
     s1_endpoint_placeholder: '阶段A 服务商的接口地址',
     s3_endpoint_label: '阶段B 地址',
     s3_endpoint_placeholder: '阶段B 服务商的接口地址',
-    save_endpoints_btn: '保存接口配置',
+    save_endpoints_btn: '保存接口',
     start_btn: '开始净语翻译',
     stop_btn: '停止',
     artifact_note: '产物命名含 .subtransjav 中间件与 *_final_cn.srt 终稿；已存在产物默认跳过',
@@ -5927,7 +5927,7 @@ function switchTab(tabId) {
   // 反向同步（批1 D2026-0930-07）：引擎页阶段A/B provider 变化后刷新
   // 快捷条显示——A/B 一致且为快捷条已知选项时跟随显示该值；否则置空
   // （中性态）。只改显示不写 settings：engine 页 provider 的持久化仍走
-  // 「保存接口配置」按钮通道，service_quick 键仅在快捷条自身变更时写。
+  // 「保存接口」按钮通道，service_quick 键仅在快捷条自身变更时写。
   function syncServiceQuickFromStages() {
     const quick = $('refineServiceQuick');
     if (!quick) return;
