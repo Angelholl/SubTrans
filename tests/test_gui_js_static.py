@@ -4825,3 +4825,44 @@ def test_console_flex_layout():
     assert m_card, "style.css 缺 #tab-translate > .card 规则"
     assert "flex: 1 1 60%;" in m_card.group(1), \
         "文件卡须 flex:1 1 60%（70% 基准已下调，与 Console 40% 配套）"
+
+
+# ---------------------------------------------------------------------------
+# d1013-卡E（回链 D2026-1013-01，三钉口径③）：W1 内联宽度趋势钉——
+# index.html 表单控件 style= 内 width/min-width 声明只允许
+# var(--w-*) 引用 + 布局性豁免白名单；白名单外 px/em 字面即红。
+# ---------------------------------------------------------------------------
+
+# 布局性豁免白名单（2026-10-13 落钉时实扫现状全冻结：
+# width:100%×1 / width:auto×3 / width:0%×1 / min-width:0×1；
+# 清单随钉冻结、只增不减）
+_INLINE_WIDTH_ALLOWLIST = ("100%", "auto", "0%", "0")
+
+
+def test_inline_width_allowlist():
+    """W1 内联宽度趋势钉（d1013-卡E / D2026-1013-01，件2 §5.2 口径③）。
+
+    计数对象：index.html 表单控件 style= 属性内 width/min-width
+    声明的 px/em 字面；允许集 = var(--w-*) 引用 + 布局性豁免
+    白名单（width:100% / width:auto / width:0% 等，落钉时实扫
+    现状列全冻结，清单随钉冻结、只增不减）；白名单外 px/em 字面
+    即红（5.5em 已由本卡改法 3 清零，落钉时无存量）。
+    先红后绿四步自证日志入 d1013-卡E 执行记录。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    violations = []
+    for s in re.finditer(r'style="([^"]*)"', html):
+        for d in re.finditer(
+                r"(?<![\w-])(min-)?width\s*:\s*([^;\"}]+)", s.group(1)):
+            prop = "min-width" if d.group(1) else "width"
+            val = d.group(2).strip()
+            if re.fullmatch(r"var\(--w-[\w-]+\)", val):
+                continue
+            if val in _INLINE_WIDTH_ALLOWLIST:
+                continue
+            violations.append(
+                f"行 {html.count(chr(10), 0, s.start()) + 1}: "
+                f"{prop}:{val}")
+    assert not violations, (
+        "白名单外内联宽度字面（应改走 var(--w-*) 引用；确需新增"
+        "布局性字面先冻结进白名单）: " + "; ".join(violations))
