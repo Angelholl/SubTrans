@@ -4017,7 +4017,7 @@ def test_style_css_no_early_comment_terminator():
 # 存量收敛属 3.1 归一包 Tier2 范围（字号 11/10px 归位需 S6 复议，见 D2026-1012-01）。
 # ============================================================================
 
-_FROZEN_FONT_PX_SMALL = 24   # font-size:11px×22 + 10px×2（style.css，2026-10-12 实测）
+_FROZEN_FONT_PX_SMALL = 0   # 已全量清零（d1013-卡A1，2026-10-13），Ref: D2026-1013-01
 _FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（token=8/12/16/pill/round）
     "9px": 5, "10px": 5, "6px": 2, "7px": 1, "4px": 1, "99px": 2, "999px": 1,
 }
@@ -4077,6 +4077,64 @@ def test_p8_no_new_component_color_literals():
     assert not new, (
         f"组件规则内出现冻结清单外的新色值字面量：{sorted(new)}——"
         "请引用语义 token（--text-*/--ok/--warn/--danger 等）或在 :root 定义新 token"
+    )
+
+
+# ============================================================================
+# d1013-卡A1 字号白名单钉（LC-3，owner 拍板钉死口径）
+# 判定面 = style.css（去 :root 块）与 index.html（内联 style 属性）的全部 font-size 声明。
+# 允许集：var(--font) / var(--font-sm) / var(--font-xs) 三档 token 引用；
+#         px 豁免清单 {15, 16, 20, 22, 30, 32, 42}px（只增不减，新增项须回终审）。
+# Ref: D2026-1013-01 LC-3
+# ============================================================================
+
+_FONT_SIZE_TOKENS = {"var(--font)", "var(--font-sm)", "var(--font-xs)"}
+_FONT_SIZE_PX_ALLOWLIST = {15, 16, 20, 22, 30, 32, 42}
+_FROZEN_INLINE_FONT_PX = 5   # index.html 内联 font-size 存量冻结（d1013-卡A1，2026-10-13 实测：11px×1+12px×2+12.5px×2）
+
+
+def test_font_size_scale_allowlist():
+    """字号白名单钉：style.css 与 index.html 全部 font-size 声明须在允许集内。
+
+    允许集：var(--font)/var(--font-sm)/var(--font-xs) 三档 token 引用；
+           px 豁免清单 {15, 16, 20, 22, 30, 32, 42}px。
+    style.css 判定面去 :root token 定义块；index.html 扫内联 style 属性中的 font-size。
+    """
+    # --- style.css 面（去 :root 块） ---
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    css_no_root = re.sub(r":root\s*\{[^}]*\}", "", css)
+    css_values = re.findall(r"font-size:\s*([^;]+);", css_no_root)
+    css_bad = []
+    for raw in css_values:
+        raw = raw.strip()
+        if raw in _FONT_SIZE_TOKENS:
+            continue
+        m = re.match(r"([\d.]+)px", raw)
+        if m and float(m.group(1)) in _FONT_SIZE_PX_ALLOWLIST:
+            continue
+        css_bad.append(raw)
+    assert not css_bad, (
+        f"style.css 出现白名单外 font-size 值：{css_bad}——"
+        "请引用 --font/--font-sm/--font-xs 或在豁免清单内（新增须回终审）"
+    )
+
+    # --- index.html 面（内联 style 属性中的 font-size） ---
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    inline_values = re.findall(r'style="[^"]*font-size:\s*([^;"]+)[;"]', html)
+    inline_frozen_count = 0
+    html_bad = []
+    for raw in inline_values:
+        raw = raw.strip()
+        if raw in _FONT_SIZE_TOKENS:
+            continue
+        m = re.match(r"([\d.]+)px", raw)
+        if m and float(m.group(1)) in _FONT_SIZE_PX_ALLOWLIST:
+            continue
+        # 非豁免 px 值走存量冻结计数（只增不减，新增即红）
+        inline_frozen_count += 1
+    assert inline_frozen_count <= _FROZEN_INLINE_FONT_PX, (
+        f"index.html 内联 font-size 非豁免 px 计数超冻结存量（{inline_frozen_count}>{_FROZEN_INLINE_FONT_PX}）："
+        "新增内联 px 字号须回终审下调冻结值"
     )
 
 
