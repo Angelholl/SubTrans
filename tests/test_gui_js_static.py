@@ -4383,6 +4383,162 @@ def test_b06_i18n_keyset_unchanged_pinned():
 
 
 # ---------------------------------------------------------------------------
+# d1013-卡D（D2026-1013-01）：中英混排——AI 区 4 处英文 label/option MSG 运行时回填
+# + 英文 label 白名单钉（LC-8 口径：白名单只增不减、新增项须回终审）
+# ---------------------------------------------------------------------------
+
+_D1013_CARD_D_MSG_KEYS = (
+    "ai_provider_label",
+    "follow_stage_default",
+    "ai_model_label",
+    "cross_film_window",
+)
+
+
+def test_d1013_card_d_msg_keys_present():
+    """MSG 表含 d1013-卡D 新增 4 键（值必须中文——test_strings_and_shortcut.py 有 MSG 全值中文钉）。"""
+    keys = _js_msg_keys()
+    for key in _D1013_CARD_D_MSG_KEYS:
+        assert key in keys, f"MSG 缺少 d1013-卡D 新键: {key}"
+        m = re.search(rf"^\s*{key}:\s*'([^']*)'", _app_js_source(), re.M)
+        assert m and m.group(1), f"MSG 键 {key} 文案为空"
+        # 值必须含中文（由 test_msg_values_are_chinese 统一钉，此处仅非空自证）
+        assert any("\u4e00" <= ch <= "\u9fff" for ch in m.group(1)), \
+            f"MSG[{key!r}] 应为中文文案: {m.group(1)!r}"
+
+
+def test_d1013_card_d_apply_i18n_backfill_calls_pinned():
+    """applyI18n 内 4 处回填调用在位（防回填被误删，照 B-06 refine_panel_title 先例）。
+
+    目标元素：index.html:729 label[for=aiProviderSel]、:731 option[value=follow]、
+    :740 label[for=aiModelInput]、:758 label[for=aggregateWindowSel]。
+    """
+    body = _extract_function(_app_js_source(), "applyI18n")
+    # 逐项 null 守卫模式（B-06 先例：const el = querySelector(...); if (el) el.textContent = MSG.key;）
+    for key, selector in (
+        ("ai_provider_label", 'label[for="aiProviderSel"]'),
+        ("follow_stage_default", '#aiProviderSel option[value="follow"]'),
+        ("ai_model_label", 'label[for="aiModelInput"]'),
+        ("cross_film_window", 'label[for="aggregateWindowSel"]'),
+    ):
+        assert f'querySelector(\'{selector}\')' in body, \
+            f"applyI18n 缺 {key} 目标定位: {selector}"
+        assert f"MSG.{key}" in body, f"applyI18n 缺 {key} 回填赋值"
+        assert "if (" in body and "textContent" in body, \
+            f"applyI18n {key} 回填须含 null 守卫"
+
+
+# 英文 label 白名单钉（LC-8 口径，回链 d1013-卡D 与 D2026-1013-01 LC-8）
+# 判定面 = index.html 文本节点（去注释/去 script/style）；
+# 同法复用 test_html_has_no_unmarked_user_visible_chinese 的解析骨架反向检测
+# 排除：含中文的节点；带 data-i18n/data-i18n-title/data-i18n-placeholder 属性元素内的文本
+# 允许集（静态写死、只增不减、新增项须回终审）：
+#   - 4 处回填前静态字面：Analysis provider / Follow stage A (default) / Analysis model / Cross-film window
+#   - owner 拍板保留：API Key（:253/:297 两处）
+#   - 品牌 option：DeepSeek API / LM Studio (local) / Ollama (local) / SiliconFlow / Zen (free)
+# 白名单外英文文本节点（含 ≥2 连续拉丁字母）即红；&times; 等 HTML 实体不算。
+
+_D1013_EN_ALLOWLIST = frozenset({
+    # d1013-卡D 4 处回填前静态字面
+    "Analysis provider",
+    "Follow stage A (default)",
+    "Analysis model",
+    "Cross-film window",
+    # owner 拍板保留
+    "API Key",
+    # 品牌 option
+    "DeepSeek API",
+    "LM Studio (local)",
+    "Ollama (local)",
+    "SiliconFlow",
+    "Zen (free)",
+})
+
+
+def _iter_html_text_nodes_for_en_allowlist():
+    """遍历 index.html 用户可见文本节点，产出 (文本, 所在标签属性字典, 行号)。
+
+    照既有钉 test_html_has_no_unmarked_user_visible_chinese 的解析骨架反向复用：
+    - 去注释、去 script/style
+    - 文本节点含 ≥2 连续拉丁字母 → 候选
+    - 排除：含中文的节点；所在标签带 data-i18n/data-i18n-title/data-i18n-placeholder
+    - HTML 实体（&...;）不计入拉丁字母判定
+    """
+    import html.parser
+
+    html_text = INDEX_HTML.read_text(encoding="utf-8")
+    # 去注释
+    html_text = re.sub(r"<!--.*?-->", "", html_text, flags=re.S)
+    # 去 script/style 标签及内容
+    html_text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html_text, flags=re.S | re.I)
+
+    class EnTextCollector(html.parser.HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.results = []
+            self.stack = []  # [(tag, attrs_dict)]
+
+        def handle_starttag(self, tag, attrs):
+            if tag in ("script", "style"):
+                return
+            self.stack.append((tag, dict(attrs)))
+
+        def handle_endtag(self, tag):
+            if tag in ("script", "style"):
+                return
+            for i in range(len(self.stack) - 1, -1, -1):
+                if self.stack[i][0] == tag:
+                    del self.stack[i:]
+                    break
+
+        def handle_data(self, data):
+            if not data.strip():
+                return
+            cur_attrs = self.stack[-1][1] if self.stack else {}
+            pos = self.getpos()
+            self.results.append((data, cur_attrs, pos[0]))
+
+        def handle_entityref(self, name):
+            pass
+
+    parser = EnTextCollector()
+    parser.feed(html_text)
+    parser.close()
+    return parser.results
+
+
+def test_html_en_text_allowlist():
+    """index.html 英文 label 白名单钉（LC-8 口径，回链 d1013-卡D 与 D2026-1013-01 LC-8）。
+
+    判定面 = index.html 文本节点（去注释/去 script/style）；
+    排除：含中文的节点；带 data-i18n/data-i18n-title/data-i18n-placeholder 属性元素内的文本。
+    允许集：_D1013_EN_ALLOWLIST（静态写死、只增不减、新增项须回终审）。
+    白名单外英文文本节点（含 ≥2 连续拉丁字母）即红；&times; 等 HTML 实体不算。
+    """
+    violations = []
+    for text, attrs, line_no in _iter_html_text_nodes_for_en_allowlist():
+        # 排除：含中文
+        if re.search(r"[\u4e00-\u9fff]", text):
+            continue
+        # 排除：所在标签带 data-i18n*
+        if any(k in attrs for k in ("data-i18n", "data-i18n-title", "data-i18n-placeholder")):
+            continue
+        # 去除 HTML 实体（&...;）后检测 ≥2 连续拉丁字母
+        plain = re.sub(r"&[a-zA-Z0-9#]+;", "", text)
+        if re.search(r"[A-Za-z]{2,}", plain):
+            # 归一化：连续空白折叠、首尾去空
+            norm = re.sub(r"\s+", " ", plain).strip()
+            # 允许集精确匹配（全字符串）
+            if norm not in _D1013_EN_ALLOWLIST:
+                violations.append(f"行 {line_no}: {norm!r}（标签属性: {attrs}）")
+
+    assert not violations, (
+        "index.html 存在白名单外英文文本节点（LC-8：白名单只增不减、新增项须回终审；"
+        "回链 d1013-卡D 与 D2026-1013-01 LC-8）：\n" + "\n".join(violations)
+    )
+
+
+# ---------------------------------------------------------------------------
 # 卡9 B-07（D2026-1012-01，阶段 2 首批）：checkbox → toggle 滑块（纯 CSS）——
 # accent-color 原生方案删净；appearance:none 轨道 + ::before 圆形滑块 +
 # :checked 位移变色；只用既有 token（零新字面色值，P8 钉3 口径）；
