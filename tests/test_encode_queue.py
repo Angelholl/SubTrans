@@ -271,6 +271,10 @@ def test_finalize_phase_not_killed_before_deadline(tmp_path, fake_env, monkeypat
     accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
     job = accepted[0]
     assert wait_until(lambda: job.progress >= 99, clock=clock)
+    # 重锚假钟：进度就位时刻=轮询次数×5s/轮（千倍实速），全量负载下生产者
+    # 迟滞十几轮即可让假钟漂过 120s deadline 致误杀假红（2026-10-13 全量
+    # 实捕 1 例，单跑即绿）。就位后回到起点再推 60s，语义与注释不变。
+    clock.t = 1000.0
     clock.advance(60.0)  # 收尾相内 60s < deadline 120s：不得杀
     time.sleep(0.05)
     assert job.state == "running"
