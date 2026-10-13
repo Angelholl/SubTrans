@@ -4122,7 +4122,6 @@ def test_font_size_scale_allowlist():
     html = INDEX_HTML.read_text(encoding="utf-8")
     inline_values = re.findall(r'style="[^"]*font-size:\s*([^;"]+)[;"]', html)
     inline_frozen_count = 0
-    html_bad = []
     for raw in inline_values:
         raw = raw.strip()
         if raw in _FONT_SIZE_TOKENS:
