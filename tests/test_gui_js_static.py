@@ -5186,3 +5186,64 @@ def test_output_dir_in_pipeline_card():
     for ev in ("click", "keydown"):
         assert re.search(r"addEventListener\(\s*['\"]" + ev + r"['\"]", seg), \
             f".destination-section 阻断块未对 {ev} 事件阻断冒泡（{ev} 仍误触 switchTab）"
+
+
+# ============================================================================
+# 卡K（D2026-1013-01 真机反馈 IA 重排轮）：流水线卡整卡点击统一过滤
+# ============================================================================
+
+
+def test_pipeline_card_click_filter():
+    """d1013-卡K 新钉（D2026-1013-01 追记；评议员 HRO② 裁定：统一过滤改写进
+    既有监听体，另挂监听拦不住先注册的跳转监听）：
+
+    ①pipelineCard click 监听体含统一过滤清单串——两自动化开关 label、
+      .encode-params-link、输出区 .destination-section 等交互元素不触发
+      整卡跳转（散点 stopPropagation 收敛为单一入口过滤）；
+    ②click 与 keydown 两监听体均含 instanceof Element 守卫，且 click 体
+      switchTab('tab-engine') 仍在（只读空白区点击仍跳转的语义保留）；
+    ③卡I 既有 .destination-section click+keydown stopPropagation 阻断块
+      原样保留（防回潮双保险，:5176 区 test_output_dir_in_pipeline_card
+      主钉已锁）。
+
+    先红后绿自证：先落本钉不动 app.js 时红（既有监听体无过滤清单/守卫）；
+    完成卡K 改法 1-2 后转绿。
+    """
+    js = _app_js_source()
+    m = re.search(r"pipelineCard\.addEventListener\(\s*['\"]click['\"]", js)
+    assert m, "app.js 缺 pipelineCard click 监听（整卡跳转入口）"
+    click_body = _js_block_from(js, js.index("{", m.end()))
+    m2 = re.search(r"pipelineCard\.addEventListener\(\s*['\"]keydown['\"]", js)
+    assert m2, "app.js 缺 pipelineCard keydown 监听（键盘跳转入口）"
+    keydown_body = _js_block_from(js, js.index("{", m2.end()))
+
+    filter_list = (
+        "button, input, label, a, select, textarea, .path-row, "
+        ".destination-section, .encode-auto-row, .fullchain-auto-row, "
+        ".encode-params-link")
+    assert filter_list in click_body, (
+        "pipelineCard click 监听体缺统一过滤清单串（勾开关/点参数/开输出区"
+        "仍连带跳引擎页）: "
+        f"{click_body[:200]}")
+    assert filter_list in keydown_body, (
+        "pipelineCard keydown 监听体缺统一过滤清单串（键盘激活交互元素"
+        "仍误触整卡跳转）")
+    assert "instanceof Element" in click_body, \
+        "click 监听体缺 instanceof Element 守卫（非元素 target 会抛错）"
+    assert "instanceof Element" in keydown_body, (
+        "keydown 监听体缺 instanceof Element 守卫（卡片聚焦时 e.target"
+        " 可能是卡片本身）")
+    assert "switchTab('tab-engine')" in click_body, \
+        "click 监听体 switchTab('tab-engine') 被删（只读区点击跳转语义丢失）"
+    assert "switchTab('tab-engine')" in keydown_body, \
+        "keydown 监听体 switchTab('tab-engine') 被删（Enter 跳转语义丢失）"
+
+    # 卡I 双保险：destination-section click+keydown stopPropagation 阻断块仍在
+    dm = re.search(r"querySelector\(\s*['\"]\.destination-section['\"]", js)
+    assert dm, "app.js 缺 .destination-section 阻断块（卡I 既有阻断被删）"
+    dseg = _js_block_from(js, js.index("{", dm.end()))
+    assert "stopPropagation" in dseg, \
+        ".destination-section 阻断块缺 stopPropagation（卡I 钉 :5176 回潮）"
+    for ev in ("click", "keydown"):
+        assert re.search(r"addEventListener\(\s*['\"]" + ev + r"['\"]", dseg), \
+            f".destination-section 阻断块未对 {ev} 事件阻断冒泡（卡K 不得删卡I 钉）"

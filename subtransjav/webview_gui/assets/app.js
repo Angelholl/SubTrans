@@ -9168,8 +9168,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 卡 3 整卡跳转引擎页（只读镜像的修改入口）
     const pipelineCard = document.getElementById('pipelineCard');
     if (pipelineCard) {
-        pipelineCard.addEventListener('click', () => switchTab('tab-engine'));
+        pipelineCard.addEventListener('click', (e) => {
+            // 卡K（D2026-1013-01 真机反馈）：交互元素不触发整卡跳转（统一入口过滤）
+            const target = e.target;
+            if (target instanceof Element && target.closest(
+                    'button, input, label, a, select, textarea, .path-row, .destination-section, .encode-auto-row, .fullchain-auto-row, .encode-params-link')) {
+                return;
+            }
+            switchTab('tab-engine');
+        });
         pipelineCard.addEventListener('keydown', (e) => {
+            // 卡K（D2026-1013-01 真机反馈）：同一过滤——键盘激活交互元素不跳转；
+            // 卡片本身聚焦时 Enter 仍跳（closest 不命中交互元素即放行）
+            const target = e.target;
+            if (target instanceof Element && target.closest(
+                    'button, input, label, a, select, textarea, .path-row, .destination-section, .encode-auto-row, .fullchain-auto-row, .encode-params-link')) {
+                return;
+            }
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 switchTab('tab-engine');
