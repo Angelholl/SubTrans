@@ -4019,7 +4019,7 @@ def test_style_css_no_early_comment_terminator():
 
 _FROZEN_FONT_PX_SMALL = 0   # 已全量清零（d1013-卡A1，2026-10-13），Ref: D2026-1013-01
 _FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（token=8/12/16/pill/round）
-    "9px": 5, "10px": 5, "6px": 2, "7px": 1, "4px": 1, "99px": 2, "999px": 1,
+    "9px": 0, "10px": 0, "6px": 0, "7px": 0, "4px": 0, "99px": 0, "999px": 0,
 }
 _FROZEN_COLOR_DISTINCT = {   # 组件规则内色值字面量（:root token 定义不计数）
     "#fff", "rgba(59,130,246,.35)", "rgba(37,99,235,.3)", "rgba(0, 0, 0, 0.5)",
@@ -4069,7 +4069,70 @@ def test_p8_no_new_border_radius_values():
         )
 
 
-def test_p8_no_new_component_color_literals():
+# ============================================================================
+# d1013-卡C 间距趋势钉（gap 49 分量映射）
+# 判定面 = style.css 组件区 gap / row-gap / column-gap 声明的每个 px 分量值
+#（双值声明两分量各计）。非 px 形态（0 / auto / 百分比 / flex 值）不计数；
+# :root 定义块内不计数。允许集：{var(--space-hair), var(--space-1), ..., var(--space-6)};
+# 字面保留清单 = 空（本卡已将 4px/8px 字面全部映射为 var()）。
+# Ref: D2026-1013-01 间距圆角归一
+# ============================================================================
+
+
+def test_gap_scale_allowlist():
+    """gap 趋势钉：style.css 组件区 gap/row-gap/column-gap 每个 px 分量须在允许集内。
+
+    允许集：{var(--space-hair), var(--space-1), var(--space-2), var(--space-3),
+    var(--space-4), var(--space-5), var(--space-6)};
+    字面保留清单 = 空（本卡已将 4px/8px 字面全部映射为 var()）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    # 提取组件区 gap/row-gap/column-gap 声明，去除 :root 定义块
+    css_scope = re.sub(r":root\s*\{[^}]*\}", "", css)
+    # 提取每个 decl 的值部分（= ; 之前的内容）
+    raw_vals = re.findall(r"(gap|row-gap|column-gap):\s*([^;]+);", css_scope)
+    bad = []
+    for decl, raw in raw_vals:
+        raw = raw.strip()
+        # 跳过已经是 var() 的值
+        if raw.startswith("var("):
+            continue
+        # 只关注 px 分量的字面值
+        m = re.match(r"(\d+(?:\.\d+)?)px\s*(.*)", raw)
+        if not m:
+            # 非 px 形态（如 0, auto, %, flex 等）不计数
+            continue
+        px_val = m.group(1)
+        # 双值声明如 gap: 4px 10px，两个分量都要检查
+        remainder = m.group(2).strip()
+        # 检查主分量
+        if px_val not in {"var(--space-hair)", "var(--space-1)", "var(--space-2)",
+                          "var(--space-3)", "var(--space-4)", "var(--space-5)", "var(--space-6)"}:
+            main_bad = True
+        else:
+            main_bad = False
+        # 如果有 remainder，检查第二个分量
+        if remainder:
+            m2 = re.match(r"(\d+(?:\.\d+)?)px\s*(.*)", remainder)
+            if m2:
+                px_val2 = m2.group(1)
+                if px_val2 not in {"var(--space-hair)", "var(--space-1)", "var(--space-2)",
+                                   "var(--space-3)", "var(--space-4)", "var(--space-5)", "var(--space-6)"}:
+                    main_bad = True
+                else:
+                    main_bad = False
+            else:
+                main_bad = True
+        if main_bad:
+            bad.append(f"{decl}: {raw}")
+    assert not bad, (
+        f"style.css 组件区出现 gap 字面 px 值（不在允许集）：{bad}——"
+        "允许集：{var(--space-hair), var(--space-1), ..., var(--space-6)}"
+    )
+
+
+# ============================================================================
+# d1013-卡A1 字号白名单钉（LC-3，owner 拍板钉死口径）
     """钉3：组件规则内色值字面量不得出现冻结清单外的新值（:root 定义不计数）。"""
     scope = _style_css_component_scope()
     actual = set(re.findall(r"(#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\))", scope))
