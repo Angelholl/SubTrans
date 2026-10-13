@@ -61,3 +61,41 @@
 ## 执行记录
 
 （执行者追加）
+
+### 2026-10-13 执行记录
+
+**改动文件（仅卡片点名的 2 个）**：
+1. `subtransjav/webview_gui/assets/index.html` — 删内联 font-size 5 处（:517 `11px`、:519 `12px`、:647 `12px`、:1071 `12.5px`、:1080 `12.5px`）；:519 顺手项 `font-family:Consolas,monospace` → `var(--font-mono)`
+2. `subtransjav/webview_gui/assets/style.css` — 末尾追加 5 条规则：`#refineTplLoadedPath` / `#refineTemplateText` / `.fullchain-status-line` / `.encode-auto-row` / `.fullchain-auto-row` 均 `font-size: var(--font-xs)`
+
+**落点裁量注明**：
+- 件1（:517）：规格写「删内联键随类走 var(--font-xs)」，但 `.muted` 实为 `var(--font-sm)`（13px），随类落与渲染声明「+1px 放大」（12px）不符——按主审裁量落 id 级规则 `#refineTplLoadedPath { font-size: var(--font-xs); }` 兑现 12px。
+- 件2（:519）：`.form-input` 全局类禁止改动，落 id 级规则 `#refineTemplateText { font-size: var(--font-xs); }`。
+
+**先红后绿回归测试（四步日志）**：
+
+步骤1（注入法红相）：临时在 `<summary style="cursor:pointer; ...">` 注入 `font-size:11px;`，跑 `test_font_size_scale_allowlist`：
+```
+FAILED tests/test_gui_js_static.py::test_font_size_scale_allowlist
+AssertionError: index.html 内联 font-size 非豁免 px 计数超冻结存量（6>5）：新增内联 px 字号须回终审下调冻结值
+assert 6 <= 5
+```
+
+步骤2：还原注入（删除注入的 `font-size:11px;`）。
+
+步骤3：完成改法 1-4 → 跑钉断言绿：
+```
+python -m pytest tests/test_gui_js_static.py::test_font_size_scale_allowlist -q → 1 passed
+```
+
+**验收标准结果**：
+
+1. `ruff check subtransjav tests` → **All checks passed!** ✓
+2. `grep -c "font-size: *[0-9.]*px" subtransjav/webview_gui/assets/index.html` → **0** ✓
+3. `grep -c "font-family: *Consolas" subtransjav/webview_gui/assets/index.html` → **0** ✓
+4. `python -m pytest tests/test_gui_js_static.py tests/test_ui_phase3_redlines.py -q --basetemp=.pytest_card` → **170 passed** ✓
+5. `python -m pytest tests/ -q --basetemp=.pytest_card` → **2073 passed, 46 failed, 18 skipped**；46 failed 全部为 `ModuleNotFoundError: No module named 'pysubs2'`（假失败，主审 .venv 复核）
+6. `python -m subtransjav.refine.cli --help` → **退出码 0** ✓
+7. GUI 黑盒由主审验收时另跑，执行者不跑。
+
+**遗留问题**：无。白名单钉 index.html 段冻结计数 5→0 的收紧由卡B 顺带（本卡未改 tests）。
