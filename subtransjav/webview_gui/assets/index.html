@@ -1038,38 +1038,6 @@
                     </span>
                 </div>
 
-                <!-- 输出目录（真机反馈 IA 重排：自卡2 整卡迁入运行控制卡——
-                     选服务→选目录→开始同卡使用流；原卡2 容器删除，
-                     section 内部结构/id/data-i18n 键原样零变） -->
-                <section class="section destination-section">
-                    <div class="section-header">
-                        <h2 data-i18n="output_header">输出目录</h2>
-                    </div>
-                    <div class="section-content">
-                        <div class="output-source-toggle">
-                            <input type="checkbox" id="outputToSource" checked>
-                            <label for="outputToSource" data-i18n="save_to_source_dir">保存到字幕同目录</label>
-                        </div>
-                        <div class="path-row">
-                            <label for="outputDir" class="path-row-label" data-i18n="output_label">输出:</label>
-                            <input
-                                type="text"
-                                id="outputDir"
-                                class="output-path"
-                                readonly
-                                data-i18n-placeholder="output_placeholder"
-                                placeholder="输出目录..."
-                            >
-                            <button type="button" class="btn btn-secondary" id="browseOutputBtn" data-i18n="browse_btn">
-                                浏览
-                            </button>
-                            <button type="button" class="btn btn-ghost" id="openOutputBtn" data-i18n="open_btn">
-                                打开
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
             </div>
 
             <!-- 卡3：两阶段流水线只读镜像（D2026-0930-09：整卡点击跳引擎页，无双向同步） -->
@@ -1099,8 +1067,42 @@
                      零 id 零静态 data-i18n，文案 EncodeDock.init JS 态承接 -->
                 <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link" style="margin-top:4px;"></button>
 
+                <!-- 输出目录已并入本卡（真机反馈第二轮，D2026-1013-01 追记 / 卡I：
+                     自卡2 → 卡1（9ae5c9a）→ 本卡，owner 图示指明整合位为
+                     「两阶段流水线」卡参数入口/产物命名区域；section 内部
+                     结构/id/data-i18n 键原样零变，交互冒泡由 app.js 阻断，
+                     不触发本卡整卡跳转） -->
+                <section class="section destination-section">
+                    <div class="section-header">
+                        <h2 data-i18n="output_header">输出目录</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="output-source-toggle">
+                            <input type="checkbox" id="outputToSource" checked>
+                            <label for="outputToSource" data-i18n="save_to_source_dir">保存到字幕同目录</label>
+                        </div>
+                        <div class="path-row">
+                            <label for="outputDir" class="path-row-label" data-i18n="output_label">输出:</label>
+                            <input
+                                type="text"
+                                id="outputDir"
+                                class="output-path"
+                                readonly
+                                data-i18n-placeholder="output_placeholder"
+                                placeholder="输出目录..."
+                            >
+                            <button type="button" class="btn btn-secondary" id="browseOutputBtn" data-i18n="browse_btn">
+                                浏览
+                            </button>
+                            <button type="button" class="btn btn-ghost" id="openOutputBtn" data-i18n="open_btn">
+                                打开
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- 真机反馈 IA 重排：featureStatus（语法提示 badge）已迁至卡1
-                     运行控制卡；本卡保留流水线镜像+自动化开关+参数入口+产物命名 -->
+                     运行控制卡；本卡保留流水线镜像+自动化开关+参数入口+输出目录+产物命名 -->
 
                 <span class="muted footnote" data-i18n="artifact_note">
 

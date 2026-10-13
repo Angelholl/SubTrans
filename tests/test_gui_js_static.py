@@ -5134,3 +5134,52 @@ def test_realdevice_feedback_pins():
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert html.count('data-i18n="save_endpoints_btn">保存接口</span>') == 2, (
         "index.html 保存接口静态回退应恰两处且无「配置」二字")
+
+
+# ============================================================================
+# 卡I（D2026-1013-01 真机反馈 IA 重排第二轮）：输出目录整块并入卡3 流水线卡
+# ============================================================================
+
+
+def test_output_dir_in_pipeline_card():
+    """卡I 位置钉（d1013-卡I / D2026-1013-01 追记，前序 9ae5c9a 误入卡1 的纠正）：
+
+    ①index.html 中 destination-section 恰 1 处，且位于 id="pipelineCard" 之后、
+      id="systemSummaryCard" 之前（= 卡3「两阶段流水线」卡内，owner 图示指明位）；
+    ②卡1 区段（文档起点至 id="pipelineCard" 之间）不再含 destination-section，
+      且 #featureStatus 仍留在卡1 原位（语法提示 badge 不随迁）；
+    ③app.js 对 .destination-section 挂 click + keydown 两个 stopPropagation
+      阻断（卡3 系整卡点击跳引擎页的链接卡，不阻断则浏览/打开/开关/输入
+      一律冒泡劫持跳转）。
+
+    先红后绿自证：先落本钉不动 index.html/app.js 时，①②红（destination-section
+    仍在卡1、卡1 区段仍含之）；完成改法 1-3 后转绿。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert html.count("destination-section") == 1, (
+        "index.html 中 destination-section 应恰出现 1 次（整块迁入不复制不残留）: "
+        f"{html.count('destination-section')}")
+    card3 = html.index('id="pipelineCard"')
+    card4 = html.index('id="systemSummaryCard"')
+    dest = html.index("destination-section")
+    assert card3 < dest < card4, (
+        "destination-section 未落在卡3 pipelineCard 与 systemSummaryCard 之间"
+        f"（实际下标 dest={dest}, card3={card3}, card4={card4}）")
+    card1 = html[:card3]
+    assert "destination-section" not in card1, \
+        "卡1 运行控制卡仍含 destination-section（输出目录应整块迁至卡3）"
+    assert 'id="featureStatus"' in card1, \
+        "#featureStatus 须保留在卡1 原位（语法提示 badge 不随输出目录迁至卡3）"
+
+    # app.js：整卡跳转劫持阻断（click 与 keydown 两事件各一 stopPropagation）
+    js = _app_js_source()
+    m = re.search(r"querySelector\(\s*['\"]\.destination-section['\"]", js)
+    assert m, "app.js 缺 .destination-section 选择器（整卡跳转冒泡未阻断）"
+    i = m.start()
+    assert js.index("function refreshPipelineCardHint") < i, \
+        ".destination-section 阻断块须挂在 pipelineCard 绑定区（refreshPipelineCardHint 之后）"
+    seg = _js_block_from(js, js.index("{", m.end()))
+    assert "stopPropagation" in seg, \
+        ".destination-section 阻断块缺 stopPropagation（点击仍冒泡触发整卡跳转）"
+    for ev in ("click", "keydown"):
+        assert re.search(r"addEventListener\(\s*['\"]" + ev + r"['\"]", seg), \
+            f".destination-section 阻断块未对 {ev} 事件阻断冒泡（{ev} 仍误触 switchTab）"
