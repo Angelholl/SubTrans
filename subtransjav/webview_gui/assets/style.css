@@ -135,6 +135,9 @@
     --w-full: 100%;                /* full-width inline token */
     --w-templates-label: 80px;     /* templates dir label min-width */
     --w-min: 0px;                  /* flex min-width reset */
+
+    /* 行高（d1013-卡B 6 档收敛三值：1.55 / --lh-tight / 字面 1） */
+    --lh-tight: 1.25;              /* 单行紧凑 chip 行高（D2026-1013-01） */
 }
 
 /* ============================================================
@@ -224,7 +227,7 @@ button:focus { outline: none; }
     font-size: var(--font-sm);
     font-weight: 650;
     letter-spacing: -.2px;
-    line-height: 1.25;
+    line-height: var(--lh-tight);
     min-width: 0;
 }
 
@@ -312,8 +315,9 @@ button:focus { outline: none; }
     border: none;
     width: 30px;
     height: 30px;
-    line-height: 30px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 15px;
     cursor: pointer;
     border-radius: var(--radius-sm);
@@ -359,7 +363,7 @@ button:focus { outline: none; }
 .rail-foot-note {
     font-size: var(--font-xs);
     color: var(--text-3);
-    line-height: 1.5;
+    line-height: 1.55;
 }
 .rail-foot-note a { color: var(--primary); text-decoration: none; }
 .rail-foot-note a:hover { text-decoration: underline; }
@@ -1065,7 +1069,7 @@ input[type="checkbox"]:focus-visible {
     margin-top: 2px;
     font-family: var(--font-mono);
     font-size: var(--font-xs);
-    line-height: 1.5;
+    line-height: 1.55;
     color: var(--text-1);
     overflow-wrap: anywhere;
     word-break: normal;
@@ -1253,7 +1257,7 @@ input[type="checkbox"]:focus-visible {
 /* 未适配 banner（全面板唯一长文案位） */
 .mp-banner {
     font-size: var(--font-xs);
-    line-height: 1.6;
+    line-height: 1.55;
     padding: 6px 10px;
     border: 1px solid var(--border);
     border-left: 3px solid var(--warn);
@@ -1308,7 +1312,8 @@ input[type="checkbox"]:focus-visible {
     border-radius: var(--radius-pill);
     border: 1px solid var(--border);
     font-size: var(--font-xs);
-    line-height: 1.6;
+    line-height: var(--lh-tight);
+    white-space: nowrap;
     flex: none;
 }
 .mp-chip-ready   { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
@@ -1578,7 +1583,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     color: var(--primary-strong);
     font-size: var(--font-xs);
     font-weight: 600;
-    line-height: 1.6;
+    line-height: var(--lh-tight);
     white-space: nowrap;
     cursor: default;
 }
@@ -2138,7 +2143,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 .about-section p {
     font-size: var(--font-sm);
-    line-height: 1.6;
+    line-height: 1.55;
     color: var(--text-2);
     margin-bottom: 6px;
 }
