@@ -584,9 +584,11 @@ button:focus { outline: none; }
 
 /* 文件卡弹性内滚（A案 批1）：卡片区填充分区剩余高度，列表容器内滚——
    弹性链路 #tab-translate > .card → .file-list-container → .file-list
-   批3（D2026-1002-12）：高度分配改比例制——文件卡吃 70%，Console 吃 30% */
+   批3（D2026-1002-12）：高度分配改比例制——文件卡吃 70%，Console 吃 30%
+   卡F（D2026-1013-01）：基准下调至文件卡 60% / Console 40%（与
+   .console-collapsible 规则配套） */
 #tab-translate > .card {
-    flex: 1 1 70%;
+    flex: 1 1 60%;
     display: flex;
     flex-direction: column;
     min-height: 0;          /* 允许收缩，容器内滚生效前提 */
@@ -735,8 +737,14 @@ button:focus { outline: none; }
 /* ============================================================
    7. 控制台（保留深色 + 圆角 + 内边距）
    ============================================================ */
+/* 卡F（D2026-1013-01）：flex:1 → flex:0 0 auto——本类三处挂载
+   （index.html:175 translate Console / :648 guide viewer / :698 AI 分析卡）
+   此前被撑高分配余量：guide 首卡内容全在闭合 details 内 → 380px 纯白空盒。
+   改自然高后 guide 两卡与 AI 分析卡回归内容高、余量沉 .main 页尾；
+   translate 的弹性由 #tab-translate .console-collapsible 前缀规则显式承接
+   （特异性 1-3-0 覆盖本条 0-1-0），空态支路两规则零改动。 */
 .console-section {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     margin-bottom: 0;
@@ -803,15 +811,16 @@ button:focus { outline: none; }
 .console-activity:empty { display: none; }
 
 /* 折叠行为（.console-section 族，app.js toggle .collapsed）
-   A案 批1（R1）：Console 保底高度 + 上限——max-height 钉死防 flex:1
-   无上限挤压文件区；类仅 tab-translate 使用（grep 实证），作用域收敛为
-   #tab-translate 前缀。批3（D2026-1002-12）：高度分配改比例制——
-   文件卡 70% / Console 30%（150px 保底 / 300px 上限），
+   A案 批1（R1）：Console 保底高度；类仅 tab-translate 使用（grep 实证），
+   作用域收敛为 #tab-translate 前缀。批3（D2026-1002-12）：高度分配改
+   比例制。卡F（D2026-1013-01）：比例制调为 文件卡 60% / Console 40%
+   且 grow=1（余量吃得进→消底部 228px 空白）；max-height 硬顶废除
+   （380px 是 D2026-1010-01 卡3 上调残值，大窗日志被截断），超量交既有
+   内滚承接（.console-output overflow-y:auto + min-height:0）；
    .console-output 本体高度全交此处（min-height:0 防双滚动） */
 #tab-translate .console-collapsible:not(.collapsed) {
-    flex: 0 1 30%;
+    flex: 1 1 40%;
     min-height: 180px;   /* 卡3（D2026-1010-01）：150→180 */
-    max-height: 380px;   /* 卡3（D2026-1010-01）：300→380（随活动流加高） */
 }
 .console-collapsible.collapsed { flex: 0 0 auto; }
 .console-collapsible.collapsed .console-output { display: none; }

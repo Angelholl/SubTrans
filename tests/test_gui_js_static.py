@@ -1014,13 +1014,15 @@ def test_batch3_ai_config_row_field_cols_pinned():
 
 
 def test_batch3_console_ratio_and_section_overflow_pinned():
-    """②主页 Console 与文件列表 70/30 比例分配 + 空态收敛（数值逐字冻结）。
+    """②主页 Console 与文件列表比例分配 + 空态收敛（数值逐字冻结）。
 
     - .section 补 overflow:hidden（收敛双层圆角不同心）；
     - .console-output 圆角降为 --radius-sm、min-height:0（高度全交外层，
       180/420 定高删除）；
-    - #tab-translate > .card 70% / .console-collapsible:not(.collapsed)
-      30%（保底/上限：原 150/300 → D2026-1010-01 卡3 改 180/380）；
+    - #tab-translate > .card 60% / .console-collapsible:not(.collapsed) 40%
+      （保底 180px 保留）；**上限 380px 已于卡F（D2026-1013-01）废除**——
+      原 70/30 + 150/300 → D2026-1010-01 卡3 改 180/380 → D2026-1013-01
+      改 60/40 + 废上限（380 硬顶截断日志 + grow=0 吃不进余量）；
     - 空态（:not(.has-files)）文件卡退出比例分配且列表容器不滚动。
     """
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
@@ -1034,13 +1036,18 @@ def test_batch3_console_ratio_and_section_overflow_pinned():
     assert "min-height: 180px" not in m.group(0) \
         and "max-height: 420px" not in m.group(0), \
         ".console-output 定高未删净"
-    assert "flex: 1 1 70%;" in css, "文件卡 70% 比例缺失"
-    # 30% 比例制保留；150/300 → 180/380（D2026-1010-01 卡3，owner 令
-    # 「高度加一点」的规格变更，决策已归档 docs/decision-log.md）
+    assert "flex: 1 1 60%;" in css, "文件卡 60% 比例缺失"
+    # 40% 比例制 + 保底 180px 保留；380px 上限随卡F（D2026-1013-01）废除
+    # （150/300 → D2026-1010-01 卡3 改 180/380 → 卡F 废上限，决策已归档
+    # docs/decision-log.md D2026-1013-01）
     assert re.search(
         r"#tab-translate \.console-collapsible:not\(\.collapsed\) \{"
-        r"[^}]*flex: 0 1 30%;[^}]*min-height: 180px;[^}]*max-height: 380px;",
-        css), "Console 30%/180/380 数值漂移"
+        r"[^}]*flex: 1 1 40%;[^}]*min-height: 180px;",
+        css), "Console 40%/180 数值漂移"
+    assert not re.search(
+        r"#tab-translate \.console-collapsible:not\(\.collapsed\) \{"
+        r"[^}]*max-height:", css), \
+        "Console 整区上限未删净（380px 硬顶已于卡F D2026-1013-01 废除）"
     assert "#tab-translate:not(.has-files) > .card { flex: 0 0 auto; }" in css, \
         "缺空态文件卡收敛规则"
     assert re.search(
@@ -3922,8 +3929,10 @@ def test_console_section_layout_column_and_height_pins():
     """D2026-1010-01 卡3 钉：Console 面板布局——.console-section 族已有
     两次连带横排前科（2.6.2 批3 #refineAiAnalyzeSection、2.7.3 件⑧活动流
     三兄弟节点被 style.css:478 行向 flex 横排=owner 反馈「宽度太短/比例
-    畸形」根因），钉列向修复防回退；高度加码钉（活动流 200px/整区
-    380px 上限）。"""
+    畸形」根因），钉列向修复防回退；高度加码钉（活动流 200px 上限 +
+    Console 整区保底 180px）。**整区 380px 上限已由卡F（D2026-1013-01）
+    废除**（硬顶截断日志+grow=0 吃不进余量），本钉改钉 40% 比例制 +
+    上限不得回潮。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     m = re.search(r"\.console-section \.section-content\s*\{([^}]*)\}", css)
     assert m, "style.css 缺 .console-section .section-content 规则"
@@ -3936,7 +3945,10 @@ def test_console_section_layout_column_and_height_pins():
         r"#tab-translate \.console-collapsible:not\(\.collapsed\)"
         r"\s*\{([^}]*)\}", css)
     assert mc, "style.css 缺 Console 整区高度规则"
-    assert "max-height: 380px" in mc.group(1), "Console 整区上限 380px"
+    assert "max-height" not in mc.group(1), \
+        "Console 整区不得回潮 max-height 硬顶（卡F D2026-1013-01 已废）"
+    assert "flex: 1 1 40%;" in mc.group(1), \
+        "Console 整区比例 40%（与文件卡 60% 配套，grow 必须为 1）"
     assert "min-height: 180px" in mc.group(1), "Console 整区保底 180px"
 
 
@@ -4770,3 +4782,46 @@ def test_b10_zero_new_id_zero_new_key_pinned():
         assert re.search(
             r'<div class="tab-page[^>]*\bid="' + re.escape(ctl) + r'"', html), \
             f"aria-controls 引用了不存在的既有 id: {ctl}"
+
+
+# ---------------------------------------------------------------------------
+# 卡F（回链 D2026-1013-01 / 规格=docs/design/d1013-S6复议-布局表面卷.md §1）：
+# 高度弹性四改同根因（高度未做弹性分配）——translate Console grow=0
+# （flex:0 1 30%）吃不进余量致底部 228px 空白；max-height:380px 硬顶截断
+# 日志（D2026-1010-01 卡3「高度加一点」的上调残值）；.console-section{flex:1}
+# 连带撑高 guide 两卡与 AI 分析卡（guide 首卡内容全在闭合 details 内 →
+# 380px 纯白空盒）。本钉逐条锁死改后值：40%/60% 比例制 + 380 硬顶已废 +
+# .console-section 回归自然高。
+# ---------------------------------------------------------------------------
+
+def test_console_flex_layout():
+    """卡F 布局钉（D2026-1013-01）：translate 文件卡 60% / Console 40% 比例制，
+    max-height:380px 硬顶废除，.console-section 回归 flex:0 0 auto 自然高
+    （余量沉 .main 页尾，translate 的弹性由 #tab-translate 前缀规则显式承接）。
+
+    先红后绿自证（落本钉不改 style.css 时前三条断言必红：380 硬顶仍在 /
+    Console 仍 30% 且 grow=0 / .console-section 仍 flex:1；完成四处改值后转绿）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    # ① 380px 硬顶废除（超量交既有内滚承接：.console-output overflow-y:auto
+    #    + min-height:0，.file-list-container overflow-y:auto，均不动）
+    assert "max-height: 380px" not in css, \
+        "style.css 仍残留 Console max-height:380px 硬顶（大窗日志截断根因）"
+    # ② translate Console 吃 40%（grow=1 才能吃掉余量，消底部 228px 空白）
+    m_console = re.search(
+        r"#tab-translate \.console-collapsible:not\(\.collapsed\)"
+        r"\s*\{([^}]*)\}", css)
+    assert m_console, "style.css 缺 #tab-translate .console-collapsible 高度规则"
+    assert "flex: 1 1 40%;" in m_console.group(1), \
+        "translate Console 须 flex:1 1 40%（禁回退 grow=0 比例制）"
+    # ③ .console-section 回归自然高：guide 两卡与 AI 分析卡不再被撑高
+    #    （空态支路 #tab-translate:not(.has-files) 两规则零改动）
+    m_section = re.search(r"\.console-section\s*\{([^}]*)\}", css)
+    assert m_section, "style.css 缺 .console-section 规则"
+    assert "flex: 0 0 auto;" in m_section.group(1), \
+        ".console-section 须 flex:0 0 auto（禁回退 flex:1 撑高 guide/AI 卡）"
+    # ④ 文件卡基准 60%（与 Console 40% 合成比例制，min-height:0 不动）
+    m_card = re.search(r"#tab-translate > \.card\s*\{([^}]*)\}", css)
+    assert m_card, "style.css 缺 #tab-translate > .card 规则"
+    assert "flex: 1 1 60%;" in m_card.group(1), \
+        "文件卡须 flex:1 1 60%（70% 基准已下调，与 Console 40% 配套）"
