@@ -114,6 +114,11 @@ const MSG = {
     encodeAutoSwitch: '翻译完成后自动压制（硬字幕）',
     // 全链自动化开关（3.0 批1 a 段，D2026-1009-02；strings.py MSG 同键镜像）
     fullchainAutoSwitch: '翻译完成后自动执行：分析→批量修复→复验（含自动压制排布）',
+    // 流水线卡文案（d1013-卡M / D2026-1013-01：开关主行短句升位
+    // （原长句降副行 desc）+ 自动化小节标题；JS 态键零静态 i18n 消耗）
+    encodeAutoShort: '自动压制',
+    fullchainAutoShort: '全链自动化',
+    pipelineGroupAuto: '自动化',
     // 全链链级状态行+digest+一键回滚（3.0 批2，D2026-1009-02 批2；
     // strings.py MSG 同键镜像双表，JS 态零静态 i18n 消耗）
     fullchainRollbackBtn: '一键回滚',
@@ -189,7 +194,7 @@ const MSG = {
     encodeAdvGroupTitle: '压制',
     encodeAdvGroupDesc: '压制成品的默认参数（格式/画质/音量等），「翻译完成后自动压制」同样使用这组参数',
     encodeAdvOpenBtn: '打开压制参数',
-    encodeParamsLink: '参数',
+    encodeParamsLink: '压制参数',
     encodeGpuEditTitle: 'GPU 可用性在发起一次压制时自动检测；此处暂不可选',
     encodeSummaryLine: (parts) => `当前压制参数：${parts.join(' · ')}`,
     encodeSummaryEmpty: '暂无已保存的压制参数（点「打开压制参数」设置）',
@@ -9296,12 +9301,20 @@ const EncodeDock = {
                 ? MSG.encodeEntryGuide : MSG.encodeEntryReview;
             btn.addEventListener('click', () => self.openModal());
         });
+        // 自动化小节标题行（d1013-卡M / D2026-1013-01：卡L 落空壳
+        // span 由 JS 态填充「自动化」小节标题；尾 hairline 由 CSS
+        // .pipeline-subhead-text::after 承接）
+        const subheadText = document.querySelector('.pipeline-subhead-text');
+        if (subheadText) subheadText.textContent = MSG.pipelineGroupAuto;
         // 自动压制开关（批3：管线设置 encode_auto_enabled；缺省关）
         const autoRow = document.querySelector('.encode-auto-row');
         if (autoRow) {
             const box = autoRow.querySelector('.encode-auto-switch');
             const label = autoRow.querySelector('.encode-auto-label');
-            label.textContent = MSG.encodeAutoSwitch;
+            // 主行短句（d1013-卡M）：既有长句降副行（desc 空壳填充）
+            label.textContent = MSG.encodeAutoShort;
+            const autoDesc = autoRow.querySelector('.encode-auto-desc');
+            if (autoDesc) autoDesc.textContent = MSG.encodeAutoSwitch;
             box.addEventListener('change', async () => {
                 const api2 = self._api();
                 if (!api2) return;
@@ -9330,7 +9343,10 @@ const EncodeDock = {
         if (fullchainRow) {
             const fcBox = fullchainRow.querySelector('.fullchain-auto-switch');
             const fcLabel = fullchainRow.querySelector('.fullchain-auto-label');
-            fcLabel.textContent = MSG.fullchainAutoSwitch;
+            // 主行短句（d1013-卡M）：既有长句降副行（desc 空壳填充）
+            fcLabel.textContent = MSG.fullchainAutoShort;
+            const fcDesc = fullchainRow.querySelector('.fullchain-auto-desc');
+            if (fcDesc) fcDesc.textContent = MSG.fullchainAutoSwitch;
             fcBox.addEventListener('change', async () => {
                 const api2 = self._api();
                 if (!api2) return;
