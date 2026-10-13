@@ -4081,6 +4081,38 @@ def test_p8_no_new_component_color_literals():
 
 
 # ============================================================================
+# d1013-卡B 行高趋势钉（6 档收敛三值）
+# 判定面 = style.css 组件区（去 :root 块，照 _style_css_component_scope 先例）。
+# 允许集：1.55（多行文本基准，body 同值）/ var(--lh-tight)（单行紧凑 chip）/
+#         字面 1（图标行盒豁免）；其余字面（1.6/1.5/1.25/30px/1.4 等）一律红。
+# index.html 内联面不入钉（唯一内联 line-height:1.6 于 index.html:647 为已知留存边界）。
+# Ref: D2026-1013-01 行高归一
+# ============================================================================
+
+_LINE_HEIGHT_ALLOWLIST = {"1.55", "var(--lh-tight)", "1"}
+
+
+def test_line_height_scale_allowlist():
+    """行高趋势钉：style.css 组件规则内 line-height 值须在允许集内。
+
+    允许集：1.55 / var(--lh-tight) / 字面 1；其余字面一律红。
+    判定面 = style.css 组件区（去 :root 块）。
+    """
+    scope = _style_css_component_scope()
+    bad = []
+    for raw in re.findall(r"line-height:\s*([^;]+);", scope):
+        raw = raw.strip()
+        if raw in _LINE_HEIGHT_ALLOWLIST:
+            continue
+        bad.append(raw)
+    assert not bad, (
+        f"style.css 组件规则出现白名单外 line-height 值：{bad}——"
+        "允许集：1.55 / var(--lh-tight) / 字面 1；"
+        "6 档收敛三值（d1013-卡B），新增档位须回终审"
+    )
+
+
+# ============================================================================
 # d1013-卡A1 字号白名单钉（LC-3，owner 拍板钉死口径）
 # 判定面 = style.css（去 :root 块）与 index.html（内联 style 属性）的全部 font-size 声明。
 # 允许集：var(--font) / var(--font-sm) / var(--font-xs) 三档 token 引用；
@@ -4090,7 +4122,7 @@ def test_p8_no_new_component_color_literals():
 
 _FONT_SIZE_TOKENS = {"var(--font)", "var(--font-sm)", "var(--font-xs)"}
 _FONT_SIZE_PX_ALLOWLIST = {15, 16, 20, 22, 30, 32, 42}
-_FROZEN_INLINE_FONT_PX = 5   # index.html 内联 font-size 存量冻结（d1013-卡A1，2026-10-13 实测：11px×1+12px×2+12.5px×2）
+_FROZEN_INLINE_FONT_PX = 0   # index.html 内联 font-size 存量冻结（d1013-卡A2 已清存量，卡B 收紧归零）
 
 
 def test_font_size_scale_allowlist():
