@@ -694,10 +694,10 @@ button:focus { outline: none; }
     min-height: 84px;
     text-align: center;
     color: var(--text-3);
-    padding: 14px var(--space-2);
+    padding: var(--space-4) var(--space-2);
     border-radius: var(--radius);
 }
-.empty-icon { font-size: 30px; margin-bottom: var(--space-2); opacity: .6; }
+.empty-icon { font-size: 32px; margin-bottom: var(--space-2); opacity: .6; }
 .empty-icon svg { display: block; margin: 0 auto; }
 .empty-state p { margin: 2px 0; font-size: var(--font-sm); }
 .empty-hint { font-size: var(--font-xs); opacity: .85; }
