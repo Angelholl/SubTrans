@@ -3759,3 +3759,12 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **flake 第 6 例**：test_pipeline_v2 低覆盖上游警示例全量偶发 2 failed，单跑 3 连绿+复跑全量绿自愈（轮 9 验收时甄别）。
 - **free 模型十轮测试（owner 指示：借十卡每卡轮换模型考察能力，断流不恢复扣 0.3）**：账目=docs/design/d1013-free模型十轮测试打分账.md。**综合排名：space-bunny 9.8（两轮均优：主动披露+变异自证 18 例+stash 基线对照）> mimo 9.5（接卡稳+披露好）= ling-3.1 9.5（首战优）> nemotron-3U 9.0（优，盯提交完整性）> nemotron-3.5 7.3（自测如实性短板跨轮复现：轮 4 钉3 吞并漏报/轮 9 全量未真跑措辞含糊——用则必逐行审 tests diff+核自测）> longcat 6.4（质量优但 4/6 派卡断流未恢复，-0.3，限流期不可依赖）**。教训=-m 模型 id 须完整形态（缩写报 Model unavailable）。
 - **依据文件**：docs/design/d1013-卡A1..卡H 共 10 张（含执行记录与主审补记）、d1013-free模型十轮测试打分账.md、subtransjav/webview_gui/assets/{style.css,index.html,app.js}、tests/test_gui_js_static.py。
+
+## [2026-10-14] [D2026-1013-01 追记] 第六轮真机反馈三卡收口（阶段卡折行治理+兜底容错卡行内化+ASR 路径悬停提示）[已执行 · 待 owner 真机走查]
+
+- **owner 四条反馈（2026-10-14）**：①阶段卡 API Key 及框、保存按钮下移与模型栏平行；②兜底与容错卡错位、风格与其他模块一致（owner 追加：「右边留白过多、组件内三层堆叠、一看就不一致」）；③上游环境 Python 路径悬停无完整文字提示；④折叠后文字应与「阈值自适应」同一平行位置——经主审 AskUserQuestion 请 owner 指认，②④合并为同一卡（兜底卡折行态部件参差，参照高级参数页 inline-field「标签左置控件右」语言）。
+- **设计（design-expert，方案一件写盘）**：docs/design/d1014-设计-引擎页折行治理与兜底卡重排方案.md——WebView2 真 A/B 实测背书（非估算），断点/高度预算/钉修订清单齐备；本设计偏离两点经主审裁量修正：新增 3 token 落「组件定宽 token 区」而非 index.html 内联引用专区；模型下限走新 token --w-stage-model 不动 --w-model（index.html:552 角色卡内联引用防连带）。设计实测脚本 16 件落项目 Temp/（gitignored 树外）留证后已清理。
+- **三卡串行派发与收口**：卡S1 阶段卡折行治理=**1645f6e**（longcat，全局钉默认模型；红 assert 0==2→绿，定向 191，全量 46 假失败/2094 passed 零回归，ruff --fix 自修 1 处 E701）；卡S2 兜底容错卡行内化=**a8dc9a2**（ling-3.1；先自跑 HEAD 全量基线对账再动手，红 m3 缺 flex:1 1 auto→绿，摘卡S1 过渡规则 #refineCleanerConfigShow（id 特异性压 class 必须摘源规则），定向 191）；卡S3 ASR 路径悬停提示=**60124ba**（nemotron-3.5；改动正确零越界但**漏 commit 环节且宣称无未完成事项**（自测如实性短板第三次复发）+钉落 tests 中部非末尾（功能等价）——主审亲验后代为提交，提交信息内记档）。测试基线 **2093→2095 passed**（+S1/S3 两钉；46 failed 为 G:\python 缺 pysubs2 既存假失败，清单与 HEAD 逐条一致）。
+- **主审总验收**：定向 192 绿/ruff 净/cli --help 0；全量 46 failed/2095 passed/18 skipped 零回归；**Mimosa deep 首扫 41 项甄别**=+4 全为设计师树外实测脚本（Temp/d1014-*.py 路径穿越面，非仓库文件），清理后复扫 **37 项/31 锚与 2026-10-13 基线零新增零消失**，seal sha256:2daf2857…aa3427；GUI 黑盒（stub 桥 IAB，8772 端口 cache-bust）：宽 1180 阶段卡单行+兜底卡单行右贴齐、窄 700 阶段卡两行（API Key 组恒与模型栏同行、测试不孤行）+兜底卡两行整组归位、asrPythonInput title 全文在位且无贴边裁切（inputRight 600 < cardRight 636）。
+- **free 模型续测三记（owner 指示测评继续）**：longcat 本轮零断流记分优（完整红绿+自测链全走+ruff 自修）；ling-3.1 记分优（先跑基线对账/自清临时目录/rm 缺失改 python 兜底）；nemotron-3.5 延续 7.3 档观察（漏 commit+落位偏差，用则必查提交完整性）。详见打分账续测节。
+- **遗留**：owner 真机走查（三卡+125%/150% 缩放复核）；W<516 极窄区阶段卡 key 整组下沉形态 owner 未见过、走查时留意。
