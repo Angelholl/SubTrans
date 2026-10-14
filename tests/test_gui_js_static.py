@@ -5177,9 +5177,13 @@ def test_realdevice_feedback_pins():
         r"\.toggle-ic-expand\s*\{\s*display:\s*inline-flex", css), \
         "折叠态未显 .toggle-ic-expand（双图标显隐契约漂移）"
     # ② key input grow 封顶（保存钮紧随输入框）
+    #   卡Q 追记：封顶值 280px→200px 并与 min-width 140px 同步收窄。
+    #   旧 280px 断言与卡Q 卡面「max-width 200px」直接冲突、必然转红，
+    #   故如实下调（立法意图「保存钮紧随输入框不贴行尾」不变，仅收窄）。
     assert re.search(
-        r"#refineS1Key,\s*#refineS3Key\s*\{[^}]*max-width:\s*280px", css), (
-        "#refineS1Key/#refineS3Key 缺 max-width:280px 封顶（保存钮回潮贴行尾）")
+        r"#refineS1Key,\s*#refineS3Key\s*\{[^}]*max-width:\s*200px", css), (
+        "#refineS1Key/#refineS3Key 缺 max-width:200px 封顶"
+        "（卡Q 收窄后保存钮回潮贴行尾）")
     # ③ 保存接口文案（MSG 值+index.html 静态回退两处）
     js = _app_js_source()
     assert re.search(r"save_endpoints_btn:\s*'保存接口'", js), (
@@ -5450,3 +5454,59 @@ def test_pipeline_card_layout_structure():
     assert ("#pipelineCard .destination-section .section-header "
             "h2::after") in css, (
         "style.css 缺输出区 h2 统一（h2::after 尾 hairline）")
+
+
+# ============================================================================
+# 卡Q（D2026-1013-01 追记 / 真机反馈）：API Key 行收窄左移 + 已保存态星号
+#   根因：alt-row 内 label(≈50)+gap 8×2+input(min-width 200)+保存钮(30)≈296
+#   > 流水线卡内容宽 244 → 保存钮被顶出卡缘。收窄后 50+8+140+8+30=236 ≤ 244。
+#   ①两 placeholder 改值不改键（FROZEN_IDS/data-i18n 键集零增减）
+#   ②--w-key-input 200px→140px
+#   ③#refineS1Key/#refineS3Key max-width 280px→200px（承接旧钉 280px，
+#     旧钉值随卡Q 收窄下调，见 test_realdevice_feedback_pins ②）
+#   ④数据流红线：已保存态只改 placeholder，不回填掩码 value
+# ============================================================================
+
+
+def test_api_key_row_compact():
+    """卡Q API Key 行收窄 + 已保存态星号 placeholder 防回潮。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    js = _app_js_source()
+
+    # ① 两 placeholder 改值（键集零增减，仅改值）
+    #   断言按 MSG 条目行取值逐字比对，不做全文件否定匹配——「留空即用」等
+    #   文案在无关键（如 tm_threshold_title）合法存在，全局否会误伤。
+    for key, want in (("key_placeholder", "留空用已保存密钥"),
+                      ("key_saved_placeholder", "已保存 ※※※※※※")):
+        mk = re.search(rf"^\s*{key}:\s*'(?P<v>[^']*)',", js, re.M)
+        assert mk, f"app.js MSG 表缺 {key}（改值不改键，键不得消失）"
+        assert mk.group("v") == want, (
+            f"MSG.{key} 应逐字为「{want}」，实为 {mk.group('v')!r}")
+    assert "LM Studio 免填" not in js, (
+        "key_placeholder 仍含「LM Studio 免填」（占位过长顶出保存钮）")
+
+    # ② 行宽 token 收窄（API Key 框下限 200px→140px）
+    assert re.search(r"--w-key-input:\s*140px", css), (
+        "--w-key-input 应为 140px（卡Q 收窄：框+保存钮回到卡内容宽内）")
+    assert not re.search(r"--w-key-input:\s*200px", css), (
+        "--w-key-input 仍为 200px（保存钮回潮被顶出卡缘）")
+
+    # ③ key input grow 封顶 280px→200px（承接真机反馈旧钉）
+    assert re.search(
+        r"#refineS1Key,\s*#refineS3Key\s*\{[^}]*max-width:\s*200px", css), (
+        "#refineS1Key/#refineS3Key 缺 max-width:200px 封顶（卡Q 收窄）")
+    assert not re.search(
+        r"#refineS1Key,\s*#refineS3Key\s*\{[^}]*max-width:\s*280px", css), (
+        "#refineS1Key/#refineS3Key 仍为 max-width:280px（旧钉值，保存钮再回潮）")
+
+    # ④ 数据流红线：已保存态只写 placeholder，严禁回填掩码假 value
+    #   （掩码若被当新 KEY 提交，将污染 DPAPI 存储）
+    assert not re.search(r"\.value\s*=\s*['\"][^'\"]*[※*•·]{2,}", js), (
+        "app.js 存在掩码字符串回填 .value（会污染 DPAPI 存储）")
+    save_fn = _extract_function(js, "saveStageKey")
+    assert re.search(r"inp\.value\s*=\s*''", save_fn), (
+        "saveStageKey 须保留 inp.value='' 清空（保存后不回填掩码）")
+    assert re.search(
+        r"inp\.placeholder\s*=\s*key\s*\?\s*MSG\.key_saved_placeholder",
+        save_fn), (
+        "saveStageKey 保存后须以 MSG.key_saved_placeholder 呈现已保存态")
