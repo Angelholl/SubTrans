@@ -993,7 +993,7 @@ def test_batch3_ai_config_row_field_cols_pinned():
     - style.css 存在 .ai-config-row .field-col 规则组与 align-items:flex-start；
     - index.html 配置行恰 3 组 .field-col（服务商/模型/跨片窗口），
       3 处内联 width:auto 不再残留；
-    - 橙色提示 #refineAiPrivacy 移入行尾（order:99 独立成行），
+    - 橙色提示 #refineAiPrivacy 移入行尾（order:99 行内末位），
       四锚点 id 全保留（FROZEN_IDS 契约）。
     """
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
@@ -3234,6 +3234,64 @@ def test_batch3_trio_wiring_and_effective_lines_pinned():
     test_fix = _extract_function(src, "testTrioModel")
     assert "refine_test_stage" in test_fix, \
         "三件套测试必须复用阶段页 refine_test_stage 桥"
+
+
+def test_ai_effective_line_inline():
+    """卡R2（D2026-1013-01）：AI 分析生效行同行化 + 模型名 R1' 简化。
+
+    - style.css `#refineAiPrivacy` 规则不含 flex-basis:100%（折行
+      成因），含 max-width:420px 与 order:99（:1004 钉逐字断言仍
+      绿=order 保留）；
+    - app.js 含 shortenModelName 定义（R1'：去 provider 前缀后前
+      12+…+后 8，全长>24 才简化）；aiRefreshEffective 显示名走
+      shortenModelName，#refineAiPrivacy title 全量回填（悬停读
+      全名，无障碍等价）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.ai-config-row > #refineAiPrivacy \{([^}]*)\}", css)
+    assert m, "缺 .ai-config-row > #refineAiPrivacy 规则"
+    rule = m.group(1)
+    assert "flex-basis: 100%" not in rule, \
+        "生效行规则残留 flex-basis:100%（折行成因，卡R2 须删）"
+    assert "max-width: 420px" in rule, "生效行规则缺 max-width:420px"
+    assert "order: 99" in rule, "生效行规则缺 order:99（钉 :1004 保留）"
+    src = _app_js_source()
+    assert "function shortenModelName" in src, "app.js 缺 shortenModelName 定义"
+    eff = _extract_function(src, "aiRefreshEffective")
+    assert "el.textContent = line(shortenModelName(full));" in eff, \
+        "生效行显示文本须走 shortenModelName（R1' 显示名简化）"
+    assert "el.title = line(full);" in eff, \
+        "#refineAiPrivacy 须 title 全量回填（悬停读全名）"
+
+
+def test_shorten_model_name_r1_prime_semantics():
+    """卡R2（D2026-1013-01）R1' 模型名简化语义三例（node 实跑；
+    node 不可用跳过，同 test_app_js_syntax_node_check 先例）。
+
+    - 带前缀长名 'lmstudio/qwen3.6-35b-a3b-uncensored-heretic-apex'：
+      slash<12 去 provider 前缀后 39>24 → 'qwen3.6-35b-…tic-apex'
+      （前 12+…+后 8 形态）；
+    - 短名 'gpt-4o-mini'（≤24）：原样；
+    - 无斜杠长名 'qwen3.6-35b-a3b-uncensored-heretic-apex'（>24）：
+      同走前中后规则 → 'qwen3.6-35b-…tic-apex'。
+    """
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node 不可用")
+    fn = _extract_function(_app_js_source(), "shortenModelName")
+    script = (
+        fn + "\n"
+        "const cases = ['lmstudio/qwen3.6-35b-a3b-uncensored-heretic-apex',"
+        " 'gpt-4o-mini',"
+        " 'qwen3.6-35b-a3b-uncensored-heretic-apex'];\n"
+        "for (const c of cases) console.log(shortenModelName(c));"
+    )
+    r = subprocess.run([node, "-e", script], capture_output=True,
+                       encoding="utf-8")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [
+        "qwen3.6-35b-…tic-apex", "gpt-4o-mini", "qwen3.6-35b-…tic-apex"], \
+        "R1' 三例语义漂移（去前缀/阈值/前中后规则）"
 
 
 # ---------------------------------------------------------------------------
