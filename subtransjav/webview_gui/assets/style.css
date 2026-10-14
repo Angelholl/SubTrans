@@ -1612,7 +1612,6 @@ input[type="checkbox"]:focus-visible {
 .stage-row .inline-field:first-child { min-width: var(--w-stage-label); }
 #refineS1Provider, #refineS3Provider { min-width: var(--w-provider); }
 #refineS1Model, #refineS3Model { min-width: var(--w-stage-model); }
-#refineCleanerConfigShow { min-width: var(--w-cleaner); }
 #refineS1Key, #refineS3Key { min-width: var(--w-key-input); max-width: 200px; }   /* 卡Q：280→200 收窄，label50+gap8+input140+gap8+钮30=236 ≤ 卡内容宽 244，保存钮紧随输入框不再顶出卡缘 */
 #refineProfile { min-width: var(--w-profile); }
 #refineV2Ctx { width: var(--w-ctx); }
@@ -3108,7 +3107,20 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .form-card.fallback-card { align-items: flex-start; gap: var(--space-3); }
 .form-card.fallback-card > label.inline-field > .form-input,
 .form-card.fallback-card > label.inline-field > .form-select { width: auto !important; }
-.form-card.fallback-card > label.path-row { flex: 0 1 320px; min-width: 240px; }
+/* d1014-卡S2（D2026-1013-01 追记·第六轮真机反馈②④）：兜底容错卡行内化——
+   三直系 label 标签与控件同行左置（(0,3,1) 特异性 + !important 压过上方
+   通用列排规则，源序在后；label 内 span↔控件 4px 间距由通用列排规则的
+   gap: var(--space-1) 继承，不另写）；目录列吃剩余宽（320px 限宽=右侧
+   留白主因去除，240px 假下限随之删）；目录输入吃剩余宽（(0,4,1) 覆盖
+   通用 width:100%）；owner 第六轮反馈推翻乙案列排方向 */
+.form-card.fallback-card:not(.stack) > label {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+}
+.form-card.fallback-card > label.path-row { flex: 1 1 auto; min-height: var(--h-ctl-sm); }
+.form-card.fallback-card > label.path-row > .form-input {
+    width: auto !important; min-width: var(--w-cleaner); flex: 1 1 var(--w-cleaner); }
 
 /* 卡R4（D2026-1013-01 第五轮反馈）：兜底与并发卡三组分组——组内 8px 咬合，
    组间 12px 分组（两级间距=分组的全部视觉手段，gap 全 token 不落字面）；
