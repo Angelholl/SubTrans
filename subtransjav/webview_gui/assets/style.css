@@ -2177,6 +2177,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .ai-config-row .field-col > .form-select,
 .ai-config-row .field-col > .form-input { width: 100%; min-width: 0; }
 .ai-config-row > #refineAiPrivacy {
+    flex: 1 1 0;   /* 卡R2 主审修复：零基准参与同行分配——basis auto=nowrap 长文本内容宽必折行 */
     max-width: 420px;
     min-width: 0;
     overflow: hidden;

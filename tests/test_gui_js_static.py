@@ -3254,6 +3254,8 @@ def test_ai_effective_line_inline():
     assert "flex-basis: 100%" not in rule, \
         "生效行规则残留 flex-basis:100%（折行成因，卡R2 须删）"
     assert "max-width: 420px" in rule, "生效行规则缺 max-width:420px"
+    assert "flex: 1 1 0" in rule, \
+        "生效行规则缺 flex:1 1 0（主审修复：basis auto=nowrap 内容宽必折行，同行化失效回潮）"
     assert "order: 99" in rule, "生效行规则缺 order:99（钉 :1004 保留）"
     src = _app_js_source()
     assert "function shortenModelName" in src, "app.js 缺 shortenModelName 定义"
