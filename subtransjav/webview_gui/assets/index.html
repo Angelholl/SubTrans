@@ -1045,14 +1045,19 @@
 
             <!-- 卡3：两阶段流水线只读镜像（D2026-0930-09：整卡点击跳引擎页，无双向同步） -->
             <div class="panel-card panel-card-link" id="pipelineCard" data-i18n-title="pipeline_card_hint" title="点击前往「引擎与模型」页修改" tabindex="0" role="link">
-                <div class="block-title" data-i18n="refine_panel_title">两阶段流水线</div>
+                <!-- 卡头标题行（d1013-卡O）：标题与压制参数钮并排，缩竖向空白 -->
+                <div class="pipeline-head-row">
+                    <div class="block-title" data-i18n="refine_panel_title">两阶段流水线</div>
+                    <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link"></button>
+                </div>
 
                 <div class="pipeline-mirror" id="pipelineMirrorLine"></div>
 
                 <!-- 自动化小节（D2026-1013-01 A 案 / d1013-卡L：三小节分组——
-                     小节标题行 + 两个开关行 + 组尾参数钮；小节标题 span 为空壳
-                     零静态中文，文案卡M JS 态填充。镜像行仍留在小节结构外（只读区，
-                     点击仍跳引擎页——卡K 过滤清单不含 .pipeline-mirror）） -->
+                     小节标题行 + 两个开关行（参数钮 d1013-卡O 上移卡头标题行）；
+                     小节标题 span 为空壳零静态中文，文案卡M JS 态填充。镜像行
+                     仍留在小节结构外（只读区，点击仍跳引擎页——卡K 过滤清单
+                     不含 .pipeline-mirror）） -->
                 <div class="pipeline-subgroup" data-testid="pipeline-subgroup-auto">
                     <div class="pipeline-subhead-row">
                         <span class="pipeline-subhead-text" data-testid="pipeline-subhead-auto"></span>
@@ -1076,14 +1081,6 @@
                         <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
                         <span class="fullchain-auto-text"><span class="fullchain-auto-label"></span><span class="fullchain-auto-desc"></span></span>
                     </label>
-                    <!-- 压制参数入口（D2026-1008-01 批2）：「参数」文字小按钮同开
-                         编辑模式弹窗；自原位迁入组尾行（仍置于 label 外——label 内
-                         点击会透传切换开关）；零 id 零静态 data-i18n，文案
-                         EncodeDock.init JS 态承接；内联 margin-top:4px 已删，
-                         归 style.css #pipelineCard .encode-params-link -->
-                    <div class="pipeline-subgroup-tail">
-                        <button type="button" class="btn btn-ghost btn-compact encode-params-link" data-testid="encode-params-link"></button>
-                    </div>
                 </div>
 
                 <!-- 输出目录已并入本卡（真机反馈第二轮，D2026-1013-01 追记 / 卡I：
