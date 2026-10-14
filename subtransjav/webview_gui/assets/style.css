@@ -2177,10 +2177,14 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .ai-config-row .field-col > .form-select,
 .ai-config-row .field-col > .form-input { width: 100%; min-width: 0; }
 .ai-config-row > #refineAiPrivacy {
-    flex-basis: 100%;
-    max-width: 100%;
+    max-width: 420px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 0;
+    align-self: center;
     order: 99;
-    margin-top: 8px;
 }
 
 /* 卡R1（D2026-1013-01 第五轮反馈）：AI 分析三列按内容定宽，跨片窗口框不再等分整行

@@ -7096,6 +7096,16 @@ function switchTab(tabId) {
   // 批3（D2026-1008-01）：中文字面量收编 MSG 键（aiEffectiveLine 等）
   // P2（D2026-1008-02）：改走 analyzeResolution 单源（半配置如实显示
   // 回落+忽略说明，与实际发起的分析/修复解析一致）
+  // 卡R2（D2026-1013-01）：生效行同行化——显示名走 shortenModelName
+  // 简化（行内 ≤420px 单行省略），title 悬停回填全量行文本
+  function shortenModelName(model) {
+    // 卡R2（D2026-1013-01）：模型名展示简化——去 provider 前缀后前 12+…+后 8（全长>24 才简化）
+    let s = String(model || '');
+    const slash = s.indexOf('/');
+    if (slash !== -1 && slash < 12) s = s.slice(slash + 1);
+    if (s.length > 24) s = s.slice(0, 12) + '…' + s.slice(-8);
+    return s;
+  }
   function aiRefreshEffective() {
     const el = $('refineAiPrivacy');
     if (!el) return;
@@ -7103,11 +7113,13 @@ function switchTab(tabId) {
     const cloud = window.AI_CLOUD_PROVIDERS || [];
     const tag = res.provider ? MSG.aiEffIndependent : MSG.aiEffFollow;
     const note = (res.notes || []).join('；');
+    const full = res.model || MSG.aiModelUnset;
+    const line = (m) => MSG.aiEffectiveLine(tag, res.effProvider, m)
+                      + (note ? '｜' + note : '')
+                      + (cloud.includes(res.effProvider) ? MSG.aiCloudNote : '');
     el.style.display = '';
-    el.textContent = MSG.aiEffectiveLine(tag, res.effProvider,
-                                          res.model || MSG.aiModelUnset)
-      + (note ? '｜' + note : '')
-      + (cloud.includes(res.effProvider) ? MSG.aiCloudNote : '');
+    el.textContent = line(shortenModelName(full));
+    el.title = line(full);
   }
 
   async function refineAiAnalyze() {
