@@ -742,7 +742,7 @@ const MSG = {
     ui_copy_manual: '无法自动复制，请长按/手动选择复制',
     first_run_guide: '首次使用：点击「添加文件」导入字幕（支持 .srt/.ass/.ssa/.vtt），或直接拖入文件开始翻译。',
     // 2.5.0 修复批（JS 态键）：词典 full 变体/云分析确认/角色卡跳转与回落提示
-    dict_sudachi_full_label: '日语词典·完整版（sudachi full）',
+    dict_sudachi_full_label: '日语完整版（sudachi full）',
     dict_sudachi_full_desc: '完整版词典数据（语法提示分词用，与 core 版二选一即可；官方 CDN 单源直链，点下方按钮下载）',
     aiCloudConfirm: p => `当前使用的服务商为「${p}」（云端），质量报告内容将发送至云端进行 AI 分析。确认继续吗？`,
     ai_cfg_provider_label: '分析服务商',

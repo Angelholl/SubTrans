@@ -1171,12 +1171,13 @@ input[type="checkbox"]:focus-visible {
 /* 词典管理 B2 案（D2026-1001 批3）：#dictRows 吃满卡片宽；详情区纵向布局
    （行渲染 .dict-row 已废，JS 只填充静态骨架）。2.6.5 段2（D2026-1004-01
    #4/#5）：空态引导条 #dictEmpty 删除，语义由四 kind 摘要行 + pill-warning
-   + warn-soft hint 条承接；详情路径改完整折行（去 ellipsis 截断） */
+   + warn-soft hint 条承接；详情路径改完整折行（去 ellipsis 截断）。
+   d1013-卡P：详情区纵向节奏 space-2→space-1（8px→4px）压缩竖向留白 */
 #dictRows { width: 100%; }
 #dictRows .dict-detail {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-1);
 }
 #dictRows .dict-detail .muted {
     min-width: 0;
@@ -1227,8 +1228,9 @@ input[type="checkbox"]:focus-visible {
 }
 
 /* 收单操作行（#5 路线1）：官方│镜像 边框合并（左/右圆角 + margin-left:-1px
-   消双线）+ 主下载键 margin-left:auto 靠右；下载中 .is-busy 禁整行 */
-.dict-action-row { display: flex; align-items: center; margin-top: 4px; }
+   消双线）+ 主下载键 margin-left:auto 靠右；下载中 .is-busy 禁整行。
+   d1013-卡P：margin-top 4px 字面收编 var(--space-1)（等值纯 token 化） */
+.dict-action-row { display: flex; align-items: center; margin-top: var(--space-1); }
 .dict-action-row .dict-src-label {
     font-size: var(--font-xs);
     color: var(--text-3);
