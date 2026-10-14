@@ -5708,16 +5708,27 @@ def _inner_of(element_text: str) -> str:
 
 
 def test_fallback_card_layout():
-    """卡R3 移交固化钉：兜底与容错卡乙案布局在位，且三直接子元素结构未变。
+    """卡R3 移交固化钉 + d1014-卡S2 行内化钉：兜底与容错卡布局在位，且三直接子元素结构未变。
 
+    演进依据：owner 第六轮反馈推翻卡R3 乙案列排方向（D2026-1013-01 追记：
+    2026-10-14 第六轮真机反馈②④合并）——标签与控件同行左置、折行整组归位、
+    目录吃剩余宽、右侧留白消掉。
     卡R3 卡面「tests：新增钉」与同卡「约束：tests 零改动」相斥（卡R3 遗留①），
     由本卡顺带补落；结构改动已在卡R3 落码，故本钉落即绿，红相见卡R3 执行记录。
+    d1014-卡S2 钉修订（m3 改写 + 新增⑤⑥⑦）先红后绿，红绿输出见卡S2 执行记录。
     断言面：
     ① 外壳 class="form-card fallback-card" 在位；
     ② 三直接子元素结构零改动——:has() 列排按直系子级命中，多一层包装即失配，
        故按序钉死为 档位 label / 上下文 label / 目录 label.path-row.grow；
-    ③ style.css 乙案三规则在位；
-    ④ 钉① 三切片锚注释逐字不动。
+    ③ style.css 规则在位——m1（卡本体 align-items: flex-start +
+       gap: var(--space-3)）/m2（前两列内容宽 width: auto !important）/
+       m3（目录列 flex: 1 1 auto + min-height: var(--h-ctl-sm)，加否定断言
+       防回 flex: 0 1 320px）；
+    ④ 钉① 三切片锚注释逐字不动；
+    ⑤ 行内化 override 在位（三直系 label 同行左置，压过通用列排规则）；
+    ⑥ 目录输入吃宽规则在位（width: auto !important + min-width: var(--w-cleaner)）；
+    ⑦ 卡S1 过渡规则 #refineCleanerConfigShow 全文无残留（id(1,0,0) 压 class
+       防复发），且 --w-model: 200px 仍在位（防借卡顺手改 token）。
     """
     html = INDEX_HTML.read_text(encoding="utf-8")
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
@@ -5756,9 +5767,31 @@ def test_fallback_card_layout():
         "style.css 缺乙案第二规则（前两列内容宽 width: auto !important）"
     m3 = re.search(
         r"\.form-card\.fallback-card\s*>\s*label\.path-row\s*\{([^}]*)\}", css)
-    assert m3, "style.css 缺乙案第三规则（目录列限宽）"
-    for decl in ("flex: 0 1 320px;", "min-width: 240px;"):
-        assert decl in m3.group(1), f"目录列规则体缺「{decl}」（卡R3 乙案）"
+    assert m3, "style.css 缺目录列规则（卡S2 行内化）"
+    for decl in ("flex: 1 1 auto;", "min-height: var(--h-ctl-sm);"):
+        assert decl in m3.group(1), f"目录列规则体缺「{decl}」（卡S2 行内化）"
+    assert "flex: 0 1 320px" not in m3.group(1), \
+        "目录列规则回潮：不得回 flex: 0 1 320px（乙案限宽已由卡S2 推翻）"
+
+    # ⑤ 行内化 override 在位（(0,3,1) 特异性 + !important 压过通用列排，源序在后）
+    m5 = re.search(
+        r"\.form-card\.fallback-card:not\(\.stack\)\s*>\s*label\s*\{([^}]*)\}", css)
+    assert m5, "style.css 缺行内化 override（.form-card.fallback-card:not(.stack) > label）"
+    assert "flex-direction: row !important;" in m5.group(1), \
+        "行内化 override 规则体缺「flex-direction: row !important;」（卡S2）"
+
+    # ⑥ 目录输入吃宽规则在位（(0,4,1) 覆盖通用 width:100%）
+    m6 = re.search(
+        r"\.form-card\.fallback-card\s*>\s*label\.path-row\s*>\s*"
+        r"\.form-input\s*\{([^}]*)\}", css)
+    assert m6, "style.css 缺目录输入吃宽规则（path-row > .form-input，卡S2）"
+    for decl in ("width: auto !important;", "min-width: var(--w-cleaner);"):
+        assert decl in m6.group(1), f"目录输入规则体缺「{decl}」（卡S2）"
+
+    # ⑦ 卡S1 过渡规则已摘（id(1,0,0) 压 class，必须摘源规则）+ token 防顺手改
+    assert "#refineCleanerConfigShow" not in css, \
+        "style.css 残留 #refineCleanerConfigShow 规则（卡S1 过渡规则须摘除）"
+    assert "--w-model: 200px" in css, "--w-model: 200px 被改动（须保持不动）"
 
     # ④ 钉① 三切片锚注释逐字不动（卡R3 与本卡共同硬约束）
     for anchor in _SLICE_ANCHORS:
