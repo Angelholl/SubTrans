@@ -3098,3 +3098,10 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .form-card.fallback-card > label.inline-field > .form-input,
 .form-card.fallback-card > label.inline-field > .form-select { width: auto !important; }
 .form-card.fallback-card > label.path-row { flex: 0 1 320px; min-width: 240px; }
+
+/* 卡R4（D2026-1013-01 第五轮反馈）：兜底与并发卡三组分组——组内 8px 咬合，
+   组间 12px 分组（两级间距=分组的全部视觉手段，gap 全 token 不落字面）；
+   组间距选择器按卡面 `.form-card .field-row` 就近加作用域锁（`.stack.form-card`
+   全站恰 1 处 = 本卡），避免连带改到 ASR 卡等其他 form-card 内的 .field-row */
+.ctrl-group { display: flex; align-items: center; gap: var(--space-2); }
+.stack.form-card > .field-row { gap: var(--space-3); }
