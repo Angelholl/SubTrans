@@ -1159,6 +1159,7 @@ input[type="checkbox"]:focus-visible {
 }
 /* 批3 扩展（D2026-1002-12）：ASR 行"未探测"默认态弱化（探测成功后 JS 移除；
    2.6.5 段2 弱化语义自 .sys-summary-val 迁 stat 槽——ASR 行不再用 val） */
+#asrPythonInput { min-width: 0; }
 .sys-summary-stat.val-muted { color: var(--text-3); }
 .pipeline-mirror {
     font-size: var(--font-sm);
