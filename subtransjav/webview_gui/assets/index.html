@@ -346,32 +346,38 @@
                 <div class="stack form-card">
                     <div class="group-title" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
                     <div class="field-row">
-                        <label class="inline-field"><span data-i18n="fallback_model_label">接管模型</span>
-                            <select id="refineFallbackModel" class="form-input compact" style="width:var(--w-fallback);">
-                                <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
-                            </select>
-                            <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
-                                    data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
-                        </label>
-                        <label class="inline-field"
-                               data-i18n-title="fallback_local_title" title="云端翻译失败时自动用本地模型补完失败的部分；只救云端，需先配好本地兜底模型。
+                        <div class="ctrl-group">
+                            <label class="inline-field"><span data-i18n="fallback_model_label">接管模型</span>
+                                <select id="refineFallbackModel" class="form-input compact" style="width:var(--w-fallback);">
+                                    <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
+                                </select>
+                                <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
+                                        data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                            </label>
+                        </div>
+                        <div class="ctrl-group">
+                            <label class="inline-field"
+                                   data-i18n-title="fallback_local_title" title="云端翻译失败时自动用本地模型补完失败的部分；只救云端，需先配好本地兜底模型。
 技术细节：失败行级接管重跑一次；仅对云端服务商阶段生效；未配置 --fallback-model 时启动即校验拒绝">
-                            <input type="checkbox" id="refineFallbackLocal"> <span data-i18n="fallback_local_label">云端故障时本地接管</span>
-                        </label>
-                        <label><span data-i18n="batch_local_label">批量·本地</span> <input id="refineBatchLocal" class="form-input compact" type="number"
-                                min="1" max="50" value="30" style="width:var(--w-batch);"></label>
-                        <label><span data-i18n="batch_cloud_label">批量·云端</span> <input id="refineBatchCloud" class="form-input compact" type="number"
-                                min="1" max="50" value="30" style="width:var(--w-batch);"></label>
-                        <label class="inline-field"
-                               data-i18n-title="concurrency_title" title="批间并发数（1-5），默认 1"><span data-i18n="concurrency_label">并行</span>
-                            <select id="refineConcurrency" class="form-select compact" style="width:var(--w-concurrency);">
-                                <option value="1" selected>1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="4">4</option>
-                                <option value="5">5</option>
-                            </select>
-                        </label>
+                                <input type="checkbox" id="refineFallbackLocal"> <span data-i18n="fallback_local_label">云端故障时本地接管</span>
+                            </label>
+                        </div>
+                        <div class="ctrl-group">
+                            <label><span data-i18n="batch_local_label">批量·本地</span> <input id="refineBatchLocal" class="form-input compact" type="number"
+                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
+                            <label><span data-i18n="batch_cloud_label">批量·云端</span> <input id="refineBatchCloud" class="form-input compact" type="number"
+                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
+                            <label class="inline-field"
+                                   data-i18n-title="concurrency_title" title="批间并发数（1-5），默认 1"><span data-i18n="concurrency_label">并行</span>
+                                <select id="refineConcurrency" class="form-select compact" style="width:var(--w-concurrency);">
+                                    <option value="1" selected>1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                </select>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 </section>

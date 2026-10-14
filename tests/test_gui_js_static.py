@@ -5630,3 +5630,212 @@ def test_agg_window_fixed_width():
     assert not offenders, (
         ".field-col 选择器出现新增类名（禁用加类法改宽，改用 :nth-child）："
         f"{offenders}")
+
+
+# ============================================================================
+# d1013-卡R4 兜底与并发卡三组分组（件1 收官）
+#   根因：.field-row 内 5 个 label 同权平铺（gap 均匀 16px），控件语义（接管/
+#   开关/批量/并发）无分组，窄窗折行时末位「并行」被挤到第二行且贴左 → 拥挤 +
+#   错落 + 孤行。改法：3 个 div.ctrl-group 把 label 包成不可拆散的原子（并行
+#   并入组3，与批量同属并发参数 → 折行时组内同行，验收项「不孤行」），零 id /
+#   零 data-i18n 增减、组内元素原样；style.css 追加 .ctrl-group（组内 8px）
+#   + 组间距规则。app.js 零改动——六控件读写链全走 id（$('id') /
+#   getElementById），与包装层深度无关，读取链断言即零改动的静态佐证。
+#   本节两钉：test_fallback_card_layout（卡R3 移交固化，结构已在位直接绿，
+#   红相已由卡R3 执行记录留证）+ test_concurrency_card_groups（本卡新钉，
+#   对现状「无 ctrl-group」先红后绿）。
+#   Ref: D2026-1013-01 第五轮反馈「并发卡一行塞 5 控件拥挤错落、『并行』孤行」
+# ============================================================================
+
+# 兜底与并发卡六控件既有 id（零增减：各恰 1 次）
+_CONCURRENCY_CARD_IDS = (
+    "refineFallbackModel", "refreshFallbackModels", "refineFallbackLocal",
+    "refineBatchLocal", "refineBatchCloud", "refineConcurrency",
+)
+
+# 钉① 切片锚注释逐字冻结（改注释会让 test_ui_phase3_redlines 的三卡切片失义）
+_SLICE_ANCHORS = (
+    "<!-- 阶段A 完整行 -->",
+    "<!-- 阶段B 完整行 -->",
+    "<!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->",
+    "<!-- 兜底与并发（原高级设置第四组迁入） -->",
+)
+
+_VOID_TAGS = frozenset({
+    "area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr",
+})
+
+
+def _html_slice_between(html: str, start: str, end: str) -> str:
+    """按两枚锚（注释/标记）切出 HTML 片段（与 test_ui_phase3_redlines 同口径，
+    本文件独立实现避免跨文件导入）。"""
+    i = html.index(start)
+    j = html.index(end, i)
+    return html[i:j]
+
+
+def _direct_children(fragment: str) -> list[tuple[str, str]]:
+    """按标签配平提取片段的直接子元素 (tag, 元素全文) 列表。
+
+    深度只在非 void 且非自闭合标签上增减：注释（`<!--` 不以字母开头，
+    正则不匹配）、void 元素（input/br…）与 SVG 自闭合（`<path …/>`）均不配平；
+    片段外游离的闭合标签忽略。"""
+    out: list[tuple[str, str]] = []
+    depth = 0
+    open_at = -1
+    for m in re.finditer(
+            r"<(/?)([a-zA-Z][\w-]*)((?:\"[^\"]*\"|'[^']*'|[^>])*)>", fragment):
+        closing, tag, attrs = m.group(1), m.group(2).lower(), m.group(3)
+        if closing:
+            if depth <= 0:
+                continue
+            depth -= 1
+            if depth == 0:
+                out.append((tag, fragment[open_at:m.end()]))
+        elif tag in _VOID_TAGS or attrs.rstrip().endswith("/"):
+            continue
+        else:
+            if depth == 0:
+                open_at = m.start()
+            depth += 1
+    return out
+
+
+def _inner_of(element_text: str) -> str:
+    """取元素全文的内层内容（剥外层开标签与末尾闭合标签）。"""
+    return element_text[element_text.index(">") + 1:element_text.rfind("</")]
+
+
+def test_fallback_card_layout():
+    """卡R3 移交固化钉：兜底与容错卡乙案布局在位，且三直接子元素结构未变。
+
+    卡R3 卡面「tests：新增钉」与同卡「约束：tests 零改动」相斥（卡R3 遗留①），
+    由本卡顺带补落；结构改动已在卡R3 落码，故本钉落即绿，红相见卡R3 执行记录。
+    断言面：
+    ① 外壳 class="form-card fallback-card" 在位；
+    ② 三直接子元素结构零改动——:has() 列排按直系子级命中，多一层包装即失配，
+       故按序钉死为 档位 label / 上下文 label / 目录 label.path-row.grow；
+    ③ style.css 乙案三规则在位；
+    ④ 钉① 三切片锚注释逐字不动。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① 外壳加类在位（乙案入口）
+    assert '<div class="form-card fallback-card">' in html, \
+        "兜底与容错卡外壳缺 fallback-card 类（卡R3 乙案未落码？）"
+
+    # ② 三直接子元素结构零改动（:has() 列排依赖直系子级）
+    block = _html_slice_between(html, "<!-- 兜底档位", "<!-- 兜底与并发")
+    top = _direct_children(block)
+    assert len(top) == 1 and top[0][0] == "div", \
+        f"兜底容错卡切片应只含一个卡片容器，实得 {len(top)} 个：{[t[0] for t in top]}"
+    kids = _direct_children(_inner_of(top[0][1]))
+    assert [k[0] for k in kids] == ["label", "label", "label"], \
+        f"兜底容错卡直接子元素须恰为三个 label（:has() 列排依赖），实得 {[k[0] for k in kids]}"
+    assert 'class="inline-field field-label"' in kids[0][1] \
+        and 'id="refineProfile"' in kids[0][1], "第一列须为兜底档位 label（refineProfile）"
+    assert 'class="inline-field field-label"' in kids[1][1] \
+        and 'id="refineV2Ctx"' in kids[1][1], "第二列须为上下文窗口 label（refineV2Ctx）"
+    assert 'class="path-row grow"' in kids[2][1], \
+        f"第三列须为目录 label.path-row.grow（乙案不拆其直系子级），实得 {kids[2][1][:60]}"
+    for dom_id in ("refineCleanerConfig", "refineCleanerConfigShow",
+                   "refinePickCleanerDir", "refineOpenCleanerDir"):
+        assert f'id="{dom_id}"' in kids[2][1], f"目录列缺 {dom_id}（三直接子元素结构漂移）"
+
+    # ③ 乙案三规则在位（作用域 .form-card.fallback-card 锁死）
+    m1 = re.search(r"\.form-card\.fallback-card\s*\{([^}]*)\}", css)
+    assert m1, "style.css 缺 .form-card.fallback-card 规则（卡R3 乙案未落码？）"
+    for decl in ("align-items: flex-start;", "gap: var(--space-3);"):
+        assert decl in m1.group(1), f".form-card.fallback-card 规则体缺「{decl}」（卡R3 乙案）"
+    m2 = re.search(
+        r"\.form-card\.fallback-card\s*>\s*label\.inline-field\s*>\s*"
+        r"\.form-select\s*\{([^}]*)\}", css)
+    assert m2 and "width: auto !important;" in m2.group(1), \
+        "style.css 缺乙案第二规则（前两列内容宽 width: auto !important）"
+    m3 = re.search(
+        r"\.form-card\.fallback-card\s*>\s*label\.path-row\s*\{([^}]*)\}", css)
+    assert m3, "style.css 缺乙案第三规则（目录列限宽）"
+    for decl in ("flex: 0 1 320px;", "min-width: 240px;"):
+        assert decl in m3.group(1), f"目录列规则体缺「{decl}」（卡R3 乙案）"
+
+    # ④ 钉① 三切片锚注释逐字不动（卡R3 与本卡共同硬约束）
+    for anchor in _SLICE_ANCHORS:
+        assert anchor in html, f"切片锚注释被改动：{anchor}"
+
+
+def test_concurrency_card_groups():
+    """卡R4 新钉：兜底与并发卡三组分组在位，并行不孤行，六控件读取链不变。
+
+    先红后绿：落钉时现状无任何 .ctrl-group（断言①③必红），改码后转绿。
+    断言面：
+    ① .stack.form-card 直接子元素仍为 group-title + field-row，field-row 的
+       直接子元素恰 3 个 div.ctrl-group，组内元素原样（label 原位、零新 id）；
+    ② 组语义：组1=接管模型下拉+刷新钮 / 组2=云端故障开关 / 组3=批量·本地 +
+       批量·云端 + 并行（并行与批量同组 → 折行时不同行孤零零贴左）；
+    ③ 六控件 id 各恰 1 次（零增减），且全部落在本卡内；
+    ④ app.js 零改动的静态佐证：refineConcurrency 读取链（readRefineConcurrency
+       / refreshPipelineMirror / change 绑定）全走 id，与包装层深度无关；
+    ⑤ style.css 分组两规则在位（组内 8px、组间 12px，均走 token）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    js = _app_js_source()
+    card = _html_slice_between(html, "<!-- 兜底与并发", "<!-- ASR 与词典页")
+
+    # ① 卡片壳与两直接子元素结构
+    top = _direct_children(card)
+    assert top and top[0][0] == "div" and 'class="stack form-card"' in top[0][1], \
+        "兜底与并发卡外壳 class=\"stack form-card\" 不在位（分组须建在本卡内）"
+    kids = _direct_children(_inner_of(top[0][1]))
+    assert [k[0] for k in kids] == ["div", "div"], \
+        f"本卡直接子元素须仍为 group-title + field-row 两块，实得 {[k[0] for k in kids]}"
+    assert 'class="group-title"' in kids[0][1], "第一块须仍为 .group-title"
+    assert 'class="field-row"' in kids[1][1], "第二块须仍为 .field-row"
+
+    # ①/② 三组包装与组内语义
+    groups = _direct_children(_inner_of(kids[1][1]))
+    assert len(groups) == 3 and all(
+        g[0] == "div" and 'class="ctrl-group"' in g[1] for g in groups), (
+        f"兜底与并发卡 .field-row 直接子元素须恰为 3 个 div.ctrl-group，"
+        f"实得 {[(g[0], g[1][:40]) for g in groups]}")
+    labels = [[c[0] for c in _direct_children(_inner_of(g[1]))] for g in groups]
+    assert labels == [["label"], ["label"], ["label", "label", "label"]], \
+        f"三组内 label 分布须为 1 / 1 / 3（组3 批量两框 + 并行），实得 {labels}"
+
+    group_ids = [[i for i in _CONCURRENCY_CARD_IDS if f'id="{i}"' in g[1]]
+                 for g in groups]
+    assert group_ids == [["refineFallbackModel", "refreshFallbackModels"],
+                         ["refineFallbackLocal"],
+                         ["refineBatchLocal", "refineBatchCloud", "refineConcurrency"]], \
+        f"三组控件归属漂移：{group_ids}（组1 接管 / 组2 开关 / 组3 批量+并行）"
+    # 组包装层本身零 id（分组只增类包装，不动 R1 id 契约）
+    for g in groups:
+        assert "id=" not in g[1][:g[1].index(">") + 1], \
+            ".ctrl-group 包装层不得新增 id（分组零 FROZEN_IDS 增减）"
+
+    # ③ 六控件 id 各恰 1 次且全在本卡内
+    for dom_id in _CONCURRENCY_CARD_IDS:
+        assert html.count(f'id="{dom_id}"') == 1, \
+            f"id={dom_id} 次数漂移（须恰 1 次，零增减）"
+        assert f'id="{dom_id}"' in card, f"id={dom_id} 逸出兜底与并发卡"
+
+    # ④ app.js 零改动的静态佐证：读取链全走 id
+    assert "$('refineConcurrency')" in _extract_function(js, "readRefineConcurrency"), \
+        "readRefineConcurrency 读取链漂移（须仍经 $('refineConcurrency') 取值）"
+    assert "document.getElementById('refineConcurrency')" \
+        in _extract_function(js, "refreshPipelineMirror"), \
+        "refreshPipelineMirror 读取链漂移（须仍经 getElementById 取值）"
+    assert "['refineS1Model', 'refineConcurrency'].forEach" in js, \
+        "并发/模型 change 联动绑定漂移（镜像读链依赖）"
+
+    # ⑤ 分组两规则在位：组内 8px 咬合 + 组间 12px 分组（作用域锁本卡）
+    m1 = re.search(r"\.ctrl-group\s*\{([^}]*)\}", css)
+    assert m1, "style.css 缺 .ctrl-group 规则（组内咬合在位？）"
+    for decl in ("display: flex;", "align-items: center;", "gap: var(--space-2);"):
+        assert decl in m1.group(1), f".ctrl-group 规则体缺「{decl}」（卡R4 分组）"
+    m2 = re.search(r"\.stack\.form-card\s*>\s*\.field-row\s*\{([^}]*)\}", css)
+    assert m2, "style.css 缺 .stack.form-card > .field-row 组间距规则（卡R4 分组）"
+    assert "gap: var(--space-3);" in m2.group(1), \
+        "组间距须为 var(--space-3)（组间 12px / 组内 8px 两级分级，均走 token）"
