@@ -5839,3 +5839,98 @@ def test_concurrency_card_groups():
     assert m2, "style.css 缺 .stack.form-card > .field-row 组间距规则（卡R4 分组）"
     assert "gap: var(--space-3);" in m2.group(1), \
         "组间距须为 var(--space-3)（组间 12px / 组内 8px 两级分级，均走 token）"
+
+
+# ---------------------------------------------------------------------------
+# d1014-卡S1：阶段卡折行治理——stage 单元化（API Key 组恒与模型栏同行）
+# D2026-1013-01 追记（2026-1014 第六轮真机反馈①）
+# ---------------------------------------------------------------------------
+
+def test_stage_card_unit_layout():
+    """阶段卡折行治理钉：alt-row 删除 + stage-unit/stage-key 单元化。
+
+    断言面：
+    - 阶段A/阶段B 双卡成对：<div class="stage-unit"> 与 <div class="stage-key">
+      各恰 2 处；stage-key 内序=API Key label→key input→保存钮；
+      stage-unit 内序含 model select→刷新→测试→stage-key；
+      status span 在 stage-unit 之外（stage-unit 块内不含
+      refineTestS1Status/refineTestS3Status）；
+    - index.html 全文零 alt-row 字样；style.css 零 .alt-row 规则
+      （--w-alt-row token 保留不算）；
+    - 三 token 逐值在位：--w-stage-model: 140px / --w-stage-unit: 520px /
+      --w-stage-key: 240px；
+    - 模型下限规则只含两模型 id（#refineS1Model, #refineS3Model），
+      #refineCleanerConfigShow 不在该规则内；
+    - --w-model: 200px 仍在位（防顺手改 token）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① stage-unit / stage-key 各恰 2 处
+    assert html.count('<div class="stage-unit">') == 2, \
+        "stage-unit 必须恰 2 处（阶段A/阶段B 各一）"
+    assert html.count('<div class="stage-key">') == 2, \
+        "stage-key 必须恰 2 处（阶段A/阶段B 各一）"
+
+    # ② stage-key 内序：API Key label → key input → 保存钮
+    for n, key_id, save_btn_id in (
+        (1, "refineS1Key", "refineSaveS1KeyBtn"),
+        (3, "refineS3Key", "refineSaveS3KeyBtn"),
+    ):
+        unit_m = re.search(
+            rf'<div class="stage-unit">(?:(?!</div>).)*?'
+            rf'<select id="refineS{n}Model"', html, re.S)
+        assert unit_m, f"stage-unit 内未找到 refineS{n}Model（n={n}）"
+        key_m = re.search(
+            rf'<div class="stage-key">(?:(?!</div>).)*?'
+            rf'id="{key_id}"(?:(?!</div>).)*?'
+            rf'id="{save_btn_id}"', html, re.S)
+        assert key_m, \
+            f"stage-key 内序漂移：{key_id} → {save_btn_id}（n={n}）"
+
+    # ③ stage-unit 内序含 model select → 刷新 → 测试 → stage-key
+    for n, model_id, refresh_id, test_id in (
+        (1, "refineS1Model", "refineRefreshS1", "refineTestS1"),
+        (3, "refineS3Model", "refineRefreshS3", "refineTestS3"),
+    ):
+        m = re.search(
+            rf'<select id="{model_id}"[\s\S]*?'
+            rf'id="{refresh_id}"[\s\S]*?'
+            rf'id="{test_id}"[\s\S]*?'
+            rf'<div class="stage-key">', html)
+        assert m, \
+            f"stage-unit 内序漂移：model→refresh→test→stage-key（n={n}）"
+
+    # ④ status span 在 stage-unit 之外
+    for n in (1, 3):
+        unit_start = html.index(f'<select id="refineS{n}Model"')
+        unit_end = html.index('</div>', html.index(
+            '<div class="stage-key">', unit_start))
+        unit_block = html[unit_start:unit_end]
+        status_id = f"refineTestS{n}Status"
+        assert status_id not in unit_block, \
+            f"{status_id} 不得出现在 stage-unit 块内（须独立成行）"
+
+    # ⑤ index.html 全文零 alt-row 字样
+    assert "alt-row" not in html, "index.html 残留 alt-row 字样"
+
+    # ⑥ style.css 零 .alt-row 规则（--w-alt-row token 保留不算）
+    assert ".alt-row" not in css, \
+        "style.css 残留 .alt-row 规则（token --w-alt-row 保留合法）"
+
+    # ⑦ 三 token 逐值在位
+    assert "--w-stage-model: 140px" in css, "缺 --w-stage-model: 140px"
+    assert "--w-stage-unit: 520px" in css, "缺 --w-stage-unit: 520px"
+    assert "--w-stage-key: 240px" in css, "缺 --w-stage-key: 240px"
+
+    # ⑧ 模型下限规则只含两模型 id
+    m = re.search(
+        r'#refineS1Model,\s*#refineS3Model\s*\{\s*min-width:\s*var\(--w-stage-model\);\s*\}',
+        css)
+    assert m, \
+        "模型下限规则漂移：须为 #refineS1Model, #refineS3Model { min-width: var(--w-stage-model); }"
+    assert "#refineCleanerConfigShow" not in m.group(0), \
+        "#refineCleanerConfigShow 不得出现在模型下限规则内"
+
+    # ⑨ --w-model: 200px 仍在位
+    assert "--w-model: 200px" in css, "--w-model: 200px 被改动（须保持不动）"

@@ -238,23 +238,25 @@
                             <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
-                        <select id="refineS1Model" class="form-select compact grow">
-                            <!-- 批2（D2026-1002-12 拍板点2）：空态占位 option（文案走
-                                 JS 态键 model_list_empty_hint，bindDom 填充，不挂静态
-                                 data-i18n）；已存模型由 applySavedStageSettings 注入
-                                 标记 option 选中，无硬默认预选 -->
-                            <option value="" disabled selected></option>
-                        </select>
-                        <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
-                        <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                        <div class="stage-unit">
+                            <select id="refineS1Model" class="form-select compact grow">
+                                <!-- 批2（D2026-1002-12 拍板点2）：空态占位 option（文案走
+                                     JS 态键 model_list_empty_hint，bindDom 填充，不挂静态
+                                     data-i18n）；已存模型由 applySavedStageSettings 注入
+                                     标记 option 选中，无硬默认预选 -->
+                                <option value="" disabled selected></option>
+                            </select>
+                            <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                            <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                            <div class="stage-key">
+                                <label class="field-label">API Key</label>
+                                <input type="password" id="refineS1Key" class="form-input compact grow"
+                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
+                                <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
+                                        data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
+                            </div>
+                        </div>
                         <span id="refineTestS1Status" class="muted stage-test-status"></span>
-                    </div>
-                    <div class="alt-row">
-                        <label class="field-label">API Key</label>
-                        <input type="password" id="refineS1Key" class="form-input compact grow"
-                               data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
-                        <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
-                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                     </div>
                 </div>
 
@@ -285,20 +287,22 @@
                             <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
                             <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
                         </select>
-                        <select id="refineS3Model" class="form-select compact grow">
-                            <!-- 同 refineS1Model：空态占位 + 已存值注入，无硬默认预选 -->
-                            <option value="" disabled selected></option>
-                        </select>
-                        <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
-                        <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                        <div class="stage-unit">
+                            <select id="refineS3Model" class="form-select compact grow">
+                                <!-- 同 refineS1Model：空态占位 + 已存值注入，无硬默认预选 -->
+                                <option value="" disabled selected></option>
+                            </select>
+                            <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                            <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                            <div class="stage-key">
+                                <label class="field-label">API Key</label>
+                                <input type="password" id="refineS3Key" class="form-input compact grow"
+                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
+                                <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
+                                        data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
+                            </div>
+                        </div>
                         <span id="refineTestS3Status" class="muted stage-test-status"></span>
-                    </div>
-                    <div class="alt-row">
-                        <label class="field-label">API Key</label>
-                        <input type="password" id="refineS3Key" class="form-input compact grow"
-                               data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
-                        <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
-                                data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                     </div>
                 </div>
 
