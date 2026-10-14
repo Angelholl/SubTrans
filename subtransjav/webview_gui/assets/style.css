@@ -3092,3 +3092,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 
 /* 图标钮（浏览/打开）收窄水平 padding，给路径输入框腾宽 */
 #pipelineCard .path-row .btn { padding: 0 var(--space-2); }
+
+/* 卡R3（D2026-1013-01 第五轮反馈）：兜底容错卡乙案——三列顶标签对齐+目录列限宽 */
+.form-card.fallback-card { align-items: flex-start; gap: var(--space-3); }
+.form-card.fallback-card > label.inline-field > .form-input,
+.form-card.fallback-card > label.inline-field > .form-select { width: auto !important; }
+.form-card.fallback-card > label.path-row { flex: 0 1 320px; min-width: 240px; }
