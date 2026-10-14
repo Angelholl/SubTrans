@@ -112,7 +112,7 @@
 
     /* ---- 内联宽度 token（index.html 内联样式逐字引用，勿删） ---- */
     --w-quick-service: 150px;      /* service quick select min-width */
-    --w-key-input: 200px;          /* API key input min-width */
+    --w-key-input: 140px;          /* API key input min-width；卡Q 收窄：框+保存钮须留在卡内容宽 244 内 */
     --w-stage-row: 340px;          /* stage row min-width */
     --w-stage-label: 148px;        /* stage checkbox label min-width */
     --w-provider: 138px;           /* stage provider select min-width */
@@ -1599,7 +1599,7 @@ input[type="checkbox"]:focus-visible {
 .stage-row .inline-field:first-child { min-width: var(--w-stage-label); }
 #refineS1Provider, #refineS3Provider { min-width: var(--w-provider); }
 #refineS1Model, #refineS3Model, #refineCleanerConfigShow { min-width: var(--w-model); }
-#refineS1Key, #refineS3Key { min-width: var(--w-key-input); max-width: 280px; }   /* 真机反馈：grow 封顶，保存钮紧随输入框不再贴行尾 */
+#refineS1Key, #refineS3Key { min-width: var(--w-key-input); max-width: 200px; }   /* 卡Q：280→200 收窄，label50+gap8+input140+gap8+钮30=236 ≤ 卡内容宽 244，保存钮紧随输入框不再顶出卡缘 */
 #refineProfile { min-width: var(--w-profile); }
 #refineV2Ctx { width: var(--w-ctx); }
 
