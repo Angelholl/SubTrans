@@ -5510,3 +5510,63 @@ def test_api_key_row_compact():
         r"inp\.placeholder\s*=\s*key\s*\?\s*MSG\.key_saved_placeholder",
         save_fn), (
         "saveStageKey 保存后须以 MSG.key_saved_placeholder 呈现已保存态")
+
+
+# ============================================================================
+# d1013-卡R1 跨片窗口下拉定宽（AI 分析三列按内容分配，零 DOM 纯 CSS）
+#   根因：`.ai-config-row .field-col { flex: 1 1 190px }` 三列等分整行，最宽屏
+#   单列 ≈520px，而跨片窗口最长选项「全部（永久）」实需 ≈116px（4.5 倍）。
+#   改法：--w-agg-window 宽度 token 定 128px（≈116px 内容 + 框内边距余量），
+#   三列经 :nth-child 收敛为「提供方按内容 / 模型吃余量（model-trio 三件套）/
+#   跨片窗口定宽」。index.html / app.js 零改动、零 FROZEN_IDS 与 MSG 增减。
+#   **严禁给 .field-col 加类**：改宽一律走 :nth-child 定位（④防加类法回潮；
+#   index.html 侧由 :1009/:3188 `class="field-col"` 恰 3 处的子串计数钉守住）。
+#   Ref: D2026-1013-01 第五轮反馈②「跨片窗口框可以缩短」
+# ============================================================================
+
+
+def test_agg_window_fixed_width():
+    """卡R1：跨片窗口框定宽 --w-agg-window:128px + 三列按内容分配。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① :root 宽度 token 区新增 --w-agg-window: 128px（值逐字冻结）
+    root = re.search(r":root\s*\{([^}]*)\}", css)
+    assert root, "style.css 缺 :root token 定义块"
+    assert re.search(r"--w-agg-window:\s*128px", root.group(1)), (
+        ":root 宽度 token 区缺 --w-agg-window: 128px"
+        "（≈116px 最长选项「全部（永久）」+ 框内边距余量）")
+
+    # ② 三列按内容分配（:nth-child 定位，零 DOM、零加类）
+    expected = {
+        1: ("flex: 0 1 auto;", "min-width: 150px;"),   # 分析提供方按内容
+        2: ("flex: 1 1 220px;", "min-width: 150px;"),   # 分析模型吃余量
+        3: ("flex: 0 0 var(--w-agg-window);",),         # 跨片窗口定宽
+    }
+    for nth, decls in expected.items():
+        m = re.search(
+            rf"\.ai-config-row > \.field-col:nth-child\({nth}\)\s*\{{([^}}]*)\}}",
+            css)
+        assert m, f"缺 .ai-config-row > .field-col:nth-child({nth}) 收敛规则（卡R1）"
+        for decl in decls:
+            assert decl in m.group(1), (
+                f":nth-child({nth}) 规则体缺「{decl}」——三列须按内容分配，"
+                "不得退回等分整行（卡R1 跨片窗口框过长根因）")
+
+    # ③ 第 3 列宽度只走 token，不得再落 px 字面（防 token 与规则两处各写一个数）
+    m3 = re.search(
+        r"\.ai-config-row > \.field-col:nth-child\(3\)\s*\{([^}]*)\}", css)
+    assert not re.search(r"\d+px", m3.group(1)), (
+        f":nth-child(3) 出现 px 字面宽度：{m3.group(1).strip()}——"
+        "宽度一律引用 var(--w-agg-window)")
+
+    # ④ 防加类法回潮：凡提及 .field-col 的选择器，元素侧不得挂第二个类
+    #    （加类会改 class="field-col" 子串、破 :1009/:3188 计数钉，零 DOM 原则失守）
+    bare = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    offenders = [
+        sel.strip() for sel in re.findall(r"([^{}]+)\{", bare)
+        if ".field-col" in sel
+        and re.search(r"\.field-col\s*\.\s*[\w-]+|\.field-col-[\w-]+", sel)
+    ]
+    assert not offenders, (
+        ".field-col 选择器出现新增类名（禁用加类法改宽，改用 :nth-child）："
+        f"{offenders}")

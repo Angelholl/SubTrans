@@ -137,6 +137,9 @@
     --w-templates-label: 80px;     /* templates dir label min-width */
     --w-min: 0px;                  /* flex min-width reset */
 
+    /* 组件定宽 token 区（卡R1 / D2026-1013-01 第五轮反馈②） */
+    --w-agg-window: 128px;         /* AI 分析跨片窗口框定宽（≈116px 内容 + 框内边距余量） */
+
     /* 行高（d1013-卡B 6 档收敛三值：1.55 / --lh-tight / 字面 1） */
     --lh-tight: 1.25;              /* 单行紧凑 chip 行高（D2026-1013-01） */
     --space-hair: 2px; /* 新增：d1013-卡C */
@@ -2179,6 +2182,14 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     order: 99;
     margin-top: 8px;
 }
+
+/* 卡R1（D2026-1013-01 第五轮反馈）：AI 分析三列按内容定宽，跨片窗口框不再等分整行
+   （最宽屏单列 ≈520px 而最长选项「全部（永久）」实需 ≈116px，4.5 倍虚宽）。
+   零 DOM：index.html/app.js 零改动，:nth-child 定位，严禁给 .field-col 加类
+   （class="field-col" 子串计数钉守护）。窄窗折行仍由父容器 flex-wrap 承接。 */
+.ai-config-row > .field-col:nth-child(1) { flex: 0 1 auto; min-width: 150px; }
+.ai-config-row > .field-col:nth-child(2) { flex: 1 1 220px; min-width: 150px; }   /* 分析模型列吃余量（model-trio 三件） */
+.ai-config-row > .field-col:nth-child(3) { flex: 0 0 var(--w-agg-window); }
 
 /* 批3（D2026-1008-01）：分析模型三件套内排（下拉+刷新+测试+状态 span）。
    select 不再是 .field-col 直接子级，吃满列宽规则自带的
