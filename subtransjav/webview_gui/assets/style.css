@@ -139,6 +139,9 @@
 
     /* 组件定宽 token 区（卡R1 / D2026-1013-01 第五轮反馈②） */
     --w-agg-window: 128px;         /* AI 分析跨片窗口框定宽（≈116px 内容 + 框内边距余量） */
+    --w-stage-model: 140px;        /* 阶段模型框下限=flex basis（卡S1；--w-model 不动防角色卡连带） */
+    --w-stage-unit: 520px;         /* 单元二行破下限（实测 486+34 余量） */
+    --w-stage-key: 240px;          /* API Key 三件原子组下限（label42+140+36+gap16=234+6） */
 
     /* 行高（d1013-卡B 6 档收敛三值：1.55 / --lh-tight / 字面 1） */
     --lh-tight: 1.25;              /* 单行紧凑 chip 行高（D2026-1013-01） */
@@ -1582,7 +1585,6 @@ input[type="checkbox"]:focus-visible {
 /* 模型下拉弹性收缩；连通性测试状态/警告文本独立成行（约 45 字，行尾必折大块） */
 .stage-row .form-select.grow { flex: 1 1 140px; }
 .stage-row .muted,
-.alt-row .muted,
 .stage-row .stage-test-status {
     flex-basis: 100%;
     max-width: 100%;
@@ -1590,18 +1592,27 @@ input[type="checkbox"]:focus-visible {
     margin-top: -2px;
 }
 
-.alt-row {
-    flex: 1;
-    min-width: var(--w-alt-row);
+.stage-unit {
+    flex: 1 1 0;
+    min-width: min(var(--w-stage-unit), 100%);
     display: flex;
-    gap: var(--space-2);
     align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+.stage-key {
+    flex: 1 1 0;
+    min-width: var(--w-stage-key);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
 }
 
 /* 阶段A/B 卡+第三卡内联宽度收编（阶段3 批1：值与原内联逐字一致；C3 域外内联合法存在不动） */
 .stage-row .inline-field:first-child { min-width: var(--w-stage-label); }
 #refineS1Provider, #refineS3Provider { min-width: var(--w-provider); }
-#refineS1Model, #refineS3Model, #refineCleanerConfigShow { min-width: var(--w-model); }
+#refineS1Model, #refineS3Model { min-width: var(--w-stage-model); }
+#refineCleanerConfigShow { min-width: var(--w-cleaner); }
 #refineS1Key, #refineS3Key { min-width: var(--w-key-input); max-width: 200px; }   /* 卡Q：280→200 收窄，label50+gap8+input140+gap8+钮30=236 ≤ 卡内容宽 244，保存钮紧随输入框不再顶出卡缘 */
 #refineProfile { min-width: var(--w-profile); }
 #refineV2Ctx { width: var(--w-ctx); }
