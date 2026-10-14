@@ -1029,16 +1029,16 @@
                     <div class="status-row">
                         <span class="status-dot dot-idle" id="statusDot" aria-hidden="true"></span>
                         <span class="status-label" id="statusLabel" data-testid="status-bar" data-i18n="status_idle">Idle</span>
+                        <!-- 功能状态（真机反馈 IA 重排：语法提示 badge 自卡3 迁入并与
+                             状态行并排（owner 2026-10-14：缩竖向空白）；容器 id/badge
+                             键零变，JS 按 id 消费不受影响） -->
+                        <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
+                            <span class="feature-badge" id="grammarHintBadge" style="display:none;">
+                                <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>
+                                <span class="feature-text" data-i18n="grammar_hint_text">语法提示</span>
+                            </span>
+                        </div>
                     </div>
-                </div>
-
-                <!-- 功能状态（真机反馈 IA 重排：语法提示 badge 自卡3 迁入——
-                     运行控制域显眼位；容器 id/badge 键零变，JS 按 id 消费不受影响） -->
-                <div class="feature-status" id="featureStatus" data-i18n-title="feature_status_title" title="功能状态">
-                    <span class="feature-badge" id="grammarHintBadge" style="display:none;">
-                        <span class="feature-icon"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="m16 20 2 2 4-4"/></svg></span>
-                        <span class="feature-text" data-i18n="grammar_hint_text">语法提示</span>
-                    </span>
                 </div>
 
             </div>
