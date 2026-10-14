@@ -3059,7 +3059,13 @@ def test_encode_adv_group_entry_pinned():
 def test_encode_auto_row_params_link_pinned():
     """钉④右栏自动压制行「参数」文字小按钮：同开编辑模式弹窗；置于
     encode-auto-row label 外（label 内点击会透传切换开关）；零 id/零静态
-    data-i18n，文案 JS 态承接。"""
+    data-i18n，文案 JS 态承接。
+
+    d1013-卡O 钉修订（D2026-1013-01 追记；owner 2026-10-14 直接指令=依据）：
+    参数钮上移卡头标题行（.pipeline-head-row 内与 block-title 同行，文档序
+    移到 encode-auto-row 之前），删原「位于 encode-auto-row 之后」相对顺序
+    断言，改恰 1 处存在断言+同行断言；:3065 class 正则与
+    MSG.encodeParamsLink 回填键断言不动。"""
     src = _app_js_source()
     html = INDEX_HTML.read_text(encoding="utf-8")
     m = re.search(r'<button[^>]*class="btn btn-ghost btn-compact '
@@ -3068,10 +3074,24 @@ def test_encode_auto_row_params_link_pinned():
     tag = m.group(0)
     assert not re.search(r'(?<![\w-])id="', tag) and "data-i18n" not in tag, \
         "参数按钮不得带 id/data-i18n（FROZEN 契约，文案走 JS 态）"
-    # 位置：紧随 encode-auto-row 之后（label 外兄弟节点，防透传切换开关）
-    row_at = html.index('data-testid="encode-auto-row"')
-    assert html.index("encode-params-link") > row_at, \
-        "参数按钮须位于自动压制行之后"
+    # 位置（d1013-卡O 钉修订）：上移卡头标题行——.pipeline-head-row 内与
+    # block-title 同行、#pipelineCard 内恰 1 处（label 外兄弟节点，防透传
+    # 切换开关）；原「位于 encode-auto-row 之后」相对顺序断言已删
+    assert html.count('class="btn btn-ghost btn-compact '
+                      'encode-params-link"') == 1, \
+        "参数按钮须恰 1 处（#pipelineCard 卡头标题行）"
+    m_head = re.search(
+        r'<div class="pipeline-head-row">\s*'
+        r'<div class="block-title" data-i18n="refine_panel_title">'
+        r'.*?</div>\s*'
+        r'<button[^>]*class="btn btn-ghost btn-compact '
+        r'encode-params-link"[^>]*></button>\s*</div>',
+        html, re.S)
+    assert m_head, \
+        "缺卡头标题行 .pipeline-head-row（参数钮须与 block-title 同行）"
+    assert html.index('<div class="pipeline-head-row">') \
+        > html.index('id="pipelineCard"'), \
+        "卡头标题行须在 #pipelineCard 内"
     init = _extract_function(_encode_dock_source(src), "init")
     assert "encode-params-link" in init \
         and "MSG.encodeParamsLink" in init, \
@@ -5348,8 +5368,9 @@ def test_pipeline_card_layout_structure():
       （>.*</span> 内无中文——文案卡M JS 态填充）；
     ②encode-auto-desc/fullchain-auto-desc 文字栈在位
       （label span 保留=JS 填充锚点，desc 空壳）；
-    ③参数钮在 pipeline-subgroup-tail 内且文档序在 encode-auto-row 后
-      （class 四类名序列逐字冻结：btn btn-ghost btn-compact
+    ③参数钮在卡头标题行 .pipeline-head-row 内与 block-title 同行
+      （d1013-卡O 钉修订：自组尾行上移卡头，删相对 encode-auto-row
+      顺序断言；class 四类名序列逐字冻结：btn btn-ghost btn-compact
       encode-params-link，零 id/零 data-i18n）；
     ④sr-only 类两处（browse/open）且 svg 在 span 前
       （图标化 C7 (ii) 方案：data-i18n 键随文本迁 span，applyI18n
@@ -5383,25 +5404,26 @@ def test_pipeline_card_layout_structure():
         r'<span class="fullchain-auto-desc"></span></span>', html), (
         "fullchain-auto 文字栈结构漂移（label/desc 栈须在位）")
 
-    # ③参数钮在组尾行内且文档序在 encode-auto-row 之后
-    m = re.search(r'<div class="pipeline-subgroup-tail">(.*?)</div>',
-                  html, re.S)
-    assert m, "缺 pipeline-subgroup-tail 组尾行"
-    assert ('class="btn btn-ghost btn-compact '
-            'encode-params-link"') in m.group(1), (
-        "参数钮须在 pipeline-subgroup-tail 内"
-        "（class 四类名序列逐字冻结）")
+    # ③参数钮在卡头标题行内与 block-title 同行（d1013-卡O 钉修订：
+    #   自组尾行 .pipeline-subgroup-tail 上移卡头，删相对 encode-auto-row
+    #   顺序断言；class 四类名序列逐字冻结与零 id/零 data-i18n 断言不动）
+    m = re.search(
+        r'<div class="pipeline-head-row">\s*'
+        r'<div class="block-title" data-i18n="refine_panel_title">'
+        r'.*?</div>\s*'
+        r'<button[^>]*class="btn btn-ghost btn-compact '
+        r'encode-params-link"[^>]*></button>\s*</div>',
+        html, re.S)
+    assert m, (
+        "缺卡头标题行 .pipeline-head-row"
+        "（参数钮须与 block-title 同行，class 四类名序列逐字冻结）")
     tag = re.search(
         r'<button[^>]*class="btn btn-ghost btn-compact '
-        r'encode-params-link"[^>]*>', m.group(1))
-    assert tag, "组尾行内参数钮标签解析失败"
+        r'encode-params-link"[^>]*>', m.group(0))
+    assert tag, "卡头行内参数钮标签解析失败"
     assert not re.search(r'(?<![\w-])id="', tag.group(0)) \
         and "data-i18n" not in tag.group(0), (
         "参数钮不得带 id/data-i18n（FROZEN 契约）")
-    tail_at = html.index('class="pipeline-subgroup-tail"')
-    row_at = html.index('data-testid="encode-auto-row"')
-    assert tail_at > row_at, (
-        "参数钮组尾行文档序须在 encode-auto-row 之后")
 
     # ④浏览/打开图标化：sr-only 恰两处且 svg 在 span 前
     n_sr = html.count('class="sr-only"')
