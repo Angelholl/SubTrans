@@ -8203,6 +8203,7 @@ function switchTab(tabId) {
     const asrPy = $('asrPythonInput');
     if (asrPy) {
       asrPy.placeholder = MSG.asrPythonPlaceholder;
+      asrPy.title = MSG.asrPythonPlaceholder;
       asrPy.addEventListener('change', async () => {
         if (!window.pywebview || !window.pywebview.api) return;
         try {

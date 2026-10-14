@@ -651,6 +651,30 @@ def test_guide_txt_view_and_learned_glossary_pinned():
     assert "glLearnedReloadBtn" in bind, "学习词库刷新按钮必须绑定 click"
 
 
+def test_asr_python_input_hint():
+    """ASR Python 输入框悬停全文提示 + min-width:0 防贴边裁切。
+
+    钉：
+    - app.js 含 asrPy.title = MSG.asrPythonPlaceholder（且紧随 placeholder
+      注入行同分支内）；
+    - style.css 含 #asrPythonInput { min-width: 0; }（允许空白弹性匹配）。
+    """
+    source = _app_js_source()
+    # app.js：title 同步注入，且在 asrPy.placeholder 行同一分支内
+    assert "asrPy.title = MSG.asrPythonPlaceholder" in source, \
+        "app.js 需包含 asrPy.title = MSG.asrPythonPlaceholder"
+    # 紧随 placeholder 注入行同一分支：确保在 asrPy.placeholder 赋值之后
+    m = re.search(
+        r"asrPy\.placeholder\s*=\s*MSG.asrPythonPlaceholder;"
+        r".*?asrPy\.title\s*=\s*MSG.asrPythonPlaceholder;",
+        source, re.S)
+    assert m, "asrPy.title 必须紧随 asrPy.placeholder 同一分支内注入"
+    # style.css：min-width:0 防内容固有宽顶出贴卡裁切
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert "#asrPythonInput { min-width: 0; }" in css, \
+        "style.css 需包含 #asrPythonInput { min-width: 0; }"
+
+
 def test_glossary_blocks_collapsible_pinned():
     """2.1.1 owner 痛点批：词库页两区块折叠契约（静态断言）。
 
