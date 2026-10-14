@@ -1671,7 +1671,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     align-items: center;
     flex-wrap: wrap;
     gap: var(--space-2);
-    margin: var(--space-2) 0;
+    margin: 0 0 0 auto;   /* 真机反馈：并入状态行并排、右对齐（badge 关闭时零占位） */
 }
 
 .feature-badge {
