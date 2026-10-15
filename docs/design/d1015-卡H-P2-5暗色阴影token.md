@@ -52,3 +52,58 @@ grep -n "active-text" subtransjav/webview_gui/assets/style.dark.css        # 期
 - 只改上列 2 文件；--shadow-sm/md 不动；不并入现有 token（评议已裁）；亮侧两 rgba 字面移入 :root 后组件规则内不得残留。
 - 提交信息：`fix(gui): P2-5 暗色蓝阴影 token 化+暗侧 active 文字 AA 修复（d1015-卡H）`，正文含 `verify: grep 留痕+全链绿` 与 `Refs: D2026-1015-05`。
 - 完成后在本卡末尾追加执行记录（含「P0 规格遗留登记① 已由本卡收口」一句，供主答回写）。
+
+## 执行记录
+
+### 改动文件（仅 2 个，无越界）
+
+1. `subtransjav/webview_gui/assets/style.css`
+   - `:root` 内 `--shadow-md`（:80）后新增 2 行：`--shadow-brand: 0 2px 6px rgba(59,130,246,.35);`、`--shadow-primary: 0 1px 2px rgba(37,99,235,.3);`（值逐字=亮侧原字面）。
+   - `.brand-mark` 规则体（:246）`box-shadow: 0 2px 6px rgba(59,130,246,.35);` → `box-shadow: var(--shadow-brand);`
+   - `.btn-primary` 规则体（:953）`box-shadow: 0 1px 2px rgba(37,99,235,.3);` → `box-shadow: var(--shadow-primary);`
+2. `subtransjav/webview_gui/assets/style.dark.css`
+   - `:root` 内 `--shadow-md` 覆盖（:77）后新增 3 行：`--shadow-brand: 0 2px 6px rgba(0, 0, 0, 0.5);`、`--shadow-primary: 0 1px 2px rgba(0, 0, 0, 0.5);`、`--active-text: var(--primary);   /* 暗侧激活文字提亮 #60A5FA，AA 修复（P0 遗留①），6.48:1 */`
+
+`--shadow-sm/--shadow-md` 零改动；未并入现有 token；亮侧两处 rgba 字面已全部移入 `:root`，组件规则体内无残留。暗侧 `--primary` = `#60A5FA`（style.dark.css:49），`--active-text: var(--primary)` 生效。
+
+### 先红后绿（grep 留痕）
+
+改前：
+```
+$ grep -n "rgba(59,130,246,.35)\|rgba(37,99,235,.3)" subtransjav/webview_gui/assets/style.css
+244:    box-shadow: 0 2px 6px rgba(59,130,246,.35);
+951:    box-shadow: 0 1px 2px rgba(37,99,235,.3);
+```
+改后：
+```
+$ grep -n "rgba(59,130,246,.35)\|rgba(37,99,235,.3)" subtransjav/webview_gui/assets/style.css
+81:    --shadow-brand: 0 2px 6px rgba(59,130,246,.35);
+82:    --shadow-primary: 0 1px 2px rgba(37,99,235,.3);
+
+$ grep -n "shadow-brand\|shadow-primary\|active-text" subtransjav/webview_gui/assets/style.css subtransjav/webview_gui/assets/style.dark.css
+style.css:48:    --active-text:  var(--primary-strong);
+style.css:81:    --shadow-brand: 0 2px 6px rgba(59,130,246,.35);
+style.css:82:    --shadow-primary: 0 1px 2px rgba(37,99,235,.3);
+style.css:246:    box-shadow: var(--shadow-brand);
+style.css:284:    color: var(--active-text);
+style.css:953:    box-shadow: var(--shadow-primary);
+style.css:1253:    color: var(--active-text);
+style.css:2506:    color: var(--active-text);
+style.dark.css:78:    --shadow-brand: 0 2px 6px rgba(0, 0, 0, 0.5);
+style.dark.css:79:    --shadow-primary: 0 1px 2px rgba(0, 0, 0, 0.5);
+style.dark.css:80:    --active-text: var(--primary);   /* 暗侧激活文字提亮 #60A5FA，AA 修复（P0 遗留①），6.48:1 */
+```
+组件字面处 2 → 0；`:root` 2 行（亮值）；暗侧覆盖 3 行。`pytest tests/test_gui_js_static.py tests/test_ui_phase3_redlines.py -q` → **202 passed in 1.93s**（全绿，无回归）。
+
+### 验收命令回执
+
+```
+$ grep -c "rgba(59,130,246,.35)" subtransjav/webview_gui/assets/style.css
+1                                   # 期望 1（仅 :root）✓
+$ grep -n "active-text" subtransjav/webview_gui/assets/style.dark.css
+80:    --active-text: var(--primary);   ...   # 期望 1 行覆盖 ✓
+```
+
+### 遗留问题
+
+- 无。**P0 规格遗留登记① 已由本卡收口**（暗侧 `.side-tab-btn.active` 激活文字 #3B82F6→#60A5FA，三处消费 `.side-tab-btn.active` / `.review-page-btn.active` / `.dict-kind-chip.active` 同步达标 6.48:1）。
