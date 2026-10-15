@@ -321,16 +321,27 @@ def test_ensure_safe_dict_dir_allows_arbitrary_dirs(monkeypatch, tmp_path):
 
 
 def test_effective_dir_blacklist_falls_back(monkeypatch, _isolated_dict_state):
-    """消费面接线：①②流命中黑名单均视为无效静默回退（防御纵深一致）。"""
+    """消费面接线：①②流命中黑名单均视为无效静默回退（防御纵深一致）。
+
+    d1015 残余批后 CI 第三发（windows-3.12，e5b4c52）：快跑下三次
+    _write_user_dirs_json 落进同一 mtime quantum → 缓存不失效读到旧 json。
+    承 d1012-卡1 处方：每次写后 os.utime(ns) 显式进位，与自然时钟解耦。"""
     root = _isolated_dict_state
     roots = _enable_fake_system_roots(monkeypatch, root / "sysroot")
     good = root / "gooddict"
     good.mkdir()
+    base_ns = 1_000_000_000
+
+    def _write_json_bumped(payload, bump):
+        p = _write_user_dirs_json(root, payload)
+        os.utime(p, ns=(base_ns + bump, base_ns + bump))
+        return p
+
     # ②JSON 指向黑名单 → 回数据根默认（与损坏 JSON 同待遇）
-    _write_user_dirs_json(root, {"dict_dir": str(roots[0] / "dict")})
+    _write_json_bumped({"dict_dir": str(roots[0] / "dict")}, 0)
     assert _norm(dm.effective_dict_dir()) == _norm(root / "dict")
     # ①注入黑名单 + ②JSON 合法 → ①无效继续向下，②生效
-    _write_user_dirs_json(root, {"dict_dir": str(good)})
+    _write_json_bumped({"dict_dir": str(good)}, 100)
     dm.set_custom_dir(str(roots[1]))
     assert _norm(dm.effective_dict_dir()) == _norm(good)
     # ①合法压过 ②（守卫只施加于被消费的流，优先级不变）
@@ -338,7 +349,7 @@ def test_effective_dir_blacklist_falls_back(monkeypatch, _isolated_dict_state):
     assert _norm(dm.effective_dict_dir()) == _norm(good)
     # ①②均黑名单 → 默认
     dm.set_custom_dir(str(roots[2]))
-    _write_user_dirs_json(root, {"dict_dir": str(roots[3] / "dict")})
+    _write_json_bumped({"dict_dir": str(roots[3] / "dict")}, 200)
     assert _norm(dm.effective_dict_dir()) == _norm(root / "dict")
     # 守卫不改变 _user_dirs_json_dict_dir 读值本身（净化只发生在消费面）
     assert _norm(dm._user_dirs_json_dict_dir()) == \
