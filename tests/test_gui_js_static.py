@@ -6219,3 +6219,72 @@ def test_p23_collapse_header_right_aligned():
     for blk in action_row:
         assert "justify-content" not in blk, \
             ".action-row 规则块不得含 justify-content（防左对齐语义被两端对齐外溢）"
+
+
+# ============================================================================
+# d1015-卡C（回链 D2026-1015-05）；卡B 落地（HEAD 29276d8）之主次 class /
+# 图标 / 文案双表同步尚无回归钉保护（主次回潮或双表失步无法被测试捕获）。
+# 本钉锁定 P1-4 拖拽区恢复面（写法沿用本文件既有读取/解析 helper 与
+# tests:5466 同款 button 片段正则）：
+# ① #addFolderBtn 次级（含 `btn btn-secondary`，不含 `btn-primary`）；
+# ② #addFilesBtn / #addFolderBtn 各含 `<svg` 且含 `stroke-width="2"`；
+# ③ app.js MSG.source_header == '拖拽 .srt 字幕文件到这里'；
+# ④ app.js MSG.empty_hint == index.html data-i18n="empty_hint" 挂点静态文本
+#    （防双表失步）；
+# ⑤ 校对页两枚 review-import-btn 各含 `<svg` 且含 `stroke-width="2"`。
+# 红证据=负控（卡B 已落地，钉落盘即绿；先红由负控证明钉真能红，防空转）：
+# 负控一改回 #addFolderBtn=btn btn-primary → 断言①红；负控二改回 app.js
+# source_header 旧值 → 断言③红；红/绿两段原文见本卡执行记录。
+# ============================================================================
+def test_p14_dropzone_restored_pinned():
+    """D2026-1015-05 / 卡C：P1-4 拖拽区恢复五断言钉（主次/图标/文案双表/校对钮）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    src = _app_js_source()
+
+    def button_fragment(dom_id: str) -> str:
+        """按 id 提取 button 完整元素片段（同 tests:5466 同款正则口径）。"""
+        m = re.search(
+            rf'<button[^>]*id="{re.escape(dom_id)}"[^>]*>(.*?)</button>',
+            html, re.S)
+        assert m, f"index.html 未找到 button#{dom_id}"
+        return m.group(0)
+
+    # ① 主次恢复：目录钮为次级，且不得回潮为 primary（P1-4 两枚并列 primary 无主次）
+    folder = button_fragment("addFolderBtn")
+    assert "btn btn-secondary" in folder, \
+        "#addFolderBtn 须为次级按钮（class 含 btn btn-secondary，P1-4 主次恢复）"
+    assert "btn-primary" not in folder, \
+        "#addFolderBtn 回潮为 btn-primary（两枚并列 primary 无主次的 P1-4 缺陷）"
+
+    # ② 拖拽区两钮图标化且粗细统一 2（Lucide 上游默认）
+    for dom_id in ("addFilesBtn", "addFolderBtn"):
+        frag = button_fragment(dom_id)
+        assert "<svg" in frag, f"#{dom_id} 缺内联 svg 图标"
+        assert 'stroke-width="2"' in frag, \
+            f"#{dom_id} 图标 stroke-width 须为 2"
+
+    # ③ app.js MSG.source_header 取值锁定（操作性文案，勿回旧值）
+    m = re.search(r"^\s*source_header:\s*'([^']*)'", src, re.M)
+    assert m, "app.js MSG 缺 source_header 键"
+    assert m.group(1) == "拖拽 .srt 字幕文件到这里", \
+        f"source_header 文案漂移：{m.group(1)!r}"
+
+    # ④ 双表同步：MSG.empty_hint == index.html data-i18n="empty_hint" 两挂点静态文本
+    m = re.search(r"^\s*empty_hint:\s*'([^']*)'", src, re.M)
+    assert m, "app.js MSG 缺 empty_hint 键"
+    msg_empty = m.group(1)
+    texts = re.findall(r'data-i18n="empty_hint"[^>]*>([^<]*)<', html)
+    assert texts, "index.html 未找到 data-i18n=\"empty_hint\" 挂点"
+    assert set(texts) == {msg_empty}, \
+        f"empty_hint 双表失步：MSG={msg_empty!r}，index 挂点={texts!r}"
+
+    # ⑤ 校对页两枚导入钮图标化且粗细统一 2
+    review = re.findall(
+        r'<button[^>]*class="[^"]*review-import-btn[^"]*"[^>]*>.*?</button>',
+        html, re.S)
+    assert len(review) == 2, \
+        f"review-import-btn 应恰 2 枚（校对页），实测 {len(review)}"
+    for frag in review:
+        assert "<svg" in frag, "review-import-btn 缺内联 svg 图标"
+        assert 'stroke-width="2"' in frag, \
+            "review-import-btn 图标 stroke-width 须为 2"
