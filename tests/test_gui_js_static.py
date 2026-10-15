@@ -4082,7 +4082,10 @@ _FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（token=8/12
     "9px": 0, "10px": 0, "6px": 0, "7px": 0, "4px": 0, "99px": 0, "999px": 0,
 }
 _FROZEN_COLOR_DISTINCT = {   # 组件规则内色值字面量（:root token 定义不计数）
-    "#fff", "rgba(59,130,246,.35)", "rgba(37,99,235,.3)", "rgba(0, 0, 0, 0.5)",
+    # 蓝阴影二字面（rgba(59,130,246,.35)/rgba(37,99,235,.3)）已随 d1015-卡H
+    # 收进 :root token（--shadow-brand/--shadow-primary），本卡（d1015-卡I）
+    # 移出冻结集并加收紧断言防组件回潮。
+    "#fff", "rgba(0, 0, 0, 0.5)",
 }
 
 
@@ -4183,6 +4186,39 @@ def test_p8_no_new_component_color_literals():
     assert not new, (
         f"组件规则内出现冻结清单外的新色值字面量：{sorted(new)}——"
         "请引用语义 token（--text-*/--ok/--warn/--danger 等）或在 :root 定义新 token"
+    )
+
+
+def test_p25_component_scope_brand_shadow_literals_banned():
+    """P2-5 钉3 收紧（d1015-卡I，Refs: D2026-1015-05）：卡H 已把组件内两枚
+    蓝阴影字面收进 :root token（--shadow-brand/--shadow-primary）；本钉把
+    该二字面移出 _FROZEN_COLOR_DISTINCT 后，组件规则内再写回任一字面即红
+    （冻结集收缩的防回潮闭环）。负控：临时向 .btn-primary 注回
+    box-shadow: 0 1px 2px rgba(37,99,235,.3); → 本钉必红。"""
+    scope = _style_css_component_scope()
+    for literal in ("rgba(59,130,246,.35)", "rgba(37,99,235,.3)"):
+        assert literal not in scope, (
+            f"组件规则内回潮蓝色阴影字面 {literal}——"
+            "请引用 :root token --shadow-brand/--shadow-primary（d1015-卡H）"
+        )
+
+
+def test_active_text_dark_aa_pinned():
+    """P2-5 暗侧 active-text 钉（d1015-卡I，Refs: D2026-1015-05）：卡H 暗侧
+    active 文字 AA 修复须有钉保护——style.dark.css 的 :root 覆盖块必须含
+    --active-text 声明且值为 var(--primary)（#60A5FA，暗底约 6.48:1）；缺失
+    即回退浅色 --primary-strong（#3B82F6）在暗底对比度不足。负控：临时注释
+    该行 → 本钉必红。"""
+    css = (ASSETS / "style.dark.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    m = re.search(r":root\s*\{([^}]*)\}", css)
+    assert m, "style.dark.css 缺 :root 覆盖块"
+    decl = re.search(r"--active-text\s*:\s*([^;}]+)", m.group(1))
+    assert decl, \
+        "style.dark.css :root 缺 --active-text 暗侧覆盖声明（AA 修复钉）"
+    assert decl.group(1).strip() == "var(--primary)", (
+        "暗侧 --active-text 必须覆盖为 var(--primary)（#60A5FA，AA 修复）；"
+        f"实测 {decl.group(1).strip()!r}"
     )
 
 
