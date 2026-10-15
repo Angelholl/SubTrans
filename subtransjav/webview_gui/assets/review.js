@@ -219,8 +219,11 @@ const ReviewUI = {
             if (hint) { hint.textContent = REVIEW_MSG.review_drop_hint; }
         }
         document.querySelectorAll('.review-import-btn').forEach((btn) => {
+            // textContent 覆写会清空全部子节点：先存图标引用，写入文案后回插
+            const svg = btn.querySelector('svg');
             btn.textContent = (btn.dataset.kind === 'video')
                 ? REVIEW_MSG.review_import_video : REVIEW_MSG.review_import_srt;
+            if (svg) { btn.prepend(svg); }
         });
         const tcBtn = document.getElementById('reviewTranscodeBtn');
         if (tcBtn) { tcBtn.textContent = REVIEW_MSG.review_transcode_btn; }
