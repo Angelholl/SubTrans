@@ -2169,7 +2169,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 /* 2.5.0 批5（D2026-1001-07）：AI 分析独立配置行（服务商下拉+模型输入）
    批3（D2026-1002-12）：平铺改 3 组顶置标签列（.field-col，每组弹性收缩
    190px 基准 / 110px 下限）；顶置 label 对齐 .field-label 视觉（muted 色 +
-   font-xs），控件吃满列宽（取代原 3 处内联 width:auto）.ai-config-row {
+   font-xs），控件吃满列宽（取代原 3 处内联 width:auto）；原行尾提示句
+   已随 D2026-1015-01 退役 */
+.ai-config-row {
     display: flex;
     gap: var(--space-2);
     align-items: flex-start;

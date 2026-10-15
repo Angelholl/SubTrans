@@ -5933,3 +5933,15 @@ def test_stage_card_unit_layout():
 
     # ⑨ --w-model: 200px 仍在位
     assert "--w-model: 200px" in css, "--w-model: 200px 被改动（须保持不动）"
+
+
+def test_style_css_comment_blocks_balanced():
+    """D2026-1015-01 验收修正防复发：style.css 注释开闭配平。
+
+    卡执行曾误删注释闭合 `*/` 致 `.ai-config-row` 整组规则被吞进注释
+    （静态文本断言测不出 CSS 语法破损，浏览器端整段失效）；此钉锁
+    `/*` 与 `*/` 出现次数相等（配平即无未闭合注释跑吃规则的形态）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert css.count("/*") == css.count("*/"), \
+        "style.css 注释开闭不配平（存在未闭合注释，将吞吃后续规则）"
