@@ -222,6 +222,9 @@ const MSG = {
     // ---- Source 区 / 文件按钮 ----
     source_header: '拖拽 .srt 字幕文件到这里',
     no_files_selected: '暂未选择文件',
+    // d1015-卡E（D2026-1015-05）：文件卡头「已选 X 个」计数（JS 态键，
+    // 卡D 骨架 .card-head-count 由此填充；0 文件时不显示）
+    selected_count: (n) => `已选 ${n} 个`,
     empty_hint: '点击按钮选择文件或文件夹，也可直接拖入 · 支持 .srt / .ass / .ssa / .vtt 批量添加',
     add_files: '添加文件',
     add_folder: '添加文件夹',
@@ -3147,6 +3150,9 @@ const FileListManager = {
 
         document.getElementById('removeSelectedBtn').disabled = !hasSelection || AppState.isRunning;
         document.getElementById('clearBtn').disabled = !hasFiles || AppState.isRunning;
+
+        const countEl = document.querySelector('.card-head-count');
+        if (countEl) countEl.textContent = AppState.selectedFiles.length > 0 ? MSG.selected_count(AppState.selectedFiles.length) : '';
 
         TranslatorManager.updateButtons();
     },

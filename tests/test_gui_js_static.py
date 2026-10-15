@@ -6310,3 +6310,44 @@ def test_review_import_icons_survive_inject():
         "_injectTexts 未先取按钮内 svg 引用（裸 textContent 覆写会抹掉图标）"
     assert any(fn in body for fn in ("prepend", "appendChild", "insertBefore")), \
         "_injectTexts 未回插 svg（清文本后图标不存活）"
+
+
+# ============================================================================
+# d1015-卡E（回链 D2026-1015-05）：B-01 计数 JS 接线钉——卡D 骨架
+# `<span class="card-head-count" data-testid="card-head-count">` 已落地，
+# 但 app.js 从无写者，span 恒空、计数不显示。本钉四断言锁死接线：
+# ① index.html 骨架锚恰 1 处（卡D 已落地，绿到即至）；
+# ② MSG 表含 JS 态键 selected_count；
+# ③ FileListManager.updateButtons 函数体消费 card-head-count/selected_count；
+# ④ style.css .card-head-count 规则体两 token（--font-xs/--text-2）。
+# ============================================================================
+def test_b01_selected_count_pinned():
+    """B-01 计数 JS 接线钉（d1015-卡E / D2026-1015-05）。
+
+    人工推演（计数不显示场景）：卡D 已在文件卡头（.card-head）落地
+    `<span class="card-head-count" data-testid="card-head-count">` 惰性骨架，
+    但全文件零写入点——span 文本恒空，增删清空文件均无量化反馈。
+    修复：MSG 表补 JS 态键 `selected_count: (n) => \\`已选 ${n} 个\\``（先例
+    encodeSummaryVol/encodeSummaryAt 箭头函数值形态），并在
+    FileListManager.updateButtons（增/删/清空/点选全路径的单点汇）按
+    队列文件总数（AppState.selectedFiles.length，非勾选索引数）回写：
+    >0 走计数文案、=0 置空（空态不得显「已选 0 个」）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # ① 骨架锚恰 1 处（卡D 已落地，本断言绿到即至）
+    assert html.count('data-testid="card-head-count"') == 1, \
+        "index.html 须恰 1 处 data-testid=\"card-head-count\"（卡D 骨架）"
+    # ② MSG 表含 selected_count 键（箭头函数值形态，_js_msg_keys 解析兼容）
+    assert "selected_count" in _js_msg_keys(), \
+        "app.js MSG 表缺 selected_count 键"
+    # ③ 接线点：updateButtons 函数体（首匹配 = FileListManager.updateButtons）
+    body = _extract_function(_app_js_source(), "updateButtons")
+    assert "card-head-count" in body, \
+        "updateButtons 未接线 .card-head-count（计数永不显示）"
+    assert "selected_count" in body, "updateButtons 未消费 MSG.selected_count"
+    # ④ style.css 规则体两 token（对比度/字号档位沿用卡D）
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.card-head-count \{[^}]*\}", css)
+    assert m, "style.css 缺 .card-head-count 规则"
+    assert "var(--font-xs)" in m.group(0) and "var(--text-2)" in m.group(0), \
+        ".card-head-count 规则体缺 --font-xs/--text-2 token"
