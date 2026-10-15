@@ -654,6 +654,7 @@ button:focus:not(:focus-visible) { outline: none; }
     border-bottom: 1px solid var(--border);
 }
 .card-head-actions { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.card-head-count { font-size: var(--font-xs); color: var(--text-2); }
 
 /* 文件卡弹性内滚（A案 批1）：卡片区填充分区剩余高度，列表容器内滚——
    弹性链路 #tab-translate > .card → .file-list-container → .file-list
