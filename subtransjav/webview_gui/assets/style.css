@@ -30,11 +30,16 @@
     /* 文字 */
     --text-1: #111827;
     --text-2: #6B7280;
-    --text-3: #9CA3AF;
+    --text-3: #656D7A;
 
     /* 品牌 */
     --primary:        #3B82F6;  /* brief 指定科技蓝 */
     --primary-strong: #2563EB;
+    /* 主按钮/品牌块前景与底色族（D2026-1015-04 G3）：组件规则只 var() 引用 */
+    --on-primary: #FFFFFF;
+    --primary-deep: #1D4ED8;
+    --btn-primary-bg: var(--primary-strong);
+    --btn-primary-bg-hover: var(--primary-deep);
     --primary-soft:   #EFF6FF;
     --primary-border: #BFDBFE;
 
@@ -47,7 +52,7 @@
     /* 语义 */
     --ok:          #10B981;
     --ok-soft:     #ECFDF5;
-    --warn:        #F59E0B;   /* brief 指定警告橙 */
+    --warn:        #B45309;   /* 警告橙 amber-700；D2026-1015-04：owner P0-5 裁决 AA 修复，brief 原字面 #F59E0B 留痕 */
     --warn-soft:   #FFFBEB;
     --danger:      #DC2626;
     --danger-soft: #FEF2F2;   /* 停止按钮浅红 */
@@ -108,7 +113,7 @@
     --border-color: var(--border);
     --status-ok: var(--ok);
     --status-err: var(--danger);
-    --status-warn: #B26A00;  /* 白底上 #B26A00 琥珀可读；深色层改用 var(--warn) */
+    --status-warn: var(--warn);  /* D2026-1015-04：收编 --warn（AA 修复，组件零改动） */
 
     /* ---- 内联宽度 token（index.html 内联样式逐字引用，勿删） ---- */
     --w-quick-service: 150px;      /* service quick select min-width */
@@ -232,7 +237,7 @@ button:focus:not(:focus-visible) { outline: none; }
     height: 32px;
     border-radius: var(--radius-sm);
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     display: grid;
     place-items: center;
     flex-shrink: 0;
@@ -698,10 +703,10 @@ button:focus:not(:focus-visible) { outline: none; }
     padding: var(--space-4) var(--space-2);
     border-radius: var(--radius);
 }
-.empty-icon { font-size: 32px; margin-bottom: var(--space-2); opacity: .6; }
+.empty-icon { font-size: 32px; margin-bottom: var(--space-2); }
 .empty-icon svg { display: block; margin: 0 auto; }
 .empty-state p { margin: 2px 0; font-size: var(--font-sm); }
-.empty-hint { font-size: var(--font-xs); opacity: .85; }
+.empty-hint { font-size: var(--font-xs); }
 
 /* 文件行（D2026-0930-09 批2：图标盒+名称/路径双行+三态 chip+移除按钮） */
 .file-item {
@@ -920,11 +925,11 @@ button:focus:not(:focus-visible) { outline: none; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
 .btn-primary {
-    background: var(--primary);
-    color: #fff;
+    background: var(--btn-primary-bg);
+    color: var(--on-primary);
     box-shadow: 0 1px 2px rgba(37,99,235,.3);
 }
-.btn-primary:hover:not(:disabled) { background: var(--primary-strong); }
+.btn-primary:hover:not(:disabled) { background: var(--btn-primary-bg-hover); }
 
 /* 停止 / 危险：浅红底 + danger 字 + danger 边（原型 .btn-stop） */
 .btn-danger {
