@@ -642,6 +642,16 @@ button:focus:not(:focus-visible) { outline: none; }
 .dz-hint { font-size: var(--font-sm); color: var(--text-2); }
 .dz-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
 
+/* P1-9 空态静态兜底（d1015-卡F / D2026-1015-05）：JS 未跑时收形，防「空药丸」。
+   作用域一律锁死（勿全局化，评议修订项⑦）：
+   ① 校对页疑点工具条两枚 ghost 钮文案由 review.js 注入，未填前 :empty 收形；
+   ② 高级页第 4 卡（压制参数组）四子件由 EncodeDock.init 注入，JS 失败时
+      收缩为带边框空卡而非「空框+空钮」。 */
+.review-det-tools button:empty { display: none; }
+[data-testid="encode-adv-group"] .group-title:empty,
+[data-testid="encode-adv-group"] .muted:empty,
+[data-testid="encode-adv-group"] .btn:empty { display: none; }
+
 /* ============================================================
    6. 文件列表
    ============================================================ */
