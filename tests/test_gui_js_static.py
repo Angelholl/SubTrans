@@ -501,9 +501,9 @@ def test_ai_tm_conflict_warn_badge_pin():
         "TM 行必须按 conflict_warn 条件渲染黄标"
 
 
-def test_ai_privacy_bar_provider_branch():
-    """隐私提示条：云端 provider（deepseek/siliconflow/custom/zen）显示
-    aiPrivacyCloud；本地显示 aiPrivacyLocal。"""
+def test_ai_cloud_provider_list_pinned():
+    """云端 provider 清单钉：AI_CLOUD_PROVIDERS 含四服务商
+    （deepseek/siliconflow/custom/zen）。aiSetPrivacy 已随 D2026-1015-01 整行移除退役。"""
     source = _app_js_source()
     _extract_function(source, "isAiCloudProvider")
     m = re.search(r"AI_CLOUD_PROVIDERS\s*=\s*\[([^\]]+)\]", source)
@@ -511,9 +511,6 @@ def test_ai_privacy_bar_provider_branch():
     cloud_list = m.group(1)
     for prov in ("deepseek", "siliconflow", "custom", "zen"):
         assert f"'{prov}'" in cloud_list, f"云服务商清单缺 {prov}"
-    bar = _extract_function(source, "aiSetPrivacy")
-    assert "aiPrivacyCloud" in bar and "aiPrivacyLocal" in bar, \
-        "隐私条必须双分支文案"
 
 
 def test_ai_apply_single_entry_calls_endpoints():
@@ -1017,22 +1014,18 @@ def test_batch3_ai_config_row_field_cols_pinned():
     - style.css 存在 .ai-config-row .field-col 规则组与 align-items:flex-start；
     - index.html 配置行恰 3 组 .field-col（服务商/模型/跨片窗口），
       3 处内联 width:auto 不再残留；
-    - 橙色提示 #refineAiPrivacy 移入行尾（order:99 行内末位），
-      四锚点 id 全保留（FROZEN_IDS 契约）。
+    - 三锚点 id 全保留（FROZEN_IDS 契约）。
     """
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     assert ".ai-config-row .field-col" in css, "缺 .field-col 规则组"
     m = re.search(r"\.ai-config-row \{[^}]*\}", css)
     assert m and "align-items: flex-start;" in m.group(0), \
         ".ai-config-row 缺 align-items:flex-start"
-    assert re.search(r"\.ai-config-row > #refineAiPrivacy \{[^}]*order: 99;", css), \
-        "#refineAiPrivacy 缺 order:99 行尾规则"
     html = INDEX_HTML.read_text(encoding="utf-8")
     i = html.index('class="ai-config-row"')
     row = html[i:html.index("</section>", i)]
     assert row.count('class="field-col"') == 3, "配置行必须恰 3 组顶置标签列"
-    for dom_id in ("aiProviderSel", "aiModelInput", "aggregateWindowSel",
-                   "refineAiPrivacy"):
+    for dom_id in ("aiProviderSel", "aiModelInput", "aggregateWindowSel"):
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
 
@@ -1186,7 +1179,7 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # 2.8.0 批1（D2026-1007-03）：压制队列底条显式解冻 218→223
     # （encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/
     #  encodeDockToggle，零 data-i18n，文案 JS 态 MSG 键承接）
-    assert len(ids) == 223, f"id 全集数漂移（2.8.0 批1 解冻后契约 223 不变），实为 {len(ids)}"
+    assert len(ids) == 222, f"id 全集数漂移（2.8.0 批1 解冻后现契约 222），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -3163,8 +3156,7 @@ def test_batch3_analysis_model_select_trio_pinned():
     assert "testTrioModel" in test_fn and "refineS1Provider" in test_fn, \
         "分析测试按钮 follow 态须测阶段A 当前配置"
     keys = _js_msg_keys()
-    for key in ("ai_model_follow_hint", "aiEffFollow", "aiEffIndependent",
-                "aiModelUnset", "aiEffectiveLine", "aiCloudNote"):
+    for key in ("ai_model_follow_hint",):
         assert key in keys, f"MSG 缺批3新键: {key}"
     assert "ai_model_placeholder" not in keys \
         and "MSG.ai_model_placeholder" not in src, \
@@ -3202,20 +3194,19 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 
 def test_batch3_ai_config_row_pins_survive():
-    """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 四锚点 id 保留 +
-    无内联 width:auto；id 全集数 223 / data-i18n 键集 187 契约数零漂移
+    """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
+    无内联 width:auto；id 全集数 222 / data-i18n 键集 187 契约数零漂移
     （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
     模型行零 id/零 data-i18n，两契约数不漂移）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     i = html.index('class="ai-config-row"')
     row = html[i:html.index("</section>", i)]
     assert row.count('class="field-col"') == 3, "配置行必须恰 3 组顶置标签列"
-    for dom_id in ("aiProviderSel", "aiModelInput", "aggregateWindowSel",
-                   "refineAiPrivacy"):
+    for dom_id in ("aiProviderSel", "aiModelInput", "aggregateWindowSel"):
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 223, f"id 全集数漂移（契约 223），实为 {len(ids)}"
+    assert len(ids) == 222, f"id 全集数漂移（契约 222），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 186=artifact_note 键退役后契约值（真机反馈 IA 重排轮，D2026-1013-01 追记；
@@ -3238,15 +3229,6 @@ def test_batch3_trio_wiring_and_effective_lines_pinned():
         "bindDom 缺刷新按钮图标/title 填充"
     assert "MSG.test_stage_btn" in bind, "bindDom 缺测试按钮文案填充"
     assert "fix_cfg_label" not in bind, "修复行标签填充随删行退役残留"
-    eff = _extract_function(src, "aiRefreshEffective")
-    assert "analyzeResolution()" in eff, \
-        "分析生效行须走 analyzeResolution 单源（P2）"
-    assert "MSG.aiEffectiveLine" in eff and "MSG.aiEffFollow" in eff \
-        and "MSG.aiEffIndependent" in eff and "MSG.aiCloudNote" in eff, \
-        "分析生效行文案必须全走 MSG 键"
-    assert "分析模型：" not in eff and "跟随阶段A" not in eff \
-        and "独立配置" not in eff and "未指定" not in eff, \
-        "aiRefreshEffective 残留中文字面量（须收编 MSG 键）"
     bf = _extract_function(src, "bfRefreshEffective")
     assert "analyzeResolution()" in bf, \
         "修复明示行入参须=analyzeResolution 产物（预览/执行同源，C7）"
@@ -3260,70 +3242,30 @@ def test_batch3_trio_wiring_and_effective_lines_pinned():
         "三件套测试必须复用阶段页 refine_test_stage 桥"
 
 
-def test_ai_effective_line_inline():
-    """卡R2（D2026-1013-01）：AI 分析生效行同行化 + 模型名 R1' 简化。
+def test_ai_effective_line_removed():
+    """D2026-1015-01 退役回归钉：AI 分析生效行黄字提示整行移除。
 
-    - style.css `#refineAiPrivacy` 规则不含 flex-basis:100%（折行
-      成因），含 max-width:420px 与 order:99（:1004 钉逐字断言仍
-      绿=order 保留）；
-    - app.js 含 shortenModelName 定义（R1'：去 provider 前缀后前
-      12+…+后 8，全长>24 才简化）；aiRefreshEffective 显示名走
-      shortenModelName，#refineAiPrivacy title 全量回填（悬停读
-      全名，无障碍等价）。
+    - index.html 无 #refineAiPrivacy 元素；
+    - style.css 无 .ai-config-row > #refineAiPrivacy 规则；
+    - app.js 无 aiRefreshEffective / shortenModelName / aiSetPrivacy 函数；
+    - MSG 七键（aiEffFollow/aiEffIndependent/aiModelUnset/aiEffectiveLine/
+      aiCloudNote/aiPrivacyCloud/aiPrivacyLocal）全部退役。
     """
+    html = INDEX_HTML.read_text(encoding="utf-8")
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    m = re.search(r"\.ai-config-row > #refineAiPrivacy \{([^}]*)\}", css)
-    assert m, "缺 .ai-config-row > #refineAiPrivacy 规则"
-    rule = m.group(1)
-    assert "flex-basis: 100%" not in rule, \
-        "生效行规则残留 flex-basis:100%（折行成因，卡R2 须删）"
-    assert "max-width: 420px" in rule, "生效行规则缺 max-width:420px"
-    assert "flex: 1 1 0" in rule, \
-        "生效行规则缺 flex:1 1 0（主审修复：basis auto=nowrap 内容宽必折行，同行化失效回潮）"
-    assert "order: 99" in rule, "生效行规则缺 order:99（钉 :1004 保留）"
     src = _app_js_source()
-    assert "function shortenModelName" in src, "app.js 缺 shortenModelName 定义"
-    eff = _extract_function(src, "aiRefreshEffective")
-    assert "el.textContent = line(shortenModelName(full));" in eff, \
-        "生效行显示文本须走 shortenModelName（R1' 显示名简化）"
-    assert "el.title = line(full);" in eff, \
-        "#refineAiPrivacy 须 title 全量回填（悬停读全名）"
+    assert "refineAiPrivacy" not in html, "index.html 残留 #refineAiPrivacy 元素"
+    assert "refineAiPrivacy" not in css, "style.css 残留 #refineAiPrivacy 规则"
+    assert "refineAiPrivacy" not in src, "app.js 残留 #refineAiPrivacy 引用"
+    assert "aiRefreshEffective" not in src, "app.js 残留 aiRefreshEffective"
+    assert "shortenModelName" not in src, "app.js 残留 shortenModelName"
+    assert "aiSetPrivacy" not in src, "app.js 残留 aiSetPrivacy"
+    keys = _js_msg_keys()
+    for key in ("aiEffFollow", "aiEffIndependent", "aiModelUnset",
+                "aiEffectiveLine", "aiCloudNote", "aiPrivacyCloud", "aiPrivacyLocal"):
+        assert key not in keys, f"MSG 死键残留: {key}"
+        assert f"MSG.{key}" not in src, f"死键仍有消费点: {key}"
 
-
-def test_shorten_model_name_r1_prime_semantics():
-    """卡R2（D2026-1013-01）R1' 模型名简化语义三例（node 实跑；
-    node 不可用跳过，同 test_app_js_syntax_node_check 先例）。
-
-    - 带前缀长名 'lmstudio/qwen3.6-35b-a3b-uncensored-heretic-apex'：
-      slash<12 去 provider 前缀后 39>24 → 'qwen3.6-35b-…tic-apex'
-      （前 12+…+后 8 形态）；
-    - 短名 'gpt-4o-mini'（≤24）：原样；
-    - 无斜杠长名 'qwen3.6-35b-a3b-uncensored-heretic-apex'（>24）：
-      同走前中后规则 → 'qwen3.6-35b-…tic-apex'。
-    """
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("node 不可用")
-    fn = _extract_function(_app_js_source(), "shortenModelName")
-    script = (
-        fn + "\n"
-        "const cases = ['lmstudio/qwen3.6-35b-a3b-uncensored-heretic-apex',"
-        " 'gpt-4o-mini',"
-        " 'qwen3.6-35b-a3b-uncensored-heretic-apex'];\n"
-        "for (const c of cases) console.log(shortenModelName(c));"
-    )
-    r = subprocess.run([node, "-e", script], capture_output=True,
-                       encoding="utf-8")
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.splitlines() == [
-        "qwen3.6-35b-…tic-apex", "gpt-4o-mini", "qwen3.6-35b-…tic-apex"], \
-        "R1' 三例语义漂移（去前缀/阈值/前中后规则）"
-
-
-# ---------------------------------------------------------------------------
-# 批4（D2026-1008-01）：AI 分析/一键修复可停止——停止按钮存在性与
-# C12 取消文案 / LM Studio JIT 说明文案钉。
-# ---------------------------------------------------------------------------
 
 def test_batch4_stop_buttons_pinned_and_wired():
     """停止分析/停止修复：index.html 双按钮（class+data-testid 零 id、
@@ -3378,7 +3320,7 @@ def test_batch4_cancel_and_jit_msg_keys_pinned():
 # 批2（D2026-1008-02）：TM 建议编辑后存入（P3 纯前端批）
 # （行级编辑/恢复入口 data-ai-act 独立标记零 data-ai-kind 串扰；tmEdit
 #   弹窗 createElement 注入零 id/零 data-i18n；定向 DOM 更新禁整表重渲；
-#   原始建议旁路内存 Map 不写伴生 JSON；FROZEN 双钉 223/187 零触碰——
+#   原始建议旁路内存 Map 不写伴生 JSON；FROZEN 双钉 222/187 零触碰——
 #   本批零 index.html 改动，全集契约天然不漂移）
 # ---------------------------------------------------------------------------
 
@@ -3509,7 +3451,7 @@ def test_p3_tm_edit_save_updates_memory_and_dom():
 
 # ---------------------------------------------------------------------------
 # P1 分析模型预热（D2026-1008-02 批3，G1 落 (c) 阻断形态）：前端静态钉
-# 全部 JS 态（零 index.html 改动，FROZEN 223/187 既有钉随全量回归保障）
+# 全部 JS 态（零 index.html 改动，FROZEN 222/187 既有钉随全量回归保障）
 # ---------------------------------------------------------------------------
 
 def test_warmup_maybe_start_guards_order_and_bridge_call():
@@ -3752,7 +3694,7 @@ def test_warmup_engine_locked_style_present():
 # 批5（D2026-1008-02）：批量修复结果可见性
 # （完成消息含剩余明细；修复后静默重读导读快照（禁 loadGuide 全量链，
 #   不清复验建议）；行动条目行渲染台账「✅ 已修」徽标。全部 JS 态键、
-#   零 index.html 改动——FROZEN 双钉 223/187 天然不漂移）
+#   零 index.html 改动——FROZEN 双钉 222/187 天然不漂移）
 # ---------------------------------------------------------------------------
 
 def test_batch5_fix_done_reread_and_remaining_pinned():
@@ -4857,7 +4799,7 @@ def test_b10_nav_aria_controls_pinned():
 
 def test_b10_zero_new_id_zero_new_key_pinned():
     """⑤零新增 id / 零新增键（钉⑤双集合自证的本卡局部前置）：页头块内零 id；
-    7 个页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=223 /
+    7 个页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=222 /
     FROZEN_I18N_KEYS=186 全等冻结另由钉⑤a/⑤b 快照自证；187→186=artifact_note
     退役，D2026-1013-01 真机反馈轮）；aria-controls 只
     引用既有 .tab-page id，容器不新增 data-i18n。"""

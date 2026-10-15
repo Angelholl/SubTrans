@@ -733,7 +733,8 @@
                         <div id="batchFixEffectiveLine" class="muted" style="display:none;"></div>
                         <!-- 2.5.0 批5（D2026-1001-07）：AI 分析独立配置（缺省跟随阶段A；custom 无默认端点已排除）
                              批3（D2026-1002-12）：平铺六件套改 3 组顶置标签列（.field-col），
-                             橙色提示移入行尾独立成行（order:99 对齐 .stage-row .muted 先例） -->
+                             橙色提示移入行尾独立成行（order:99 对齐 .stage-row .muted 先例；
+                             该提示已随 D2026-1015-01 整行移除） -->
                         <div class="ai-config-row">
                             <div class="field-col">
                                 <label class="muted" for="aiProviderSel">Analysis provider</label>
@@ -768,7 +769,6 @@
                                 <label class="muted" for="aggregateWindowSel">Cross-film window</label>
                                 <select id="aggregateWindowSel" class="form-select compact"></select>
                             </div>
-                            <div id="refineAiPrivacy" class="muted hint-warn" style="display:none;"></div>
                         </div>
                         <!-- P2（D2026-1008-02）：修复模型独立配置行已删除——
                              一键修复与 AI 分析模型完全统一（同独立分析配置→
