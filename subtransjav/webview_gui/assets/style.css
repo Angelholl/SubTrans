@@ -186,7 +186,7 @@ a { color: var(--primary); }
     outline: var(--focus-outline);
     outline-offset: 2px;
 }
-button:focus { outline: none; }
+button:focus:not(:focus-visible) { outline: none; }
 
 /* ============================================================
    3. 三栏骨架：rail | main | aside
