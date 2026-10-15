@@ -439,8 +439,8 @@ button:focus:not(:focus-visible) { outline: none; }
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    font-size: var(--font-sm);
-    font-weight: 600;
+    font-size: var(--font);
+    font-weight: 700;
     color: var(--text-2);
 }
 .stage-group-title::after {
@@ -542,15 +542,25 @@ button:focus:not(:focus-visible) { outline: none; }
     align-items: center;
     gap: var(--space-2);
     padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
 }
-.panel-card .section-header { padding: 0 0 var(--space-2); border-bottom: 1px solid var(--border); }
+.panel-card .section-header { padding: 0 0 var(--space-2); }
 
 .section-header h2 {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--font);
+    font-weight: 700;
+    color: var(--text-2);
     margin: 0;
+}
+.section-header h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 .section-content { padding: var(--space-3) 14px; }
@@ -1455,17 +1465,39 @@ input[type="checkbox"]:focus-visible {
 #dictStatus { overflow-wrap: anywhere; }
 
 .group-title {
-    font-size: var(--font-sm);
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font);
+    font-weight: 700;
     color: var(--text-2);
+}
+.group-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 .block-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
     font-size: var(--font);
-    font-weight: 600;
-    color: var(--text-1);
+    font-weight: 700;
+    color: var(--text-2);
     cursor: default;
 }
+.block-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+/* 行内卡头生长规则（卡A #10）：block-title 吃满剩余宽，尾 hairline 随之吃满，
+   右侧控件簇（计数/折叠钮/参数钮）被推至右缘；P2-3 词库折叠簇右对齐同源。 */
+.gl-collapse-header .block-title { flex: 1 1 auto; min-width: 0; }
+.pipeline-head-row .block-title { flex: 1 1 auto; min-width: 0; }
 
 .field-label {
     font-size: var(--font-xs);
@@ -1559,10 +1591,20 @@ input[type="checkbox"]:focus-visible {
 .stack.form-card { align-items: stretch; }
 
 .form-card-header {
-    font-weight: 600;
-    margin-bottom: var(--space-1);
-    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font);
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+    color: var(--text-2);
     width: 100%;
+}
+.form-card-header::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 /* 卡内 label 带输入控件时改为上下排布（阶段A/B 行布局语义保留）；
@@ -1750,11 +1792,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 
 /* adv-group 卡头分层（阶段3 批3/C7：首 group-title=卡头，其余=卡内小节分隔；
-   纯 CSS 无 DOM 改动，间距值均在既有节奏档内） */
-.adv-group > .group-title:first-child {
-    padding-bottom: var(--space-2);
-    border-bottom: 1px solid var(--border);
-}
+   纯 CSS 无 DOM 改动，间距值均在既有节奏档内）。
+   卡A（D2026-1015-05）P1-2 归一：首子卡头不再画全宽下划线（下距由 .adv-group
+   自身 gap = var(--space-2) 承担，尾 hairline 随基类生效）。 */
 .adv-group > .group-title:not(:first-child) {
     padding-top: var(--space-2);
     border-top: 1px solid var(--border);
