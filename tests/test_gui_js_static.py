@@ -6351,3 +6351,55 @@ def test_b01_selected_count_pinned():
     assert m, "style.css 缺 .card-head-count 规则"
     assert "var(--font-xs)" in m.group(0) and "var(--text-2)" in m.group(0), \
         ".card-head-count 规则体缺 --font-xs/--text-2 token"
+
+
+# ============================================================================
+# d1015-卡G（回链 D2026-1015-05）：P1-9 空态/JS 态三态兜底终态钉——卡F 静态
+# 兜底已落地（:empty 收形/details open/「—」占位），但学习词库空态仍静态
+# display:none（JS 未跑时表头裸露）。本钉锁跨卡终态，防任一环回退：
+# ① index.html `<details id="refineGuideViewer" open`（卡F 落地，绿到即至）；
+# ② style.css 两族作用域 :empty 收形规则（卡F 落地，绿到即至）；
+# ③ index.html #glLearnedEmpty 不再含静态 display:none 且 app.js
+#    glLearnedLoad 函数体对其有显隐操作（本卡红核：先红后绿）；
+# ④ index.html #dataRootCurrentPath 含「—」静态占位（卡F 落地）。
+# 负控（硬要求）：临时删 details 的 open → ① 必红（红/绿留痕见卡执行记录）。
+# ============================================================================
+def test_p19_empty_state_fallback_pinned():
+    """P1-9 空态/JS 态三态兜底终态钉（d1015-卡G / D2026-1015-05）。
+
+    人工推演（JS 未跑/失败时逐格病灶）：
+    - 质量页导读 details 默认闭合 → 「暂无导读数据」引导首屏不可见（卡F 已 open）；
+    - 校对页空药丸/幽灵钮、高级页白卡空框 → 卡F 已 :empty 收形；
+    - 学习词库空态元素静态 display:none → JS 未跑时表头裸露（卡G：显隐交
+      JS 全权，入口先隐防加载中闪烁）；
+    - 高级页数据目录路径空 span → 首帧无占位（卡F 已静态「—」）。
+    本钉四项锁跨卡终态：①②④ 卡F 落地即绿，③ 为本卡红核（先红后绿）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    src = _app_js_source()
+
+    # ① 质量页导读 details 默认展开（卡F 落地，绿到即至）
+    assert '<details id="refineGuideViewer" open' in html, \
+        "① index.html 缺 `<details id=\"refineGuideViewer\" open`" \
+        "（导读引导首屏不可见）"
+
+    # ② 校对页/高级页空子件 :empty 收形规则（卡F 落地，绿到即至）
+    assert ".review-det-tools button:empty" in css, \
+        "② style.css 缺 .review-det-tools button:empty 收形规则"
+    assert re.search(r'\[data-testid="encode-adv-group"\][^{]*:empty', css), \
+        "② style.css 缺 [data-testid=\"encode-adv-group\"] 作用域 :empty 规则"
+
+    # ③ 学习词库空态显隐交 JS 全权（本卡红核）
+    m_empty = re.search(r'<div\b[^>]*id="glLearnedEmpty"[^>]*>', html)
+    assert m_empty, "③ index.html 缺 #glLearnedEmpty 元素"
+    tag = m_empty.group(0).replace(" ", "")
+    assert "display:none" not in tag, \
+        "③ #glLearnedEmpty 仍含静态 display:none（JS 未跑时表头裸露）"
+    body = _extract_function(src, "glLearnedLoad")
+    assert "glLearnedEmpty" in body and "empty.style.display" in body, \
+        "③ glLearnedLoad 未对 #glLearnedEmpty 做显隐操作"
+
+    # ④ 高级页数据目录路径静态「—」占位（卡F 落地）
+    assert re.search(r'id="dataRootCurrentPath"[^>]*>\s*—\s*<', html), \
+        "④ #dataRootCurrentPath 缺静态「—」占位"
