@@ -3490,8 +3490,9 @@ def test_warmup_trigger_points_wired():
     assert "window.__warmupTabHook = " in src, "IIFE 须导出 __warmupTabHook"
     # 触发点①：completed 分支内 _finish 之后调 __warmupMaybeStart()，
     # 且附 Console 一行 warmupAfterQueue
+    # （P2-9 d1015-卡J：_finish 收尾增第二参 dotState，断言随形态同步）
     assert "window.__warmupMaybeStart()" in src
-    assert src.index("this._finish(MSG.completed);") \
+    assert src.index("this._finish(MSG.completed, dotState)") \
         < src.index("window.__warmupMaybeStart()"), "触发须在 _finish 之后"
     assert "MSG.warmupAfterQueue" in src
     # 全局别名已导出（跨 IIFE 调用通道）
@@ -6439,3 +6440,67 @@ def test_p19_empty_state_fallback_pinned():
     # ④ 高级页数据目录路径静态「—」占位（卡F 落地）
     assert re.search(r'id="dataRootCurrentPath"[^>]*>\s*—\s*<', html), \
         "④ #dataRootCurrentPath 缺静态「—」占位"
+
+
+# ============================================================================
+# P2-9 右栏状态点五态接线（d1015-卡J / D2026-1015-05）
+# ============================================================================
+def test_p29_status_dot_wired():
+    """P2-9 状态点五态接线钉（d1015-卡J / D2026-1015-05）。
+
+    人工推演（owner 主诉"出错也不变红"）：setDot 原只切 running/idle 两态，
+    .dot-ok/.dot-warn/.dot-err 三类虽在 style.css 在位却永不被右栏运行点
+    点亮 → 出错/告警/正常完成一律灰或蓝。本卡收口：
+    - setDot 全集化五态（未知值回落 dot-idle，全量 toggle）；
+    - _finish 增第二参 dotState（默认 'idle'）收尾。
+    评议实测勘误（必须遵守）：startStatusPolling 与 _finish 挂在
+    TranslatorManager 上，TranslatorManager 无 setDot 方法；新调用点严禁
+    this.setDot，须照抄现有 ProgressManager.setDot('running'|'idle') 同款
+    真实引用形态——故本钉③断言带 ProgressManager. 前缀，禁裸子串防假绿。
+    """
+    src = _app_js_source()
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① setDot 五类映射 + 五类全集 toggle（本卡红核）
+    dot = _extract_function(src, "setDot")
+    for cls in ("dot-idle", "dot-running", "dot-ok", "dot-warn", "dot-err"):
+        assert f"'{cls}'" in dot, f"① setDot 缺五态类映射: {cls}"
+        assert re.search(rf"toggle\('{cls}'", dot), \
+            f"① setDot 未对 {cls} 做全量 toggle"
+    assert re.search(r"map\[state\]|\?\?\s*'dot-idle'|\|\|\s*'dot-idle'", dot), \
+        "① setDot 缺未知值回落 dot-idle"
+
+    # ② _finish 第二参 dotState + 按真实引用形态 ProgressManager.setDot 收尾
+    fin = _extract_function(src, "_finish")
+    assert re.search(r"_finish\s*\(\s*statusText\s*,\s*dotState\s*=\s*'idle'", fin), \
+        "② _finish 缺第二参 dotState（默认 'idle'）"
+    assert "ProgressManager.setDot(dotState)" in fin, \
+        "② _finish 未按真实引用形态 ProgressManager.setDot(dotState) 收尾"
+    assert "this.setDot(" not in fin, \
+        "② _finish 误用 this.setDot（TranslatorManager 无该方法）"
+
+    # ③ 轮询函数体 warn/err 分支 + error 路径（带真实引用前缀形态）
+    poll = _extract_function(src, "startStatusPolling")
+    assert "ProgressManager.setDot('warn')" in poll, \
+        "③ 轮询 tick 风险降级未接 ProgressManager.setDot('warn')"
+    assert "dotState = 'warn'" in poll, \
+        "③ completed 告警/多数未译分支未归 'warn'"
+    assert "dotState = 'ok'" in poll, \
+        "③ completed 正常完成分支未归 'ok'"
+    assert "_finish(MSG.completed, dotState)" in poll, \
+        "③ completed 收尾未把 dotState 传入 _finish"
+    assert "_finish(MSG.error, 'err')" in poll, \
+        "③ 轮询 status==='error' 分支未传 'err'"
+
+    # ③b start 主链两处 error（collectOptions catch + 主 catch）全传 'err'
+    start = _extract_function(src, "startTranslation")
+    assert start.count("_finish(MSG.error, 'err')") == 2, \
+        "③b start 主链 error 双处未全传 'err'"
+    assert "this.setDot(" not in start, \
+        "③b start 主链误用 this.setDot（须经 ProgressManager）"
+    assert "ProgressManager.setDot('running')" in start, \
+        "③b start 起跑态点色形态漂移"
+
+    # ④ style.css .dot-err 规则仍在（错误红点样式在位）
+    assert re.search(r"\.status-dot\.dot-err\s*\{", css), \
+        "④ style.css 缺 .status-dot.dot-err 规则"
