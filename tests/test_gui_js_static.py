@@ -5176,8 +5176,10 @@ def test_realdevice_feedback_pins():
     assert "cursor: pointer" in blk, (
         "把手单钮缺 cursor: pointer（可点 affordance 消失）")
     assert re.search(
-        r"\.aside-toggle-btn:hover\s*\{[^}]*background:\s*var\(--surface-2\)",
+        r"\.aside-toggle-btn:hover\s*\{[^}]*background:\s*var\(--surface\)",
         css), "把手单钮缺 hover 提色（入口可点 affordance 回潮隐形）"
+    # 上行为 d1015-卡1（D2026-1015-04 §1.3#3）同步：hover 提色 token 由
+    # --surface-2 改指 --surface（右栏底=--bg 灰，白提亮更可辨；立法本意不变）
     assert re.search(
         r"\.workbench\.aside-collapsed\s+\.aside-toggle-btn\s*\{[^}]*"
         r"width:\s*100%", css), (
@@ -5945,3 +5947,59 @@ def test_style_css_comment_blocks_balanced():
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     assert css.count("/*") == css.count("*/"), \
         "style.css 注释开闭不配平（存在未闭合注释，将吞吃后续规则）"
+
+
+# ============================================================================
+# d1015-卡1（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md §1 v2）
+# P0-1 三栏表面分层 A1-②（左/右栏降 --bg、中栏转白 --surface、子卡 --surface-2、
+# 分隔线升级 --border-strong）+ G1 案乙（左栏导航/主题钮基态 text-1）静态钉。
+# ============================================================================
+def _p01_rule_blocks(css: str, selector: str) -> list:
+    """取 style.css 中该选择器的规则块体（花括号内声明文本，可多块）。
+
+    选择器按字面转义、后接 `{`（故 `.section` 不会命中 `.section-header`，
+    `:hover` / ` .child` 等后缀选择器亦不命中），与既有源码文本钉法同源。
+    """
+    return re.findall(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+
+
+def test_p01_surface_layering_pinned():
+    """D2026-1015-04 / 卡1：P0-1 三栏表面分层 + 分隔线升级 + G1 案乙 静态钉。
+
+    断言面 = style.css 点名选择器规则块的声明文本（防回潮；dark 主题经
+    token 自动继承，不在本钉面）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    def has(selector: str, decl: str) -> bool:
+        return any(decl in blk for blk in _p01_rule_blocks(css, selector))
+
+    # A. 表面重分配
+    assert has(".rail", "background: var(--bg)"), \
+        ".rail background 须降为 var(--bg)（左栏降为应用底灰，A1-②）"
+    assert has(".main", "background: var(--surface)"), \
+        ".main 须新增 background: var(--surface)（中栏转白=全屏唯一亮区）"
+    for sel in (".card", ".section", ".form-card", ".mp-tier",
+                ".adv-group", ".media-source-bar"):
+        assert has(sel, "background: var(--surface-2)"), \
+            f"{sel} background 须为 var(--surface-2)（中栏子卡）"
+
+    # A. 分隔线升级
+    assert has(".rail", "var(--border-strong)"), \
+        ".rail 分隔线须升级 var(--border-strong)"
+    assert has(".aside", "var(--border-strong)"), \
+        ".aside 分隔线须升级 var(--border-strong)"
+
+    # D. G1 案乙：左栏导航/主题钮基态转 text-1（改后 #F3F4F6 面上 text-2 仅 4.39:1）
+    assert has(".side-tab-btn", "color: var(--text-1)"), \
+        ".side-tab-btn 基态 color 须为 var(--text-1)（G1 案乙）"
+    assert has(".theme-button", "color: var(--text-1)"), \
+        ".theme-button 基态 color 须为 var(--text-1)（G1 案乙）"
+
+    # 防误伤：右栏子卡与透明覆盖规则维持不动
+    assert has(".panel-card", "background: var(--surface)"), \
+        ".panel-card background 须维持 var(--surface)（右栏子卡保持白）"
+    assert has(".aside", "background: var(--bg)"), \
+        ".aside background 须维持 var(--bg)"
+    assert has(".panel-card .section", "background: transparent"), \
+        ".panel-card .section 透明覆盖规则不得改动"
