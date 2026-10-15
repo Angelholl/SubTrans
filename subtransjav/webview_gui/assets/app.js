@@ -523,8 +523,6 @@ const MSG = {
     bfStopPending: '正在停止修复…',
     bfCancelled: '已取消批量修复。已落盘条目以重翻台账为准，可再次发起处理余量。',
     aiNeedGuide: '请先加载质量报告导读',
-    aiPrivacyCloud: p => `⚠️ 分析内容（含字幕译文）将发送至 ${p}`,
-    aiPrivacyLocal: '本地模型分析，内容不出本机',
     aiSectionGlossary: '术语建议',
     aiSectionTm: 'TM 建议',
     aiSectionObs: '一般观察',
@@ -806,11 +804,6 @@ const MSG = {
     // 中文字面量收编（全 JS 态键，零静态 data-i18n）；批3 修复模型独立
     // 配置行四键（fix_cfg_label 等）随 P2（D2026-1008-02）删行退役
     ai_model_follow_hint: '跟随阶段A 当前模型',
-    aiEffFollow: '跟随阶段A',
-    aiEffIndependent: '独立配置',
-    aiModelUnset: '（未指定）',
-    aiEffectiveLine: (tag, prov, model) => `分析模型：${tag} — ${prov} / ${model}`,
-    aiCloudNote: ' ｜ 注意：分析时报告内容将发送至该云端服务',
     // P2（D2026-1008-02）：分析独立配置半配置忽略说明（G5-补，JS 态键；
     // 后端侧同义键=strings.py fix_ai_indep_half_ignored，双表镜像）
     aiIndepHalfIgnored: '分析独立配置不完整，已忽略',
@@ -5782,7 +5775,6 @@ function switchTab(tabId) {
           }
           aggWin.value = (r.settings.tm_stats_window) || '30';
         }
-        if (typeof aiRefreshEffective === 'function') aiRefreshEffective();
         if (aiProvSel && !aiProvSel.dataset.bound) {
           aiProvSel.dataset.bound = '1';
           const saveAiConfig = () => {
@@ -5792,7 +5784,6 @@ function switchTab(tabId) {
             }).then(rv => {
               if (!rv || rv.success !== true) console.warn('[refine] AI 分析设置保存失败');
             }).catch(e => console.warn('[refine] AI 分析设置保存失败', e));
-            aiRefreshEffective();
           };
           // 批3（D2026-1008-01）：切 provider 只重置模型下拉空态（follow=
           // 禁用+占位，刷新/测试按钮随禁），不自动拉取（阶段页先例）
@@ -6830,17 +6821,6 @@ function switchTab(tabId) {
     return gp.replace(/_质量报告导读\.json$/, '_质量报告.txt');
   }
 
-  function aiSetPrivacy(providerName) {
-    const bar = $('refineAiPrivacy');
-    if (!bar) return;
-    if (isAiCloudProvider(providerName)) {
-      bar.textContent = MSG.aiPrivacyCloud(providerName || MSG.unknown);
-    } else {
-      bar.textContent = MSG.aiPrivacyLocal;
-    }
-    bar.style.display = '';
-  }
-
   function aiActionBtn(kind, idx, label) {
     return '<button type="button" class="btn btn-secondary btn-compact btn-sm"'
       + ' data-ai-kind="' + kind + '" data-ai-idx="' + idx + '">'
@@ -7092,36 +7072,6 @@ function switchTab(tabId) {
   // 都触发，去重靠上方守卫+5s 抑制+后端桥三层）
   window.__warmupTabHook = () => { warmupMaybeStart(); };
 
-  // 2.5.0 批5（D2026-1001-07）：AI 分析生效配置常驻显示（C1/C5：复用 refineAiPrivacy）
-  // 批3（D2026-1008-01）：中文字面量收编 MSG 键（aiEffectiveLine 等）
-  // P2（D2026-1008-02）：改走 analyzeResolution 单源（半配置如实显示
-  // 回落+忽略说明，与实际发起的分析/修复解析一致）
-  // 卡R2（D2026-1013-01）：生效行同行化——显示名走 shortenModelName
-  // 简化（行内 ≤420px 单行省略），title 悬停回填全量行文本
-  function shortenModelName(model) {
-    // 卡R2（D2026-1013-01）：模型名展示简化——去 provider 前缀后前 12+…+后 8（全长>24 才简化）
-    let s = String(model || '');
-    const slash = s.indexOf('/');
-    if (slash !== -1 && slash < 12) s = s.slice(slash + 1);
-    if (s.length > 24) s = s.slice(0, 12) + '…' + s.slice(-8);
-    return s;
-  }
-  function aiRefreshEffective() {
-    const el = $('refineAiPrivacy');
-    if (!el) return;
-    const res = analyzeResolution();
-    const cloud = window.AI_CLOUD_PROVIDERS || [];
-    const tag = res.provider ? MSG.aiEffIndependent : MSG.aiEffFollow;
-    const note = (res.notes || []).join('；');
-    const full = res.model || MSG.aiModelUnset;
-    const line = (m) => MSG.aiEffectiveLine(tag, res.effProvider, m)
-                      + (note ? '｜' + note : '')
-                      + (cloud.includes(res.effProvider) ? MSG.aiCloudNote : '');
-    el.style.display = '';
-    el.textContent = line(shortenModelName(full));
-    el.title = line(full);
-  }
-
   async function refineAiAnalyze() {
     if (!lastLoadedGuidePath && !lastLoadedIsTxt) {
       aiStatus(MSG.aiNeedGuide);
@@ -7172,7 +7122,6 @@ function switchTab(tabId) {
         rp, res.model, res.provider);
       if (r && r.success) {
         lastAiSuggestions = r;
-        aiSetPrivacy(r.provider_name);
         aiRenderResult(r);
         aiStatus(MSG.aiDone + (r.crosscheck_segments
           ? MSG.asrCrosscheckNote(r.crosscheck_segments) : ''));
@@ -7207,7 +7156,7 @@ function switchTab(tabId) {
   }
 
   // 2.7.4 件C（D2026-1007-02）：修复生效配置常驻明示行（对齐
-  // aiRefreshEffective 先例）：生效 provider/model 由后端
+  // 生效行直拼先例）：生效 provider/model 由后端
   // refine_preview_fix_config 统一解析，拒绝时明示行红色直显原因；
   // 未加载导读时隐藏。P2（D2026-1008-02）：入参=analyzeResolution()
   // 产物（预览与修复执行同源 by construction，C7）；notes（半配置
