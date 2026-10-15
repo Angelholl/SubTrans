@@ -75,6 +75,9 @@
     /* 阴影加深 */
     --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
     --shadow-md: 0 2px 4px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.4);
+    --shadow-brand: 0 2px 6px rgba(0, 0, 0, 0.5);
+    --shadow-primary: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --active-text: var(--primary);   /* 暗侧激活文字提亮 #60A5FA，AA 修复（P0 遗留①），6.48:1 */
 
     /* 状态文字：浅色琥珀 #B26A00 深底不可读 → 用亮 --warn */
     --status-warn: var(--warn);
