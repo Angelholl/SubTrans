@@ -6288,3 +6288,25 @@ def test_p14_dropzone_restored_pinned():
         assert "<svg" in frag, "review-import-btn 缺内联 svg 图标"
         assert 'stroke-width="2"' in frag, \
             "review-import-btn 图标 stroke-width 须为 2"
+
+
+# ============================================================================
+# d1015-卡L（回链 D2026-1015-05）：review.js `_injectTexts` 对两枚
+# `.review-import-btn` 的裸 textContent 覆写会抹掉卡B 预置的内联 svg
+# （图标运行期消失）——改为「清文本、回插 svg」并加防回退钉。
+# ============================================================================
+def test_review_import_icons_survive_inject():
+    """D2026-1015-05 / 卡L：review.js 导入钮图标存活钉。
+
+    卡B 已在校对页两枚 review-import-btn 内预置 video/file-text 内联 svg，
+    但 `_injectTexts()` 以 `btn.textContent = REVIEW_MSG…` 整段覆写子节点树
+    → svg 运行期被抹（图标永久消失）。修复=先取 svg 引用、清文本、再回插。
+    正向双断言：① 函数体含 `querySelector('svg')` 取图标引用；② 含回插手段
+    （prepend/appendChild/insertBefore 任一）——两者齐备即证明「清文本后又
+    把 svg 插回」；裸 textContent 覆写不回插的形态必然不同时满足两断言。
+    """
+    body = _extract_function(_review_js_source(), "_injectTexts")
+    assert "querySelector('svg')" in body, \
+        "_injectTexts 未先取按钮内 svg 引用（裸 textContent 覆写会抹掉图标）"
+    assert any(fn in body for fn in ("prepend", "appendChild", "insertBefore")), \
+        "_injectTexts 未回插 svg（清文本后图标不存活）"
