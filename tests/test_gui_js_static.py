@@ -6084,3 +6084,37 @@ def test_p05_contrast_tokens_pinned():
     assert nb, "未找到 .nav-item-placeholder 规则块"
     assert any("opacity: .55" in blk for blk in nb), \
         ".nav-item-placeholder 的 opacity:.55 属例外 D 豁免，不得误伤"
+
+
+# ============================================================================
+# d1015-卡4（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md
+# §3.4 P2-7 v2，路线甲已裁定）
+# P2-7 图标 stroke-width 统一为 2（Lucide 上游默认值）+ 双静态钉。
+# ============================================================================
+def test_p27_stroke_width_uniform_pinned():
+    """D2026-1015-04 / 卡4：P2-7 index.html 内联 svg 粗细统一为 2 双断言钉。
+
+    背景（规格 §3.4 v2 实扫口径）：index.html 内联 svg 共 36 处 =
+    1.8×12 + 2×24 混用（品牌 logo / 导航 7 项 / 拖拽区与上传复用 /
+    浏览 + 打开），选 2 的理由=与 app.js 既有生成物一致、占多数、
+    且为 Lucide 上游默认（未来粘贴官方 svg 不再漂移）；反向选 1.8 须改
+    app.js 字符串，违反本批「不碰 JS」边界。路线甲=逐 svg 改属性值
+    （属性即事实源，diff 可审计，对已为 2 的 24 处零扰动）。
+
+    断言面=仅 index.html（app.js 不入断言面：其生成 svg 5 处 = 4×2 + 1×1，
+    :1692 推荐星 `stroke-width="1"` 在 JS 字符串内，D2026-1015-04 登记
+    「本批硬边界不碰、登记不动」；review.js 0 处、style.css 仅 select
+    箭头 data-uri 内 1 处已是 2，均不在本钉判定面）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ① 防回潮（窄口径，如实命名）：1.8 混用值命中数必须为 0
+    mixed = html.count('stroke-width="1.8"')
+    assert mixed == 0, (
+        "index.html 仍有 stroke-width=\"1.8\" 混用值"
+        f"（P2-7 回潮或新增 1.8 图标，实测 {mixed} 处）")
+
+    # ② 严口径：全部 stroke-width 属性值集合 == {"2"}（正则提取，机器可判）
+    values = set(re.findall(r'stroke-width="([^"]*)"', html))
+    assert values == {"2"}, \
+        f"index.html stroke-width 属性值集合漂移（应恒为 {{'2'}}）：{sorted(values)}"
