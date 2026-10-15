@@ -6024,3 +6024,63 @@ def test_p04_focus_ring_pinned():
         "style.css 须含带 :not(:focus-visible) 闸门的灭环规则（P0-4）"
     assert "button:focus { outline: none; }" not in css, \
         "style.css 不得残留旧形态 button:focus { outline: none; }（键盘焦点环被吞）"
+
+
+# ============================================================================
+# d1015-卡3（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md §3.1-§3.3
+# + §3.4 P2-6 v2，G2 已裁案 A）
+# P0-5 三组对比度修复（G1 灰字 / G2 琥珀 / G3 主按钮白字）+ P2-6 空态 opacity 全开。
+# ============================================================================
+def test_p05_contrast_tokens_pinned():
+    """D2026-1015-04 / 卡3：P0-5 三组对比度 token + P2-6 空态 opacity 静态钉。
+
+    断言面 = style.css / style.dark.css 的 :root 定义与点名组件规则块：
+    - 亮 :root 新 token 终值（text-3/warn/status-warn/on-primary/primary-deep/
+      btn-primary-bg 族）在位；
+    - 暗 :root 两 token（text-3/on-primary）在位；
+    - `.btn-primary` / `.brand-mark` 规则块内不再含 `color: #fff` 字面量
+      （一律 var(--on-primary)，P8 钉3 判定集只缩不涨）；
+    - `.empty-icon` / `.empty-hint` 规则块不含小数透明度声明（P2-6 全开）；
+    - 防误伤：`--primary` 本体维持原品牌蓝（亮 #3B82F6）；`.nav-item-placeholder`
+      块仍含 `opacity: .55`（WCAG 1.4.3 例外 D 登记不误伤）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    dark = (ASSETS / "style.dark.css").read_text(encoding="utf-8")
+
+    def blocks(text: str, selector: str) -> list:
+        """取指定选择器的规则块体（选择器字面转义后接 `{`，故精确命中基规则）。"""
+        return re.findall(re.escape(selector) + r"\s*\{([^}]*)\}", text)
+
+    # A. 亮 :root token 终值
+    for pat in (r"--text-3:\s*#656D7A\b", r"--warn:\s*#B45309\b",
+                r"--status-warn:\s*var\(--warn\)",
+                r"--on-primary:\s*#FFFFFF\b", r"--primary-deep:\s*#1D4ED8\b",
+                r"--btn-primary-bg:\s*\S", r"--btn-primary-bg-hover:\s*\S"):
+        assert re.search(pat, css), f"style.css :root 缺少 P0-5 token: {pat}"
+
+    # C. 暗 :root token 终值（暗 --warn/--status-warn 达标不动）
+    for pat in (r"--text-3:\s*#828A98\b", r"--on-primary:\s*#111827\b"):
+        assert re.search(pat, dark), f"style.dark.css :root 缺少 P0-5 token: {pat}"
+
+    # B. 组件规则消字面量：.btn-primary / .brand-mark 块内无 color:#fff
+    for sel in (".btn-primary", ".brand-mark"):
+        for blk in blocks(css, sel):
+            assert "color: #fff" not in blk, \
+                f"{sel} 规则块仍含 color: #fff 字面量（应走 var(--on-primary)）"
+    assert blocks(css, ".btn-primary"), "未找到 .btn-primary 规则块"
+
+    # D. P2-6 空态 opacity 全开：两规则块无小数透明度声明
+    for sel in (".empty-icon", ".empty-hint"):
+        assert blocks(css, sel), f"未找到 {sel} 规则块"
+        for blk in blocks(css, sel):
+            assert not re.search(r"opacity:\s*\.", blk), \
+                f"{sel} 规则块仍含小数透明度声明（P2-6 应全开）"
+
+    # 防误伤：--primary 本体仍是原品牌蓝；占位导航项 opacity 豁免不误伤
+    m = re.search(r"--primary:\s*([^;]+);", css)
+    assert m and m.group(1).strip() == "#3B82F6", \
+        "--primary 品牌蓝本体被改动（应维持亮 #3B82F6）"
+    nb = blocks(css, ".nav-item-placeholder")
+    assert nb, "未找到 .nav-item-placeholder 规则块"
+    assert any("opacity: .55" in blk for blk in nb), \
+        ".nav-item-placeholder 的 opacity:.55 属例外 D 豁免，不得误伤"
