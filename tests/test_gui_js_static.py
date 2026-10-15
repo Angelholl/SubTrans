@@ -6003,3 +6003,24 @@ def test_p01_surface_layering_pinned():
         ".aside background 须维持 var(--bg)"
     assert has(".panel-card .section", "background: transparent"), \
         ".panel-card .section 透明覆盖规则不得改动"
+
+
+# ============================================================================
+# d1015-卡2（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md §2 v2）
+# P0-4 键盘焦点环恢复：button:focus 灭环规则加 :not(:focus-visible) 闸门，
+# 键盘聚焦时该规则不匹配 → 全局 :focus-visible 胜出（WCAG 2.4.7）。
+# ============================================================================
+def test_p04_focus_ring_pinned():
+    """D2026-1015-04 / 卡2：P0-4 焦点环闸门静态钉（防回潮）。
+
+    断言面 = style.css 源码精确串：
+    - 新形态在位（带 :not(:focus-visible) 闸门）；
+    - 旧形态（不带闸门的 `button:focus { outline: none; }`）不再存在。
+    同时锁住整行未被删除（评议员已否决删除案）与未被改为 box-shadow 方案。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    assert "button:focus:not(:focus-visible) { outline: none; }" in css, \
+        "style.css 须含带 :not(:focus-visible) 闸门的灭环规则（P0-4）"
+    assert "button:focus { outline: none; }" not in css, \
+        "style.css 不得残留旧形态 button:focus { outline: none; }（键盘焦点环被吞）"
