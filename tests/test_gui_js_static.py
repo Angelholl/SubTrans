@@ -6118,3 +6118,104 @@ def test_p27_stroke_width_uniform_pinned():
     values = set(re.findall(r'stroke-width="([^"]*)"', html))
     assert values == {"2"}, \
         f"index.html stroke-width 属性值集合漂移（应恒为 {{'2'}}）：{sorted(values)}"
+
+
+# ============================================================================
+# d1015-卡A（回链 D2026-1015-05；规格 docs/design/d1015-P1残余批-设计规格.md §1
+# 〔主审裁定追记 v2 已收口〕+ docs/design/d1015-P2残余批-设计规格.md §4）
+# P1-2 五套卡头归一②级规格（14px/700/text-2 + 尾 hairline）+ P2-3 词库折叠
+# 簇右对齐（生长规则并入卡A #10）。解析 helper 沿用 _p01_rule_blocks（既有钉
+# 同源，勿另造解析器）。
+# ============================================================================
+def test_p12_card_header_unified_pinned():
+    """D2026-1015-05 / 卡A：P1-2 五套卡头归一②级规格静态钉（防回潮）。
+
+    断言面 = style.css 点名选择器规则块体（_p01_rule_blocks 取花括号内声明文本）。
+    规格：S6 §2.2 ②级底座 = `var(--font)`/700/`--text-2` + 尾 hairline
+    （`::after{content:""; flex:1; height:1px; background:var(--border)}`），
+    行布局与 .stage-group-title 现值/pipeline 先例逐字一致。
+
+    ① `.section-header` 与 `.panel-card .section-header` 两规则体不含 border-bottom
+      （全宽下划线移除，分隔职责移交 h2 尾 hairline）；
+    ② 五规则体各含尾 hairline 片段（::after + flex: 1 + height: 1px +
+      var(--border)）与行布局三声明（display:flex/align-items:center/
+      gap:var(--space-3)）；
+    ③ 五规则族 font-size 只允许 var(--font)、color 只允许 var(--text-2)；
+    ④ `.adv-group > .group-title:not(:first-child)` 仍含 border-top（组间结构线
+      非卡头画法，防误删）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① 卡头实线移除。注：_p01_rule_blocks 按「选择器子串 + {」命中，
+    #    `.section-header` 会连带命中 `#pipelineCard .destination-section
+    #    .section-header`（卡A #11/#5482 保留项，其 border-bottom: none 为覆写
+    #    非实线）——按实线口径断言并豁免该 none 覆写块（该块在位另正向锁）。
+    for sel in (".section-header", ".panel-card .section-header"):
+        blks = [b for b in _p01_rule_blocks(css, sel)
+                if "border-bottom: none" not in b]
+        assert blks, f"未找到 {sel} 规则块"
+        for blk in blks:
+            assert "border-bottom" not in blk, \
+                f"{sel} 规则块仍含 border-bottom（应删实线，移交 h2 尾 hairline）"
+    assert any("border-bottom: none" in b
+               for b in _p01_rule_blocks(css, ".section-header")), \
+        "#pipelineCard .destination-section .section-header 的 border-bottom:none " \
+        "覆写块须在位（卡A #11 保留项；tests:5482 既有钉）"
+
+    # ② 五规则体尾 hairline + 行布局三声明
+    for sel in (".section-header h2", ".group-title", ".form-card-header",
+                ".block-title", ".stage-group-title"):
+        afters = _p01_rule_blocks(css, sel + "::after")
+        assert afters, f"{sel} 缺 ::after 尾 hairline 规则块"
+        assert any("flex: 1" in b and "height: 1px" in b
+                   and "var(--border)" in b for b in afters), \
+            f"{sel}::after 规则体须含 flex: 1 / height: 1px / var(--border) 片段"
+        bases = _p01_rule_blocks(css, sel)
+        assert bases, f"未找到 {sel} 规则块"
+        assert any("display: flex" in b and "align-items: center" in b
+                   and "gap: var(--space-3)" in b for b in bases), \
+            f"{sel} 规则体须含行布局 display:flex/align-items:center/" \
+            "gap:var(--space-3)"
+
+    # ③ 字级/色阶归一（五规则族内所有声明只允许目标 token，无字面量回流）
+    for sel in (".section-header h2", ".group-title", ".form-card-header",
+                ".block-title", ".stage-group-title"):
+        fam = _p01_rule_blocks(css, sel) + _p01_rule_blocks(css, sel + "::after")
+        sizes = {d.strip() for blk in fam
+                 for d in re.findall(r"font-size:\s*([^;]+);", blk)}
+        colors = {d.strip() for blk in fam
+                  for d in re.findall(r"color:\s*([^;]+);", blk)}
+        assert sizes and sizes <= {"var(--font)"}, \
+            f"{sel} 规则族 font-size 只允许 var(--font)，实测 {sorted(sizes)}"
+        assert colors and colors <= {"var(--text-2)"}, \
+            f"{sel} 规则族 color 只允许 var(--text-2)，实测 {sorted(colors)}"
+
+    # ④ advanced 组间结构线保留（防误删同族 border-top）
+    notfirst = _p01_rule_blocks(
+        css, ".adv-group > .group-title:not(:first-child)")
+    assert notfirst and any("border-top" in b for b in notfirst), \
+        ".adv-group > .group-title:not(:first-child) 须仍含 border-top（组间结构线）"
+
+
+def test_p23_collapse_header_right_aligned():
+    """D2026-1015-05 / 卡A：P2-3 词库折叠簇右对齐（方向=Console space-between 母版）。
+
+    ⑤ style.css 含 `.gl-collapse-header .block-title` 规则且规则体含
+      `flex: 1 1 auto` 与 `min-width: 0`（标题吃满剩余宽 → count/chevron/刷新
+      整簇右推；DOM 序不变）；
+    ⑥ `.action-row` 基类规则体不含 `justify-content`（其余 action-row 左对齐
+      为正确语义，防全局两端对齐外溢）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ⑤ 词库折叠标题生长规则在位
+    assert any("flex: 1 1 auto" in b and "min-width: 0" in b
+               for b in _p01_rule_blocks(css, ".gl-collapse-header .block-title")), \
+        ".gl-collapse-header .block-title 须含 flex: 1 1 auto 与 min-width: 0（P2-3）"
+
+    # ⑥ action-row 基类左对齐语义零改动
+    action_row = _p01_rule_blocks(css, ".action-row")
+    assert action_row, "未找到 .action-row 规则块"
+    for blk in action_row:
+        assert "justify-content" not in blk, \
+            ".action-row 规则块不得含 justify-content（防左对齐语义被两端对齐外溢）"
