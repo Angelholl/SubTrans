@@ -6504,3 +6504,57 @@ def test_p29_status_dot_wired():
     # ④ style.css .dot-err 规则仍在（错误红点样式在位）
     assert re.search(r"\.status-dot\.dot-err\s*\{", css), \
         "④ style.css 缺 .status-dot.dot-err 规则"
+
+
+# ============================================================================
+# d1015-卡K（回链 D2026-1015-05；规格 docs/design/d1015-P2残余批-设计规格.md §3
+# 〔主审裁定追记 v2 R12〕）
+# P2-4 质量页 #refineGuideViewer details 折叠头原生标记归一（mask 自绘
+# Lucide chevron-right + [open] rotate）静态钉。
+# ============================================================================
+def test_p24_guide_details_chevron_pinned():
+    """D2026-1015-05 / 卡K：P2-4 质量页 details chevron 归一静态钉（防回潮）。
+
+    背景（规格 §3）：`<details id="refineGuideViewer">` 的 summary 是全站唯一
+    既未摘原生 ▶ 标记、又无箭头语言的折叠头（站内两套既有语言：Console/词库
+    按钮式 rotate；dict-diag/mp-tier 内嵌 svg 或 marker 摘除），与全站
+    Lucide chevron+rotate 不一致。收口路线=先摘原生标记（list-style:none +
+    ::-webkit-details-marker 双写）再以 `::after` 自绘 Lucide chevron-right：
+    mask 只取 alpha，颜色由 background-color var(--text-2) 承担（随主题），
+    [open] 时 rotate(90deg)。
+
+    断言面：
+    - style.css：#refineGuideViewer > summary 族四条规则（摘标记 / 自绘 /
+      旋转）逐条在位，自绘规则体含 var(--text-2) 与 -webkit-mask/mask 双写；
+    - index.html：`refineGuideViewer` 出现次数不变（==1，防误改 HTML，
+      现值经 grep 记数）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ① 原生 ▶ 标记摘除：base summary list-style:none + WebKit 伪元素 display:none
+    assert any("list-style: none" in blk for blk in
+               _p01_rule_blocks(css, "#refineGuideViewer > summary")), \
+        "① #refineGuideViewer > summary 缺 list-style: none（原生标记未摘）"
+    marker = _p01_rule_blocks(
+        css, "#refineGuideViewer > summary::-webkit-details-marker")
+    assert marker and all("display: none" in blk for blk in marker), \
+        "① 缺 #refineGuideViewer > summary::-webkit-details-marker{display:none}"
+
+    # ② [open] 旋转规则在位（chevron 展开时转向）
+    opened = _p01_rule_blocks(css, "#refineGuideViewer[open] > summary::after")
+    assert opened and all("rotate(90deg)" in blk for blk in opened), \
+        "② 缺 #refineGuideViewer[open] > summary::after{transform:rotate(90deg)}"
+
+    # ③ 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
+    drawn = _p01_rule_blocks(css, "#refineGuideViewer > summary::after")
+    assert drawn, "③ 缺 #refineGuideViewer > summary::after 自绘规则"
+    for blk in drawn:
+        assert "var(--text-2)" in blk, \
+            "③ 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
+        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
+            "③ 自绘 chevron 未 -webkit-mask / mask 双写"
+
+    # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
+    assert html.count("refineGuideViewer") == 1, \
+        "④ index.html refineGuideViewer 出现次数漂移（应恒为 1，proof HTML 未动）"
