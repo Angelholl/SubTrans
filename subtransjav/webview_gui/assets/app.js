@@ -220,9 +220,9 @@ const MSG = {
     theme_dark: '暗色主题',
 
     // ---- Source 区 / 文件按钮 ----
-    source_header: 'Source（.srt / .ass / .ssa / .vtt 字幕）',
+    source_header: '拖拽 .srt 字幕文件到这里',
     no_files_selected: '暂未选择文件',
-    empty_hint: '点击上方按钮或拖入文件开始',
+    empty_hint: '点击按钮选择文件或文件夹，也可直接拖入 · 支持 .srt / .ass / .ssa / .vtt 批量添加',
     add_files: '添加文件',
     add_folder: '添加文件夹',
     remove_selected: '移除选中',
