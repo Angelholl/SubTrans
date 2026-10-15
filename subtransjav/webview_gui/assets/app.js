@@ -3653,11 +3653,20 @@ const ProgressManager = {
         if (this.statusLabel) this.statusLabel.textContent = text;
     },
 
-    // 状态点（D2026-0930-09 批2）：idle 灰 / running 蓝
+    // 状态点（D2026-0930-09 批2 两态 → P2-9 d1015-卡J 五态全集）：
+    // idle 灰 / running 蓝 / ok 绿 / warn 琥珀 / err 红；未知值回落 idle。
+    // 五类全量 toggle（当前类 true 其余 false），终态色保留至下一次 start。
     setDot(state) {
         if (!this.statusDot) return;
-        this.statusDot.classList.toggle('dot-running', state === 'running');
-        this.statusDot.classList.toggle('dot-idle', state !== 'running');
+        const dotClass = {
+            idle: 'dot-idle', running: 'dot-running',
+            ok: 'dot-ok', warn: 'dot-warn', err: 'dot-err'
+        }[state] || 'dot-idle';
+        this.statusDot.classList.toggle('dot-idle', dotClass === 'dot-idle');
+        this.statusDot.classList.toggle('dot-running', dotClass === 'dot-running');
+        this.statusDot.classList.toggle('dot-ok', dotClass === 'dot-ok');
+        this.statusDot.classList.toggle('dot-warn', dotClass === 'dot-warn');
+        this.statusDot.classList.toggle('dot-err', dotClass === 'dot-err');
     },
 
     reset() {
@@ -4104,7 +4113,7 @@ const TranslatorManager = {
         } catch (error) {
             ConsoleManager.log(MSG.translationErrorLog(error.message), 'error');
             ErrorHandler.show(MSG.translationErrorTitle, error.message);
-            this._finish(MSG.error);
+            this._finish(MSG.error, 'err');
             return;
         }
 
@@ -4192,7 +4201,7 @@ const TranslatorManager = {
         } catch (error) {
             ConsoleManager.log(MSG.translationErrorLog(error.message), 'error');
             ErrorHandler.show(MSG.translationErrorTitle, error.message);
-            this._finish(MSG.error);
+            this._finish(MSG.error, 'err');
         }
     },
 
@@ -4212,13 +4221,16 @@ const TranslatorManager = {
         }
     },
 
-    _finish(statusText) {
+    // P2-9（d1015-卡J）：收尾点色随终态收束（默认 idle；cancelled 等
+    // 用户主动取消维持 idle，ok/warn/err 由调用方按终态传入）。注意：
+    // TranslatorManager 无 setDot 方法，一律经 ProgressManager 转发。
+    _finish(statusText, dotState = 'idle') {
         this.stopStatusPolling();
         this.state.isRunning = false;
         AppState.isRunning = false;
         FileListManager.updateButtons();
         ProgressManager.setIndeterminate(false);
-        ProgressManager.setDot('idle');
+        ProgressManager.setDot(dotState);
         this.setStatus(statusText);
     },
 
@@ -4374,6 +4386,8 @@ const TranslatorManager = {
                 // 风险计数
                 if (status.risk_count > 0) {
                     text = `${text || MSG.running}${MSG.risk_suffix(status.risk_count)}`;
+                    // P2-9：运行中一旦有风险即降级琥珀（幂等，重复无副作用）
+                    ProgressManager.setDot('warn');
                 }
                 if (text) this.setStatus(text);
 
@@ -4397,10 +4411,15 @@ const TranslatorManager = {
 
                 if (status.status === 'completed') {
                     this.setProgress(100);
+                    // P2-9：完成态点色收束——多数未译（有告警框）必归 warn，
+                    // 防"绿点+告警框"矛盾；warning_level 告警归 warn；其余 ok
+                    let dotState = 'ok';
                     if (status.untranslated_majority) {
+                        dotState = 'warn';
                         ErrorHandler.show(MSG.untranslated_title,
                             MSG.untranslated_hint);
                     } else if (status.warning_level) {
+                        dotState = 'warn';
                         const level = status.warning_level === 'critical'
                             ? MSG.level_critical : MSG.level_warning;
                         ConsoleManager.log(
@@ -4411,7 +4430,7 @@ const TranslatorManager = {
                         ErrorHandler.showSuccess(MSG.completed_title, MSG.completed_detail);
                     }
                     if (typeof this.guideAutoDetect === 'function') this.guideAutoDetect();
-                    this._finish(MSG.completed);
+                    this._finish(MSG.completed, dotState);
                     // P1 预热触发点①（D2026-1008-02 批3，G2 会话级完成=
                     // 整队列回 idle）：Console 一行 + 调预热（后端会话钩子
                     // 并发触发，后端桥内单飞+指纹去重）
@@ -4424,7 +4443,7 @@ const TranslatorManager = {
                     ConsoleManager.log(MSG.translationErrorLog(status.error), 'error');
                     ErrorHandler.show(MSG.translationFailedTitle,
                         status.error || MSG.unknownError);
-                    this._finish(MSG.error);
+                    this._finish(MSG.error, 'err');
                 } else if (status.status === 'cancelled') {
                     this._finish(MSG.cancelled);
                 }
