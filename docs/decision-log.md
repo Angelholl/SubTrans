@@ -3768,3 +3768,17 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **主审总验收**：定向 192 绿/ruff 净/cli --help 0；全量 46 failed/2095 passed/18 skipped 零回归；**Mimosa deep 首扫 41 项甄别**=+4 全为设计师树外实测脚本（Temp/d1014-*.py 路径穿越面，非仓库文件），清理后复扫 **37 项/31 锚与 2026-10-13 基线零新增零消失**，seal sha256:2daf2857…aa3427；GUI 黑盒（stub 桥 IAB，8772 端口 cache-bust）：宽 1180 阶段卡单行+兜底卡单行右贴齐、窄 700 阶段卡两行（API Key 组恒与模型栏同行、测试不孤行）+兜底卡两行整组归位、asrPythonInput title 全文在位且无贴边裁切（inputRight 600 < cardRight 636）。
 - **free 模型续测三记（owner 指示测评继续）**：longcat 本轮零断流记分优（完整红绿+自测链全走+ruff 自修）；ling-3.1 记分优（先跑基线对账/自清临时目录/rm 缺失改 python 兜底）；nemotron-3.5 延续 7.3 档观察（漏 commit+落位偏差，用则必查提交完整性）。详见打分账续测节。
 - **遗留**：owner 真机走查（三卡+125%/150% 缩放复核）；W<516 极窄区阶段卡 key 整组下沉形态 owner 未见过、走查时留意。
+
+## [2026-10-15] D2026-1015-01 退役AI分析生效行黄字提示并重写v3.0.3已发版 [adopted]
+- **原决策**：按 owner 直接指示，整行移除卡片折叠态截断不可读的 `#refineAiPrivacy` 黄字提示（5 文件原子卡），并将该调整写入已发版 v3.0.3、重传修复后正式安装包（同版本号换包）。
+- **我的异议**：[HIGH_RISK_OBJECTION]+[MATERIAL_CONFLICT]——卡称「id 唯一消费点」与代码冲突，漏掉第二消费点 `aiSetPrivacy`（app.js:6833-6842，调用 7175，键 526-527），退役钉断言面不含 app.js，残留漏网，「5 文件原子」为假原子。
+- **主模型最终决定**：采纳 + 部分采纳。
+  - 条件①（补第二消费点）：**采纳**——aiSetPrivacy+唯一调用点+两 MSG 键随元素退役，退役钉补 `"refineAiPrivacy" not in app.js` 及七死键断言。
+  - 条件②（是否保留隐私条）：**裁定一并退役**——同槽同黄字同为折叠截断，且云 provider 有 `AppModal.confirm(MSG.aiCloudConfirm)` 模态门（7144-7145）在前，常驻隐私条冗余；`AI_CLOUD_PROVIDERS`/`isAiCloudProvider`（7074/7144/7504 活消费）保留。
+  - 条件③（辨识标识）：**采纳缓释、驳回内嵌哈希**——仓库无 build-metadata 通道，改用 Release 正文钉新包 SHA256+换包日期注记+SHA256SUMS 随版更新+公开 URL 回读。
+  - 删 tag 顺序/ruleset 核查：**采纳**，锁死序 PATCH draft=true→REST 删 tag→推 release 分支→REST 建 tag（绕本地 L3 拦截，先例 v2.1.1）→CI 绿→换双资产→draft=false→回读。
+  - CHANGELOG cherry-pick 一致性：**采纳**（同笔落 main 后 cherry-pick 至 release/3.0.3）。
+  - 替代方案改发 v3.0.4：**不采纳**（owner 已拍板改 v3.0.3 已发版内容；仅 immutable releases/ruleset 实际阻塞时停下回报）。
+- **条件是否已闭环**：四条全部闭环，方案放行。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：①同版本号换包辨识面（回读 SHA256/正文核验）；②删 tag 链路（执行前核对 ruleset 与是否启用 immutable releases，阻塞即停报）；③新 exe 安装冒烟；④退役钉先红后绿、snapshot diff 仅该 id。
