@@ -648,6 +648,33 @@ def test_guide_txt_view_and_learned_glossary_pinned():
     assert "glLearnedReloadBtn" in bind, "学习词库刷新按钮必须绑定 click"
 
 
+def test_guide_json_blocks_initial_hidden():
+    """导读卡空态光秃标题收口（d1016-卡D / D2026-1016-04）。
+
+    #guideJsonBlocks 静态默认可见时，空态（启动首屏/未加载导读）下四个 h4
+    区块标题光秃显示；改为初始 display:none，由既有渲染链路在载入 json 导读时
+    点亮、txt 模式隐藏。四标题本体 data-i18n 键计数锁定防误动。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # ① 锚点标签含初始隐藏样式
+    assert re.search(r'<div id="guideJsonBlocks" style="display:none;">', html), \
+        "guideJsonBlocks 必须初始隐藏（空态四行光秃标题收口）"
+    source = _app_js_source()
+    # ② json 载入点亮既有行为锁定防回潮
+    render_body = _extract_function(source, "guideRender")
+    assert "jsonBlocks.style.display = ''" in render_body, \
+        "guideRender 必须在 json 载入时点亮结构化导读块"
+    # ③ txt 模式隐藏既有行为锁定
+    txt_body = _extract_function(source, "guideRenderTxt")
+    assert "jsonBlocks.style.display = 'none'" in txt_body, \
+        "guideRenderTxt 必须在 txt 模式隐藏结构化导读块"
+    # ④ 四标题本体 data-i18n 键各恰出现一次（防误动标题本体）
+    for key in ("guide_conclusions", "guide_sections",
+                "guide_items_title", "guide_companions"):
+        assert html.count(f'data-i18n="{key}"') == 1, \
+            f"h4 标题 data-i18n 键必须恰出现一次: {key}"
+
+
 def test_asr_python_input_hint():
     """ASR Python 输入框悬停全文提示 + min-width:0 防贴边裁切。
 
@@ -3490,8 +3517,9 @@ def test_warmup_trigger_points_wired():
     assert "window.__warmupTabHook = " in src, "IIFE 须导出 __warmupTabHook"
     # 触发点①：completed 分支内 _finish 之后调 __warmupMaybeStart()，
     # 且附 Console 一行 warmupAfterQueue
+    # （P2-9 d1015-卡J：_finish 收尾增第二参 dotState，断言随形态同步）
     assert "window.__warmupMaybeStart()" in src
-    assert src.index("this._finish(MSG.completed);") \
+    assert src.index("this._finish(MSG.completed, dotState)") \
         < src.index("window.__warmupMaybeStart()"), "触发须在 _finish 之后"
     assert "MSG.warmupAfterQueue" in src
     # 全局别名已导出（跨 IIFE 调用通道）
@@ -4082,7 +4110,10 @@ _FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（token=8/12
     "9px": 0, "10px": 0, "6px": 0, "7px": 0, "4px": 0, "99px": 0, "999px": 0,
 }
 _FROZEN_COLOR_DISTINCT = {   # 组件规则内色值字面量（:root token 定义不计数）
-    "#fff", "rgba(59,130,246,.35)", "rgba(37,99,235,.3)", "rgba(0, 0, 0, 0.5)",
+    # 蓝阴影二字面（rgba(59,130,246,.35)/rgba(37,99,235,.3)）已随 d1015-卡H
+    # 收进 :root token（--shadow-brand/--shadow-primary），本卡（d1015-卡I）
+    # 移出冻结集并加收紧断言防组件回潮。
+    "#fff", "rgba(0, 0, 0, 0.5)",
 }
 
 
@@ -4183,6 +4214,39 @@ def test_p8_no_new_component_color_literals():
     assert not new, (
         f"组件规则内出现冻结清单外的新色值字面量：{sorted(new)}——"
         "请引用语义 token（--text-*/--ok/--warn/--danger 等）或在 :root 定义新 token"
+    )
+
+
+def test_p25_component_scope_brand_shadow_literals_banned():
+    """P2-5 钉3 收紧（d1015-卡I，Refs: D2026-1015-05）：卡H 已把组件内两枚
+    蓝阴影字面收进 :root token（--shadow-brand/--shadow-primary）；本钉把
+    该二字面移出 _FROZEN_COLOR_DISTINCT 后，组件规则内再写回任一字面即红
+    （冻结集收缩的防回潮闭环）。负控：临时向 .btn-primary 注回
+    box-shadow: 0 1px 2px rgba(37,99,235,.3); → 本钉必红。"""
+    scope = _style_css_component_scope()
+    for literal in ("rgba(59,130,246,.35)", "rgba(37,99,235,.3)"):
+        assert literal not in scope, (
+            f"组件规则内回潮蓝色阴影字面 {literal}——"
+            "请引用 :root token --shadow-brand/--shadow-primary（d1015-卡H）"
+        )
+
+
+def test_active_text_dark_aa_pinned():
+    """P2-5 暗侧 active-text 钉（d1015-卡I，Refs: D2026-1015-05）：卡H 暗侧
+    active 文字 AA 修复须有钉保护——style.dark.css 的 :root 覆盖块必须含
+    --active-text 声明且值为 var(--primary)（#60A5FA，暗底约 6.48:1）；缺失
+    即回退浅色 --primary-strong（#3B82F6）在暗底对比度不足。负控：临时注释
+    该行 → 本钉必红。"""
+    css = (ASSETS / "style.dark.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    m = re.search(r":root\s*\{([^}]*)\}", css)
+    assert m, "style.dark.css 缺 :root 覆盖块"
+    decl = re.search(r"--active-text\s*:\s*([^;}]+)", m.group(1))
+    assert decl, \
+        "style.dark.css :root 缺 --active-text 暗侧覆盖声明（AA 修复钉）"
+    assert decl.group(1).strip() == "var(--primary)", (
+        "暗侧 --active-text 必须覆盖为 var(--primary)（#60A5FA，AA 修复）；"
+        f"实测 {decl.group(1).strip()!r}"
     )
 
 
@@ -5176,8 +5240,10 @@ def test_realdevice_feedback_pins():
     assert "cursor: pointer" in blk, (
         "把手单钮缺 cursor: pointer（可点 affordance 消失）")
     assert re.search(
-        r"\.aside-toggle-btn:hover\s*\{[^}]*background:\s*var\(--surface-2\)",
+        r"\.aside-toggle-btn:hover\s*\{[^}]*background:\s*var\(--surface\)",
         css), "把手单钮缺 hover 提色（入口可点 affordance 回潮隐形）"
+    # 上行为 d1015-卡1（D2026-1015-04 §1.3#3）同步：hover 提色 token 由
+    # --surface-2 改指 --surface（右栏底=--bg 灰，白提亮更可辨；立法本意不变）
     assert re.search(
         r"\.workbench\.aside-collapsed\s+\.aside-toggle-btn\s*\{[^}]*"
         r"width:\s*100%", css), (
@@ -5945,3 +6011,763 @@ def test_style_css_comment_blocks_balanced():
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     assert css.count("/*") == css.count("*/"), \
         "style.css 注释开闭不配平（存在未闭合注释，将吞吃后续规则）"
+
+
+# ============================================================================
+# d1015-卡1（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md §1 v2）
+# P0-1 三栏表面分层 A1-②（左/右栏降 --bg、中栏转白 --surface、子卡 --surface-2、
+# 分隔线升级 --border-strong）+ G1 案乙（左栏导航/主题钮基态 text-1）静态钉。
+# ============================================================================
+def _p01_rule_blocks(css: str, selector: str) -> list:
+    """取 style.css 中该选择器的规则块体（花括号内声明文本，可多块）。
+
+    选择器按字面转义、后接 `{`（故 `.section` 不会命中 `.section-header`，
+    `:hover` / ` .child` 等后缀选择器亦不命中），与既有源码文本钉法同源。
+    """
+    return re.findall(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+
+
+def test_p01_surface_layering_pinned():
+    """D2026-1015-04 / 卡1：P0-1 三栏表面分层 + 分隔线升级 + G1 案乙 静态钉。
+
+    断言面 = style.css 点名选择器规则块的声明文本（防回潮；dark 主题经
+    token 自动继承，不在本钉面）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    def has(selector: str, decl: str) -> bool:
+        return any(decl in blk for blk in _p01_rule_blocks(css, selector))
+
+    # A. 表面重分配
+    assert has(".rail", "background: var(--bg)"), \
+        ".rail background 须降为 var(--bg)（左栏降为应用底灰，A1-②）"
+    assert has(".main", "background: var(--surface)"), \
+        ".main 须新增 background: var(--surface)（中栏转白=全屏唯一亮区）"
+    for sel in (".card", ".section", ".form-card", ".mp-tier",
+                ".adv-group", ".media-source-bar"):
+        assert has(sel, "background: var(--surface-2)"), \
+            f"{sel} background 须为 var(--surface-2)（中栏子卡）"
+
+    # A. 分隔线升级
+    assert has(".rail", "var(--border-strong)"), \
+        ".rail 分隔线须升级 var(--border-strong)"
+    assert has(".aside", "var(--border-strong)"), \
+        ".aside 分隔线须升级 var(--border-strong)"
+
+    # D. G1 案乙：左栏导航/主题钮基态转 text-1（改后 #F3F4F6 面上 text-2 仅 4.39:1）
+    assert has(".side-tab-btn", "color: var(--text-1)"), \
+        ".side-tab-btn 基态 color 须为 var(--text-1)（G1 案乙）"
+    assert has(".theme-button", "color: var(--text-1)"), \
+        ".theme-button 基态 color 须为 var(--text-1)（G1 案乙）"
+
+    # 防误伤：右栏子卡与透明覆盖规则维持不动
+    assert has(".panel-card", "background: var(--surface)"), \
+        ".panel-card background 须维持 var(--surface)（右栏子卡保持白）"
+    assert has(".aside", "background: var(--bg)"), \
+        ".aside background 须维持 var(--bg)"
+    assert has(".panel-card .section", "background: transparent"), \
+        ".panel-card .section 透明覆盖规则不得改动"
+
+
+# ============================================================================
+# d1015-卡2（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md §2 v2）
+# P0-4 键盘焦点环恢复：button:focus 灭环规则加 :not(:focus-visible) 闸门，
+# 键盘聚焦时该规则不匹配 → 全局 :focus-visible 胜出（WCAG 2.4.7）。
+# ============================================================================
+def test_p04_focus_ring_pinned():
+    """D2026-1015-04 / 卡2：P0-4 焦点环闸门静态钉（防回潮）。
+
+    断言面 = style.css 源码精确串：
+    - 新形态在位（带 :not(:focus-visible) 闸门）；
+    - 旧形态（不带闸门的 `button:focus { outline: none; }`）不再存在。
+    同时锁住整行未被删除（评议员已否决删除案）与未被改为 box-shadow 方案。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    assert "button:focus:not(:focus-visible) { outline: none; }" in css, \
+        "style.css 须含带 :not(:focus-visible) 闸门的灭环规则（P0-4）"
+    assert "button:focus { outline: none; }" not in css, \
+        "style.css 不得残留旧形态 button:focus { outline: none; }（键盘焦点环被吞）"
+
+
+# ============================================================================
+# d1015-卡3（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md §3.1-§3.3
+# + §3.4 P2-6 v2，G2 已裁案 A）
+# P0-5 三组对比度修复（G1 灰字 / G2 琥珀 / G3 主按钮白字）+ P2-6 空态 opacity 全开。
+# ============================================================================
+def test_p05_contrast_tokens_pinned():
+    """D2026-1015-04 / 卡3：P0-5 三组对比度 token + P2-6 空态 opacity 静态钉。
+
+    断言面 = style.css / style.dark.css 的 :root 定义与点名组件规则块：
+    - 亮 :root 新 token 终值（text-3/warn/status-warn/on-primary/primary-deep/
+      btn-primary-bg 族）在位；
+    - 暗 :root 两 token（text-3/on-primary）在位；
+    - `.btn-primary` / `.brand-mark` 规则块内不再含 `color: #fff` 字面量
+      （一律 var(--on-primary)，P8 钉3 判定集只缩不涨）；
+    - `.empty-icon` / `.empty-hint` 规则块不含小数透明度声明（P2-6 全开）；
+    - 防误伤：`--primary` 本体维持原品牌蓝（亮 #3B82F6）；`.nav-item-placeholder`
+      块仍含 `opacity: .55`（WCAG 1.4.3 例外 D 登记不误伤）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    dark = (ASSETS / "style.dark.css").read_text(encoding="utf-8")
+
+    def blocks(text: str, selector: str) -> list:
+        """取指定选择器的规则块体（选择器字面转义后接 `{`，故精确命中基规则）。"""
+        return re.findall(re.escape(selector) + r"\s*\{([^}]*)\}", text)
+
+    # A. 亮 :root token 终值
+    for pat in (r"--text-3:\s*#656D7A\b", r"--warn:\s*#B45309\b",
+                r"--status-warn:\s*var\(--warn\)",
+                r"--on-primary:\s*#FFFFFF\b", r"--primary-deep:\s*#1D4ED8\b",
+                r"--btn-primary-bg:\s*\S", r"--btn-primary-bg-hover:\s*\S"):
+        assert re.search(pat, css), f"style.css :root 缺少 P0-5 token: {pat}"
+
+    # C. 暗 :root token 终值（暗 --warn/--status-warn 达标不动）
+    for pat in (r"--text-3:\s*#828A98\b", r"--on-primary:\s*#111827\b"):
+        assert re.search(pat, dark), f"style.dark.css :root 缺少 P0-5 token: {pat}"
+
+    # B. 组件规则消字面量：.btn-primary / .brand-mark 块内无 color:#fff
+    for sel in (".btn-primary", ".brand-mark"):
+        for blk in blocks(css, sel):
+            assert "color: #fff" not in blk, \
+                f"{sel} 规则块仍含 color: #fff 字面量（应走 var(--on-primary)）"
+    assert blocks(css, ".btn-primary"), "未找到 .btn-primary 规则块"
+
+    # D. P2-6 空态 opacity 全开：两规则块无小数透明度声明
+    for sel in (".empty-icon", ".empty-hint"):
+        assert blocks(css, sel), f"未找到 {sel} 规则块"
+        for blk in blocks(css, sel):
+            assert not re.search(r"opacity:\s*\.", blk), \
+                f"{sel} 规则块仍含小数透明度声明（P2-6 应全开）"
+
+    # 防误伤：--primary 本体仍是原品牌蓝；占位导航项 opacity 豁免不误伤
+    m = re.search(r"--primary:\s*([^;]+);", css)
+    assert m and m.group(1).strip() == "#3B82F6", \
+        "--primary 品牌蓝本体被改动（应维持亮 #3B82F6）"
+    nb = blocks(css, ".nav-item-placeholder")
+    assert nb, "未找到 .nav-item-placeholder 规则块"
+    assert any("opacity: .55" in blk for blk in nb), \
+        ".nav-item-placeholder 的 opacity:.55 属例外 D 豁免，不得误伤"
+
+
+# ============================================================================
+# d1015-卡4（回链 D2026-1015-04；规格 docs/design/d1015-P0必修批-设计规格.md
+# §3.4 P2-7 v2，路线甲已裁定）
+# P2-7 图标 stroke-width 统一为 2（Lucide 上游默认值）+ 双静态钉。
+# ============================================================================
+def test_p27_stroke_width_uniform_pinned():
+    """D2026-1015-04 / 卡4：P2-7 index.html 内联 svg 粗细统一为 2 双断言钉。
+
+    背景（规格 §3.4 v2 实扫口径）：index.html 内联 svg 共 36 处 =
+    1.8×12 + 2×24 混用（品牌 logo / 导航 7 项 / 拖拽区与上传复用 /
+    浏览 + 打开），选 2 的理由=与 app.js 既有生成物一致、占多数、
+    且为 Lucide 上游默认（未来粘贴官方 svg 不再漂移）；反向选 1.8 须改
+    app.js 字符串，违反本批「不碰 JS」边界。路线甲=逐 svg 改属性值
+    （属性即事实源，diff 可审计，对已为 2 的 24 处零扰动）。
+
+    断言面=仅 index.html（app.js 不入断言面：其生成 svg 5 处 = 4×2 + 1×1，
+    :1692 推荐星 `stroke-width="1"` 在 JS 字符串内，D2026-1015-04 登记
+    「本批硬边界不碰、登记不动」；review.js 0 处、style.css 仅 select
+    箭头 data-uri 内 1 处已是 2，均不在本钉判定面）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ① 防回潮（窄口径，如实命名）：1.8 混用值命中数必须为 0
+    mixed = html.count('stroke-width="1.8"')
+    assert mixed == 0, (
+        "index.html 仍有 stroke-width=\"1.8\" 混用值"
+        f"（P2-7 回潮或新增 1.8 图标，实测 {mixed} 处）")
+
+    # ② 严口径：全部 stroke-width 属性值集合 == {"2"}（正则提取，机器可判）
+    values = set(re.findall(r'stroke-width="([^"]*)"', html))
+    assert values == {"2"}, \
+        f"index.html stroke-width 属性值集合漂移（应恒为 {{'2'}}）：{sorted(values)}"
+
+
+# ============================================================================
+# d1015-卡A（回链 D2026-1015-05；规格 docs/design/d1015-P1残余批-设计规格.md §1
+# 〔主审裁定追记 v2 已收口〕+ docs/design/d1015-P2残余批-设计规格.md §4）
+# P1-2 五套卡头归一②级规格（14px/700/text-2 + 尾 hairline）+ P2-3 词库折叠
+# 簇右对齐（生长规则并入卡A #10）。解析 helper 沿用 _p01_rule_blocks（既有钉
+# 同源，勿另造解析器）。
+# ============================================================================
+def test_p12_card_header_unified_pinned():
+    """D2026-1015-05 / 卡A：P1-2 五套卡头归一②级规格静态钉（防回潮）。
+
+    断言面 = style.css 点名选择器规则块体（_p01_rule_blocks 取花括号内声明文本）。
+    规格：S6 §2.2 ②级底座 = `var(--font)`/700/`--text-2` + 尾 hairline
+    （`::after{content:""; flex:1; height:1px; background:var(--border)}`），
+    行布局与 .stage-group-title 现值/pipeline 先例逐字一致。
+
+    ① `.section-header` 与 `.panel-card .section-header` 两规则体不含 border-bottom
+      （全宽下划线移除，分隔职责移交 h2 尾 hairline）；
+    ② 五规则体各含尾 hairline 片段（::after + flex: 1 + height: 1px +
+      var(--border)）与行布局三声明（display:flex/align-items:center/
+      gap:var(--space-3)）；
+    ③ 五规则族 font-size 只允许 var(--font)、color 只允许 var(--text-2)；
+    ④ `.adv-group > .group-title:not(:first-child)` 仍含 border-top（组间结构线
+      非卡头画法，防误删）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① 卡头实线移除。注：_p01_rule_blocks 按「选择器子串 + {」命中，
+    #    `.section-header` 会连带命中 `#pipelineCard .destination-section
+    #    .section-header`（卡A #11/#5482 保留项，其 border-bottom: none 为覆写
+    #    非实线）——按实线口径断言并豁免该 none 覆写块（该块在位另正向锁）。
+    for sel in (".section-header", ".panel-card .section-header"):
+        blks = [b for b in _p01_rule_blocks(css, sel)
+                if "border-bottom: none" not in b]
+        assert blks, f"未找到 {sel} 规则块"
+        for blk in blks:
+            assert "border-bottom" not in blk, \
+                f"{sel} 规则块仍含 border-bottom（应删实线，移交 h2 尾 hairline）"
+    assert any("border-bottom: none" in b
+               for b in _p01_rule_blocks(css, ".section-header")), \
+        "#pipelineCard .destination-section .section-header 的 border-bottom:none " \
+        "覆写块须在位（卡A #11 保留项；tests:5482 既有钉）"
+
+    # ② 五规则体尾 hairline + 行布局三声明
+    for sel in (".section-header h2", ".group-title", ".form-card-header",
+                ".block-title", ".stage-group-title"):
+        afters = _p01_rule_blocks(css, sel + "::after")
+        assert afters, f"{sel} 缺 ::after 尾 hairline 规则块"
+        assert any("flex: 1" in b and "height: 1px" in b
+                   and "var(--border)" in b for b in afters), \
+            f"{sel}::after 规则体须含 flex: 1 / height: 1px / var(--border) 片段"
+        bases = _p01_rule_blocks(css, sel)
+        assert bases, f"未找到 {sel} 规则块"
+        assert any("display: flex" in b and "align-items: center" in b
+                   and "gap: var(--space-3)" in b for b in bases), \
+            f"{sel} 规则体须含行布局 display:flex/align-items:center/" \
+            "gap:var(--space-3)"
+
+    # ③ 字级/色阶归一（五规则族内所有声明只允许目标 token，无字面量回流）
+    for sel in (".section-header h2", ".group-title", ".form-card-header",
+                ".block-title", ".stage-group-title"):
+        fam = _p01_rule_blocks(css, sel) + _p01_rule_blocks(css, sel + "::after")
+        sizes = {d.strip() for blk in fam
+                 for d in re.findall(r"font-size:\s*([^;]+);", blk)}
+        colors = {d.strip() for blk in fam
+                  for d in re.findall(r"color:\s*([^;]+);", blk)}
+        assert sizes and sizes <= {"var(--font)"}, \
+            f"{sel} 规则族 font-size 只允许 var(--font)，实测 {sorted(sizes)}"
+        assert colors and colors <= {"var(--text-2)"}, \
+            f"{sel} 规则族 color 只允许 var(--text-2)，实测 {sorted(colors)}"
+
+    # ④ advanced 组间结构线保留（防误删同族 border-top）
+    notfirst = _p01_rule_blocks(
+        css, ".adv-group > .group-title:not(:first-child)")
+    assert notfirst and any("border-top" in b for b in notfirst), \
+        ".adv-group > .group-title:not(:first-child) 须仍含 border-top（组间结构线）"
+
+
+def test_p23_collapse_header_right_aligned():
+    """D2026-1015-05 / 卡A：P2-3 词库折叠簇右对齐（方向=Console space-between 母版）。
+
+    ⑤ style.css 含 `.gl-collapse-header .block-title` 规则且规则体含
+      `flex: 1 1 auto` 与 `min-width: 0`（标题吃满剩余宽 → count/chevron/刷新
+      整簇右推；DOM 序不变）；
+    ⑥ `.action-row` 基类规则体不含 `justify-content`（其余 action-row 左对齐
+      为正确语义，防全局两端对齐外溢）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ⑤ 词库折叠标题生长规则在位
+    assert any("flex: 1 1 auto" in b and "min-width: 0" in b
+               for b in _p01_rule_blocks(css, ".gl-collapse-header .block-title")), \
+        ".gl-collapse-header .block-title 须含 flex: 1 1 auto 与 min-width: 0（P2-3）"
+
+    # ⑥ action-row 基类左对齐语义零改动
+    action_row = _p01_rule_blocks(css, ".action-row")
+    assert action_row, "未找到 .action-row 规则块"
+    for blk in action_row:
+        assert "justify-content" not in blk, \
+            ".action-row 规则块不得含 justify-content（防左对齐语义被两端对齐外溢）"
+
+
+# ============================================================================
+# d1015-卡C（回链 D2026-1015-05）；卡B 落地（HEAD 29276d8）之主次 class /
+# 图标 / 文案双表同步尚无回归钉保护（主次回潮或双表失步无法被测试捕获）。
+# 本钉锁定 P1-4 拖拽区恢复面（写法沿用本文件既有读取/解析 helper 与
+# tests:5466 同款 button 片段正则）：
+# ① #addFolderBtn 次级（含 `btn btn-secondary`，不含 `btn-primary`）；
+# ② #addFilesBtn / #addFolderBtn 各含 `<svg` 且含 `stroke-width="2"`；
+# ③ app.js MSG.source_header == '拖拽 .srt 字幕文件到这里'；
+# ④ app.js MSG.empty_hint == index.html data-i18n="empty_hint" 挂点静态文本
+#    （防双表失步）；
+# ⑤ 校对页两枚 review-import-btn 各含 `<svg` 且含 `stroke-width="2"`。
+# 红证据=负控（卡B 已落地，钉落盘即绿；先红由负控证明钉真能红，防空转）：
+# 负控一改回 #addFolderBtn=btn btn-primary → 断言①红；负控二改回 app.js
+# source_header 旧值 → 断言③红；红/绿两段原文见本卡执行记录。
+# ============================================================================
+def test_p14_dropzone_restored_pinned():
+    """D2026-1015-05 / 卡C：P1-4 拖拽区恢复五断言钉（主次/图标/文案双表/校对钮）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    src = _app_js_source()
+
+    def button_fragment(dom_id: str) -> str:
+        """按 id 提取 button 完整元素片段（同 tests:5466 同款正则口径）。"""
+        m = re.search(
+            rf'<button[^>]*id="{re.escape(dom_id)}"[^>]*>(.*?)</button>',
+            html, re.S)
+        assert m, f"index.html 未找到 button#{dom_id}"
+        return m.group(0)
+
+    # ① 主次恢复：目录钮为次级，且不得回潮为 primary（P1-4 两枚并列 primary 无主次）
+    folder = button_fragment("addFolderBtn")
+    assert "btn btn-secondary" in folder, \
+        "#addFolderBtn 须为次级按钮（class 含 btn btn-secondary，P1-4 主次恢复）"
+    assert "btn-primary" not in folder, \
+        "#addFolderBtn 回潮为 btn-primary（两枚并列 primary 无主次的 P1-4 缺陷）"
+
+    # ② 拖拽区两钮图标化且粗细统一 2（Lucide 上游默认）
+    for dom_id in ("addFilesBtn", "addFolderBtn"):
+        frag = button_fragment(dom_id)
+        assert "<svg" in frag, f"#{dom_id} 缺内联 svg 图标"
+        assert 'stroke-width="2"' in frag, \
+            f"#{dom_id} 图标 stroke-width 须为 2"
+
+    # ③ app.js MSG.source_header 取值锁定（操作性文案，勿回旧值）
+    m = re.search(r"^\s*source_header:\s*'([^']*)'", src, re.M)
+    assert m, "app.js MSG 缺 source_header 键"
+    assert m.group(1) == "拖拽 .srt 字幕文件到这里", \
+        f"source_header 文案漂移：{m.group(1)!r}"
+
+    # ④ 双表同步：MSG.empty_hint == index.html data-i18n="empty_hint" 两挂点静态文本
+    m = re.search(r"^\s*empty_hint:\s*'([^']*)'", src, re.M)
+    assert m, "app.js MSG 缺 empty_hint 键"
+    msg_empty = m.group(1)
+    texts = re.findall(r'data-i18n="empty_hint"[^>]*>([^<]*)<', html)
+    assert texts, "index.html 未找到 data-i18n=\"empty_hint\" 挂点"
+    assert set(texts) == {msg_empty}, \
+        f"empty_hint 双表失步：MSG={msg_empty!r}，index 挂点={texts!r}"
+
+    # ⑤ 校对页两枚导入钮图标化且粗细统一 2
+    review = re.findall(
+        r'<button[^>]*class="[^"]*review-import-btn[^"]*"[^>]*>.*?</button>',
+        html, re.S)
+    assert len(review) == 2, \
+        f"review-import-btn 应恰 2 枚（校对页），实测 {len(review)}"
+    for frag in review:
+        assert "<svg" in frag, "review-import-btn 缺内联 svg 图标"
+        assert 'stroke-width="2"' in frag, \
+            "review-import-btn 图标 stroke-width 须为 2"
+
+
+# ============================================================================
+# d1015-卡L（回链 D2026-1015-05）：review.js `_injectTexts` 对两枚
+# `.review-import-btn` 的裸 textContent 覆写会抹掉卡B 预置的内联 svg
+# （图标运行期消失）——改为「清文本、回插 svg」并加防回退钉。
+# ============================================================================
+def test_review_import_icons_survive_inject():
+    """D2026-1015-05 / 卡L：review.js 导入钮图标存活钉。
+
+    卡B 已在校对页两枚 review-import-btn 内预置 video/file-text 内联 svg，
+    但 `_injectTexts()` 以 `btn.textContent = REVIEW_MSG…` 整段覆写子节点树
+    → svg 运行期被抹（图标永久消失）。修复=先取 svg 引用、清文本、再回插。
+    正向双断言：① 函数体含 `querySelector('svg')` 取图标引用；② 含回插手段
+    （prepend/appendChild/insertBefore 任一）——两者齐备即证明「清文本后又
+    把 svg 插回」；裸 textContent 覆写不回插的形态必然不同时满足两断言。
+    """
+    body = _extract_function(_review_js_source(), "_injectTexts")
+    assert "querySelector('svg')" in body, \
+        "_injectTexts 未先取按钮内 svg 引用（裸 textContent 覆写会抹掉图标）"
+    assert any(fn in body for fn in ("prepend", "appendChild", "insertBefore")), \
+        "_injectTexts 未回插 svg（清文本后图标不存活）"
+
+
+# ============================================================================
+# d1015-卡E（回链 D2026-1015-05）：B-01 计数 JS 接线钉——卡D 骨架
+# `<span class="card-head-count" data-testid="card-head-count">` 已落地，
+# 但 app.js 从无写者，span 恒空、计数不显示。本钉四断言锁死接线：
+# ① index.html 骨架锚恰 1 处（卡D 已落地，绿到即至）；
+# ② MSG 表含 JS 态键 selected_count；
+# ③ FileListManager.updateButtons 函数体消费 card-head-count/selected_count；
+# ④ style.css .card-head-count 规则体两 token（--font-xs/--text-2）。
+# ============================================================================
+def test_b01_selected_count_pinned():
+    """B-01 计数 JS 接线钉（d1015-卡E / D2026-1015-05）。
+
+    人工推演（计数不显示场景）：卡D 已在文件卡头（.card-head）落地
+    `<span class="card-head-count" data-testid="card-head-count">` 惰性骨架，
+    但全文件零写入点——span 文本恒空，增删清空文件均无量化反馈。
+    修复：MSG 表补 JS 态键 `selected_count: (n) => \\`已选 ${n} 个\\``（先例
+    encodeSummaryVol/encodeSummaryAt 箭头函数值形态），并在
+    FileListManager.updateButtons（增/删/清空/点选全路径的单点汇）按
+    队列文件总数（AppState.selectedFiles.length，非勾选索引数）回写：
+    >0 走计数文案、=0 置空（空态不得显「已选 0 个」）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # ① 骨架锚恰 1 处（卡D 已落地，本断言绿到即至）
+    assert html.count('data-testid="card-head-count"') == 1, \
+        "index.html 须恰 1 处 data-testid=\"card-head-count\"（卡D 骨架）"
+    # ② MSG 表含 selected_count 键（箭头函数值形态，_js_msg_keys 解析兼容）
+    assert "selected_count" in _js_msg_keys(), \
+        "app.js MSG 表缺 selected_count 键"
+    # ③ 接线点：updateButtons 函数体（首匹配 = FileListManager.updateButtons）
+    body = _extract_function(_app_js_source(), "updateButtons")
+    assert "card-head-count" in body, \
+        "updateButtons 未接线 .card-head-count（计数永不显示）"
+    assert "selected_count" in body, "updateButtons 未消费 MSG.selected_count"
+    # ④ style.css 规则体两 token（对比度/字号档位沿用卡D）
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.card-head-count \{[^}]*\}", css)
+    assert m, "style.css 缺 .card-head-count 规则"
+    assert "var(--font-xs)" in m.group(0) and "var(--text-2)" in m.group(0), \
+        ".card-head-count 规则体缺 --font-xs/--text-2 token"
+
+
+# ============================================================================
+# d1015-卡G（回链 D2026-1015-05）：P1-9 空态/JS 态三态兜底终态钉——卡F 静态
+# 兜底已落地（:empty 收形/details open/「—」占位），但学习词库空态仍静态
+# display:none（JS 未跑时表头裸露）。本钉锁跨卡终态，防任一环回退：
+# ① index.html `<details id="refineGuideViewer" open`（卡F 落地，绿到即至）；
+# ② style.css 两族作用域 :empty 收形规则（卡F 落地，绿到即至）；
+# ③ index.html #glLearnedEmpty 不再含静态 display:none 且 app.js
+#    glLearnedLoad 函数体对其有显隐操作（本卡红核：先红后绿）；
+# ④ index.html #dataRootCurrentPath 含「—」静态占位（卡F 落地）。
+# 负控（硬要求）：临时删 details 的 open → ① 必红（红/绿留痕见卡执行记录）。
+# ============================================================================
+def test_p19_empty_state_fallback_pinned():
+    """P1-9 空态/JS 态三态兜底终态钉（d1015-卡G / D2026-1015-05）。
+
+    人工推演（JS 未跑/失败时逐格病灶）：
+    - 质量页导读 details 默认闭合 → 「暂无导读数据」引导首屏不可见（卡F 已 open）；
+    - 校对页空药丸/幽灵钮、高级页白卡空框 → 卡F 已 :empty 收形；
+    - 学习词库空态元素静态 display:none → JS 未跑时表头裸露（卡G：显隐交
+      JS 全权，入口先隐防加载中闪烁）；
+    - 高级页数据目录路径空 span → 首帧无占位（卡F 已静态「—」）。
+    本钉四项锁跨卡终态：①②④ 卡F 落地即绿，③ 为本卡红核（先红后绿）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    src = _app_js_source()
+
+    # ① 质量页导读 details 默认展开（卡F 落地，绿到即至）
+    assert '<details id="refineGuideViewer" open' in html, \
+        "① index.html 缺 `<details id=\"refineGuideViewer\" open`" \
+        "（导读引导首屏不可见）"
+
+    # ② 校对页/高级页空子件 :empty 收形规则（卡F 落地，绿到即至）
+    assert ".review-det-tools button:empty" in css, \
+        "② style.css 缺 .review-det-tools button:empty 收形规则"
+    assert re.search(r'\[data-testid="encode-adv-group"\][^{]*:empty', css), \
+        "② style.css 缺 [data-testid=\"encode-adv-group\"] 作用域 :empty 规则"
+
+    # ③ 学习词库空态显隐交 JS 全权（本卡红核）
+    m_empty = re.search(r'<div\b[^>]*id="glLearnedEmpty"[^>]*>', html)
+    assert m_empty, "③ index.html 缺 #glLearnedEmpty 元素"
+    tag = m_empty.group(0).replace(" ", "")
+    assert "display:none" not in tag, \
+        "③ #glLearnedEmpty 仍含静态 display:none（JS 未跑时表头裸露）"
+    body = _extract_function(src, "glLearnedLoad")
+    assert "glLearnedEmpty" in body and "empty.style.display" in body, \
+        "③ glLearnedLoad 未对 #glLearnedEmpty 做显隐操作"
+
+    # ④ 高级页数据目录路径静态「—」占位（卡F 落地）
+    assert re.search(r'id="dataRootCurrentPath"[^>]*>\s*—\s*<', html), \
+        "④ #dataRootCurrentPath 缺静态「—」占位"
+
+
+# ============================================================================
+# P2-9 右栏状态点五态接线（d1015-卡J / D2026-1015-05）
+# ============================================================================
+def test_p29_status_dot_wired():
+    """P2-9 状态点五态接线钉（d1015-卡J / D2026-1015-05）。
+
+    人工推演（owner 主诉"出错也不变红"）：setDot 原只切 running/idle 两态，
+    .dot-ok/.dot-warn/.dot-err 三类虽在 style.css 在位却永不被右栏运行点
+    点亮 → 出错/告警/正常完成一律灰或蓝。本卡收口：
+    - setDot 全集化五态（未知值回落 dot-idle，全量 toggle）；
+    - _finish 增第二参 dotState（默认 'idle'）收尾。
+    评议实测勘误（必须遵守）：startStatusPolling 与 _finish 挂在
+    TranslatorManager 上，TranslatorManager 无 setDot 方法；新调用点严禁
+    this.setDot，须照抄现有 ProgressManager.setDot('running'|'idle') 同款
+    真实引用形态——故本钉③断言带 ProgressManager. 前缀，禁裸子串防假绿。
+    """
+    src = _app_js_source()
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① setDot 五类映射 + 五类全集 toggle（本卡红核）
+    dot = _extract_function(src, "setDot")
+    for cls in ("dot-idle", "dot-running", "dot-ok", "dot-warn", "dot-err"):
+        assert f"'{cls}'" in dot, f"① setDot 缺五态类映射: {cls}"
+        assert re.search(rf"toggle\('{cls}'", dot), \
+            f"① setDot 未对 {cls} 做全量 toggle"
+    assert re.search(r"map\[state\]|\?\?\s*'dot-idle'|\|\|\s*'dot-idle'", dot), \
+        "① setDot 缺未知值回落 dot-idle"
+
+    # ② _finish 第二参 dotState + 按真实引用形态 ProgressManager.setDot 收尾
+    fin = _extract_function(src, "_finish")
+    assert re.search(r"_finish\s*\(\s*statusText\s*,\s*dotState\s*=\s*'idle'", fin), \
+        "② _finish 缺第二参 dotState（默认 'idle'）"
+    assert "ProgressManager.setDot(dotState)" in fin, \
+        "② _finish 未按真实引用形态 ProgressManager.setDot(dotState) 收尾"
+    assert "this.setDot(" not in fin, \
+        "② _finish 误用 this.setDot（TranslatorManager 无该方法）"
+
+    # ③ 轮询函数体 warn/err 分支 + error 路径（带真实引用前缀形态）
+    poll = _extract_function(src, "startStatusPolling")
+    assert "ProgressManager.setDot('warn')" in poll, \
+        "③ 轮询 tick 风险降级未接 ProgressManager.setDot('warn')"
+    assert "dotState = 'warn'" in poll, \
+        "③ completed 告警/多数未译分支未归 'warn'"
+    assert "dotState = 'ok'" in poll, \
+        "③ completed 正常完成分支未归 'ok'"
+    assert "_finish(MSG.completed, dotState)" in poll, \
+        "③ completed 收尾未把 dotState 传入 _finish"
+    assert "_finish(MSG.error, 'err')" in poll, \
+        "③ 轮询 status==='error' 分支未传 'err'"
+
+    # ③b start 主链两处 error（collectOptions catch + 主 catch）全传 'err'
+    start = _extract_function(src, "startTranslation")
+    assert start.count("_finish(MSG.error, 'err')") == 2, \
+        "③b start 主链 error 双处未全传 'err'"
+    assert "this.setDot(" not in start, \
+        "③b start 主链误用 this.setDot（须经 ProgressManager）"
+    assert "ProgressManager.setDot('running')" in start, \
+        "③b start 起跑态点色形态漂移"
+
+    # ④ style.css .dot-err 规则仍在（错误红点样式在位）
+    assert re.search(r"\.status-dot\.dot-err\s*\{", css), \
+        "④ style.css 缺 .status-dot.dot-err 规则"
+
+
+# ============================================================================
+# d1015-卡K（回链 D2026-1015-05；规格 docs/design/d1015-P2残余批-设计规格.md §3
+# 〔主审裁定追记 v2 R12〕）
+# P2-4 质量页 #refineGuideViewer details 折叠头原生标记归一（mask 自绘
+# Lucide chevron-right + [open] rotate）静态钉。
+# ============================================================================
+def test_p24_guide_details_chevron_pinned():
+    """D2026-1015-05 / 卡K：P2-4 质量页 details chevron 归一静态钉（防回潮）。
+
+    背景（规格 §3）：`<details id="refineGuideViewer">` 的 summary 是全站唯一
+    既未摘原生 ▶ 标记、又无箭头语言的折叠头（站内两套既有语言：Console/词库
+    按钮式 rotate；dict-diag/mp-tier 内嵌 svg 或 marker 摘除），与全站
+    Lucide chevron+rotate 不一致。收口路线=先摘原生标记（list-style:none +
+    ::-webkit-details-marker 双写）再以 `::after` 自绘 Lucide chevron-right：
+    mask 只取 alpha，颜色由 background-color var(--text-2) 承担（随主题），
+    [open] 时 rotate(90deg)。
+
+    断言面：
+    - style.css：#refineGuideViewer > summary 族四条规则（摘标记 / 自绘 /
+      旋转）逐条在位，自绘规则体含 var(--text-2) 与 -webkit-mask/mask 双写；
+    - index.html：`refineGuideViewer` 出现次数不变（==1，防误改 HTML，
+      现值经 grep 记数）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ① 原生 ▶ 标记摘除：base summary list-style:none + WebKit 伪元素 display:none
+    assert any("list-style: none" in blk for blk in
+               _p01_rule_blocks(css, "#refineGuideViewer > summary")), \
+        "① #refineGuideViewer > summary 缺 list-style: none（原生标记未摘）"
+    marker = _p01_rule_blocks(
+        css, "#refineGuideViewer > summary::-webkit-details-marker")
+    assert marker and all("display: none" in blk for blk in marker), \
+        "① 缺 #refineGuideViewer > summary::-webkit-details-marker{display:none}"
+
+    # ② [open] 旋转规则在位（chevron 展开时转向）
+    opened = _p01_rule_blocks(css, "#refineGuideViewer[open] > summary::after")
+    assert opened and all("rotate(90deg)" in blk for blk in opened), \
+        "② 缺 #refineGuideViewer[open] > summary::after{transform:rotate(90deg)}"
+
+    # ③ 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
+    drawn = _p01_rule_blocks(css, "#refineGuideViewer > summary::after")
+    assert drawn, "③ 缺 #refineGuideViewer > summary::after 自绘规则"
+    for blk in drawn:
+        assert "var(--text-2)" in blk, \
+            "③ 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
+        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
+            "③ 自绘 chevron 未 -webkit-mask / mask 双写"
+
+    # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
+    assert html.count("refineGuideViewer") == 1, \
+        "④ index.html refineGuideViewer 出现次数漂移（应恒为 1，proof HTML 未动）"
+
+
+# ============================================================================
+# d1016 卡A（回链 D2026-1016-01；规格 docs/design/
+# d1016-卡A-校对页ASR对照折叠钮.md）
+# 校对页疑点区「ASR 对照」钮补 chevron 折叠语言 + aria-expanded 状态接线
+# 静态钉（防回潮）：CSS chevron 常显 + [aria-expanded="true"] rotate(90deg)
+# + review.js handler 同步 aria-expanded。
+# ============================================================================
+def test_review_asr_chevron_pinned():
+    """D2026-1016-01 / 卡A：校对页 ASR 对照钮 chevron + aria 状态静态钉。
+
+    背景（卡面根因）：`.review-det-tools` 工具行「ASR 对照」钮是
+    `.review-asr-card` 显隐唯一切换钮，但无 chevron、无 aria 状态、切换无
+    视觉反馈，与全站「Lucide chevron + rotate」折叠语言（P2-4 卡K / 词库页
+    B2）不一致。收口路线=`#reviewAsrBtn::after` 自绘 Lucide chevron-right
+    （mask 取 alpha，颜色由 background-color var(--text-2) 承担随主题），
+    `[aria-expanded="true"]` 时 rotate(90deg)；review.js click handler 同步
+    写 aria-expanded。
+
+    断言面：
+    - style.css：#reviewAsrBtn::after 自绘规则（含 var(--text-2) 与
+      -webkit-mask/mask 双写）+ [aria-expanded="true"]::after rotate 规则；
+    - review.js：reviewAsrBtn click handler 体含 setAttribute('aria-expanded');
+    - index.html：`reviewAsrBtn` 出现次数恒为 1（防误改 HTML）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    js = REVIEW_JS.read_text(encoding="utf-8")
+
+    # ① 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
+    drawn = _p01_rule_blocks(css, "#reviewAsrBtn::after")
+    assert drawn, "① 缺 #reviewAsrBtn::after 自绘 chevron 规则"
+    for blk in drawn:
+        assert "var(--text-2)" in blk, \
+            "① 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
+        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
+            "① 自绘 chevron 未 -webkit-mask / mask 双写"
+
+    # ② [aria-expanded="true"] 旋转规则在位（chevron 展开时转向）
+    opened = _p01_rule_blocks(css, '#reviewAsrBtn[aria-expanded="true"]::after')
+    assert opened and all("rotate(90deg)" in blk for blk in opened), \
+        '② 缺 #reviewAsrBtn[aria-expanded="true"]::after{transform:rotate(90deg)}'
+
+    # ③ review.js reviewAsrBtn click handler 体同步 aria-expanded
+    m = re.search(
+        r"const asrBtn = document\.getElementById\('reviewAsrBtn'\);", js)
+    assert m, "③ review.js 未找到 reviewAsrBtn 绑定段"
+    seg = js[m.end():]
+    mm = re.search(r"asrBtn\.addEventListener\('click',\s*\(\)\s*=>\s*\{", seg)
+    assert mm, "③ review.js reviewAsrBtn 缺 click handler"
+    depth = 0
+    handler = ""
+    for i in range(mm.end() - 1, len(seg)):
+        ch = seg[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                handler = seg[mm.end() - 1:i + 1]
+                break
+    assert handler, "③ review.js reviewAsrBtn handler 花括号未配平"
+    assert "setAttribute('aria-expanded'" in handler, \
+        "③ reviewAsrBtn handler 未同步 setAttribute('aria-expanded')"
+
+    # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
+    assert html.count("reviewAsrBtn") == 1, \
+        "④ index.html reviewAsrBtn 出现次数漂移（应恒为 1，proof HTML 未动）"
+
+
+# ============================================================================
+# d1016 卡B（回链 D2026-1016-02；规格 docs/design/
+# d1016-卡B-校对页右栏折叠钮.md）
+# 校对页右栏解除强制隐藏（no-aside）改「折叠态起步」（右缘保留折叠/展开钮）
+# 静态钉（防回潮）。
+# ============================================================================
+
+
+def test_review_aside_collapse_pinned():
+    """D2026-1016-02 / 卡B：校对页右栏折叠态起步静态钉。
+
+    背景（卡面根因）：review.js active tab=tab-review 时给 .workbench 挂
+    no-aside → CSS 整体 display:none 右栏，全局折叠/展开钮（.aside-toggle-btn
+    位于 .aside 内）随之消失，校对页无任何折叠入口。改法=进校对页强制
+    aside-collapsed 折叠态（右缘保留 « 钮），离页恢复进页前状态（快照制，
+    不读 localStorage）。
+
+    断言面：
+    ① review.js `_syncWorkbench` 函数体不含 no-aside 且含 aside-collapsed；
+    ② review.js 含 _asidePreReview 快照字段/恢复分支与 _syncAsideAria 定义；
+    ③ index.html no-aside 出现次数恒为 0（注释改写防回潮）；
+    ④ style.css 零改动防线：.workbench.no-aside 规则仍存在（休眠保留）+
+       .aside-toggle-btn 折叠态规则仍在。
+
+    先红场景：本钉先落、JS 未改时 ①②③ 红（旧逻辑仍挂 no-aside、
+    _asidePreReview/_syncAsideAria 未定义、HTML 注释仍含 no-aside）。
+    """
+    js = _review_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① _syncWorkbench 函数体：no-aside 摘除 + aside-collapsed 挂载
+    body = _extract_function(js, "_syncWorkbench")
+    assert "no-aside" not in body, \
+        "① _syncWorkbench 仍挂/卸 no-aside（旧强制隐藏未摘除）"
+    assert _ASIDE_COLLAPSE_CLASS in body, \
+        "① _syncWorkbench 未挂 aside-collapsed（折叠态起步缺失）"
+
+    # ② 快照字段声明 + 恢复分支 + aria 同步定义
+    assert re.search(r"_asidePreReview:\s*null", js), \
+        "② review.js 缺 _asidePreReview 快照字段声明"
+    assert "_asidePreReview" in body, \
+        "② _syncWorkbench 缺 _asidePreReview 快照恢复分支"
+    assert re.search(r"_syncAsideAria\s*\([^)]*\)\s*\{", js), \
+        "② review.js 缺 _syncAsideAria 定义（进页强制折叠态 aria 未补齐）"
+
+    # ③ index.html no-aside 零命中（注释改写防回潮）
+    assert html.count("no-aside") == 0, \
+        "③ index.html 仍含 no-aside（注释回潮）"
+
+    # ④ style.css 零改动防线（休眠保留，防误删破既有 @media 计数/卡G2卡N 钉面）
+    assert re.search(r"\.workbench\.no-aside\s*\{[^}]*grid-template-columns",
+                     css), \
+        "④ style.css .workbench.no-aside 规则被删（休眠保留防线破裂）"
+    assert re.search(
+        r"\.workbench\.no-aside\s+\.aside\s*\{[^}]*display:\s*none", css), \
+        "④ style.css .workbench.no-aside .aside 隐藏规则被删（休眠保留）"
+    assert _p01_rule_blocks(css, ".aside-toggle-btn"), \
+        "④ style.css 缺 .aside-toggle-btn 折叠把手规则（卡G2/卡N 钉面）"
+
+
+# ============================================================================
+# d1016 卡C（回链 D2026-1016-03；规格 docs/design/
+# d1016-卡C-跳摘折叠头归一.md）
+# 质量页「最近一次跳摘」details.fc-status-digest 折叠头原生 ▶ 归一
+# （Lucide chevron + [open] rotate 90°）静态钉（防回潮）。
+# 元素由 app.js 动态 createElement 创建（非 index.html），故 ④ 反钉零命中。
+# ============================================================================
+def test_fc_digest_chevron_pinned():
+    """D2026-1016-03 / 卡C：跳摘折叠头 chevron 归一静态钉（防回潮）。
+
+    背景（卡面根因）：全链状态行摘要 `details.fc-status-digest > summary`
+    由 app.js 动态 createElement 创建（全库零 CSS），是 P2-4 卡K 归一时的
+    漏网折叠头——原生 ▶ marker 直接外露、无任何 chevron 语言，与卡K 定下的
+    「Lucide chevron + [open] rotate 90°」不一致。收口路线与卡K 同款：先摘
+    原生标记（list-style:none + ::-webkit-details-marker 双写），再以
+    `::after` 自绘 Lucide chevron-right（mask 只取 alpha，颜色由
+    background-color var(--text-2) 承担随主题），[open] 时 rotate(90deg)；
+    summary 改 display:flex 为 transform 生效前提。
+
+    断言面：
+    - style.css：.fc-status-digest summary 族三条规则（摘标记 / 自绘 /
+      旋转）逐条在位，自绘规则体含 var(--text-2) 与 -webkit-mask/mask 双写；
+    - index.html：`fc-status-digest` 出现次数恒为 0（该元素由 app.js 动态
+      创建，防误搬进 HTML）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ① 原生 ▶ 标记摘除：base summary list-style:none + WebKit 伪元素 display:none
+    assert any("list-style: none" in blk for blk in
+               _p01_rule_blocks(css, ".fc-status-digest > summary")), \
+        "① .fc-status-digest > summary 缺 list-style: none（原生标记未摘）"
+    marker = _p01_rule_blocks(
+        css, ".fc-status-digest > summary::-webkit-details-marker")
+    assert marker and all("display: none" in blk for blk in marker), \
+        "① 缺 .fc-status-digest > summary::-webkit-details-marker{display:none}"
+
+    # ② 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
+    drawn = _p01_rule_blocks(css, ".fc-status-digest > summary::after")
+    assert drawn, "② 缺 .fc-status-digest > summary::after 自绘规则"
+    for blk in drawn:
+        assert "var(--text-2)" in blk, \
+            "② 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
+        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
+            "② 自绘 chevron 未 -webkit-mask / mask 双写"
+
+    # ③ [open] 旋转规则在位（chevron 展开时转向）
+    opened = _p01_rule_blocks(css, ".fc-status-digest[open] > summary::after")
+    assert opened and all("rotate(90deg)" in blk for blk in opened), \
+        "③ 缺 .fc-status-digest[open] > summary::after{transform:rotate(90deg)}"
+
+    # ④ index.html 零命中（该元素由 app.js 动态创建，防误搬进 HTML）
+    assert html.count("fc-status-digest") == 0, \
+        "④ index.html 出现 fc-status-digest（该元素应由 app.js 动态创建）"
