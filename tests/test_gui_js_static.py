@@ -6627,3 +6627,64 @@ def test_review_asr_chevron_pinned():
     # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
     assert html.count("reviewAsrBtn") == 1, \
         "④ index.html reviewAsrBtn 出现次数漂移（应恒为 1，proof HTML 未动）"
+
+
+# ============================================================================
+# d1016 卡B（回链 D2026-1016-02；规格 docs/design/
+# d1016-卡B-校对页右栏折叠钮.md）
+# 校对页右栏解除强制隐藏（no-aside）改「折叠态起步」（右缘保留折叠/展开钮）
+# 静态钉（防回潮）。
+# ============================================================================
+
+
+def test_review_aside_collapse_pinned():
+    """D2026-1016-02 / 卡B：校对页右栏折叠态起步静态钉。
+
+    背景（卡面根因）：review.js active tab=tab-review 时给 .workbench 挂
+    no-aside → CSS 整体 display:none 右栏，全局折叠/展开钮（.aside-toggle-btn
+    位于 .aside 内）随之消失，校对页无任何折叠入口。改法=进校对页强制
+    aside-collapsed 折叠态（右缘保留 « 钮），离页恢复进页前状态（快照制，
+    不读 localStorage）。
+
+    断言面：
+    ① review.js `_syncWorkbench` 函数体不含 no-aside 且含 aside-collapsed；
+    ② review.js 含 _asidePreReview 快照字段/恢复分支与 _syncAsideAria 定义；
+    ③ index.html no-aside 出现次数恒为 0（注释改写防回潮）；
+    ④ style.css 零改动防线：.workbench.no-aside 规则仍存在（休眠保留）+
+       .aside-toggle-btn 折叠态规则仍在。
+
+    先红场景：本钉先落、JS 未改时 ①②③ 红（旧逻辑仍挂 no-aside、
+    _asidePreReview/_syncAsideAria 未定义、HTML 注释仍含 no-aside）。
+    """
+    js = _review_js_source()
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    # ① _syncWorkbench 函数体：no-aside 摘除 + aside-collapsed 挂载
+    body = _extract_function(js, "_syncWorkbench")
+    assert "no-aside" not in body, \
+        "① _syncWorkbench 仍挂/卸 no-aside（旧强制隐藏未摘除）"
+    assert _ASIDE_COLLAPSE_CLASS in body, \
+        "① _syncWorkbench 未挂 aside-collapsed（折叠态起步缺失）"
+
+    # ② 快照字段声明 + 恢复分支 + aria 同步定义
+    assert re.search(r"_asidePreReview:\s*null", js), \
+        "② review.js 缺 _asidePreReview 快照字段声明"
+    assert "_asidePreReview" in body, \
+        "② _syncWorkbench 缺 _asidePreReview 快照恢复分支"
+    assert re.search(r"_syncAsideAria\s*\([^)]*\)\s*\{", js), \
+        "② review.js 缺 _syncAsideAria 定义（进页强制折叠态 aria 未补齐）"
+
+    # ③ index.html no-aside 零命中（注释改写防回潮）
+    assert html.count("no-aside") == 0, \
+        "③ index.html 仍含 no-aside（注释回潮）"
+
+    # ④ style.css 零改动防线（休眠保留，防误删破既有 @media 计数/卡G2卡N 钉面）
+    assert re.search(r"\.workbench\.no-aside\s*\{[^}]*grid-template-columns",
+                     css), \
+        "④ style.css .workbench.no-aside 规则被删（休眠保留防线破裂）"
+    assert re.search(
+        r"\.workbench\.no-aside\s+\.aside\s*\{[^}]*display:\s*none", css), \
+        "④ style.css .workbench.no-aside .aside 隐藏规则被删（休眠保留）"
+    assert _p01_rule_blocks(css, ".aside-toggle-btn"), \
+        "④ style.css 缺 .aside-toggle-btn 折叠把手规则（卡G2/卡N 钉面）"
