@@ -648,6 +648,33 @@ def test_guide_txt_view_and_learned_glossary_pinned():
     assert "glLearnedReloadBtn" in bind, "学习词库刷新按钮必须绑定 click"
 
 
+def test_guide_json_blocks_initial_hidden():
+    """导读卡空态光秃标题收口（d1016-卡D / D2026-1016-04）。
+
+    #guideJsonBlocks 静态默认可见时，空态（启动首屏/未加载导读）下四个 h4
+    区块标题光秃显示；改为初始 display:none，由既有渲染链路在载入 json 导读时
+    点亮、txt 模式隐藏。四标题本体 data-i18n 键计数锁定防误动。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # ① 锚点标签含初始隐藏样式
+    assert re.search(r'<div id="guideJsonBlocks" style="display:none;">', html), \
+        "guideJsonBlocks 必须初始隐藏（空态四行光秃标题收口）"
+    source = _app_js_source()
+    # ② json 载入点亮既有行为锁定防回潮
+    render_body = _extract_function(source, "guideRender")
+    assert "jsonBlocks.style.display = ''" in render_body, \
+        "guideRender 必须在 json 载入时点亮结构化导读块"
+    # ③ txt 模式隐藏既有行为锁定
+    txt_body = _extract_function(source, "guideRenderTxt")
+    assert "jsonBlocks.style.display = 'none'" in txt_body, \
+        "guideRenderTxt 必须在 txt 模式隐藏结构化导读块"
+    # ④ 四标题本体 data-i18n 键各恰出现一次（防误动标题本体）
+    for key in ("guide_conclusions", "guide_sections",
+                "guide_items_title", "guide_companions"):
+        assert html.count(f'data-i18n="{key}"') == 1, \
+            f"h4 标题 data-i18n 键必须恰出现一次: {key}"
+
+
 def test_asr_python_input_hint():
     """ASR Python 输入框悬停全文提示 + min-width:0 防贴边裁切。
 
