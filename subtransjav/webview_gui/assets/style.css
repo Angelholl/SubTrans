@@ -1879,6 +1879,25 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 #refineGuideViewer[open] > summary::after { transform: rotate(90deg); }
 
+/* d1016 卡C（D2026-1016-03）：全链状态行摘要 details.fc-status-digest
+   （app.js 动态创建）折叠头原生 ▶ 归一，与卡K 同款 Lucide chevron-right +
+   mask 自绘（颜色由 background-color var(--text-2) 承担，随主题；
+   -webkit-mask/mask 双写）。summary 改 display:flex 为 rotate 生效前提，
+   width:fit-content 让点击热区贴文字不横跨整行 */
+.fc-status-digest > summary { list-style: none; display: flex; align-items: center; gap: var(--space-2); width: fit-content; }
+.fc-status-digest > summary::-webkit-details-marker { display: none; }
+.fc-status-digest > summary::after {
+    content: "";
+    flex: none;
+    width: 14px;
+    height: 14px;
+    background-color: var(--text-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform var(--dur) ease;
+}
+.fc-status-digest[open] > summary::after { transform: rotate(90deg); }
+
 /* 2.6.1 批1（D2026-1002-07）：来源条折叠进卡头 summary 行的单行紧凑态 */
 #refineGuideViewer summary .media-source-bar {
     border: none;
