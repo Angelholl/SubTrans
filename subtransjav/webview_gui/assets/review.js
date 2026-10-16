@@ -137,6 +137,8 @@ const ReviewUI = {
     _pollTimer: null,
     _jumpQueue: [],
     _barShown: false,
+    // d1016-卡B：进校对页前的右栏折叠态快照（离页恢复，快照制不读 localStorage）
+    _asidePreReview: null,
     // ---- 批 2b（D2026-1002-10）：列表/编辑/联动状态 ----
     _currentIndex: -1,
     _dirty: false,
@@ -266,7 +268,7 @@ const ReviewUI = {
     },
 
     _bindTabWatcher() {
-        // 简案：每次 side-tab 点击后一个 tick 检查 active tab → 挂/卸 no-aside
+        // 简案：每次 side-tab 点击后一个 tick 检查 active tab → 校对页强制折叠态
         document.querySelectorAll('.side-tab-btn').forEach((btn) => {
             btn.addEventListener('click', () => setTimeout(() => this._syncWorkbench(), 0));
         });
@@ -277,12 +279,32 @@ const ReviewUI = {
         const wb = document.querySelector('.workbench');
         if (!wb) { return; }
         const tab = this.getActiveTab();
-        wb.classList.toggle('no-aside', tab === 'tab-review');
+        if (tab === 'tab-review') {
+            // d1016-卡B：右栏折叠态起步（右缘保留折叠/展开钮），校对工作区全宽语义
+            if (this._asidePreReview == null) {
+                this._asidePreReview = wb.classList.contains('aside-collapsed');
+            }
+            wb.classList.add('aside-collapsed');
+            this._syncAsideAria(true);
+        } else if (this._asidePreReview != null) {
+            // 离开校对页：恢复进页前状态（快照制，不读 localStorage，避免
+            // private 模式默认分歧与卡G2 持久化串扰）
+            wb.classList.toggle('aside-collapsed', this._asidePreReview);
+            this._syncAsideAria(this._asidePreReview);
+            this._asidePreReview = null;
+        }
         // 首次进入校对页即亮状态条（idle 态提示未导入）
         if (tab === 'tab-review' && !this._barShown && this._status) {
             this._barShown = true;
             this._status.setState({ state: 'idle', labelKey: 'review_status_idle' });
         }
+    },
+
+    _syncAsideAria(collapsed) {
+        // 卡G2 handler 只在点击时写 aria；进页强制折叠态需同步补齐
+        document.querySelectorAll('.aside-toggle-btn').forEach((b) => {
+            b.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        });
     },
 
     _pick(kind) {
