@@ -6558,3 +6558,72 @@ def test_p24_guide_details_chevron_pinned():
     # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
     assert html.count("refineGuideViewer") == 1, \
         "④ index.html refineGuideViewer 出现次数漂移（应恒为 1，proof HTML 未动）"
+
+
+# ============================================================================
+# d1016 卡A（回链 D2026-1016-01；规格 docs/design/
+# d1016-卡A-校对页ASR对照折叠钮.md）
+# 校对页疑点区「ASR 对照」钮补 chevron 折叠语言 + aria-expanded 状态接线
+# 静态钉（防回潮）：CSS chevron 常显 + [aria-expanded="true"] rotate(90deg)
+# + review.js handler 同步 aria-expanded。
+# ============================================================================
+def test_review_asr_chevron_pinned():
+    """D2026-1016-01 / 卡A：校对页 ASR 对照钮 chevron + aria 状态静态钉。
+
+    背景（卡面根因）：`.review-det-tools` 工具行「ASR 对照」钮是
+    `.review-asr-card` 显隐唯一切换钮，但无 chevron、无 aria 状态、切换无
+    视觉反馈，与全站「Lucide chevron + rotate」折叠语言（P2-4 卡K / 词库页
+    B2）不一致。收口路线=`#reviewAsrBtn::after` 自绘 Lucide chevron-right
+    （mask 取 alpha，颜色由 background-color var(--text-2) 承担随主题），
+    `[aria-expanded="true"]` 时 rotate(90deg)；review.js click handler 同步
+    写 aria-expanded。
+
+    断言面：
+    - style.css：#reviewAsrBtn::after 自绘规则（含 var(--text-2) 与
+      -webkit-mask/mask 双写）+ [aria-expanded="true"]::after rotate 规则；
+    - review.js：reviewAsrBtn click handler 体含 setAttribute('aria-expanded');
+    - index.html：`reviewAsrBtn` 出现次数恒为 1（防误改 HTML）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    js = REVIEW_JS.read_text(encoding="utf-8")
+
+    # ① 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
+    drawn = _p01_rule_blocks(css, "#reviewAsrBtn::after")
+    assert drawn, "① 缺 #reviewAsrBtn::after 自绘 chevron 规则"
+    for blk in drawn:
+        assert "var(--text-2)" in blk, \
+            "① 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
+        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
+            "① 自绘 chevron 未 -webkit-mask / mask 双写"
+
+    # ② [aria-expanded="true"] 旋转规则在位（chevron 展开时转向）
+    opened = _p01_rule_blocks(css, '#reviewAsrBtn[aria-expanded="true"]::after')
+    assert opened and all("rotate(90deg)" in blk for blk in opened), \
+        '② 缺 #reviewAsrBtn[aria-expanded="true"]::after{transform:rotate(90deg)}'
+
+    # ③ review.js reviewAsrBtn click handler 体同步 aria-expanded
+    m = re.search(
+        r"const asrBtn = document\.getElementById\('reviewAsrBtn'\);", js)
+    assert m, "③ review.js 未找到 reviewAsrBtn 绑定段"
+    seg = js[m.end():]
+    mm = re.search(r"asrBtn\.addEventListener\('click',\s*\(\)\s*=>\s*\{", seg)
+    assert mm, "③ review.js reviewAsrBtn 缺 click handler"
+    depth = 0
+    handler = ""
+    for i in range(mm.end() - 1, len(seg)):
+        ch = seg[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                handler = seg[mm.end() - 1:i + 1]
+                break
+    assert handler, "③ review.js reviewAsrBtn handler 花括号未配平"
+    assert "setAttribute('aria-expanded'" in handler, \
+        "③ reviewAsrBtn handler 未同步 setAttribute('aria-expanded')"
+
+    # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
+    assert html.count("reviewAsrBtn") == 1, \
+        "④ index.html reviewAsrBtn 出现次数漂移（应恒为 1，proof HTML 未动）"
