@@ -6688,3 +6688,59 @@ def test_review_aside_collapse_pinned():
         "④ style.css .workbench.no-aside .aside 隐藏规则被删（休眠保留）"
     assert _p01_rule_blocks(css, ".aside-toggle-btn"), \
         "④ style.css 缺 .aside-toggle-btn 折叠把手规则（卡G2/卡N 钉面）"
+
+
+# ============================================================================
+# d1016 卡C（回链 D2026-1016-03；规格 docs/design/
+# d1016-卡C-跳摘折叠头归一.md）
+# 质量页「最近一次跳摘」details.fc-status-digest 折叠头原生 ▶ 归一
+# （Lucide chevron + [open] rotate 90°）静态钉（防回潮）。
+# 元素由 app.js 动态 createElement 创建（非 index.html），故 ④ 反钉零命中。
+# ============================================================================
+def test_fc_digest_chevron_pinned():
+    """D2026-1016-03 / 卡C：跳摘折叠头 chevron 归一静态钉（防回潮）。
+
+    背景（卡面根因）：全链状态行摘要 `details.fc-status-digest > summary`
+    由 app.js 动态 createElement 创建（全库零 CSS），是 P2-4 卡K 归一时的
+    漏网折叠头——原生 ▶ marker 直接外露、无任何 chevron 语言，与卡K 定下的
+    「Lucide chevron + [open] rotate 90°」不一致。收口路线与卡K 同款：先摘
+    原生标记（list-style:none + ::-webkit-details-marker 双写），再以
+    `::after` 自绘 Lucide chevron-right（mask 只取 alpha，颜色由
+    background-color var(--text-2) 承担随主题），[open] 时 rotate(90deg)；
+    summary 改 display:flex 为 transform 生效前提。
+
+    断言面：
+    - style.css：.fc-status-digest summary 族三条规则（摘标记 / 自绘 /
+      旋转）逐条在位，自绘规则体含 var(--text-2) 与 -webkit-mask/mask 双写；
+    - index.html：`fc-status-digest` 出现次数恒为 0（该元素由 app.js 动态
+      创建，防误搬进 HTML）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ① 原生 ▶ 标记摘除：base summary list-style:none + WebKit 伪元素 display:none
+    assert any("list-style: none" in blk for blk in
+               _p01_rule_blocks(css, ".fc-status-digest > summary")), \
+        "① .fc-status-digest > summary 缺 list-style: none（原生标记未摘）"
+    marker = _p01_rule_blocks(
+        css, ".fc-status-digest > summary::-webkit-details-marker")
+    assert marker and all("display: none" in blk for blk in marker), \
+        "① 缺 .fc-status-digest > summary::-webkit-details-marker{display:none}"
+
+    # ② 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
+    drawn = _p01_rule_blocks(css, ".fc-status-digest > summary::after")
+    assert drawn, "② 缺 .fc-status-digest > summary::after 自绘规则"
+    for blk in drawn:
+        assert "var(--text-2)" in blk, \
+            "② 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
+        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
+            "② 自绘 chevron 未 -webkit-mask / mask 双写"
+
+    # ③ [open] 旋转规则在位（chevron 展开时转向）
+    opened = _p01_rule_blocks(css, ".fc-status-digest[open] > summary::after")
+    assert opened and all("rotate(90deg)" in blk for blk in opened), \
+        "③ 缺 .fc-status-digest[open] > summary::after{transform:rotate(90deg)}"
+
+    # ④ index.html 零命中（该元素由 app.js 动态创建，防误搬进 HTML）
+    assert html.count("fc-status-digest") == 0, \
+        "④ index.html 出现 fc-status-digest（该元素应由 app.js 动态创建）"
