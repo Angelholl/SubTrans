@@ -1121,9 +1121,10 @@ const ReviewUI = {
         if (asrBtn) {
             asrBtn.addEventListener('click', () => {
                 const card = document.querySelector('.review-asr-card');
-                if (card) {
-                    card.style.display = getComputedStyle(card).display !== 'none' ? 'none' : '';
-                }
+                if (!card) { return; }
+                const open = getComputedStyle(card).display === 'none';
+                card.style.display = open ? '' : 'none';
+                asrBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
             });
         }
         const goto = document.querySelector('.review-asr-goto');
