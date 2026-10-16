@@ -30,11 +30,16 @@
     /* 文字 */
     --text-1: #111827;
     --text-2: #6B7280;
-    --text-3: #9CA3AF;
+    --text-3: #656D7A;
 
     /* 品牌 */
     --primary:        #3B82F6;  /* brief 指定科技蓝 */
     --primary-strong: #2563EB;
+    /* 主按钮/品牌块前景与底色族（D2026-1015-04 G3）：组件规则只 var() 引用 */
+    --on-primary: #FFFFFF;
+    --primary-deep: #1D4ED8;
+    --btn-primary-bg: var(--primary-strong);
+    --btn-primary-bg-hover: var(--primary-deep);
     --primary-soft:   #EFF6FF;
     --primary-border: #BFDBFE;
 
@@ -47,7 +52,7 @@
     /* 语义 */
     --ok:          #10B981;
     --ok-soft:     #ECFDF5;
-    --warn:        #F59E0B;   /* brief 指定警告橙 */
+    --warn:        #B45309;   /* 警告橙 amber-700；D2026-1015-04：owner P0-5 裁决 AA 修复，brief 原字面 #F59E0B 留痕 */
     --warn-soft:   #FFFBEB;
     --danger:      #DC2626;
     --danger-soft: #FEF2F2;   /* 停止按钮浅红 */
@@ -73,6 +78,8 @@
     /* 阴影（柔和） */
     --shadow-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
     --shadow-md: 0 2px 4px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.08);
+    --shadow-brand: 0 2px 6px rgba(59,130,246,.35);
+    --shadow-primary: 0 1px 2px rgba(37,99,235,.3);
 
     /* 圆角 */
     --radius-sm: 8px;
@@ -108,7 +115,7 @@
     --border-color: var(--border);
     --status-ok: var(--ok);
     --status-err: var(--danger);
-    --status-warn: #B26A00;  /* 白底上 #B26A00 琥珀可读；深色层改用 var(--warn) */
+    --status-warn: var(--warn);  /* D2026-1015-04：收编 --warn（AA 修复，组件零改动） */
 
     /* ---- 内联宽度 token（index.html 内联样式逐字引用，勿删） ---- */
     --w-quick-service: 150px;      /* service quick select min-width */
@@ -186,7 +193,7 @@ a { color: var(--primary); }
     outline: var(--focus-outline);
     outline-offset: 2px;
 }
-button:focus { outline: none; }
+button:focus:not(:focus-visible) { outline: none; }
 
 /* ============================================================
    3. 三栏骨架：rail | main | aside
@@ -212,8 +219,8 @@ button:focus { outline: none; }
 
 /* ---------- 左栏：品牌 + 导航 + 主题 ---------- */
 .rail {
-    background: var(--surface-2);
-    border-right: 1px solid var(--border);
+    background: var(--bg);
+    border-right: 1px solid var(--border-strong);
     display: flex;
     flex-direction: column;
     padding: var(--space-4) var(--space-3);
@@ -232,11 +239,11 @@ button:focus { outline: none; }
     height: 32px;
     border-radius: var(--radius-sm);
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(59,130,246,.35);
+    box-shadow: var(--shadow-brand);
 }
 
 .brand-name {
@@ -261,7 +268,7 @@ button:focus { outline: none; }
     width: 100%;
     border: none;
     background: transparent;
-    color: var(--text-2);
+    color: var(--text-1);
     font-family: inherit;
     font-size: var(--font-sm);
     font-weight: 500;
@@ -271,7 +278,7 @@ button:focus { outline: none; }
     text-align: left;
     cursor: pointer;
 }
-.side-tab-btn:hover { background: var(--surface-3); color: var(--text-1); }
+.side-tab-btn:hover { background: var(--surface); color: var(--text-1); }
 .side-tab-btn.active {
     background: var(--active-bg);
     color: var(--active-text);
@@ -327,7 +334,7 @@ button:focus { outline: none; }
 
 .theme-button {
     background: transparent;
-    color: var(--text-2);
+    color: var(--text-1);
     border: none;
     width: 30px;
     height: 30px;
@@ -340,7 +347,7 @@ button:focus { outline: none; }
     align-self: flex-start;
     transition: background var(--dur) ease, color var(--dur) ease;
 }
-.theme-button:hover { background: var(--surface-3); color: var(--text-1); }
+.theme-button:hover { background: var(--surface); color: var(--text-1); }
 /* 阶段2 批1：按钮内为 moon/sun 双内联 SVG（显隐由 applyTheme 控制），
    flex 居中替代原 line-height 文本居中；颜色随按钮 --text-2/hover --text-1 */
 .theme-button { display: inline-flex; align-items: center; justify-content: center; }
@@ -386,6 +393,7 @@ button:focus { outline: none; }
 
 /* ---------- 中栏：主工作区 ---------- */
 .main {
+    background: var(--surface);
     overflow-y: auto;
     padding: var(--space-5) 28px var(--space-6);
     display: flex;
@@ -433,8 +441,8 @@ button:focus { outline: none; }
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    font-size: var(--font-sm);
-    font-weight: 600;
+    font-size: var(--font);
+    font-weight: 700;
     color: var(--text-2);
 }
 .stage-group-title::after {
@@ -447,7 +455,7 @@ button:focus { outline: none; }
 /* ---------- 右栏：配置面板 ---------- */
 .aside {
     position: relative;   /* 卡G1：折叠/展开钮 absolute 定位的定位锚 */
-    border-left: 1px solid var(--border);
+    border-left: 1px solid var(--border-strong);
     background: var(--bg);
     overflow-y: auto;
     padding: var(--space-5) 20px 28px;
@@ -477,7 +485,7 @@ button:focus { outline: none; }
     justify-content: center;
     transition: background var(--dur) ease, color var(--dur) ease;
 }
-.aside-toggle-btn:hover { background: var(--surface-2); color: var(--text-1); }
+.aside-toggle-btn:hover { background: var(--surface); color: var(--text-1); }
 .aside-toggle-btn:focus-visible { outline: var(--focus-outline); outline-offset: -2px; }
 .aside-toggle-btn .toggle-ic-expand { display: none; }
 
@@ -501,7 +509,7 @@ button:focus { outline: none; }
    4. 卡片与区块
    ============================================================ */
 .card {
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
@@ -516,7 +524,7 @@ button:focus { outline: none; }
 }
 
 .section {
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
@@ -536,15 +544,25 @@ button:focus { outline: none; }
     align-items: center;
     gap: var(--space-2);
     padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
 }
-.panel-card .section-header { padding: 0 0 var(--space-2); border-bottom: 1px solid var(--border); }
+.panel-card .section-header { padding: 0 0 var(--space-2); }
 
 .section-header h2 {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--font);
+    font-weight: 700;
+    color: var(--text-2);
     margin: 0;
+}
+.section-header h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 .section-content { padding: var(--space-3) 14px; }
@@ -626,6 +644,16 @@ button:focus { outline: none; }
 .dz-hint { font-size: var(--font-sm); color: var(--text-2); }
 .dz-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; }
 
+/* P1-9 空态静态兜底（d1015-卡F / D2026-1015-05）：JS 未跑时收形，防「空药丸」。
+   作用域一律锁死（勿全局化，评议修订项⑦）：
+   ① 校对页疑点工具条两枚 ghost 钮文案由 review.js 注入，未填前 :empty 收形；
+   ② 高级页第 4 卡（压制参数组）四子件由 EncodeDock.init 注入，JS 失败时
+      收缩为带边框空卡而非「空框+空钮」。 */
+.review-det-tools button:empty { display: none; }
+[data-testid="encode-adv-group"] .group-title:empty,
+[data-testid="encode-adv-group"] .muted:empty,
+[data-testid="encode-adv-group"] .btn:empty { display: none; }
+
 /* ============================================================
    6. 文件列表
    ============================================================ */
@@ -638,6 +666,7 @@ button:focus { outline: none; }
     border-bottom: 1px solid var(--border);
 }
 .card-head-actions { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.card-head-count { font-size: var(--font-xs); color: var(--text-2); }
 
 /* 文件卡弹性内滚（A案 批1）：卡片区填充分区剩余高度，列表容器内滚——
    弹性链路 #tab-translate > .card → .file-list-container → .file-list
@@ -697,10 +726,10 @@ button:focus { outline: none; }
     padding: var(--space-4) var(--space-2);
     border-radius: var(--radius);
 }
-.empty-icon { font-size: 32px; margin-bottom: var(--space-2); opacity: .6; }
+.empty-icon { font-size: 32px; margin-bottom: var(--space-2); }
 .empty-icon svg { display: block; margin: 0 auto; }
 .empty-state p { margin: 2px 0; font-size: var(--font-sm); }
-.empty-hint { font-size: var(--font-xs); opacity: .85; }
+.empty-hint { font-size: var(--font-xs); }
 
 /* 文件行（D2026-0930-09 批2：图标盒+名称/路径双行+三态 chip+移除按钮） */
 .file-item {
@@ -714,7 +743,7 @@ button:focus { outline: none; }
     user-select: none;
     transition: background var(--dur-fast) ease;
 }
-.file-item:hover { background: var(--surface-2); }
+.file-item:hover { background: var(--surface); }
 .file-item.selected { background: var(--primary-soft); box-shadow: inset 2px 0 0 var(--primary-strong); }
 .file-item:focus-visible { outline: var(--focus-outline); outline-offset: -2px; }
 
@@ -919,11 +948,11 @@ button:focus { outline: none; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
 .btn-primary {
-    background: var(--primary);
-    color: #fff;
-    box-shadow: 0 1px 2px rgba(37,99,235,.3);
+    background: var(--btn-primary-bg);
+    color: var(--on-primary);
+    box-shadow: var(--shadow-primary);
 }
-.btn-primary:hover:not(:disabled) { background: var(--primary-strong); }
+.btn-primary:hover:not(:disabled) { background: var(--btn-primary-bg-hover); }
 
 /* 停止 / 危险：浅红底 + danger 字 + danger 边（原型 .btn-stop） */
 .btn-danger {
@@ -938,7 +967,7 @@ button:focus { outline: none; }
     color: var(--text-1);
     border-color: var(--border-strong);
 }
-.btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-3); }
 
 .btn-ghost {
     background: transparent;
@@ -1166,7 +1195,7 @@ input[type="checkbox"]:focus-visible {
     color: var(--text-1);
     padding: var(--space-2) 10px;
     margin-bottom: 10px;
-    background: var(--surface-2);
+    background: var(--surface-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     white-space: nowrap;
@@ -1278,7 +1307,7 @@ input[type="checkbox"]:focus-visible {
     gap: var(--space-1) var(--space-3);
     margin-top: 6px;
     padding: 8px 10px;
-    background: var(--surface-2);
+    background: var(--surface-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     max-height: 180px;
@@ -1323,7 +1352,7 @@ input[type="checkbox"]:focus-visible {
     padding: 6px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    background: var(--surface-3);
     margin-bottom: 10px;
 }
 .mp-path-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -1347,7 +1376,7 @@ input[type="checkbox"]:focus-visible {
     border: 1px solid var(--border);
     border-left: 3px solid var(--warn);
     border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    background: var(--surface-3);
     margin-bottom: 10px;
 }
 
@@ -1356,7 +1385,7 @@ input[type="checkbox"]:focus-visible {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     margin-bottom: 8px;
-    background: var(--surface);
+    background: var(--surface-2);
 }
 .mp-tier > summary { cursor: pointer; }
 .mp-tier > summary::-webkit-summary-marker { display: none; }
@@ -1449,17 +1478,39 @@ input[type="checkbox"]:focus-visible {
 #dictStatus { overflow-wrap: anywhere; }
 
 .group-title {
-    font-size: var(--font-sm);
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font);
+    font-weight: 700;
     color: var(--text-2);
+}
+.group-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 .block-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
     font-size: var(--font);
-    font-weight: 600;
-    color: var(--text-1);
+    font-weight: 700;
+    color: var(--text-2);
     cursor: default;
 }
+.block-title::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+/* 行内卡头生长规则（卡A #10）：block-title 吃满剩余宽，尾 hairline 随之吃满，
+   右侧控件簇（计数/折叠钮/参数钮）被推至右缘；P2-3 词库折叠簇右对齐同源。 */
+.gl-collapse-header .block-title { flex: 1 1 auto; min-width: 0; }
+.pipeline-head-row .block-title { flex: 1 1 auto; min-width: 0; }
 
 .field-label {
     font-size: var(--font-xs);
@@ -1542,7 +1593,7 @@ input[type="checkbox"]:focus-visible {
     gap: var(--space-3);
     align-items: center;
     flex-wrap: wrap;
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
@@ -1553,10 +1604,20 @@ input[type="checkbox"]:focus-visible {
 .stack.form-card { align-items: stretch; }
 
 .form-card-header {
-    font-weight: 600;
-    margin-bottom: var(--space-1);
-    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font);
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+    color: var(--text-2);
     width: 100%;
+}
+.form-card-header::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
 }
 
 /* 卡内 label 带输入控件时改为上下排布（阶段A/B 行布局语义保留）；
@@ -1640,7 +1701,7 @@ input[type="checkbox"]:focus-visible {
 .gl-table tr:last-child td { border-bottom: none; }
 #refineGlossTable tbody tr:hover td,
 #glLearnedTable tbody tr:hover td,
-.gl-table tr:hover td { background: var(--surface-2); transition: background var(--dur-fast) ease; }
+.gl-table tr:hover td { background: var(--surface); transition: background var(--dur-fast) ease; }
 
 /* 表级基础与列宽（阶段3 批2/C4：挂类即完整生效的前提；值与原内联逐字一致） */
 .gl-table { width: var(--w-full); border-collapse: collapse; }
@@ -1736,7 +1797,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     flex-direction: column;
     gap: var(--space-2);
     min-width: var(--w-min);
-    background: var(--surface);
+    background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
@@ -1744,11 +1805,9 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 }
 
 /* adv-group 卡头分层（阶段3 批3/C7：首 group-title=卡头，其余=卡内小节分隔；
-   纯 CSS 无 DOM 改动，间距值均在既有节奏档内） */
-.adv-group > .group-title:first-child {
-    padding-bottom: var(--space-2);
-    border-bottom: 1px solid var(--border);
-}
+   纯 CSS 无 DOM 改动，间距值均在既有节奏档内）。
+   卡A（D2026-1015-05）P1-2 归一：首子卡头不再画全宽下划线（下距由 .adv-group
+   自身 gap = var(--space-2) 承担，尾 hairline 随基类生效）。 */
 .adv-group > .group-title:not(:first-child) {
     padding-top: var(--space-2);
     border-top: 1px solid var(--border);
@@ -1765,7 +1824,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     padding: var(--space-2) 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: var(--surface);
+    background: var(--surface-2);
 }
 
 .media-source-label {
@@ -1803,6 +1862,42 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 /* 质量报告导读查看器 */
 #refineGuideViewer > summary { color: var(--text-1); font-weight: 600; }
 
+/* d1015 卡K（D2026-1015-05）：P2-4 原生 ▶ 标记归一 + mask 自绘 Lucide
+   chevron-right（颜色由 background-color var(--text-2) 承担，随主题；
+   data-uri 走 select 箭头先例，-webkit-mask/mask 双写） */
+#refineGuideViewer > summary { list-style: none; }
+#refineGuideViewer > summary::-webkit-details-marker { display: none; }
+#refineGuideViewer > summary::after {
+    content: "";
+    flex: none;
+    width: 14px;
+    height: 14px;
+    background-color: var(--text-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform var(--dur) ease;
+}
+#refineGuideViewer[open] > summary::after { transform: rotate(90deg); }
+
+/* d1016 卡C（D2026-1016-03）：全链状态行摘要 details.fc-status-digest
+   （app.js 动态创建）折叠头原生 ▶ 归一，与卡K 同款 Lucide chevron-right +
+   mask 自绘（颜色由 background-color var(--text-2) 承担，随主题；
+   -webkit-mask/mask 双写）。summary 改 display:flex 为 rotate 生效前提，
+   width:fit-content 让点击热区贴文字不横跨整行 */
+.fc-status-digest > summary { list-style: none; display: flex; align-items: center; gap: var(--space-2); width: fit-content; }
+.fc-status-digest > summary::-webkit-details-marker { display: none; }
+.fc-status-digest > summary::after {
+    content: "";
+    flex: none;
+    width: 14px;
+    height: 14px;
+    background-color: var(--text-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform var(--dur) ease;
+}
+.fc-status-digest[open] > summary::after { transform: rotate(90deg); }
+
 /* 2.6.1 批1（D2026-1002-07）：来源条折叠进卡头 summary 行的单行紧凑态 */
 #refineGuideViewer summary .media-source-bar {
     border: none;
@@ -1832,7 +1927,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     padding: 10px var(--space-3);
     border: 1px dashed var(--border-strong);
     border-radius: var(--radius);
-    background: var(--surface-2);
+    background: var(--surface-3);
     color: var(--text-3);   /* D2026-1002-07 批1：与 .empty-state 统一文字色阶 */
     font-size: var(--font-sm);
 }
@@ -1871,7 +1966,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
 .guide-txt-view {
     font-family: var(--font-mono);
     font-size: var(--font-xs);
-    background: var(--surface-2);
+    background: var(--surface-3);
     border: 1px solid var(--border);
     color: var(--text-1);
     padding: 10px;
@@ -2523,6 +2618,21 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     margin-top: var(--space-3);
     flex-wrap: wrap;
 }
+/* d1016 卡A（D2026-1016-01）：ASR 对照钮补折叠语言——mask 自绘 Lucide
+   chevron-right（颜色由 background-color var(--text-2) 承担，随主题；
+   data-uri 走 select 箭头先例，-webkit-mask/mask 双写），展开态
+   [aria-expanded="true"] 转向。index.html 零改动，初值无属性=收起态。 */
+#reviewAsrBtn::after {
+    content: "";
+    flex: none;
+    width: 14px;
+    height: 14px;
+    background-color: var(--text-2);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: transform var(--dur) ease;
+}
+#reviewAsrBtn[aria-expanded="true"]::after { transform: rotate(90deg); }
 .review-det-summary { font-size: var(--font-xs); }
 .review-detections {
     margin-top: var(--space-2);
@@ -2707,7 +2817,7 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     padding: var(--space-1) var(--space-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    background: var(--surface-2);
+    background: var(--surface-3);
     white-space: pre-wrap;
     word-break: break-word;
 }

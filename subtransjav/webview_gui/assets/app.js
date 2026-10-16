@@ -220,9 +220,12 @@ const MSG = {
     theme_dark: '暗色主题',
 
     // ---- Source 区 / 文件按钮 ----
-    source_header: 'Source（.srt / .ass / .ssa / .vtt 字幕）',
+    source_header: '拖拽 .srt 字幕文件到这里',
     no_files_selected: '暂未选择文件',
-    empty_hint: '点击上方按钮或拖入文件开始',
+    // d1015-卡E（D2026-1015-05）：文件卡头「已选 X 个」计数（JS 态键，
+    // 卡D 骨架 .card-head-count 由此填充；0 文件时不显示）
+    selected_count: (n) => `已选 ${n} 个`,
+    empty_hint: '点击按钮选择文件或文件夹，也可直接拖入 · 支持 .srt / .ass / .ssa / .vtt 批量添加',
     add_files: '添加文件',
     add_folder: '添加文件夹',
     remove_selected: '移除选中',
@@ -3148,6 +3151,9 @@ const FileListManager = {
         document.getElementById('removeSelectedBtn').disabled = !hasSelection || AppState.isRunning;
         document.getElementById('clearBtn').disabled = !hasFiles || AppState.isRunning;
 
+        const countEl = document.querySelector('.card-head-count');
+        if (countEl) countEl.textContent = AppState.selectedFiles.length > 0 ? MSG.selected_count(AppState.selectedFiles.length) : '';
+
         TranslatorManager.updateButtons();
     },
 
@@ -3647,11 +3653,20 @@ const ProgressManager = {
         if (this.statusLabel) this.statusLabel.textContent = text;
     },
 
-    // 状态点（D2026-0930-09 批2）：idle 灰 / running 蓝
+    // 状态点（D2026-0930-09 批2 两态 → P2-9 d1015-卡J 五态全集）：
+    // idle 灰 / running 蓝 / ok 绿 / warn 琥珀 / err 红；未知值回落 idle。
+    // 五类全量 toggle（当前类 true 其余 false），终态色保留至下一次 start。
     setDot(state) {
         if (!this.statusDot) return;
-        this.statusDot.classList.toggle('dot-running', state === 'running');
-        this.statusDot.classList.toggle('dot-idle', state !== 'running');
+        const dotClass = {
+            idle: 'dot-idle', running: 'dot-running',
+            ok: 'dot-ok', warn: 'dot-warn', err: 'dot-err'
+        }[state] || 'dot-idle';
+        this.statusDot.classList.toggle('dot-idle', dotClass === 'dot-idle');
+        this.statusDot.classList.toggle('dot-running', dotClass === 'dot-running');
+        this.statusDot.classList.toggle('dot-ok', dotClass === 'dot-ok');
+        this.statusDot.classList.toggle('dot-warn', dotClass === 'dot-warn');
+        this.statusDot.classList.toggle('dot-err', dotClass === 'dot-err');
     },
 
     reset() {
@@ -4098,7 +4113,7 @@ const TranslatorManager = {
         } catch (error) {
             ConsoleManager.log(MSG.translationErrorLog(error.message), 'error');
             ErrorHandler.show(MSG.translationErrorTitle, error.message);
-            this._finish(MSG.error);
+            this._finish(MSG.error, 'err');
             return;
         }
 
@@ -4186,7 +4201,7 @@ const TranslatorManager = {
         } catch (error) {
             ConsoleManager.log(MSG.translationErrorLog(error.message), 'error');
             ErrorHandler.show(MSG.translationErrorTitle, error.message);
-            this._finish(MSG.error);
+            this._finish(MSG.error, 'err');
         }
     },
 
@@ -4206,13 +4221,16 @@ const TranslatorManager = {
         }
     },
 
-    _finish(statusText) {
+    // P2-9（d1015-卡J）：收尾点色随终态收束（默认 idle；cancelled 等
+    // 用户主动取消维持 idle，ok/warn/err 由调用方按终态传入）。注意：
+    // TranslatorManager 无 setDot 方法，一律经 ProgressManager 转发。
+    _finish(statusText, dotState = 'idle') {
         this.stopStatusPolling();
         this.state.isRunning = false;
         AppState.isRunning = false;
         FileListManager.updateButtons();
         ProgressManager.setIndeterminate(false);
-        ProgressManager.setDot('idle');
+        ProgressManager.setDot(dotState);
         this.setStatus(statusText);
     },
 
@@ -4368,6 +4386,8 @@ const TranslatorManager = {
                 // 风险计数
                 if (status.risk_count > 0) {
                     text = `${text || MSG.running}${MSG.risk_suffix(status.risk_count)}`;
+                    // P2-9：运行中一旦有风险即降级琥珀（幂等，重复无副作用）
+                    ProgressManager.setDot('warn');
                 }
                 if (text) this.setStatus(text);
 
@@ -4391,10 +4411,15 @@ const TranslatorManager = {
 
                 if (status.status === 'completed') {
                     this.setProgress(100);
+                    // P2-9：完成态点色收束——多数未译（有告警框）必归 warn，
+                    // 防"绿点+告警框"矛盾；warning_level 告警归 warn；其余 ok
+                    let dotState = 'ok';
                     if (status.untranslated_majority) {
+                        dotState = 'warn';
                         ErrorHandler.show(MSG.untranslated_title,
                             MSG.untranslated_hint);
                     } else if (status.warning_level) {
+                        dotState = 'warn';
                         const level = status.warning_level === 'critical'
                             ? MSG.level_critical : MSG.level_warning;
                         ConsoleManager.log(
@@ -4405,7 +4430,7 @@ const TranslatorManager = {
                         ErrorHandler.showSuccess(MSG.completed_title, MSG.completed_detail);
                     }
                     if (typeof this.guideAutoDetect === 'function') this.guideAutoDetect();
-                    this._finish(MSG.completed);
+                    this._finish(MSG.completed, dotState);
                     // P1 预热触发点①（D2026-1008-02 批3，G2 会话级完成=
                     // 整队列回 idle）：Console 一行 + 调预热（后端会话钩子
                     // 并发触发，后端桥内单飞+指纹去重）
@@ -4418,7 +4443,7 @@ const TranslatorManager = {
                     ConsoleManager.log(MSG.translationErrorLog(status.error), 'error');
                     ErrorHandler.show(MSG.translationFailedTitle,
                         status.error || MSG.unknownError);
-                    this._finish(MSG.error);
+                    this._finish(MSG.error, 'err');
                 } else if (status.status === 'cancelled') {
                     this._finish(MSG.cancelled);
                 }
@@ -4804,6 +4829,8 @@ function switchTab(tabId) {
     const st = $('refineTestS' + n + 'Status');
     if (!st) return;
     st.style.color = kind === 'err' ? 'var(--status-err)' : (kind === 'ok' ? 'var(--status-ok)' : 'var(--text-muted)');
+    // P1-9 格8/9（D2026-1015-05）：保存/运行反馈补失败状态类（零新 CSS）
+    st.classList.toggle('status-err', kind === 'err');
     st.textContent = text;
   }
 
@@ -5002,18 +5029,29 @@ function switchTab(tabId) {
     const btn = $('refineTestS' + n);
     if (!btn) return;
     btn.disabled = true;
-    if (st) { st.style.color = 'var(--text-muted)'; st.textContent = MSG.testing; }
+    if (st) {
+      st.style.color = 'var(--text-muted)';
+      // P1-9 格8/9（D2026-1015-05）：失败锚补状态类（既有 .status-err，
+      // 零新 CSS）——运行/成功清类，失败加类
+      st.classList.toggle('status-err', false);
+      st.textContent = MSG.testing;
+    }
     try {
       const r = await pywebview.api.refine_test_stage(
         prov, model, stageEndpoint(n), stageKeyOrNull(n));
       if (st) {
         st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
+        st.classList.toggle('status-err', !r.success);
         st.textContent = (r.success ? '✅ ' : '❌ ') +
           (r.success ? r.message : (r.tip || r.error || MSG.failed));
       }
       if (!r.success && r.tip) console.warn('[refine]', r.tip);
     } catch (e) {
-      if (st) { st.style.color = 'var(--status-err)'; st.textContent = '❌ ' + e; }
+      if (st) {
+        st.style.color = 'var(--status-err)';
+        st.classList.toggle('status-err', true);
+        st.textContent = '❌ ' + e;
+      }
     } finally {
       btn.disabled = false;
     }
@@ -5229,12 +5267,16 @@ function switchTab(tabId) {
   }
 
   // 学习词库只读查看（config/glossary_learned.csv；自学习产物，优先级低于全局词库）
+  // P1-9 格11（D2026-1015-05）：空态显隐交 JS 全权——index.html 移除
+  // #glLearnedEmpty 静态 display:none 后，本入口先隐防加载中闪烁，
+  // !r.exists 显（下方分支）、成功加载隐；样式类（虚线框）零改动。
   async function glLearnedLoad() {
     const st = $('glLearnedStatus');
     const stats = $('glLearnedStats');
     const empty = $('glLearnedEmpty');
     const more = $('glLearnedMore');
     const tb = document.querySelector('#glLearnedTable tbody');
+    if (empty) empty.style.display = 'none';
     if (!tb) return;
     try {
       const r = await window.pywebview.api.refine_get_learned_glossary();
@@ -5621,12 +5663,18 @@ function switchTab(tabId) {
       }
       if (st) {
         st.style.color = r.success ? 'var(--status-ok)' : 'var(--status-err)';
+        // P1-9 格8/9（D2026-1015-05）：保存接口状态补失败状态类（零新 CSS）
+        st.classList.toggle('status-err', !r.success);
         st.textContent = r.success
           ? MSG.endpoints_saved + MSG.resume_fingerprint_hint
           : '❌ ' + r.error;
       }
     } catch (e) {
-      if (st) { st.style.color = 'var(--status-err)'; st.textContent = '❌ ' + e; }
+      if (st) {
+        st.style.color = 'var(--status-err)';
+        st.classList.toggle('status-err', true);
+        st.textContent = '❌ ' + e;
+      }
     }
   }
 
@@ -6807,9 +6855,15 @@ function switchTab(tabId) {
     return AI_CLOUD_PROVIDERS.includes(String(prov || '').toLowerCase());
   }
 
-  function aiStatus(text) {
+  // P1-9 格5（D2026-1015-05）：失败色锚——照 guideStatus 单点先例补
+  // isError 分支（style.css 既有 .status-err 规则，零新样式）；失败加类，
+  // 成功/中性清类。前置守卫类提示（需先加载导读）沿用 guideStatus 先例
+  // 不标红，只有真实失败/异常（api 未就绪、aiFailed、落库失败）传 true。
+  function aiStatus(text, isError) {
     const st = $('refineAiAnalyzeStatus');
-    if (st) st.textContent = text || '';
+    if (!st) return;
+    st.textContent = text || '';
+    st.classList.toggle('status-err', !!isError);
   }
 
   function aiReportPath() {
@@ -7078,7 +7132,7 @@ function switchTab(tabId) {
       return;
     }
     if (!window.pywebview || !window.pywebview.api) {
-      aiStatus(MSG.api_not_ready);
+      aiStatus(MSG.api_not_ready, true);
       return;
     }
     const rp = aiReportPath();
@@ -7133,10 +7187,10 @@ function switchTab(tabId) {
         const tail = (r && r.stderr_tail) || '';
         const firstLine = tail.split('\n').map(s => s.trim()).find(Boolean) || '';
         if (firstLine) detail += '｜' + firstLine.slice(0, 200);
-        aiStatus(MSG.aiFailed(detail));
+        aiStatus(MSG.aiFailed(detail), true);
       }
     } catch (e) {
-      aiStatus(MSG.aiFailed(e && e.message ? e.message : String(e)));
+      aiStatus(MSG.aiFailed(e && e.message ? e.message : String(e)), true);
     } finally {
       if (btn) btn.disabled = false;
       // 批4：停止按钮隐藏复位——取消/完成后均可重新发起
@@ -7150,9 +7204,15 @@ function switchTab(tabId) {
   // textContent 渲染（R2），禁 innerHTML 拼接。
   let lastActionItems = null;
 
-  function bfStatus(text) {
+  // P1-9 格5（D2026-1015-05）：失败色锚——同 aiStatus/guideStatus 先例补
+  // isError 分支（既有 .status-err 类，零新样式）；仅真实失败分支传 true
+  // （api 未就绪/回滚失败/修复失败），成功与中性提示（需导读/无可修条目/
+  // 运行中/取消）清类。
+  function bfStatus(text, isError) {
     const st = $('refineBatchFixStatus');
-    if (st) st.textContent = text || '';
+    if (!st) return;
+    st.textContent = text || '';
+    st.classList.toggle('status-err', !!isError);
   }
 
   // 2.7.4 件C（D2026-1007-02）：修复生效配置常驻明示行（对齐
@@ -7366,7 +7426,7 @@ function switchTab(tabId) {
   async function fullchainRollbackRun() {
     if (!lastLoadedGuidePath || lastLoadedIsTxt) return;
     if (!window.pywebview || !window.pywebview.api) {
-      bfStatus(MSG.api_not_ready);
+      bfStatus(MSG.api_not_ready, true);
       return;
     }
     const rbBtn = document.querySelector('.fullchain-rollback-btn');
@@ -7376,7 +7436,7 @@ function switchTab(tabId) {
         .fullchain_rollback_preview(lastLoadedGuidePath);
     } catch (e) { /* 预览失败按失败文案处理 */ }
     if (!pv || !pv.success) {
-      bfStatus(MSG.fcRollbackFail + '：' + ((pv && pv.error) || ''));
+      bfStatus(MSG.fcRollbackFail + '：' + ((pv && pv.error) || ''), true);
       return;
     }
     if (!pv.applied && !pv.auto_insert) {
@@ -7416,11 +7476,11 @@ function switchTab(tabId) {
         batchFixRefresh();
         fullchainStatusRefresh(true);
       } else {
-        bfStatus(MSG.fcRollbackFail + '：' + ((r && r.error) || ''));
+        bfStatus(MSG.fcRollbackFail + '：' + ((r && r.error) || ''), true);
       }
     } catch (e) {
       bfStatus(MSG.fcRollbackFail + '：'
-        + (e && e.message ? e.message : String(e)));
+        + (e && e.message ? e.message : String(e)), true);
     } finally {
       if (rbBtn) rbBtn.disabled = false;
     }
@@ -7429,7 +7489,7 @@ function switchTab(tabId) {
   async function batchFixRun() {
     if (!lastActionItems) { bfStatus(MSG.batchFixNeedGuide); return; }
     if (!window.pywebview || !window.pywebview.api) {
-      bfStatus(MSG.api_not_ready);
+      bfStatus(MSG.api_not_ready, true);
       return;
     }
     const all = (lastActionItems.open_items || [])
@@ -7607,11 +7667,11 @@ function switchTab(tabId) {
       } else if (r && r.cancelled) {
         bfStatus(MSG.bfCancelled);
       } else {
-        bfStatus(MSG.batchFixFail + '：' + ((r && r.error) || ''));
+        bfStatus(MSG.batchFixFail + '：' + ((r && r.error) || ''), true);
       }
     } catch (e) {
       bfStatus(MSG.batchFixFail + '：'
-        + (e && e.message ? e.message : String(e)));
+        + (e && e.message ? e.message : String(e)), true);
     } finally {
       clearInterval(poll);
       if (btn) btn.disabled = false;
@@ -7786,7 +7846,7 @@ function switchTab(tabId) {
     btn.textContent = MSG.aiApplyRetry;
     btn.title = m;
     btn.disabled = false;
-    aiStatus(MSG.aiApplyFailed(m));
+    aiStatus(MSG.aiApplyFailed(m), true);
   }
 
   async function aiApplyGlossary(idx, btn) {
@@ -8249,7 +8309,10 @@ function switchTab(tabId) {
       if (!r || !r.success) return;
       const pathEl = $('dataRootCurrentPath');
       const tagEl = $('dataRootSourceTag');
-      if (pathEl) pathEl.textContent = r.data_root;
+      // P1-9 格14②（D2026-1015-05）覆写核验：成功回包但 data_root 为空串时
+      // 会覆写掉静态「—」占位 → 补占位兜底保持语义（失败分支已提前 return，
+      // 静态占位天然保留）。「—」与 index.html 占位同字面，零新键。
+      if (pathEl) pathEl.textContent = r.data_root || '—';
       if (tagEl) tagEl.textContent = dataRootSourceLabel(r.source);
     }).catch(() => {});
   }
