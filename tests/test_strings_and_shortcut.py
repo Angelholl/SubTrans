@@ -198,7 +198,7 @@ def test_js_msg_references_defined_in_table():
     f93e426 键表化时 13 个调用点 camelCase 悬空，轮询循环每 tick
     TypeError 中断（进度冻结、完成分支不可达）；本钉防同类回退。
     """
-    src = _APP_JS_PATH.read_text(encoding="utf-8")
+    src = js_sources.read_all()
     refs = set(re.findall(r"\bMSG\.([A-Za-z_][A-Za-z0-9_]*)", src))
     assert refs, "app.js 未引用任何 MSG.x"
     dangling = sorted(refs - _js_msg_keys())
@@ -348,7 +348,7 @@ _ADVANCED_NOTICE_TEXT = "以下为进阶选项，默认值已适配绝大多数�
 
 def _js_msg_value(key: str) -> str:
     """正则解析 app.js MSG 键表中 key 的单引号字符串值（含 JS 转义还原）。"""
-    src = _APP_JS_PATH.read_text(encoding="utf-8")
+    src = js_sources.msg_source()
     m = re.search(r"const MSG = \{(.*?)\n\};", src, re.S)
     assert m, "app.js 未找到 const MSG = {...} 键表"
     vm = re.search(
