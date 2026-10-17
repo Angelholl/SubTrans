@@ -10,6 +10,7 @@ app.js 依赖浏览器 DOM/pywebview，项目内无 JS 自动化测试基建，
 
 配套 ``node --check app.js`` 语法校验（node 不可用时该用例跳过）。
 """
+import hashlib
 import re
 import shutil
 import subprocess
@@ -6783,16 +6784,47 @@ def test_js_sources_layer_pinned():
     """js_sources 集中读取层接线钉（卡 0；D2026-1016-05）。
 
     ① JS_FILES 现值锁定（后续拆分批随批更新本断言）；
-    ② read_all() 拼接视图与 app.js 全文逐字节相等（C0/C1 等价物）；
+    ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
-    assert js_sources.JS_FILES == ["app.js"], \
+    assert js_sources.JS_FILES == ["app.js", "app-modal.js", "app-main.js"], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
-    assert js_sources.read_all() == APP_JS.read_text(encoding="utf-8"), \
-        "read_all() 拼接视图与 app.js 全文不逐字节相等（C0/C1 破）"
+    assert hashlib.sha256(
+        js_sources.read_all().encode("utf-8")).hexdigest() == (
+        "787460b7db478e48e104616e91cc32ac852fb05e0d922da15ad6fd7c4a433533"), \
+        "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
                  "test_ui_phase3_redlines.py"):
         src = (tests_dir / name).read_text(encoding="utf-8")
         assert "js_sources" in src, \
             f"{name} 未接线 js_sources 集中读取层（读取点回潮）"
+
+
+def test_js_split_integrity_pinned():
+    """app.js 拆分批1 完整性护栏（R-A，d1018-卡1 / D2026-1018-01；node 缺失亦生效）。
+
+    ① 三文件字节数与 sha256 锁定（纯字节搬运守恒的物证，函数不跨文件）；
+    ② index.html 加载序 = JS_FILES 定义序 app.js → app-modal.js →
+       app-main.js，且 review.js 在该序之后（review.js 不属本拆分家族）。
+    """
+    frozen = {
+        "app.js": (58699,
+                   "a6ca418f606b7c753a759c499bc8181cafd9da6b2d1001648dc792baa8dfcc26"),
+        "app-modal.js": (92754,
+                         "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
+        "app-main.js": (318745,
+                        "067b0ec443bd83a9f75aa3854853c053de21bf578495eee3d71a95f912d9fc1f"),
+    }
+    for name, (size, digest) in frozen.items():
+        raw = (ASSETS / name).read_bytes()
+        assert len(raw) == size, f"{name} 字节数漂移: {len(raw)} != {size}"
+        assert hashlib.sha256(raw).hexdigest() == digest, \
+            f"{name} sha256 漂移（切分非纯字节搬运）"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    order = [html.index(f'src="{name}"')
+             for name in ("app.js", "app-modal.js", "app-main.js")]
+    assert order == sorted(order), \
+        "index.html 加载序必须为 app.js → app-modal.js → app-main.js"
+    assert html.index('src="review.js"') > order[-1], \
+        "review.js 必须在 app-main.js 之后加载（非本拆分家族）"
