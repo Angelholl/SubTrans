@@ -3824,3 +3824,16 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **裁定与执行**（17 条裁定案全落地）：R1-R2 卡头归一尾 hairline+纯 CSS 路线甲；R4 empty_hint 位置中立文案双挂点同步；R6 格3 校对兜底改挂 no_files_selected（后因校对页 i18n cap 冷钉+渲染覆盖式实证**登记不修**）；R7 格10 首帧词典兜底登记不修（真机观察）；R8/R16-R17 守「一卡一两个文件」拆钉卡，负控红证据补先红（卡C/卡I 四段负控全红实证）；R11 四条硬修订全落实（ProgressManager.setDot 引用形态/error 三处 'err'/untranslated_majority 归 warn/钉带前缀防假绿）；R14 P0 遗留登记①随卡H 收口（--active-text 暗侧 6.48:1）。执行偏离三处均留痕采纳：卡B svg 内层 span 双轨（既有钉 data-i18n 禁直挂 svg）、卡G index.html 单行（卡面文件清单漏列，格11 本体要求）、卡F 格3②/格7 阻断登记（校对页 i18n cap 钉+FROZEN_I18N 快照钉互斥，越权解冻不值 marginal 收益）。
 - **验证**：全量测试基线 2483+4→**2493+4**（+10 钉只增）；Mimosa deep 三次 37 零新增（seal 500900b9/71fc611d/a4bff929/a2a88800）；黑盒统一过（HTTP 桥+IAB）：亮暗双主题目验（主次按钮+图标/卡头拉线/无蓝光晕/激活态亮蓝）+P2-9 五态点色双侧 computed 断言全对+P1-9 首帧四项（details open/引导可见/chevron 14px/:empty 收形）+卡L 图标存活实证。黑盒环境伪影两笔（陈旧缓存 review.js/计算样式读黑）已甄别排除，非产品缺陷。12 卡 24 commit 全部推送（main=e5b4c52+勾账 commit）。
 - **遗留**：①P1-4 暂定态待 owner 真机认/否（首屏对照点）；②格3②/格7/格10 登记不修三项入真机走查清单观察栏；③阶段 3 app.js 拆分（前置方案评审门）与阶段 4 验收（真机走查+暗色专项+焦点专项+AA 门+618px+125%/150% 缩放）按 roadmap 接续；④ruff spike/ 8 项既存基线未清（非本批）。
+
+## 2026-10-16 D2026-1016-05 「3.1 阶段3 app.js 拆分动工+前置方案评审」 已拍板
+
+- **原决策**：以《d1012-阶段3前置-appjs拆分静态测试迁移方案》为动工门，批准 3.1 阶段 3「app.js 拆分」独立批动工。方案要点：先建 `tests/js_sources.py` 集中读取层（拼接视图 ≈ 拆分前 app.js 等价物），三静态测试改经该层、断言本体零迁移；按自包含度四批拆分（首批 AppModal，末批 Refine），零构建 `<script src>` 顺序加载。
+- **评议员异议**：**有条件批准**，三条 [HIGH_RISK_OBJECTION] 与 C0–C5 条件（未闭环前不得开拆）：
+  - HRO-1 拼接视图等价性未被证实+位置型断言漏盘（test_gui_js_static.py 1352 条 assert 远超方案自述"约百余条"；:1030 硬编码 3600 定窗+:1227 banner 切片为方案漏盘；"加载序=依赖序"≠"原始定义序"）。
+  - HRO-2 护栏自证循环（无 DOM 快照 harness，"DOM 零变化"无自动化载体，唯一自动护栏由本变更自身迁移）。
+  - HRO-3 品牌钉未申报（新 .js 照抄 app.js 文件头即触发 default-deny 全量钉红；ALLOWLIST 扩大须先评议）。
+  - 实证边界：IIFE 仅覆盖 Refine 块（app.js:4757-9113 约 44%），其余顶层 const；AppModal 顶层 const 非零依赖（引 ConsoleManager app.js:1563）；打包 spec 整目录收资源透明；_slice_between 仅 redlines 2 处且四锚同处 Refine IIFE 内。
+- **主模型最终决定**：**HRO-1/2/3 全部采纳，C0–C5 全部采纳**。HRO-1→JS_FILES 顺序须复现原始定义序，:1030 定窗+:1227 切片清单并入卡 0 逐锚出等价结论；HRO-2→C2 升格机器可查硬条件（三测试 diff 仅允许读取来源行+helper 定义，断言行/锚点串/3600 数字零变动，主审逐行审痕）；HRO-3→C3 落卡（新 .js 禁 SubTransJAV 头、禁执行者扩 ALLOWLIST）；Q2 首批仅 AppModal 一块+正式承认拆分批多文件卡；Q3 批 4 前先做 IIFE 私有符号升顶层可研+新文件禁 window.X 赋值；Q6 专用分支 refactor/appjs-split（自 main 切出），卡 0 先合、单 revert 可回退整批；基线口径消解为唯一值 **2497+4**；"DOM 快照 diff"降级为人工/web-gui-tester 步骤并标注 GUI 已验证/未验证。
+- **条件闭环状态**：C0–C5 已采纳为动工前置条件，尚待落地闭环（C0 卡 0 读取层逐字节相等+2497+4 不降／C1 定义序+逐锚等价清单／C2 断言零改动审痕／C3 品牌头禁令／C4 node --check 遍历 JS_FILES／C5 作用域耦合清单过评后才开首批）。回退立场：任一条未闭环→转"反对"，对应卡不得开拆。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：①卡 0 回传 read_all() 逐字节 diff 证据+JS_FILES 顺序/行号映射表（复核 C1）；②首批 AppModal 卡面须含 3 触点+禁 window.+无品牌头；③每卡验收留"断言行改动数=0"审痕；④拆分分支每卡原子绿+单 revert 演练；⑤批 4 前提交 IIFE 升顶层可研结论。
