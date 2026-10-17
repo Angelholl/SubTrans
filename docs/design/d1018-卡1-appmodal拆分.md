@@ -97,4 +97,65 @@ ruff check tests/js_sources.py tests/test_gui_js_static.py
 
 ## 执行记录（执行者填写）
 
-（待填：改动文件清单 / 自测结果红绿原文 / 遗留问题）
+执行者：OpenCode（deepseek-v4.1-flash-free）｜日期：2026-10-18｜分支：refactor/appjs-split
+
+### 一、改动文件清单（6 个，与卡面「改动文件」逐一对应，零扩展）
+
+| # | 文件 | 动作 | 校验 |
+|---|---|---|---|
+| 1 | `subtransjav/webview_gui/assets/app.js` | 截断为原 L1–1006 | 58,699B／sha256 `a6ca418f…cc26` ✓ |
+| 2 | `subtransjav/webview_gui/assets/app-modal.js` | 新增（原 L1007–2820） | 92,754B／sha256 `4e987b49…b6707` ✓ |
+| 3 | `subtransjav/webview_gui/assets/app-main.js` | 新增（原 L2821–9830） | 318,745B／sha256 `067b0ec4…9fc1f` ✓ |
+| 4 | `subtransjav/webview_gui/assets/index.html` | app.js 与 review.js 之间插两行 script | diff 仅 +2 行 ✓ |
+| 5 | `tests/js_sources.py` | `JS_FILES` 一行 + 顺序注释同步（read_all docstring 同步一句） | — |
+| 6 | `tests/test_gui_js_static.py` | `test_js_sources_layer_pinned` ①②更新（docstring ②句同步）＋末尾新增 `test_js_split_integrity_pinned`；仅新增 `import hashlib` 一行支撑 | ③ 未动 ✓ |
+
+切分方式＝卡面 Python 二进制模式脚本原文照跑，`assert seg1 + seg2 + seg3 == raw` 通过（守恒不变量 `sha256(read_all()) = 787460b7…3533`，改写前后一致）。
+
+### 二、自测结果（红 → 绿原文）
+
+**① 先红**（落钉后、未拆前）：
+
+```
+$ .venv/Scripts/python.exe -m pytest tests/test_gui_js_static.py -q -k "js_sources or js_split"
+E       AssertionError: JS_FILES 现值漂移（拆分批须随批同步本钉）: ['app.js']
+E       assert ['app.js'] == ['app.js', 'a...'app-main.js']
+E         Right contains 2 more items, first extra item: 'app-modal.js'
+tests\test_gui_js_static.py:6790: AssertionError
+E           AssertionError: app.js 字节数漂移: 470198 != 58699
+tests\test_gui_js_static.py:6821: AssertionError
+FAILED tests/test_gui_js_static.py::test_js_sources_layer_pinned
+FAILED tests/test_gui_js_static.py::test_js_split_integrity_pinned
+2 failed, 202 deselected in 0.86s
+```
+
+**② 后绿**：
+
+```
+$ .venv/Scripts/python.exe -m pytest tests/test_gui_js_static.py -q -k "js_sources or js_split"
+2 passed, 202 deselected in 0.11s
+
+$ .venv/Scripts/python.exe -m pytest tests/test_gui_js_static.py tests/test_strings_and_shortcut.py tests/test_ui_phase3_redlines.py tests/test_brand_allowlist.py -q
+259 passed in 2.68s
+
+$ .venv/Scripts/python.exe -m pytest tests/ -q      # 全量，基线符合预期
+2499 passed, 4 skipped, 2 warnings in 147.91s (0:02:27)
+
+$ .venv/Scripts/python.exe -m ruff check tests/js_sources.py tests/test_gui_js_static.py
+All checks passed!
+```
+
+**③ 红线逐条自查**：
+
+- 纯字节搬运：三文件 sha256 与卡面冻结值逐一相等；`read_all()` 拼接 sha256 = `787460b7…3533`（未动）。
+- 加载序：index.html diff 仅 +2 行，序 = app.js → app-modal.js → app-main.js → review.js；`type="module"` 零命中、import/export 零命中。
+- `window.__X` 赋值：共 12 处，全部落 app-main.js（app.js/app-modal.js 均 0 处）；无**新增** `window.X =`（app-main.js 内仅 1 处 `window.AppDictKindsCount`，为原 L8368 既有字节搬运，非新增）。
+- 品牌：新两文件 `SubTransJAV` 零命中；`test_brand_allowlist.py` ALLOWLIST 未扩，该钉通过。
+- C2 审痕面：三测试断言行/锚点串/`3600` 数字零改动（仅动 `test_js_sources_layer_pinned` 已豁免的①②）。
+- node --check 三文件均通过（`test_app_js_syntax_node_check` 在 node v24.21.0 下实跑未跳过）。
+- 未执行 push；GUI 黑盒验证留主审。
+
+### 三、遗留问题
+
+- 无阻塞遗留。待主审验收项：GUI 黑盒（三文件加载序下 DOM/模态行为零变化）由主审执行。
+- 说明（非卡内改动）：拆分后 `tests/test_strings_and_shortcut.py:162` 的 `_APP_JS_PATH` 指向仅剩段1 的 `app.js`，该变量当前无引用点（死变量），本卡未点名故未动；若后续批次需要，请由主审另开卡清理。
