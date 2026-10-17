@@ -1,0 +1,32 @@
+"""app.js 拆分批集中读取层（3.1 阶段 3 前置，D2026-1016-05 条件 C0）。
+
+JS_FILES 顺序必须复现原始 app.js 文件内定义序（非仅依赖序）——
+拼接视图 read_all() 是全部静态断言的文本等价物（C1）。
+MSG 键表单一归属：msg_source() 返回含键表的那份文件文本（红线③）。
+"""
+
+from pathlib import Path
+
+ASSETS = Path(__file__).resolve().parent.parent / "subtransjav" / "webview_gui" / "assets"
+
+# 加载序 = index.html <script> 顺序 = 原始定义序；每批拆分随批更新本表
+JS_FILES = ["app.js"]
+
+
+def read_all() -> str:
+    """依序拼接全部 JS 文件文本（JS_FILES=["app.js"] 时与 app.js 全文逐字节相等）。"""
+    return "".join(
+        (ASSETS / name).read_text(encoding="utf-8") for name in JS_FILES
+    )
+
+
+def msg_source() -> str:
+    """返回含 ``const MSG = {`` 的那份文件文本；恰一份，多份/零份即 AssertionError。"""
+    hits = [
+        (ASSETS / name).read_text(encoding="utf-8")
+        for name in JS_FILES
+        if "const MSG = {" in (ASSETS / name).read_text(encoding="utf-8")
+    ]
+    if len(hits) != 1:
+        raise AssertionError(f"const MSG 键表必须恰一份，现 {len(hits)} 份")
+    return hits[0]
