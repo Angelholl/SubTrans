@@ -15,6 +15,7 @@ import re
 import time
 from pathlib import Path
 
+import js_sources
 import pytest
 
 from subtransjav.refine import config as rc
@@ -169,7 +170,7 @@ def _js_msg_keys() -> set[str]:
       key: 'text',           key: `text`,
       key: n => `...`,       key: (a, b) => `...`,
     """
-    src = _APP_JS_PATH.read_text(encoding="utf-8")
+    src = js_sources.msg_source()
     m = re.search(r"const MSG = \{(.*?)\n\};", src, re.S)
     assert m, "app.js 未找到 const MSG = {...} 键表"
     body = m.group(1)

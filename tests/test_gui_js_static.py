@@ -15,6 +15,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import js_sources
 import pytest
 
 ASSETS = (Path(__file__).resolve().parents[1] / "subtransjav"
@@ -25,7 +26,7 @@ INDEX_HTML = ASSETS / "index.html"
 
 
 def _app_js_source() -> str:
-    return APP_JS.read_text(encoding="utf-8")
+    return js_sources.read_all()
 
 
 def _extract_function(source: str, name: str) -> str:
@@ -97,9 +98,10 @@ def test_app_js_syntax_node_check():
     node = shutil.which("node")
     if not node:
         pytest.skip("node 不可用")
-    r = subprocess.run([node, "--check", str(APP_JS)],
-                       capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
+    for name in js_sources.JS_FILES:
+        r = subprocess.run([node, "--check", str(ASSETS / name)],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, f"{name}: {r.stderr}"
 
 
 # ---------------------------------------------------------------------------
@@ -6771,3 +6773,26 @@ def test_fc_digest_chevron_pinned():
     # ④ index.html 零命中（该元素由 app.js 动态创建，防误搬进 HTML）
     assert html.count("fc-status-digest") == 0, \
         "④ index.html 出现 fc-status-digest（该元素应由 app.js 动态创建）"
+
+
+# ---------------------------------------------------------------------------
+# 卡 0（D2026-1016-05 条件 C0/C1/C4）：app.js 拆分前置集中读取层接线钉
+# ---------------------------------------------------------------------------
+
+def test_js_sources_layer_pinned():
+    """js_sources 集中读取层接线钉（卡 0；D2026-1016-05）。
+
+    ① JS_FILES 现值锁定（后续拆分批随批更新本断言）；
+    ② read_all() 拼接视图与 app.js 全文逐字节相等（C0/C1 等价物）；
+    ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
+    """
+    assert js_sources.JS_FILES == ["app.js"], \
+        f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
+    assert js_sources.read_all() == APP_JS.read_text(encoding="utf-8"), \
+        "read_all() 拼接视图与 app.js 全文不逐字节相等（C0/C1 破）"
+    tests_dir = Path(__file__).resolve().parent
+    for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
+                 "test_ui_phase3_redlines.py"):
+        src = (tests_dir / name).read_text(encoding="utf-8")
+        assert "js_sources" in src, \
+            f"{name} 未接线 js_sources 集中读取层（读取点回潮）"
