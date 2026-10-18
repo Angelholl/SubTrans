@@ -11,14 +11,15 @@ ASSETS = Path(__file__).resolve().parent.parent / "subtransjav" / "webview_gui" 
 
 # 加载序 = index.html <script> 顺序 = 原始定义序；每批拆分随批更新本表
 JS_FILES = [
-    "app.js",        # 段1 L1-1006：文件头 + 工具/常量定义（MSG 键表单一归属）
-    "app-modal.js",  # 段2 L1007-2820：AppModal 顶层 const 块（含区头注释）
-    "app-main.js",   # 段3 L2821-9830：ErrorHandler 起的其余控制器代码
+    "app.js",        # 段1a 原 L1-10：品牌文件头（品牌钉白名单文件，终态纯注释桩）
+    "app-msg.js",    # 段1b 原 L11-1006：MSG 文案表 + applyI18n/AppState/UIHelpers（批2）
+    "app-modal.js",  # 段2 原 L1007-2820：AppModal 顶层 const 块（含区头注释）
+    "app-main.js",   # 段3 原 L2821-9830：ErrorHandler 起的其余控制器代码
 ]
 
 
 def read_all() -> str:
-    """依序拼接全部 JS 文件文本（批1 后与拆分前的整份 app.js 逐字节相等）。"""
+    """依序拼接全部 JS 文件文本（批2 后与拆分前的整份 app.js 逐字节相等）。"""
     return "".join(
         (ASSETS / name).read_text(encoding="utf-8") for name in JS_FILES
     )
