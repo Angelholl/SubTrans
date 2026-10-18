@@ -85,6 +85,6 @@
 
 ### 遗留问题
 
-1. GUI 黑盒未验证（纯静态 DOM 删除，DOM 断言回归锁代验）；`#dropzone` 删图标后垂直留白实测未见失衡风险（gap 布局同卡2 先例），真机目验留待 owner。
+1. **GUI 未验证**（纯静态 DOM 删除，卡面禁起 GUI，DOM 断言回归锁代验）；`#dropzone` 删图标后垂直留白实测未见失衡风险（gap 布局同卡2 先例），真机目验留待 owner。
 2. 派卡基础设施缺失待 owner 裁决：exec_wrapper.py / pointer_tools.py 不在本机（疑在其他环境或未同步），opencode CLI 未安装——后续派卡流程恢复方式需 owner 定。
 3. 未 push（与分支上卡2 四笔一并待主审验收推送）。
