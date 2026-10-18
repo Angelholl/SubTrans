@@ -2406,16 +2406,6 @@ input[type="checkbox"].gl-sel { cursor: pointer; }
     font-size: var(--font-xs);
     border-radius: var(--radius-sm);
 }
-#tab-review .dz-icon {
-    width: 24px;
-    height: 24px;
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    border: 1px solid var(--primary-border);
-    color: var(--primary);
-    display: grid;
-    place-items: center;
-}
 
 /* 播放器容器（letterbox 用既有 --console-bg 深色 token） */
 .review-player-wrap {
