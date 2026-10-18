@@ -159,7 +159,6 @@ def test_main_aumid_pinned_value_and_call_site():
 # W2 i18n 双表同步钉：index.html data-i18n* 引用的键必须都在 app.js MSG 中
 # ---------------------------------------------------------------------------
 
-_APP_JS_PATH = WEBVIEW_GUI_DIR / "assets" / "app.js"
 _INDEX_HTML_PATH = WEBVIEW_GUI_DIR / "assets" / "index.html"
 
 
