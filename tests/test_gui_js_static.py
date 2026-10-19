@@ -6789,7 +6789,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6871,8 +6871,10 @@ def test_js_split_integrity_pinned():
                              "ce941f6b1605d221321a52daaaf9e896b7ce64d570fd1125d8913a1219792de9"),
         "app-refine-batchfix.js": (25976,
                                    "fb802a9b43e509aad696be184fd8b16fd925da89ae6f577dab00665ccfd1ea4a"),
-        "app-main.js": (67306,
-                        "ddad93d1efbf28f6ce4f570f12f9a36de8ea902a43aa7d01a1bd429588a4ba74"),
+        "app-refine-asr.js": (5258,
+                              "24da1757e9defaba78ccb935e7708497ba8ac6b948ae79bee787ab70247b7776"),
+        "app-main.js": (62048,
+                        "726b7843eae8554b399485aba5f4055747e340436801ba500f7226b4bc2b8df3"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
@@ -6893,7 +6895,7 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-main.js", "app-init.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-main.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
