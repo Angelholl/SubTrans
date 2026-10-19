@@ -369,3 +369,12 @@ node --check <34 个文件逐个>
 1. **GUI 黑盒点验待主审**（本执行环境无法点击原生 WebView2 窗口）：静态与加载期等价证据已由 harness 提供（35/35 零失败）；真窗口点验建议主审在终态一次补全：首屏加载、ASR 模型面板「打开目录」按钮点验（唯一行为差量）、四元素显示/绑定、翻译完成后自动探测链路（app-translator.js:362）。
 2. test_upload_zone_no_icon.py:102 注释仍提 app-main.js（无路径依赖，勘探 §7.5 登记不动）——终态后该注释已过期，留待后续批次顺手修。
 3. 本执行轮零 Mimosa 复扫（本机无该命令）；建议主审机按惯例复扫（主审口径基线 28 findings identity）。
+
+### 主审验收记录（2026-10-19，ZCode 主审）
+
+- **验收＝通过**。验证链亲手重跑：ruff 触点三文件绿（`spike/` 存量 8 处非本批引入，登记 D2026-1019-02）；定向四文件 261 passed（259＋2 新钉）；全量 **2512 passed + 4 skipped**（精确达标，165s）；冒烟（refine --help＋GUI 主模块导入）过；secret 扫描 19 笔新增行 0 命中；Mimosa 产品面 **28 identity 零新增**（seal `8e7e13ef…`；新增 15 条全落 `artifacts/b4/` 树外 harness 脚本，甄别登记）。
+- **载荷钉独立复算双命中**：read_all()=470,144B/`10f6ef82…37a`；refine 家族拼接=204,006B/`6051c666…fe33`。偏差披露①的追认落 decision-log **D2026-1019-02**（A.3-1 字面式勘误，数值口径不变）。
+- **单 revert 主审亲测**：临时 worktree 内 revert `1eb262c..HEAD` 后对起点 diff 为空，worktree 已清。
+- **f9f4ce3 纯 rename 实证**：`-M100%` 判定 app-main.js→app-refine-boot.js 内容零改。
+- **GUI**：真机点验未做（主审无法点原生 WebView2 窗口）；程序化等价证据齐（本记录 §harness＋主审静态钉全套），四点清单移交 owner 真机走查。
+- **收口**：本记录＋D2026-1019-02 以 docs commit 随批推送（push 由主审执行，ls-remote 复核）。
