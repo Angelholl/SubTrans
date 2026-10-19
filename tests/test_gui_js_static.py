@@ -6789,7 +6789,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6875,8 +6875,10 @@ def test_js_split_integrity_pinned():
                               "24da1757e9defaba78ccb935e7708497ba8ac6b948ae79bee787ab70247b7776"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
-        "app-main.js": (56882,
-                        "a50954b0792a4655f3b010d08d348ca4ab0f06a2ce9d3fbc3bc98aec7160bbc0"),
+        "app-refine-bind.js": (17170,
+                               "a0711b0f7de046555bdced38c8b7aabb7b70e5867b0378464918476ab799bb39"),
+        "app-main.js": (39712,
+                        "28fcfbeb5d152c6e4d7c7f234c2f23bebc673504db786251668582ff92c295c3"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
@@ -6897,7 +6899,7 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-main.js", "app-init.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-main.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
