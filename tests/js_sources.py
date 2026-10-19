@@ -24,6 +24,7 @@ JS_FILES = [
     "app-directory.js",     # 段3h 原 app-main.js L1170-1249：DirectoryControls（批3）
     "app-translator.js",    # 段3i 原 app-main.js L1251-1671：TranslatorManager（批3）
     "app-theme.js",         # 段3j 原 app-main.js L1673-1781：ThemeManager（批3）
+    "app-shortcuts.js",     # 段3k 原 app-main.js L1783-1830：KeyboardShortcuts（批3）
     "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
 ]
 
