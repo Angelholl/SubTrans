@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
 """D2026-1003-05 批2 pysubs2<1.9 解析 spike（预研，合成样集，明确标注非真实语料）。
 
 覆盖 C3 八项中可在离线验证的七项（临时 SRT 生命周期属规格决策不在此测）：
 编码探测 / ASS Format 行驱动 / VTT 非载荷行 / 软硬换行三态 / voice span /
 厘秒→毫秒零填充 / 不可解析行行为。roll-up 用 REGION+line 定位样代验忽略面。
 """
-import sys
 from pathlib import Path
 
 import pysubs2
@@ -58,7 +56,7 @@ except Exception as e:
     auto_ok = False
     detail = f"自动探测异常：{type(e).__name__}: {e}"
 subs = pysubs2.load(str(gbk_ass), encoding="gbk")
-explicit_ok = "今日はいい天気ですね" == subs[0].plaintext
+explicit_ok = subs[0].plaintext == "今日はいい天気ですね"
 check("编码探测", auto_ok and False or not auto_ok,
       f"自动探测不可靠（{detail}）→ 显式 encoding 可靠={explicit_ok}"
       " → 规格必须自持探测梯（BOM→UTF-8 严→GBK 回退），不能交给库自动探测")

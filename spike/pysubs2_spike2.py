@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """pysubs2 spike 修订轮：补 [Script Info] 头 + to_string 输出 + 非空断言防假通过。"""
 from pathlib import Path
 
