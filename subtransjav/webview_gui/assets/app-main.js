@@ -1,28 +1,4 @@
 // ============================================================
-// About Dialog
-// ============================================================
-async function showAbout() {
-    const modal = document.getElementById('aboutModal');
-    const versionEl = document.getElementById('aboutVersion');
-
-    try {
-        const result = await pywebview.api.get_version();
-        if (result.success) {
-            versionEl.textContent = `Version ${result.version}`;
-        }
-    } catch (e) {
-        console.warn('Could not fetch version:', e);
-    }
-
-    modal.classList.add('active');
-}
-
-function closeAbout() {
-    const modal = document.getElementById('aboutModal');
-    modal.classList.remove('active');
-}
-
-// ============================================================
 // v1.5 左侧 TAB 导航（SmartSub 式）：按 data-tab 切换主内容区页面，
 // 选中态同步到 TAB 按钮（accent 高亮）与对应页面（.tab-page.active）
 // ============================================================
