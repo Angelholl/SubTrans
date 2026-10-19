@@ -131,9 +131,6 @@
                      拖拽事件与 .drag-over class 由 app.js 绑定在 #fileList 上，
                      高亮规则见 style.css .file-list.drag-over） -->
                 <div class="dropzone" id="dropzone">
-                    <div class="dz-icon">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>
-                    </div>
                     <div class="dz-title" data-i18n="source_header">拖拽 .srt 字幕文件到这里</div>
                     <div class="dz-hint" data-i18n="empty_hint">点击按钮选择文件或文件夹，也可直接拖入 · 支持 .srt / .ass / .ssa / .vtt 批量添加</div>
                     <div class="dz-actions">
@@ -929,9 +926,6 @@
 
                 <!-- 导入区（复用全局 .dropzone 家族结构；按钮经事件委托 data-kind 分流） -->
                 <div class="dropzone" id="reviewDropzone">
-                    <div class="dz-icon">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>
-                    </div>
                     <div class="dz-title"></div>
                     <div class="dz-hint"></div>
                     <div class="dz-actions">
@@ -1259,6 +1253,39 @@
 
     <!-- JavaScript -->
     <script src="app.js"></script>
+    <script src="app-msg.js"></script>
+    <script src="app-modal.js"></script>
+    <script src="app-error-handler.js"></script>
+    <script src="app-file-list.js"></script>
+    <script src="app-console.js"></script>
+    <script src="app-activity.js"></script>
+    <script src="app-progress.js"></script>
+    <script src="app-system-summary.js"></script>
+    <script src="app-tm-query.js"></script>
+    <script src="app-directory.js"></script>
+    <script src="app-translator.js"></script>
+    <script src="app-theme.js"></script>
+    <script src="app-shortcuts.js"></script>
+    <script src="app-about.js"></script>
+    <script src="app-tabs.js"></script>
+    <script src="app-refine-core.js"></script>
+    <script src="app-refine-models.js"></script>
+    <script src="app-refine-glossary.js"></script>
+    <script src="app-refine-templates.js"></script>
+    <script src="app-refine-settings.js"></script>
+    <script src="app-refine-guide.js"></script>
+    <script src="app-refine-preview.js"></script>
+    <script src="app-refine-ai.js"></script>
+    <script src="app-refine-batchfix.js"></script>
+    <script src="app-refine-asr.js"></script>
+    <script src="app-refine-ai-actions.js"></script>
+    <script src="app-refine-bind.js"></script>
+    <script src="app-refine-dataroot.js"></script>
+    <script src="app-refine-dict.js"></script>
+    <script src="app-refine-boot.js"></script>
+    <script src="app-init.js"></script>
+    <script src="app-encode-dock.js"></script>
+    <script src="app-feature-status.js"></script>
     <script src="review.js"></script>
 </body>
 </html>
