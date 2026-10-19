@@ -22,6 +22,7 @@ JS_FILES = [
     "app-system-summary.js",# 段3f 原 app-main.js L860-1058：SystemSummary（批3）
     "app-tm-query.js",      # 段3g 原 app-main.js L1060-1168：TmSearch（批3；文件名避开 tm-search 负向钉）
     "app-directory.js",     # 段3h 原 app-main.js L1170-1249：DirectoryControls（批3）
+    "app-translator.js",    # 段3i 原 app-main.js L1251-1671：TranslatorManager（批3）
     "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
 ]
 
