@@ -6789,7 +6789,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6881,8 +6881,8 @@ def test_js_split_integrity_pinned():
                                    "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
         "app-refine-dict.js": (34748,
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
-        "app-main.js": (2654,
-                        "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
+        "app-refine-boot.js": (2654,
+                             "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
@@ -6903,10 +6903,95 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-main.js", "app-init.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
         "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"
     assert html.index('src="review.js"') > order[-1], \
         "review.js 必须在全部分文件之后加载（非本拆分家族）"
+
+
+def test_refine_family_deshell_pinned():
+    """批4 去壳钉（D2026-1019-01）：Refine 家族 15 文件已脱离 IIFE 壳，且每个文件在 index.html 恰加载一次。"""
+    refine = [n for n in js_sources.JS_FILES if n.startswith("app-refine-")]
+    assert len(refine) == 15, f"Refine 家族应为 15 个分文件，实为 {len(refine)}"
+    assert "app-main.js" not in js_sources.JS_FILES, "app-main.js 应已并入 refine 家族"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for name in refine:
+        src = (ASSETS / name).read_text(encoding="utf-8")
+        assert "(function () {" not in src, f"{name} 残留 IIFE 壳开"
+        assert "\n})();" not in src, f"{name} 残留 IIFE 终结行"
+        assert html.count(f'src="{name}"') == 1, f"{name} 在 index.html 出现次数 != 1"
+
+
+# 批4 全局面冻结名单（172 个；末次变更=批4 去壳升顶层）
+_REFINE_TOP_NAMES = frozenset({
+    "$", "AI_CLOUD_PROVIDERS", "ASR_SOURCE_LABELS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
+    "DICT_STOP_GRACE_MS", "FULLCHAIN_SCOPE_NOTE", "GUIDE_ITEMS_MODAL_TITLE",
+    "GUIDE_ITEMS_OPEN_BTN_LABEL", "GUIDE_SUFFIX", "MODEL_REFRESH_SVG", "REFINE_PROVIDER_URLS",
+    "__warmupInflight", "_dictBusyKind", "_dictCustomDir", "_dictDirCache", "_dictEnsureHint",
+    "_dictEnsureKindRow", "_dictNeedsMigration", "_dictOldDir", "_dictRefreshHint",
+    "_dictRefreshKindRow", "_dictSourcesCache", "_dictStatusCache", "_dictStopPending",
+    "_dictStopRequestedAt", "aiActionBtn", "aiApplyFail", "aiApplyGlossary", "aiApplyTm",
+    "aiBtnState", "aiConflictBadge", "aiEditBtn", "aiEditTm", "aiModelApplyFollowState",
+    "aiRenderResult", "aiReportPath", "aiRestoreBtn", "aiRestoreTm", "aiStatus",
+    "aiUpdateTmTarget", "analyzeResolution", "applyProviderEndpoint", "applySavedStageSettings",
+    "applyServiceQuickProvider", "asrApplyEnvStatus", "asrOpenModelsPanel", "asrRefresh",
+    "asrStatus", "attachPreviewSeekListeners", "batchFixRefresh", "batchFixRun",
+    "bfRefreshEffective", "bfStatus", "bindCleanerDirControls", "bindDirectionControls", "bindDom",
+    "buildRefineOptions", "clearPreviewError", "closeAudioPreview", "dataRootBrowse",
+    "dataRootLoad", "dataRootSave", "dataRootSourceLabel", "detachPreviewSeekListeners",
+    "dictDownload", "dictFailureText", "dictLoad", "dictMigrate", "dictPickDir",
+    "dictRenderDetail", "dictRequestStop", "dictRestoreDir", "dictShowStatus",
+    "ensureGuideStatusLine", "ensurePreviewErrorSlot", "ensurePreviewLoadingNote", "esc", "fcFmt",
+    "fileUrlOf", "fmtGB", "fullchainRollbackRun", "fullchainStatusRefresh", "glAdd", "glDel",
+    "glExport", "glImport", "glLearnedLoad", "glLoad", "glRender", "glRows", "glSave", "glStatus",
+    "guideAutoDetect", "guideCopyPath", "guideCustomStatus", "guideItemCardHtml", "guideLoad",
+    "guidePath", "guideRender", "guideRenderTxt", "guideStalenessCheck", "guideStatus",
+    "inferredMediaCache", "isAiCloudProvider", "lastActionItems", "lastAiSuggestions",
+    "lastAsrProbe", "lastGuideData", "lastLoadedGuideMtime", "lastLoadedGuidePath",
+    "lastLoadedIsTxt", "lastLoadedReportTxtPath", "lastPreviewTiming", "lastPreviewToken",
+    "loadRemote", "markInferredMedia", "maybeShowDataGuide", "mediaMissingHint",
+    "mediaOverridePath", "modelEmptyOptionHTML", "openAudioPreview", "openDir",
+    "openGuideItemsModal", "openTplEditor", "pickCleanerDir", "pickDir",
+    "pickPreviewMediaManually", "previewArmStop", "previewPendingSeek", "previewSeekGen",
+    "previewSeekHandlers", "readPositiveInt", "readRefineConcurrency", "readRefineCtx",
+    "refineAiAnalyze", "refreshAnalysisModels", "refreshFallbackModels", "refreshModels",
+    "refreshServiceQuickRow", "refreshTrioSelect", "rematchPreviewMedia", "renderMediaTag",
+    "saveCleanerDir", "saveStageEndpoints", "saveStageKey", "savedAiModel", "savedStageModels",
+    "showPreviewError", "stageEndpoint", "stageEndpointFor", "stageKeyFor", "stageKeyOrNull",
+    "stageStatus", "syncServiceQuickFromStages", "testAnalysisModel", "testStage", "testTrioModel",
+    "timingToSeconds", "tmOriginalSeed", "tmOriginalTargets", "tmResolveEntry", "tplDirState",
+    "tplGotoEdit", "tplLoad", "tplRefreshSelect", "tplRenderDatalist", "tplRenderOptions",
+    "tplSave", "trioStatus", "updateMediaSourceBar", "warmupMaybeStart",
+})
+
+
+def test_refine_global_surface_pinned():
+    """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 172 个名字，且与其余分文件零重名。"""
+    pat_fn = re.compile(r"^  (?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(")
+    pat_var = re.compile(r"^  (?:const|let|var)\s+([A-Za-z_$][\w$]*)")
+    refine_names = []
+    for name in (n for n in js_sources.JS_FILES if n.startswith("app-refine-")):
+        for line in (ASSETS / name).read_text(encoding="utf-8").split("\n"):
+            m = pat_fn.match(line) or pat_var.match(line)
+            if m:
+                refine_names.append(m.group(1))
+    assert len(refine_names) == len(set(refine_names)), "Refine 家族顶层声明存在重名"
+    assert set(refine_names) == _REFINE_TOP_NAMES, (
+        "Refine 顶层声明集合漂移："
+        f"新增 {sorted(set(refine_names) - _REFINE_TOP_NAMES)}；"
+        f"缺失 {sorted(_REFINE_TOP_NAMES - set(refine_names))}"
+    )
+    others = []
+    for name in js_sources.JS_FILES:
+        if name.startswith("app-refine-"):
+            continue
+        for line in (ASSETS / name).read_text(encoding="utf-8").split("\n"):
+            m = (re.match(r"^(?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(", line)
+                 or re.match(r"^(?:const|let|var)\s+([A-Za-z_$][\w$]*)", line))
+            if m:
+                others.append(m.group(1))
+    assert not (set(refine_names) & set(others)), \
+        f"顶层声明跨文件重名（经典脚本会 SyntaxError）: {sorted(set(refine_names) & set(others))}"
