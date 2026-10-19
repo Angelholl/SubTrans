@@ -19,7 +19,7 @@ JS_FILES = [
     "app-console.js",       # 段3c 原 app-main.js L453-650：RAWLOG_MODAL_TITLE + ConsoleManager（批3）
     "app-activity.js",      # 段3d 原 app-main.js L652-790：heartbeatIsStale + ActivityStream（批3）
     "app-progress.js",      # 段3e 原 app-main.js L792-858：ProgressManager（批3）
-    "app-system-summary.js",# 段3f 原 app-main.js L860-1058：SystemSummary（批3）
+    "app-system-summary.js", # 段3f 原 app-main.js L860-1058：SystemSummary（批3）
     "app-tm-query.js",      # 段3g 原 app-main.js L1060-1168：TmSearch（批3；文件名避开 tm-search 负向钉）
     "app-directory.js",     # 段3h 原 app-main.js L1170-1249：DirectoryControls（批3）
     "app-translator.js",    # 段3i 原 app-main.js L1251-1671：TranslatorManager（批3）
@@ -27,10 +27,10 @@ JS_FILES = [
     "app-shortcuts.js",     # 段3k 原 app-main.js L1783-1830：KeyboardShortcuts（批3）
     "app-about.js",         # 段3l 原 app-main.js L1832-1854：showAbout + closeAbout（批3）
     "app-tabs.js",          # 段3m 原 app-main.js L1856-1934：TAB_HOOKS + switchTab（批3）
-    "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
+    "app-main.js",          # 原 app-main.js L1936-6293：Refine IIFE 单块（批3 终态；批4 目标）
     "app-init.js",          # 段3n 原 app-main.js L6295-6481：DOMContentLoaded 初始化 + RunControlsInit/refreshPipelineMirror + pywebviewready 钩子（批3）
     "app-encode-dock.js",   # 段3o 原 app-main.js L6483-6982：EncodeDock（批3）
-    "app-feature-status.js",# 段3p 原 app-main.js L6984-7010：FeatureStatus（批3，文件末块）
+    "app-feature-status.js", # 段3p 原 app-main.js L6984-7010：FeatureStatus（批3，文件末块）
 ]
 
 
