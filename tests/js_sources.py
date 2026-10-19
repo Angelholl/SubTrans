@@ -19,6 +19,7 @@ JS_FILES = [
     "app-console.js",       # 段3c 原 app-main.js L453-650：RAWLOG_MODAL_TITLE + ConsoleManager（批3）
     "app-activity.js",      # 段3d 原 app-main.js L652-790：heartbeatIsStale + ActivityStream（批3）
     "app-progress.js",      # 段3e 原 app-main.js L792-858：ProgressManager（批3）
+    "app-system-summary.js",# 段3f 原 app-main.js L860-1058：SystemSummary（批3）
     "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
 ]
 
