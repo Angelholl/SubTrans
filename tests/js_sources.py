@@ -11,10 +11,11 @@ ASSETS = Path(__file__).resolve().parent.parent / "subtransjav" / "webview_gui" 
 
 # 加载序 = index.html <script> 顺序 = 原始定义序；每批拆分随批更新本表
 JS_FILES = [
-    "app.js",        # 段1a 原 L1-10：品牌文件头（品牌钉白名单文件，终态纯注释桩）
-    "app-msg.js",    # 段1b 原 L11-1006：MSG 文案表 + applyI18n/AppState/UIHelpers（批2）
-    "app-modal.js",  # 段2 原 L1007-2820：AppModal 顶层 const 块（含区头注释）
-    "app-main.js",   # 段3 原 L2821-9830：ErrorHandler 起的其余控制器代码
+    "app.js",               # 段1a 原 L1-10：品牌文件头（品牌钉白名单文件，终态纯注释桩）
+    "app-msg.js",           # 段1b 原 L11-1006：MSG 文案表 + applyI18n/AppState/UIHelpers（批2）
+    "app-modal.js",         # 段2 原 L1007-2820：AppModal 顶层 const 块（含区头注释）
+    "app-error-handler.js", # 段3a 原 app-main.js L1-19：ErrorHandler（批3）
+    "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
 ]
 
 
