@@ -29,6 +29,7 @@ JS_FILES = [
     "app-tabs.js",          # 段3m 原 app-main.js L1856-1934：TAB_HOOKS + switchTab（批3）
     "app-refine-core.js",  # 原 app-main.js L1-160：Refine 核心助手与端点（批4）
     "app-refine-models.js",  # 原 app-main.js L161-453：模型刷新与测试（批4）
+    "app-refine-glossary.js",  # 原 app-main.js L454-619：词库表格编辑器（批4）
     "app-main.js",          # 原 L1936-6293：Refine 去壳单块（批4-A；批4-B 起逐块切出）
     "app-init.js",          # 段3n 原 app-main.js L6295-6481：DOMContentLoaded 初始化 + RunControlsInit/refreshPipelineMirror + pywebviewready 钩子（批3）
     "app-encode-dock.js",   # 段3o 原 app-main.js L6483-6982：EncodeDock（批3）

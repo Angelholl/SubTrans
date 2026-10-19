@@ -6789,7 +6789,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-refine-core.js", "app-refine-models.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6857,8 +6857,10 @@ def test_js_split_integrity_pinned():
                                "332e810e3760a891eb6f20c92cd24461dd4cf2f8ab808e15fc306a2f1718d7f9"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
-        "app-main.js": (183260,
-                        "2b9abd8424972cc02c7c5e2f9827adb7d2504f3a9d38f7a77ff205992af246e2"),
+        "app-refine-glossary.js": (6588,
+                                   "5836d3481b3b20b6d49933559c9893b719621e003cd46890c34b99f708a24516"),
+        "app-main.js": (176672,
+                        "0e5cc467b10d39e0c9138d5efc69e05bae9a7589f5d864aac720e39cfbefd732"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
@@ -6879,7 +6881,7 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-main.js", "app-init.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-main.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
