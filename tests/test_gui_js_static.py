@@ -10,22 +10,23 @@ app.js 依赖浏览器 DOM/pywebview，项目内无 JS 自动化测试基建，
 
 配套 ``node --check app.js`` 语法校验（node 不可用时该用例跳过）。
 """
+import hashlib
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
+import js_sources
 import pytest
 
 ASSETS = (Path(__file__).resolve().parents[1] / "subtransjav"
           / "webview_gui" / "assets")
-APP_JS = ASSETS / "app.js"
 REVIEW_JS = ASSETS / "review.js"
 INDEX_HTML = ASSETS / "index.html"
 
 
 def _app_js_source() -> str:
-    return APP_JS.read_text(encoding="utf-8")
+    return js_sources.read_all()
 
 
 def _extract_function(source: str, name: str) -> str:
@@ -97,9 +98,10 @@ def test_app_js_syntax_node_check():
     node = shutil.which("node")
     if not node:
         pytest.skip("node 不可用")
-    r = subprocess.run([node, "--check", str(APP_JS)],
-                       capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
+    for name in js_sources.JS_FILES:
+        r = subprocess.run([node, "--check", str(ASSETS / name)],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, f"{name}: {r.stderr}"
 
 
 # ---------------------------------------------------------------------------
@@ -2318,21 +2320,17 @@ def test_startup_chain_not_killed_by_scope_leak():
     assert "document.getElementById('refineConcurrency')" in body, \
         "并发值必须经 document.getElementById('refineConcurrency') 读取"
 
-    # 断言2 钉作用域审计：全文件 $(' 的出现必须全部落在 Refine UI IIFE
-    # 区间内（从含 window.__refineUI 哨兵的行到其后第一个列首 })(); 行）。
-    # 等价判据：全文件出现总数 == 区间内出现总数（且 >0 自证提取有效）——
-    # 任何顶层（或非 Refine IIFE 区间）新增 $(' 引用都会使总数 > 区间数。
-    sentinel = source.index("window.__refineUI")
-    end_m = re.search(r"^\}\)\(\);", source[sentinel:], re.M)
-    assert end_m, "未找到 Refine UI IIFE 终点（列首 })();）"
-    iife_seg = source[sentinel:sentinel + end_m.start()]
+    # 断言2 钉作用域审计（批4 去壳后重写，D2026-1019-01）：Refine 私有助手 $ 已升为顶层函数，
+    # 但仍只允许 refine 家族消费——全库 $(' 出现必须全部落在「refine 家族 + 过渡期剩余 app-main」。
+    family = [n for n in js_sources.JS_FILES
+              if n.startswith("app-refine-") or n == "app-main.js"]
     total = source.count("$('")
-    inner = iife_seg.count("$('")
+    inner = sum((ASSETS / n).read_text(encoding="utf-8").count("$('")
+                for n in family)
     assert total > 0, "自证失败：未提取到任何 $(' 出现（判据失效）"
     assert total == inner, (
-        "顶层不得引用 IIFE 私有 $（D2026-1006-01 件⑥）："
-        f"全文件 $(' 出现 {total} 处，Refine UI IIFE 区间内仅 {inner} 处，"
-        "区间外存在词法作用域致死引用"
+        "refine 家族外出现 $(' 引用（跨模块耦合）："
+        f"全库 {total} 处，家族内仅 {inner} 处"
     )
 
     # 断言3 钉链A 可达：顶层 DOMContentLoaded 回调内 refreshPipelineMirror()
@@ -4106,7 +4104,7 @@ def test_style_css_no_early_comment_terminator():
 # ============================================================================
 
 _FROZEN_FONT_PX_SMALL = 0   # 已全量清零（d1013-卡A1，2026-10-13），Ref: D2026-1013-01
-_FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（token=8/12/16/pill/round）
+_FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（档位占位符已移除）
     "9px": 0, "10px": 0, "6px": 0, "7px": 0, "4px": 0, "99px": 0, "999px": 0,
 }
 _FROZEN_COLOR_DISTINCT = {   # 组件规则内色值字面量（:root token 定义不计数）
@@ -6120,11 +6118,11 @@ def test_p05_contrast_tokens_pinned():
                 r"--status-warn:\s*var\(--warn\)",
                 r"--on-primary:\s*#FFFFFF\b", r"--primary-deep:\s*#1D4ED8\b",
                 r"--btn-primary-bg:\s*\S", r"--btn-primary-bg-hover:\s*\S"):
-        assert re.search(pat, css), f"style.css :root 缺少 P0-5 token: {pat}"
+        assert re.search(pat, css), f"style.css :root 缺少 P0-5 语义变量：{pat}"
 
     # C. 暗 :root token 终值（暗 --warn/--status-warn 达标不动）
     for pat in (r"--text-3:\s*#828A98\b", r"--on-primary:\s*#111827\b"):
-        assert re.search(pat, dark), f"style.dark.css :root 缺少 P0-5 token: {pat}"
+        assert re.search(pat, dark), f"style.dark.css :root 缺少 P0-5 语义变量：{pat}"
 
     # B. 组件规则消字面量：.btn-primary / .brand-mark 块内无 color:#fff
     for sel in (".btn-primary", ".brand-mark"):
@@ -6771,3 +6769,229 @@ def test_fc_digest_chevron_pinned():
     # ④ index.html 零命中（该元素由 app.js 动态创建，防误搬进 HTML）
     assert html.count("fc-status-digest") == 0, \
         "④ index.html 出现 fc-status-digest（该元素应由 app.js 动态创建）"
+
+
+# ---------------------------------------------------------------------------
+# 卡 0（D2026-1016-05 条件 C0/C1/C4）：app.js 拆分前置集中读取层接线钉
+# ---------------------------------------------------------------------------
+
+def test_js_sources_layer_pinned():
+    """js_sources 集中读取层接线钉（卡 0；D2026-1016-05）。
+
+    ① JS_FILES 现值锁定（后续拆分批随批更新本断言；批3 逐块切出自包含块）；
+    ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
+       批4 去壳载荷钉：refine 家族拼接 == 6051c666…（204,006B）；全库拼接换代 10f6ef82…（470,144B）；
+       旧钉 787460b7…（470,198B）已退役（D2026-1019-01）；
+    ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
+    """
+    assert js_sources.JS_FILES == [
+        "app.js", "app-msg.js", "app-modal.js", "app-error-handler.js",
+        "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
+        "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
+        "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
+        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+    ], \
+        f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
+    assert hashlib.sha256(
+        js_sources.read_all().encode("utf-8")).hexdigest() == (
+        "10f6ef82c83752f5ac3e463d9ad8490f22432aeebaf9d0b5c398ebc4e116f37a"), \
+        "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
+    # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（204,006B），15 次切块恒真；切点外任何字节改动必红。
+    refine_family = [n for n in js_sources.JS_FILES
+                     if n.startswith("app-refine-") or n == "app-main.js"]
+    assert hashlib.sha256("".join(
+        (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
+    ).encode("utf-8")).hexdigest() == (
+        "6051c666d37bf1a11b17064c1478ff91ea139860374b9e1c1f679602e546fe33"), \
+        "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
+    tests_dir = Path(__file__).resolve().parent
+    for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
+                 "test_ui_phase3_redlines.py"):
+        src = (tests_dir / name).read_text(encoding="utf-8")
+        assert "js_sources" in src, \
+            f"{name} 未接线 js_sources 集中读取层（读取点回潮）"
+
+
+def test_js_split_integrity_pinned():
+    """app.js 拆分批1-3 完整性护栏（R-A，d1018-卡1 / D2026-1018-01；node 缺失亦生效）。
+
+    ① 各分文件字节数与 sha256 锁定（纯字节搬运守恒的物证，函数不跨文件）；
+    ② index.html 加载序 = JS_FILES 定义序（批3 后全部分文件全量钉），
+       且 review.js 在该序之后（review.js 不属本拆分家族）。
+    """
+    frozen = {
+        "app.js": (248,
+                   "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
+        "app-msg.js": (58451,
+                       "e6af08d83ff64d1c7366eb140deecefc68b0c6a01af08100e9998d623a4413eb"),
+        "app-modal.js": (92754,
+                         "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
+        "app-error-handler.js": (745,
+                                 "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
+        "app-file-list.js": (15821,
+                             "4ace89a8da62e4317535538abb4f7ed973b1f23de85a9b08381f1b0c22512d8b"),
+        "app-console.js": (7818,
+                           "2f877e37da26830a28808bb1df4b3ea8b025e942f460f0c095487c4f5e45f534"),
+        "app-activity.js": (6167,
+                            "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
+        "app-progress.js": (3070,
+                            "e19571ec0a38d3e517501efb735771b31a0ac5a7ea39b371e29de596e19f2763"),
+        "app-system-summary.js": (9494,
+                                  "980cfd6a394de75f0f346387a382bc8cc302482a41605d4839551d5599b143c9"),
+        "app-tm-query.js": (4893,
+                            "c923272db15462c77875acdb27a32cc202860bd07fdf3245220bf1c4f70a4a2e"),
+        "app-directory.js": (3149,
+                             "2b4d435badd728491b076d295a4ff6b32109637166a790bfc12072e43c8686e3"),
+        "app-translator.js": (19835,
+                              "17e60b12b64381c428c11cde07fdedf5a558a2140d2bc1b60db8d52c8f490186"),
+        "app-theme.js": (4234,
+                         "943902377f465a30975c4e77d443ec784b0f44855203139c1055a5c6185f8d34"),
+        "app-shortcuts.js": (1638,
+                             "ac08c35f4837daf2871eddb17402179fc6ecfd9703be4a55810c2079a2995584"),
+        "app-about.js": (705,
+                         "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
+        "app-tabs.js": (3978,
+                        "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
+        "app-refine-core.js": (7401,
+                               "332e810e3760a891eb6f20c92cd24461dd4cf2f8ab808e15fc306a2f1718d7f9"),
+        "app-refine-models.js": (13345,
+                                 "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
+        "app-refine-glossary.js": (6588,
+                                   "5836d3481b3b20b6d49933559c9893b719621e003cd46890c34b99f708a24516"),
+        "app-refine-templates.js": (9297,
+                                    "10f95ce8f11589d91e394029d82f21e312206e1293fdfd205f1658a97813150c"),
+        "app-refine-settings.js": (19255,
+                                   "20907b96509e55835dcae5f1790519c880069d2f4f4dad0d705a2524941e1c55"),
+        "app-refine-guide.js": (26042,
+                                "60debeb42e15fd1fc8f98f6707472597aca2f7fe45130dc62a5b7cf29f30d4c9"),
+        "app-refine-preview.js": (14493,
+                                  "2847f1ca77bfcc313d1383a47df86d14797f47b9b33f42c54c5131b52b20947b"),
+        "app-refine-ai.js": (14303,
+                             "ce941f6b1605d221321a52daaaf9e896b7ce64d570fd1125d8913a1219792de9"),
+        "app-refine-batchfix.js": (25976,
+                                   "fb802a9b43e509aad696be184fd8b16fd925da89ae6f577dab00665ccfd1ea4a"),
+        "app-refine-asr.js": (5258,
+                              "24da1757e9defaba78ccb935e7708497ba8ac6b948ae79bee787ab70247b7776"),
+        "app-refine-ai-actions.js": (5166,
+                                     "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
+        "app-refine-bind.js": (17170,
+                               "a0711b0f7de046555bdced38c8b7aabb7b70e5867b0378464918476ab799bb39"),
+        "app-refine-dataroot.js": (2310,
+                                   "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
+        "app-refine-dict.js": (34748,
+                               "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
+        "app-refine-boot.js": (2654,
+                             "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
+        "app-init.js": (9118,
+                        "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
+        "app-encode-dock.js": (23169,
+                               "b3a94f95b2442ca0cec32c65f8c10f436e13998547e0b9c1aa02a5a5aebd6bfe"),
+        "app-feature-status.js": (851,
+                                  "f0e6c9269a346cfc7e0343e10a0d3304f5c73e1b4cbe1e6184f6f2df85b51c6b"),
+    }
+    for name, (size, digest) in frozen.items():
+        raw = (ASSETS / name).read_bytes()
+        assert len(raw) == size, f"{name} 字节数漂移: {len(raw)} != {size}"
+        assert hashlib.sha256(raw).hexdigest() == digest, \
+            f"{name} sha256 漂移（切分非纯字节搬运）"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    order = [html.index(f'src="{name}"')
+             for name in (
+                 "app.js", "app-msg.js", "app-modal.js",
+                 "app-error-handler.js", "app-file-list.js", "app-console.js",
+                 "app-activity.js", "app-progress.js", "app-system-summary.js",
+                 "app-tm-query.js", "app-directory.js", "app-translator.js",
+                 "app-theme.js", "app-shortcuts.js", "app-about.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js",
+                 "app-encode-dock.js", "app-feature-status.js",
+             )]
+    assert order == sorted(order), \
+        "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"
+    assert html.index('src="review.js"') > order[-1], \
+        "review.js 必须在全部分文件之后加载（非本拆分家族）"
+
+
+def test_refine_family_deshell_pinned():
+    """批4 去壳钉（D2026-1019-01）：Refine 家族 15 文件已脱离 IIFE 壳，且每个文件在 index.html 恰加载一次。"""
+    refine = [n for n in js_sources.JS_FILES if n.startswith("app-refine-")]
+    assert len(refine) == 15, f"Refine 家族应为 15 个分文件，实为 {len(refine)}"
+    assert "app-main.js" not in js_sources.JS_FILES, "app-main.js 应已并入 refine 家族"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for name in refine:
+        src = (ASSETS / name).read_text(encoding="utf-8")
+        assert "(function () {" not in src, f"{name} 残留 IIFE 壳开"
+        assert "\n})();" not in src, f"{name} 残留 IIFE 终结行"
+        assert html.count(f'src="{name}"') == 1, f"{name} 在 index.html 出现次数 != 1"
+
+
+# 批4 全局面冻结名单（172 个；末次变更=批4 去壳升顶层）
+_REFINE_TOP_NAMES = frozenset({
+    "$", "AI_CLOUD_PROVIDERS", "ASR_SOURCE_LABELS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
+    "DICT_STOP_GRACE_MS", "FULLCHAIN_SCOPE_NOTE", "GUIDE_ITEMS_MODAL_TITLE",
+    "GUIDE_ITEMS_OPEN_BTN_LABEL", "GUIDE_SUFFIX", "MODEL_REFRESH_SVG", "REFINE_PROVIDER_URLS",
+    "__warmupInflight", "_dictBusyKind", "_dictCustomDir", "_dictDirCache", "_dictEnsureHint",
+    "_dictEnsureKindRow", "_dictNeedsMigration", "_dictOldDir", "_dictRefreshHint",
+    "_dictRefreshKindRow", "_dictSourcesCache", "_dictStatusCache", "_dictStopPending",
+    "_dictStopRequestedAt", "aiActionBtn", "aiApplyFail", "aiApplyGlossary", "aiApplyTm",
+    "aiBtnState", "aiConflictBadge", "aiEditBtn", "aiEditTm", "aiModelApplyFollowState",
+    "aiRenderResult", "aiReportPath", "aiRestoreBtn", "aiRestoreTm", "aiStatus",
+    "aiUpdateTmTarget", "analyzeResolution", "applyProviderEndpoint", "applySavedStageSettings",
+    "applyServiceQuickProvider", "asrApplyEnvStatus", "asrOpenModelsPanel", "asrRefresh",
+    "asrStatus", "attachPreviewSeekListeners", "batchFixRefresh", "batchFixRun",
+    "bfRefreshEffective", "bfStatus", "bindCleanerDirControls", "bindDirectionControls", "bindDom",
+    "buildRefineOptions", "clearPreviewError", "closeAudioPreview", "dataRootBrowse",
+    "dataRootLoad", "dataRootSave", "dataRootSourceLabel", "detachPreviewSeekListeners",
+    "dictDownload", "dictFailureText", "dictLoad", "dictMigrate", "dictPickDir",
+    "dictRenderDetail", "dictRequestStop", "dictRestoreDir", "dictShowStatus",
+    "ensureGuideStatusLine", "ensurePreviewErrorSlot", "ensurePreviewLoadingNote", "esc", "fcFmt",
+    "fileUrlOf", "fmtGB", "fullchainRollbackRun", "fullchainStatusRefresh", "glAdd", "glDel",
+    "glExport", "glImport", "glLearnedLoad", "glLoad", "glRender", "glRows", "glSave", "glStatus",
+    "guideAutoDetect", "guideCopyPath", "guideCustomStatus", "guideItemCardHtml", "guideLoad",
+    "guidePath", "guideRender", "guideRenderTxt", "guideStalenessCheck", "guideStatus",
+    "inferredMediaCache", "isAiCloudProvider", "lastActionItems", "lastAiSuggestions",
+    "lastAsrProbe", "lastGuideData", "lastLoadedGuideMtime", "lastLoadedGuidePath",
+    "lastLoadedIsTxt", "lastLoadedReportTxtPath", "lastPreviewTiming", "lastPreviewToken",
+    "loadRemote", "markInferredMedia", "maybeShowDataGuide", "mediaMissingHint",
+    "mediaOverridePath", "modelEmptyOptionHTML", "openAudioPreview", "openDir",
+    "openGuideItemsModal", "openTplEditor", "pickCleanerDir", "pickDir",
+    "pickPreviewMediaManually", "previewArmStop", "previewPendingSeek", "previewSeekGen",
+    "previewSeekHandlers", "readPositiveInt", "readRefineConcurrency", "readRefineCtx",
+    "refineAiAnalyze", "refreshAnalysisModels", "refreshFallbackModels", "refreshModels",
+    "refreshServiceQuickRow", "refreshTrioSelect", "rematchPreviewMedia", "renderMediaTag",
+    "saveCleanerDir", "saveStageEndpoints", "saveStageKey", "savedAiModel", "savedStageModels",
+    "showPreviewError", "stageEndpoint", "stageEndpointFor", "stageKeyFor", "stageKeyOrNull",
+    "stageStatus", "syncServiceQuickFromStages", "testAnalysisModel", "testStage", "testTrioModel",
+    "timingToSeconds", "tmOriginalSeed", "tmOriginalTargets", "tmResolveEntry", "tplDirState",
+    "tplGotoEdit", "tplLoad", "tplRefreshSelect", "tplRenderDatalist", "tplRenderOptions",
+    "tplSave", "trioStatus", "updateMediaSourceBar", "warmupMaybeStart",
+})
+
+
+def test_refine_global_surface_pinned():
+    """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 172 个名字，且与其余分文件零重名。"""
+    pat_fn = re.compile(r"^  (?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(")
+    pat_var = re.compile(r"^  (?:const|let|var)\s+([A-Za-z_$][\w$]*)")
+    refine_names = []
+    for name in (n for n in js_sources.JS_FILES if n.startswith("app-refine-")):
+        for line in (ASSETS / name).read_text(encoding="utf-8").split("\n"):
+            m = pat_fn.match(line) or pat_var.match(line)
+            if m:
+                refine_names.append(m.group(1))
+    assert len(refine_names) == len(set(refine_names)), "Refine 家族顶层声明存在重名"
+    assert set(refine_names) == _REFINE_TOP_NAMES, (
+        "Refine 顶层声明集合漂移："
+        f"新增 {sorted(set(refine_names) - _REFINE_TOP_NAMES)}；"
+        f"缺失 {sorted(_REFINE_TOP_NAMES - set(refine_names))}"
+    )
+    others = []
+    for name in js_sources.JS_FILES:
+        if name.startswith("app-refine-"):
+            continue
+        for line in (ASSETS / name).read_text(encoding="utf-8").split("\n"):
+            m = (re.match(r"^(?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(", line)
+                 or re.match(r"^(?:const|let|var)\s+([A-Za-z_$][\w$]*)", line))
+            if m:
+                others.append(m.group(1))
+    assert not (set(refine_names) & set(others)), \
+        f"顶层声明跨文件重名（经典脚本会 SyntaxError）: {sorted(set(refine_names) & set(others))}"
