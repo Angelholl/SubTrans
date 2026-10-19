@@ -2320,21 +2320,17 @@ def test_startup_chain_not_killed_by_scope_leak():
     assert "document.getElementById('refineConcurrency')" in body, \
         "并发值必须经 document.getElementById('refineConcurrency') 读取"
 
-    # 断言2 钉作用域审计：全文件 $(' 的出现必须全部落在 Refine UI IIFE
-    # 区间内（从含 window.__refineUI 哨兵的行到其后第一个列首 })(); 行）。
-    # 等价判据：全文件出现总数 == 区间内出现总数（且 >0 自证提取有效）——
-    # 任何顶层（或非 Refine IIFE 区间）新增 $(' 引用都会使总数 > 区间数。
-    sentinel = source.index("window.__refineUI")
-    end_m = re.search(r"^\}\)\(\);", source[sentinel:], re.M)
-    assert end_m, "未找到 Refine UI IIFE 终点（列首 })();）"
-    iife_seg = source[sentinel:sentinel + end_m.start()]
+    # 断言2 钉作用域审计（批4 去壳后重写，D2026-1019-01）：Refine 私有助手 $ 已升为顶层函数，
+    # 但仍只允许 refine 家族消费——全库 $(' 出现必须全部落在「refine 家族 + 过渡期剩余 app-main」。
+    family = [n for n in js_sources.JS_FILES
+              if n.startswith("app-refine-") or n == "app-main.js"]
     total = source.count("$('")
-    inner = iife_seg.count("$('")
+    inner = sum((ASSETS / n).read_text(encoding="utf-8").count("$('")
+                for n in family)
     assert total > 0, "自证失败：未提取到任何 $(' 出现（判据失效）"
     assert total == inner, (
-        "顶层不得引用 IIFE 私有 $（D2026-1006-01 件⑥）："
-        f"全文件 $(' 出现 {total} 处，Refine UI IIFE 区间内仅 {inner} 处，"
-        "区间外存在词法作用域致死引用"
+        "refine 家族外出现 $(' 引用（跨模块耦合）："
+        f"全库 {total} 处，家族内仅 {inner} 处"
     )
 
     # 断言3 钉链A 可达：顶层 DOMContentLoaded 回调内 refreshPipelineMirror()
@@ -6784,6 +6780,8 @@ def test_js_sources_layer_pinned():
 
     ① JS_FILES 现值锁定（后续拆分批随批更新本断言；批3 逐块切出自包含块）；
     ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
+       批4 去壳载荷钉：refine 家族拼接 == 6051c666…（204,006B）；全库拼接换代 10f6ef82…（470,144B）；
+       旧钉 787460b7…（470,198B）已退役（D2026-1019-01）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -6796,8 +6794,17 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "787460b7db478e48e104616e91cc32ac852fb05e0d922da15ad6fd7c4a433533"), \
+        "10f6ef82c83752f5ac3e463d9ad8490f22432aeebaf9d0b5c398ebc4e116f37a"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
+    # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（204,006B），15 次切块恒真；切点外任何字节改动必红。
+    refine_family = [n for n in js_sources.JS_FILES
+                     if n.startswith("app-refine-") or n == "app-main.js"]
+    assert hashlib.sha256("".join(
+        (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
+    ).encode("utf-8")).hexdigest() == (
+        "6051c666d37bf1a11b17064c1478ff91ea139860374b9e1c1f679602e546fe33"), \
+        "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
                  "test_ui_phase3_redlines.py"):
@@ -6846,8 +6853,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-main.js": (204060,
-                        "ea558c8ee9232dd74dc0d4bcedb11e7fc07c4041462286bcbaca4b6662a329f4"),
+        "app-main.js": (204006,
+                        "6051c666d37bf1a11b17064c1478ff91ea139860374b9e1c1f679602e546fe33"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,

@@ -1,6 +1,4 @@
 // ===== Refine UI：模型刷新/测试 + 词库表格编辑器 + 角色卡编辑器 =====
-(function () {
-  if (window.__refineUI) return;
   window.__refineUI = true;
 
   function $(id) { return document.getElementById(id); }
@@ -156,7 +154,6 @@
   }
 
   TranslatorManager.collectOptions = buildRefineOptions;
-  TranslatorManager.guideAutoDetect = guideAutoDetect;
 
   // ---- 已存模型名（批2 D2026-1002-12 拍板点2：删 custom-model-1/2 前端
   // 硬默认，模型下拉不再有"默认模型"语义——仅认用户显式保存过的值）----
@@ -1701,6 +1698,7 @@
   function guideAutoDetect() {
     guideLoad(true);
   }
+  TranslatorManager.guideAutoDetect = guideAutoDetect;
 
   // ============================================================
   // 媒体来源条 + 快速试听（D2026-0929-09 视听对比第二阶段）
@@ -4355,5 +4353,4 @@
   }
 
   window.__refineLoadRemote = loadRemote;
-})();
 
