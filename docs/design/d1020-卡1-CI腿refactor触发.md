@@ -51,3 +51,4 @@ push 后 gh run list --branch refactor/appjs-split   # 出现 CI run
 - **验证**：`yaml.safe_load` 过、push.branches=['main','master','refactor/**']；`grep -c $'\r'` = 0（CI 首腿 CRLF 守卫不触）；`git diff --stat` 仅 ci.yml 1 行；secret 扫描新增行 0 命中。
 - **提交**：`a131bda`（ci.yml，逐文件点名）；本卡 docs 随后单独提交。工作树中并发会话在途件 docs/decision-log.md（D2026-1020-01 归档方案条目，+20 行）未触碰未混入。
 - **绿相待验证**：推送后 refactor/appjs-split 应出现 CI run（8 腿矩阵＋lint＋mypy 门）——触发面生效即本卡绿相，run 结果兼作批1-4 首次 CI 背书与合并前双保险数据；结果回填本节。
+- **绿相回填（2026-10-20，主审合并列车批）**：首个 refactor CI run=**39292183541 success**（head 86b92c3，2026-10-19T17:12Z，8 腿矩阵＋lint＋mypy 门）＝触发面生效实证、CI-A 闭环；合并列车随批两 run 同绿——第一段合并提交 33cf856＝run 39298268375 success、main 第二段 ce2ed7b＝run 39299151483 success（拆分内容首次进 main CI）。本卡绿相闭环，勾账详见 decision-log **D2026-1020-02**。
