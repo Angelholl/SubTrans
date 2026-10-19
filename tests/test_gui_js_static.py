@@ -6791,7 +6791,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-main.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6846,8 +6846,10 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-main.js": (213178,
-                        "1b1b5a4c4f180db82eb89db06faf0b206c30cf05847af74d2afc4f2c3d54aa23"),
+        "app-main.js": (204060,
+                        "ea558c8ee9232dd74dc0d4bcedb11e7fc07c4041462286bcbaca4b6662a329f4"),
+        "app-init.js": (9118,
+                        "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
                                "b3a94f95b2442ca0cec32c65f8c10f436e13998547e0b9c1aa02a5a5aebd6bfe"),
         "app-feature-status.js": (851,
@@ -6866,8 +6868,8 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-main.js", "app-encode-dock.js",
-                 "app-feature-status.js",
+                 "app-tabs.js", "app-main.js", "app-init.js",
+                 "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
         "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"
