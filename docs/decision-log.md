@@ -3884,3 +3884,15 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **过程异常（执行轮内自愈，均已处置）**：块2 首次驱动脚本锚点缺陷致红相失效→回退重做无残留；笔15 pathspec 失败致首次提交不完整→amend 补齐（本地未推送）；执行记录写入遭凭据判据误拦一次（P7 所消除形态复发）→改写措辞重试未绕判据。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：① owner 真机四点清单（GUI）；② `spike/` 8 处 ruff 存量（候选微 chore 或 ruff exclude，须 owner 裁）；③ `artifacts/b4/` 的 15 条 Mimosa 树外登记（产品面无关，随 exec.v1 证据保留）；④ 根目录残留 `%TEMP%ci-logs.zip`＋`.tokcheck` 已由主审清删（2026-10-19，内容核验为 GitHub 403 JSON 与 TOKEN_LEN 长度标记，无密值）。
+
+## 2026-10-19 D2026-1019-03 「d1018-批4 验收后门禁/技术债登记＋spike/ 8 处 ruff 存量微 chore 收口」 已登记
+
+- **原决策**：owner 2026-10-19 派单裁决（非新拍板，系 D2026-1019-02 验收后裁决事项的执行与登记）；载体＝独立分支 `chore/spike-ruff-cleanup`（自 `c42d1e9`；chore 提交 `f6d3a01`＋docs 本笔），不混入 refactor/appjs-split 已验收链；单 revert 实证＝临时 worktree（%TEMP%\stj-revert-proof-d1019，已清）revert `f6d3a01` 后对起点 `git diff c42d1e9` 为 **0 行**（--stat 空）。
+- **微 chore 摘要**：spike/ 8 处 ruff 存量（UP009×4／F401×3／SIM300×1）`ruff --fix` 机械修，语义零变（F401 的 `os`/`sys` 裁卡前核实全文件零使用，纯 stdlib 无副作用；SIM300 为纯比较翻转；UP009 纯注释行删除）；全库 ruff **8→0**；全量 **2512 passed + 4 skipped** 恒等（152.7s）；冒烟 `refine --help`＋GUI 主模块导入 rc=0；secret 扫描新增行 **0 命中**；卡＝`docs/design/d1019-卡1-spike-ruff微chore.md`（含修复前红原文）。**关闭 D2026-1019-02 风险跟踪②**。
+- **事项①（合并前门禁）refactor/ 分支无 CI 腿**：风险＝批1-4 推送均无 CI 腿（**批1-3 同样无腿，但不得作为不修理由**），全部验证仅主审本地链；门禁时点＝**refactor/appjs-split 合并 main 前必须闭环**；方案二选一**待 owner 裁决**——A＝CI 加 workflow_dispatch 或 push 触发 `refactor/**`（主审建议：长期低成本、合并门自动化），B＝合并前手动跑等价全量并留证入勾账；**本登记未改 CI 触发面**（未经授权不动）；负责人＝owner／合并操作人；临时替代＝主审本地全链（全量 2512+4＋载荷钉双哈希＋Mimosa identity 比对）；关闭条件＝合并前 CI 腿就位或等效手动全量留证。
+- **事项②（发布门禁）GUI 原生 WebView2 真窗口四点走查**：四点清单原文——①首屏加载；②ASR 模型面板「打开目录」按钮点验（**唯一行为差量**，app-modal.js:662 分支激活调 `refine_open_dir`）；③四元素显示/绑定；④翻译完成后自动探测链路（app-translator.js:362）。负责人＝owner 真机走查；程序化等价证据（执行者 vm harness 35/35＋主审静态钉全套）**不替代**真窗口点验；时点＝下个真机走查批／发布前；关闭条件＝四点真机全过并入走查记录。
+- **事项③（独立工具债）Mimosa 钩子 scanner_enobufs 自身故障**：现象＝git commit 期钩子扫描器 ENOBUFS 取不到完整扫描结论走兼容放行（本笔 `f6d3a01` 提交时再次复现；2026-10-12/10-13 先例同，见本档 C22-卡1 直调收口条）；风险＝提交期安全/secret 扫描存在静默失效面；临时替代＝MCP 深扫 seal 会话侧完整取得（**不长期依赖**）；负责人＝owner（ZCode 配置域）；关闭条件＝scanner 修复、钩子扫描恢复为常规门。
+- **Mimosa（本笔）**：deep 扫描 findings **43 条 native identity 与批4 终扫（scan-…142645）逐条全等**（产品面 28＋`artifacts/b4/` 树外 harness 15，甄别口径同 D2026-1019-02）＝**零新增**，seal `sha256:96bb2787910537e96c7670a6ab1a154c978e4e51963134be239f478c659fd277`；披露：job 元数据 offlineAdvisory matchedPackages=1（批4 记「依赖 0 受影响包」），但 findings 层零 advisory 载荷、零新增条目，判 advisory 库元数据漂移非本 chore 引入（本笔零依赖触点，仅删导入），留观察待 owner 复核。
+- **过程披露**：派卡链路第二发不可用（`tools/exec_wrapper.py`／`tools/pointer_tools.py` 不在仓库＋opencode CLI 全机未装，同 d1018-卡3 先例，疑 TEMP 清理所致），按全局兜底条款主审兜底亲执并裁卡（lessons L-20261020-01）；基础设施恢复方式仍待 owner 裁决。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **后续风险跟踪**：① 事项①②③ 关闭条件见上（CI 腿／真机四点／scanner 修复）；② offlineAdvisory 元数据漂移待 owner 复核；③ 派卡基础设施恢复方式待 owner 裁决。
