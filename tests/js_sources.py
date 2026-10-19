@@ -15,6 +15,7 @@ JS_FILES = [
     "app-msg.js",           # 段1b 原 L11-1006：MSG 文案表 + applyI18n/AppState/UIHelpers（批2）
     "app-modal.js",         # 段2 原 L1007-2820：AppModal 顶层 const 块（含区头注释）
     "app-error-handler.js", # 段3a 原 app-main.js L1-19：ErrorHandler（批3）
+    "app-file-list.js",     # 段3b 原 app-main.js L21-451：FileListManager（批3）
     "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
 ]
 

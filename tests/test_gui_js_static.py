@@ -6788,7 +6788,7 @@ def test_js_sources_layer_pinned():
     """
     assert js_sources.JS_FILES == [
         "app.js", "app-msg.js", "app-modal.js", "app-error-handler.js",
-        "app-main.js",
+        "app-file-list.js", "app-main.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6819,8 +6819,10 @@ def test_js_split_integrity_pinned():
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
-        "app-main.js": (318000,
-                        "990074f1d6f9d19a135acc0a00fdd0ffd76e4b4971c536d5b24bd1a7cdd851a1"),
+        "app-file-list.js": (15821,
+                             "4ace89a8da62e4317535538abb4f7ed973b1f23de85a9b08381f1b0c22512d8b"),
+        "app-main.js": (302179,
+                        "90af1ba636a3658eb7382d1794ea6c3e12ee2b611e389f573ce554283270dd24"),
     }
     for name, (size, digest) in frozen.items():
         raw = (ASSETS / name).read_bytes()
@@ -6831,7 +6833,7 @@ def test_js_split_integrity_pinned():
     order = [html.index(f'src="{name}"')
              for name in (
                  "app.js", "app-msg.js", "app-modal.js",
-                 "app-error-handler.js", "app-main.js",
+                 "app-error-handler.js", "app-file-list.js", "app-main.js",
              )]
     assert order == sorted(order), \
         "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"
