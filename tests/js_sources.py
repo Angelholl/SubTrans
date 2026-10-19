@@ -31,6 +31,7 @@ JS_FILES = [
     "app-refine-models.js",  # 原 app-main.js L161-453：模型刷新与测试（批4）
     "app-refine-glossary.js",  # 原 app-main.js L454-619：词库表格编辑器（批4）
     "app-refine-templates.js",  # 原 app-main.js L620-825：角色卡编辑器（批4）
+    "app-refine-settings.js",  # 原 app-main.js L826-1228：阶段设置与目录（批4）
     "app-main.js",          # 原 L1936-6293：Refine 去壳单块（批4-A；批4-B 起逐块切出）
     "app-init.js",          # 段3n 原 app-main.js L6295-6481：DOMContentLoaded 初始化 + RunControlsInit/refreshPipelineMirror + pywebviewready 钩子（批3）
     "app-encode-dock.js",   # 段3o 原 app-main.js L6483-6982：EncodeDock（批3）
