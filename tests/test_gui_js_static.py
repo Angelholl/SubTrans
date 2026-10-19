@@ -4108,7 +4108,7 @@ def test_style_css_no_early_comment_terminator():
 # ============================================================================
 
 _FROZEN_FONT_PX_SMALL = 0   # 已全量清零（d1013-卡A1，2026-10-13），Ref: D2026-1013-01
-_FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（token=8/12/16/pill/round）
+_FROZEN_RADIUS_COUNTS = {    # border-radius 硬编码非 token 档（档位占位符已移除）
     "9px": 0, "10px": 0, "6px": 0, "7px": 0, "4px": 0, "99px": 0, "999px": 0,
 }
 _FROZEN_COLOR_DISTINCT = {   # 组件规则内色值字面量（:root token 定义不计数）
@@ -6122,11 +6122,11 @@ def test_p05_contrast_tokens_pinned():
                 r"--status-warn:\s*var\(--warn\)",
                 r"--on-primary:\s*#FFFFFF\b", r"--primary-deep:\s*#1D4ED8\b",
                 r"--btn-primary-bg:\s*\S", r"--btn-primary-bg-hover:\s*\S"):
-        assert re.search(pat, css), f"style.css :root 缺少 P0-5 token: {pat}"
+        assert re.search(pat, css), f"style.css :root 缺少 P0-5 语义变量：{pat}"
 
     # C. 暗 :root token 终值（暗 --warn/--status-warn 达标不动）
     for pat in (r"--text-3:\s*#828A98\b", r"--on-primary:\s*#111827\b"):
-        assert re.search(pat, dark), f"style.dark.css :root 缺少 P0-5 token: {pat}"
+        assert re.search(pat, dark), f"style.dark.css :root 缺少 P0-5 语义变量：{pat}"
 
     # B. 组件规则消字面量：.btn-primary / .brand-mark 块内无 color:#fff
     for sel in (".btn-primary", ".brand-mark"):
