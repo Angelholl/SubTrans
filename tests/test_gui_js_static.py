@@ -6791,7 +6791,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-main.js",
+        "app-main.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6846,8 +6846,10 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-main.js": (237198,
-                        "b38e59d34851b460487a8be89a39ebf6816d1e464d695027e5680aa7bc30b0f7"),
+        "app-main.js": (236347,
+                        "a003c549720665f3035445e5c348c93edaf18521e34d3455bc582a9306963a79"),
+        "app-feature-status.js": (851,
+                                  "f0e6c9269a346cfc7e0343e10a0d3304f5c73e1b4cbe1e6184f6f2df85b51c6b"),
     }
     for name, (size, digest) in frozen.items():
         raw = (ASSETS / name).read_bytes()
@@ -6862,7 +6864,7 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-main.js",
+                 "app-tabs.js", "app-main.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
         "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"
