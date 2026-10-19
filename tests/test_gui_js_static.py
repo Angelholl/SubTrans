@@ -6782,11 +6782,14 @@ def test_fc_digest_chevron_pinned():
 def test_js_sources_layer_pinned():
     """js_sources 集中读取层接线钉（卡 0；D2026-1016-05）。
 
-    ① JS_FILES 现值锁定（后续拆分批随批更新本断言；批2 切出 app-msg.js）；
+    ① JS_FILES 现值锁定（后续拆分批随批更新本断言；批3 逐块切出自包含块）；
     ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
-    assert js_sources.JS_FILES == ["app.js", "app-msg.js", "app-modal.js", "app-main.js"], \
+    assert js_sources.JS_FILES == [
+        "app.js", "app-msg.js", "app-modal.js", "app-error-handler.js",
+        "app-main.js",
+    ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
@@ -6801,11 +6804,11 @@ def test_js_sources_layer_pinned():
 
 
 def test_js_split_integrity_pinned():
-    """app.js 拆分批1-2 完整性护栏（R-A，d1018-卡1 / D2026-1018-01；node 缺失亦生效）。
+    """app.js 拆分批1-3 完整性护栏（R-A，d1018-卡1 / D2026-1018-01；node 缺失亦生效）。
 
-    ① 四文件字节数与 sha256 锁定（纯字节搬运守恒的物证，函数不跨文件）；
-    ② index.html 加载序 = JS_FILES 定义序 app.js → app-msg.js →
-       app-modal.js → app-main.js，且 review.js 在该序之后（review.js 不属本拆分家族）。
+    ① 各分文件字节数与 sha256 锁定（纯字节搬运守恒的物证，函数不跨文件）；
+    ② index.html 加载序 = JS_FILES 定义序（批3 后全部分文件全量钉），
+       且 review.js 在该序之后（review.js 不属本拆分家族）。
     """
     frozen = {
         "app.js": (248,
@@ -6814,8 +6817,10 @@ def test_js_split_integrity_pinned():
                        "e6af08d83ff64d1c7366eb140deecefc68b0c6a01af08100e9998d623a4413eb"),
         "app-modal.js": (92754,
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
-        "app-main.js": (318745,
-                        "067b0ec443bd83a9f75aa3854853c053de21bf578495eee3d71a95f912d9fc1f"),
+        "app-error-handler.js": (745,
+                                 "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
+        "app-main.js": (318000,
+                        "990074f1d6f9d19a135acc0a00fdd0ffd76e4b4971c536d5b24bd1a7cdd851a1"),
     }
     for name, (size, digest) in frozen.items():
         raw = (ASSETS / name).read_bytes()
@@ -6824,8 +6829,11 @@ def test_js_split_integrity_pinned():
             f"{name} sha256 漂移（切分非纯字节搬运）"
     html = INDEX_HTML.read_text(encoding="utf-8")
     order = [html.index(f'src="{name}"')
-             for name in ("app.js", "app-msg.js", "app-modal.js", "app-main.js")]
+             for name in (
+                 "app.js", "app-msg.js", "app-modal.js",
+                 "app-error-handler.js", "app-main.js",
+             )]
     assert order == sorted(order), \
-        "index.html 加载序必须为 app.js → app-msg.js → app-modal.js → app-main.js"
+        "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"
     assert html.index('src="review.js"') > order[-1], \
-        "review.js 必须在 app-main.js 之后加载（非本拆分家族）"
+        "review.js 必须在全部分文件之后加载（非本拆分家族）"
