@@ -6789,7 +6789,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-refine-core.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-refine-core.js", "app-refine-models.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6855,8 +6855,10 @@ def test_js_split_integrity_pinned():
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
         "app-refine-core.js": (7401,
                                "332e810e3760a891eb6f20c92cd24461dd4cf2f8ab808e15fc306a2f1718d7f9"),
-        "app-main.js": (196605,
-                        "a914af90c3ecfe5b49c776f2c5a801ada059b44efe3e36ef084d807e95caeab2"),
+        "app-refine-models.js": (13345,
+                                 "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
+        "app-main.js": (183260,
+                        "2b9abd8424972cc02c7c5e2f9827adb7d2504f3a9d38f7a77ff205992af246e2"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
@@ -6877,7 +6879,7 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-main.js", "app-init.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-main.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \
