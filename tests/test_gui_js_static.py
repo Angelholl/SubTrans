@@ -6789,7 +6789,7 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
-        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-main.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
@@ -6879,8 +6879,10 @@ def test_js_split_integrity_pinned():
                                "a0711b0f7de046555bdced38c8b7aabb7b70e5867b0378464918476ab799bb39"),
         "app-refine-dataroot.js": (2310,
                                    "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
-        "app-main.js": (37402,
-                        "9cd8b3183b0a7afd1437d80fb486826a081129bd4ddaab17debeff9b636d570f"),
+        "app-refine-dict.js": (34748,
+                               "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
+        "app-main.js": (2654,
+                        "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
         "app-encode-dock.js": (23169,
@@ -6901,7 +6903,7 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-main.js", "app-init.js",
+                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-main.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \

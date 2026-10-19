@@ -40,6 +40,7 @@ JS_FILES = [
     "app-refine-ai-actions.js",  # 原 app-main.js L3075-3201：AI 应用动作（批4）
     "app-refine-bind.js",  # 原 app-main.js L3202-3544：bindDom 绑定（批4）
     "app-refine-dataroot.js",  # 原 app-main.js L3545-3600：数据保存目录（批4）
+    "app-refine-dict.js",  # 原 app-main.js L3601-4300：词典管理（批4）
     "app-main.js",          # 原 L1936-6293：Refine 去壳单块（批4-A；批4-B 起逐块切出）
     "app-init.js",          # 段3n 原 app-main.js L6295-6481：DOMContentLoaded 初始化 + RunControlsInit/refreshPipelineMirror + pywebviewready 钩子（批3）
     "app-encode-dock.js",   # 段3o 原 app-main.js L6483-6982：EncodeDock（批3）
