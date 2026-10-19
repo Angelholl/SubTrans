@@ -3885,7 +3885,7 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：① owner 真机四点清单（GUI）；② `spike/` 8 处 ruff 存量（候选微 chore 或 ruff exclude，须 owner 裁）；③ `artifacts/b4/` 的 15 条 Mimosa 树外登记（产品面无关，随 exec.v1 证据保留）；④ 根目录残留 `%TEMP%ci-logs.zip`＋`.tokcheck` 已由主审清删（2026-10-19，内容核验为 GitHub 403 JSON 与 TOKEN_LEN 长度标记，无密值）。
 
-## 2026-10-19 D2026-1019-03 「d1018-批4 验收后门禁/技术债登记＋spike/ 8 处 ruff 存量微 chore 收口」 已登记
+## 2026-10-19 D2026-1019-03 「d1018-批4 验收后门禁/技术债登记＋spike/ 8 处 ruff 存量微 chore 收口」 已登记（2026-10-20 owner 复核裁决追记，4da9807 已关闭）
 
 - **原决策**：owner 2026-10-19 派单裁决（非新拍板，系 D2026-1019-02 验收后裁决事项的执行与登记）；载体＝独立分支 `chore/spike-ruff-cleanup`（自 `c42d1e9`；chore 提交 `f6d3a01`＋docs 本笔），不混入 refactor/appjs-split 已验收链；单 revert 实证＝临时 worktree（%TEMP%\stj-revert-proof-d1019，已清）revert `f6d3a01` 后对起点 `git diff c42d1e9` 为 **0 行**（--stat 空）。
 - **微 chore 摘要**：spike/ 8 处 ruff 存量（UP009×4／F401×3／SIM300×1）`ruff --fix` 机械修，语义零变（F401 的 `os`/`sys` 裁卡前核实全文件零使用，纯 stdlib 无副作用；SIM300 为纯比较翻转；UP009 纯注释行删除）；全库 ruff **8→0**；全量 **2512 passed + 4 skipped** 恒等（152.7s）；冒烟 `refine --help`＋GUI 主模块导入 rc=0；secret 扫描新增行 **0 命中**；卡＝`docs/design/d1019-卡1-spike-ruff微chore.md`（含修复前红原文）。**关闭 D2026-1019-02 风险跟踪②**。
@@ -3896,3 +3896,4 @@ C1-C21 全采纳有落点（C5/C6/C7/C8/C9 归件2；C14/C15/C17/C18 归件4；C
 - **过程披露**：派卡链路第二发不可用（`tools/exec_wrapper.py`／`tools/pointer_tools.py` 不在仓库＋opencode CLI 全机未装，同 d1018-卡3 先例，疑 TEMP 清理所致），按全局兜底条款主审兜底亲执并裁卡（lessons L-20261020-01）；基础设施恢复方式仍待 owner 裁决。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **后续风险跟踪**：① 事项①②③ 关闭条件见上（CI 腿／真机四点／scanner 修复）；② offlineAdvisory 元数据漂移待 owner 复核；③ 派卡基础设施恢复方式待 owner 裁决。
+- **owner 复核裁决追记（2026-10-20，验收通过）**：① CI 腿**拍板选 A**——workflow_dispatch 或 `refactor/**` 触发＋paths 过滤控频，合并 main 前再手动跑一次全量作双保险；实施为后续门禁项（落地时另裁卡改 ci.yml，本登记仍未改触发面）。② GUI 四点门禁补齐：负责人＝owner，截止＝下个发布门（具体日期 owner 排期定），关闭证据＝**录屏/截图＋点验记录**，不接受仅「已移交」。③ scanner_enobufs 关闭条件＝钩子修复**或替代扫描器稳定出 seal**，负责人＝owner，期限待 owner 排期，禁止长期依赖临时口径。④ offlineAdvisory 维持观察项不阻塞：owner 复核时须记录 advisory 库版本与时间戳（本笔 scan=2026-10-19T16:06:44Z／scanId …dbc9199fec90；advisory 库版本未在扫描工件暴露，复核时从扫描环境取）。⑤ 派卡基础设施：主审兜底亲执继续有效，须设恢复期限或明确替代流程（待 owner）。⑥ **合并顺序**：本分支（`c42d1e9`→`f6d3a01`→`4da9807`→本笔）与 refactor/appjs-split **同一合并列车**——先合入 refactor 分支再合 main，或同批合 main，**禁止单独落 main**（chore 基于 c42d1e9，单独落 main 无依赖风险但破坏列车完整性，按 owner 指示登记）。⑦ revert 证据澄清：原实证（revert `f6d3a01` 对起点 0 行）于分支仅含 chore 提交时执行、成立；分支补 docs 笔后于 2026-10-20 补做**全分支 revert 实证**（临时 worktree revert `c42d1e9..HEAD` 两笔后对起点 diff **0 行**，worktree 已清）——澄清无误，**`4da9807` 关闭**，本分支随合并列车处理。
