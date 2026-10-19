@@ -26,6 +26,7 @@ JS_FILES = [
     "app-theme.js",         # 段3j 原 app-main.js L1673-1781：ThemeManager（批3）
     "app-shortcuts.js",     # 段3k 原 app-main.js L1783-1830：KeyboardShortcuts（批3）
     "app-about.js",         # 段3l 原 app-main.js L1832-1854：showAbout + closeAbout（批3）
+    "app-tabs.js",          # 段3m 原 app-main.js L1856-1934：TAB_HOOKS + switchTab（批3）
     "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
 ]
 
