@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """pysubs2 spike 补测：不可解析行行为（C3 第 8 项前半）。"""
 from pathlib import Path
 

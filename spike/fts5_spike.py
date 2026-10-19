@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """D2026-1003-05 批1 FTS5 三同步策略 spike（预研，不入主库）。
 
 输入：生产 tm.db 的只读拷贝（spike/tmp/tm_copy.db）。
@@ -12,11 +11,9 @@
   4) C2 隐患演示：先建 FTS 再做表重建迁移 -> FTS 面被碾；正确顺序（迁移后建）存活。
 输出：stdout 结构化结果（由调用方落盘 spike/fts5_result.txt）。
 """
-import os
 import re
 import shutil
 import sqlite3
-import sys
 import time
 import unicodedata
 from pathlib import Path
