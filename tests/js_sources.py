@@ -28,6 +28,7 @@ JS_FILES = [
     "app-about.js",         # 段3l 原 app-main.js L1832-1854：showAbout + closeAbout（批3）
     "app-tabs.js",          # 段3m 原 app-main.js L1856-1934：TAB_HOOKS + switchTab（批3）
     "app-main.js",          # 段3 留存块：批3 逐块剥离中的余量（终态=Refine IIFE，批4 目标）
+    "app-encode-dock.js",   # 段3o 原 app-main.js L6483-6982：EncodeDock（批3）
     "app-feature-status.js",# 段3p 原 app-main.js L6984-7010：FeatureStatus（批3，文件末块）
 ]
 
