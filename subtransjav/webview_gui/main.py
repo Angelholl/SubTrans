@@ -198,9 +198,13 @@ def on_drop_event(e):
 
     Uses PyWebView's pywebviewFullPath to get absolute file paths,
     bypassing browser security restrictions.
+
+    d1021-卡1：以下 ``[drop]`` 前缀行是纯增量诊断埋点（不改变任何行为分支），
+    供真机 gui.log 每步取证：触发/文件数/后缀过滤前后/evaluate_js 前后。
     """
     import webview
     files = e.get('dataTransfer', {}).get('files', [])
+    print(f"[drop] event received files={len(files)}")
     if len(files) == 0:
         return
 
@@ -211,10 +215,17 @@ def on_drop_event(e):
     # 2.7.2 件1（D2026-1005-02）：字幕后缀放开至 .ass/.ssa/.vtt（与对话框口径一致）
     allowed_exts = ('.srt', '.ass', '.ssa', '.vtt',
                     '.mp4', '.mkv', '.webm', '.mov', '.avi')
+    pathless = 0
     for file in files:
         full_path = file.get('pywebviewFullPath')
-        if full_path and str(full_path).lower().endswith(allowed_exts):
+        if not full_path:
+            pathless += 1
+        elif str(full_path).lower().endswith(allowed_exts):
             paths.append(full_path)
+
+    # 诊断口径：pathless>0 即 pywebviewFullPath 注入失效（疑点2：private_mode/WebView2
+    # 组合）；pathless=0 而 allowed=0 即后缀过滤全拒；均定位到具体环节
+    print(f"[drop] filter pathless={pathless} allowed={len(paths)} of {len(files)}")
 
     if not paths:
         return
@@ -223,11 +234,13 @@ def on_drop_event(e):
     # （视频路径入登记=信任边界扩大，已在 D2026-1002-09 登记备案）
     from .api import register_session_paths
     register_session_paths(paths)
+    print(f"[drop] evaluate_js begin n={len(paths)}")
 
     try:
         window = webview.windows[0]
         paths_json = json.dumps(paths)
         window.evaluate_js(f"ReviewUI.onDroppedFiles({paths_json})")
+        print("[drop] evaluate_js ok")
     except Exception as ex:
         print(msg("drop_event_error", e=ex))
 
@@ -240,6 +253,13 @@ def bind_dom_events(window):
         window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
         window.dom.document.events.drop += DOMEventHandler(on_drop_event, True, True)
         print(msg("dom_events_bound"))
+        # d1021-卡1 诊断：num_listeners 仅在 JS 侧 drop 监听真正注入成功时 +1；
+        # 若为 0，pywebview 会直接丢弃 FilesDropped → pywebviewFullPath 必然缺失
+        try:
+            from webview.dom import _dnd_state
+            print(f"[drop] dnd_listeners={_dnd_state.get('num_listeners')}")
+        except Exception as state_ex:
+            print(f"[drop] dnd_listeners unavailable: {state_ex}")
     except Exception as ex:
         print(msg("dom_events_bind_failed", e=ex))
         print(msg("dom_events_fallback"))
