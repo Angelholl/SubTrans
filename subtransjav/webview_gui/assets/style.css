@@ -661,13 +661,55 @@ button:focus:not(:focus-visible) { outline: none; }
    弹性链路 #tab-translate > .card → .file-list-container → .file-list
    批3（D2026-1002-12）：高度分配改比例制——文件卡吃 70%，Console 吃 30%
    卡F（D2026-1013-01）：基准下调至文件卡 60% / Console 40%（与
-   .console-collapsible 规则配套） */
+   .console-collapsible 规则配套）
+   P1-6 件B（d1021-卡2）：比例基准改由 CSS 变量 --translate-split 单点承接
+   （默认 60% = 卡F 基准），拖拽分隔条时 app-file-list.js 尾部 TranslateSplit
+   小节改写页面内联变量；Console 侧仍走下方 40% 定值（实现最简：两值不互算，
+   拖动区间 clamp [25,75] 下两卡片合计仍 >100% 但 flex-shrink 自动配平） */
+#tab-translate { --translate-split: 60%; }
 #tab-translate > .card {
-    flex: 1 1 60%;
+    flex: 1 1 var(--translate-split);
     display: flex;
     flex-direction: column;
     min-height: 0;          /* 允许收缩，容器内滚生效前提 */
 }
+
+/* --- P1-6 件B（d1021-卡2）：文件卡/Console 可拖拽分隔条 -------------------
+   命中热区 6px（含上下 1px 外边距=8px 触控裕量），中缝 1px 边框色指示线；
+   hover / 拖拽中（.is-dragging）指示线升 2px 主色 + 主色浅底，光标 row-resize。
+   折叠互斥取「禁用」而非隐藏：.is-disabled 由 JS 在 Console 折叠时挂上
+   （pointer-events:none + 降透明度），保布局不跳变。 */
+#tab-translate .translate-splitter {
+    flex: 0 0 auto;
+    height: 6px;
+    margin: 1px 0;
+    position: relative;
+    cursor: row-resize;
+    transition: background-color var(--dur) ease;
+}
+#tab-translate .translate-splitter::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    transform: translateY(-50%);
+    background: var(--border);
+    transition: height var(--dur) ease, background var(--dur) ease;
+}
+#tab-translate .translate-splitter:hover::before,
+#tab-translate .translate-splitter.is-dragging::before {
+    height: 2px;
+    background: var(--primary);
+}
+#tab-translate .translate-splitter.is-dragging { background-color: var(--primary-soft); }
+#tab-translate .translate-splitter.is-disabled {
+    cursor: default;
+    pointer-events: none;   /* 折叠态禁用（本卡取禁用而非隐藏，见 HTML 注释） */
+    opacity: 0.35;
+}
+#tab-translate .translate-splitter.is-disabled::before { background: var(--border); height: 1px; }
 #tab-translate .file-list-container {
     flex: 1 1 auto;
     min-width: 0;

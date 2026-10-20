@@ -1082,7 +1082,13 @@ def test_batch3_console_ratio_and_section_overflow_pinned():
     assert "min-height: 180px" not in m.group(0) \
         and "max-height: 420px" not in m.group(0), \
         ".console-output 定高未删净"
-    assert "flex: 1 1 60%;" in css, "文件卡 60% 比例缺失"
+    # 文件卡比例基准（d1021-卡2 P1-6 件B）：60% 由 CSS 变量 --translate-split
+    # 单点承接（拖拽分隔条改写该变量；Console 侧仍为下方 40% 定值）
+    assert "#tab-translate { --translate-split: 60%; }" in css, \
+        "文件卡比例变量 --translate-split 默认 60% 缺失"
+    m_card = re.search(r"#tab-translate > \.card \{[^}]*\}", css)
+    assert m_card and "flex: 1 1 var(--translate-split);" in m_card.group(0), \
+        "文件卡 flex-basis 未改读 --translate-split（60% 基准）"
     # 40% 比例制 + 保底 180px 保留；380px 上限随卡F（D2026-1013-01）废除
     # （150/300 → D2026-1010-01 卡3 改 180/380 → 卡F 废上限，决策已归档
     # docs/decision-log.md D2026-1013-01）
@@ -4931,11 +4937,85 @@ def test_console_flex_layout():
     assert m_section, "style.css 缺 .console-section 规则"
     assert "flex: 0 0 auto;" in m_section.group(1), \
         ".console-section 须 flex:0 0 auto（禁回退 flex:1 撑高 guide/AI 卡）"
-    # ④ 文件卡基准 60%（与 Console 40% 合成比例制，min-height:0 不动）
+    # ④ 文件卡基准 60%（与 Console 40% 合成比例制，min-height:0 不动）；
+    #    d1021-卡2 P1-6 件B：60% 改由 --translate-split 变量承接
     m_card = re.search(r"#tab-translate > \.card\s*\{([^}]*)\}", css)
     assert m_card, "style.css 缺 #tab-translate > .card 规则"
-    assert "flex: 1 1 60%;" in m_card.group(1), \
-        "文件卡须 flex:1 1 60%（70% 基准已下调，与 Console 40% 配套）"
+    assert "flex: 1 1 var(--translate-split);" in m_card.group(1), \
+        "文件卡须 flex:1 1 var(--translate-split)（变量默认 60%，与 Console 40% 配套）"
+
+
+# ---------------------------------------------------------------------------
+# d1021-卡2（P1-6 件B）：translate 页文件卡/Console 可拖拽分隔＋比例记忆
+# ---------------------------------------------------------------------------
+
+def test_translate_splitter_static_pinned():
+    """P1-6 件B 静态钉：分隔条元素 + 样式 + 拖拽/记忆逻辑 + clamp 边界。
+
+    ①index.html #tab-translate 内恰一个 .translate-splitter（role=separator
+      + aria-orientation=vertical + aria-label），且零 id / 零 data-i18n
+      （id 冻结预算与 i18n 键全集不动，JS 走类选择器定位），位置在文件卡与
+      Console 之间（DOM 顺序＝上/下关系）；
+    ②style.css 有 --translate-split 变量（默认 60%=卡F 基准 D2026-1013-01）
+      与分隔条规则（6px 命中热区 + row-resize 光标 + hover/拖拽中高亮 +
+      折叠禁用态 .is-disabled）；
+    ③app-file-list.js 尾部 TranslateSplit 小节：clamp [25,75]、localStorage
+      键 subtransjav.translate.split、preventDefault 且禁 stopPropagation
+      （d1021-卡1 缺陷B 同源教训：document 级 pywebview 桥靠冒泡）；
+    ④恢复路径：read() 非法/越界回退 DEFAULT(60)；FileListManager.init 接线。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert html.count('class="translate-splitter"') == 1, \
+        "index.html 应有恰一个 .translate-splitter（#tab-translate 内）"
+    tag = re.search(r'<div class="translate-splitter"[^>]*>', html).group(0)
+    for frag in ('role="separator"', 'aria-orientation="vertical"', 'aria-label="'):
+        assert frag in tag, f"分隔条缺可访问属性: {frag}"
+    assert 'id="' not in tag, "分隔条不得携带 id（FROZEN_IDS 冻结预算）"
+    assert "data-i18n" not in tag, "分隔条不得携带 data-i18n（键全集冻结）"
+    i_split = html.index('class="translate-splitter"')
+    assert html.index('id="fileListContainer"') < i_split \
+        < html.index('class="section console-section console-collapsible"'), \
+        "分隔条须位于文件卡（fileListContainer）与 Console 之间"
+
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    assert "#tab-translate { --translate-split: 60%; }" in css, \
+        "缺 --translate-split 默认 60% 变量定义"
+    m = re.search(r"#tab-translate \.translate-splitter \{([^}]*)\}", css)
+    assert m, "缺 .translate-splitter 样式规则"
+    assert "flex: 0 0 auto;" in m.group(1) and "height: 6px;" in m.group(1), \
+        "分隔条须 flex:0 0 auto + 6px 命中热区"
+    assert "cursor: row-resize;" in m.group(1), "分隔条缺拖拽光标"
+    for frag in (".translate-splitter:hover::before",
+                 ".translate-splitter.is-dragging::before",
+                 ".translate-splitter.is-dragging {",
+                 ".translate-splitter.is-disabled {"):
+        assert frag in css, f"style.css 缺分隔条态样式: {frag}"
+
+    js = (ASSETS / "app-file-list.js").read_text(encoding="utf-8")
+    split_js = js[js.index("const TranslateSplit = {"):]
+    for frag in ("KEY: 'subtransjav.translate.split'",
+                 "MIN: 25,", "MAX: 75,", "DEFAULT: 60,"):
+        assert frag in split_js, f"TranslateSplit 缺常量: {frag}"
+    assert "Math.min(this.MAX, Math.max(this.MIN, pct))" in split_js, \
+        "clamp 逻辑缺失（须夹入 [25,75]）"
+    assert "setProperty('--translate-split'" in split_js, \
+        "未写 CSS 变量 --translate-split"
+    assert "localStorage.setItem(this.KEY" in split_js \
+        and "localStorage.getItem(this.KEY)" in split_js, \
+        "比例记忆读写未落（单写 + 读回）"
+    assert "e.preventDefault()" in split_js, "拖拽缺 preventDefault"
+    # 代码行过滤（剥行内/整行注释）后禁 stopPropagation——注释里点名禁令不算违规
+    split_code = "\n".join(re.sub(r"//.*$", "", line)
+                           for line in split_js.splitlines())
+    assert "stopPropagation" not in split_code, \
+        "分隔层不得 stopPropagation（document 级 pywebview 桥靠冒泡）"
+    assert "pct < this.MIN || pct > this.MAX" in split_js, \
+        "读记忆未做越界回退（非法值须回退 60）"
+    assert "classList.contains('collapsed')" in split_js \
+        and "is-disabled" in split_js, \
+        "折叠互斥缺失（Console 折叠态须禁用/兜底 guard）"
+    assert "TranslateSplit.init();" in js[:js.index("const TranslateSplit = {")], \
+        "FileListManager.init 未接线 TranslateSplit.init（初始化恢复不落）"
 
 
 # ---------------------------------------------------------------------------
@@ -6783,6 +6863,8 @@ def test_js_sources_layer_pinned():
        批4 去壳载荷钉：refine 家族拼接 == 6051c666…（204,006B）；全库拼接换代 10f6ef82…（470,144B）；
        旧钉 787460b7…（470,198B）已退役（D2026-1019-01）；
        d1021-卡1 换代 f67e4ceb…（app-file-list.js 缺陷B 修复：drop 监听去 stopPropagation＋注释，15821B→16069B）；
+       d1021-卡2 换代 50a0ab4a…（P1-6 件B 拖拽分隔层：app-file-list.js 尾部 TranslateSplit
+       小节 + FileListManager.init 末行接线，16069B→21361B；旧钉 f67e4ceb… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -6795,7 +6877,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "f67e4ceb5aeba8681bba74412ca4b4840f1d571331ce4a3e3a73cafbb0e657bd"), \
+        "50a0ab4acc3f1a01994eeb3d6db2e4435eed2801f0e7c31989501f9655bf5a32"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（204,006B），15 次切块恒真；切点外任何字节改动必红。
@@ -6830,8 +6912,8 @@ def test_js_split_integrity_pinned():
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
-        "app-file-list.js": (16069,
-                             "19c7d9474efd8e83c09bc8115f3cb98b26440b2c3da43cbc5b2035d80ae5bbfd"),
+        "app-file-list.js": (21361,
+                             "114f68b7ea49fb42f935916690d1701a7e1e59f47191ac09fcd24ed11d77f432"),
         "app-console.js": (7818,
                            "2f877e37da26830a28808bb1df4b3ea8b025e942f460f0c095487c4f5e45f534"),
         "app-activity.js": (6167,
