@@ -61,8 +61,10 @@ const FileListManager = {
         });
 
         fileList.addEventListener('drop', (e) => {
+            // d1021-卡1 缺陷B：此处禁 stopPropagation——pywebview 桥的 document 级
+            // drop 监听（main.py bind_dom_events）靠冒泡接收，拦断即「拖了不加载」；
+            // preventDefault 保留（防 WebView2 默认打开文件）。
             e.preventDefault();
-            e.stopPropagation();
             highlight(false);
             // Actual path extraction happens in Python (main.py) via pywebviewFullPath,
             // which calls back into FileListManager.addDroppedFiles(paths).
