@@ -93,6 +93,7 @@ computer-use 0.6.5、document-skills 0.1.5（被 documents/presentations/spreads
 ### 1.6 版本健康度
 
 - 市场装 4 插件（installed_plugins.json）：mimosa 1.0.4 / github 0.1.2 / watch-positions 0.1.1 均=官方市场最新（marketplace.json 2026-10-20 拉取比对）；pyright-lsp 1.0.0 系 2026-10-20 新装（claude-plugins-official，该市场索引 09-13 后未刷新——**终裁补充⑤处置：标"待定"而非必需**，功能验证待最近一次 Python 会话以 LSP 诊断探针一次确认，不可用或来源存疑则禁用；验证窗口=清卸卡验证窗，风险窗口最小期处置）。
+  - **探针已执行（2026-10-20，D-05 执行批内，owner 令顺跑）**：`pyright-langserver` 二进制全机缺席——npm 全局（G:\nodejs\node_modules）空、PATH 无、ZCode 应用无内嵌副本（D:\zcode\resources 检索零命中）、插件数据目录（plugins\data\pyright-lsp@claude-plugins-official）空；插件本体仅声明 `lspServers.pyright.command=pyright-langserver --stdio`，无自带运行时。LSP 诊断通道无法建立（spawn 即失败，属基础设施缺失非契约失败）→ 按 §1.6 处置规则判**不可用**。禁用动作（全局启停行 pyright-lsp 启→禁）待清卸卡窗口执行；不安装运行时（安装属范围外，未授权）。Node v24.21.0 在场，若日后 owner 令恢复，`npm i -g pyright` 后重跑探针即可翻绿。
 - 内建插件（browser-use/zcode-guide/documents 等）随 ZCode 应用分发，无独立升级面，无过期风险；缓存内多版本旧目录仅磁盘卫生问题。
 - 用户级技能无版本机制（纯 markdown）：lessons/config-write 2026-10-16 刚维护=健康；其余 09-23/09-28 装入，无弃用标记机制，以引用与使用频度管理。
 
