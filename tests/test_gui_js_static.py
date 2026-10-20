@@ -6782,6 +6782,7 @@ def test_js_sources_layer_pinned():
     ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
        批4 去壳载荷钉：refine 家族拼接 == 6051c666…（204,006B）；全库拼接换代 10f6ef82…（470,144B）；
        旧钉 787460b7…（470,198B）已退役（D2026-1019-01）；
+       d1021-卡1 换代 f67e4ceb…（app-file-list.js 缺陷B 修复：drop 监听去 stopPropagation＋注释，15821B→16069B）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -6794,7 +6795,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "10f6ef82c83752f5ac3e463d9ad8490f22432aeebaf9d0b5c398ebc4e116f37a"), \
+        "f67e4ceb5aeba8681bba74412ca4b4840f1d571331ce4a3e3a73cafbb0e657bd"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（204,006B），15 次切块恒真；切点外任何字节改动必红。
@@ -6829,8 +6830,8 @@ def test_js_split_integrity_pinned():
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
-        "app-file-list.js": (15821,
-                             "4ace89a8da62e4317535538abb4f7ed973b1f23de85a9b08381f1b0c22512d8b"),
+        "app-file-list.js": (16069,
+                             "19c7d9474efd8e83c09bc8115f3cb98b26440b2c3da43cbc5b2035d80ae5bbfd"),
         "app-console.js": (7818,
                            "2f877e37da26830a28808bb1df4b3ea8b025e942f460f0c095487c4f5e45f534"),
         "app-activity.js": (6167,

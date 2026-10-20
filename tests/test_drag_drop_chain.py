@@ -106,3 +106,18 @@ def test_on_drop_event_emits_chain_diagnostics(capsys, monkeypatch):
     assert "[drop] evaluate_js begin n=1" in out
     assert "[drop] evaluate_js ok" in out
     assert len(scripts) == 1 and "a.ass" in scripts[0]
+
+
+def test_filelist_drop_listener_must_not_stop_propagation():
+    """d1021-卡1 缺陷B 静态钉：#fileList 的 drop 监听禁 stopPropagation——
+    pywebview 桥的 document 级 drop 监听（main.py bind_dom_events）靠冒泡接收，
+    目标层拦断 = document 收不到 = 拖拽文件永不加载（v2.6.0 起回归）。"""
+    from pathlib import Path
+    body = Path("subtransjav/webview_gui/assets/app-file-list.js").read_text(encoding="utf-8")
+    drop_block = body[body.index("fileList.addEventListener('drop'"):]
+    drop_block = drop_block[:drop_block.index("});")]
+    code_only = "\n".join(line for line in drop_block.splitlines()
+                          if not line.strip().startswith("//"))
+    assert "stopPropagation" not in code_only, \
+        "#fileList drop 监听不得 stopPropagation，否则 document 级 pywebview 桥接收不到 drop"
+    assert "preventDefault" in drop_block, "preventDefault 必须保留（防 WebView2 默认打开文件）"
