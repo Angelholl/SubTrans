@@ -78,3 +78,31 @@ def test_review_ondroppedfiles_consumes_all_subtitle_exts():
         "onDroppedFiles 未把字幕后缀文件交给 setSrtPath"
     assert "endsWith('.srt')" not in body, \
         "onDroppedFiles 仍残留 .srt 单后缀硬编码（会丢弃 .ass/.ssa/.vtt）"
+
+
+def test_on_drop_event_emits_chain_diagnostics(capsys, monkeypatch):
+    """阶段2：drop 链诊断埋点每步一行（触发/文件数/过滤前后/evaluate_js 前后），
+    且埋点为纯增量——放行文件仍汇聚为一次 ReviewUI 转发。"""
+    import webview
+
+    from subtransjav.webview_gui.main import on_drop_event
+
+    scripts = []
+
+    class FakeWin:
+        @staticmethod
+        def evaluate_js(script):
+            scripts.append(script)
+
+    monkeypatch.setattr(webview, "windows", [FakeWin()])
+    event = {"dataTransfer": {"files": [
+        {"pywebviewFullPath": "D:/x/a.ass"},
+        {"name": "b.txt"},  # 无 pywebviewFullPath = 注入失效形态
+    ]}}
+    on_drop_event(event)
+    out = capsys.readouterr().out
+    assert "[drop] event received files=2" in out
+    assert "[drop] filter pathless=1 allowed=1 of 2" in out
+    assert "[drop] evaluate_js begin n=1" in out
+    assert "[drop] evaluate_js ok" in out
+    assert len(scripts) == 1 and "a.ass" in scripts[0]
