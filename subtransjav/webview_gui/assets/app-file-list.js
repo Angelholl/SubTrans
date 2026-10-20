@@ -32,6 +32,10 @@ const FileListManager = {
         document.getElementById('addFolderBtn').addEventListener('click', () => this.addFolder());
         document.getElementById('removeSelectedBtn').addEventListener('click', () => this.removeSelected());
         document.getElementById('clearBtn').addEventListener('click', () => this.clearAll());
+
+        // P1-6 件B（d1021-卡2）：文件卡/Console 拖拽分隔层初始化（本文件自持，
+        // 零 app-init.js 改动；无分隔条元素时静默跳过）
+        TranslateSplit.init();
     },
 
     initializeDragDrop() {
@@ -429,6 +433,109 @@ const FileListManager = {
         this.itemStates = {};
         this.render();
         ConsoleManager.log(MSG.clearedItems(count), 'info');
+    }
+};
+
+// ============================================================
+// P1-6 件B（d1021-卡2）：translate 页文件卡/Console 拖拽分隔层
+// 纯前端 mouse 会话：mousedown → document mousemove/mouseup，比例单点写
+// 页面内联 CSS 变量 --translate-split（默认 60% = 卡F D2026-1013-01 基准），
+// 松手时落 localStorage 记忆（键 subtransjav.translate.split，值=文件卡
+// flex-basis 百分数字符串，命名形态参照右栏折叠记忆键：subtransjav.<域>.<项>）。
+// 折叠互斥：Console 折叠（.console-collapsible.collapsed）时分隔条**禁用**
+// （本卡二选取「禁用」而非「隐藏」：.is-disabled + 拖拽前 guard 兜底，保布局
+// 不跳变）。
+// 铁律：只 e.preventDefault()，**禁 stopPropagation**（d1021-卡1 缺陷B 同源
+// 教训：main.py bind_dom_events 的 document 级 pywebview 桥靠冒泡收事件）。
+// ============================================================
+const TranslateSplit = {
+    KEY: 'subtransjav.translate.split',   // localStorage 记忆键
+    MIN: 25,                              // 比例下界（文件卡 ≥25%）
+    MAX: 75,                              // 比例上界
+    DEFAULT: 60,                          // 卡F 基准（无记忆/非法值回退）
+
+    init() {
+        this.page = document.getElementById('tab-translate');
+        this.splitter = this.page ? this.page.querySelector('.translate-splitter') : null;
+        if (!this.page || !this.splitter) return;
+        this.consoleSection = this.page.querySelector('.console-collapsible');
+        this.current = this.DEFAULT;
+        this.set(this.read(), false);     // 初始化恢复（读到非法值回退 60）
+        this.syncDisabled();
+        this.splitter.addEventListener('mousedown', (e) => this.onDown(e));
+        // 折叠态互斥：Console 折叠钮是唯一折叠入口（app-console.js），
+        // 点后同步禁用态（不做轮询/观察器，静态可控）
+        const collapseBtn = document.getElementById('consoleCollapseBtn');
+        if (collapseBtn) collapseBtn.addEventListener('click', () => this.syncDisabled());
+    },
+
+    // 折叠态互斥：Console 折叠 → .is-disabled（pointer-events:none + 降透明）
+    syncDisabled() {
+        if (!this.splitter || !this.consoleSection) return;
+        this.splitter.classList.toggle(
+            'is-disabled', this.consoleSection.classList.contains('collapsed'));
+    },
+
+    // clamp [25,75]：越界值夹回边界；非数值回退 DEFAULT
+    clamp(pct) {
+        if (typeof pct !== 'number' || !isFinite(pct)) return this.DEFAULT;
+        return Math.min(this.MAX, Math.max(this.MIN, pct));
+    },
+
+    // 读记忆：缺失/非数值/越界一律回退 DEFAULT（60）
+    read() {
+        let raw = null;
+        try {
+            raw = localStorage.getItem(this.KEY);
+        } catch (err) {
+            return this.DEFAULT;          // private 模式读不到 → 默认比例
+        }
+        if (raw === null || raw === '') return this.DEFAULT;
+        const pct = parseFloat(raw);
+        if (!isFinite(pct) || pct < this.MIN || pct > this.MAX) return this.DEFAULT;
+        return pct;
+    },
+
+    // 写比例：先 clamp 再写 CSS 变量（内联覆盖 #tab-translate 的 60% 默认）；
+    // persist=true 时同步单写 localStorage
+    set(pct, persist) {
+        const value = this.clamp(pct);
+        this.current = value;
+        this.page.style.setProperty('--translate-split', value + '%');
+        if (persist) {
+            try {
+                localStorage.setItem(this.KEY, String(value));
+            } catch (err) {
+                // 写入失败静默（private 模式降级为会话级比例）
+            }
+        }
+        return value;
+    },
+
+    onDown(e) {
+        if (!this.page || e.button !== 0) return;
+        if (this.consoleSection
+            && this.consoleSection.classList.contains('collapsed')) return;  // guard 兜底
+        e.preventDefault();   // 只 preventDefault：禁 stopPropagation（桥靠冒泡）
+        const card = this.page.querySelector(':scope > .card');
+        if (!card || !this.consoleSection) return;
+        const top = card.getBoundingClientRect().top;
+        const total = this.consoleSection.getBoundingClientRect().bottom - top;
+        if (!(total > 0)) return;   // 弹性区未成形（隐藏页/折叠）不启会话
+
+        this.splitter.classList.add('is-dragging');
+        const onMove = (ev) => {
+            // 分隔条中线 ≈ 文件卡底：比例 = (指针 Y − 弹性区顶) / 弹性区高 ×100
+            this.set(((ev.clientY - top) / total) * 100, false);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            this.splitter.classList.remove('is-dragging');
+            this.set(this.current, true);   // 会话末尾单写记忆
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     }
 };
 
