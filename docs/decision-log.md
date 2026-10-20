@@ -581,7 +581,7 @@
 - **后续风险跟踪**：①OpenCode 通道判据维护（因保留备用，纳入 D2026-1020-05 后续任务清单）；②主力=ZCode 测试期模型独家风险——保留备用通道即为其对冲，激活条件见 D-03。
 - **回链**：Ref: D2026-1020-01（顺序追加）；与 D2026-1020-05 语义咬合（暂停非退役 ↔ 通道定位）；**改号注记＝原编 D2026-1020-02，因与合并列车收口登记条目（3005ccd 先落库先推送）撞号，按 D2026-1003 撞号先例顺延改号**；评议=decision-critic 2026-10-20（无 HRO；3 项反向修正采纳：.gitignore=`__pycache__/`、不写"全参数化"、非确定性任务加"标注不确定性来源"）。
 
-## 2026-10-20 D2026-1020-05 「wrapper 三件套收敛到全局 tools/＋全局派卡命令改绝对路径＋OpenCode 通道定位（N1）」 [已拍板·待执行（待 owner 开工令）]
+## 2026-10-20 D2026-1020-05 「wrapper 三件套收敛到全局 tools/＋全局派卡命令改绝对路径＋OpenCode 通道定位（N1）」 [已执行（Part 1 七项收口 2026-10-20，执行记录=docs/design/d1020-wrapper-convergence-exec-record.md）]
 
 - **原决策**：派卡基础设施收敛——wrapper 三件套（`exec_wrapper.py` 578 行／`pointer_tools.py` 267 行／`quota_watch.py` 249 行）由 default 工作区（`G:/zcode/.zcode/workspace/default/tools/`，该项目 2026-10-19 降本关停封盘 DEC-2026-10-19-01）收敛至全局 `C:/Users/57850/.zcode/tools/`，并把全局 AGENTS.md 派卡命令由相对路径改为绝对路径。前置：N1（OpenCode 通道定位）为 D-03 前置拍板项，owner 2026-10-20 已拍定=保留备用，前置满足。
 - **评议员结论**（decision-critic 独立评议）：**有条件支持 → 条件闭环后支持**。4 项 [HIGH_RISK_OBJECTION] 全闭环：H1（Part1 自指矛盾/无回滚）→ 主模型显式放行+回滚边界；H2（双通道适用混乱）→ 按规则性质切分；H3（单一权威源无版本化）→ C/tools/ git init + J 作 seed；H4（smoke 口径不足）→ L1-L3 分级。独立实证：三件套 git blob 与 J 裸仓逐位一致；`ensure_git_exclude` 幂等（`exec_wrapper.py:235-238`）；`_build_cli_argv`（`:358`）对 .py 用 `sys.executable` 注入、无兄弟脚本路径拼接（exec_wrapper 对 pointer_tools 零引用、对 quota_watch 仅注释 L45-46）；`WARN_TOKENS=120K` 等为模块级硬编码常量（L37-41）。
@@ -612,7 +612,7 @@
   - 放行：经**主模型显式放行**，放行依据记入本决策。
   - 回滚脚本路径：`C:/Users/57850/.zcode/tools/rollback_wrapper_convergence.sh`（还原 AGENTS.md 备份 + 删除 `C:/Users/57850/.zcode/tools/`）。
   - 回滚边界：仅覆盖 AGENTS.md 还原与 tools/ 删除，**不含已派发卡与子智能体已产生副作用**。
-  - 回滚演练记录链接：`<占位>`（须含：还原后 AGENTS.md diff 为空 + tools/ 不存在 + 全项目 grep 无 C 路径残留）。
+  - 回滚演练记录链接：`docs/design/d1020-wrapper-convergence-exec-record.md`（2026-10-20 已演练：三断言全过；断言3 按"操作面引用 0 命中"口径成立，decision-log 自身 5 处为决策历史记录不可移除）。
 - **验收口径**：L1-L3 如上；L2/L3 必过方可放行；L4（token 看护验证）延后。
 - **配置架构核查结论**：三件套无外部配置文件依赖；exec_wrapper 运行参数经 CLI 传入，**阈值硬编码**（`WARN_TOKENS=120K`、`STRIP_BLOCK` 等为模块级常量）；quota_watch 为旁路只读诊断工具（`--db` 显式传参），不在轮转链内；项目间无配置耦合。**阈值硬编码在当前单用户单主力项目场景下可接受（有意识暂缓，非已解决）；若未来出现多项目差异化阈值需求，再评估参数化。**
 - **default 边界**：全局 tools/ 服务对象=SubTransJAV 及未来项目，**不含 default**；default 工作副本 wrapper 为历史遗留，不纳入维护、不作回滚目标；J 裸仓作 provenance seed + 异地归档；**C/tools/.git 为回滚目标**（git init 后 C 区自主，lineage 来源已登记）。
