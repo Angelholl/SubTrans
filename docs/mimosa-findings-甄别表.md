@@ -1,6 +1,7 @@
 # Mimosa 扫描发现三态甄别表（v1.3.1 D7a-3，D2026-0925-02）
 
 - **数据源**：`C:\Users\57850\.mimosa\security-scans\project-84b400c5f32332301acf457f\scan-2026-09-24T17-54-12.317Z-a0276cc48beb\findings.json`
+- **Seal digest（2026-10-20 v3.0.4 发版门复扫）**：`sha256:68fb480e3a4ec26f26c8c5166f6d83c95f1d50c71545633522b47afa1a448c9b`，findingCount=**43＝产品面 28＋artifacts/b4 树外 15**（scan-2026-10-20T03-59-48.100Z-36df5b1dda61，release/3.0.4 分支树）；identity 与现行基线 scan-2026-10-20T02-47-33.605Z-9f8671365152（合并列车收口两轮同指纹，主审独立复算 sorted-join sha256=45cb79aa…7856 两侧一致）**逐条全等零新增**——本版差量仅版本四件套＋CHANGELOG＋本表增记，产品面代码零改动；本表归档批（D2026-1020-01）漏网行号引用一处随本增记改 ID 锚（见总判据行）；依赖扫描 completion=completed / packagesScanned=68 / matchedAdvisories=1 同前。
 - **Seal digest（2026-10-07 2.8.0 批2/批3 复扫）**：`sha256:fc8f5bcbe3a6e5e56a4d2e5f5d3c737e01300751bbcdf1986a3796359c911912`，findingCount=**37**（scan-2026-10-07T17-37-04.353Z-434792762c3d）；批2/批3 14 文件（GPU 双检/预设体系/自动化钩子/音量与增强链旋钮）零新 anchor 族——实例级 NEW2/GONE3 均为已甄别留痕族行移位（#30 anchor sha256:44aca6d2… 在 ffmpeg_supply 扩段后漂移；#31 注 api anchor sha256:7f49388a… 两实例随 api 增段漂移其一）；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
 - **Seal digest（2026-10-07 2.8.0 批1 复扫）**：`sha256:a13bc88b375051d30c6b561c440f5204e552520263ad4bc67050b15daf13523d`，findingCount=**38**（36+2 入账 #30/#31，scan-2026-10-07T16-56-12.216Z-46c18e0ac4ca）；本批 12 文件（hardsub/ffmpeg_supply/encode_queue 三新件+api 接线+前端底条/弹窗）——ffmpeg_supply×2 为新件首入深扫面（pin 制品+固定文件名集合封死，见 #30/#31）；api.py 两条既有发现行号漂移（1773→1796/2092→2115，anchor 同）；消除 2 条（gone）= 旧行号位置实例替换，anchor 族延续；依赖扫描 completion=completed / packagesScanned=67 / matchedAdvisories=1 同前。
 - **Seal digest（历史锚：2026-09-24 首扫基线，下表甄别结论即对该次快照作出）**：`sha256:53010c48d878099dfb2c3b91443593f3654baf79619c60063efbaa44bae080da`（seal.json，artifacts 含 findings.json sha256:51623f83…）
@@ -131,4 +132,4 @@
 
 ---
 
-**留痕维持总判据**：本项目为本地单机工具链（CLI + 本地 webview 回环），上述路径/URL 全部来自操作者本人 CLI 参数、程序内常量或本地配置文件派生，不存在跨信任边界的不可信输入方；边界加固以守卫脚本（tools/guard_banned_paths.py，D10）+ 敏感路径名单制承接（decision-log :139 契约）。
+**留痕维持总判据**：本项目为本地单机工具链（CLI + 本地 webview 回环），上述路径/URL 全部来自操作者本人 CLI 参数、程序内常量或本地配置文件派生，不存在跨信任边界的不可信输入方；边界加固以守卫脚本（tools/guard_banned_paths.py，D10）+ 敏感路径名单制承接（decision-log 条目 D2026-0916-01 收尾清单契约）。
