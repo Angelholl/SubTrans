@@ -5,7 +5,7 @@
 2. 干净仓 → 退出码 0；
 3. --staged 模式只查 staged（未 staged 的违规文件不触发）；
 4. 名单契约：BANNED_PATTERNS 每一项均被 .gitignore 对应规则覆盖
-   或属 docs/decision-log.md :139 收尾清单（防名单与 .gitignore 漂移）；
+   或属 decision-log 条目 D2026-0916-01 收尾清单（防名单与 .gitignore 漂移）；
 5. cp1252 窄码页（PYTHONIOENCODING=cp1252）下干净仓 → 退出码 0
    （Windows CI 中文输出不崩溃回归）；
 6. 反向契约：.gitignore「TM 备份」敏感段每条规则在 BANNED_PATTERNS
@@ -105,7 +105,7 @@ def test_staged_mode_only_checks_staged(tmp_path):
 
 def test_pattern_contract_gitignore_or_decisionlog():
     """名单契约：每个 pattern 有出处标注，且字面条目能在 .gitignore
-    或 decision-log :139 清单里 grep 到（防漂移）。"""
+    或 decision-log 条目 D2026-0916-01 清单里 grep 到（防漂移）。"""
     assert BANNED_PATTERNS, "名单不得为空"
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     dlog = (ROOT / "docs" / "decision-log.md").read_text(encoding="utf-8")
