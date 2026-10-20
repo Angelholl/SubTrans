@@ -125,7 +125,9 @@ function makeStatusManager(ids) {
 
 const ReviewUI = {
     REVIEW_VIDEO_EXTS: ['.mp4', '.mkv', '.webm', '.mov', '.avi'],
-    REVIEW_SRT_EXTS: ['.srt'],
+    // d1021-卡1（必修①）：与 main.py allowed_exts 的字幕口径同步，
+    // .ass/.ssa/.vtt 拖入校对页不再被 isSrt 静默丢弃
+    REVIEW_SRT_EXTS: ['.srt', '.ass', '.ssa', '.vtt'],
 
     _videoPath: null,
     _srtPath: null,
