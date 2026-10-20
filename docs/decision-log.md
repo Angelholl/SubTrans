@@ -644,3 +644,12 @@
 - **验证（主审验收链，2026-10-20）**：ruff 全库 clean；定向 brand 钉＋guard 契约 8 passed（归档卷 tracked 后白名单双断言绿）；全量 **2512 passed＋4 skipped**（135.14s，与基线恒等）；冒烟 subtransjav-refine --help rc=0＋GUI 主模块导入 rc=0；Mimosa deep 归档后扫描＝产品面 28 零新增 identity（C6 PASS，详 D2026-1020-01 执行追记③）。执行者轮（d1020-卡2）另证：切分断言全绿＋A+B sha256 逐字节相等＋引用刷新 30 处零悬空（主审补刀 2 处后共 32）。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **回链**：Ref: D2026-1020-01（第一阶段执行）、D2026-1020-02（①④）、D2026-1019-03（②③）、D2026-1015-05/D2026-1015-03/D2026-1012-01（回填核销）、docs/design/d1020-卡2-decision-log归档执行.md（执行卡含主审裁决段）、roadmap.md 3.1 节。
+
+## [2026-10-20] [D2026-1020-07] AGENTS 瘦身与技能治理：骨架化 2435B＋dispatch-discipline 外迁＋Skill hook 审计机制层（H3 gate 降远期） [已拍板·待执行]
+
+- **决策内容**：全局 `~/.zcode/AGENTS.md`（实测 8994B，软限 8100B 已破常态告警，硬限 9216B 余 222B）四节瘦身为骨架（v2.2 实测 2435B 含尾换行/正文 2434B，哨兵「按本节默认执行」恰 1），操作细则外迁新 skill `dispatch-discipline`；frontend-design 重复副本移除＋卸载候选逐项清卸；时序=D-05 先行、迁移为 D-05 后续第一项硬时点。规格=`docs/design/d1020-AGENTS瘦身与技能治理-修订设计规格.md`（v2.1→v2.2，owner 终裁收编）。决策号初拟 D2026-1020-06 与既有「3.1 发版条件复核收口」撞号，按 D2026-1020-04/05 先例顺延改 -07。
+- **评议员异议（decision-critic，2026-10-20 两轮）**：首轮 1×[HIGH_RISK_OBJECTION]＋1×[MATERIAL_CONFLICT]＋4×[MEDIUM]＋2×[NOTE]。HRO-1=H3「完全复用 H1」结构不成立（H1 谓词 file_path 在 Agent 入参不存在；matcher `Agent` 过宽误伤 code-reader；OpenCode 备用通道走 Bash 不经过 Agent；TICKS 打点证不了 skill 已读）。MATERIAL_CONFLICT=划界表承诺「留」的不可委托清单未落骨架＋完成通知反制句丢失。MEDIUM×4=卸载 SOP「H1 拦 mv」前提错误／`.disabled-` 前缀无证据／引用核查范围偏窄／基线扩七文件时序与卡面文件数。复评：异议全数解除，**终局立场=支持**，无新增 HRO。
+- **owner 终裁（2026-10-20，六拍板点全落定）**：①H3=有条件立项，批准 payload 采集＋shadow 日志，**enforce 语义定义前不建 gate**（采纳「拿不到 skill 已读信号，enforce 三条死路」论证；enforce 定义不出→「纪律级弱约束」收口，默认预期非例外），机制层先行=**Skill hook＋审计**（skill-loads.jsonl＋agent-calls.jsonl＋合规率审计，直接测「skill 有没有被读」）；②卸载清单=条件追认，逐项明细（无关 4＋重叠 1＋待定 1；emil/autoglm 待 owner 单独确认；github 无关 3 项不可行撤出）；③**pdf 从规则摘除**（项目无 PDF 产出需求）；④github:commit 禁用半行=「仅限非项目仓库」；⑤排期=追认默认方案、**拒合并备选**（断窗理由），D-05 回滚脚本加 guard（存在 dispatch-discipline 即 exit 1）＋回滚顺序=迁移回滚→D-05 回滚；⑥2600B=追认，定性**复核触发线非硬拦截**。五处执行补充全采纳（h2 检查=存在性＋最小字节＋关键行；负向钉拆机制/行为两项；触发率窗口=3 周或 10 次先到为准；body 级冲突扫描已跑零隐藏冲突；pyright-lsp 标待定）。
+- **异议处置**：HRO-1 采纳、MATERIAL_CONFLICT 采纳（骨架补齐：不可委托清单＋完成通知反制句＋治理细节）、MEDIUM×4＋NOTE×2 全采纳。**无驳回、无封盘项、无 [PRESSURE-OVERRIDE]**。
+- **风险跟踪**：①H3 判据实证未过→「纪律级弱约束」回退（默认预期）；②OpenCode 备用通道派卡无拦截点，挂账随通道复活再评估；③Skill/Agent 两工具 PreToolUse 入参各采一次样为 hook 实施前置；④骨架 2600B 超线触发逐条复核，禁「删注释凑字节」假精简；⑤pyright-lsp 功能验证入清卸卡验证窗。
+- **回链**：Ref: D2026-1020-04（通道切换追认）、D2026-1020-05（wrapper 收敛）、D2026-1019-03（发版门禁）；规格 v2.2 与评议全文见 docs/design/d1020-AGENTS瘦身与技能治理-修订设计规格.md。
