@@ -164,6 +164,16 @@
                     </div>
                 </div>
 
+                <!-- P1-6 件B（d1021-卡2）：文件卡/Console 可拖拽分隔条（纯前端 mouse，
+                     逻辑在 app-file-list.js 尾部 TranslateSplit 小节）；比例单点写
+                     CSS 变量 --translate-split（默认 60%，卡F D2026-1013-01 基准）。
+                     零 id / 零 data-i18n：id 冻结预算与 i18n 键全集不动，JS 走类选择器定位；
+                     aria-label 为静态中文（与 7 页 tabpanel 同形态，不走 i18n 键）。
+                     折叠互斥取「禁用」而非隐藏（.console-collapsible.collapsed 时 JS 加
+                     .is-disabled + 拖拽 guard，见 app-file-list.js 注释）。 -->
+                <div class="translate-splitter" role="separator" aria-orientation="vertical"
+                     aria-label="调整文件列表与 Console 高度比例"></div>
+
                 <!-- Console Section -->
 
                 <section class="section console-section console-collapsible">
