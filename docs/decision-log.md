@@ -668,3 +668,4 @@
 - **大考对账**：audit_dispatch_compliance.py 窗口 7/10（样本不足继续累计）；本会话 3 派卡（code-reader×3＋wrapper×2）派卡前均已读 dispatch-discipline=合规；**他会话（session_a34ff27c，01:13 调研 server.py 卸载接口）1 卡未读 skill** 致现行合规率 85.7%<9/10——按规格 §5 触发「回迁或升级机制」评估线，先报 owner 裁（候选=H3 shadow 数据看齐/纪律重申/样本到 10 再判，主审建议=样本到 10 再判，本会话合规先例不构成机制失败证据）。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **回链**：Ref: D2026-1009-01/-02（F4 预案 B 终态）、D2026-1013-01（卡F 60/40 基准）、D2026-0930-09（缺陷B 回归引入点）、D2026-1020-05（wrapper 通道）、D2026-1020-07（pyright-lsp §1.6）；卡面=docs/design/d1021-卡1/卡2（含执行记录）。
+- **追记（2026-10-21，owner 三点裁决）**：①P1-6 拖拽层**验收通过**（owner 口径）；②**暂不推版**——本地 8 笔（f7f5773…2a24091）留 main 不 push，待密集测试修复其他小 BUG 后汇总发版；③大考窗口**样本到 10/10 再判**（85.7% 评估线暂不触发 §5 处置；建议采纳=样本不足不判机制）。emil/autoglm 真身查明＝skills-disabled 内两个用户级技能（emil-design-eng=Emil Kowalski 设计工程方法论；autoglm-browser-agent=AutoGLM 浏览器自动化代理），**禁用态维持**，是否恢复/删除待 owner 单独确认（原待定项语义不变）。
