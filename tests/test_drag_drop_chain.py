@@ -9,6 +9,8 @@ test_gui_js_static.py 的静态断言形态（源码文本提取）钉死两侧�
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 GUI_DIR = ROOT / "subtransjav" / "webview_gui"
 
@@ -82,8 +84,13 @@ def test_review_ondroppedfiles_consumes_all_subtitle_exts():
 
 def test_on_drop_event_emits_chain_diagnostics(capsys, monkeypatch):
     """阶段2：drop 链诊断埋点每步一行（触发/文件数/过滤前后/evaluate_js 前后），
-    且埋点为纯增量——放行文件仍汇聚为一次 ReviewUI 转发。"""
-    import webview
+    且埋点为纯增量——放行文件仍汇聚为一次 ReviewUI 转发。
+
+    实跑面=gui-probe/本地（daily CI 无 gui extra，importorskip 跳过）。
+    """
+    webview = pytest.importorskip(
+        "webview", reason="pywebview 为可选 gui extra，未安装时跳过",
+        exc_type=ImportError)
 
     from subtransjav.webview_gui.main import on_drop_event
 
