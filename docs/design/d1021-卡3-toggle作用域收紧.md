@@ -59,3 +59,10 @@ B-07（fdcc46b，2026-10-12）把 checkbox 升为全局 toggle 视觉语言（st
    与规则书写先后无关；若后续 JS 生成模板（app-refine-glossary.js:31）去掉 `gl-sel` 类，本钉与覆盖块须同步换代——本卡未改 JS。
 3. 暗色主题下 `.gl-sel` 回归原生形态后，勾选框颜色由 UA 默认渲染决定（B-07 已删 `accent-color`，
    `style.dark.css` 零改动）。若主审黑盒发现暗色下对比度不足，需另行裁决——本卡禁字面色值，执行者未自行加 token。
+
+## 主审验收记录（2026-10-21，主审）
+
+- **验证链（主审亲跑，硬序全过）**：ruff clean → 定向 208 passed → 全量 2519+4（基线只增不减）→ 冒烟（import subtransjav＋refine --help）→ 深扫 43 零新增（seal sha256:641314a6c0ebe8a08b261e29175b9f92b607c5622be79ffef3426ab22364acc2，基线 43＝产品面 28＋树外 15 恒等，offlineAdvisory=1 观察项维持）。
+- **GUI 黑盒 DOM 断言（HTTP 桥＋IAB 夹具注入）PASS**：`.gl-sel` computed appearance=auto / 14×14 / cursor:pointer、点击可勾选；设置类 checkbox appearance=none / 34×18、点击可勾选——两形态并存、功能层零改动。如实登记：黑盒在提交 e1f8d63 之后执行（卡面归主审），该提交信息未注明 GUI 验证态，本次补验。
+- **遗留裁决**：遗留1 关闭（黑盒/冒烟/深扫由主审补执行）；遗留2（特异性 0,1,1 与规则书写序无关，若 JS 模板去 `gl-sel` 类则钉与覆盖块须同批换代）按是接受；遗留3（暗色 UA 默认色，B-07 禁字面色值故不加 token）按是接受，对比度不足另裁。
+- **验收结论**：**通过**。本地提交待 owner 验收后 push（暂不推版）。另：主审一体命令笔误在仓库根产生的未跟踪空文件 `9216` 已清理。
