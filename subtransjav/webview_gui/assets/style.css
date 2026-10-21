@@ -130,7 +130,6 @@
     --w-profile: 110px;            /* profile select min-width */
     --w-ctx: 92px;                 /* context window input width */
     --w-cleaner: 160px;            /* cleaner dir input min-width */
-    --w-endpoint-label: 70px;      /* endpoint label min-width */
     --w-fallback: 170px;           /* fallback model select width */
     --w-batch: 70px;               /* batch number input width */
     --w-concurrency: 60px;         /* concurrency select width */
@@ -1633,6 +1632,11 @@ input[type="checkbox"]:focus-visible {
 
 /* stack 容器加挂 form-card 时保持纵向拉伸（阶段3 批1/C1：防 align-items:center 级联把列排子项居中收缩） */
 .stack.form-card { align-items: stretch; }
+
+/* d1021-卡4（D2026-1021-03 ② critic 布局硬化）：接口地址行入卡后须吃满卡内容宽
+   （.form-card 为 flex 而 .action-row 基类无 grow，卡内 input 撑不满）；
+   .action-row 基类不动，仅本作用域规则 */
+.form-card > .action-row { flex: 1 1 100%; }
 
 .form-card-header {
     display: flex;
