@@ -393,7 +393,7 @@
 - **free 模型十轮测试（owner 指示：借十卡每卡轮换模型考察能力，断流不恢复扣 0.3）**：账目=docs/design/d1013-free模型十轮测试打分账.md。**综合排名：space-bunny 9.8（两轮均优：主动披露+变异自证 18 例+stash 基线对照）> mimo 9.5（接卡稳+披露好）= ling-3.1 9.5（首战优）> nemotron-3U 9.0（优，盯提交完整性）> nemotron-3.5 7.3（自测如实性短板跨轮复现：轮 4 钉3 吞并漏报/轮 9 全量未真跑措辞含糊——用则必逐行审 tests diff+核自测）> longcat 6.4（质量优但 4/6 派卡断流未恢复，-0.3，限流期不可依赖）**。教训=-m 模型 id 须完整形态（缩写报 Model unavailable）。
 - **依据文件**：docs/design/d1013-卡A1..卡H 共 10 张（含执行记录与主审补记）、d1013-free模型十轮测试打分账.md、subtransjav/webview_gui/assets/{style.css,index.html,app.js}、tests/test_gui_js_static.py。
 
-## [2026-10-14] [D2026-1013-01 追记] 第六轮真机反馈三卡收口（阶段卡折行治理+兜底容错卡行内化+ASR 路径悬停提示）[已执行 · 待 owner 真机走查]
+## [2026-10-14] [D2026-1013-01 追记] 第六轮真机反馈三卡收口（阶段卡折行治理+兜底容错卡行内化+ASR 路径悬停提示）[已执行 · 已收口（2026-10-21 主审回写：真机走查项 2026-10-16 视为通过，见 roadmap 阶段4 收口）]
 
 - **owner 四条反馈（2026-10-14）**：①阶段卡 API Key 及框、保存按钮下移与模型栏平行；②兜底与容错卡错位、风格与其他模块一致（owner 追加：「右边留白过多、组件内三层堆叠、一看就不一致」）；③上游环境 Python 路径悬停无完整文字提示；④折叠后文字应与「阈值自适应」同一平行位置——经主审 AskUserQuestion 请 owner 指认，②④合并为同一卡（兜底卡折行态部件参差，参照高级参数页 inline-field「标签左置控件右」语言）。
 - **设计（design-expert，方案一件写盘）**：docs/design/d1014-设计-引擎页折行治理与兜底卡重排方案.md——WebView2 真 A/B 实测背书（非估算），断点/高度预算/钉修订清单齐备；本设计偏离两点经主审裁量修正：新增 3 token 落「组件定宽 token 区」而非 index.html 内联引用专区；模型下限走新 token --w-stage-model 不动 --w-model（index.html:552 角色卡内联引用防连带）。设计实测脚本 16 件落项目 Temp/（gitignored 树外）留证后已清理。
@@ -646,7 +646,7 @@
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **回链**：Ref: D2026-1020-01（第一阶段执行）、D2026-1020-02（①④）、D2026-1019-03（②③）、D2026-1015-05/D2026-1015-03/D2026-1012-01（回填核销）、docs/design/d1020-卡2-decision-log归档执行.md（执行卡含主审裁决段）、roadmap.md 3.1 节。
 
-## [2026-10-20] [D2026-1020-07] AGENTS 瘦身与技能治理：骨架化 2435B＋dispatch-discipline 外迁＋Skill hook 审计机制层（H3 gate 降远期） [已拍板·待执行]
+## [2026-10-20] [D2026-1020-07] AGENTS 瘦身与技能治理：骨架化 2435B＋dispatch-discipline 外迁＋Skill hook 审计机制层（H3 gate 降远期） [已拍板·已收口（2026-10-21 主审回写：执行记录在条目内；残余仅检索类判定面待 owner）]
 
 - **决策内容**：全局 `~/.zcode/AGENTS.md`（实测 8994B，软限 8100B 已破常态告警，硬限 9216B 余 222B）四节瘦身为骨架（v2.2 实测 2435B 含尾换行/正文 2434B，哨兵「按本节默认执行」恰 1），操作细则外迁新 skill `dispatch-discipline`；frontend-design 重复副本移除＋卸载候选逐项清卸；时序=D-05 先行、迁移为 D-05 后续第一项硬时点。规格=`docs/design/d1020-AGENTS瘦身与技能治理-修订设计规格.md`（v2.1→v2.2，owner 终裁收编）。决策号初拟 D2026-1020-06 与既有「3.1 发版条件复核收口」撞号，按 D2026-1020-04/05 先例顺延改 -07。
 - **评议员异议（decision-critic，2026-10-20 两轮）**：首轮 1×[HIGH_RISK_OBJECTION]＋1×[MATERIAL_CONFLICT]＋4×[MEDIUM]＋2×[NOTE]。HRO-1=H3「完全复用 H1」结构不成立（H1 谓词 file_path 在 Agent 入参不存在；matcher `Agent` 过宽误伤 code-reader；OpenCode 备用通道走 Bash 不经过 Agent；TICKS 打点证不了 skill 已读）。MATERIAL_CONFLICT=划界表承诺「留」的不可委托清单未落骨架＋完成通知反制句丢失。MEDIUM×4=卸载 SOP「H1 拦 mv」前提错误／`.disabled-` 前缀无证据／引用核查范围偏窄／基线扩七文件时序与卡面文件数。复评：异议全数解除，**终局立场=支持**，无新增 HRO。
@@ -670,7 +670,7 @@
 - **回链**：Ref: D2026-1009-01/-02（F4 预案 B 终态）、D2026-1013-01（卡F 60/40 基准）、D2026-0930-09（缺陷B 回归引入点）、D2026-1020-05（wrapper 通道）、D2026-1020-07（pyright-lsp §1.6）；卡面=docs/design/d1021-卡1/卡2（含执行记录）。
 - **追记（2026-10-21，owner 三点裁决）**：①P1-6 拖拽层**验收通过**（owner 口径）；②**暂不推版**——本地 8 笔（f7f5773…2a24091）留 main 不 push，待密集测试修复其他小 BUG 后汇总发版；③大考窗口**样本到 10/10 再判**（85.7% 评估线暂不触发 §5 处置；建议采纳=样本不足不判机制）。emil/autoglm 真身查明＝skills-disabled 内两个用户级技能（emil-design-eng=Emil Kowalski 设计工程方法论；autoglm-browser-agent=AutoGLM 浏览器自动化代理），**禁用态维持**，是否恢复/删除待 owner 单独确认（原待定项语义不变）。
 
-## 2026-10-21 D2026-1021-02 「三点裁决：技能状态勘正（autoglm 实为启用态）＋scanner_enobufs 修复纳入本轮＋候选池三项纳入本轮」 [已拍板·待执行]
+## 2026-10-21 D2026-1021-02 「三点裁决：技能状态勘正（autoglm 实为启用态）＋scanner_enobufs 修复纳入本轮＋候选池三项纳入本轮」 [已拍板·已收口（2026-10-21 主审回写：执行收口在条目内；autoglm 陈旧副本随 D2026-1021-03 追记销毁令处置）]
 
 - **裁决内容（owner，2026-10-21）**：①技能状态勘正——emil-design-eng 在会话/`/` 菜单不可见＝其仅存于 `~/.zcode/skills-disabled`（非发现根，永不被发现），禁用态属实；autoglm-browser-agent 实际生效态＝**启用**（owner 2026-10-21 09:02 在 Settings→Skills 勾选，客户端已将其置于 `~/.agents/skills` 发现根并被本会话加载；`skills-disabled` 内 2026-09-28 旧副本为陈旧重复，两份并存是「核实为禁用态」误判的触发源——上条 D2026-1021-01 追记「禁用态维持」对 autoglm 即告陈旧，本条勘正）。陈旧副本清理与 emil 恢复/删除仍待 owner 单独裁决（本条不擅自移文件）。②scanner_enobufs 钩子修复纳入本轮。③候选池三项（状态 tag 列、checkbox→toggle、接口地址区深化，D2026-1001-03 第⑤项）纳入本轮。
 - **scanner_enobufs 问题定义（D2026-1019-03 ③ 在案）**：供应商钩子入口写 stdout 后立即 exit，stdout 管道背压（ENOBUFS）时判定 JSON 丢失、宿主把空输出当放行＝「兼容放行」，提交期安全/secret 扫描存在静默失效面（2026-10-12/13 在案，f6d3a01 提交复现）。修复已随 mimosa **1.0.4** 出厂（installed_plugins.json 现行版本，2026-10-20 01:53 更新）：run-hook.cjs 轻量适配器先落判定到私有临时文件、等完整 JSON 送达宿主管道再退出，适配器失败直接 deny PreToolUse（不再空输出放行），每次运行后清理。**本轮动作＝验证收口**：新会话＋真实提交观察钩子扫描稳定出完整判定即关闭 ③；本会话（1.0.4 后新会话）Bash 调用零 deny 与适配器正常工作相符，为弱佐证；若 1.0.4 下 ENOBUFS 复发，行为已从静默放行翻转为阻断，按新缺陷信号处置，不再适用兼容放行口径。
@@ -679,7 +679,7 @@
 - **回链**：Ref: D2026-1019-03（③）、D2026-1001-03（⑤）、D2026-1021-01（追记勘正对象）、D2026-1020-07（②待定项）；roadmap 阶段3 节候选池行。
 - **执行收口（2026-10-21 本会话）**：①emil-design-eng 启用已执行（skills-disabled→.agents/skills，移动前后哈希 ffbe68e6007fb42cb8149f089b400a1ca007d59ba23e8948e2be4476f3175939 一致，TICKS 打点 C-20261021-1328，一体命令基线已刷新；新会话生效）。autoglm 陈旧副本留 skills-disabled 待 owner 裁决（未删）。②D2026-1019-03 ③ 按「替代扫描器稳定出 seal」支路关闭：补偿门定形为硬门（提交前 MCP 深扫 seal），本会话收口深扫 seal sha256:641314a6…（43 零新增）；引擎内部 ENOBUFS 走厂商升级通道（owner 渠道，证据=钩子警告＋seal）。③checkbox→toggle 作用域收紧＝卡3 执行＋主审验收通过（卡3 验收记录：验证链全过＋GUI 黑盒 DOM 断言 PASS，基线 2519+4）；状态 tag 列与接口地址区深化＝规格＋影响分析已呈 owner（本会话回复），派卡前须 decision-critic 评议＋owner 解冻裁决。
 
-## 2026-10-21 D2026-1021-03 「owner 三点裁决：技能清理（web-design-guidelines 启用＋四件卸载）＋接口地址区独立卡片化同意＋状态 tag 列语义待澄清」 [已拍板·执行中]
+## 2026-10-21 D2026-1021-03 「owner 三点裁决：技能清理（web-design-guidelines 启用＋四件卸载）＋接口地址区独立卡片化同意＋状态 tag 列语义待澄清」 [已拍板·已收口（2026-10-21 主审回写：追记二点裁决全落＋卡4 主审验收通过）]
 
 - **裁决内容（owner，2026-10-21）**：①技能处置——web-design-guidelines **启用**（skills-disabled→.agents/skills，SKILL.md 哈希 f4647ca866a3accf763777f83e7682954f0187cd6bea7eea0399796652414e8f 写前=写后一致；新会话生效），grill-me / grill-with-docs / improve-codebase-architecture / triage 四件**卸载**（移 %TEMP%\skills-uninstalled-20261021 备份目录，非销毁，可恢复）；autoglm-browser-agent 的 skills-disabled 陈旧副本另行待裁。②接口地址区独立卡片化**同意**（基于项目真实 token 渲染的前后对照预览）。③状态 tag 列的 A/B 语义存疑（意义不明），**暂停待语义澄清**——A/B 系主审预览示例语义（逐行生效范围：阶段A=净语+翻译、阶段B=审校+抛光），非原始规格定义；候选语义=逐行生效范围／来源（手动/学习）／绑定文件／放弃该项，待 owner 选定后另议。
 - **critic 评议（正式，agent_ab52bfe2）**：**有条件支持方案 A、反对方案 B**（A=卡头复用既有键 s1_endpoint_label/s3_endpoint_label，零新增 i18n 键零新增 id，钉⑤双集合逐字不动；B=新键触 FROZEN_I18N_KEYS(186) 冻结集扩容，纯文案不值）。**[HIGH_RISK_OBJECTION] R1 红线冲突——主审采纳**：新增 4 个元素节点与 ui-phase3-批清单:42「不新增任何元素节点/不加 form-card-header」直接冲突且无机器闸（钉⑤只锁 id/i18n 集合，新增 DOM 会静默过闸）；处置=本条显式登记 **R1 豁免（授权源=owner ②同意）**＋卡内补 DOM 结构钉防无声推翻。布局风险硬化：`.form-card` 为 flex 而 action-row 无 grow，卡内 input 撑不满→新增作用域规则 `.form-card > .action-row { flex: 1 1 100% }`（不动 .action-row 基类）；`--w-endpoint-label` 因行内 label 移除成死 token（随卡清理）。
