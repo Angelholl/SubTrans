@@ -45,7 +45,7 @@ A dual-engine subtitle translation & refinement toolkit (evolved from the SubTra
 
 - onedir 打包 + Inno Setup 安装器，数据根位于 `%LOCALAPPDATA%\SubTrans`；**卸载不删除用户数据**（词库/TM/配置/产物均保留）。
 - 安装器内置 WebView2 检测与引导（GUI 运行时依赖）。
-- 安装包**未做代码签名**：首次运行可能触发 SmartScreen 提示（点「更多信息 → 仍要运行」）。发布页提供的 `SHA256SUMS.txt` 是**安装包完整性校验值（哈希），不是数字签名**——下载后可用它核对文件未被篡改，但不改变 SmartScreen 行为。
+- 完整性口径＝发布页提供的 `SHA256SUMS.txt`（安装包校验值）：下载后在 CMD 执行 `certutil -hashfile 安装包文件名 SHA256` 比对，一致即文件未被篡改（默认完整性核验方式）。
 - 环境变量 `SUBTRANSJAV_DATA_ROOT` 优先级最高，可整体重定位数据根（词库/TM/配置/产物锚点）。
 - `subtrans-cli.exe --where`（EXE 版位于安装目录；pip/源码版为 `subtransjav-refine --where`）一次性诊断当前全部路径锚点（只读零副作用），排障首选。
 - EXE 版数据根默认 `%LOCALAPPDATA%\SubTrans`；pip / 源码版数据位置在仓库根（同样可用 `SUBTRANSJAV_DATA_ROOT` 重定位）。
@@ -219,7 +219,7 @@ SRT 输入
 - **云端密钥放哪？** 三级解析：CLI/GUI 传参 > 环境变量 > GUI 保存（DPAPI 加密存储）；本地服务无需密钥。
 - **只想看执行计划、不实际调用？** 加 `--dry-run`。
 - **我的数据（词库/TM/配置）在哪？** 运行安装目录内的 `subtrans-cli.exe --where`（pip/源码版为 `subtransjav-refine --where`）一次报全当前全部路径锚点；EXE 版默认在 `%LOCALAPPDATA%\SubTrans`，pip 版在仓库根。
-- **杀毒软件报毒怎么办？** 安装包未做代码签名，部分杀软（含 Windows Defender）可能对这类 Python 打包文件误报，不代表文件有问题。处理步骤：① 从官方 Releases 下载并核对发布页提供的 SHA256 校验值；② 核对一致后将被隔离的文件「恢复」，并把安装包/安装目录加入杀软白名单；③ 仍持续误报可向杀软厂商提交误报申诉（如微软 Defender 的[文件提交页](https://www.microsoft.com/en-us/wdsi/filesubmission)），厂商核实后会更新病毒库放行。
+- **杀毒软件报毒怎么办？** 部分杀软（含 Windows Defender）可能对 Python 打包文件误报，不代表文件有问题。处理步骤：① 从官方 Releases 下载并核对发布页提供的 SHA256 校验值；② 核对一致后将被隔离的文件「恢复」，并把安装包/安装目录加入杀软白名单；③ 仍持续误报可向杀软厂商提交误报申诉（如微软 Defender 的[文件提交页](https://www.microsoft.com/en-us/wdsi/filesubmission)），厂商核实后会更新病毒库放行。
 
 更多问题见 [docs/使用与维护手册.md](docs/使用与维护手册.md)。
 
