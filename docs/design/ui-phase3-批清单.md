@@ -40,6 +40,7 @@
 ## 二、三面红线（固化，违者当批回退）
 
 - **R1 DOM 恒定**：不新增/删除/移动任何元素节点与文本节点。允许的改动面仅限：①既有元素 class 属性追加/修改 ②style 属性整体移除 ③style.css/style.dark.css 规则增改 ④app.js 模板字符串内的 class/style 字面量。id 属性零改动；closest 锚点（app.js:553/555/561/967/3135，.file-item/.console-section/.btn-audio-preview）禁触。
+  - **R1 豁免记录（d1021-卡4，授权=D2026-1021-03 ②，2026-10-21 落码）**：引擎页阶段A/阶段B 接口地址行独立卡片化——新增 4 个元素节点（2 个 form-card 包裹 + 2 个 form-card-header 卡头，本条「不加 form-card-header」的显式豁免）；卡头复用既有键 s1/s3_endpoint_label（零新增 i18n 键）、零新增 id、行内 label 移除（语义由卡头承载）；授权源=owner ②同意（critic 方案 A，反对方案 B）。结构钉落 tests/test_gui_js_static.py（test_batch_c_engine_stage_groups_pinned + test_d1021_card4_endpoint_card_structure_pinned）防无声推翻。
 - **R2 节奏禁区**：`:root` 的 `--font/--font-sm/--font-xs/--font-mono/--font-sans/--space-1` 定义与 `html`/`body`/控制台/`.form-input` 等既有 font-size/line-height 声明一律不改；新增类不得引入新字号/间距节奏值（只复用既有值）；`--w-*` 宽度 token 允许照用。
 - **R3 契约恒空**：index.html id 全集 diff=空（现 165 唯一）；data-i18n 键全集 diff=空（现 186 键，白名单仅 theme_google/carbon/primer 三删除键）；JS MSG 键表不动；测试字面钉不碰（test_gui_js_static.py:281/331 的 `'refineS' + n + 'Provider'`、`for (const n of [1, 3])`，:594 的 `stack gl-collapsible` count==2 等）。
 
