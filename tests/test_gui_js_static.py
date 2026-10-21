@@ -4743,6 +4743,51 @@ def test_b07_toggle_zero_new_literals_pinned():
 
 
 # ---------------------------------------------------------------------------
+# d1021-卡3（D2026-1021-02）：B-07 作用域收紧——词库表行选择复选框 .gl-sel
+# （JS 生成，app-refine-glossary.js:31）回归原生 checkbox 形态，与设置类
+# toggle 语义分离；基础 toggle 块（1105-1144）零改动，设置类形态不得回退。
+# ---------------------------------------------------------------------------
+
+_B07_GLSSEL_OVERRIDE = re.compile(
+    r'input\[type="checkbox"\]\.gl-sel\s*\{([^}]*)\}', re.S)
+
+
+def test_b07_glsel_native_override_pinned():
+    """d1021-卡3：.gl-sel 覆盖块存在且含 appearance:auto + 14px 尺寸；
+    基础 toggle 块仍含 appearance:none + var(--radius-pill)（设置类形态
+    未回退）；覆盖块零字面色值（B-07 零字面量钉口径）。
+
+    人工推演（缺失场景）：删覆盖块则 .gl-sel 回落全局 toggle 形态，
+    选择语义与设置语义混淆、表格行视觉失真（本钉红）；若把基础块改为
+    appearance:auto（全局回退而非作用域收紧），设置类 toggle 视觉丢失
+    （第二组断言红）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    ov = _B07_GLSSEL_OVERRIDE.search(css)
+    assert ov, (
+        'style.css 缺 input[type="checkbox"].gl-sel 覆盖块'
+        "（D2026-1021-02 作用域收紧：行选择语义回归原生形态）")
+    body = ov.group(1)
+    assert "appearance: auto" in body, \
+        '.gl-sel 覆盖块必须 appearance:auto（回归原生 checkbox 形态）'
+    assert "14px" in body, \
+        ".gl-sel 覆盖块必须锁定 14px 尺寸（表格行内视觉密度契约）"
+    assert "cursor: pointer" in body, \
+        ".gl-sel 必须保留 cursor:pointer（既有 :1746 契约不得丢）"
+    # 覆盖块零字面色值（B-07 零字面量钉口径）
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", body), (
+        ".gl-sel 覆盖块出现字面色值——请引既有 token（P8 钉3 同口径）")
+    # 基础 toggle 块未回退：设置类形态仍为 toggle 滑块
+    base = _B07_TOGGLE_BASE.search(css)
+    assert base, 'style.css 缺 input[type="checkbox"] 基础规则块'
+    base_body = base.group(1)
+    assert "appearance: none" in base_body, \
+        "基础 toggle 块必须保持 appearance:none（作用域收紧不得全局回退）"
+    assert "border-radius: var(--radius-pill)" in base_body, \
+        "基础 toggle 块圆角必须仍引 --radius-pill token（设置类形态未回退）"
+
+
+# ---------------------------------------------------------------------------
 # 卡10 B-10（D2026-1012-01，阶段 2 首批）：七页页头 + tabpanel 语义——
 # 其余 6 页（engine/asrdict/glossary/guide/advanced/review）顶部各加与
 # tab-translate :108-113 同构的 .page-head（h1 复用导航既有 tabXxx 键，与

@@ -1743,7 +1743,7 @@ input[type="checkbox"]:focus-visible {
 
 /* 词库行内输入（app.js 模板生成） */
 input.gl-src, input.gl-dst { width: 100%; min-width: 0; }
-input[type="checkbox"].gl-sel { cursor: pointer; }
+input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cursor: pointer; }
 
 /* 词库区块折叠（.gl-collapsible 族，app.js toggle .collapsed） */
 .gl-tab-content { display: flex; flex-direction: column; gap: var(--space-2); }
