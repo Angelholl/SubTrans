@@ -1962,6 +1962,31 @@ def test_batch_c_engine_stage_groups_pinned():
     assert "endpoint-save-twin" in grp_b, "B 组缺孪生保存按钮"
     assert 'id="refineSaveEndpointsBtn"' not in grp_b, \
         "孪生保存按钮不得带 id（id 冻结预算）"
+    # d1021-卡4（D2026-1021-03 ②＋critic 方案 A；R1 豁免登记 ui-phase3-批清单:42）：
+    # 阶段A/阶段B 接口地址行独立卡片化——两组 form-card 包裹在位、卡头复用既有键
+    # s1/s3_endpoint_label（零新增 i18n 键）、行内 label 移除（语义由卡头承载）、
+    # 零新 id、twin 保持无 id
+    addr_a = grp_a[grp_a.index("<!-- 阶段A 地址"):]
+    addr_b = grp_b[grp_b.index("<!-- 阶段B 地址"):]
+    for card, key in ((addr_a, "s1_endpoint_label"),
+                      (addr_b, "s3_endpoint_label")):
+        assert '<div class="form-card">' in card, \
+            "接口地址行未包进独立 form-card（D2026-1021-03 ②）"
+        assert f'<div class="form-card-header" data-i18n="{key}">' in card, \
+            f"卡头须复用既有键 {key}（零新增 i18n 键）"
+        assert 'class="field-label"' not in card, \
+            "行内 label 未移除（语义须由卡头承载）"
+        assert 'style="min-width' not in card, \
+            "行内 label 内联宽度未随卡清理（死 token 引用的回流点）"
+    assert sorted(re.findall(r'(?<![\w-])id="([^"]+)"', addr_a)) == [
+        "refineEndpointStatus", "refineS1Endpoint", "refineSaveEndpointsBtn"], \
+        "阶段A 地址卡出现新增 id（id 冻结预算）"
+    assert sorted(re.findall(r'(?<![\w-])id="([^"]+)"', addr_b)) == [
+        "refineS3Endpoint"], "阶段B 地址卡出现新增 id（id 冻结预算）"
+    twin = re.search(r'<button[^>]*endpoint-save-twin[^>]*>', addr_b)
+    assert twin, "B 组缺孪生保存按钮（class-only 无 id）"
+    assert not re.search(r'(?<![\w-])id="', twin.group(0)), \
+        "孪生保存按钮必须保持无 id（id 冻结预算；data-testid 不算 id）"
     assert "endpoints_summary" not in html, "接口地址卡外壳应随 IA 重排删除"
     # 去外壳后 JS 绑定循环一并移除（stage-group 为纯 CSS 布局零 JS）
     src = _app_js_source()
@@ -1973,6 +1998,27 @@ def test_batch_c_engine_stage_groups_pinned():
         "style.css 缺 .stage-group 规则组"
     assert ".seg-btn" not in css and ".seg-page" not in css, \
         "style.css 残留 .seg-* 规则"
+
+
+def test_d1021_card4_endpoint_card_structure_pinned():
+    """d1021-卡4（D2026-1021-03 ②，R1 豁免登记 ui-phase3-批清单:42）结构钉：
+    ① 两处切片注释锚（<!-- 阶段A 地址 / <!-- 阶段B 地址）原样在位——
+      test_ui_phase3_redlines 钉① 依赖该锚，失锚即无声推翻；
+    ② critic 布局硬化作用域规则 `.form-card > .action-row { flex: 1 1 100%; }`
+      在位（.action-row 基类不动，防卡内 input 收缩）；
+    ③ `--w-endpoint-label` 死 token 已随卡从 style.css 移除，assets 面零引用。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for anchor in ("<!-- 阶段A 地址", "<!-- 阶段B 地址"):
+        assert anchor in html, f"redlines 切片锚失锚: {anchor}"
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"\.form-card\s*>\s*\.action-row\s*\{([^}]*)\}", css)
+    assert m, "style.css 缺卡内 action-row 生长规则（critic 布局硬化未落码）"
+    assert "flex: 1 1 100%" in m.group(1), "卡内 action-row 生长规则声明漂移"
+    assert "--w-endpoint-label" not in css, "死 token 未随卡从 style.css 移除"
+    assert "var(--w-endpoint-label)" not in html, "死 token 引用回流（行内 label 未移除）"
+    assert "var(--w-endpoint-label)" not in js_sources.read_all(), \
+        "JS 面残留死 token 引用（全仓零引用核对未通过）"
 
 
 def test_batch_c_asrdict_tab_order_pinned():
