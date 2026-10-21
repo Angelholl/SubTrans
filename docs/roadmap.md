@@ -65,7 +65,7 @@
 - ✅ 词库/模板页：两表挂 .gl-table+表级/列宽规则（C4）+glRender/glLearnedLoad 行模板内联清到类（.gl-alias/.gl-sel-cell）
 - ✅ 质量页/高级参数页：adv-group 卡头分层（双标题 :first-child 双选择器，C7）+来源组挂 form-card+AI 结果两表挂 gl-table（C8）
 - ✅ 开工门闭环：批清单 docs/design/ui-phase3-批清单.md 二级评议通过（1 HRO 采纳=钉⑤ id 165/i18n 键 186 全集冻结，补 gate 只拦丢失的机器闸；C1-C9 并入第六节）；红线钉 tests/test_ui_phase3_redlines.py 六用例；web-gui-tester 黑盒六组 PASS+四档截图（Temp/gui-phase3/）；Mimosa 复扫 29 零新增（seal 485f0ce9）
-- 待 owner：真机走查时顺带目检阶段3 面（引擎三卡/高级卡头/词库表/暗色）；候选池三项（状态 tag 列、checkbox→toggle、接口地址区深化，D2026-1001-03 第⑤项）**2026-10-21 owner 裁决纳入本轮（D2026-1021-02）**：checkbox→toggle 已随卡9 B-07 落地（fdcc46b，2026-10-12，「未动」为陈旧账勘正），仅余作用域收紧残项；状态 tag 列与接口地址区深化触阶段3 红线＋钉⑤（id/i18n 冻结），派卡前须 decision-critic 评议＋owner 解冻裁决
+- 待 owner：真机走查时顺带目检阶段3 面（引擎三卡/高级卡头/词库表/暗色）。**候选池三项终态（D2026-1021-03，2026-10-21）**：checkbox→toggle 作用域收紧已落（卡3 验收通过，基线 2519+4）；接口地址区独立卡片化执行中（卡4，critic 方案 A＋R1 豁免登记）；状态 tag 列 **owner 裁放弃**（A/B 逐行语义不需要，维持全局生效现状，零变更）——D2026-1001-03 第⑤项收口
 
 ## 2.3.0 —— 轻量安装包与词典自管理（D2026-1001 交接 D1-D4 拍板+D2026-1001-03 版本口径）✅ 已发布（2026-10-01，tag v2.3.0→5c3919b release/2.3.0 分支制+Release id 400807261：单 setup.exe 33,568,216B+SHA256SUMS 哈希核过，notes 只写本版；release.yml 双跑全绿 dispatch 36837536293+tag 36838069064；发版审读抓出并修复 setup.iss [Files] 空壳缺陷）
 
