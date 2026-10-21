@@ -41,6 +41,7 @@ ALLOWLIST = frozenset({
     "docs/使用与维护手册.md",               # 标题渊源口径（历史文档标题；批3 收敛正文与数据根口径后仍保留）
     "docs/decision-log.md",                # 决策历史记录（现行区），不改写已留存表述
     "docs/decision-log-archive-v1-v2.md",  # 决策历史归档卷：历史条目逐字节保全（D2026-1020-01 C5），非新增品牌表述
+    "docs/decision-log-archive-c.md",      # 决策历史归档卷 C 组（D2026-1020-01 追记三）：历史条目逐字节保全，非新增品牌表述
     "docs/roadmap.md",                     # 历史规划文档
     "docs/B2-门②语料基线-20260926.md",     # 历史走查记录（树外归档绝对路径）
     "AGENTS.md",                            # 项目规则（标题/正文引用产品全称；仓库级权威文档）
