@@ -65,3 +65,8 @@ config/fullchain_last_run.json
 
 # 词典下载数据（pip/源码形态数据根=旧仓库根，引擎页下载的 sudachi 词典落 dict/，本地数据不入库）
 dict/
+
+# 账本收口治理运行时（D2026-1022-02 治理轮）：受控位置在仓库外（~/.zcode/governance/scan-min/），
+# 本地安全源在 ~/.zcode/tools/；以下条目防御脚本副本、安全源、统计产物误入公开仓库
+governance/scan-min/
+governance-secret-keywords.json
