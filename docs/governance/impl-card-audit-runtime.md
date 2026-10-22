@@ -1,0 +1,241 @@
+# impl-card-audit-runtime.md — 审计运行时实现卡（治理轮 2026-10-22）
+
+定性：**规则层验收通过；运行时层未交付。** 本卡是运行时层的唯一待办出处；本卡本身不构成验收，不得据本卡写"已止住循环"或"运行时生效"。
+
+本轮（2026-10-22）收口定性：**文档层冻结；① 暴露面已按 owner 条件判（低敏感→接受现状，① 维持 closed）；运行时最小版已跑通一次真实扫描**——统计落盘与正式输出目录仍未交付。
+
+以下命令均在项目根目录执行。
+
+## 卡面（自足）
+
+- 只改：运行时脚本、其输出目录、本地安全源。不改三份治理文件、不改 decision-log、不动归档卷。
+- 执行者只 commit，不 push；第 6 项（脚本注释勘正）须走 owner 门，不得自行改。
+- 卡面不含根路径字面量，不含旧品牌词字面量，不含敏感原值。
+
+## 交付项
+
+1. **脚本读 map**：读取 `docs/governance/closure-map.yaml` 的 `entries`（正式）与 `provisional`（临时）两个区，按 audit-filter-rules §2 `zones` 标记条目区属；provisional 条目只出占位行"临时条目，待归档，见 {canonical_id}"。
+2. **按 disposition 输出**：实现 §2 disposition 表全部 9 键（含 `closed_and_optional_no_action` 复合分支，① 先例）＋ `similarity_action` / `unmapped_action` / `next_review_guard`；输出串与 §1、§3 逐字一致，不得只改文档不改可加载配置。
+3. **统计字段落盘**：§2 `statistics_fields` 十字段按 §4 基线口径落盘（`statistics_scope: entries_only`，provisional 不进入任一字段）。落盘文件即"可复核"的唯一凭据；落盘前不得称可复核。
+4. **输出目录新建**：输出目录当前不存在（脚本纯 stdout、无输出目录参数），须由本卡新建；路径与命名由 owner 定（建议与本地安全源同级，不入公开仓库）。规则配置不得假设输出目录存在。
+5. **敏感关键词本地安全源**（本轮未建，规格定死如下）：
+   - 位置：`%USERPROFILE%\.zcode\tools\governance-secret-keywords.json`（该目录独立 git 版本化，不属项目仓库；本卡不写用户名字面量）。
+   - 维护人：owner（主审）；写入走 config-write 域，须 owner 门。
+   - 不入仓库保证：项目仓库侧 `.gitignore` 排除任何本地源副本＋pre-commit 钩子对 `docs/governance/` 扫描敏感原值（命中即拒提交）。两者本轮均未建立，属本卡后续交付。
+   - 匹配方式：运行时对命中文本做规范化（小写＋正斜杠）后比对 sha256 前 8 位。本轮已登记占位：`hash:92c47020`（用户名类）、`hash:9540b882`（本地绝对路径类）。威胁模型边界见 audit-filter-rules §0 第 5 条（防明文误 grep 与意外扩散，不抗字典反查，不含主动攻击者）。
+6. **②-conflict 脚本注释勘正走 owner 门**：脚本 docstring/help 写"owner 2026-10-20 令：检索类计入判定面"，与 decision-log:141「待 owner」冲突（②-conflict 条目，硬冲突已登记不自动裁决）。勘正须走 owner 门＋单列卡（脚本属本地工具目录写入，走 config-write）；本卡不得自行改注释，也不得引脚本 docstring 作证据。
+
+## 首次真实扫描基线，2026-10-22
+
+- 脚本：`%TEMP%\stj_governance_scan_min.py`（本轮在系统临时目录，未入仓库；第 4 项"输出目录新建"未执行）
+- 输入：`audit_dispatch_compliance.py` 的真实输出，只读跑一次，落 `%TEMP%\audit_real_output_20261022.txt`（15 行，数据源为 hooks-log）
+- 命令（以下命令均在项目根目录执行）：`python %TEMP%\stj_governance_scan_min.py %TEMP%\audit_real_output_20261022.txt`
+- 十个统计字段：raw_hits 15 / dedup_hits 2 / closed_cited 1 / pending 1 / observation_due 0 / open 0 / conflicts 0 / evidence_gaps 0 / similarity_pending 0 / unclassified 1
+- 对账：15 = 2 ＋ 1 ＋ 12（12 行为同 ID 重复命中，按去重不入统计字段）
+- 命中条目：D2026-1020-07（closed → 只出引用行）、D2026-1022-02②（已拍板 → 不再重问）
+- 与 §4 基线的差异：§4 是映射表的静态 status 分布（量纲＝条目数），本轮是单次扫描的动态结果（量纲＝命中行数），两者不可互推；本轮 10 字段中 7 项为 0，因为输入面（派卡审计输出）不含 closed/观察/冲突类命中，只出现 ② 与 1020-07 两个口径词——不得据此写"循环已止住"。
+- 本轮实现选定的口径（须与 §1 一致）：raw_hits 按输入行计（每行最多一次判定）；相似匹配用 difflib 比率 ≥0.6 作最小实现；② 的"已拍板"由脚本侧 RULED 登记表实现（map 不扩字段）；provisional 去重仍适用（`seen.add` 在分区判定之前）。
+- 敏感关键词未加载，本轮不计（map 内 `hash:` 占位 3 处）。
+- 解析失败即报错退出已实测：构造畸形 map 与缺 map 两种情形均 `exit=1`，无静默降级。
+- 残余指针分支（closed 且 optional_no_action）：基线输入面未命中，当时标"未验证分支"，不计入验收通过项。2026-10-22 补跑验证通过——输入面＝decision-log ① 段（tip 树 `git grep` 输出经 stdin），命中关键词 `fd87e1d`，输出行与 §1.4／§3 逐字一致："已收口，见 D2026-1022-02①；残余可选决策见 D2026-1022-02①-residual，默认不动"。补跑单列，不计入基线数字（补跑统计 raw_hits 1 / dedup_hits 1 / closed_cited 1 / 其余 0）。
+
+## 验收
+
+- 规则层：三份文件口径一致；closure-map 可被 YAML 解析（本轮实测 `yaml.safe_load` 通过）。附带勘正：原第 106 行 `notes` 值以 ASCII 双引号开头致整文件不可解析，已改为引号包裹＋内部全角引号——运行时实现须以可解析为前提。
+- 运行时：最小版已跑通一次（上一节即凭据），但统计未落盘、正式输出目录未建、本地安全源未建——§4"统计数字可复核"仍标未满足，须待落盘后勾账。在此之前本轮交付定性保持"规则层验收通过；运行时层未交付"（最小版跑通 ≠ 运行时层交付完成）。
+
+## 附录 A：可追溯性（首次基线须可复现）
+
+- 脚本（本轮在系统临时目录，未入仓库）：`%TEMP%\stj_governance_scan_min.py`，sha256 `baf46980081d5b80775c74b5a4e6e853f0d0f0e184bf9760c012e5c51494f99c`（7256B／184 行）
+- 输入样本：`%TEMP%\audit_real_output_20261022.txt`，sha256 `0df6b9a48d90ba8465970e49b1e963a515aa8ad01f7ec0f6fe6a9550ceabdf3b`（1636B／15 行）
+- 可复现命令（以下命令均在项目根目录执行）：`python %TEMP%\stj_governance_scan_min.py %TEMP%\audit_real_output_20261022.txt`
+- 附录 B 为脚本全文副本。若临时目录被清，按附录 B 重建后重算 sha256，须与上面记录值一致；不一致即"首次基线不可复现"，须如实报告，不得默认通过。
+- 正式版迁移去向（未执行）：受控持久位置由 owner 定（建议与本地安全源同级，不入公开仓库）。迁移完成前，本卡附录 A＋B 是首次基线的唯一凭据。
+
+## 附录 B：脚本全文（实跑副本）
+
+```python
+#!/usr/bin/env python3
+"""最小运行时（治理轮 2026-10-22）：读 closure-map 两区，按 disposition 打标签输出，十字段统计到 stdout。
+
+本轮范围（实现卡第 1-3 项的最小版）：
+- 解析失败即报错退出，不静默降级；
+- 统计只打 stdout，不落盘，不建正式输出目录（本轮用系统临时目录）；
+- 敏感关键词（hash: 占位）不加载，显式标"敏感关键词未加载，本轮不计"；
+- 只读 map 与扫描输出，不写归档卷、不写 decision-log、不改 map。
+"""
+import sys
+import difflib
+from collections import Counter
+from datetime import date
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    print("[错误] 缺少 yaml，无法加载 map（不静默降级）", file=sys.stderr)
+    sys.exit(1)
+
+MAP_PATH = Path("docs/governance/closure-map.yaml")
+TODAY = date(2026, 10, 22)
+
+# RULED＝运行时侧临时登记表，不是第二真值源，只作提示；每条带 decision-log 锚点＋拍板日期；
+# decision-log 归档后本表退役或改判。不写入 map（文档层已冻结、不扩字段）。
+RULED = {
+    "D2026-1022-02②": {
+        "anchor": "decision-log.md:199",
+        "date": "2026-10-22",
+        "ruling": "仅 code-Executor 入判定面，检索类仅观察列；窗口延长至 2026-11-10",
+    }
+}
+
+if not MAP_PATH.is_file():
+    print("[错误] map 不存在，退出（不静默降级）", file=sys.stderr)
+    sys.exit(1)
+try:
+    doc = yaml.safe_load(MAP_PATH.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"[错误] closure-map 解析失败，退出（不静默降级）：{exc}", file=sys.stderr)
+    sys.exit(1)
+
+index = []
+for zone, rows in (("entries", doc.get("entries") or []), ("provisional", doc.get("provisional") or [])):
+    for e in rows:
+        index.append({
+            "canonical_id": e["canonical_id"],
+            "zone": zone,
+            "status": e["status"],
+            "default_action": e.get("default_action"),
+            "titles": e.get("legacy_titles") or [],
+            "keywords": e.get("legacy_keywords") or [],
+            "evidence_refs": e.get("evidence_refs") or [],
+            "next_review": e.get("next_review"),
+            "ruling_question": e.get("ruling_question"),
+            "default_option": e.get("default_option"),
+            "consequence": e.get("consequence_if_no_decision"),
+            "notes": e.get("notes"),
+            "conflict": bool(e.get("conflict")),
+        })
+
+sensitive_skipped = sum(1 for e in index for kw in e["keywords"] if str(kw).startswith("hash:"))
+
+
+def norm(s):
+    return str(s).lower().replace("\\", "/")
+
+
+def match(line):
+    n = norm(line)
+    for e in index:
+        if norm(e["canonical_id"]) in n:
+            return e, "exact"
+        for kw in e["keywords"]:
+            if str(kw).startswith("hash:"):
+                continue
+            if norm(kw) in n:
+                return e, "exact"
+    best, ratio = None, 0.0
+    for e in index:
+        for t in e["titles"]:
+            r = difflib.SequenceMatcher(None, n, norm(t)).ratio()
+            if r > ratio:
+                best, ratio = e, r
+    if best and ratio >= 0.6:
+        return best, "similarity"
+    return None, None
+
+
+def due(next_review):
+    if not next_review:
+        return False
+    if "触发条件" in str(next_review):
+        return False  # 触发型不可自动判，只登记
+    for tok in str(next_review).split():
+        try:
+            y, m, d = map(int, tok.split("-"))
+            if date(y, m, d) <= TODAY:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def disposition(e, stats):
+    if e["zone"] == "provisional":
+        emit(f"临时条目，待归档，见 {e['canonical_id']}")
+        return
+    st = e["status"]
+    if st in ("closed", "written_back", "meta_cleared"):
+        stats["closed_cited"] += 1
+        if st == "closed" and e["default_action"] == "optional_no_action":
+            emit(f"已收口，见 {e['canonical_id']}；残余可选决策见 {e['canonical_id']}-residual，默认不动")
+        else:
+            emit(f"已收口，见 {e['canonical_id']}；证据 {e['evidence_refs']}")
+    elif st == "optional_decision":
+        emit(f"原账已关闭（{e['canonical_id']}），可选决策默认不动；除非 owner 明确覆盖红线")
+    elif st == "owner_decision_pending":
+        stats["pending"] += 1
+        r = RULED.get(e["canonical_id"])
+        if r:
+            emit(f"{e['canonical_id']}｜已拍板，待落 decision-log（锚点 {r['anchor']}，拍板 {r['date']}）｜{r['ruling']}｜不再重问")
+        else:
+            emit(f"待拍板（每轮一次）：{e['ruling_question']}｜默认：{e['default_option']}｜不拍板后果：{e['consequence']}")
+    elif st == "closed_observation":
+        if due(e["next_review"]):
+            stats["observation_due"] += 1
+            emit(f"观察到期出账：{e['canonical_id']}（{e['next_review']}）")
+    elif st == "open":
+        stats["open"] += 1
+        emit(f"出账：{e['canonical_id']}")
+    elif st == "evidence_gap":
+        stats["evidence_gaps"] += 1
+        emit(f"补证清单（无执行动作）：{e['canonical_id']}｜{e['notes']}")
+    if e["conflict"]:
+        stats["conflicts"] += 1
+        emit(f"冲突登记（不自动裁决）：{e['canonical_id']}｜{e['notes']}")
+
+
+def emit(s):
+    print(s)
+
+
+def audit_round(text):
+    stats = Counter()
+    seen = set()
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        stats["raw_hits"] += 1
+        e, kind = match(line)
+        if e is None:
+            stats["unclassified"] += 1
+            continue
+        if e["canonical_id"] in seen:
+            stats["dedup_skipped"] += 1
+            continue
+        seen.add(e["canonical_id"])
+        if e["zone"] == "provisional":
+            emit(f"临时条目，待归档，见 {e['canonical_id']}")
+            continue
+        if kind == "similarity":
+            stats["similarity_pending"] += 1
+            emit(f"疑似匹配 {e['canonical_id']}（status={e['status']}），待人工确认，不自动关闭")
+            continue
+        stats["dedup_hits"] += 1
+        disposition(e, stats)
+    return stats
+
+
+if __name__ == "__main__":
+    src = sys.argv[1] if len(sys.argv) > 1 else "-"
+    text = Path(src).read_text(encoding="utf-8") if src != "-" else sys.stdin.read()
+    print(f"== 最小运行时扫描（map 两区：entries {len(doc.get('entries') or [])}／provisional {len(doc.get('provisional') or [])}；输入 {src}；日期 {TODAY}）==")
+    print("敏感关键词未加载，本轮不计（map 内 hash: 占位 {} 处）".format(sensitive_skipped))
+    stats = audit_round(text)
+    print("== 统计（只计正式区）==")
+    for f in ["raw_hits", "dedup_hits", "closed_cited", "pending", "observation_due",
+              "open", "conflicts", "evidence_gaps", "similarity_pending", "unclassified"]:
+        print(f"  {f} = {stats[f]}")
+    print(f"  对账：raw_hits = dedup_hits + unclassified + dedup_skipped（同 ID 重复行，不入统计字段）"
+          f" → {stats['raw_hits']} = {stats['dedup_hits']} + {stats['unclassified']} + {stats['dedup_skipped']}")
+```

@@ -1,0 +1,382 @@
+# closure-map.yaml — 外部收口映射表（账本收口治理轮，2026-10-22）
+#
+# 从属声明：本表从属于 docs/decision-log.md（现行区）与归档卷（archive-v1-v2 / archive-c），
+#   仅作检索过滤层，不裁决、不成为第二真值源。冲突时以 decision-log 条目正文终态＋证据为准。
+# 更新纪律：新收口条目先落 decision-log、后入本表（表只跟随、绝不领先）；写入人＝主审（收口时）；
+#   每条必带可解析 evidence_refs（指向 log/归档卷锚点或 commit/seal），禁止孤儿条目；
+#   MEMORY.md 索引行非状态真值源，不得作盘点依据（C22 误列根因，L-20261022-01）。
+# 一状态一条目：条目内不得打包两个状态，残余单列 canonical_id。
+# 品牌钉：本文件不得含旧品牌词字面量（case-sensitive 判定见 tests/test_brand_allowlist.py:129）；
+#   legacy_keywords 以小写形态存储，匹配按大小写不敏感执行（见 audit-filter-rules.md §0）。
+# 未命中本表的扫描输出显式标"未分类"，不静默归 open 也不静默归 closed。
+# 分区：entries＝正式条目（已落 decision-log）；provisional＝治理轮自身产出、尚未归档，不参与过滤统计。
+# 公开仓库与敏感值：本仓库为公开仓库（2026-10-22 GitHub API 核实 private=false），本目录一旦提交推送即公开；
+#   故本表不存敏感原值——用户名类／绝对路径类关键词以 sha256 前 8 位＋占位描述表示（规范化＝小写＋正斜杠），
+#   原值由运行时从本地安全源动态加载（见 audit-filter-rules.md §0 第 5 条）。
+#   单列说明（不静默保留）：opencode-cli.exe 为程序名、不含本机身份信息，保留原值；用户名类（hash:92c47020）与本地绝对路径类（hash:9540b882）已脱敏。
+
+meta:
+  version: 1
+  generated: "2026-10-22"
+  truth_source: docs/decision-log.md（现行区）＋ docs/decision-log-archive-v1-v2.md ＋ docs/decision-log-archive-c.md
+  scope: 本轮重点样本（D2026-1022-02 七项＋其单列残余，10 条）＋历史反复命中种子集（14 条）＝正式 24 条（增量维护，每次真实重开才补）；治理轮自身 3 条入 provisional，不计入 entry_count；已发布版本类不入表（发布事实非决策收口）
+  status_vocab: [closed, closed_observation, owner_decision_pending, optional_decision, meta_cleared, written_back, open, evidence_gap]
+  entry_count: 24          # 正式条目（27−3，GOV-P-2026-1022-01/02/03 已移入 provisional）
+  provisional_count: 3     # 临时条目，不参与过滤统计与 disposition 处置
+
+entries:
+
+  # ── 本轮重点样本：D2026-1022-02 七项 ──
+
+  - canonical_id: D2026-1022-02①
+    legacy_titles:
+      - "① git 清史——事实核销：原账已随 A6 删库重建实质关闭，残余仅两处，改写须先复述代价待 owner 确认"
+    legacy_keywords: [git 清史, 清史待 owner 令, 删库重建, A6, fd87e1d, 5f2e135, hash:92c47020（用户名类，本地源加载）, archive-c:310, 用户名命中提交]
+    status: closed
+    decision_owner: 执行代理
+    evidence_refs: [decision-log.md:198, archive-c:316, commit fd87e1d, 逐位一致 diff=0]
+    closed_at: "2026-10-22"
+    default_action: optional_no_action
+    conflict: false
+    notes: 原账（3 个用户名命中提交）已随老库死亡＝无历史可清；未改写、未 force push。残余 a/b 两类单列 D2026-1022-02①-residual。旧话头"清史待 owner 令"（archive-c:310）是易误命中源，只作 legacy_keywords 引用。
+      2026-10-22 暴露面实测（git ls-remote＋祖先判据＋tip 树 git grep，只读）：根提交 fd87e1d 已推送（origin/main tip=18d3ea2 以其为祖先）；公开仓库 tip 树仍含 hash:92c47020 命中 5 个 tracked 文件（decision-log.md、d1013 卡面、d1020-wrapper 执行记录、d1020-卡L2、甄别表），①-residual 所列 5 提交全部可达。命中内容逐条目视核对＝用户名＋本机绝对路径类，无凭据、无个人数据。按 owner 条件判（低敏感）→ 接受现状不清史，① 维持 closed。**暴露面保留是 owner 决策，非遗漏；hash 脱敏只保证治理层不新增副本，不追认历史既有副本。**
+      防御性登记：dd4d6ed／32856ea／377915a 三提交当前不可达 origin/main（仅本地引用）＝当前无公开暴露面；"当前不可达"≠"永远不可达"，若未来误推送须复评。
+
+  - canonical_id: D2026-1022-02①-residual
+    legacy_titles:
+      - "现行可达历史 hash:92c47020（用户名类）命中 5 提交分两类（a 甄别表数据源行／b 决策记录绝对路径）"
+    legacy_keywords: [hash:92c47020（用户名类，本地源加载，小写形态匹配）, aed7c67, 9f7f31f, 8a07cdc, 22678e6, fd87e1d, 甄别表数据源行, 绝对路径, 不得回退相对路径]
+    status: optional_decision
+    decision_owner: owner
+    evidence_refs: [decision-log.md:198, tests/test_brand_allowlist.py:129（字节级 case-sensitive 判定面口径）, D2026-1020-05 授权动作第 4 条]
+    closed_at: null
+    default_action: optional_no_action
+    conflict: false
+    notes: 默认不动（b 类属有意保留非泄露）。若 owner 明确覆盖红线坚持清 a/b，须先拍板：数据源行改占位口径＋决策记录路径改中性写法＋解冻绝对路径令；且须先复述代价（force push＋全部 commit 哈希/tag 回链作废＋与逐字节保全红线冲突）。"不得回退相对路径"的字面载体是 D2026-1022-02① 转述，不在 D2026-1020-05 条目正文（事实偏差已登记）。
+      2026-10-22：① 暴露面按 owner 条件判为低敏感、接受现状（见 D2026-1022-02① notes），本残余维持默认不动；仅当 owner 日后决定清史时才动 a/b。本句不构成清史授权，仅限定残余处置的前置条件。
+
+  - canonical_id: D2026-1022-02②
+    legacy_titles:
+      - "② 检索类判定面 §5 评估——两口径结论相反，须先冻结口径；主模型立场＋critic 评议呈 owner"
+    legacy_keywords: [检索类判定面, code-reader, code-Executor, 双口径 55%, 4/4=100%, §5, 回迁, 升级, audit_dispatch_compliance, 规则变更]
+    status: owner_decision_pending
+    decision_owner: owner
+    evidence_refs: [decision-log.md:199, decision-log.md:141, audit 实跑 2026-10-22（数据源 hooks-log）, decision-critic 2026-10-22（1 HRO 采纳）]
+    closed_at: null
+    next_review: null
+    default_action: ask_owner
+    conflict: false
+    default_option: 冻结口径为"检索类仅观察列"＋脚本 §5 判定行只对 code-Executor 判（critic 已采纳立场）
+    ruling_question: 检索类是否入 §5 判定面——维持仅 code-Executor（默认）还是覆盖检索类走升级措辞（不取回迁）
+    consequence_if_no_decision: 3 周线 2026-11-10（起算 10-20）；样本 4<10 须注明样本不足、延长窗口；既不能按 55% 触发回迁/升级，也不能按 100% 收口"可靠"
+    notes: 规则变更，不可委托，每轮只出现一次。本条即拍板问题唯一出处，扫描输出不得重复展开。
+      owner 已拍板（2026-10-22）：采纳默认——仅 code-Executor 入判定面，检索类仅观察列；窗口延长至 2026-11-10；期间不按 55% 触发回迁/升级，也不按 100% 收口"可靠"。状态维持 owner_decision_pending 直至落 decision-log；拍板问题已有答案，扫描输出不得再重复展开（运行时用脚本侧 RULED 登记表实现，不扩 map 字段）。
+
+  - canonical_id: D2026-1022-02②-conflict
+    legacy_titles:
+      - "audit_dispatch_compliance.py docstring/help 写'owner 2026-10-20 令：检索类计入判定面'，与 decision-log:141「待 owner」矛盾"
+    legacy_keywords: [docstring, owner 2026-10-20 令, 判定面, 未经证实的权威声明]
+    status: evidence_gap
+    decision_owner: owner
+    evidence_refs: [audit_dispatch_compliance.py:12/:83, decision-log.md:141]
+    closed_at: null
+    default_action: cite_only
+    conflict: true
+    notes: 硬冲突已登记，不自动裁决。补证清单：①勘正脚本注释或补令出处；②本表 evidence_refs 只能引 decision-log:141，不得引脚本 docstring；③脚本属 ~/.zcode 域写入（config-write），须走 owner 门＋单列卡。
+
+  - canonical_id: D2026-1022-02③
+    legacy_titles:
+      - "③ D2026-1020-05 后续任务清单①-⑤逐条核销（答 owner 问'已交付和复核为何还等执行/等令'）"
+    legacy_keywords: [等执行, 等令, 后续任务清单, WARN_TOKENS, L4 token 看护, d1018-卡4:109, 冻结声明, 条件触发]
+    status: meta_cleared
+    decision_owner: 执行代理
+    evidence_refs: [decision-log.md:200, decision-log.md:111, commit aed7c67（⑥ 7 天窗内交付）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: false
+    notes: ①③④⑤已交付/已定性、②拍板延后是结果非欠账、⑥已交付——无执行欠账。子项⑤（判据维护，长期项无触发线）属持续动作，单列 D2026-1020-05⑤-standing，不得随整条核销吞掉。
+
+  - canonical_id: D2026-1020-05⑤-standing
+    legacy_titles:
+      - "⑤ OpenCode 通道判据维护（长期项，无触发线）"
+    legacy_keywords: [维护, 长期项, 无触发线, 多项目差异化, 参数化]
+    status: closed_observation
+    decision_owner: owner
+    evidence_refs: [decision-log.md:200, decision-log.md:111]
+    closed_at: "2026-10-22"
+    next_review: "触发条件：多项目差异化需求出现时再评估参数化（无固定日期；若既无日期又无可解析触发→本条自身判 evidence_gap 强制浮出）"
+    default_action: observe_due
+    conflict: false
+    notes: "“维护”是持续动作非一次性交付；枚举无 standing 位，增补与否待 owner（见 provisional 区 GOV-P-2026-1022-01）。"
+
+  - canonical_id: D2026-1022-02④
+    legacy_titles:
+      - "④ offlineAdvisory 当前需要处理什么——本轮已按 ④ 口径执行复核，结论：advisory 库版本在扫描工件内不可取，维持观察不阻塞"
+    legacy_keywords: [offlineAdvisory, advisory 库版本, matchedPackages, 元数据漂移, 加密资产包, 厂商面, archive-c:513]
+    status: closed_observation
+    decision_owner: owner
+    evidence_refs: [archive-c:513, decision-log.md:201, scan-2026-10-22T03-51-36.750Z-800b928c5c6e, seal 44aaaf94…750ca3, 四工件遍历无版本字段]
+    closed_at: "2026-10-22"
+    next_review: "触发条件：发版后 owner 排期；兜底 2026-11-21（+30 天未发版则重新浮出，兜底日期为治理轮提议非归档原文）"
+    default_action: observe_due
+    conflict: false
+    notes: 复核已执行（可记录项＝插件版本 1.0.4＋扫描时间戳＋matchedPackages=1 自 10-19 恒为 1、零新增）。无阻塞动作。
+
+  - canonical_id: D2026-1022-02⑤
+    legacy_titles:
+      - "⑤ scanner_enobufs——按 owner 本轮裁决关闭"
+    legacy_keywords: [scanner_enobufs, 在途, 厂商通道, 无回音, 替代扫描器, 补偿门, MCP 深扫, seal 硬门, D2026-1019-03③]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [decision-log.md:202, archive-c:512/:518, decision-log.md:173（补偿门定形）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: true
+    notes: 任务规则规定⑤类映射 closed_observation，但归档原文＝owner 本轮裁决关闭＋厂商通道"随之关闭，不再挂'在途'"——按硬约束 1 以归档原文为准（HRO-1 采纳）。若 owner 确需跟踪厂商插件更新，须新立独立观察项（新 canonical_id），不得寄生在本条。日后厂商出修复版按常规插件更新处理，不单列议题。
+
+  - canonical_id: D2026-1022-02⑥
+    legacy_titles:
+      - "⑥ 派卡基础设施内容构成（D2026-1020-05 本体）——状态＝暂停非退役、长期观察项"
+    legacy_keywords: [exec_wrapper, pointer_tools, quota_watch, 三件套, 暂停非退役, 激活条件①-④, X=8 周, 降级出口, 重置上限 2, automation-892466c1, 每三日 free 模型]
+    status: closed_observation
+    decision_owner: owner
+    evidence_refs: [decision-log.md:203, decision-log.md:76, 本地工具目录（用户位，原值本地源加载，见 audit-filter-rules §0 第 5 条；git 版本化＋tools-baseline.sha256）, automation-892466c1]
+    closed_at: "2026-10-20"
+    next_review: "2026-12-15（X=8 周稳定窗，起算迁移完成 2026-10-20；必要非充分）"
+    default_action: observe_due
+    conflict: false
+    notes: 本体在仓库外（~/.zcode/tools），跨域项是否入本表纳管须 owner 确认边界（本条按"引用其 decision-log 锚点"口径收录）。"每三日测试 free 模型"此前无登记，owner 本轮指示后已建自动化。
+
+  - canonical_id: D2026-1022-02⑦
+    legacy_titles:
+      - "⑦ 账面核销（承 D2026-1022-01 第 8 项盘点）——本条即回写"
+    legacy_keywords: [核销表, 待执行标签, owner-①, owner-②, owner-③, 三标签, 账面滞后, 第三波归档]
+    status: written_back
+    decision_owner: 执行代理
+    evidence_refs: [commit 18d3ea2（已 push，ls-remote 一致）, decision-log.md:34-36, 验证链五环全绿（全量 2520+4，seal 44aaaf94）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: false
+    notes: 两处陈旧标题在归档卷内，逐字节保全红线不回改，事实由新条目承载；第三波归档留时机面（承 D2026-1020-01 C7）。
+
+  # ── 历史反复命中种子集 ──
+
+  - canonical_id: D2026-1012-01⑥
+    legacy_titles:
+      - "3.1 UI 重塑计划评议归档+无人值守轮共识执行（⑥ A6 删库重建）"
+    legacy_keywords: [A6, 删库重建, 清史待 owner 令, fd87e1d, 5f2e135, 34 Release 死亡, 备份镜像]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [archive-c:315-316, commit fd87e1d（树与 5f2e135 逐位一致 diff=0）]
+    closed_at: "2026-10-12"
+    default_action: cite_only
+    conflict: false
+    notes: ①类原账的关闭依据。实际 A6 终态在 archive-c:316（:310 是含旧话头的勾账段＝误命中源）。
+
+  - canonical_id: D2026-1015-02
+    legacy_titles:
+      - "C22 校准实测闭环（下界 0.0945 未达标→维持预案 B 放弃语义）＋v3.0.3 真机走查收口"
+    legacy_keywords: [C22, 校准, 0.0945, 预案 B, 疑似漏听, 样本池, 卡3 在途（陈旧记忆索引行，禁作依据）, 17 钮（笔误）, 开始标注.bat]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [archive-c:403-409, commit 81be2f4, docs/c22_calibration_report.md, decision-log.md:193（盘点勘正）]
+    closed_at: "2026-10-15"
+    default_action: cite_only
+    conflict: false
+    notes: 无活账。重开触发仅限：模型/置信门/切片策略改动或新语料（archive-c:409 登记）。C22 曾被重新开账系依据陈旧记忆索引行未下钻正文（L-20261022-01）。
+
+  - canonical_id: D2026-1022-01
+    legacy_titles:
+      - "owner 真机验收四项回写勾账：3.0.5 三点／五 TAB 页／P1-4 引擎页／app.js 拆分——验收通过收口"
+    legacy_keywords: [真机走查挂账, 挂账, GUI 未验证, 真机走查三点, P1-4 暂定, 四点发布门, 五 TAB 页, 拖入加载, 分隔拖拽, 折叠禁用]
+    status: written_back
+    decision_owner: owner
+    evidence_refs: [decision-log.md:189-194, commit ea39457, roadmap 回写四处（:52/:143/:156/:158）, 验证链五环全绿（全量 2520+4，seal 142e185b→44aaaf94 口径见基线条）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: false
+    notes: ②③④此前已实质收口（D2026-1015-05/D2026-1020-06），本条为显式确认非新开收口；①为唯一活挂账且已随本条勾销。含 C22 盘点勘正段（meta_cleared 性质）。
+
+  - canonical_id: D2026-1020-01
+    legacy_titles:
+      - "decision-log 历史条目两阶段归档方案（A+B 104 条入卷＋主日志速查留现行）"
+    legacy_keywords: [核销表, 零悬空, decision-log:行号, D2026-0923-01:796, 混合形态上报, C5, C7, 第三波归档]
+    status: written_back
+    decision_owner: 执行代理
+    evidence_refs: [commit 7fc5a27（推送 CI 绿）, decision-log.md:21-36, commit 18d3ea2（三标签核销）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: false
+    notes: C1-C23 勾账已完毕，非待回写。C5 约束（品牌词归零须移白名单条目）仍有效。
+
+  - canonical_id: D2026-1020-05
+    legacy_titles:
+      - "wrapper 三件套收敛到全局 tools/＋全局派卡命令改绝对路径＋OpenCode 通道定位（N1）"
+    legacy_keywords: [wrapper, 绝对路径, 不得回退相对路径, opencode-cli.exe（程序名，无本机身份信息，保留原值）, hash:9540b882（本地绝对路径类，本地源加载）, 开工令, 清障, 凭据]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [decision-log.md:76, docs/design/d1020-wrapper-convergence-exec-record.md, commit 8a07cdc]
+    closed_at: "2026-10-20"
+    default_action: cite_only
+    conflict: false
+    notes: Part 1 七项收口＋后续任务①-⑤经 D2026-1022-02③ 逐条核销无欠账；⑥ L2 脚本 7 天窗内交付（aed7c67）。"不得回退相对路径"字面量不在本条目正文（载体见①-residual notes）。
+
+  - canonical_id: D2026-1020-07
+    legacy_titles:
+      - "AGENTS 瘦身与技能治理：骨架化＋dispatch-discipline 外迁＋Skill hook 审计机制层（H3 gate 降远期）"
+    legacy_keywords: [AGENTS 瘦身, dispatch-discipline, hooks-log, 判定面, 大考, 首航, 100%, 55%, 检索类]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [decision-log.md:141, 首航 session_3822d736（1m40s，1/1）]
+    closed_at: "2026-10-21"
+    default_action: cite_only
+    conflict: false
+    notes: 残余仅②（检索类判定面待 owner）；本条引用时指向 D2026-1022-02②，不重复展开。
+
+  - canonical_id: D2026-1019-03
+    legacy_titles:
+      - "d1018-批4 验收后门禁/技术债登记＋spike/ 8 处 ruff 存量微 chore 收口"
+    legacy_keywords: [CI 选 A, GUI 证据=录屏截图, 合并同列车, scanner_enobufs, offlineAdvisory, 4da9807, 甄别表]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [archive-c:506-518, commit 4da9807（已关闭）, commit 67c281b]
+    closed_at: "2026-10-20"
+    default_action: cite_only
+    conflict: false
+    notes: ③（scanner_enobufs）关闭条件原文"修复或替代扫描器稳定出 seal"第二支路已兑现（见⑤）；④ 转观察（见④）；② GUI 证据口径后被 D2026-1020-06 owner 点验放行口径承接。
+
+  - canonical_id: D2026-1021-01
+    legacy_titles:
+      - "P1-6 拖拽层收口（拖拽加载回归根因修复＋分隔条落地）＋等令组清算"
+    legacy_keywords: [P1-6, 拖拽, 分隔条, 记忆比例, 撞号 v2_file_parallel, 等令组, 挂账]
+    status: closed
+    decision_owner: 执行代理
+    evidence_refs: [decision-log.md:152-164, 真机挂账三点 ✅（2026-10-22 owner，D2026-1022-01）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: false
+    notes: 挂账已勾销。大考窗口残余单列 D2026-1021-01-追记③。
+
+  - canonical_id: D2026-1021-01-追记③
+    legacy_titles:
+      - "大考窗口 7/10 样本不足——样本到 10/10 再判"
+    legacy_keywords: [大考, 窗口, 样本不足, 10/10, 7/10, 触发率]
+    status: closed_observation
+    decision_owner: 执行代理
+    evidence_refs: [decision-log.md:160, decision-log.md:163]
+    closed_at: "2026-10-21"
+    next_review: "触发条件：窗口内真实派卡样本到 10（先到为准）；时长线 2026-11-10（承 §5 3 周线）"
+    default_action: observe_due
+    conflict: false
+    notes: 未到 next_review 不出账；出账时只引用本条＋②（口径未冻结前不判）。
+
+  - canonical_id: D2026-1021-02
+    legacy_titles:
+      - "三点裁决：技能状态勘正（autoglm 实为启用态）＋scanner_enobufs 修复纳入本轮＋候选池三项纳入本轮"
+    legacy_keywords: [三点裁决, autoglm, emil, 候选池三项, 补偿门, 定形, 硬门, 厂商通道]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [decision-log.md:166-173, 卡3 toggle 验收通过, enobufs ③关闭（2026-10-21）]
+    closed_at: "2026-10-21"
+    default_action: cite_only
+    conflict: false
+    notes: autoglm 双副本曾误判禁用、勘正为启用态（meta 性质）；本条为⑤关闭的第一级收口（第二级见⑤）。
+
+  - canonical_id: D2026-1021-04
+    legacy_titles:
+      - "owner 裁决：代码签名议题关闭，默认完整性口径＝SHA256 哈希比对（S码）"
+    legacy_keywords: [签名, 哈希, S码, FAQ 改写, 速查第7条, 旧签名记忆两篇]
+    status: closed
+    decision_owner: owner
+    evidence_refs: [decision-log.md:183, decision-log.md:16（速查节第 7 条）]
+    closed_at: "2026-10-21"
+    default_action: cite_only
+    conflict: false
+    notes: 历史记录保留不回改；命中只引用。
+
+  - canonical_id: D2026-1001-05-S7
+    legacy_titles:
+      - "国庆冲刺轮立项：2.3.1 发版+候选池小项激活（S0-S7 八项裁定）——S7 反馈批二"
+    legacy_keywords: [反馈批二, S7, 实测发现问题再修, 真机走查, 无脑推进项目, roadmap:28]
+    status: closed_observation
+    decision_owner: owner
+    evidence_refs: [archive-v1-v2:2123-2129（owner 关键句逐字落档）, roadmap:26, decision-log.md:133（D2026-1020-06 续期语义）]
+    closed_at: "2026-10-20"
+    next_review: "触发条件：owner 真机使用发现问题时（无固定日期；触发型 standing，若既无日期又无可解析触发→判 evidence_gap 强制浮出）"
+    default_action: observe_due
+    conflict: false
+    notes: 路径已触发并走完多轮（D2026-1001-06→2.5.0），不存在名为"反馈批二"的活账面；roadmap:28 措辞即最终态。
+
+  - canonical_id: D2026-1001-03-gui-probe
+    legacy_titles:
+      - "gui-probe 定时核对：cron 已错峰 03:00→03:17 UTC；下次复核=2026-11-01 首跳"
+    legacy_keywords: [gui-probe, cron, 03:17, 2026-11-01, 首跳, 升格处置, 17 3 1 * *]
+    status: closed_observation
+    decision_owner: owner
+    evidence_refs: [roadmap:237, archive-v1-v2:2018/:2035（勾账表 cron 行）]
+    closed_at: "2026-10-01"
+    next_review: "2026-11-01（首跳可见性核对；若仍未触发须升格处置，不得仅再调时间）"
+    default_action: observe_due
+    conflict: false
+    notes: 现行区无此条目（出处在归档卷＋roadmap），canonical_id 取裁定出处 D2026-1001-03。
+
+  - canonical_id: appjs-split-batch4
+    legacy_titles:
+      - "app.js 拆分批4 收口（Refine 去壳升顶层 15 块终态 34 文件+35 script）"
+    legacy_keywords: [app.js 拆分, 批1, 批2, 批3, 批4, 846f8b5, 7128ee1, 1eb262c, c42d1e9, 33cf856, ce2ed7b, 守恒钉, 载荷钉, 6051c666]
+    status: closed
+    decision_owner: 执行代理
+    evidence_refs: [commit c42d1e9（推送）, roadmap:156, 全量 2512+4, seal fe8c9c9f（当时基线口径）]
+    closed_at: "2026-10-19"
+    default_action: cite_only
+    conflict: false
+    notes: 四批全收口；GUI 真机四点发布门随 D2026-1020-06 门禁关闭＋D2026-1022-01 显式确认。
+
+# ── 临时条目区（本节自定更新纪律"表只跟随、绝不领先"的直接产物：治理轮自身的产出不得混入正式 entries）──
+
+provisional:
+  # 临时条目，尚未入 decision-log，不参与正式过滤统计，不计入 entry_count；owner 拍板并归档后移入 entries。
+
+  - canonical_id: GOV-P-2026-1022-01
+    legacy_titles:
+      - "状态枚举缺口：无 standing/paused 位（'维护'＝持续动作、'暂停'≠退役）"
+    legacy_keywords: [standing, paused, 枚举增补, 消歧规则]
+    status: owner_decision_pending
+    decision_owner: owner
+    evidence_refs: [decision-critic 2026-10-22（D 项）, 本表 GOV-P-2026-1022-01（尚未入 decision-log＝evidence_gap）]
+    closed_at: null
+    default_action: ask_owner
+    conflict: false
+    default_option: 不增补枚举，按 status-vocab.md 消歧规则处置（长期观察/暂停非退役→closed_observation＋显式触发型 next_review）
+    ruling_question: 是否为枚举增补 standing/paused（规则变更，不可委托）
+    consequence_if_no_decision: 默认选项生效；持续动作类条目按 closed_observation＋触发条件出账
+    notes: 本条为评议新增、尚未入 decision-log，canonical_id 为治理轮临时号，拍板归档后回填。owner 已拍板（2026-10-22）：不增补 standing/paused，持续动作与暂停非退役一律用 closed_observation＋显式触发条件表达。本条已定，待归档后移入 entries。
+
+  - canonical_id: GOV-P-2026-1022-02
+    legacy_titles:
+      - "品牌钉处置路径：docs/governance/** 属 default-deny，写入旧品牌词字面量即红"
+    legacy_keywords: [品牌钉, ALLOWLIST, docs/governance, 450a628, 豁免扩展, 占位符脱敏]
+    status: optional_decision
+    decision_owner: owner
+    evidence_refs: [tests/test_brand_allowlist.py:84/:121-122/:125-133, commit 450a628（先例）, decision-critic 2026-10-22 HRO-2]
+    closed_at: null
+    default_action: optional_no_action
+    conflict: false
+    default_option: 治理文件不含旧品牌词字面量＋关键词小写存储＋大小写不敏感匹配（本轮已按此执行）
+    ruling_question: 若未来映射必须引字面量——加 ALLOWLIST 条目（先例 450a628，低成本）还是扩大豁免面（须先评议＋改断言）
+    consequence_if_no_decision: 默认路径生效，不触发品牌钉
+    notes: 占位符脱敏会破坏字面匹配——本表已改走"哈希前缀＋本地安全源动态加载"（见 audit-filter-rules §0 第 5 条），匹配按规范化后哈希比对，不再依赖字面量原值；扩大豁免面属规则变更须先评议。
+      owner 已拍板（2026-10-22）：走 ALLOWLIST 加条目（先例 450a628），不扩大豁免面；每条登记理由＋复核周期。本条已定，待归档后移入 entries。
+
+  - canonical_id: GOV-P-2026-1022-03
+    legacy_titles:
+      - "审计输出目录＝幻影输入：audit_dispatch_compliance.py 纯 stdout 零落盘，无输出目录参数"
+    legacy_keywords: [审计输出目录, stdout, 落盘, 统计可复核, 实现卡]
+    status: evidence_gap
+    decision_owner: 无
+    evidence_refs: [audit_dispatch_compliance.py:121-150（全 print）, decision-critic 2026-10-22 F 项]
+    closed_at: null
+    default_action: cite_only
+    conflict: false
+    notes: 补证清单：①输出目录须新立为待实现需求（实现卡 docs/governance/impl-card-audit-runtime.md）；②本轮只冻结统计口径与字段定义，"统计数字可复核"标未满足不勾账；③规则配置不得假设输出目录存在。另：本地扫描历史目录（用户位，原值本地源加载，见 audit-filter-rules §0 第 5 条）本机 glob 不可见（code-reader 实探），seal 真身位置属 evidence_gap，本表只引 decision-log 文本记载。
+      进展登记（2026-10-22）：最小版已跑通一次真实扫描，输入面与实跑数字见实现卡；输出目录、统计落盘、本地安全源仍未建——本条维持 evidence_gap，不勾销。
