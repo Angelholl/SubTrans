@@ -133,3 +133,4 @@ def audit_round(hits, map_entries, today):
 - 七项主项分布（可复算，对应 status-vocab §4.1）：闭环/核销 4（①③⑤⑦）＋待 owner 拍板 1（②）＋长期观察 2（④⑥）＝7；①-residual 为 ① 子项单列，不计入七项主项
 - 统计数字可复核：✅（依据＝2026-10-22 受控位置实跑：脚本 `~/.zcode/governance/scan-min/stj_governance_scan_min.py`，输入 `inputs/audit_real_output_20261022.txt`（sha256 `0df6b9a4…`，与附录 A 一致），十字段落盘 `output/stats-20261022.json` 与本节基线逐字段一致（15/2/1/1/0/0/0/0/0/1，对账 15=2+1+12），凭据 commit `049ab6a`；执行记录见实现卡。A3 换输入面另笔落盘 `output/stats-20261022-a3.json`）
 - **双口径声明（不可互推）**：运行时口径＝输入行（每行最多一次判定），静态口径＝条目数；二者量纲不同，不得互相反推。运行时对账式 `raw_hits = dedup_hits + unclassified + dedup_skipped` 只在运行时口径下成立；§4 的条目分布不是运行时统计的结果，也不能由某轮实跑反推。
+- **移入后状态（B2 执行轮 2026-10-22，承 D2026-1022-03）**：正式 28／临时 0；status 分布 closed 16／closed_observation 6／evidence_gap 1（GOV-P-2026-1022-03-residual 单列）／meta_cleared 1／optional_decision 1／written_back 3；冲突登记仍 2（⑤＋②-conflict，后者已随 B1 勘正关闭但冲突事实保留）；pending 0（② 已落笔）。本节上方 24／3 为落笔时基线快照，移入后以本行为准。任务预期 entry_count 27 未含单列残余条目，实数 28，差 1 如实登记不强行勾账。

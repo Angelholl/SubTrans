@@ -21,8 +21,8 @@ meta:
   truth_source: docs/decision-log.md（现行区）＋ docs/decision-log-archive-v1-v2.md ＋ docs/decision-log-archive-c.md
   scope: 本轮重点样本（D2026-1022-02 七项＋其单列残余，10 条）＋历史反复命中种子集（14 条）＝正式 24 条（增量维护，每次真实重开才补）；治理轮自身 3 条入 provisional，不计入 entry_count；已发布版本类不入表（发布事实非决策收口）
   status_vocab: [closed, closed_observation, owner_decision_pending, optional_decision, meta_cleared, written_back, open, evidence_gap]
-  entry_count: 24          # 正式条目（27−3，GOV-P-2026-1022-01/02/03 已移入 provisional）
-  provisional_count: 3     # 临时条目，不参与过滤统计与 disposition 处置
+  entry_count: 28          # B2 移入后实数（24＋3 移入＋1 单列残余）。任务预期 27 未含单列残余条目——与实数差 1，按"数字与 entries 实际条数互证"规则如实登记，不强行勾账（见 audit-filter-rules §4 移入后状态行）
+  provisional_count: 0     # 三条已随 D2026-1022-03 落笔移入 entries
 
 entries:
 
@@ -59,30 +59,28 @@ entries:
     legacy_titles:
       - "② 检索类判定面 §5 评估——两口径结论相反，须先冻结口径；主模型立场＋critic 评议呈 owner"
     legacy_keywords: [检索类判定面, code-reader, code-Executor, 双口径 55%, 4/4=100%, §5, 回迁, 升级, audit_dispatch_compliance, 规则变更]
-    status: owner_decision_pending
+    status: closed
     decision_owner: owner
-    evidence_refs: [decision-log.md:199, decision-log.md:141, audit 实跑 2026-10-22（数据源 hooks-log）, decision-critic 2026-10-22（1 HRO 采纳）]
-    closed_at: null
+    evidence_refs: [decision-log.md:199, decision-log.md:141, decision-log.md:208（D2026-1022-03 落笔）, audit 实跑 2026-10-22（数据源 hooks-log）, decision-critic 2026-10-22（1 HRO 采纳）]
+    closed_at: "2026-10-22"
     next_review: null
-    default_action: ask_owner
+    default_action: cite_only
     conflict: false
-    default_option: 冻结口径为"检索类仅观察列"＋脚本 §5 判定行只对 code-Executor 判（critic 已采纳立场）
-    ruling_question: 检索类是否入 §5 判定面——维持仅 code-Executor（默认）还是覆盖检索类走升级措辞（不取回迁）
-    consequence_if_no_decision: 3 周线 2026-11-10（起算 10-20）；样本 4<10 须注明样本不足、延长窗口；既不能按 55% 触发回迁/升级，也不能按 100% 收口"可靠"
-    notes: 规则变更，不可委托，每轮只出现一次。本条即拍板问题唯一出处，扫描输出不得重复展开。
-      owner 已拍板（2026-10-22）：采纳默认——仅 code-Executor 入判定面，检索类仅观察列；窗口延长至 2026-11-10；期间不按 55% 触发回迁/升级，也不按 100% 收口"可靠"。状态维持 owner_decision_pending 直至落 decision-log；拍板问题已有答案，扫描输出不得再重复展开（运行时用脚本侧 RULED 登记表实现，不扩 map 字段）。
+    notes: 拍板问题唯一出处为 decision-log.md:199（D2026-1022-02②），答案＝采纳默认口径：仅 code-Executor 入 §5 判定面，检索类仅观察列；窗口延长至 2026-11-10（起算 10-20），期间不按 55% 触发回迁/升级，不按 100% 收口"可靠"（样本 4<10，注明样本不足）。
+      2026-10-22 B2 执行轮：口径随 D2026-1022-03 落笔转 closed；脚本侧 RULED 登记表随之退役（受控位置脚本注释留痕）；§5 判定行改动经单列卡执行（docs/design/d1022-§5-判定面单列卡.md），判定集默认仅 code-Executor＋code-reader 单列观察列。窗口样本线继续累计（现 4<10），2026-11-10 前不判可靠。
 
   - canonical_id: D2026-1022-02②-conflict
     legacy_titles:
       - "audit_dispatch_compliance.py docstring/help 写'owner 2026-10-20 令：检索类计入判定面'，与 decision-log:141「待 owner」矛盾"
     legacy_keywords: [docstring, owner 2026-10-20 令, 判定面, 未经证实的权威声明]
-    status: evidence_gap
+    status: closed
     decision_owner: owner
-    evidence_refs: [audit_dispatch_compliance.py:12/:83, decision-log.md:141]
-    closed_at: null
+    evidence_refs: [audit_dispatch_compliance.py:12/:83, decision-log.md:141, decision-log.md:208（D2026-1022-03 落笔）, docs/design/d1022-B1-脚本注释勘正卡.md（B1 执行记录）, tools git 67c572f（基线提交）＋6d05695（勘正提交）]
+    closed_at: "2026-10-22"
     default_action: cite_only
     conflict: true
-    notes: 硬冲突已登记，不自动裁决。补证清单：①勘正脚本注释或补令出处；②本表 evidence_refs 只能引 decision-log:141，不得引脚本 docstring；③脚本属 ~/.zcode 域写入（config-write），须走 owner 门＋单列卡。
+    notes: 硬冲突已登记（不自动裁决），冲突经 B1 勘正消解——脚本注释不再声称未经证实的权威，改引 2026-10-22 拍板（D2026-1022-03）。
+      关闭动作按 B1 规则 4 在本条 decision-log 落笔后执行。补证清单三项全落：①勘正已执行（B1 卡＋tools git 两笔，改前/改后哈希见卡面）；②evidence_refs 现可引 decision-log 落笔锚点；③config-write 域写入走 owner 门＋单列卡（TICKS 打点 C-20261022-2007，写前比对通过，写后重验通过）。
 
   - canonical_id: D2026-1022-02③
     legacy_titles:
@@ -332,51 +330,56 @@ entries:
     conflict: false
     notes: 四批全收口；GUI 真机四点发布门随 D2026-1020-06 门禁关闭＋D2026-1022-01 显式确认。
 
-# ── 临时条目区（本节自定更新纪律"表只跟随、绝不领先"的直接产物：治理轮自身的产出不得混入正式 entries）──
-
-provisional:
-  # 临时条目，尚未入 decision-log，不参与正式过滤统计，不计入 entry_count；owner 拍板并归档后移入 entries。
+# ── B2 执行轮移入条目（原 provisional 三条，随 decision-log D2026-1022-03 落笔移入 entries；"表只跟随、绝不领先"纪律的直接兑现）──
 
   - canonical_id: GOV-P-2026-1022-01
     legacy_titles:
       - "状态枚举缺口：无 standing/paused 位（'维护'＝持续动作、'暂停'≠退役）"
     legacy_keywords: [standing, paused, 枚举增补, 消歧规则]
-    status: owner_decision_pending
+    status: closed
     decision_owner: owner
-    evidence_refs: [decision-critic 2026-10-22（D 项）, 本表 GOV-P-2026-1022-01（尚未入 decision-log＝evidence_gap）]
-    closed_at: null
-    default_action: ask_owner
+    evidence_refs: [decision-critic 2026-10-22（D 项）, decision-log.md:208（D2026-1022-03 落笔）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
     conflict: false
-    default_option: 不增补枚举，按 status-vocab.md 消歧规则处置（长期观察/暂停非退役→closed_observation＋显式触发型 next_review）
-    ruling_question: 是否为枚举增补 standing/paused（规则变更，不可委托）
-    consequence_if_no_decision: 默认选项生效；持续动作类条目按 closed_observation＋触发条件出账
-    notes: 本条为评议新增、尚未入 decision-log，canonical_id 为治理轮临时号，拍板归档后回填。owner 已拍板（2026-10-22）：不增补 standing/paused，持续动作与暂停非退役一律用 closed_observation＋显式触发条件表达。本条已定，待归档后移入 entries。
+    notes: 拍板落笔：不增补 standing/paused 枚举，持续动作与暂停非退役一律用 closed_observation＋显式触发条件表达（status-vocab 消歧规则）。原 provisional 号保留作出处锚点。
 
   - canonical_id: GOV-P-2026-1022-02
     legacy_titles:
       - "品牌钉处置路径：docs/governance/** 属 default-deny，写入旧品牌词字面量即红"
     legacy_keywords: [品牌钉, ALLOWLIST, docs/governance, 450a628, 豁免扩展, 占位符脱敏]
-    status: optional_decision
+    status: closed
     decision_owner: owner
-    evidence_refs: [tests/test_brand_allowlist.py:84/:121-122/:125-133, commit 450a628（先例）, decision-critic 2026-10-22 HRO-2]
-    closed_at: null
-    default_action: optional_no_action
+    evidence_refs: [tests/test_brand_allowlist.py:84/:121-122/:125-133, commit 450a628（先例）, decision-critic 2026-10-22 HRO-2, decision-log.md:208（D2026-1022-03 落笔）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
     conflict: false
-    default_option: 治理文件不含旧品牌词字面量＋关键词小写存储＋大小写不敏感匹配（本轮已按此执行）
-    ruling_question: 若未来映射必须引字面量——加 ALLOWLIST 条目（先例 450a628，低成本）还是扩大豁免面（须先评议＋改断言）
-    consequence_if_no_decision: 默认路径生效，不触发品牌钉
-    notes: 占位符脱敏会破坏字面匹配——本表已改走"哈希前缀＋本地安全源动态加载"（见 audit-filter-rules §0 第 5 条），匹配按规范化后哈希比对，不再依赖字面量原值；扩大豁免面属规则变更须先评议。
-      owner 已拍板（2026-10-22）：走 ALLOWLIST 加条目（先例 450a628），不扩大豁免面；每条登记理由＋复核周期。本条已定，待归档后移入 entries。
+    notes: 拍板落笔：若未来映射必须引旧品牌词字面量，走 ALLOWLIST 加条目（先例 450a628），不扩大豁免面；每条登记理由＋复核周期。占位符脱敏破坏字面匹配——本表已改走"哈希前缀＋本地安全源动态加载"（audit-filter-rules §0 第 5 条）。原 provisional 号保留作出处锚点。
 
   - canonical_id: GOV-P-2026-1022-03
     legacy_titles:
       - "审计输出目录＝幻影输入：audit_dispatch_compliance.py 纯 stdout 零落盘，无输出目录参数"
     legacy_keywords: [审计输出目录, stdout, 落盘, 统计可复核, 实现卡]
-    status: evidence_gap
+    status: closed
     decision_owner: 无
-    evidence_refs: [audit_dispatch_compliance.py:121-150（全 print）, decision-critic 2026-10-22 F 项]
+    evidence_refs: [audit_dispatch_compliance.py:121-150（全 print）, decision-critic 2026-10-22 F 项, decision-log.md:208（D2026-1022-03 落笔）, 实现卡执行记录 A2（输出目录＋统计落盘＋本地安全源三项已建）]
+    closed_at: "2026-10-22"
+    default_action: cite_only
+    conflict: false
+    notes: 主段随实现卡 A2 交付关闭（受控位置输出目录＋统计落盘＋本地安全源三项已建）。seal 真身子项维持 evidence_gap，单列残余 GOV-P-2026-1022-03-residual。原 provisional 号保留作出处锚点。
+
+  - canonical_id: GOV-P-2026-1022-03-residual
+    legacy_titles:
+      - "seal 真身位置属 evidence_gap（本机 glob 不可见，本表只引 decision-log 文本记载）"
+    legacy_keywords: [seal 真身, 扫描历史目录, glob 不可见, 加密资产包]
+    status: evidence_gap
+    decision_owner: owner
+    evidence_refs: [decision-log.md:208, code-reader 实探（本机 glob 不可见）, 实现卡 GOV-P-03 notes]
     closed_at: null
     default_action: cite_only
     conflict: false
-    notes: 补证清单：①输出目录须新立为待实现需求（实现卡 docs/governance/impl-card-audit-runtime.md）；②本轮只冻结统计口径与字段定义，"统计数字可复核"标未满足不勾账；③规则配置不得假设输出目录存在。另：本地扫描历史目录（用户位，原值本地源加载，见 audit-filter-rules §0 第 5 条）本机 glob 不可见（code-reader 实探），seal 真身位置属 evidence_gap，本表只引 decision-log 文本记载。
-      进展登记（2026-10-22）：最小版已跑通一次真实扫描，输入面与实跑数字见实现卡；输出目录、统计落盘、本地安全源仍未建——本条维持 evidence_gap，不勾销。
+    notes: 补证清单（无执行动作）：seal 真身实际路径须从扫描环境取（受保护加密资产包内），本表不存原值。GOV-P-03 主段关闭不吞本残余（一状态一条目纪律）。
+
+# ── 临时条目区（现为空：三条已随 D2026-1022-03 落笔移入 entries；新临时条目须先落 decision-log 后入本区）──
+
+provisional: []
