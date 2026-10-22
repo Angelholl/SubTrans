@@ -131,5 +131,5 @@ def audit_round(hits, map_entries, today):
 - owner_decision_pending（正式区）：1（②）／临时区：1（GOV-P-2026-1022-01）
 - closed_observation 6 条（全在正式区）中：触发型 4（③⑤-standing、④、1021-01-追记③、S7），日期型 2（⑥ 2026-12-15、gui-probe 2026-11-01）
 - 七项主项分布（可复算，对应 status-vocab §4.1）：闭环/核销 4（①③⑤⑦）＋待 owner 拍板 1（②）＋长期观察 2（④⑥）＝7；①-residual 为 ① 子项单列，不计入七项主项
-- 统计数字可复核：未满足（运行时层未交付，仅冻结口径与字段；待实现卡 docs/governance/impl-card-audit-runtime.md）
+- 统计数字可复核：✅（依据＝2026-10-22 受控位置实跑：脚本 `~/.zcode/governance/scan-min/stj_governance_scan_min.py`，输入 `inputs/audit_real_output_20261022.txt`（sha256 `0df6b9a4…`，与附录 A 一致），十字段落盘 `output/stats-20261022.json` 与本节基线逐字段一致（15/2/1/1/0/0/0/0/0/1，对账 15=2+1+12），凭据 commit `049ab6a`；执行记录见实现卡。A3 换输入面另笔落盘 `output/stats-20261022-a3.json`）
 - **双口径声明（不可互推）**：运行时口径＝输入行（每行最多一次判定），静态口径＝条目数；二者量纲不同，不得互相反推。运行时对账式 `raw_hits = dedup_hits + unclassified + dedup_skipped` 只在运行时口径下成立；§4 的条目分布不是运行时统计的结果，也不能由某轮实跑反推。
