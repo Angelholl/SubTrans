@@ -52,6 +52,14 @@
 - 附录 B 为脚本全文副本。若临时目录被清，按附录 B 重建后重算 sha256，须与上面记录值一致；不一致即"首次基线不可复现"，须如实报告，不得默认通过。
 - 正式版迁移去向（未执行）：受控持久位置由 owner 定（建议与本地安全源同级，不入公开仓库）。迁移完成前，本卡附录 A＋B 是首次基线的唯一凭据。
 
+## 执行记录（2026-10-22 收口轮，A1/A2/A3）
+
+- **A1 迁移已执行**：脚本与输入样本自 %TEMP% 逐字节迁入受控位置 `~/.zcode/governance/scan-min/`（脚本 sha256 迁移时与附录 A 记录值一致 `baf46980…`，输入样本 `0df6b9a4…`）；%TEMP% 副本已清空；清空后从受控位置复跑基线，十字段与首次基线逐字段一致（15/2/1/1/0/0/0/0/0/1，对账 15=2+1+12）。脚本不依赖 %TEMP%（输入经 argv）。
+- **A2 三项已建**：①统计落盘——实跑输出写入受控位置 `output/stats-YYYYMMDD.json`，十字段与 §2 statistics_fields 逐字一致；②正式输出目录——受控位置下 `output/`（规则配置不假设 `~/.zcode/audit`）；③本地安全源——`~/.zcode/tools/governance-secret-keywords.json`（本卡第 5 项定死路径，与受控位置同处 `~/.zcode` 下），存两占位对应原值（`92c47020`／`9540b882`），运行时动态加载并对命中文本规范化后比对 sha256 前 8 位，逐条核验通过。维护方式：owner（主审），写入走 config-write 域须 owner 门；不入仓库——项目侧 `.gitignore` 防御条目已加（`governance/scan-min/`、`governance-secret-keywords.json`），`git check-ignore` 实测命中、治理文件本体不被忽略。
+- **扩展版脚本**（受控位置，含安全源加载＋哈希前缀比对＋统计落盘＋未分类显式 emit）：sha256 `1e3fa9de1a782e04d094f8bdb2a2d87a377b3f65c49c13261875add33a38e04e`；基线输入复跑十字段不变（基线输入不含敏感原值，加载安全源不改变判定）。
+- **A3 换输入面实跑**：输入面＝旧词（清史/在途/维护/观察/待 owner 令/等执行/等令/无回音/挂账）对归档卷＋decision-log＋design 文档的 grep（236 行，落受控位置 `inputs/a3_grep_20261022.txt`）。结果：closed_cited 11（只出引用行、无待办、无重复展开）、open 0、similarity_pending 0（单列）、pending 1（②每轮一次＋已拍板结论）、provisional 只出占位行（GOV-P-02/03）、closed_observation 未到期不出账（observation_due 0）、未分类 63 逐条处置见 `output/a3-unclassified-handling-20261022.md`（62 行触发词＝叙述词"观察"非任何条目关键词；1 行"待 owner 令"仅为 ① 关键词字面片段）。
+- 遗留：B1（脚本注释勘正）与 B2（②状态转 closed＋provisional 三条移入＋entry_count 更新）属 owner 门，本轮仅呈请未执行。
+
 ## 附录 B：脚本全文（实跑副本）
 
 ```python
