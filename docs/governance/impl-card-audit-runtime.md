@@ -77,6 +77,15 @@
 - 本登记满足判定链第 8 条；待查期间不得据附录 A 对退役后版本宣称"可复现性已恢复"。
 - **评审轮核实补记（code-review 2026-10-22，实测事实，不归因）**：① 退役后记录值 `2eee57e2…` 与盘上实物逐位一致（现算 10374B，RULED 表已清空仅注释留痕）——缺口仅系退役前三值互不一致，退役后侧无缺口；② scan-min 不受 git 版本化（`~/.zcode/governance/` 无 .git、tools-baseline 无条目）→ 退役前哈希 `b6ec2b43…` 无版本化载体、不可从任何 commit 复算，附录 B 系最小版文本副本非退役前扩展版；③ tools git 三版（67c572f/6d05695/707d5fa）从未含 RULED（逐版 grep=0），"退役混入 §5 提交"假说被实测否定（707d5fa 哈希 `efd42e3f…` 属另一文件 audit_dispatch_compliance.py，非本脚本）。
 
+## 执行记录（CI 红腿 rerun 轮，2026-10-22，owner 裁定：先 rerun 不改测试）
+
+- **rerun 前检查**：工作树干净（`git status --porcelain` 空）；本地 HEAD＝远程 tip＝`6186e96`（ls-remote 一致）。run 39790957026 attempt 1：八腿中 7 绿 1 红，红腿＝test (windows-latest, 3.12)（job 119866528984），失败点 `tests/test_quality_report.py::test_guide_sink_absent_keeps_output_byte_identical`（`assert plain == with_sink`，tests\\test_quality_report.py:412），日志 diff 两时间戳 `13:57:14` vs `13:57:15`（报告头时间与【白话导读】时间跨秒边界），机制＝跨秒竞态，与本轮 docs-only 提交无因果。
+- **rerun 方式＝rerun-failed-jobs（仅重跑红腿）**。理由：其余七腿已绿，整体 rerun 只会让已验证绿腿重新暴露 flake 风险并耗 runner 时间；单腿 rerun 基于同一 head SHA（6186e96），结果等价。rerun 期间零文件改动，工作树全程干净。
+- **rerun 结果（attempt 2）**：run 级 completed/success。windows-3.12 新 job 119890345719 success（14:42:22→14:46:25Z），日志 `2180 passed, 21 skipped` 零失败（attempt 1 同腿为 `1 failed, 2179 passed, 21 skipped`；收集范围同为 2201，唯一变化即该红测试转绿）。其余七腿保持 attempt 1 绿（四腿 carry 入 attempt 2、三腿归属 attempt 1，均 success）。八腿全绿。
+- **观察项单列登记（新 canonical_id，本卡 notes 面登记；不入 closure-map，entry_count 28 维持不动）**：`OBS-CI-FLAKE-20261022`——已知 flake，跨秒边界，rerun 自愈；是否加固待 owner 定。涉及测试＝`test_guide_sink_absent_keeps_output_byte_identical` 的时间处理（若加固，限定冻结 datetime 注入或容忍跨秒，不动被测逻辑）。
+- **完结声明**：规则层＋运行时层＋② 归档均收口，循环验证通过，完全完结。附注：windows-3.12 首跑红系已知 flake 家族跨秒边界偶发，rerun 自愈，非本轮提交引入。
+- **哈希漂移登记**：维持 evidence_gap（三哈希互不一致、归因待查），不因 rerun 绿而关闭或勾销。
+
 ## 附录 B：脚本全文（实跑副本）
 
 ```python
