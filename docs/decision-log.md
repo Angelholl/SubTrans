@@ -204,3 +204,14 @@
 - **⑦ 账面核销（承 D2026-1022-01 第 8 项盘点）**：本条即回写。已核销＝D2026-1020-01 核销表 owner-①/②/③ 三处【待执行】标签（执行追记已逐项完成，本笔改【已执行】）＋③④⑤⑥ 各项状态回写。仍留 owner 决策面＝② 检索类判定面口径冻结（规则变更）＋① 若坚持清 a/b 两类须先解冻绝对路径令。仍留时机面＝主日志 10-20 后条目等第三波归档（承 D2026-1020-01 C7 时机分支）。C1-C23 勾账已完毕（C22 无活账），不属待回写。
 - **是否 [PRESSURE-OVERRIDE]**：否。
 - **回链**：Ref: D2026-1012-01（⑥ A6 清史）、D2026-1020-05（①-⑥ 清单＋基础设施本体）、D2026-1020-07（检索类判定面＋§5）、D2026-1021-01（大考窗口＋追记③）、D2026-1019-03（③④）、D2026-1021-02（②）、D2026-1022-01（第 8 项盘点）、D2026-1020-01（核销表）；评议＝decision-critic 2026-10-22（2 MATERIAL_CONFLICT 采纳＋1 [HIGH_RISK_OBJECTION] 采纳，见②）。
+
+## [2026-10-22] [D2026-1022-03] 「② 判定面口径落笔＋三条临时条目落笔（B2 执行轮）：仅 code-Executor 入 §5 判定面、检索类仅观察列；GOV-P-01/02/03 归档；②-conflict 随 B1 勘正关闭」 [owner 已拍板·本条即落笔]
+
+- **② 落笔（本条即拍板落笔唯一出处）**：owner 拍板 2026-10-22，采纳默认口径——仅 code-Executor 入 §5 判定面，检索类 code-reader 仅观察列；窗口延长至 2026-11-10（3 周线，起算迁移完成 10-20）；期间不按 55% 触发回迁/升级，不按 100% 收口"可靠"（样本 4<10，注明样本不足）。closure-map ② 随之由 owner_decision_pending 转 closed；脚本侧 RULED 登记表随本条落笔退役。
+- **GOV-P-2026-1022-01 落笔**：不增补 standing/paused 枚举；持续动作与暂停非退役一律用 closed_observation＋显式触发条件表达（status-vocab 消歧规则）。
+- **GOV-P-2026-1022-02 落笔**：若未来映射必须引旧品牌词字面量，走 ALLOWLIST 加条目（先例 450a628），不扩大豁免面；每条登记理由＋复核周期。
+- **GOV-P-2026-1022-03 落笔**：审计输出目录＝幻影输入已确认，实现卡需求成立（docs/governance/impl-card-audit-runtime.md，A2 三项已交付）；seal 真身子项维持 evidence_gap，单列残余 GOV-P-2026-1022-03-residual。
+- **②-conflict 关闭动作（本条落笔后执行）**：脚本注释勘正走 B1（config-write owner 门＋单列卡，卡面含改前/改后两行＋快照哈希＋单文件 git revert 回滚命令）；evidence_gap 随之关闭。
+- **执行记录**（B2 执行轮）：B1 两行勘正——改前快照哈希 L12 `eb2a27f6…`／L83 `45702ccf…`／文件 `4b35a260…`，改后 L12 `1145db9a…`／L83 `9c1da73c…`／文件 `562aa8fd…`；tools git 基线提交 67c572f＋勘正提交 6d05695，回滚＝单文件 `git revert 6d05695`；config-write 全流程（TICKS C-20261022-2007、写前比对通过、写后重验通过）。§5 判定行改由单列卡执行（tools git 707d5fa）：L82 默认值改 code-Executor＋新增 `--observe-types`＋code-reader 单列观察列；回归测试实跑通过，全量 2521+4=2525（基线 2524 只增不减），冒烟真跑通过（判定面 4/4、观察列 17）。RULED 表退役（受控位置脚本注释留痕，哈希 `b6ec2b43…`→`2eee57e2…`；注：`b6ec2b43…` 与实现卡附录 A/B 记录值均不一致＝登记后漂移，如实登记）。②-conflict 关闭动作在本条落笔后执行并落 closure-map。entry_count 实数 28（任务预期 27 未含单列残余条目，差 1 如实登记不强行勾账），provisional_count 0，yaml.safe_load 重验通过。
+- **是否 [PRESSURE-OVERRIDE]**：否。
+- **回链**：Ref: D2026-1022-02②（评估与拍板）、decision-log.md:141（D2026-1020-07 残余）、docs/governance/closure-map.yaml GOV-P-2026-1022-01/02/03、docs/governance/impl-card-audit-runtime.md、docs/design/d1022-B1-脚本注释勘正卡.md、docs/design/d1022-§5-判定面单列卡.md。
