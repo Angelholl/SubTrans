@@ -39,7 +39,7 @@ ALLOWLIST = frozenset({
     "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；新版本记录随发版 SOP 定版）
     "LICENSE",                             # 版权署名 The SubTransJAV Project Authors（法律文本不改）
     "docs/使用与维护手册.md",               # 标题渊源口径（历史文档标题；批3 收敛正文与数据根口径后仍保留）
-    "docs/decision-log.md",                # 决策历史记录（现行区），不改写已留存表述
+    "docs/decision-log-archive-d.md",      # 决策历史归档卷 D（第三波：10-20 后 13 条，D2026-1023-01）：历史条目逐字节保全（D2026-1020-01 C5），非新增品牌表述
     "docs/decision-log-archive-v1-v2.md",  # 决策历史归档卷：历史条目逐字节保全（D2026-1020-01 C5），非新增品牌表述
     "docs/decision-log-archive-c.md",      # 决策历史归档卷 C 组（D2026-1020-01 追记三）：历史条目逐字节保全，非新增品牌表述
     "docs/roadmap.md",                     # 历史规划文档
