@@ -58,7 +58,16 @@
 - **A2 三项已建**：①统计落盘——实跑输出写入受控位置 `output/stats-YYYYMMDD.json`，十字段与 §2 statistics_fields 逐字一致；②正式输出目录——受控位置下 `output/`（规则配置不假设 `~/.zcode/audit`）；③本地安全源——`~/.zcode/tools/governance-secret-keywords.json`（本卡第 5 项定死路径，与受控位置同处 `~/.zcode` 下），存两占位对应原值（`92c47020`／`9540b882`），运行时动态加载并对命中文本规范化后比对 sha256 前 8 位，逐条核验通过。维护方式：owner（主审），写入走 config-write 域须 owner 门；不入仓库——项目侧 `.gitignore` 防御条目已加（`governance/scan-min/`、`governance-secret-keywords.json`），`git check-ignore` 实测命中、治理文件本体不被忽略。
 - **扩展版脚本**（受控位置，含安全源加载＋哈希前缀比对＋统计落盘＋未分类显式 emit）：sha256 `1e3fa9de1a782e04d094f8bdb2a2d87a377b3f65c49c13261875add33a38e04e`；基线输入复跑十字段不变（基线输入不含敏感原值，加载安全源不改变判定）。
 - **A3 换输入面实跑**：输入面＝旧词（清史/在途/维护/观察/待 owner 令/等执行/等令/无回音/挂账）对归档卷＋decision-log＋design 文档的 grep（236 行，落受控位置 `inputs/a3_grep_20261022.txt`）。结果：closed_cited 11（只出引用行、无待办、无重复展开）、open 0、similarity_pending 0（单列）、pending 1（②每轮一次＋已拍板结论）、provisional 只出占位行（GOV-P-02/03）、closed_observation 未到期不出账（observation_due 0）、未分类 63 逐条处置见 `output/a3-unclassified-handling-20261022.md`（62 行触发词＝叙述词"观察"非任何条目关键词；1 行"待 owner 令"仅为 ① 关键词字面片段）。
-- 遗留：B1（脚本注释勘正）与 B2（②状态转 closed＋provisional 三条移入＋entry_count 更新）属 owner 门，本轮仅呈请未执行。
+- 遗留：B1（脚本注释勘正）与 B2（②状态转 closed＋provisional 三条移入＋entry_count 更新）属 owner 门，本轮仅呈请未执行。→ B2 执行轮已执行（见下节），本行保留作过程账。
+
+## 执行记录（B2 执行轮，2026-10-22，承 D2026-1022-03）
+
+- **B1 已执行（config-write owner 门＋单列卡）**：两行勘正（卡 d1022-B1-脚本注释勘正卡.md，含改前/改后两行＋哈希）；tools git 基线提交 67c572f＋勘正提交 6d05695，回滚路径＝单文件 `git revert 6d05695`；协议全流程留痕（TICKS C-20261022-2007、写前比对通过、写后重验通过）。
+- **B2 已执行（硬序合规：先 decision-log 后 closure-map）**：② 与 GOV-P-01/02/03 落笔 decision-log D2026-1022-03（:208）；②→closed、三条移入 entries、seal 真身子项单列残余 GOV-P-2026-1022-03-residual（evidence_gap）；entry_count 实数 28（任务预期 27 未含单列残余条目，差 1 如实登记不强行勾账），provisional_count 0；yaml.safe_load 重验通过（28/0、status 分布自洽、无空 next_review）。
+- **②-conflict 关闭动作**：按 B1 规则 4 在 decision-log 落笔后执行，closure-map ②-conflict→closed（冲突事实保留）。
+- **§5 单列卡已执行**：见卡 d1022-§5-判定面单列卡.md 执行记录（tools git 707d5fa；回归测试实跑通过、全量 2521+4=2525 基线只增不减、冒烟真跑通过）。
+- **RULED 退役**：受控位置脚本 RULED 表清空＋注释留痕（退役声明＋D2026-1022-03 锚点）；运行时验证：② 输入行只出引用行、pending 0、不再命中 RULED。
+- **附录 A/B 漂移注记（如实登记）**：受控位置脚本退役前哈希 `b6ec2b43…` 与附录 A 记录值（`baf46980` 最小版）及实现卡扩展版记录值（`1e3fa9de`）均不一致——登记后漂移、归因未明，如实登记；退役后哈希 `2eee57e2…`。附录 B 为退役前副本，附录 A"重算 sha256 须与记录值一致"对退役后版本不再成立（首次基线可复现性指退役前快照）。
 
 ## 附录 B：脚本全文（实跑副本）
 
