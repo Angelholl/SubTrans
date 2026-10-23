@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .filters import build_srt, parse_srt
+from .output_formats import existing_extra_formats, sync_extra_outputs
 from .quality_report import _CPS_CJK_BASE, _cjk_dominant, resolve_final_block, write_guide_json
 from .source_hallucination import is_fluent_target
 from .v2_outputs import (
@@ -556,6 +557,10 @@ def run_action_retranslate(cfg, args) -> int:
     if applied_positions or nochange_indexes:
         if applied_positions:
             _atomic_write_text(str(final_path), new_srt)
+            # 附加成品件同步再生（D2026-1023-02）：cfg 旗标 ∪ 已存在附加件
+            sync_extra_outputs(str(final_path), new_entries,
+                               sorted(set(getattr(cfg, "extra_output_formats", []) or [])
+                                      | set(existing_extra_formats(str(final_path)))))
         _refresh_guide(guide, out_dir, stem, new_entries,
                        applied_indexes, nochange_indexes)
         print(f"📖 [行动层] 导读快照已刷新: {stem}_质量报告导读.json")

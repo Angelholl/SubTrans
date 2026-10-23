@@ -66,6 +66,7 @@ from .manifest import (
     manifest_path,
     save_manifest,
 )
+from .output_formats import existing_extra_formats, sync_extra_outputs
 from .pipeline_support import (
     CREATED_TMP_DIRS,
     RefineError,
@@ -1605,6 +1606,11 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         _t_final = time.perf_counter()
         emitter.emit("phase_started", phase="final", file=fname)
         _atomic_write_text(out_final_path, build_srt(final_entries))
+        # 附加成品件平行写出（D2026-1023-02）：cfg 旗标 ∪ 已存在附加件，
+        # 附加件一经产生任何终稿写点同步再生；缺省旗标空+无在场件 → no-op
+        sync_extra_outputs(out_final_path, final_entries,
+                           sorted(set(cfg.extra_output_formats)
+                                  | set(existing_extra_formats(out_final_path))))
         print(f"   ✅ 完成 -> {Path(out_final_path).name} "
               f"({len(final_entries)} 条)")
         manifest.mark_done("B", out_final_path, len(final_entries),

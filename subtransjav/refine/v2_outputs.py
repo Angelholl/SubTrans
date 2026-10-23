@@ -190,7 +190,8 @@ def _remove_stale_risk_reports(out_dir: str, stem: str) -> list:
 # 产物命名契约（D2026-0930-04 ②）：终稿后缀单点映射。缺省方向（target=zh）
 # 保留历史别名 "cn" 一字符不变（存量工具链/档案/GUI 完成检测零感知）；非
 # 缺省方向取语言码。全仓终稿路径只许经本函数取后缀（契约钉测试在
-# tests/test_v2_outputs.py）。
+# tests/test_v2_outputs.py）。附加成品件名=final_stem+扩展（.ass/.vtt），
+# 全仓只许经 output_formats.sync_extra_outputs 取（D2026-1023-02）。
 _FINAL_SUFFIX_BY_TARGET = {"zh": "cn"}
 
 
@@ -208,7 +209,9 @@ def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
                              file_name: str = None) -> None:
     """--force 重跑前的产物备份（仅精确匹配文件名，存在才备份）。
 
-    对输出目录中确切名为 ``{stem}_final_cn.srt``、``{stem}_质量报告.txt``、
+    对输出目录中确切名为 ``{stem}_final_cn.srt``、``{stem}_final_cn.ass``、
+    ``{stem}_final_cn.vtt``（D2026-1023-02：多格式附加成品件）、
+    ``{stem}_质量报告.txt``、
     ``{stem}_分歧复核.csv``、``{stem}_术语冲突观察.csv``、
     ``{stem}_风险清单.md``、``{stem}_风险清单.json``、
     ``{stem}_质量报告导读.json``、``{stem}_重翻记录.json``（D11 契约④：
@@ -222,7 +225,10 @@ def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
     from datetime import datetime
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    for suffix in (f"_final_{final_suffix()}.srt", "_质量报告.txt",
+    for suffix in (f"_final_{final_suffix()}.srt",
+                   f"_final_{final_suffix()}.ass",   # D2026-1023-02 附加成品件
+                   f"_final_{final_suffix()}.vtt",   # （非 zh 方向不备份=既有 quirk 不修）
+                   "_质量报告.txt",
                    "_分歧复核.csv",
                    "_术语冲突观察.csv", "_风险清单.md", "_风险清单.json",
                    "_质量报告导读.json", "_重翻记录.json",

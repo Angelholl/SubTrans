@@ -9,6 +9,7 @@ import threading
 import types
 from pathlib import Path
 
+import pysubs2
 import pytest
 
 from subtransjav.refine import pipeline_v2 as pv
@@ -473,6 +474,39 @@ def test_run_single_v2_end_to_end(tmp_path, monkeypatch):
     assert not (tmp_path / "work").exists()   # 临时工作区一并清理
     # 两次 LLM 调用（阶段A + 阶段B）
     assert len(fake.calls) == 2
+    # 默认零变化钉（D2026-1023-02）：不带旗标不产出附加件
+    assert not (tmp_path / "demo_final_cn.ass").exists()
+    assert not (tmp_path / "demo_final_cn.vtt").exists()
+
+
+def test_run_single_v2_extra_output_formats(tmp_path, monkeypatch):
+    """extra_output_formats=["ass","vtt"] → {stem}_final_cn.ass/.vtt 在场，
+    event 数=终稿 SRT 条数（D2026-1023-02）。"""
+    from subtransjav.refine.filters import parse_srt
+
+    cfg = _make_cfg(tmp_path, extra_output_formats=["ass", "vtt"])
+    in_srt = tmp_path / "demo.srt"
+    in_srt.write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n\n"
+        "2\n00:00:10,000 --> 00:00:11,000\nさようなら\n",
+        encoding="utf-8")
+
+    def _fake_tmp(p, s):
+        d = tmp_path / "work"
+        d.mkdir(exist_ok=True)
+        return str(d)
+    monkeypatch.setattr(pv, "refine_tmp_dir", _fake_tmp)
+    monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: FakeClient())
+    monkeypatch.setattr(pv, "_init_tm", lambda c: None)
+
+    out = pv._run_single_v2(cfg, str(in_srt))
+    n_entries = len(parse_srt(Path(out).read_text(encoding="utf-8")))
+    ass_p = pysubs2.SSAFile.load(str(tmp_path / "demo_final_cn.ass"))
+    vtt_p = pysubs2.SSAFile.load(str(tmp_path / "demo_final_cn.vtt"))
+    assert len(ass_p.events) == n_entries
+    assert len(vtt_p.events) == n_entries
+    assert "Microsoft YaHei" in (tmp_path / "demo_final_cn.ass").read_text(
+        encoding="utf-8")
 
 
 def test_run_single_v2_fallback_original_survives_language_filter(
