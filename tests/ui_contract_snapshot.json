@@ -381,6 +381,7 @@
     "stage_a_label",
     "stage_b_label",
     "start_btn",
+    "start_btn_tab",
     "status_idle",
     "stop_btn",
     "synopsis_label",
@@ -440,7 +441,8 @@
       "真机反馈 IA 重排轮（D2026-1013-01 追记，owner 2026-10-13 直接指示删除产物命名说明）：artifact_note 键退役（index.html footnote 元素删除+app.js MSG 键同步删），i18n_keys 187→186；ids 223 不动",
       "AI 分析生效行黄字提示退役（D2026-1015-01，owner 2026-10-15 直接指示折叠态截断不可读取消）：index.html #refineAiPrivacy 元素删除+app.js aiRefreshEffective/shortenModelName/aiSetPrivacy/MSG 七键删除+style.css 行尾规则删除，ids 223→222；i18n_keys 186 不动",
       "多格式输出 GUI 面（D2026-1023-02 批2）：index.html 输出目录 section 新增 outputFmtAss/outputFmtVtt 两复选框+app-msg.js 三 MSG 键（output_format_header/output_fmt_ass/output_fmt_vtt），ids 222→224；i18n_keys 186→189",
-      "字幕清洗总开关 GUI 面（D2026-1023-03 批3）：index.html 输出目录 section 新增 polishEnabled 复选框+app-msg.js 一键 polish_enabled_label，ids 224→225；i18n_keys 189→190"
+      "字幕清洗总开关 GUI 面（D2026-1023-03 批3）：index.html 输出目录 section 新增 polishEnabled 复选框+app-msg.js 一键 polish_enabled_label，ids 224→225；i18n_keys 189→190",
+      "翻译TAB快捷开始钮独立文案键（d1023 owner 2026-10-23 指定「开始翻译」四字）：app-msg.js 一键 start_btn_tab（右栏主钮 start_btn 不动），ids 225 不动；i18n_keys 190→191"
     ]
   }
 }

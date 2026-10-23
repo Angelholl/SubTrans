@@ -487,7 +487,8 @@ def test_translate_page_has_start_stop_and_no_guide_card():
 def test_translate_tab_has_quick_start_button():
     """d1023 卡：翻译 TAB 拖拽区 .dz-actions 增「开始」快捷钮——零新增 id
     （data-testid 锚点），次级样式（不得与 addFilesBtn 并列 primary），
-    文案复用既有 start_btn 键（零新增 i18n 键）。"""
+    文案挂独立键 start_btn_tab（owner 2026-10-23 指定四字「开始翻译」；
+    右栏主钮 start_btn「开始净语翻译」不动）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     start = html.index('id="dropzone"')
     end = html.index("<!-- 文件列表卡片", start)
@@ -504,14 +505,18 @@ def test_translate_tab_has_quick_start_button():
         "快捷开始钮不得为 primary（P1-4 并列 primary 无主次缺陷）"
     assert not re.search(r'\sid="', frag), \
         "零新增 id 约束：快捷开始钮只挂 data-testid"
-    assert 'data-i18n="start_btn"' in frag, \
-        "快捷开始钮文案须复用既有 start_btn 键（零新增 i18n 键）"
+    assert 'data-i18n="start_btn_tab"' in frag, \
+        "快捷开始钮文案须挂独立键 start_btn_tab（开始翻译）"
     assert "<svg" in frag and 'stroke-width="2"' in frag, \
         '快捷开始钮图标须为同排内联风格（stroke-width="2"）'
-    # 零新增键复核：MSG.start_btn 仍为既有文案，未派生新键
+    # 右栏主钮键复核：MSG.start_btn 仍为既有文案（独立键不共用、主钮不漂移）
     assert re.search(r"^\s*start_btn:\s*'开始净语翻译'",
                      _app_js_source(), re.M), \
         "MSG.start_btn 缺失或文案漂移"
+    # 快捷钮独立键：四字文案钉死
+    assert re.search(r"^\s*start_btn_tab:\s*'开始翻译'",
+                     _app_js_source(), re.M), \
+        "MSG.start_btn_tab 缺失或文案漂移"
 
 
 def test_translate_tab_quick_start_binds_start_translation():
@@ -3396,11 +3401,12 @@ def test_batch3_ai_config_row_pins_survive():
     assert len(ids) == 225, f"id 全集数漂移（契约 225），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
-    # 190=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
+    # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
     # + 字幕清洗一键 polish_enabled_label（D2026-1023-03 批3）
+    # + 翻译TAB快捷钮独立键 start_btn_tab（d1023 同日 owner 指定）
     # 解冻后契约值（D2026-1023-02/03；快照钉⑤b 为全集全等断言，此行只锁计数，
     # 漂移细节归钉⑤b）
-    assert len(i18n) == 190, f"data-i18n 键集数漂移（契约 190），实为 {len(i18n)}"
+    assert len(i18n) == 191, f"data-i18n 键集数漂移（契约 191），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -7074,6 +7080,8 @@ def test_js_sources_layer_pinned():
        d1023-卡 换代（翻译 TAB 快捷开始钮）：refine 家族 69a0a0e4…/204,679B、
        全库 19b6455e…/477,083B（app-refine-bind.js +271B、app-translator.js +453B；
        旧钉 0dd7df4c… / a4bcbcf0… 退役）；
+       d1023 同日再换代（快捷钮独立文案键 start_btn_tab，owner 指定四字）：
+       全库 bbc5807a…/477,229B（app-msg.js +146B；旧钉 19b6455e… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7086,7 +7094,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "19b6455eda991057c39eb3c43d41a5bea4a2ea8365409650958d684daaf9258e"), \
+        "bbc5807a4a13ff1549f1ae7d4d46f7269b5d5374b3509818d55cd76872f0ae49"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7116,8 +7124,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (58724,
-                       "78567eccfdd88ed96f258e96815c24a1b33a732dc2b4347ebd2fc3216a72b403"),
+        "app-msg.js": (58870,
+                       "8e0fd31ee4c0547614038d3b818642791fa060719392872d6eae9a2f7305300c"),
         "app-modal.js": (92754,
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
         "app-error-handler.js": (745,
