@@ -55,6 +55,10 @@ def build_parser():
     p.add_argument("--profile", choices=["local", "cloud"], default="local",
                    help="v2 兜底档位：local=strict(cleaner_rules+误译拦截) | cloud=lenient(仅通用校验)")
 
+    p.add_argument("--extra-output-format", choices=["ass", "vtt"],
+                   action="append", default=[],
+                   help="终稿平行附加成品件格式（可重复传，默认不写附加件，D2026-1023-02）")
+
     for n, label in ((1, "阶段A"), (3, "阶段B")):
         g = p.add_argument_group(f"{label}（槽位 s{n}）")
         g.add_argument(f"--s{n}-provider",
@@ -374,6 +378,7 @@ def config_from_args(args):
         event_format=args.event_format,
         heartbeat_interval=args.heartbeat_interval,
         tm_learn_gate=not args.no_tm_learn_gate,
+        extra_output_formats=args.extra_output_format,
     )
     # A1 缺省重绑定：仅显式传 --v2-ctx 时赋值（构造后赋值天然处于分层链
     # 最高优先级）；不传时 dataclass 缺省 16384 与 user_settings/env 分层

@@ -271,6 +271,8 @@ class StageConfig:
 class RefineConfig:
     inputs: list = field(default_factory=list)   # 输入 SRT 路径列表
     output_dir: str = ""            # 空 = 与各输入同目录
+    # 附加成品件格式（D2026-1023-02）：空=只写 SRT（默认行为零变化）
+    extra_output_formats: list = field(default_factory=list)
     # 槽位结构永久保留 4 槽（D2026-0922-02 裁决三）；enabled 仅影响
     # manifest/GUI 展示，对 v2 按 tag→槽位取数无行为影响。槽1/3 为
     # v2 未用槽，默认停用，避免 validate() 对空模型/key 误报。
