@@ -1214,7 +1214,7 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # 2.8.0 批1（D2026-1007-03）：压制队列底条显式解冻 218→223
     # （encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/
     #  encodeDockToggle，零 data-i18n，文案 JS 态 MSG 键承接）
-    assert len(ids) == 222, f"id 全集数漂移（2.8.0 批1 解冻后现契约 222），实为 {len(ids)}"
+    assert len(ids) == 224, f"id 全集数漂移（2.8.0 批1 解冻后现契约 224），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -3272,7 +3272,7 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
-    无内联 width:auto；id 全集数 222 / data-i18n 键集 187 契约数零漂移
+    无内联 width:auto；id 全集数 224 / data-i18n 键集 189 契约数零漂移
     （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
     模型行零 id/零 data-i18n，两契约数不漂移）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
@@ -3283,12 +3283,13 @@ def test_batch3_ai_config_row_pins_survive():
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 222, f"id 全集数漂移（契约 222），实为 {len(ids)}"
+    assert len(ids) == 224, f"id 全集数漂移（契约 224），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
-    # 186=artifact_note 键退役后契约值（真机反馈 IA 重排轮，D2026-1013-01 追记；
-    # 快照钉⑤b 为全集全等断言，此行只锁计数，漂移细节归钉⑤b）
-    assert len(i18n) == 186, f"data-i18n 键集数漂移（契约 186），实为 {len(i18n)}"
+    # 189=多格式输出轮三新键（output_format_header/output_fmt_ass/output_fmt_vtt）
+    # 解冻后契约值（D2026-1023-02；快照钉⑤b 为全集全等断言，此行只锁计数，
+    # 漂移细节归钉⑤b）
+    assert len(i18n) == 189, f"data-i18n 键集数漂移（契约 189），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -6968,7 +6969,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "50a0ab4acc3f1a01994eeb3d6db2e4435eed2801f0e7c31989501f9655bf5a32"), \
+        "bf8de109a51e440a3a93990ab4bdc2cd7f803c027bb0b6c21d020e25cbe3e038"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（204,006B），15 次切块恒真；切点外任何字节改动必红。
@@ -6977,7 +6978,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "6051c666d37bf1a11b17064c1478ff91ea139860374b9e1c1f679602e546fe33"), \
+        "7bc53c7683c1aee1c5c0d9dad8cce95552fcfdbf10f07b55cabc53194c41cb78"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -6997,8 +6998,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (58451,
-                       "e6af08d83ff64d1c7366eb140deecefc68b0c6a01af08100e9998d623a4413eb"),
+        "app-msg.js": (58575,
+                       "c9db6126eb0bc5963264a0312f255c80763e065ac04948a52ec2c6a76677f7a7"),
         "app-modal.js": (92754,
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
         "app-error-handler.js": (745,
@@ -7027,8 +7028,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-refine-core.js": (7401,
-                               "332e810e3760a891eb6f20c92cd24461dd4cf2f8ab808e15fc306a2f1718d7f9"),
+        "app-refine-core.js": (7572,
+                               "d14ab9847a7b0a475c85d5f4a71542572539b69c830d6db6d5d73cdcffbd1bc7"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
         "app-refine-glossary.js": (6588,
