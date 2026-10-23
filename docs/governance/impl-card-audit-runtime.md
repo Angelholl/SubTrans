@@ -83,6 +83,7 @@
 - **rerun 方式＝rerun-failed-jobs（仅重跑红腿）**。理由：其余七腿已绿，整体 rerun 只会让已验证绿腿重新暴露 flake 风险并耗 runner 时间；单腿 rerun 基于同一 head SHA（6186e96），结果等价。rerun 期间零文件改动，工作树全程干净。
 - **rerun 结果（attempt 2）**：run 级 completed/success。windows-3.12 新 job 119890345719 success（14:42:22→14:46:25Z），日志 `2180 passed, 21 skipped` 零失败（attempt 1 同腿为 `1 failed, 2179 passed, 21 skipped`；收集范围同为 2201，唯一变化即该红测试转绿）。其余七腿保持 attempt 1 绿（四腿 carry 入 attempt 2、三腿归属 attempt 1，均 success）。八腿全绿。
 - **观察项单列登记（新 canonical_id，本卡 notes 面登记；不入 closure-map，entry_count 28 维持不动）**：`OBS-CI-FLAKE-20261022`——已知 flake，跨秒边界，rerun 自愈；是否加固待 owner 定。涉及测试＝`test_guide_sink_absent_keeps_output_byte_identical` 的时间处理（若加固，限定冻结 datetime 注入或容忍跨秒，不动被测逻辑）。
+- **加固执行记录（2026-10-23，Q4-CI-02，owner 批准 A/B 项）**：测试时间处理已加固；OBS 继续观察，未关闭。
 - **完结声明**：规则层＋运行时层＋② 归档均收口，循环验证通过，完全完结。附注：windows-3.12 首跑红系已知 flake 家族跨秒边界偶发，rerun 自愈，非本轮提交引入。
 - **哈希漂移登记**：维持 evidence_gap（三哈希互不一致、归因待查），不因 rerun 绿而关闭或勾销。
 
