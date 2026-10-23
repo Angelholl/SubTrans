@@ -273,6 +273,17 @@ class RefineConfig:
     output_dir: str = ""            # 空 = 与各输入同目录
     # 附加成品件格式（D2026-1023-02）：空=只写 SRT（默认行为零变化）
     extra_output_formats: list = field(default_factory=list)
+    # 确定性字幕清洗层（D2026-1023-03 D3）：总开关默认关，存量行为零变化。
+    # 数值/字符串字段的 0/空串 = 未覆盖，回落到 polish.POLICY_DEFAULTS。
+    polish_enabled: bool = False          # 总开关，默认关（D3）
+    polish_max_line_chars: int = 0        # 0=用 polish.POLICY_DEFAULTS
+    polish_max_lines: int = 0             # 0=默认
+    polish_max_duration_ms: int = 0       # 0=默认
+    polish_min_gap_ms: float = 0.0        # 0=默认（83.416）
+    polish_quote_style: str = ""          # 空=默认；corner / keep / curly
+    polish_strip_final_period: bool = True
+    polish_remove_dialogue_gt: bool = False
+    polish_extend_short_into_gap: bool = False  # 占位，本轮无行为（钉死）
     # 槽位结构永久保留 4 槽（D2026-0922-02 裁决三）；enabled 仅影响
     # manifest/GUI 展示，对 v2 按 tag→槽位取数无行为影响。槽1/3 为
     # v2 未用槽，默认停用，避免 validate() 对空模型/key 误报。
@@ -626,6 +637,43 @@ class RefineConfig:
                 "（--s{n}-instructions）；包内仅随 ja→zh 卡，其他方向的"
                 "卡按需自制后显式传入")
         return errors
+
+
+#: polish 覆盖字段映射：RefineConfig 字段 → polish.POLICY_DEFAULTS 键。
+#: 单一映射点，pipeline 生效值与 manifest 指纹共用，防两处漂移。
+_POLISH_SCALAR_FIELDS = (
+    ("polish_max_line_chars", "max_line_chars"),
+    ("polish_max_lines", "max_lines"),
+    ("polish_max_duration_ms", "max_duration_ms"),
+    ("polish_min_gap_ms", "min_gap_ms"),
+    ("polish_quote_style", "quote_style"),
+)
+_POLISH_BOOL_FIELDS = (
+    ("polish_strip_final_period", "strip_final_period"),
+    ("polish_remove_dialogue_gt", "remove_dialogue_gt"),
+    ("polish_extend_short_into_gap", "extend_short_into_gap"),
+)
+
+
+def polish_policy_from_config(cfg) -> dict:
+    """把 RefineConfig 的 polish_* 字段折算成 polish.POLICY_DEFAULTS 全量策略。
+
+    0 / 空串 / None = 未覆盖，保留 polish.py 默认（默认值单一真值源）；
+    布尔字段无覆盖哨兵，按配置值直接生效。返回 dict 供 polish_entries 与
+    manifest 指纹共用。
+    """
+    from .polish import POLICY_DEFAULTS
+    policy = dict(POLICY_DEFAULTS)
+    for field_name, key in _POLISH_SCALAR_FIELDS:
+        value = getattr(cfg, field_name, None)
+        if value in (0, "", None):
+            continue
+        policy[key] = value
+    for field_name, key in _POLISH_BOOL_FIELDS:
+        value = getattr(cfg, field_name, None)
+        if value is not None:
+            policy[key] = bool(value)
+    return policy
 
 
 def ensure_language_support():

@@ -448,6 +448,14 @@ def compute_config_hash(cfg) -> str:
     _dir_tgt = str(getattr(cfg, "target_lang", None) or "zh")
     if (_dir_src, _dir_tgt) != ("ja", "zh"):
         payload["direction"] = f"{_dir_src}→{_dir_tgt}"
+    # 确定性字幕清洗层（D2026-1023-03 D3/D5）：条件键缺席归一——默认关
+    # （或旧配置对象无该属性）时不写入任何 polish 键，payload 与改动前
+    # 逐字节一致（存量 --resume 零误伤）；开启时写入全量生效参数（含未
+    # 覆盖项的 POLICY_DEFAULTS 默认值），保证「开-默认」与「开-改参」哈希
+    # 不同。MANIFEST_VERSION / _CONFIG_FIELDS / TaskManifest 均不动。
+    if bool(getattr(cfg, "polish_enabled", False)):
+        from .config import polish_policy_from_config
+        payload["polish"] = polish_policy_from_config(cfg)
     files = instruction_source_files(cfg)
     payload["instruction_files_sha1"] = (
         hashlib.sha1(

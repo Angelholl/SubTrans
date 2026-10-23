@@ -59,6 +59,25 @@ def build_parser():
                    action="append", default=[],
                    help="终稿平行附加成品件格式（可重复传，默认不写附加件，D2026-1023-02）")
 
+    # ---- 确定性字幕清洗层（默认关，D2026-1023-03 D3）----
+    p.add_argument("--polish", action="store_true",
+                   help="启用确定性字幕清洗层（文本规范化+时间轴收缩式钳制；"
+                        "默认关闭，存量行为不变）")
+    p.add_argument("--polish-max-line-chars", type=int, default=0,
+                   help="单行最大显示宽度（默认 16，0=用内置默认）")
+    p.add_argument("--polish-max-lines", type=int, default=0,
+                   help="每条最多行数（默认 2，0=用内置默认）")
+    p.add_argument("--polish-max-duration-ms", type=int, default=0,
+                   help="单条最长时长 ms（默认 7000，0=用内置默认）")
+    p.add_argument("--polish-min-gap-ms", type=float, default=0.0,
+                   help="相邻条目最小间隔 ms（默认 83，即 2 帧@23.976 口径）")
+    p.add_argument("--polish-quote-style", choices=["corner", "keep", "curly"],
+                   default="",
+                   help="引号派系统一：corner=「」 / curly=“” / keep=不动"
+                        "（默认 corner）")
+    p.add_argument("--polish-remove-dialogue-gt", action="store_true",
+                   help="删除行首对话标记 >>（默认保留）")
+
     for n, label in ((1, "阶段A"), (3, "阶段B")):
         g = p.add_argument_group(f"{label}（槽位 s{n}）")
         g.add_argument(f"--s{n}-provider",
@@ -379,6 +398,13 @@ def config_from_args(args):
         heartbeat_interval=args.heartbeat_interval,
         tm_learn_gate=not args.no_tm_learn_gate,
         extra_output_formats=args.extra_output_format,
+        polish_enabled=args.polish,
+        polish_max_line_chars=args.polish_max_line_chars,
+        polish_max_lines=args.polish_max_lines,
+        polish_max_duration_ms=args.polish_max_duration_ms,
+        polish_min_gap_ms=args.polish_min_gap_ms,
+        polish_quote_style=args.polish_quote_style,
+        polish_remove_dialogue_gt=args.polish_remove_dialogue_gt,
     )
     # A1 缺省重绑定：仅显式传 --v2-ctx 时赋值（构造后赋值天然处于分层链
     # 最高优先级）；不传时 dataclass 缺省 16384 与 user_settings/env 分层
