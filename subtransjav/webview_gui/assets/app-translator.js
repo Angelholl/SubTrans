@@ -19,9 +19,12 @@ const TranslatorManager = {
         const hasFiles = AppState.selectedFiles.length > 0;
         const isRunning = this.state.isRunning;
 
-        const startBtn = document.getElementById('refineStartBtn');
+        const startBtns = [
+            document.getElementById('refineStartBtn'),
+            document.querySelector('[data-testid="btn-start-translate"]')
+        ].filter(Boolean);
         const cancelBtn = document.getElementById('refineCancelBtn');
-        if (startBtn) startBtn.disabled = !hasFiles || isRunning;
+        startBtns.forEach((startBtn) => { startBtn.disabled = !hasFiles || isRunning; });
         if (cancelBtn) cancelBtn.disabled = !isRunning;
     },
 
@@ -225,9 +228,12 @@ const TranslatorManager = {
         ConsoleManager.log(MSG.warmupQueued, 'info');
         this._warmupHolding = true;
         const locked = this._lockEngineControls(true);
-        const startBtn = document.getElementById('refineStartBtn');
-        const prevText = startBtn ? startBtn.textContent : '';
-        if (startBtn) startBtn.disabled = true;
+        const startBtns = [
+            document.getElementById('refineStartBtn'),
+            document.querySelector('[data-testid="btn-start-translate"]')
+        ].filter(Boolean);
+        const prevText = startBtns.length ? startBtns[0].textContent : '';
+        startBtns.forEach((startBtn) => { startBtn.disabled = true; });
         const firstTimeout = Number(st.timeout) > 0 ? Number(st.timeout) : 300;
         // elapsed 与后端同源（首拍回带起流经秒数），倒计时基准对齐 G10
         const startedAtMs = Number(st.elapsed) > 0
@@ -259,19 +265,22 @@ const TranslatorManager = {
                     ? Number(cur.timeout) : firstTimeout;
                 if (elapsedS >= timeoutS) { released = 'timeout'; break; }
                 // 倒计时文案（每秒刷新，剩余=timeout-elapsed）
-                if (startBtn) {
-                    startBtn.disabled = true;   // 持有期间即便他处重排也保持锁定
-                    startBtn.textContent =
+                if (startBtns.length) {
+                    const holdText =
                         MSG.warmupHoldBtn(Math.max(0, Math.ceil(timeoutS - elapsedS)));
+                    startBtns.forEach((startBtn) => {
+                        startBtn.disabled = true;   // 持有期间即便他处重排也保持锁定
+                        startBtn.textContent = holdText;
+                    });
                 }
             }
         } finally {
             this._warmupHolding = false;
             this._lockEngineControls(false, locked);
-            if (startBtn) {
+            startBtns.forEach((startBtn) => {
                 startBtn.textContent = prevText;
                 startBtn.disabled = false;   // updateButtons 会按运行态再纠正
-            }
+            });
             if (released === 'timeout' || released === 'unknown') {
                 // G7 第三态/超时放行：杀客户端+清状态（后端互锁随之放行）
                 try {

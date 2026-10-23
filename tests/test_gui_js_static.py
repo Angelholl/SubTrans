@@ -471,7 +471,8 @@ def test_service_quick_key_save_removed():
 
 
 def test_translate_page_has_start_stop_and_no_guide_card():
-    """tab-translate 页保留唯一开始/停止入口（复用 refineStartBtn 通道），
+    """tab-translate 页保留开始/停止入口：右栏主入口（refineStartBtn）
+    ＋翻译 TAB 拖拽区快捷开始钮（btn-start-translate）双钮同链路；
     三步引导卡不复存在；开始/停止按钮已绑定 click。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     for anchor in ("refineStartBtn", "refineCancelBtn",
@@ -481,6 +482,67 @@ def test_translate_page_has_start_stop_and_no_guide_card():
     bind = _extract_function(source, "bindDom")
     assert "refineStartBtn" in bind, "开始按钮必须绑定 click"
     assert "refineCancelBtn" in bind, "停止按钮必须绑定 click"
+
+
+def test_translate_tab_has_quick_start_button():
+    """d1023 卡：翻译 TAB 拖拽区 .dz-actions 增「开始」快捷钮——零新增 id
+    （data-testid 锚点），次级样式（不得与 addFilesBtn 并列 primary），
+    文案复用既有 start_btn 键（零新增 i18n 键）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    start = html.index('id="dropzone"')
+    end = html.index("<!-- 文件列表卡片", start)
+    block = html[start:end]
+    assert 'class="dz-actions"' in block
+    m = re.search(
+        r'<button[^>]*data-testid="btn-start-translate"[^>]*>(.*?)</button>',
+        block, re.S)
+    assert m, '翻译 TAB .dz-actions 缺 data-testid="btn-start-translate"'
+    frag = m.group(0)
+    assert "btn btn-secondary" in frag, \
+        "快捷开始钮须为次级（class 含 btn btn-secondary）"
+    assert "btn-primary" not in frag, \
+        "快捷开始钮不得为 primary（P1-4 并列 primary 无主次缺陷）"
+    assert not re.search(r'\sid="', frag), \
+        "零新增 id 约束：快捷开始钮只挂 data-testid"
+    assert 'data-i18n="start_btn"' in frag, \
+        "快捷开始钮文案须复用既有 start_btn 键（零新增 i18n 键）"
+    assert "<svg" in frag and 'stroke-width="2"' in frag, \
+        '快捷开始钮图标须为同排内联风格（stroke-width="2"）'
+    # 零新增键复核：MSG.start_btn 仍为既有文案，未派生新键
+    assert re.search(r"^\s*start_btn:\s*'开始净语翻译'",
+                     _app_js_source(), re.M), \
+        "MSG.start_btn 缺失或文案漂移"
+
+
+def test_translate_tab_quick_start_binds_start_translation():
+    """d1023 卡：快捷钮与右栏 #refineStartBtn 同 handler
+    （同一条 TranslatorManager.startTranslation 链路）。"""
+    bind = _extract_function(_app_js_source(), "bindDom")
+    assert "btn-start-translate" in bind, "bindDom 未接快捷开始钮"
+    idx = bind.index("btn-start-translate")
+    tail = bind[idx:idx + 400]
+    assert "addEventListener('click'" in tail, "快捷开始钮必须绑定 click"
+    assert "startTranslation" in tail, \
+        "快捷开始钮必须走 TranslatorManager.startTranslation"
+
+
+def test_translate_tab_quick_start_dual_button_state_sync():
+    """d1023 卡：updateButtons 与预热持有/倒计时/恢复双钮同态，
+    杜绝右栏钮与翻译 TAB 快捷钮 disabled/文案状态漂移。"""
+    src = _app_js_source()
+    tm = src[src.index("const TranslatorManager = {"):]
+    update = _extract_function(tm, "updateButtons")
+    assert "refineStartBtn" in update and "btn-start-translate" in update, \
+        "updateButtons 未同时覆盖右栏钮与翻译 TAB 快捷钮"
+    assert ".filter(Boolean)" in update and "forEach" in update, \
+        "updateButtons 须以数组遍历同步两钮 disabled（同态）"
+    hold = _extract_function(src, "_warmupHoldUntilRelease")
+    assert "btn-start-translate" in hold, \
+        "预热持有路径未同步翻译 TAB 快捷钮"
+    assert "startBtn.textContent = prevText" in hold, \
+        "预热结束须恢复双钮文案（startBtn 循环变量同态恢复）"
+    assert "MSG.warmupHoldBtn" in hold and "timeoutS - elapsedS" in hold, \
+        "预热倒计时文案须双钮同步刷新"
 
 # ---------------------------------------------------------------------------
 # AI 质量分析（D2026-0929：--ai-analyze 前后端接入）静态钉
@@ -7009,6 +7071,9 @@ def test_js_sources_layer_pinned():
        d1021-卡1 换代 f67e4ceb…（app-file-list.js 缺陷B 修复：drop 监听去 stopPropagation＋注释，15821B→16069B）；
        d1021-卡2 换代 50a0ab4a…（P1-6 件B 拖拽分隔层：app-file-list.js 尾部 TranslateSplit
        小节 + FileListManager.init 末行接线，16069B→21361B；旧钉 f67e4ceb… 退役）；
+       d1023-卡 换代（翻译 TAB 快捷开始钮）：refine 家族 69a0a0e4…/204,679B、
+       全库 19b6455e…/477,083B（app-refine-bind.js +271B、app-translator.js +453B；
+       旧钉 0dd7df4c… / a4bcbcf0… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7021,7 +7086,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "a4bcbcf02c5acb1198b62f78cd9762da80120964bc1605ec40a17468a2e07f78"), \
+        "19b6455eda991057c39eb3c43d41a5bea4a2ea8365409650958d684daaf9258e"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7031,7 +7096,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "0dd7df4cd44c956ef7cc51337808f300f2ee82966c3269123f081e32f1ea567d"), \
+        "69a0a0e4f0657531239777f6d09d621fc28041e3d00867d99a17554d0697a9a0"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7071,8 +7136,8 @@ def test_js_split_integrity_pinned():
                             "c923272db15462c77875acdb27a32cc202860bd07fdf3245220bf1c4f70a4a2e"),
         "app-directory.js": (3149,
                              "2b4d435badd728491b076d295a4ff6b32109637166a790bfc12072e43c8686e3"),
-        "app-translator.js": (19835,
-                              "17e60b12b64381c428c11cde07fdedf5a558a2140d2bc1b60db8d52c8f490186"),
+        "app-translator.js": (20288,
+                              "a745d62347ff7734b6971aeccfc181e0c799144aa31b066f384c86957a22adf0"),
         "app-theme.js": (4234,
                          "943902377f465a30975c4e77d443ec784b0f44855203139c1055a5c6185f8d34"),
         "app-shortcuts.js": (1638,
@@ -7103,8 +7168,8 @@ def test_js_split_integrity_pinned():
                               "24da1757e9defaba78ccb935e7708497ba8ac6b948ae79bee787ab70247b7776"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
-        "app-refine-bind.js": (17170,
-                               "a0711b0f7de046555bdced38c8b7aabb7b70e5867b0378464918476ab799bb39"),
+        "app-refine-bind.js": (17441,
+                               "469e85818b7c18aa585899283aa2ea3789b4bb88863365f9a7886d69932afce9"),
         "app-refine-dataroot.js": (2310,
                                    "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
         "app-refine-dict.js": (34748,

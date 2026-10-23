@@ -9,6 +9,9 @@
     window.__refineBound = true;
 
     $('refineStartBtn').addEventListener('click', () => TranslatorManager.startTranslation());
+    // 翻译 TAB 快捷开始钮（d1023）：与右栏主入口同一 handler
+    const tabStartBtn = document.querySelector('[data-testid="btn-start-translate"]');
+    if (tabStartBtn) tabStartBtn.addEventListener('click', () => TranslatorManager.startTranslation());
     $('refineCancelBtn').addEventListener('click', () => TranslatorManager.cancelTranslation());
 
     for (const n of [1, 3]) {
