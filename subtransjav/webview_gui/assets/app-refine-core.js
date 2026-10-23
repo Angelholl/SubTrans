@@ -104,6 +104,10 @@
     return {
       inputs: AppState.selectedFiles,
       output_dir: $('outputDir') ? $('outputDir').value : '',
+      extra_output_formats: [
+        ($('outputFmtAss') || {}).checked ? 'ass' : null,
+        ($('outputFmtVtt') || {}).checked ? 'vtt' : null,
+      ].filter(Boolean),
       profile: ($('refineProfile') || {}).value || 'local',
       v2_concurrency: readRefineConcurrency(),
       v2_ctx: readRefineCtx(),
