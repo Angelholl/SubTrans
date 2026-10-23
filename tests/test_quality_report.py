@@ -403,8 +403,24 @@ def test_guide_sink_collects_snapshot_same_source_as_report():
     assert all(s["note"].startswith("　（") for s in sink["sections"])
 
 
-def test_guide_sink_absent_keeps_output_byte_identical():
-    """无 sink 零行为：同输入两次 build（带/不带 sink），txt 逐字节相等。"""
+def test_guide_sink_absent_keeps_output_byte_identical(monkeypatch):
+    """无 sink 零行为：同输入两次 build（带/不带 sink），txt 逐字节相等。
+
+    跨秒 flake 加固（OBS-CI-FLAKE-20261022）：两次 build 各自调用被测模块的
+    datetime.now()（quality_report.py:1252），秒边界即翻转；monkeypatch 冻结
+    该取时点（datetime 子类保留其余类方法，仅覆写 now）。只改测试时间处理，
+    不动被测逻辑。
+    """
+    from datetime import datetime
+
+    import subtransjav.refine.quality_report as quality_report
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 1, 1, 0, 0, 0)
+
+    monkeypatch.setattr(quality_report, "datetime", _FrozenDateTime)
     exp, final = _w1a_report_inputs()
     plain = build_quality_report(exp, final, "demo")
     sink: dict = {}
