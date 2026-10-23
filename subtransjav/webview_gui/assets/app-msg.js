@@ -374,6 +374,8 @@ const MSG = {
     s3_endpoint_placeholder: '阶段B 服务商的接口地址',
     save_endpoints_btn: '保存接口',
     start_btn: '开始净语翻译',
+    // 翻译 TAB 快捷开始钮独立键（d1023 owner 指定四字文案；右栏主钮 start_btn 不动）
+    start_btn_tab: '开始翻译',
     stop_btn: '停止',
     status_idle: 'Idle',
 
