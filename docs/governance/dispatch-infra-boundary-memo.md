@@ -4,12 +4,12 @@
 
 ## 1. 边界事实（现状）
 
-- **账本体在仓库外**：派卡 wrapper 三件套真身＝`C:/Users/57850/.zcode/tools/`（D2026-1020-05 收敛成果，落笔 `docs/decision-log-archive-d.md:62`）：
+- **账本体在仓库外**：派卡 wrapper 三件套真身＝`%USERPROFILE%\.zcode\tools`（D2026-1020-05 收敛成果，落笔 `docs/decision-log-archive-d.md:62`）：
   - 三件套本体：`exec_wrapper.py`（19,643B）/ `pointer_tools.py`（9,880B）/ `quota_watch.py`（7,550B）；
   - 同目录治理扩展件：`audit_dispatch_compliance.py` / `monthly_l2_check.py` / `governance-secret-keywords.json` / `tools-baseline.sha256` / `cli-baseline.json` / `rollback_wrapper_convergence.sh`；
   - 该目录已独立 `git init` 版本化＋`tools-baseline.sha256` 钉（D2026-1020-05），即账本体自带一套仓外版本化地基。
 - **状态＝暂停非退役**（关键措辞，落笔 `docs/decision-log-archive-d.md:47,51`，D2026-1020-04；状态词表 `docs/governance/status-vocab.md:8,26`＝closed_observation）。本 memo 不得也不将其改写为退役。
-- **激活条件①-④＋X=8 周稳定窗**（唯一成文处 `docs/decision-log-archive-d.md:74-75,187`，D2026-1020-05）：①ZCode 内生通道连续 K=2 次任务失败；②需要 exec.v1 机器契约；③主模型判定测试期模型质量不达标；④需要多模型轮转/限流兜底；另有连续 M=3 次同一能力缺口→触发能力补进主通道评估、降级出口 X=8 周、重置上限 2 次。激活条件①已有实际触发先例（`docs/decision-log-archive-d.md:139`）。
+- **激活条件①-④＋X=8 周稳定窗**（唯一成文处 `docs/decision-log-archive-d.md:74-75,187`，D2026-1020-05）：①ZCode 内生通道连续 K=2 次任务失败；②需要 exec.v1 机器契约；③主模型判定测试期模型质量不达标；④需要多模型轮转/限流兜底；另有连续 M=3 次同一能力缺口→触发能力补进主通道评估、降级出口 X=8 周、重置上限 2 次。激活条件①已有实际触发先例（`docs/decision-log-archive-d.md:139`）——仅为历史先例，不改变当前暂停非退役状态。
 - **仓库内引用面**：全局 AGENTS.md wrapper 命令形态（绝对路径）、dispatch-discipline skill（真值源）、docs/design 历史卡面验收命令（旧 G: 相对路径用法已冻结不回改，`docs/decision-log-archive-d.md:184` ④）。wrapper 缺失断链先例三发：`docs/design/d1018-卡3-全站dz-icon连根拔.md:68,89`、`docs/design/d1019-卡1-spike-ruff微chore.md:70`、`docs/decision-log-archive-c.md:514`。
 
 ## 2. 三选项
@@ -26,7 +26,7 @@
 
 ## 4. 边界事实/待办风险登记（不清理、不处置）
 
-- **双副本残留**：旧位 `G:\zcode\.zcode\workspace\default\tools\` 仍存三件套副本（2026-10-18 时间戳，D2026-1020-05 收敛后未删）。风险＝与 autoglm 双副本误判同型的「改错副本/读到旧版」混淆；列为待办风险，是否清理由 owner 另行拍板。
+- **双副本残留**：旧位 `<workspace>\.zcode\workspace\default\tools` 仍存三件套副本（2026-10-18 时间戳，D2026-1020-05 收敛后未删）。风险＝与 autoglm 双副本误判同型的「改错副本/读到旧版」混淆；列为待办风险，是否清理由 owner 另行拍板。
 - **仓外工具链观察项**（只登记）：`audit_dispatch_compliance.py` 遇 hooks-log 坏行直接崩溃（无 errors="replace" 兜底）；hooks-log 存在疑似写竞态坏行（见 Q4-CI-02 阶段 1 执行报告只读预检记录）。依 Q4-CI-02 E 项约束本任务不修该脚本。
 
 ## 5. 未实施声明
