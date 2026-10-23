@@ -18,7 +18,7 @@ import unicodedata
 
 #: 清洗策略默认值（D5 校准门）——全部默认值只在此表，严禁散落硬编码。
 #: 每条 PROVISIONAL 均为占位：owner 提供 SE 成品样例后单点改默认，不声称已定标。
-POLICY_DEFAULTS = {
+POLICY_DEFAULTS: dict = {
     "strip_final_period": True,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
     "quote_style": "corner",  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
     "max_line_chars": 16,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
@@ -168,7 +168,7 @@ def _wrap_lines(lines, max_chars, max_lines):
             natural.add(idx)
 
     # 不在 <i>/</i> 标签内部断行
-    forbidden = set()
+    forbidden: set = set()
     for match in _ITALIC_TAG_RE.finditer(joined):
         forbidden.update(range(match.start() + 1, match.end()))
 
@@ -188,7 +188,7 @@ def _wrap_lines(lines, max_chars, max_lines):
     fallback = None
     for parts in range(1, max_parts + 1):
         # dp[part][end] = (over, unnatural, max_width, start)
-        dp = [[None] * (total + 1) for _ in range(parts + 1)]
+        dp: list = [[None] * (total + 1) for _ in range(parts + 1)]
         dp[0][0] = (0, 0, 0.0, -1)
         for part in range(1, parts + 1):
             for end in range(1, total + 1):
@@ -207,9 +207,10 @@ def _wrap_lines(lines, max_chars, max_lines):
                     if best is None or (cand[0], cand[1], cand[2]) < (best[0], best[1], best[2]):
                         best = cand
                 dp[part][end] = best
-        if dp[parts][total] is None:
+        cell = dp[parts][total]
+        if cell is None:
             continue
-        result = dp[parts][total]
+        result = cell
         new_lines = []
         end = total
         for part in range(parts, 0, -1):
