@@ -556,6 +556,8 @@ def run_action_retranslate(cfg, args) -> int:
     # 非空即刷新导读（全 nochange 无终稿变更，导读 status 仍落盘）
     if applied_positions or nochange_indexes:
         if applied_positions:
+            # 行动层重翻终稿写点：产物不在 polish 清洗保证边界内
+            # （D2026-1023-03 D4：保证边界=主链终稿+附加件再生）
             _atomic_write_text(str(final_path), new_srt)
             # 附加成品件同步再生（D2026-1023-02）：cfg 旗标 ∪ 已存在附加件
             sync_extra_outputs(str(final_path), new_entries,
