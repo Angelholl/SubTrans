@@ -97,6 +97,8 @@
     "mediaSourceToggleBtn",
     "openOutputBtn",
     "outputDir",
+    "outputFmtAss",
+    "outputFmtVtt",
     "outputToSource",
     "pipelineCard",
     "pipelineMirrorLine",
@@ -329,6 +331,9 @@
     "nav_group_workspace",
     "no_files_selected",
     "open_btn",
+    "output_fmt_ass",
+    "output_fmt_vtt",
+    "output_format_header",
     "output_header",
     "output_label",
     "output_placeholder",
@@ -431,7 +436,8 @@
       "2.8.0 批1（D2026-1007-03 压制队列底条）：FROZEN_IDS 218→223，五 id=encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/encodeDockToggle（零 data-i18n，文案 JS 态 MSG 键承接）；FROZEN_I18N_KEYS 187 不动——配记 index.html:1142 与 test_gui_js_static.py 计数钉 223",
       "3.1 阶段1 地基批 卡2（D2026-1012-01）：快照外置 tests/ui_contract_snapshot.json + 再生工具 tools/ui_contract_snapshot.py，集合零增减（ids 223 / i18n_keys 187）；解冻史自本卡起只记本 _meta.history（测试文件头注释解冻史块全量迁入，含本卡据 index.html/decision-log/test_gui_js_static 补记的 217→218、218→223 两笔）",
       "真机反馈 IA 重排轮（D2026-1013-01 追记，owner 2026-10-13 直接指示删除产物命名说明）：artifact_note 键退役（index.html footnote 元素删除+app.js MSG 键同步删），i18n_keys 187→186；ids 223 不动",
-      "AI 分析生效行黄字提示退役（D2026-1015-01，owner 2026-10-15 直接指示折叠态截断不可读取消）：index.html #refineAiPrivacy 元素删除+app.js aiRefreshEffective/shortenModelName/aiSetPrivacy/MSG 七键删除+style.css 行尾规则删除，ids 223→222；i18n_keys 186 不动"
+      "AI 分析生效行黄字提示退役（D2026-1015-01，owner 2026-10-15 直接指示折叠态截断不可读取消）：index.html #refineAiPrivacy 元素删除+app.js aiRefreshEffective/shortenModelName/aiSetPrivacy/MSG 七键删除+style.css 行尾规则删除，ids 223→222；i18n_keys 186 不动",
+      "多格式输出 GUI 面（D2026-1023-02 批2）：index.html 输出目录 section 新增 outputFmtAss/outputFmtVtt 两复选框+app-msg.js 三 MSG 键（output_format_header/output_fmt_ass/output_fmt_vtt），ids 222→224；i18n_keys 186→189"
     ]
   }
 }

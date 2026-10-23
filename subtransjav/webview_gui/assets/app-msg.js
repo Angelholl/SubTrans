@@ -223,6 +223,9 @@ const MSG = {
 
     // ---- 输出目录 ----
     output_header: '输出目录',
+    output_format_header: '输出格式',
+    output_fmt_ass: '同时输出 .ass',
+    output_fmt_vtt: '同时输出 .vtt',
     save_to_source_dir: '保存到字幕同目录',
     output_label: '输出:',
     output_placeholder: '输出目录...',
