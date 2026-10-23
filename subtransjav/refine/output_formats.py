@@ -68,7 +68,7 @@ def _build_ass(entries) -> str:
         borderstyle=1,
         outline=2.5,
         shadow=2.5,
-        alignment=2,
+        alignment=pysubs2.Alignment.BOTTOM_CENTER,  # 值=2，枚举形态过 mypy 钉
         marginl=10,
         marginr=10,
         marginv=20,
