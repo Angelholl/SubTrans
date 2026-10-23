@@ -281,6 +281,40 @@ def test_noise_gate_m_leading_whitespace_matches_tm_gate():
 
 
 # ----------------------------------------------------------------------
+# build_quality_report 字幕清洗统计行（D2026-1023-03 批3）
+# ----------------------------------------------------------------------
+
+_POLISH_BOUNDARY = ("清洗保证边界：主链终稿+附加件再生；"
+                    "行动层重翻与自动补行产物不在保证内（未 polish）")
+
+
+def test_build_quality_report_polish_line_only_when_stats_present():
+    """polish_stats 缺省（未启用清洗）→ 统计行整行省略，但保证边界注记
+    恒在；注入 merge_stats["polish"] → 只列非 0 键（逐键计数）。"""
+    e = {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+         "text": "テスト"}
+    off = build_quality_report([e], [e], "demo")
+    assert "字幕清洗:" not in off
+    assert _POLISH_BOUNDARY in off
+
+    stats = {"polish": {"whitespace_collapsed": 3, "periods_stripped": 2,
+                        "dropped_empty": 0}}
+    on = build_quality_report([e], [e], "demo", merge_stats=stats)
+    assert "字幕清洗: 空白折叠 3 / 去句号 2" in on
+    assert "空行丢弃" not in on            # 0 值键省略
+    assert _POLISH_BOUNDARY in on
+
+
+def test_build_quality_report_polish_all_zero_shows_no_change():
+    """清洗已运行但无任何变换：显式「无改动」，不输出空计数行。"""
+    e = {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+         "text": "テスト"}
+    stats = {"polish": {"whitespace_collapsed": 0, "music_fixed": 0}}
+    shown = build_quality_report([e], [e], "demo", merge_stats=stats)
+    assert "字幕清洗: 无改动" in shown
+
+
+# ----------------------------------------------------------------------
 # build_quality_report 白话导读区（两分支）与章节注解行
 # ----------------------------------------------------------------------
 

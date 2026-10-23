@@ -108,6 +108,9 @@
         ($('outputFmtAss') || {}).checked ? 'ass' : null,
         ($('outputFmtVtt') || {}).checked ? 'vtt' : null,
       ].filter(Boolean),
+      // 字幕清洗总开关（D2026-1023-03 批3）：默认不勾=不传/False；
+      // 会话级无持久化（与附加格式复选框同语义，刷新复位）
+      polish_enabled: !!($('polishEnabled') || {}).checked,
       profile: ($('refineProfile') || {}).value || 'local',
       v2_concurrency: readRefineConcurrency(),
       v2_ctx: readRefineCtx(),

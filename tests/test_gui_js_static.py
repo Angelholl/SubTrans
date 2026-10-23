@@ -333,6 +333,52 @@ def test_batch_values_use_positive_int_guard():
 
 
 # ---------------------------------------------------------------------------
+# 字幕清洗总开关 GUI 面（D2026-1023-03 批3）
+# ---------------------------------------------------------------------------
+
+def test_polish_checkbox_default_unchecked_in_output_format_block():
+    """index.html 输出格式区块新增 polishEnabled：默认不勾（=polish_enabled
+    默认 False 的 GUI 镜像），行容器沿用既有 output-source-toggle 类
+    （019b205 死类教训），label 走新 data-i18n 键。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(r'<input[^>]*id="polishEnabled"[^>]*>', html)
+    assert m, "缺少字幕清洗复选框 polishEnabled"
+    assert "checked" not in m.group(0), "polishEnabled 默认必须不勾"
+    assert 'data-i18n="polish_enabled_label"' in html, "缺清洗复选框 i18n 键"
+    i_vtt = html.index('id="outputFmtVtt"')
+    i_p = html.index('id="polishEnabled"')
+    i_path = html.index('class="path-row"', i_vtt)
+    assert i_vtt < i_p < i_path, "polishEnabled 须位于输出格式区块内"
+    row_start = html.rindex("<div", 0, i_p)
+    assert 'class="output-source-toggle"' in html[row_start:i_p], \
+        "清洗复选框行须沿用既有 output-source-toggle 类（禁止死类）"
+
+
+def test_build_refine_options_polish_enabled_wiring():
+    """buildRefineOptions 新增 polish_enabled（布尔），缺 checkbox 时 False。"""
+    opts = _extract_function(_app_js_source(), "buildRefineOptions")
+    assert "polish_enabled: !!($('polishEnabled') || {}).checked" in opts, \
+        "buildRefineOptions 缺 polish_enabled 布尔组装"
+
+
+def test_build_refine_args_polish_flag_whitelist():
+    """api 白名单转发：polish_enabled=True → 恰一个 --polish；
+    False/None/缺席 → 零旗标（默认零变化）。"""
+    pytest.importorskip("webview",
+                        reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试",
+                        exc_type=ImportError)
+    from subtransjav.webview_gui.api import _build_refine_args  # noqa: PLC0415
+
+    args = _build_refine_args({"inputs": ["a.srt"], "polish_enabled": True})
+    assert args.count("--polish") == 1, "polish_enabled=True 须转发 --polish"
+    for options in ({"inputs": ["a.srt"]},
+                    {"inputs": ["a.srt"], "polish_enabled": False},
+                    {"inputs": ["a.srt"], "polish_enabled": None}):
+        assert "--polish" not in _build_refine_args(options), \
+            f"缺省/False 不得产生 --polish: {options}"
+
+
+# ---------------------------------------------------------------------------
 # v1.5 翻译服务快捷下拉（原小白模式顶栏迁入 tab-translate，逻辑保留）
 # ---------------------------------------------------------------------------
 
@@ -1213,8 +1259,10 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # （batchFixEffectiveLine，零 data-i18n，文案 JS 态 MSG 键承接）；
     # 2.8.0 批1（D2026-1007-03）：压制队列底条显式解冻 218→223
     # （encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/
-    #  encodeDockToggle，零 data-i18n，文案 JS 态 MSG 键承接）
-    assert len(ids) == 224, f"id 全集数漂移（2.8.0 批1 解冻后现契约 224），实为 {len(ids)}"
+    #  encodeDockToggle，零 data-i18n，文案 JS 态 MSG 键承接）；
+    # d1023-polish 批3（D2026-1023-03）：+polishEnabled（清洗总开关，
+    # 显式解冻 224→225；带 data-i18n=polish_enabled_label）
+    assert len(ids) == 225, f"id 全集数漂移（d1023 批3 解冻后现契约 225），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -3272,7 +3320,7 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
-    无内联 width:auto；id 全集数 224 / data-i18n 键集 189 契约数零漂移
+    无内联 width:auto；id 全集数 225 / data-i18n 键集 190 契约数零漂移
     （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
     模型行零 id/零 data-i18n，两契约数不漂移）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
@@ -3283,13 +3331,14 @@ def test_batch3_ai_config_row_pins_survive():
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 224, f"id 全集数漂移（契约 224），实为 {len(ids)}"
+    assert len(ids) == 225, f"id 全集数漂移（契约 225），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
-    # 189=多格式输出轮三新键（output_format_header/output_fmt_ass/output_fmt_vtt）
-    # 解冻后契约值（D2026-1023-02；快照钉⑤b 为全集全等断言，此行只锁计数，
+    # 190=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
+    # + 字幕清洗一键 polish_enabled_label（D2026-1023-03 批3）
+    # 解冻后契约值（D2026-1023-02/03；快照钉⑤b 为全集全等断言，此行只锁计数，
     # 漂移细节归钉⑤b）
-    assert len(i18n) == 189, f"data-i18n 键集数漂移（契约 189），实为 {len(i18n)}"
+    assert len(i18n) == 190, f"data-i18n 键集数漂移（契约 190），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -6952,9 +7001,10 @@ def test_js_sources_layer_pinned():
 
     ① JS_FILES 现值锁定（后续拆分批随批更新本断言；批3 逐块切出自包含块）；
     ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
-       批4 去壳载荷钉：refine 家族拼接现钉 7bc53c76…（204,177B，d1023-批2 换代：
-       app-refine-core.js extra_output_formats 组装 +4 行；旧钉 6051c666…/204,006B 退役）；
-       全库拼接换代 10f6ef82…（470,144B）；
+       批4 去壳载荷钉：refine 家族拼接现钉 0dd7df4c…（204,408B，d1023-批3 换代：
+       app-refine-core.js polish_enabled 组装 +5 行；旧钉 7bc53c76…/204,177B 退役）；
+       全库拼接换代 a4bcbcf0…（476,359B；旧钉 bf8de109… 随 app-msg.js 新增
+       polish_enabled_label 键退役）；
        旧钉 787460b7…（470,198B）已退役（D2026-1019-01）；
        d1021-卡1 换代 f67e4ceb…（app-file-list.js 缺陷B 修复：drop 监听去 stopPropagation＋注释，15821B→16069B）；
        d1021-卡2 换代 50a0ab4a…（P1-6 件B 拖拽分隔层：app-file-list.js 尾部 TranslateSplit
@@ -6971,17 +7021,17 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "bf8de109a51e440a3a93990ab4bdc2cd7f803c027bb0b6c21d020e25cbe3e038"), \
+        "a4bcbcf02c5acb1198b62f78cd9762da80120964bc1605ec40a17468a2e07f78"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
-    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,177B，d1023-批2 换代），
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
     # 15 次切块恒真；切点外任何字节改动必红。
     refine_family = [n for n in js_sources.JS_FILES
                      if n.startswith("app-refine-") or n == "app-main.js"]
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "7bc53c7683c1aee1c5c0d9dad8cce95552fcfdbf10f07b55cabc53194c41cb78"), \
+        "0dd7df4cd44c956ef7cc51337808f300f2ee82966c3269123f081e32f1ea567d"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7001,8 +7051,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (58575,
-                       "c9db6126eb0bc5963264a0312f255c80763e065ac04948a52ec2c6a76677f7a7"),
+        "app-msg.js": (58724,
+                       "78567eccfdd88ed96f258e96815c24a1b33a732dc2b4347ebd2fc3216a72b403"),
         "app-modal.js": (92754,
                          "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
         "app-error-handler.js": (745,
@@ -7031,8 +7081,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-refine-core.js": (7572,
-                               "d14ab9847a7b0a475c85d5f4a71542572539b69c830d6db6d5d73cdcffbd1bc7"),
+        "app-refine-core.js": (7803,
+                               "8f823025981d58e75cce843a650aee7c51a7c7543cbac5b36184545813c990c6"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
         "app-refine-glossary.js": (6588,

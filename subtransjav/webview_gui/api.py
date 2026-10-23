@@ -319,6 +319,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
         if fmt in ("ass", "vtt"):
             args.extend(["--extra-output-format", fmt])
 
+    # 字幕清洗总开关（D2026-1023-03 批3）：只转发总开关，细参数
+    # 本轮 GUI 不暴露；未勾/缺省零旗标（默认零变化）
+    if options.get("polish_enabled"):
+        args.append("--polish")
+
     # v2 两阶段管线（阶段A→s1 槽位、阶段B→s3 槽位）
     if options.get("profile"):
         args.extend(["--profile", str(options["profile"])])

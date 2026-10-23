@@ -84,6 +84,24 @@ _CPS_MIN_DURATION_S = 0.5
 # 相邻条目时间轴间隙观测阈值（秒；只观测不行动）
 _GAP_MAX_SECONDS = 5.0
 
+# 字幕清洗统计键 → 报告显示名（D2026-1023-03 批3；键集与
+# subtransjav/refine/polish.py STATS_KEYS 对齐，0 值键不输出）
+_POLISH_STAT_LABELS: tuple[tuple[str, str], ...] = (
+    ("whitespace_collapsed", "空白折叠"),
+    ("music_fixed", "音乐标记修复"),
+    ("italic_tags_reported", "斜体标签上报"),
+    ("i_tags_repaired", "i 标签修复"),
+    ("gt_removed", "gt 移除"),
+    ("periods_stripped", "去句号"),
+    ("quotes_normalized", "引号规范化"),
+    ("lines_rewrapped", "拆行"),
+    ("long_clamped", "长行截断"),
+    ("short_reported", "短行上报"),
+    ("overlaps_resolved", "重叠消解"),
+    ("gaps_enforced", "间隔补足"),
+    ("dropped_empty", "空行丢弃"),
+)
+
 # 导读条目身份码（卡5 撞号消歧，D2026-1012-01 A5）：item_id = "码-index"。
 # 真机 6/7 运行 11 对重复 index 全为 cps_too_fast×其他类别各自独立编号相撞，
 # 裸 #N 无法区分"哪一条导读条目"——身份改为 类别码+index（additive 双写，
@@ -1376,6 +1394,22 @@ def build_quality_report(orig_entries: list, final_entries: list,
     lines.append(clean_line)
     if noise_line:
         lines.append(noise_line)
+    # 字幕清洗统计（D2026-1023-03 批3）：polish_stats 经 merge_stats["polish"]
+    # 数据链路传入（pipeline_v2 批次内挂入）；未启用清洗时整行省略，
+    # 0 值键不输出（只列实际发生的变换）。
+    polish_stats = merge_stats.get("polish") or {}
+    if polish_stats:
+        _polish_parts = [
+            f"{label} {int(polish_stats.get(key, 0) or 0)}"
+            for key, label in _POLISH_STAT_LABELS
+            if int(polish_stats.get(key, 0) or 0)
+        ]
+        lines.append("字幕清洗: "
+                     + (" / ".join(_polish_parts) if _polish_parts else "无改动"))
+    # D4 保证边界固定注记（无条件输出）：清洗只覆盖主链终稿与附加件再生，
+    # 行动层重翻/自动补行产物不经 polish。
+    lines.append("清洗保证边界：主链终稿+附加件再生；"
+                 "行动层重翻与自动补行产物不在保证内（未 polish）")
     lines.append(tm_line)
     lines.append(f"时间轴对齐率（对预合并后期望时间轴）: {align_rate:.1f}%"
                  f"（未对齐 {len(misaligned)} 条"
