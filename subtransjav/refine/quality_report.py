@@ -91,15 +91,15 @@ _POLISH_STAT_LABELS: tuple[tuple[str, str], ...] = (
     ("music_fixed", "音乐标记修复"),
     ("italic_tags_reported", "斜体标签上报"),
     ("i_tags_repaired", "i 标签修复"),
-    ("gt_removed", "gt 移除"),
+    ("gt_removed", "对话标记移除"),
     ("periods_stripped", "去句号"),
     ("quotes_normalized", "引号规范化"),
     ("lines_rewrapped", "拆行"),
-    ("long_clamped", "长行截断"),
-    ("short_reported", "短行上报"),
+    ("long_clamped", "超长时长缩短"),
+    ("short_reported", "短时长上报"),
     ("overlaps_resolved", "重叠消解"),
-    ("gaps_enforced", "间隔补足"),
-    ("dropped_empty", "空行丢弃"),
+    ("gaps_enforced", "最小间隔保证"),
+    ("dropped_empty", "空条目删除"),
 )
 
 # 导读条目身份码（卡5 撞号消歧，D2026-1012-01 A5）：item_id = "码-index"。

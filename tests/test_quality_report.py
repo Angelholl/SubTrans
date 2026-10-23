@@ -301,7 +301,7 @@ def test_build_quality_report_polish_line_only_when_stats_present():
                         "dropped_empty": 0}}
     on = build_quality_report([e], [e], "demo", merge_stats=stats)
     assert "字幕清洗: 空白折叠 3 / 去句号 2" in on
-    assert "空行丢弃" not in on            # 0 值键省略
+    assert "空条目删除" not in on          # 0 值键省略
     assert _POLISH_BOUNDARY in on
 
 
