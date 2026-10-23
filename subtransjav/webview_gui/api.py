@@ -314,6 +314,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
     if out_dir and out_dir.lower().strip() != "source":
         args.extend(["-o", out_dir])
 
+    # 多格式输出附加件旗标（D2026-1023-02 批2）：白名单过滤，缺省零旗标
+    for fmt in (options.get("extra_output_formats") or []):
+        if fmt in ("ass", "vtt"):
+            args.extend(["--extra-output-format", fmt])
+
     # v2 两阶段管线（阶段A→s1 槽位、阶段B→s3 槽位）
     if options.get("profile"):
         args.extend(["--profile", str(options["profile"])])
@@ -3315,6 +3320,15 @@ class TranslateAPI:
                                      endpoint=endpoint)}
         args = ["--action-retranslate", p,
                 "--entries", ",".join(str(i) for i in sorted(want))]
+        # 多格式附加件再生成旗标（D2026-1023-02 批2）：按已存在附加件反推
+        #（cfg 旗标不走本通道——手动批修复会话态无 GUI 勾选可透传），final
+        # 路径经 _resolve_final_subtitle/final_stem 契约取，取不到不追加
+        final_srt = self._resolve_final_subtitle(
+            str(Path(p).with_name(stem + ".srt")))
+        if final_srt:
+            from subtransjav.refine.output_formats import existing_extra_formats
+            for fmt in existing_extra_formats(final_srt):
+                args.extend(["--extra-output-format", fmt])
         # F1 修复源文增强（D2026-1009-02 批0 / D2026-1009-01 C1）：三级
         # 定位原始源文 SRT，命中即透传 --action-source（按 timing 对齐恢复
         # 完整源文）；解析退化（None）不追加，CLI 侧既有提示兜底，不新增
@@ -6123,6 +6137,12 @@ class TranslateAPI:
                             _append_ledger(Path(ledger_path), records)
                             _atomic_write_text(
                                 final_path, build_srt(new_entries))
+                            # 附加成品件一致性再生（D2026-1023-02 批2）：
+                            # 只按已存在附加件再生，不凭空新增
+                            from subtransjav.refine.output_formats import existing_extra_formats, sync_extra_outputs
+                            sync_extra_outputs(
+                                final_path, new_entries,
+                                existing_extra_formats(final_path))
                             ok_write = True
                         except Exception:
                             _log_exc("_run_fullchain_missed_stage.write")
@@ -6561,6 +6581,11 @@ class TranslateAPI:
         # 依据；终稿写失败时台账已记录回滚动作不丢失）
         _append_ledger(Path(ledger_path), records)
         _atomic_write_text(final_path, build_srt(entries))
+        # 附加成品件一致性再生（D2026-1023-02 批2）：只按已存在附加件
+        # 再生，不凭空新增
+        from subtransjav.refine.output_formats import existing_extra_formats, sync_extra_outputs
+        sync_extra_outputs(final_path, entries,
+                           existing_extra_formats(final_path))
         if deleted:
             # guide 顶层 extras.auto_insert 同步清空（来源标记收口）
             try:
