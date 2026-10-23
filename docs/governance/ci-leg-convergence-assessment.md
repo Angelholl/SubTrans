@@ -16,12 +16,12 @@
 | 查询 | 时点 | 方式 | 结果 |
 |---|---|---|---|
 | `branches/main`（public） | 2026-10-23T02:33:49Z | 无凭证 | `protected=false`（commit 52aeb5f） |
-| `branches/main/protection` | 2026-10-23 本会话（北京 09:5x，分钟级未记；凭证＝git credential fill token，只读 GET） | 带凭证 | 404 `Branch not protected` |
+| `branches/main/protection` | 2026-10-23 本会话（北京 09:5x，分钟级估算，非精确时间戳；凭证＝git credential fill token，只读 GET） | 带凭证 | 404 `Branch not protected` |
 | `rulesets` | 同上 | 带凭证 | 空数组 |
 | `actions/workflows` | 2026-10-23T02:33:49Z | 无凭证 | CI/gui-probe/release 三件均 active |
 | gui-probe `runs?event=schedule` | 2026-10-23T02:33:49Z | 无凭证 | `total_count=0`（定时至今零跳，11/01 为错峰后首跳） |
 
-**结论：main 无任何 required status checks / ruleset，8 腿全部非阻断（advisory）。**
+**结论：main 无任何 required status checks / ruleset，8 腿全部非阻断（advisory）。精确时间以无凭证轮（2026-10-23T02:33:49Z）为准，带凭证轮仅作交叉验证。**
 **时点声明：以上基于查询时点配置；若后续启用 required checks，本报告结论需重评。**
 
 ## 3. 8→4 收敛候选与影响面
