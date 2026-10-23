@@ -49,6 +49,7 @@ from .config import (
     TEMP_DIR,
     RefineConfig,
     ensure_language_support,
+    polish_policy_from_config,
 )
 from .events import EventEmitter
 from .filters import build_srt, parse_srt
@@ -76,6 +77,7 @@ from .pipeline_support import (
     load_glossary_merged,
     refine_tmp_dir,
 )
+from .polish import polish_entries
 from .risk import SEVERITY_CRITICAL, SEVERITY_INFO, SEVERITY_WARNING, RiskCollector
 from .source_hallucination import (
     apply_source_filter,
@@ -1584,6 +1586,25 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         if cfg.verbose:
             print(f"   [VERBOSE] 阶段B 耗时 {time.perf_counter() - _t_b:.1f}s")
 
+        # ---- 确定性字幕清洗层（D2026-1023-03 D3）----
+        # 插入点钉死：隔离区回捞/计数/事件打印之后、术语冲突扫描之前。
+        # 默认关（polish_enabled=False）时零调用，全链行为与改动前一致。
+        # 下游（术语冲突扫描 / garble 对齐 / CPS 扫描 / 终稿写出）必须消费
+        # 同一份清洗后条目——赋值回 final_entries 后加断言钉住。
+        polish_stats = None
+        if bool(getattr(cfg, "polish_enabled", False)):
+            post_polish_entries, polish_stats = polish_entries(
+                final_entries, polish_policy_from_config(cfg))
+            # 出口不变量已由 polish_entries 内部保证，此处不重复实现。
+            final_entries = post_polish_entries
+            assert final_entries is post_polish_entries
+            if cfg.verbose:
+                print(
+                    "   [VERBOSE] polish 清洗完成: "
+                    f"去句号 {polish_stats['periods_stripped']} / "
+                    f"拆行 {polish_stats['lines_rewrapped']} / "
+                    f"重叠 {polish_stats['overlaps_resolved']}")
+
         # ---- v1.2.2 D1 术语冲突观察（终稿生成后计算；一次遍历两用）----
         # 冲突清单供 CSV/报告【术语冲突观察】小节；逐术语统计供
         # 【术语一致性】章节；冲突 span 集合在 glossary_conflict_block=True
@@ -1702,6 +1723,10 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     pass_mode = probe_disagreement_mode(in_path)
                     disag = collect_disagreement(in_path)
                 merge_stats: dict = {"premerge_merged": premerge_merged}
+                # polish 清洗 stats（D2026-1023-03）：本批只挂数据链路，
+                # 质量报告展示层=批3，此处不渲染。
+                if polish_stats is not None:
+                    merge_stats["polish"] = dict(polish_stats)
                 # H5 隔离区回捞：移出主稿进 *_隔离区.srt 的条数入账条数
                 # 恒等式（无隔离时为 0，报告中该项不显示）
                 merge_stats["quarantine_moved"] = len(quarantine_entries)

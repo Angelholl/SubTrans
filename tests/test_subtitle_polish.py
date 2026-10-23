@@ -2,6 +2,8 @@
 
 import copy
 import unicodedata
+from pathlib import Path
+from types import SimpleNamespace
 
 from subtransjav.refine.polish import POLICY_DEFAULTS, polish_entries
 
@@ -349,3 +351,119 @@ def test_dropped_empty_entry():
     assert len(out) == 1
     assert out[0]["text"] == "甲"
     assert stats["dropped_empty"] == 1
+
+
+# --- 批2：主链接线 / 配置面 / 指纹条件键 -------------------------------------
+
+
+def _pipeline_cfg(**kw):
+    from subtransjav.refine.config import RefineConfig, StageConfig
+    options = dict(inputs=[], templates_dir="", tm_enabled=False,
+                   v2_profile="cloud", quality_report=False)
+    options.update(kw)
+    cfg = RefineConfig(**options)
+    cfg.stages = [
+        StageConfig(0, True, "lmstudio", "fake-model"),
+        StageConfig(1, False, "deepseek", ""),
+        StageConfig(2, True, "lmstudio", "fake-model"),
+        StageConfig(3, False, "lmstudio", ""),
+    ]
+    return cfg
+
+
+class _FakeClient:
+    """终稿文本带句号，用于验证 polish 默认关/开的可见差异。"""
+
+    def __init__(self):
+        self.calls = []
+
+    def translate_entries(self, entries, *, system_text, user_prompt, **kwargs):
+        from subtransjav.translate.llm_client import BatchResult
+        self.calls.append([e["index"] for e in entries])
+        stage_b = any("|||" in e.get("text", "") for e in entries)
+        translations = {
+            e["index"]: (f"审{e['index']}。" if stage_b else f"译{e['index']}。")
+            for e in entries}
+        return BatchResult(translations=translations, deleted=set(), failed=[])
+
+
+def _run_pipeline(tmp_path, monkeypatch, **kw):
+    from subtransjav.refine import pipeline_v2 as pv
+    cfg = _pipeline_cfg(**kw)
+    in_srt = tmp_path / "demo.srt"
+    in_srt.write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n\n"
+        "2\n00:00:10,000 --> 00:00:11,000\nさようなら\n", encoding="utf-8")
+
+    def _fake_tmp(_path, _stem):
+        work = tmp_path / "work"
+        work.mkdir(exist_ok=True)
+        return str(work)
+
+    monkeypatch.setattr(pv, "refine_tmp_dir", _fake_tmp)
+    monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: _FakeClient())
+    monkeypatch.setattr(pv, "_init_tm", lambda cfg: None)
+    return pv._run_single_v2(cfg, str(in_srt))
+
+
+def test_pipeline_polish_default_off_is_zero_change(tmp_path, monkeypatch):
+    """默认关：polish_entries 零调用，终稿逐字保留句号。"""
+    from subtransjav.refine import pipeline_v2 as pv
+    calls = []
+    monkeypatch.setattr(pv, "polish_entries",
+                        lambda *a, **k: calls.append(1))
+    out = _run_pipeline(tmp_path, monkeypatch)
+    assert calls == []
+    content = Path(out).read_text(encoding="utf-8")
+    assert "审1。" in content and "审2。" in content
+
+
+def test_pipeline_polish_enabled_applies_and_links_stats(tmp_path, monkeypatch):
+    """开：终稿句号消失，stats 挂进质量报告 merge_stats 数据链路。"""
+    from subtransjav.refine import quality_report as qr
+    captured = {}
+
+    def _fake_build(*args, **kwargs):
+        captured["merge_stats"] = dict(kwargs.get("merge_stats") or {})
+        return "polish 报告占位\n第二行\n第三行"
+
+    monkeypatch.setattr(qr, "build_quality_report", _fake_build)
+    out = _run_pipeline(tmp_path, monkeypatch, polish_enabled=True,
+                        quality_report=True)
+    content = Path(out).read_text(encoding="utf-8")
+    assert "审1。" not in content and "审2。" not in content
+    assert "审1" in content and "审2" in content
+    stats = captured["merge_stats"]["polish"]
+    assert stats["periods_stripped"] == 2
+
+
+def _legacy_cfg(cfg):
+    """旧配置形态：不含任何 polish_* 属性的简易 cfg 对象。"""
+    return SimpleNamespace(**{key: value for key, value in cfg.__dict__.items()
+                              if not key.startswith("polish_")})
+
+
+def test_config_hash_off_matches_legacy_config_shape():
+    """默认关：指纹与不含 polish_* 属性的旧配置逐字节一致。"""
+    from subtransjav.refine.config import RefineConfig
+    from subtransjav.refine.manifest import compute_config_hash
+    cfg = RefineConfig(inputs=[], templates_dir="", tm_enabled=False)
+    assert compute_config_hash(cfg) == compute_config_hash(_legacy_cfg(cfg))
+
+
+def test_config_hash_polish_three_states():
+    """指纹三态：H_off ≠ H_on_default ≠ H_on_changed；关时改参不影响。"""
+    from subtransjav.refine.config import RefineConfig
+    from subtransjav.refine.manifest import compute_config_hash
+
+    def _hash(**kw):
+        return compute_config_hash(RefineConfig(
+            inputs=[], templates_dir="", tm_enabled=False, **kw))
+
+    h_off = _hash(polish_enabled=False)
+    h_off_changed = _hash(polish_enabled=False, polish_max_line_chars=12)
+    h_on_default = _hash(polish_enabled=True)
+    h_on_changed = _hash(polish_enabled=True, polish_max_line_chars=12,
+                         polish_quote_style="curly")
+    assert h_off == h_off_changed
+    assert len({h_off, h_on_default, h_on_changed}) == 3
