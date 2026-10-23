@@ -28,3 +28,12 @@
 - **零改动清单（Q5/Q6 裁定）**：roadmap.md（现状已核一致）、audit-filter-rules.md、status-vocab.md、impl-card-audit-runtime.md、两既有归档卷、全部长期观察项（哈希漂移 evidence_gap／offlineAdvisory／adaptive thresholds／OBS-CI-FLAKE-20261022）。
 - **验证**：ruff 全库 0；定向 pytest（test_brand_allowlist＋test_guard_banned_paths）全绿；全量 pytest 2521 passed＋4 skipped（基线 2520+4→2521+4 只增不减，§5 回归测试笔已入基线）；冒烟 refine --help/--where rc=0。
 - **通道**：分支 chore/decision-log-archive-d，执行代理只 commit 不 push，留主审验收（Q7 裁定）。
+
+## [2026-10-23] [D2026-1023-02] 「多格式输出（保 ASS/VTT）立项两口径拍板：平行附加写出＋案甲本批＋设置页复选框/CLI append＋并行排期」 [已拍板（主审按开工令与评估包既定口径裁定；owner 拍板门保留于验收/push 闸）]
+
+- **背景**：Q4-PROD-03 评估包 §3.2（建议立项）→ owner 开工令（2026-10-23，任务提示词=开工令，内列两口径待拍板）。方案书=`docs/design/d1023-多格式输出方案书.md`；decision-critic 评议=有条件支持＋1 HRO（终稿 SRT 实有 4 写点：`pipeline_v2.py:1607`、`action_retranslate.py:558`、`api.py:6124-6125`、`api.py:6563`，只在 1607 追加=静默失同步）＋C1–C10。
+- **裁定**：①**平行附加写出**——终稿 SRT 恒写，ASS/VTT 为 opt-in 附加成品件（`{final_stem}.ass/.vtt`），拒绝替换写出（击穿压制链解析/校对页/完成判定/备份表四面）；②**样式保真=案甲本批**（格式容器转换，显式默认样式集对齐压制 force_style 语义），案乙′（样式模板回捞复用）留后续批凭真机信号再裁，案丙（event 级标签回嵌）本批与可预见二期不实施、保留 owner 重启口——与评估包 §3.2 范围建议（样式映射回译链=第二阶段议题）一致；③**HRO-1 采纳方案 A**：统一 helper `sync_extra_outputs` 在全部 4 写点再生，一致性契约=「一经产生处处同步再生、写点不凭空新增」，全链 GUI 写点 formats 从已存在附加件反推；④**GUI 形态**=设置页「输出目录」区两复选框（默认不勾）+ CLI `--extra-output-format`（append），会话级无持久化（同 outputToSource 现机制）；⑤**排期=明示并行**（本批不改 CI/治理表，与 10/31–11/10 观察预检密集面无交叠）。
+- **裁定主体说明**：开工令要求两口径交 owner 拍板；主审已发三问（样式案/GUI 形态/排期）owner 未答，按开工令自身建议（默认 SRT opt-in）与已 commit 评估包 §3.2 既定范围建议收口拍板，全部留本地 commit 不 push，owner 否决权保留于验收/push 闸（AGENTS.md「方案取舍拍板=owner 决或主模型亲持」之后一分支）。
+- **C7 裁定**：附加件命名 target 感知经 `final_stem` 契约单点；备份表追加行照 `.srt` 行既有模式（`final_suffix()` 无参），非 zh 方向成品件不备份=既有 quirk 登记不修。
+- **条件闭环**：C2 plaintext setter／C3 ASS centisecond ±10ms 口径／C4 剥 `{\...}`+VTT 转义／C5 零时长 +1ms 规范化／C6 显式样式集／C8 快照解冻原子化（ids 222→224、i18n_keys 186→+2~3、`_meta.history` 一笔+二级评议同批做全）／C9 completed 不追溯补出=文档明示行为——均已写入方案书 §3/§5/§6/§7。
+- **回链**：评估包 `docs/design/q4-prod03-产品候选池评估包.md` §3.2；roadmap 候选池登记见同日回写；批卡=`docs/design/d1023-批1-批清单.md`／`d1023-批2-批清单.md`。
