@@ -226,6 +226,8 @@ const MSG = {
     output_format_header: '输出格式',
     output_fmt_ass: '同时输出 .ass',
     output_fmt_vtt: '同时输出 .vtt',
+    // 字幕清洗总开关（D2026-1023-03 批3）：默认不勾，会话级无持久化
+    polish_enabled_label: '字幕清洗（实验性）',
     save_to_source_dir: '保存到字幕同目录',
     output_label: '输出:',
     output_placeholder: '输出目录...',

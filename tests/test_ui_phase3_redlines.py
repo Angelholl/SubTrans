@@ -176,3 +176,24 @@ def test_nav_grouping_pinned():
         and "side-tab-btn" in rb.group(0), \
         "校对 TAB 按钮必须挂 data-tab=tab-review 且为 .side-tab-btn"
     assert "tabReview: '校对'" in JS, "MSG 缺 tabReview 静态键"
+
+
+# ---------------------------------------------------------------------------
+# d1023-polish 批3（D2026-1023-03）：字幕清洗复选框输出格式区块落位钉
+# ---------------------------------------------------------------------------
+
+def test_polish_checkbox_in_output_format_block_existing_class():
+    """清洗复选框落在「输出格式」区块（outputFmtVtt 之后、path-row 之前），
+    行容器沿用既有 output-source-toggle 类（019b205 死类教训），默认不勾
+    （=polish_enabled 默认 False 的 GUI 镜像）。"""
+    block = _slice_between(
+        HTML, '<div class="field-label" data-i18n="output_format_header">',
+        '<div class="path-row">')
+    m = re.search(r'<input[^>]*id="polishEnabled"[^>]*>', block)
+    assert m, "输出格式区块缺 polishEnabled 复选框"
+    assert "checked" not in m.group(0), "polishEnabled 默认必须不勾"
+    row_start = block.rindex("<div", 0, m.start())
+    assert 'class="output-source-toggle"' in block[row_start:m.start()], \
+        "清洗复选框行须沿用既有 output-source-toggle 类（禁止死类）"
+    assert 'data-i18n="polish_enabled_label"' in block, \
+        "清洗复选框缺 data-i18n 键 polish_enabled_label"

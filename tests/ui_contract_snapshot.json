@@ -102,6 +102,7 @@
     "outputToSource",
     "pipelineCard",
     "pipelineMirrorLine",
+    "polishEnabled",
     "progressBar",
     "progressFill",
     "rawLogToggleBtn",
@@ -338,6 +339,7 @@
     "output_label",
     "output_placeholder",
     "pipeline_card_hint",
+    "polish_enabled_label",
     "profile_cloud",
     "profile_label",
     "profile_local",
@@ -437,7 +439,8 @@
       "3.1 阶段1 地基批 卡2（D2026-1012-01）：快照外置 tests/ui_contract_snapshot.json + 再生工具 tools/ui_contract_snapshot.py，集合零增减（ids 223 / i18n_keys 187）；解冻史自本卡起只记本 _meta.history（测试文件头注释解冻史块全量迁入，含本卡据 index.html/decision-log/test_gui_js_static 补记的 217→218、218→223 两笔）",
       "真机反馈 IA 重排轮（D2026-1013-01 追记，owner 2026-10-13 直接指示删除产物命名说明）：artifact_note 键退役（index.html footnote 元素删除+app.js MSG 键同步删），i18n_keys 187→186；ids 223 不动",
       "AI 分析生效行黄字提示退役（D2026-1015-01，owner 2026-10-15 直接指示折叠态截断不可读取消）：index.html #refineAiPrivacy 元素删除+app.js aiRefreshEffective/shortenModelName/aiSetPrivacy/MSG 七键删除+style.css 行尾规则删除，ids 223→222；i18n_keys 186 不动",
-      "多格式输出 GUI 面（D2026-1023-02 批2）：index.html 输出目录 section 新增 outputFmtAss/outputFmtVtt 两复选框+app-msg.js 三 MSG 键（output_format_header/output_fmt_ass/output_fmt_vtt），ids 222→224；i18n_keys 186→189"
+      "多格式输出 GUI 面（D2026-1023-02 批2）：index.html 输出目录 section 新增 outputFmtAss/outputFmtVtt 两复选框+app-msg.js 三 MSG 键（output_format_header/output_fmt_ass/output_fmt_vtt），ids 222→224；i18n_keys 186→189",
+      "字幕清洗总开关 GUI 面（D2026-1023-03 批3）：index.html 输出目录 section 新增 polishEnabled 复选框+app-msg.js 一键 polish_enabled_label，ids 224→225；i18n_keys 189→190"
     ]
   }
 }
