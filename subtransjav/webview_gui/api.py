@@ -6104,6 +6104,8 @@ class TranslateAPI:
                     try:
                         with open(final_path, encoding="utf-8") as f:
                             entries = parse_srt(f.read())
+                        # 自动补行写点：产物不在 polish 清洗保证边界内
+                        # （D2026-1023-03 D4：保证边界=主链终稿+附加件再生）
                         new_entries = insert_candidates(entries, picks)
                         # C15 独立恒等式：失败=程序 bug，该文件整体放弃
                         assert_insert_invariants(entries, new_entries, picks)
