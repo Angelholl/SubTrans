@@ -824,3 +824,42 @@ def test_residual_cps_marked_on_applied(tmp_path, install_client, capsys):
     assert rec["residual_cps"] is not None and rec["residual_cps"] > 5.0
     assert "残留" in rec["reason"]
     assert "⚠️" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# 附加成品件同步再生（D2026-1023-02）
+# ---------------------------------------------------------------------------
+
+def test_apply_regenerates_existing_extra_ass(tmp_path, install_client):
+    """预置同名 .ass 附加件 → apply 重翻终稿后 .ass 同步再生，与 SRT 逐条
+    一致（event 数相等、文本=重翻后）；无预置件时重翻后仍无 .ass（再生非
+    新增）。"""
+    from subtransjav.refine.output_formats import existing_extra_formats
+    pytest.importorskip("pysubs2")
+    import pysubs2
+
+    # 场景1：预置 .ass → apply 后再生且与终稿逐条一致
+    _write_final(tmp_path, FINAL_ENTRIES)
+    (tmp_path / "ep01_final_cn.ass").write_text("[Script Info]\n",
+                                                encoding="utf-8")
+    _write_guide(tmp_path, [_item(2, T2, "[未翻译] テスト")])
+    install_client(responses=["重翻后的中文台词"])
+    assert run_action_retranslate(_cfg(), _args(tmp_path, apply=True)) == 0
+
+    final = _read_final(tmp_path)
+    ass_path = tmp_path / "ep01_final_cn.ass"
+    assert ass_path.is_file()
+    ass = pysubs2.SSAFile.load(str(ass_path))
+    assert len(ass.events) == len(final)
+    assert [ev.plaintext for ev in ass.events] == [e["text"] for e in final]
+    assert existing_extra_formats(str(tmp_path / "ep01_final_cn.srt")) == ("ass",)
+
+
+def test_apply_without_preset_extra_writes_none(tmp_path, install_client):
+    """无预置附加件 → 重翻后仍无 .ass（不凭空新增）。"""
+    _write_final(tmp_path, FINAL_ENTRIES)
+    _write_guide(tmp_path, [_item(2, T2, "[未翻译] テスト")])
+    install_client(responses=["重翻后的中文台词"])
+    assert run_action_retranslate(_cfg(), _args(tmp_path, apply=True)) == 0
+    assert not (tmp_path / "ep01_final_cn.ass").exists()
+    assert not (tmp_path / "ep01_final_cn.vtt").exists()
