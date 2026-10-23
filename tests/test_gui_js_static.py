@@ -6952,7 +6952,9 @@ def test_js_sources_layer_pinned():
 
     ① JS_FILES 现值锁定（后续拆分批随批更新本断言；批3 逐块切出自包含块）；
     ② read_all() 拼接视图 sha256 锁定（拆分后与整份 app.js 的守恒等价物）；
-       批4 去壳载荷钉：refine 家族拼接 == 6051c666…（204,006B）；全库拼接换代 10f6ef82…（470,144B）；
+       批4 去壳载荷钉：refine 家族拼接现钉 7bc53c76…（204,177B，d1023-批2 换代：
+       app-refine-core.js extra_output_formats 组装 +4 行；旧钉 6051c666…/204,006B 退役）；
+       全库拼接换代 10f6ef82…（470,144B）；
        旧钉 787460b7…（470,198B）已退役（D2026-1019-01）；
        d1021-卡1 换代 f67e4ceb…（app-file-list.js 缺陷B 修复：drop 监听去 stopPropagation＋注释，15821B→16069B）；
        d1021-卡2 换代 50a0ab4a…（P1-6 件B 拖拽分隔层：app-file-list.js 尾部 TranslateSplit
@@ -6972,7 +6974,8 @@ def test_js_sources_layer_pinned():
         "bf8de109a51e440a3a93990ab4bdc2cd7f803c027bb0b6c21d020e25cbe3e038"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
-    # 按 JS_FILES 顺序拼接恒等于去壳载荷（204,006B），15 次切块恒真；切点外任何字节改动必红。
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,177B，d1023-批2 换代），
+    # 15 次切块恒真；切点外任何字节改动必红。
     refine_family = [n for n in js_sources.JS_FILES
                      if n.startswith("app-refine-") or n == "app-main.js"]
     assert hashlib.sha256("".join(
