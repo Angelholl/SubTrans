@@ -968,6 +968,9 @@ def build_quality_report(orig_entries: list, final_entries: list,
       隔离区移出 Q —— merge_stats["quarantine_moved"]（H5 隔离区回捞把
         存疑条目移出主稿进 *_隔离区.srt 的条数；键缺失/为 0（无隔离）
         时该项不显示，恒等式退回五项形式——故选"不显示"而非"+0"）；
+      源文清洗合并/删喘息 —— merge_stats["kana_merged"] /
+        ["kana_moan_deleted"]（D2026-1025-01 批3a 源文假名清洗减少的
+        条数；键缺失/为 0 时同 Q 口径不显示）；
       终稿 F —— len(final_entries)。
     成立（N = D+M+C+E+Q+F）→ 前缀 ✅；不成立 → 前缀 ⚠️ 并显示两侧数值
     （通常意味着存在未入账的条目减少，如漏覆盖，绝不静默）。
@@ -1285,6 +1288,16 @@ def build_quality_report(orig_entries: list, final_entries: list,
         noise_line = (f"纯假名实义保留: {n_noise_kept}"
                       f"（其中 [未翻译] 标记 {m_marked}）")
 
+    # 源文假名清洗统计行（D2026-1025-01 批3a）：merge_stats["kana_merged"]
+    # 等键缺失（未运行/非 ja→zh/两开关全关）时整行省略（只加不减契约）。
+    if "kana_merged" in merge_stats or "kana_moan_deleted" in merge_stats:
+        kana_line = (f"源文清洗: 合并 "
+                     f"{int(merge_stats.get('kana_merged', 0) or 0)}"
+                     f" · 删喘息 "
+                     f"{int(merge_stats.get('kana_moan_deleted', 0) or 0)}")
+    else:
+        kana_line = None
+
     # v1.2.2 D2：TM 摘要行（H=阶段A 精确命中数、L=本次学习入库数；
     # 两侧均取不到时整行显示"无样本"）
     if tm_exact_hits is None and tm_learned_count is None:
@@ -1303,13 +1316,20 @@ def build_quality_report(orig_entries: list, final_entries: list,
     c_clean = int(clean_merged) if clean_merged is not None else 0
     e_clean = int(clean_deleted or 0)
     q_quar = int(merge_stats.get("quarantine_moved", 0) or 0)
+    # 源文假名清洗（D2026-1025-01 批3a）：并入恒等式右侧（键缺失/0 值
+    # 不显示，与隔离区移出 Q 同款"不显示而非 +0"约定）
+    kana_merged_n = int(merge_stats.get("kana_merged", 0) or 0)
+    kana_deleted_n = int(merge_stats.get("kana_moan_deleted", 0) or 0)
     f_final = len(final_entries)
     rhs_terms = (f"闸门0删除 {gate0_del_total} + 预合并合并 {premerged}"
                  f" + 规则清洗合并 {c_clean} + 规则清洗删除 {e_clean}"
                  + (f" + 隔离区移出 {q_quar}" if q_quar else "")
+                 + (f" + 源文清洗合并 {kana_merged_n}" if kana_merged_n else "")
+                 + (f" + 源文清洗删喘息 {kana_deleted_n}"
+                    if kana_deleted_n else "")
                  + f" + 终稿 {f_final}")
     rhs_total = (gate0_del_total + premerged + c_clean + e_clean
-                 + q_quar + f_final)
+                 + q_quar + kana_merged_n + kana_deleted_n + f_final)
     if n_src == rhs_total:
         check_line = f"条数核对: ✅ 原文 {n_src} = {rhs_terms}"
     else:
@@ -1365,6 +1385,20 @@ def build_quality_report(orig_entries: list, final_entries: list,
         lines.extend(untranslated_lines[:_UNTRANSLATED_LIST_LIMIT])
         if len(untranslated) > _UNTRANSLATED_LIST_LIMIT:
             lines.append(f"（其余 {len(untranslated) - _UNTRANSLATED_LIST_LIMIT}"
+                         f" 条略）")
+        lines.append("-" * 60)
+    # 源文假名清洗删除台账（D2026-1025-01 批3a）：孤立喘息删除逐条列出
+    # （kana_moan_deleted_timings 缺失/为空时整节省略），上限同
+    # _MISS_LIST_LIMIT 风格。
+    kana_del_rows = merge_stats.get("kana_moan_deleted_timings") or []
+    if kana_del_rows:
+        lines.append(f"【源文清洗】孤立喘息删除共 {len(kana_del_rows)} 条"
+                     f"（源文纯假名喘息，前后间隙均超 1200ms，opt-in）")
+        for row in kana_del_rows[:_MISS_LIST_LIMIT]:
+            lines.append(f"  {_fmt_timing(row.get('timing') or '')}"
+                         f" 原文: {(row.get('text') or '')[:60]}")
+        if len(kana_del_rows) > _MISS_LIST_LIMIT:
+            lines.append(f"（其余 {len(kana_del_rows) - _MISS_LIST_LIMIT}"
                          f" 条略）")
         lines.append("-" * 60)
     # 处置章节：闸门0 送翻前删除台账（gate0_deletions 未提供时整节省略）
@@ -1447,6 +1481,8 @@ def build_quality_report(orig_entries: list, final_entries: list,
     lines.append(clean_line)
     if noise_line:
         lines.append(noise_line)
+    if kana_line:
+        lines.append(kana_line)
     # 字幕清洗统计（D2026-1023-03 批3）：polish_stats 经 merge_stats["polish"]
     # 数据链路传入（pipeline_v2 批次内挂入）；未启用清洗时整行省略，
     # 0 值键不输出（只列实际发生的变换）。

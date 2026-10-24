@@ -456,6 +456,16 @@ def compute_config_hash(cfg) -> str:
     if bool(getattr(cfg, "polish_enabled", False)):
         from .config import polish_policy_from_config
         payload["polish"] = polish_policy_from_config(cfg)
+    # 源文假名清洗（D2026-1025-01 批3a）：条件键缺席归一——两开关均为
+    # 默认值（合并开/喘息删除关，或旧配置对象无该属性）时不写入任何键，
+    # payload 与改动前逐字节一致（存量 --resume 零误伤）；任一非默认即
+    # 计入。MANIFEST_VERSION / _CONFIG_FIELDS / TaskManifest 均不动。
+    _kana_merge = bool(getattr(cfg, "source_kana_merge_enabled", True))
+    _kana_moan_del = bool(getattr(
+        cfg, "source_kana_moan_delete_enabled", False))
+    if not _kana_merge or _kana_moan_del:
+        payload["source_kana_clean"] = {"merge": _kana_merge,
+                                        "moan_delete": _kana_moan_del}
     files = instruction_source_files(cfg)
     payload["instruction_files_sha1"] = (
         hashlib.sha1(

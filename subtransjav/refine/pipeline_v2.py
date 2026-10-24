@@ -1212,6 +1212,28 @@ def map_entries_to_scenes(entries: list, scenes: dict) -> dict:
     return mapping
 
 
+def _kana_clean_stage(entries: list, cfg: RefineConfig) -> tuple:
+    """源文假名清洗阶段（D2026-1025-01 批3a）：预合并后、阶段A 前的
+    确定性源文侧清洗（kana_clean 纯函数层的管线接线门）。
+
+    仅 ja→zh（与 v2_rules 同门条件，防误伤其他语言——分类器也只触
+    纯假名条目）且至少一个开关启用时生效；其余情形原样返回
+    (entries, None)。返回 stats 键：kana_merged / kana_moan_deleted /
+    kana_moan_deleted_timings / kana_kept（并入 merge_stats 流，供
+    质量报告消费）。
+    """
+    if (getattr(cfg, "source_lang", None) or "ja",
+            getattr(cfg, "target_lang", None) or "zh") != ("ja", "zh"):
+        return entries, None
+    merge_on = bool(getattr(cfg, "source_kana_merge_enabled", True))
+    delete_on = bool(getattr(cfg, "source_kana_moan_delete_enabled", False))
+    if not merge_on and not delete_on:
+        return entries, None
+    from .kana_clean import clean_entries
+    return clean_entries(entries, merge_enabled=merge_on,
+                         delete_enabled=delete_on)
+
+
 def _run_single_v2(cfg: RefineConfig, in_path: str, collector=None,
                    emitter=None, learn_threads: list | None = None) -> str:
     """产物锁挂点（v1.3.0 D4，D2026-0925-01 终选）：锁键=输入 sha1+output_dir。
@@ -1466,6 +1488,14 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                               action="如非预期，可调低 premerge_max_span_ms / "
                                      "premerge_max_chars 或关闭 premerge_enabled",
                               severity=SEVERITY_INFO)
+
+    # 源文假名清洗（D2026-1025-01 批3a）：预合并后、阶段A 前——源文侧
+    # 纯假名短句合并（默认开）与孤立喘息删除（默认关）。仅 ja→zh 生效。
+    orig_entries, kana_stats = _kana_clean_stage(orig_entries, cfg)
+    if kana_stats and (kana_stats.get("kana_merged")
+                       or kana_stats.get("kana_moan_deleted")):
+        print(f"   🈶 源文假名清洗: 合并 {kana_stats['kana_merged']} 条"
+              f" · 删喘息 {kana_stats['kana_moan_deleted']} 条")
 
     # ---- v1.2.2 Beta 剧情自摘要（时点：闸门0+预合并后、阶段A 前）----
     # 手写 sidecar【剧情摘要】非空时手写优先；关闭/失败静默跳过。
@@ -1723,6 +1753,17 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     pass_mode = probe_disagreement_mode(in_path)
                     disag = collect_disagreement(in_path)
                 merge_stats: dict = {"premerge_merged": premerge_merged}
+                # 源文假名清洗 stats（D2026-1025-01 批3a）：kana_stats 为
+                # None（非 ja→zh / 两开关全关）时不挂数据链路，报告该行缺席
+                if kana_stats is not None:
+                    merge_stats["kana_merged"] = int(
+                        kana_stats.get("kana_merged", 0) or 0)
+                    merge_stats["kana_moan_deleted"] = int(
+                        kana_stats.get("kana_moan_deleted", 0) or 0)
+                    merge_stats["kana_moan_deleted_timings"] = list(
+                        kana_stats.get("kana_moan_deleted_timings") or [])
+                    merge_stats["kana_kept"] = int(
+                        kana_stats.get("kana_kept", 0) or 0)
                 # polish 清洗 stats（D2026-1023-03）：本批只挂数据链路，
                 # 质量报告展示层=批3，此处不渲染。
                 if polish_stats is not None:

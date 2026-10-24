@@ -1583,6 +1583,10 @@ def test_run_single_v2_premerge_disabled_passthrough(tmp_path, monkeypatch):
     """premerge_enabled=False：本可合并的碎片原样透传（阶段A 收到原条数）。"""
     cfg = _make_cfg(tmp_path)
     cfg.premerge_enabled = False
+    # 批3a（D2026-1025-01）新增默认开的源文假名合并层：本测试钉的是
+    # premerge 透传语义，隔离该新层（其数据「エースだよ」为纯假名短句
+    # 类，默认开时会被并入前条——属新层预期行为，见 test_kana_stage_*）
+    cfg.source_kana_merge_enabled = False
     in_srt = tmp_path / "demo.srt"
     in_srt.write_text(
         "1\n00:00:01,000 --> 00:00:02,000\n僕たち水泳部の部長で\n\n"
@@ -2900,3 +2904,131 @@ def test_resume_rejects_changed_stage_prompts(tmp_path, monkeypatch, capsys):
     # B3 加固④（与 capsys 无关的拒绝复用证据）：首调须是阶段A（输入无 ||| 标记），
     # 证明 A 确已重跑，不单凭 stdout 字符串判定
     assert not any("|||" in e["text"] for e in fake2.entry_log[0])
+
+
+# ---------------------------------------------------------------------------
+# 源文假名清洗（D2026-1025-01 批3a）：管线侧接线
+# ---------------------------------------------------------------------------
+
+def _kana_entries():
+    return [
+        {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+         "text": "好きだ"},
+        {"index": 2, "timing": "00:00:02,500 --> 00:00:02,700",
+         "text": "うん"},                    # 间隙 500 → 并入前条
+        {"index": 3, "timing": "00:00:06,000 --> 00:00:06,100",
+         "text": "あぁ"},                    # 孤立喘息（前后间隙均 >1200）
+        {"index": 4, "timing": "00:00:09,100 --> 00:00:10,000",
+         "text": "やめて"},
+    ]
+
+
+def test_kana_stage_default_merges_short():
+    """默认开合并：纯假名短句并入前条（ja→zh）。"""
+    entries = _kana_entries()
+    out, stats = pv._kana_clean_stage(entries, _make_cfg(tmp_path="unused"))
+    assert stats is not None
+    assert [e["text"] for e in out] == ["好きだうん", "あぁ", "やめて"]
+    assert stats["kana_merged"] == 1
+
+
+def test_kana_stage_default_keeps_isolated_moan():
+    """默认不删喘息：孤立喘息条目原样保留。"""
+    entries = _kana_entries()
+    out, stats = pv._kana_clean_stage(entries, _make_cfg(tmp_path="unused"))
+    assert len(out) == 3
+    assert out[1]["text"] == "あぁ"
+    assert stats["kana_moan_deleted"] == 0
+    assert stats["kana_kept"] == 2          # あぁ + やめて（短句类）
+
+
+def test_kana_stage_delete_opt_in():
+    """开删除后：孤立喘息删除＋相邻喘息并入（不误删）。"""
+    cfg = _make_cfg(tmp_path="unused",
+                    source_kana_moan_delete_enabled=True)
+    out, stats = pv._kana_clean_stage(_kana_entries(), cfg)
+    assert [e["text"] for e in out] == ["好きだうん", "やめて"]
+    assert stats["kana_moan_deleted"] == 1
+    assert stats["kana_moan_deleted_timings"] == [
+        {"timing": "00:00:06,000 --> 00:00:06,100", "text": "あぁ"}]
+    assert stats["kana_merged"] == 1
+
+
+def test_kana_stage_skips_non_default_direction():
+    """非 ja→zh 整段跳过：条目原样、stats 为 None。"""
+    cfg = _make_cfg(tmp_path="unused", source_lang="en", target_lang="zh",
+                    source_kana_moan_delete_enabled=True)
+    entries = _kana_entries()
+    out, stats = pv._kana_clean_stage(entries, cfg)
+    assert out == entries
+    assert stats is None
+
+
+def test_kana_stage_both_switches_off_noop():
+    cfg = _make_cfg(tmp_path="unused", source_kana_merge_enabled=False)
+    entries = _kana_entries()
+    out, stats = pv._kana_clean_stage(entries, cfg)
+    assert out == entries
+    assert stats is None
+
+
+def test_quality_report_kana_clean_line_and_section():
+    """报告：统计区「源文清洗」子行 + 【源文清洗】删除台账（时间戳+原文）。"""
+    from subtransjav.refine.quality_report import build_quality_report
+
+    orig = [
+        {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+         "text": "好きだうん"},
+        {"index": 3, "timing": "00:00:09,100 --> 00:00:10,000",
+         "text": "やめて"},
+    ]
+    final = [
+        {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+         "text": "喜欢你"},
+        {"index": 2, "timing": "00:00:09,100 --> 00:00:10,000",
+         "text": "住手"},
+    ]
+    merge_stats = {
+        "premerge_merged": 0,
+        "kana_merged": 1,
+        "kana_moan_deleted": 1,
+        "kana_moan_deleted_timings": [
+            {"timing": "00:00:06,000 --> 00:00:06,100", "text": "あぁ"}],
+        "kana_kept": 0,
+    }
+    report = build_quality_report(
+        orig, final, "demo", expected_entries=orig,
+        merge_stats=merge_stats, orig_total=4)
+    assert "源文清洗: 合并 1 · 删喘息 1" in report
+    assert "【源文清洗】" in report
+    assert "00:00:06,000 --> 00:00:06,100 原文: あぁ" in report
+    # 条数核对恒等式把源文清洗两项入账：4 = 0闸门0 + 0预合并 + 1合并 + 1删 + 2终稿
+    assert "源文清洗合并 1" in report
+    assert "源文清洗删喘息 1" in report
+    assert "条数核对: ✅" in report
+
+
+def test_quality_report_kana_absent_line_omitted():
+    """kana 键缺失（未运行/旧调用方）时不出现源文清洗行——只加不减契约。"""
+    from subtransjav.refine.quality_report import build_quality_report
+
+    orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+             "text": "挿入する"}]
+    final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+              "text": "插进去"}]
+    report = build_quality_report(orig, final, "demo")
+    assert "源文清洗" not in report
+
+
+def test_config_hash_kana_defaults_byte_identical():
+    """两开关均默认值时哈希与无该字段旧版逐字节一致；任一非默认即变。"""
+    base = compute_config_hash(_make_cfg(tmp_path="unused"))
+    assert compute_config_hash(_make_cfg(tmp_path="unused")) == base
+
+    changed = compute_config_hash(_make_cfg(
+        tmp_path="unused", source_kana_moan_delete_enabled=True))
+    assert changed != base
+
+    changed2 = compute_config_hash(_make_cfg(
+        tmp_path="unused", source_kana_merge_enabled=False))
+    assert changed2 != base
