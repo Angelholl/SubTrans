@@ -7086,6 +7086,8 @@ def test_js_sources_layer_pinned():
        7c947e25…/209,715B、全库 3dbcbbff…/494,372B（app-msg.js +41 键、
        app-modal.js polish kind、app-refine-core.js 会话态+入口组+9 键接线；
        旧钉 69a0a0e4… / bbc5807a… 退役）；
+       d1024-批2 主审直修换代（验收期弹窗回填缺陷：句末去句号/行首>>两下拉
+       自会话已应用参数回填，app-modal.js +71B）：全库 7507ae15…/494,443B；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7098,7 +7100,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "3dbcbbffa72e56d90a0313bfda0a9356ce6689e825af2fbedbbb6219c5ee7b46"), \
+        "7507ae15300df26e6699bc22e4872d05180afc92750875e25a5a81c7c948763f"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7130,8 +7132,8 @@ def test_js_split_integrity_pinned():
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
         "app-msg.js": (62277,
                        "854996d63f40f46e9130df111b8d7b07aa09d022cb48cdf69a8a6f49179fcef4"),
-        "app-modal.js": (101454,
-                         "bf57f12f719e0216ec544e9329698ee75a899a5f1aa23ef19496b40fdde2935b"),
+        "app-modal.js": (101525,
+                         "13f1946dc9c9334cb98d91e4a2f54b27ae074ce4aaa8dce7c1cbf9dfd98b54a7"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (21361,
