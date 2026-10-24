@@ -3122,6 +3122,23 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
     border-radius: var(--radius-sm); padding: 6px 10px; font-size: var(--font-xs); color: var(--text-1); margin-top: 8px; }
 .enc-jobs-line { font-size: var(--font-xs); color: var(--text-2); margin-bottom: 10px; }
 
+/* ===== 字幕清洗参数弹窗（D2026-1024-01 批2 件A）：PROVISIONAL 徽章 + 开关格 + 小注 =====
+   语义照原型 polish-popup-proto.html（%TEMP 参照）；只用既有 token，暗色主题
+   自动生效（dark 主题 token 驱动零改动）；.tag-provisional 为卡面点名徽章类
+   （入口组标题+弹窗标题两处使用），样式照原型 :256-262。 */
+.tag-provisional {
+    font-size: var(--font-xs); font-weight: 600;
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+    color: var(--warn); background: var(--warn-soft);
+}
+.pp-note { font-size: var(--font-xs); color: var(--text-3); }
+.pp-toggle-cell { display: flex; flex-direction: column; gap: var(--space-hair); min-width: 0; }
+.pp-toggle-cell.full { grid-column: 1 / -1; }
+.pp-toggle { display: inline-flex; align-items: center; gap: var(--space-2);
+    font-size: var(--font-xs); font-weight: 550; color: var(--text-1); cursor: pointer; }
+
 /* ===== P1 预热 G9 参数区锁定（D2026-1008-02 批3；TranslatorManager
    _lockEngineControls 挂/摘 .engine-locked，dim+锁定态）===== */
 #tab-engine.engine-locked { opacity: .55; pointer-events: none; }

@@ -191,6 +191,51 @@ const MSG = {
     encodeSummaryVol: (db) => `音量 ${db}dB`,
     encodeSummaryAt: (t) => `保存于 ${t}`,
 
+    // 字幕清洗参数弹窗（D2026-1024-01 批2 件A）：高级参数 TAB「字幕清洗」
+    // 入口组+弹窗全 JS 态文案（零静态 data-i18n/零 id）；入口组标题复用
+    // polish_enabled_label（「字幕清洗（实验性）」文字相同）。文案照抄
+    // 批2 卡面（D2026-1024-01），未应用 summary 零散拼接片段随值内联
+    polishAdvBadge: 'PROVISIONAL · 待校准',
+    polishAdvDesc: '总开关在右侧「输出格式」区的「字幕清洗（实验性）」复选框；本弹窗参数仅在开关开启后生效。留空或填 0 = 使用内置默认值（默认口径暂定 PROVISIONAL，待校准）。',
+    polishAdvOpenBtn: '字幕清洗设置…',
+    polishAdvSummaryDefault: '当前参数：默认口径（每行 16 全角字 · 每条 2 行 · 上限 7000ms · 间隔 83.4ms）',
+    polishAdvSummaryLine: (parts) => `当前参数：${parts.join(' · ')}`,
+    polishPopupTitle: '字幕清洗参数',
+    polishPopupJobsLine: '仅保存清洗参数，不会立即处理已有字幕；总开关在右栏「输出格式」区，开启后本组参数才生效。',
+    polishPopupSecText: '文本规范',
+    polishPopupSecTiming: '时间轴',
+    polishPopupSave: '保存',
+    polishLblMaxChars: '每行最大全角字数',
+    polishLblMaxLines: '每条最大行数',
+    polishLblQuoteStyle: '引号派系',
+    polishLblStripPeriod: '句末去句号',
+    polishLblDialogGt: '行首「>>」对话标记',
+    polishLblRewrap: '拆行重排',
+    polishLblMaxDur: '显示时长上限 ms',
+    polishLblMinGap: '相邻最小间隔 ms',
+    polishLblClampLong: '超长缩短钳制',
+    polishPhMaxChars: '默认 16',
+    polishPhMaxLines: '默认 2',
+    polishPhMaxDur: '默认 7000',
+    polishPhMinGap: '默认 83.4',
+    polishQuoteDefault: '跟随默认（「」）',
+    polishQuoteKeep: '完全不动',
+    polishQuoteCurly: '弯引号“”',
+    polishPeriodDefault: '跟随默认（去）',
+    polishPeriodKeep: '保留句号',
+    polishGtDefault: '跟随默认（保留）',
+    polishGtRemove: '删除',
+    polishNoteMaxChars: '一行最多排多少个全角字，超出就折到下一行；留空即用默认 16。',
+    polishNoteMaxLines: '一条字幕最多分成几行显示，不够放就拆成多条；留空即用默认 2。',
+    polishNoteQuoteStyle: '中文引号统一成哪套样式：「」是默认；选「完全不动」则一个引号都不碰。',
+    polishNoteStripPeriod: '句尾的句号要不要删掉：默认删（画面更干净），也可统一保留。',
+    polishNoteDialogGt: '行首的 >> 对话标记：默认保留（区分说话人），也可统一删掉。',
+    polishNoteRewrap: '过长的一条按上面设定的字数/行数重新断行排版，必要时拆成多条；关闭则不重排。',
+    polishNoteMaxDur: '单条字幕最多显示多久（毫秒），再长也会被切走；留空即用默认 7000。',
+    polishNoteMinGap: '相邻两条字幕之间至少留多长空档（毫秒）；留空即用默认 83.4。',
+    polishNoteClampLong: '单条显示超过「时长上限」时自动切走多余时长；关闭则超长条目只记入报告、不缩短。',
+    polishTimingCaliber: '口径提示：最小间隔 83.4 ms ≈ 2 帧 @ 23.976fps，指「相邻两条之间的空档」，与「最短显示时长」不是一个参数，勿与 833 ms 口径混淆。',
+
     // ============================================================
     // i18n 键表（W2 收编）：index.html data-i18n/data-i18n-title/
     // data-i18n-placeholder 引用的键必须全部出现在本表（tests 钉住）；

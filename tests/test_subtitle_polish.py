@@ -535,3 +535,17 @@ def test_cli_new_switch_flags():
     cfg_off = config_from_args(args_off)
     assert cfg_off.polish_rewrap_enabled is False
     assert cfg_off.polish_clamp_long_enabled is False
+
+
+def test_cli_keep_final_period_flag():
+    """CLI：--polish-keep-final-period → cfg.polish_strip_final_period=False；缺省 True。"""
+    from subtransjav.refine.cli import build_parser, config_from_args
+
+    args = build_parser().parse_args(["-i", "x.srt"])
+    cfg = config_from_args(args)
+    assert cfg.polish_strip_final_period is True
+
+    args_keep = build_parser().parse_args(
+        ["-i", "x.srt", "--polish-keep-final-period"])
+    cfg_keep = config_from_args(args_keep)
+    assert cfg_keep.polish_strip_final_period is False

@@ -442,7 +442,8 @@
       "AI 分析生效行黄字提示退役（D2026-1015-01，owner 2026-10-15 直接指示折叠态截断不可读取消）：index.html #refineAiPrivacy 元素删除+app.js aiRefreshEffective/shortenModelName/aiSetPrivacy/MSG 七键删除+style.css 行尾规则删除，ids 223→222；i18n_keys 186 不动",
       "多格式输出 GUI 面（D2026-1023-02 批2）：index.html 输出目录 section 新增 outputFmtAss/outputFmtVtt 两复选框+app-msg.js 三 MSG 键（output_format_header/output_fmt_ass/output_fmt_vtt），ids 222→224；i18n_keys 186→189",
       "字幕清洗总开关 GUI 面（D2026-1023-03 批3）：index.html 输出目录 section 新增 polishEnabled 复选框+app-msg.js 一键 polish_enabled_label，ids 224→225；i18n_keys 189→190",
-      "翻译TAB快捷开始钮独立文案键（d1023 owner 2026-10-23 指定「开始翻译」四字）：app-msg.js 一键 start_btn_tab（右栏主钮 start_btn 不动），ids 225 不动；i18n_keys 190→191"
+      "翻译TAB快捷开始钮独立文案键（d1023 owner 2026-10-23 指定「开始翻译」四字）：app-msg.js 一键 start_btn_tab（右栏主钮 start_btn 不动），ids 225 不动；i18n_keys 190→191",
+      "字幕清洗参数弹窗（D2026-1024-01 批2 件A）：index.html 高级参数 TAB 压制组邻位新增「字幕清洗」入口组（照压制入口组模式，全 JS 态 MSG 零静态 data-i18n/零 id）+app-msg.js 41 键（polish_adv_*/polish_popup_* 前缀）+app-modal.js polish kind+app-refine-core.js 会话态与 buildRefineOptions 9 键接线，ids 225 不动；i18n_keys 191 不动（入口组零静态键）"
     ]
   }
 }

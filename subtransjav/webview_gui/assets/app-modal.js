@@ -14,6 +14,7 @@ const AppModal = {
     _tmSaving: false,    // P3：tmEdit 保存进行中（禁关，editor 同款）
     _tmOpts: null,       // P3：tmEdit(opts) 暂存（onSaved）
     _encodeCollect: null,// 2.8.0.2：encode 闭包 collect（打开赋值/结算置 null，防悬挂引用）
+    _polishCollect: null,// D2026-1024-01 批2 件A：polish 闭包 collect（同 encode 先例）
 
     _settle(value) {
         if (!this._busy) return;
@@ -55,6 +56,7 @@ const AppModal = {
     //     no-op 且不 preventDefault）；
     //   prompt：带输入值结算；encode：按当前表单值结算（_resolve 包装器落
     //     {ok, params}，collect 闭包经 _encodeCollect 暴露、关闭置 null）；
+    //   polish（D2026-1024-01 批2 件A）：同 encode 分派（_polishCollect）；
     //   其余（alert/confirm/batchfix）：true（确认）。
     _okValue(input) {
         if (this._kind === 'tmEdit' || this._kind === 'editor'
@@ -64,6 +66,12 @@ const AppModal = {
         if (this._kind === 'prompt') return (input && input.value) || '';
         if (this._kind === 'encode') {
             const collect = this._encodeCollect;
+            return collect ? { ok: true, params: collect() } : true;
+        }
+        // D2026-1024-01 批2 件A：polish 同 encode 分派——ok 键/Enter=保存，
+        // 按当前表单值结算 {ok, params}（collect 闭包经 _polishCollect 暴露）
+        if (this._kind === 'polish') {
+            const collect = this._polishCollect;
             return collect ? { ok: true, params: collect() } : true;
         }
         return true;
@@ -1354,6 +1362,171 @@ const AppModal = {
                 // 编辑模式确认键隐藏、Enter=关闭（返回值弃置不保存，保存只经
                 // 「保存参数」按钮——失败反馈须留在可见状态行，结算后弹窗已收起）
                 resolve(value ? { ok: true, params: collect() } : null);
+            };
+        });
+    },
+
+    // ============================================================
+    // 字幕清洗参数弹窗（D2026-1024-01 批2 件A）：照 encode kind 先例
+    // （mk/mkField/mkSelect 闭包 + _bindSkeletonOnce 统一骨架绑定，复用
+    // #appModal 骨架），压制式弹出·单滚动分区纵排（v4 原型终裁）。
+    // 布局：jobs-line + 分区一「文本规范」（6 参数）+ 分区二「时间轴」
+    // （3 参数+口径提示行）；开关两枚照 encode 增强开关 .enc-field.full
+    // 内联 label 画法（pp-toggle-cell.full 同栅格语义）。
+    // 零 id（骨架既有 id 之外零新增）、文案全 MSG 键（批2 卡面照抄）。
+    // 结算：保存（ok 键/Enter）={ok:true, params}；取消/ESC/遮罩={ok:false}；
+    // 打开时从 opts.last 回填（当前会话已应用参数，缺省=全默认）。
+    // ============================================================
+    polish(opts) {
+        if (this._busy) return Promise.resolve({ ok: false });  // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve({ ok: false });       // 骨架缺席兜底
+        const last = (opts && opts.last) || {};
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = MSG.polishPopupTitle;
+        // 标题行内缀 PROVISIONAL 徽章（原型同位；textContent 已清空旧子节点）
+        const titleEl = root.querySelector('.modal-title');
+        titleEl.appendChild(document.createTextNode(' '));
+        const badge = document.createElement('span');
+        badge.className = 'tag-provisional';
+        badge.textContent = MSG.polishAdvBadge;
+        titleEl.appendChild(badge);
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';
+        input.style.display = 'none';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        okBtn.style.display = '';
+        okBtn.textContent = MSG.polishPopupSave;
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
+
+        const mk = (tag, cls, parent) => {
+            const el = document.createElement(tag);
+            if (cls) el.className = cls;
+            if (parent) parent.appendChild(el);
+            return el;
+        };
+        const mkField = (parent, text) => {
+            const w = mk('div', 'enc-field', parent);
+            const lb = mk('label', null, w);
+            lb.textContent = text;
+            return w;
+        };
+        const mkSelect = (parent, options, value) => {
+            const s = mk('select', 'form-select', parent);
+            options.forEach((op) => {
+                const opt = document.createElement('option');
+                opt.value = op.v;
+                opt.textContent = op.t;
+                s.appendChild(opt);
+            });
+            if (value) s.value = value;
+            return s;
+        };
+        const mkNote = (parent, text) => {
+            mk('div', 'pp-note', parent).textContent = text;
+        };
+        // 数值输入格：label + number 输入 + 灰字小注（原型 .enc-field 同构）
+        const mkNumber = (parent, labelText, ph, min, max, step, val, note) => {
+            const w = mkField(parent, labelText);
+            const inp = mk('input', 'form-input', w);
+            inp.type = 'number';
+            inp.min = String(min);
+            inp.max = String(max);
+            inp.step = String(step);
+            inp.placeholder = ph;
+            inp.value = val || '';
+            mkNote(w, note);
+            return inp;
+        };
+        // 下拉格：label + select + 灰字小注
+        const mkSelectField = (parent, labelText, options, value, note) => {
+            const w = mkField(parent, labelText);
+            const s = mkSelect(w, options, value);
+            mkNote(w, note);
+            return s;
+        };
+        // 开关格（原型 pp-toggle-cell.full）：整行 label 内联 checkbox + 小注
+        const mkToggle = (parent, labelText, note, checked) => {
+            const cell = mk('div', 'pp-toggle-cell full', parent);
+            const lb = mk('label', 'pp-toggle', cell);
+            const inp = mk('input', null, lb);
+            inp.type = 'checkbox';
+            inp.checked = checked;
+            lb.appendChild(document.createTextNode(' ' + labelText));
+            mkNote(cell, note);
+            return inp;
+        };
+
+        const jobsLine = mk('div', 'enc-jobs-line', body);
+        jobsLine.textContent = MSG.polishPopupJobsLine;
+
+        // —— 分区一：文本规范（6 参数）——
+        const sec1 = mk('div', 'enc-section', body);
+        mk('h4', null, sec1).textContent = MSG.polishPopupSecText;
+        const grid1 = mk('div', 'enc-grid', sec1);
+        const elMaxChars = mkNumber(grid1, MSG.polishLblMaxChars,
+            MSG.polishPhMaxChars, 1, 40, 1, last.max_line_chars,
+            MSG.polishNoteMaxChars);
+        const elMaxLines = mkNumber(grid1, MSG.polishLblMaxLines,
+            MSG.polishPhMaxLines, 1, 4, 1, last.max_lines,
+            MSG.polishNoteMaxLines);
+        const elQuote = mkSelectField(grid1, MSG.polishLblQuoteStyle, [
+            { v: 'default', t: MSG.polishQuoteDefault },
+            { v: 'keep', t: MSG.polishQuoteKeep },
+            { v: 'curly', t: MSG.polishQuoteCurly },
+        ], last.quote_style || 'default', MSG.polishNoteQuoteStyle);
+        const elPeriod = mkSelectField(grid1, MSG.polishLblStripPeriod, [
+            { v: 'default', t: MSG.polishPeriodDefault },
+            { v: 'keep', t: MSG.polishPeriodKeep },
+        ], 'default', MSG.polishNoteStripPeriod);
+        const elGt = mkSelectField(grid1, MSG.polishLblDialogGt, [
+            { v: 'default', t: MSG.polishGtDefault },
+            { v: 'remove', t: MSG.polishGtRemove },
+        ], 'default', MSG.polishNoteDialogGt);
+        const elRewrap = mkToggle(grid1, MSG.polishLblRewrap, MSG.polishNoteRewrap,
+            last.rewrap_enabled !== false);
+
+        // —— 分区二：时间轴（3 参数+口径提示行）——
+        const sec2 = mk('div', 'enc-section', body);
+        mk('h4', null, sec2).textContent = MSG.polishPopupSecTiming;
+        const grid2 = mk('div', 'enc-grid', sec2);
+        const elMaxDur = mkNumber(grid2, MSG.polishLblMaxDur,
+            MSG.polishPhMaxDur, 0, 60000, 100, last.max_duration_ms,
+            MSG.polishNoteMaxDur);
+        const elMinGap = mkNumber(grid2, MSG.polishLblMinGap,
+            MSG.polishPhMinGap, 0, 5000, 0.1, last.min_gap_ms,
+            MSG.polishNoteMinGap);
+        const elClamp = mkToggle(grid2, MSG.polishLblClampLong, MSG.polishNoteClampLong,
+            last.clamp_long_enabled !== false);
+        mk('div', 'enc-eta-row', sec2).textContent = MSG.polishTimingCaliber;
+
+        const collect = () => ({
+            max_line_chars: elMaxChars.value.trim(),
+            max_lines: elMaxLines.value.trim(),
+            quote_style: elQuote.value,
+            keep_final_period: elPeriod.value === 'keep',
+            remove_dialogue_gt: elGt.value === 'remove',
+            rewrap_enabled: elRewrap.checked,
+            max_duration_ms: elMaxDur.value.trim(),
+            min_gap_ms: elMinGap.value.trim(),
+            clamp_long_enabled: elClamp.checked,
+        });
+        // 同 encode 先例：闭包 collect 暴露给统一骨架 ok/Enter 分派
+        this._polishCollect = collect;
+
+        this._busy = true;
+        this._kind = 'polish';
+        root.style.display = 'flex';
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                this._polishCollect = null;
+                // truthy（保存键/Enter，统一分派已按当前表单结算 {ok,params}）
+                // → 按当前表单值结算；falsy（取消/ESC/遮罩）→ {ok:false}。
+                resolve(value ? { ok: true, params: collect() } : { ok: false });
             };
         });
     },

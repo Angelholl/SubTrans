@@ -7082,6 +7082,10 @@ def test_js_sources_layer_pinned():
        旧钉 0dd7df4c… / a4bcbcf0… 退役）；
        d1023 同日再换代（快捷钮独立文案键 start_btn_tab，owner 指定四字）：
        全库 bbc5807a…/477,229B（app-msg.js +146B；旧钉 19b6455e… 退役）；
+       d1024-批2 换代（件A 字幕清洗参数弹窗，D2026-1024-01）：refine 家族
+       7c947e25…/209,715B、全库 3dbcbbff…/494,372B（app-msg.js +41 键、
+       app-modal.js polish kind、app-refine-core.js 会话态+入口组+9 键接线；
+       旧钉 69a0a0e4… / bbc5807a… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7094,7 +7098,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "bbc5807a4a13ff1549f1ae7d4d46f7269b5d5374b3509818d55cd76872f0ae49"), \
+        "3dbcbbffa72e56d90a0313bfda0a9356ce6689e825af2fbedbbb6219c5ee7b46"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7104,7 +7108,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "69a0a0e4f0657531239777f6d09d621fc28041e3d00867d99a17554d0697a9a0"), \
+        "7c947e25261d1306a23775438f8a42eb2d631401fe94173fe377a3fd7c7335e1"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7124,10 +7128,10 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (58870,
-                       "8e0fd31ee4c0547614038d3b818642791fa060719392872d6eae9a2f7305300c"),
-        "app-modal.js": (92754,
-                         "4e987b4944251fc083b564ff94cc9a8b7a009c3b48f37852d98310f71b9b6707"),
+        "app-msg.js": (62277,
+                       "854996d63f40f46e9130df111b8d7b07aa09d022cb48cdf69a8a6f49179fcef4"),
+        "app-modal.js": (101454,
+                         "bf57f12f719e0216ec544e9329698ee75a899a5f1aa23ef19496b40fdde2935b"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (21361,
@@ -7154,8 +7158,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-refine-core.js": (7803,
-                               "8f823025981d58e75cce843a650aee7c51a7c7543cbac5b36184545813c990c6"),
+        "app-refine-core.js": (12839,
+                               "a84c934544272e7595307f8333b2e4846c49f5b5ea3e8a469e1540804e66cc39"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
         "app-refine-glossary.js": (6588,
@@ -7226,18 +7230,20 @@ def test_refine_family_deshell_pinned():
         assert html.count(f'src="{name}"') == 1, f"{name} 在 index.html 出现次数 != 1"
 
 
-# 批4 全局面冻结名单（172 个；末次变更=批4 去壳升顶层）
+# 批4 全局面冻结名单（175 个；末次变更=d1024 批2 件A 清洗弹窗三顶层声明）
 _REFINE_TOP_NAMES = frozenset({
     "$", "AI_CLOUD_PROVIDERS", "ASR_SOURCE_LABELS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
     "DICT_STOP_GRACE_MS", "FULLCHAIN_SCOPE_NOTE", "GUIDE_ITEMS_MODAL_TITLE",
     "GUIDE_ITEMS_OPEN_BTN_LABEL", "GUIDE_SUFFIX", "MODEL_REFRESH_SVG", "REFINE_PROVIDER_URLS",
-    "__warmupInflight", "_dictBusyKind", "_dictCustomDir", "_dictDirCache", "_dictEnsureHint",
+    "__warmupInflight", "_appliedPolishParams", "_dictBusyKind", "_dictCustomDir",
+    "_dictDirCache", "_dictEnsureHint",
     "_dictEnsureKindRow", "_dictNeedsMigration", "_dictOldDir", "_dictRefreshHint",
     "_dictRefreshKindRow", "_dictSourcesCache", "_dictStatusCache", "_dictStopPending",
     "_dictStopRequestedAt", "aiActionBtn", "aiApplyFail", "aiApplyGlossary", "aiApplyTm",
     "aiBtnState", "aiConflictBadge", "aiEditBtn", "aiEditTm", "aiModelApplyFollowState",
     "aiRenderResult", "aiReportPath", "aiRestoreBtn", "aiRestoreTm", "aiStatus",
-    "aiUpdateTmTarget", "analyzeResolution", "applyProviderEndpoint", "applySavedStageSettings",
+    "aiUpdateTmTarget", "analyzeResolution", "appliedPolishOptionFields",
+    "applyProviderEndpoint", "applySavedStageSettings",
     "applyServiceQuickProvider", "asrApplyEnvStatus", "asrOpenModelsPanel", "asrRefresh",
     "asrStatus", "attachPreviewSeekListeners", "batchFixRefresh", "batchFixRun",
     "bfRefreshEffective", "bfStatus", "bindCleanerDirControls", "bindDirectionControls", "bindDom",
@@ -7260,6 +7266,7 @@ _REFINE_TOP_NAMES = frozenset({
     "previewSeekHandlers", "readPositiveInt", "readRefineConcurrency", "readRefineCtx",
     "refineAiAnalyze", "refreshAnalysisModels", "refreshFallbackModels", "refreshModels",
     "refreshServiceQuickRow", "refreshTrioSelect", "rematchPreviewMedia", "renderMediaTag",
+    "renderPolishAdvSummary",
     "saveCleanerDir", "saveStageEndpoints", "saveStageKey", "savedAiModel", "savedStageModels",
     "showPreviewError", "stageEndpoint", "stageEndpointFor", "stageKeyFor", "stageKeyOrNull",
     "stageStatus", "syncServiceQuickFromStages", "testAnalysisModel", "testStage", "testTrioModel",

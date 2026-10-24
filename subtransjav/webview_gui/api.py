@@ -319,10 +319,40 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
         if fmt in ("ass", "vtt"):
             args.extend(["--extra-output-format", fmt])
 
-    # 字幕清洗总开关（D2026-1023-03 批3）：只转发总开关，细参数
-    # 本轮 GUI 不暴露；未勾/缺省零旗标（默认零变化）
+    # 字幕清洗总开关（D2026-1023-03 批3）：未勾/缺省零旗标（默认零变化）。
+    # 细参数白名单转发（D2026-1024-01 批2 件A，弹窗化）：仿
+    # --polish-min-gap-ms 形态——全部在 polish_enabled 分支内、只转发有值项，
+    # 默认零旗标；字符串数值清洗：转换失败即忽略该键
     if options.get("polish_enabled"):
         args.append("--polish")
+        for _pk, _pf in (("polish_max_line_chars", "--polish-max-line-chars"),
+                         ("polish_max_lines", "--polish-max-lines"),
+                         ("polish_max_duration_ms", "--polish-max-duration-ms")):
+            try:
+                _pn = int(str(options.get(_pk) or "").strip())
+            except (TypeError, ValueError):
+                continue
+            if _pn > 0:
+                args.extend([_pf, str(_pn)])
+        try:
+            _gap = float(str(options.get("polish_min_gap_ms") or "").strip())
+        except (TypeError, ValueError):
+            _gap = 0.0
+        if _gap > 0:
+            # 整数值输出整数形态（100→"100"），非整数保留小数（83.4→"83.4"）
+            _gap_s = str(int(_gap)) if float(_gap).is_integer() else str(_gap)
+            args.extend(["--polish-min-gap-ms", _gap_s])
+        _qs = options.get("polish_quote_style")
+        if _qs in ("keep", "curly"):
+            args.extend(["--polish-quote-style", str(_qs)])
+        if options.get("polish_keep_final_period") is True:
+            args.append("--polish-keep-final-period")
+        if options.get("polish_remove_dialogue_gt") is True:
+            args.append("--polish-remove-dialogue-gt")
+        if options.get("polish_no_rewrap") is True:
+            args.append("--polish-no-rewrap")
+        if options.get("polish_no_clamp_long") is True:
+            args.append("--polish-no-clamp-long")
 
     # v2 两阶段管线（阶段A→s1 槽位、阶段B→s3 槽位）
     if options.get("profile"):
