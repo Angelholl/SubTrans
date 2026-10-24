@@ -20,6 +20,10 @@
     custom: ''
   };
 
+  // ---- 字幕清洗参数弹窗会话态（D2026-1024-01 批2 件A）：当前会话已应用的
+  // 清洗参数（null=全默认口径）；不落 localStorage，刷新自然复位 ----
+  let _appliedPolishParams = null;
+
   // 每阶段独立的接口地址输入框
   function stageEndpoint(n) {
     const v = ($('refineS' + n + 'Endpoint') || {}).value;
@@ -99,6 +103,39 @@
     return (Number.isFinite(n) && n > 0) ? n : null;
   }
 
+  // ---- 字幕清洗细参数折算（D2026-1024-01 批2 件A）：会话级已应用参数 →
+  // buildRefineOptions 的 9 个 polish_* 键；未应用（null）=全默认=空对象
+  // （零键，api 侧默认零旗标）；空串/0/default 值不给键 ----
+  function appliedPolishOptionFields() {
+    const out = {};
+    const p = _appliedPolishParams;
+    if (!p) return out;
+    const posInt = (v) => {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const posNum = (v) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const mlc = posInt(p.max_line_chars);
+    if (mlc) out.polish_max_line_chars = mlc;
+    const ml = posInt(p.max_lines);
+    if (ml) out.polish_max_lines = ml;
+    const md = posInt(p.max_duration_ms);
+    if (md) out.polish_max_duration_ms = md;
+    const mg = posNum(p.min_gap_ms);
+    if (mg) out.polish_min_gap_ms = mg;
+    if (p.quote_style === 'keep' || p.quote_style === 'curly') {
+      out.polish_quote_style = p.quote_style;
+    }
+    if (p.keep_final_period) out.polish_keep_final_period = true;
+    if (p.remove_dialogue_gt) out.polish_remove_dialogue_gt = true;
+    if (p.rewrap_enabled === false) out.polish_no_rewrap = true;
+    if (p.clamp_long_enabled === false) out.polish_no_clamp_long = true;
+    return out;
+  }
+
   // ---- 启动选项收集器（v2 两阶段：阶段A→s1 槽位，阶段B→s3 槽位）----
   function buildRefineOptions() {
     return {
@@ -111,6 +148,10 @@
       // 字幕清洗总开关（D2026-1023-03 批3）：默认不勾=不传/False；
       // 会话级无持久化（与附加格式复选框同语义，刷新复位）
       polish_enabled: !!($('polishEnabled') || {}).checked,
+      // 字幕清洗细参数（D2026-1024-01 批2 件A）：自会话级 _appliedPolishParams
+      // 折算 9 键（未应用=全默认，一律不给键）；白名单转发语义见
+      // api.py _build_refine_args（空值/0/default 一律不产生旗标）
+      ...appliedPolishOptionFields(),
       profile: ($('refineProfile') || {}).value || 'local',
       v2_concurrency: readRefineConcurrency(),
       v2_ctx: readRefineCtx(),
@@ -161,4 +202,77 @@
   }
 
   TranslatorManager.collectOptions = buildRefineOptions;
+
+  // ---- 字幕清洗入口组（D2026-1024-01 批2 件A）：标题+徽章+说明+入口钮+
+  // summary 行全 JS 态 MSG 填充（组内零 id/零静态 data-i18n）；入口钮开
+  // AppModal.polish（回填会话已应用参数），保存结算后写回会话态并刷新
+  // summary；summary 未应用=默认口径固定文案，应用后列实际值与偏离项
+  // （零散拼接片段随值内联，同 encode 摘要行函数键先例） ----
+  function renderPolishAdvSummary() {
+    const row = document.querySelector('.polish-params-summary');
+    if (!row) return;
+    const p = _appliedPolishParams;
+    if (!p) {
+      row.textContent = MSG.polishAdvSummaryDefault;
+      return;
+    }
+    const posInt = (v) => {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const posNum = (v) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const parts = [];
+    const mlc = posInt(p.max_line_chars);
+    if (mlc) parts.push('每行 ' + mlc + ' 全角字');
+    const ml = posInt(p.max_lines);
+    if (ml) parts.push('每条 ' + ml + ' 行');
+    const md = posInt(p.max_duration_ms);
+    if (md) parts.push('上限 ' + md + 'ms');
+    const mg = posNum(p.min_gap_ms);
+    if (mg) parts.push('间隔 ' + String(p.min_gap_ms).trim() + 'ms');
+    if (p.quote_style === 'keep') parts.push('引号不动');
+    else if (p.quote_style === 'curly') parts.push('弯引号“”');
+    if (p.keep_final_period) parts.push('保留句号');
+    if (p.remove_dialogue_gt) parts.push('删除>>标记');
+    if (p.rewrap_enabled === false) parts.push('拆行重排关');
+    if (p.clamp_long_enabled === false) parts.push('超长钳制关');
+    row.textContent = MSG.polishAdvSummaryLine(parts);
+  }
+
+  (function initPolishAdvGroup() {
+    const fill = () => {
+      const title = document.querySelector('.polish-adv-title');
+      if (title) {
+        // 标题复用 polish_enabled_label（「字幕清洗（实验性）」文字相同）+ 徽章
+        title.textContent = MSG.polish_enabled_label;
+        title.appendChild(document.createTextNode(' '));
+        const badge = document.createElement('span');
+        badge.className = 'tag-provisional';
+        badge.textContent = MSG.polishAdvBadge;
+        title.appendChild(badge);
+      }
+      const desc = document.querySelector('.polish-adv-desc');
+      if (desc) desc.textContent = MSG.polishAdvDesc;
+      document.querySelectorAll('.polish-params-open-btn').forEach((btn) => {
+        btn.textContent = MSG.polishAdvOpenBtn;
+        btn.addEventListener('click', async () => {
+          const r = await AppModal.polish({ last: _appliedPolishParams });
+          if (r && r.ok) {
+            _appliedPolishParams = r.params;
+            renderPolishAdvSummary();
+          }
+        });
+      });
+      renderPolishAdvSummary();
+    };
+    // 本文件在 body 尾同步加载（DOM 已就绪）；readyState 兜底防早载
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fill);
+    } else {
+      fill();
+    }
+  })();
 

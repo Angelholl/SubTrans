@@ -77,6 +77,8 @@ def build_parser():
                         "（默认 corner）")
     p.add_argument("--polish-remove-dialogue-gt", action="store_true",
                    help="删除行首对话标记 >>（默认保留）")
+    p.add_argument("--polish-keep-final-period", action="store_true",
+                   help="句末去句号=保留句号（默认去：句尾句号统一删除，D2026-1024-01）")
     p.add_argument("--polish-no-rewrap", dest="polish_rewrap_enabled",
                    action="store_false",
                    help="关闭拆行重排（默认开：超宽/超行文本自动重排）")
@@ -410,6 +412,7 @@ def config_from_args(args):
         polish_max_duration_ms=args.polish_max_duration_ms,
         polish_min_gap_ms=args.polish_min_gap_ms,
         polish_quote_style=args.polish_quote_style,
+        polish_strip_final_period=not args.polish_keep_final_period,
         polish_remove_dialogue_gt=args.polish_remove_dialogue_gt,
         polish_rewrap_enabled=args.polish_rewrap_enabled,
         polish_clamp_long_enabled=args.polish_clamp_long_enabled,

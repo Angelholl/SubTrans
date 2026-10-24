@@ -247,6 +247,79 @@ def test_build_refine_args_glossary_conflict_block_absent_by_default():
     assert "--glossary-conflict-block" not in args
 
 
+# ---------------------------------------------------------------------------
+# 字幕清洗细参数白名单转发（D2026-1024-01 批2 件A）：全部在 polish_enabled
+# 分支内、只转发有值项；空值/0/default/非法字符串一律零旗标（默认零变化）
+# ---------------------------------------------------------------------------
+
+_POLISH_DETAIL_PARAMS = {
+    "polish_max_line_chars": 20,
+    "polish_max_lines": 3,
+    "polish_max_duration_ms": 8000,
+    "polish_min_gap_ms": 100,
+    "polish_quote_style": "curly",
+    "polish_keep_final_period": True,
+    "polish_remove_dialogue_gt": True,
+    "polish_no_rewrap": True,
+    "polish_no_clamp_long": True,
+}
+
+
+def test_build_refine_args_polish_disabled_zero_flags():
+    """polish_enabled=False：即使带细参数也零 polish 旗标（既有语义不变）。"""
+    args = _build_refine_args({"inputs": ["a.srt"], **_POLISH_DETAIL_PARAMS})
+    assert not [a for a in args if a.startswith("--polish")]
+
+
+def test_build_refine_args_polish_enabled_only_switch_by_default():
+    """polish_enabled=True 且未应用细参数：只有 --polish，无 --polish-* 细参旗标。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "polish_enabled": True})
+    assert "--polish" in args
+    assert not [a for a in args if a.startswith("--polish-")]
+
+
+def test_build_refine_args_polish_detail_params_passthrough():
+    """逐细参数给值 → 对应旗标出现且值透传。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "polish_enabled": True,
+                               **_POLISH_DETAIL_PARAMS})
+    assert args[args.index("--polish-max-line-chars") + 1] == "20"
+    assert args[args.index("--polish-max-lines") + 1] == "3"
+    assert args[args.index("--polish-max-duration-ms") + 1] == "8000"
+    assert args[args.index("--polish-min-gap-ms") + 1] == "100"
+    assert args[args.index("--polish-quote-style") + 1] == "curly"
+    assert "--polish-keep-final-period" in args
+    assert "--polish-remove-dialogue-gt" in args
+    assert "--polish-no-rewrap" in args
+    assert "--polish-no-clamp-long" in args
+
+
+def test_build_refine_args_polish_empty_zero_default_absent():
+    """空串/0/default 值不产生旗标。"""
+    args = _build_refine_args({
+        "inputs": ["a.srt"], "polish_enabled": True,
+        "polish_max_line_chars": "", "polish_max_lines": 0,
+        "polish_max_duration_ms": "0", "polish_min_gap_ms": "",
+        "polish_quote_style": "default",
+        "polish_keep_final_period": False,
+        "polish_remove_dialogue_gt": False,
+        "polish_no_rewrap": False, "polish_no_clamp_long": False,
+    })
+    assert not [a for a in args if a.startswith("--polish-")]
+
+
+def test_build_refine_args_polish_invalid_string_ignored():
+    """字符串数值清洗：转换失败即忽略该键，其余合法键照常转发。"""
+    args = _build_refine_args({
+        "inputs": ["a.srt"], "polish_enabled": True,
+        "polish_max_line_chars": "abc",
+        "polish_min_gap_ms": "xyz",
+        "polish_max_lines": "4",
+    })
+    assert "--polish-max-line-chars" not in args
+    assert "--polish-min-gap-ms" not in args
+    assert args[args.index("--polish-max-lines") + 1] == "4"
+
+
 class _StopLaunch(Exception):
     """fake Popen 哨兵：捕获拼好的 args 后终止启动流程。"""
 

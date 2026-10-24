@@ -900,6 +900,18 @@
                     </div>
                     </div>
 
+                    <!-- 字幕清洗参数独立设置项（D2026-1024-01 批2 件A）：照「压制」
+                         入口组结构；组内零 id/零静态 data-i18n（FROZEN_IDS/
+                         FROZEN_I18N_KEYS 冻结），全部文案由 app-refine-core.js
+                         JS 态 MSG 承接；summary 行由 renderPolishAdvSummary 渲染
+                         （弹窗保存成功后同步刷新；会话级无持久化） -->
+                    <div class="adv-group" data-testid="polish-adv-group">
+                    <div class="group-title polish-adv-title" data-testid="polish-adv-group-title"></div>
+                    <div class="muted polish-adv-desc" data-testid="polish-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact polish-params-open-btn" data-testid="polish-adv-open-btn"></button>
+                    <div class="muted polish-params-summary" data-testid="polish-adv-summary"></div>
+                    </div>
+
                     <!-- 压制参数独立设置项（D2026-1008-01 批2）：仿「断点与日志」组
                          结构；组内零 id/零静态 data-i18n（FROZEN_IDS/FROZEN_I18N_KEYS
                          冻结），全部文案由 EncodeDock.init JS 态 MSG 承接；摘要行由
