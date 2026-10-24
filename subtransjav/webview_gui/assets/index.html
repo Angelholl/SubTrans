@@ -850,54 +850,18 @@
 
                     </div>
 
-                    <div class="adv-group">
-                    <div class="group-title" data-i18n="adv_group_tm_learn_gate">TM 与学习闸</div>
-                    <div class="field-row">
-                        <label class="inline-field"
-                               data-i18n-title="tm_enable_title" title="开启后翻译时可复用以往积累的译文记忆，取消后本次完全不读写记忆库，一般保持勾选。
-技术细节：取消勾选时向管线传递 --no-tm（不读取也不写入翻译记忆库）">
-                            <input type="checkbox" id="refineTmEnable" checked> <span data-i18n="tm_enable_label">翻译记忆库</span>
-                        </label>
-                        <label class="inline-field grow">
-                            <span data-i18n="tm_db_label">TM 库路径</span>
-                            <input id="refineTmDb" class="form-input compact grow" style="min-width:var(--w-tm-db);"
-                                   data-i18n-placeholder="tm_db_placeholder" placeholder="留空=使用默认 TM 库">
-                        </label>
-                        <label class="inline-field"
-                               data-i18n-title="tm_threshold_title" title="控制复用记忆库译文的匹配严格程度，调低会更宽松、也更容易套用不贴切的旧译文，留空即用默认值，一般无需填写。
-技术细节：模糊匹配阈值 0-1（步进 0.05），越低越宽松；留空=使用管线默认">
-                            <span data-i18n="tm_threshold_label">TM 阈值</span>
-                            <input type="number" id="refineTmThreshold" class="form-input compact" style="width:var(--w-tm-threshold);"
-                                   min="0" max="1" step="0.05" data-i18n-placeholder="tm_threshold_placeholder" placeholder="默认">
-                        </label>
-                        <label class="inline-field"
-                               data-i18n-title="glossary_learn_title" title="开启后翻译命中将写入学习词库（默认关闭）；学习词库与手动词库分层生效，可在词库页查看">
-                            <input type="checkbox" id="refineGlossaryLearn"> <span data-i18n="glossary_learn_label">learned 词库自学习</span>
-                        </label>
-                        <label class="inline-field">
-                            <input type="checkbox" id="refineGlossaryConflictBlock"> <span data-i18n="glossary_conflict_block_label">冲突条目禁入 TM（默认仅观察）</span>
-                        </label>
-                    </div>
-
-                    </div>
-
-                    <div class="adv-group">
-                    <div class="group-title" data-i18n="adv_group_resume_logging">断点与日志</div>
-                    <div class="field-row">
-                        <label class="inline-field"
-                               data-i18n-title="resume_title" title="上次中断后重跑时，自动接着上次的进度继续，只处理没做完的部分，一般保持勾选。
-技术细节：中断后重跑时，检测到 *_manifest.json 即复用已完成阶段，仅续跑剩余阶段">
-                            <input type="checkbox" id="resumeToggle" data-testid="resume-toggle"> <span data-i18n="resume_label">断点恢复（复用已完成阶段）</span>
-                        </label>
-                        <label class="inline-field"
-                               data-i18n-title="force_resume_title" title="上次中断后重跑时，即使检测到改动也接着上次的进度继续，可能用到过期的中间结果。
-技术细节：覆盖清单指纹校验；会复用可能过期的阶段A产物">
-                            <input type="checkbox" id="refineForceResume" data-testid="force-resume-toggle"> <span data-i18n="force_resume_label">强制断点恢复（指纹不匹配仍复用）</span>
-                        </label>
-                        <label class="inline-field" data-i18n-title="verbose_title" title="向子进程传递 --verbose 输出调试日志">
-                            <input type="checkbox" id="debugLogging"> <span data-i18n="verbose_label">详细日志</span>
-                        </label>
-                    </div>
+                    <!-- TM 与断点合并入口组（D2026-1024-01 批3 件B）：原「TM 与学习闸」
+                         「断点与日志」两区块撤除迁入 AppModal.tmBreak 合并弹窗；
+                         照批2 字幕清洗入口组结构，组内零 id/零静态 data-i18n
+                         （FROZEN_IDS/FROZEN_I18N_KEYS 冻结），全部文案由
+                         app-refine-core.js JS 态 MSG 承接；summary 行由
+                         renderTmBreakAdvSummary 渲染（弹窗保存成功后同步刷新；
+                         会话级无持久化，刷新复位） -->
+                    <div class="adv-group" data-testid="tm-break-adv-group">
+                    <div class="group-title tm-break-adv-title" data-testid="tm-break-adv-group-title"></div>
+                    <div class="muted tm-break-adv-desc" data-testid="tm-break-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact tm-break-params-open-btn" data-testid="tm-break-adv-open-btn"></button>
+                    <div class="muted tm-break-params-summary" data-testid="tm-break-adv-summary"></div>
                     </div>
 
                     <!-- 字幕清洗参数独立设置项（D2026-1024-01 批2 件A）：照「压制」
