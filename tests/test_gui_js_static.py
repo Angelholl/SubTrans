@@ -535,7 +535,8 @@ def test_translate_page_has_start_stop_and_no_guide_card():
 
 def test_translate_tab_has_quick_start_button():
     """d1023 卡：翻译 TAB 拖拽区 .dz-actions 增「开始」快捷钮——零新增 id
-    （data-testid 锚点），次级样式（不得与 addFilesBtn 并列 primary），
+    （data-testid 锚点），主级蓝底（D2026-1025-01 owner 真机反馈追裁：
+    添加文件夹/开始翻译统一蓝底，推翻 2026-10-15「并列 primary 无主次」口径），
     文案挂独立键 start_btn_tab（owner 2026-10-23 指定四字「开始翻译」；
     右栏主钮 start_btn「开始净语翻译」不动）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
@@ -548,10 +549,10 @@ def test_translate_tab_has_quick_start_button():
         block, re.S)
     assert m, '翻译 TAB .dz-actions 缺 data-testid="btn-start-translate"'
     frag = m.group(0)
-    assert "btn btn-secondary" in frag, \
-        "快捷开始钮须为次级（class 含 btn btn-secondary）"
-    assert "btn-primary" not in frag, \
-        "快捷开始钮不得为 primary（P1-4 并列 primary 无主次缺陷）"
+    assert "btn btn-primary" in frag, \
+        "快捷开始钮须为 primary 蓝底（D2026-1025-01 统一蓝底追裁）"
+    assert "btn btn-secondary" not in frag, \
+        "快捷开始钮不得回潮次级白底（D2026-1025-01 统一蓝底防回潮）"
     assert not re.search(r'\sid="', frag), \
         "零新增 id 约束：快捷开始钮只挂 data-testid"
     assert 'data-i18n="start_btn_tab"' in frag, \
@@ -6631,7 +6632,8 @@ def test_p23_collapse_header_right_aligned():
 # 图标 / 文案双表同步尚无回归钉保护（主次回潮或双表失步无法被测试捕获）。
 # 本钉锁定 P1-4 拖拽区恢复面（写法沿用本文件既有读取/解析 helper 与
 # tests:5466 同款 button 片段正则）：
-# ① #addFolderBtn 次级（含 `btn btn-secondary`，不含 `btn-primary`）；
+# ① #addFolderBtn 主级蓝底（含 `btn btn-primary`）——D2026-1025-01 owner
+#    真机反馈追裁「添加文件夹/开始翻译统一蓝底」，原次级钉随之换代；
 # ② #addFilesBtn / #addFolderBtn 各含 `<svg` 且含 `stroke-width="2"`；
 # ③ app.js MSG.source_header == '拖拽 .srt 字幕文件到这里'；
 # ④ app.js MSG.empty_hint == index.html data-i18n="empty_hint" 挂点静态文本
@@ -6642,7 +6644,8 @@ def test_p23_collapse_header_right_aligned():
 # source_header 旧值 → 断言③红；红/绿两段原文见本卡执行记录。
 # ============================================================================
 def test_p14_dropzone_restored_pinned():
-    """D2026-1015-05 / 卡C：P1-4 拖拽区恢复五断言钉（主次/图标/文案双表/校对钮）。"""
+    """D2026-1015-05 / 卡C：P1-4 拖拽区恢复五断言钉；主次钉已于 D2026-1025-01
+    统一蓝底追裁换代（图标/文案双表/校对钮断言不变）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     src = _app_js_source()
 
@@ -6654,12 +6657,13 @@ def test_p14_dropzone_restored_pinned():
         assert m, f"index.html 未找到 button#{dom_id}"
         return m.group(0)
 
-    # ① 主次恢复：目录钮为次级，且不得回潮为 primary（P1-4 两枚并列 primary 无主次）
+    # ① 主级蓝底：目录钮与添加文件/开始翻译统一蓝底（D2026-1025-01 追裁，
+    #    推翻 P1-4「两枚并列 primary 无主次」对目录钮的约束）
     folder = button_fragment("addFolderBtn")
-    assert "btn btn-secondary" in folder, \
-        "#addFolderBtn 须为次级按钮（class 含 btn btn-secondary，P1-4 主次恢复）"
-    assert "btn-primary" not in folder, \
-        "#addFolderBtn 回潮为 btn-primary（两枚并列 primary 无主次的 P1-4 缺陷）"
+    assert "btn btn-primary" in folder, \
+        "#addFolderBtn 须为 primary 蓝底（D2026-1025-01 统一蓝底追裁）"
+    assert "btn btn-secondary" not in folder, \
+        "#addFolderBtn 不得回潮次级白底（D2026-1025-01 统一蓝底防回潮）"
 
     # ② 拖拽区两钮图标化且粗细统一 2（Lucide 上游默认）
     for dom_id in ("addFilesBtn", "addFolderBtn"):
