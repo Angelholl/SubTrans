@@ -89,10 +89,11 @@ def clean_entries(entries: list, merge_enabled: bool = True,
       kana_moan_deleted_timings — 删除台账 [{timing, text}]（报告消费）；
       kana_kept — 判为短句/喘息但原样保留的条数。
     """
-    stats = {"kana_merged": 0, "kana_moan_deleted": 0,
-             "kana_moan_deleted_timings": [], "kana_kept": 0}
+    merged_n = deleted_n = kept_n = 0
+    deleted_log: list = []
     if not entries:
-        return entries, stats
+        return entries, {"kana_merged": 0, "kana_moan_deleted": 0,
+                         "kana_moan_deleted_timings": [], "kana_kept": 0}
     n = len(entries)
     classes = [classify_kana_entry(e.get("text") or "") for e in entries]
     spans = [_timing_span(e.get("timing") or "") for e in entries]
@@ -141,44 +142,44 @@ def clean_entries(entries: list, merge_enabled: bool = True,
             if act is None:
                 # 实义/保留后条：缓冲条目挂到后条（文本时间序拼接、span 并集）
                 out.append(_merge_pair(carry, e))
-                stats["kana_merged"] += 1
+                merged_n += 1
                 carry = None
                 continue
             if act == "merge_prev":
                 # 后条决策并入前条（=缓冲条目）：缓冲条目吸收后条后落定，
                 # 链式续并交由后续 merge_prev 并入该落定条目
                 out.append(_merge_pair(carry, e))
-                stats["kana_merged"] += 1
+                merged_n += 1
                 carry = None
                 continue
             # delete/keep/carry_next 与缓冲语义互斥（间隙论证见上），
             # 防御性落定：缓冲条目原样保留
             out.append(carry)
-            stats["kana_kept"] += 1
+            kept_n += 1
             carry = None
         if act is None:
             out.append(dict(e))
         elif act == "merge_prev":
             if not out:                     # 决策阶段保证 i>0；防御
                 out.append(dict(e))
-                stats["kana_kept"] += 1
+                kept_n += 1
             else:
                 out[-1] = _merge_pair(out[-1], e)
-                stats["kana_merged"] += 1
+                merged_n += 1
         elif act == "carry_next":
             carry = dict(e)
         elif act == "delete":
-            stats["kana_moan_deleted"] += 1
-            stats["kana_moan_deleted_timings"].append(
-                {"timing": e.get("timing") or "",
-                 "text": e.get("text") or ""})
+            deleted_n += 1
+            deleted_log.append({"timing": e.get("timing") or "",
+                                "text": e.get("text") or ""})
         else:                               # keep
             out.append(dict(e))
-            stats["kana_kept"] += 1
+            kept_n += 1
     if carry is not None:                   # 末尾缓冲条目落定保留
         out.append(carry)
-        stats["kana_kept"] += 1
-    return out, stats
+        kept_n += 1
+    return out, {"kana_merged": merged_n, "kana_moan_deleted": deleted_n,
+                 "kana_moan_deleted_timings": deleted_log, "kana_kept": kept_n}
 
 
 def _merge_pair(a: dict, b: dict) -> dict:
