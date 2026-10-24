@@ -15,6 +15,7 @@ const AppModal = {
     _tmOpts: null,       // P3：tmEdit(opts) 暂存（onSaved）
     _encodeCollect: null,// 2.8.0.2：encode 闭包 collect（打开赋值/结算置 null，防悬挂引用）
     _polishCollect: null,// D2026-1024-01 批2 件A：polish 闭包 collect（同 encode 先例）
+    _tmBreakCollect: null,// D2026-1024-01 批3 件B：tmBreak 闭包 collect（同 polish 先例）
 
     _settle(value) {
         if (!this._busy) return;
@@ -57,6 +58,7 @@ const AppModal = {
     //   prompt：带输入值结算；encode：按当前表单值结算（_resolve 包装器落
     //     {ok, params}，collect 闭包经 _encodeCollect 暴露、关闭置 null）；
     //   polish（D2026-1024-01 批2 件A）：同 encode 分派（_polishCollect）；
+    //   tmbreak（D2026-1024-01 批3 件B）：同 polish 分派（_tmBreakCollect）；
     //   其余（alert/confirm/batchfix）：true（确认）。
     _okValue(input) {
         if (this._kind === 'tmEdit' || this._kind === 'editor'
@@ -72,6 +74,12 @@ const AppModal = {
         // 按当前表单值结算 {ok, params}（collect 闭包经 _polishCollect 暴露）
         if (this._kind === 'polish') {
             const collect = this._polishCollect;
+            return collect ? { ok: true, params: collect() } : true;
+        }
+        // D2026-1024-01 批3 件B：tmbreak 同 polish 分派——ok 键/Enter=保存，
+        // 按当前表单值结算 {ok, params}（collect 闭包经 _tmBreakCollect 暴露）
+        if (this._kind === 'tmbreak') {
+            const collect = this._tmBreakCollect;
             return collect ? { ok: true, params: collect() } : true;
         }
         return true;
@@ -1524,6 +1532,153 @@ const AppModal = {
         return new Promise((resolve) => {
             this._resolve = (value) => {
                 this._polishCollect = null;
+                // truthy（保存键/Enter，统一分派已按当前表单结算 {ok,params}）
+                // → 按当前表单值结算；falsy（取消/ESC/遮罩）→ {ok:false}。
+                resolve(value ? { ok: true, params: collect() } : { ok: false });
+            };
+        });
+    },
+
+    // ============================================================
+    // TM 与断点合并弹窗（D2026-1024-01 批3 件B）：照 polish kind 先例
+    // （本地 mk 闭包 + _bindSkeletonOnce 统一骨架绑定，复用 #appModal
+    // 骨架），压制式弹出·单滚动分区纵排。原「TM 与学习闸」「断点与日志」
+    // 两区块 8 控件迁入，控件标签/长提示 title/placeholder/默认值逐项
+    // 从原区块保真照搬（title 挂控件 label，全文含「技术细节」行）。
+    // 布局：分区一「TM 与学习闸」（翻译记忆库开关/TM 阈值/TM 库路径整行/
+    // learned 自学习/冲突条目禁入）+ 分区二「断点与日志」（断点恢复/
+    // 强制恢复/详细日志）；开关格照批2 pp-toggle-cell.full 画法。
+    // 零 id（骨架既有 id 之外零新增）、文案全 MSG 键（标签/title 复用
+    // 既有键，分区标题复用原组标题键）。
+    // 结算：保存（ok 键/Enter）={ok:true, params}；取消/ESC/遮罩={ok:false}；
+    // 打开时从 opts.last 回填（当前会话值，缺省=原控件初始默认）。
+    // ============================================================
+    tmBreak(opts) {
+        if (this._busy) return Promise.resolve({ ok: false });  // 单例不叠加
+        const root = document.getElementById('appModal');
+        if (!root) return Promise.resolve({ ok: false });       // 骨架缺席兜底
+        // 会话当前值回填（缺省=原静态控件初始默认：TM 开/断点开，其余关）
+        const d = (opts && opts.last) || {
+            tm_enable: true, tm_db: '', tm_threshold: '',
+            glossary_learn: false, glossary_conflict_block: false,
+            resume: true, force_resume: false, verbose: false,
+        };
+        const body = root.querySelector('.modal-body');
+        const cancelBtn = root.querySelector('.modal-cancel');
+        const okBtn = root.querySelector('.modal-ok');
+        const input = root.querySelector('.modal-input');
+        root.querySelector('.modal-title').textContent = MSG.tmBreakPopupTitle;
+        body.textContent = '';
+        body.style.whiteSpace = 'normal';
+        input.style.display = 'none';
+        cancelBtn.style.display = '';
+        cancelBtn.textContent = MSG.ui_cancel;
+        okBtn.style.display = '';
+        okBtn.textContent = MSG.tmBreakPopupSave;
+        this._bindSkeletonOnce(root);       // 2.8.0.2：唯一 kind 感知骨架绑定
+
+        const mk = (tag, cls, parent) => {
+            const el = document.createElement(tag);
+            if (cls) el.className = cls;
+            if (parent) parent.appendChild(el);
+            return el;
+        };
+        // 字段格：label（title 长提示挂此）+ 控件 + 灰字小注
+        const mkField = (parent, text, title) => {
+            const w = mk('div', 'enc-field', parent);
+            const lb = mk('label', null, w);
+            lb.textContent = text;
+            if (title) lb.title = title;
+            return w;
+        };
+        const mkNote = (parent, text) => {
+            mk('div', 'pp-note', parent).textContent = text;
+        };
+        // 数值输入格：label + number 输入 + 灰字小注（原型 .enc-field 同构）
+        const mkNumber = (parent, labelText, ph, min, max, step, val, note, title) => {
+            const w = mkField(parent, labelText, title);
+            const inp = mk('input', 'form-input', w);
+            inp.type = 'number';
+            inp.min = String(min);
+            inp.max = String(max);
+            inp.step = String(step);
+            inp.placeholder = ph;
+            inp.value = val || '';
+            mkNote(w, note);
+            return inp;
+        };
+        // 文本输入格：整行 label + text 输入 + 灰字小注（TM 库路径）
+        const mkTextField = (parent, labelText, ph, val, note) => {
+            const w = mkField(parent, labelText);
+            w.classList.add('full');
+            const inp = mk('input', 'form-input', w);
+            inp.type = 'text';
+            inp.placeholder = ph;
+            inp.value = val || '';
+            mkNote(w, note);
+            return inp;
+        };
+        // 开关格（原型 pp-toggle-cell.full）：整行 label 内联 checkbox +
+        // 长提示 title 挂 label + 小注
+        const mkToggle = (parent, labelText, note, checked, title) => {
+            const cell = mk('div', 'pp-toggle-cell full', parent);
+            const lb = mk('label', 'pp-toggle', cell);
+            if (title) lb.title = title;
+            const inp = mk('input', null, lb);
+            inp.type = 'checkbox';
+            inp.checked = checked;
+            lb.appendChild(document.createTextNode(' ' + labelText));
+            mkNote(cell, note);
+            return inp;
+        };
+
+        // —— 分区一：TM 与学习闸（5 控件）——
+        const sec1 = mk('div', 'enc-section', body);
+        mk('h4', null, sec1).textContent = MSG.adv_group_tm_learn_gate;
+        const grid1 = mk('div', 'enc-grid', sec1);
+        const elTmEnable = mkToggle(grid1, MSG.tm_enable_label,
+            MSG.tmBreakNoteTmEnable, d.tm_enable !== false, MSG.tm_enable_title);
+        const elThreshold = mkNumber(grid1, MSG.tm_threshold_label,
+            MSG.tm_threshold_placeholder, 0, 1, 0.05, d.tm_threshold,
+            MSG.tmBreakNoteTmThreshold, MSG.tm_threshold_title);
+        const elTmDb = mkTextField(grid1, MSG.tm_db_label,
+            MSG.tm_db_placeholder, d.tm_db, MSG.tmBreakNoteTmDb);
+        const elLearn = mkToggle(grid1, MSG.glossary_learn_label,
+            MSG.tmBreakNoteGlossaryLearn, !!d.glossary_learn,
+            MSG.glossary_learn_title);
+        const elConflict = mkToggle(grid1, MSG.glossary_conflict_block_label,
+            MSG.tmBreakNoteConflictBlock, !!d.glossary_conflict_block);
+
+        // —— 分区二：断点与日志（3 控件）——
+        const sec2 = mk('div', 'enc-section', body);
+        mk('h4', null, sec2).textContent = MSG.adv_group_resume_logging;
+        const grid2 = mk('div', 'enc-grid', sec2);
+        const elResume = mkToggle(grid2, MSG.resume_label,
+            MSG.tmBreakNoteResume, d.resume !== false, MSG.resume_title);
+        const elForce = mkToggle(grid2, MSG.force_resume_label,
+            MSG.tmBreakNoteForceResume, !!d.force_resume, MSG.force_resume_title);
+        const elVerbose = mkToggle(grid2, MSG.verbose_label,
+            MSG.tmBreakNoteVerbose, !!d.verbose, MSG.verbose_title);
+
+        const collect = () => ({
+            tm_enable: elTmEnable.checked,
+            tm_db: elTmDb.value,
+            tm_threshold: elThreshold.value,
+            glossary_learn: elLearn.checked,
+            glossary_conflict_block: elConflict.checked,
+            resume: elResume.checked,
+            force_resume: elForce.checked,
+            verbose: elVerbose.checked,
+        });
+        // 同 polish 先例：闭包 collect 暴露给统一骨架 ok/Enter 分派
+        this._tmBreakCollect = collect;
+
+        this._busy = true;
+        this._kind = 'tmbreak';
+        root.style.display = 'flex';
+        return new Promise((resolve) => {
+            this._resolve = (value) => {
+                this._tmBreakCollect = null;
                 // truthy（保存键/Enter，统一分派已按当前表单结算 {ok,params}）
                 // → 按当前表单值结算；falsy（取消/ESC/遮罩）→ {ok:false}。
                 resolve(value ? { ok: true, params: collect() } : { ok: false });

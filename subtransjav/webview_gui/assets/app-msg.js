@@ -236,6 +236,26 @@ const MSG = {
     polishNoteClampLong: '单条显示超过「时长上限」时自动切走多余时长；关闭则超长条目只记入报告、不缩短。',
     polishTimingCaliber: '口径提示：最小间隔 83.4 ms ≈ 2 帧 @ 23.976fps，指「相邻两条之间的空档」，与「最短显示时长」不是一个参数，勿与 833 ms 口径混淆。',
 
+    // TM 与断点合并弹窗（D2026-1024-01 批3 件B）：高级参数 TAB「TM 与断点」
+    // 入口组+弹窗壳文案；8 控件标签/长提示 title/placeholder/分区标题全部
+    // 复用既有键（tm_* / glossary_* / resume_* / force_resume_* / verbose_* /
+    // adv_group_tm_learn_gate / adv_group_resume_logging），新增键仅组名/
+    // 说明/入口钮/弹窗标题/保存钮/短注×8；summary 状态词与偏离片段随值内联
+    // （encode 摘要 'H.264' 内联先例同构）
+    tmBreakAdvGroupTitle: 'TM 与断点',
+    tmBreakAdvDesc: '翻译记忆库与学习闸、断点恢复与日志的合并设置（原「TM 与学习闸」「断点与日志」两组已整合迁入弹窗）。',
+    tmBreakAdvOpenBtn: 'TM 与学习闸 / 断点与日志…',
+    tmBreakPopupTitle: 'TM 与断点设置',
+    tmBreakPopupSave: '保存',
+    tmBreakNoteTmEnable: '开启后翻译时复用以往积累的译文记忆；取消则本次完全不读写记忆库。',
+    tmBreakNoteTmThreshold: '模糊匹配严格程度 0-1（步进 0.05）；留空即用管线默认，一般无需填写。',
+    tmBreakNoteTmDb: '留空 = 使用默认 TM 库。',
+    tmBreakNoteGlossaryLearn: '翻译命中写入学习词库（默认关闭）；与手动词库分层生效，可在词库页查看。',
+    tmBreakNoteConflictBlock: '冲突条目默认仅观察；开启后禁入 TM。',
+    tmBreakNoteResume: '中断后重跑自动续跑剩余部分；一般保持勾选。',
+    tmBreakNoteForceResume: '指纹不匹配也接着上次进度继续，可能用到过期中间结果。',
+    tmBreakNoteVerbose: '向子进程传递 --verbose 输出调试日志。',
+
     // ============================================================
     // i18n 键表（W2 收编）：index.html data-i18n/data-i18n-title/
     // data-i18n-placeholder 引用的键必须全部出现在本表（tests 钉住）；

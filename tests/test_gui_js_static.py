@@ -361,6 +361,55 @@ def test_build_refine_options_polish_enabled_wiring():
         "buildRefineOptions 缺 polish_enabled 布尔组装"
 
 
+def test_tm_break_options_session_state_pins():
+    """D2026-1024-01 批3 件B：TM/断点 8 控件迁入合并弹窗后，
+    buildRefineOptions 8 options 键名与取值语义零变化（仅取值来源
+    DOM $() → 会话态 _tmBreakParams），会话态默认值=原静态控件初始值。"""
+    src = _app_js_source()
+    opts = _extract_function(src, "buildRefineOptions")
+    # 8 键逐键钉：键名零变化，取值一律自会话态 _tmBreakParams
+    assert "resume: !!_tmBreakParams.resume," in opts, \
+        "resume 键名/取值语义漂移（应读会话态 _tmBreakParams.resume）"
+    assert "force_resume: !!_tmBreakParams.force_resume," in opts, \
+        "force_resume 键名/取值语义漂移"
+    assert "glossary_learn: !!_tmBreakParams.glossary_learn," in opts, \
+        "glossary_learn 键名/取值语义漂移"
+    assert "glossary_conflict_block: !!_tmBreakParams.glossary_conflict_block," in opts, \
+        "glossary_conflict_block 键名/取值语义漂移"
+    assert "verbose: !!_tmBreakParams.verbose," in opts, \
+        "verbose 键名/取值语义漂移"
+    assert "no_tm: !_tmBreakParams.tm_enable," in opts, \
+        "no_tm 键名/取值语义漂移（=tm_enable 取反）"
+    assert "tm_db: (_tmBreakParams.tm_db || '').trim()," in opts, \
+        "tm_db 键名/取值语义漂移（trim 语义保留）"
+    assert "tm_threshold: (_tmBreakParams.tm_threshold || '').trim()," in opts, \
+        "tm_threshold 键名/取值语义漂移（trim 语义保留）"
+    # 旧静态控件 id 消费点清零（弹窗化后 index.html 已无这些控件）
+    for dom_id in ("refineTmEnable", "refineTmDb", "refineTmThreshold",
+                   "refineGlossaryLearn", "refineGlossaryConflictBlock",
+                   "resumeToggle", "refineForceResume", "debugLogging"):
+        assert dom_id not in opts, f"buildRefineOptions 仍读 DOM 控件: {dom_id}"
+    # index.html 静态 8 id 撤除＋「TM 与断点」入口组在位
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for dom_id in ("refineTmEnable", "refineTmDb", "refineTmThreshold",
+                   "refineGlossaryLearn", "refineGlossaryConflictBlock",
+                   "resumeToggle", "refineForceResume", "debugLogging"):
+        assert f'id="{dom_id}"' not in html, f"index.html 仍残留静态控件: {dom_id}"
+    assert 'data-testid="tm-break-adv-open-btn"' in html, \
+        "index.html 缺「TM 与断点」入口钮"
+    # 会话态默认值=原静态控件初始值（TM 开/断点开；learned/冲突禁入/
+    # 强制恢复/详细日志关；库路径/阈值空串）
+    m = re.search(r"let _tmBreakParams = \{(.*?)\};", src, re.S)
+    assert m, "缺 _tmBreakParams 会话态初始化"
+    init = m.group(1)
+    for key, val in (("tm_enable", "true"), ("tm_db", "''"),
+                     ("tm_threshold", "''"), ("glossary_learn", "false"),
+                     ("glossary_conflict_block", "false"), ("resume", "true"),
+                     ("force_resume", "false"), ("verbose", "false")):
+        assert f"{key}: {val}," in init, \
+            f"_tmBreakParams 默认值偏离原控件初始值: {key} 应为 {val}"
+
+
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""
@@ -689,13 +738,14 @@ def test_dry_run_entry_removed_from_gui():
 
 
 def test_glossary_learn_has_tooltip():
-    """learned 词库自学习勾选项必须带悬停说明（data-i18n-title + MSG 键）。"""
-    html = INDEX_HTML.read_text(encoding="utf-8")
-    m = re.search(r'<label[^>]*>\s*<input type="checkbox"'
-                  r'\s+id="refineGlossaryLearn">', html, re.S)
-    assert m, "未找到 refineGlossaryLearn 所在 label"
-    assert 'data-i18n-title="glossary_learn_title"' in m.group(0), \
-        "learned 自学习选项缺少 data-i18n-title"
+    """learned 词库自学习勾选项必须带悬停说明（MSG 键 + 弹窗消费点）。
+
+    D2026-1024-01 批3 件B：控件随「TM 与学习闸」区块迁入 AppModal.tmBreak
+    合并弹窗，index.html 静态 data-i18n-title 锚随区块撤除；title 改由
+    弹窗构建代码挂 MSG.glossary_learn_title（键值原文保留）。"""
+    modal_src = (ASSETS / "app-modal.js").read_text(encoding="utf-8")
+    assert "MSG.glossary_learn_title" in modal_src, \
+        "tmBreak 弹窗未挂 glossary_learn_title（长提示丢失）"
     assert "glossary_learn_title" in _js_msg_keys()
 
 
@@ -1328,8 +1378,10 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # （encodeDock/encodeDockFill/encodeDockLabel/encodeDockList/
     #  encodeDockToggle，零 data-i18n，文案 JS 态 MSG 键承接）；
     # d1023-polish 批3（D2026-1023-03）：+polishEnabled（清洗总开关，
-    # 显式解冻 224→225；带 data-i18n=polish_enabled_label）
-    assert len(ids) == 225, f"id 全集数漂移（d1023 批3 解冻后现契约 225），实为 {len(ids)}"
+    # 显式解冻 224→225；带 data-i18n=polish_enabled_label）；
+    # d1024 批3 件B（D2026-1024-01）：TM/断点 8 静态 id 撤除迁入合并弹窗，
+    # 显式解冻 225→217
+    assert len(ids) == 217, f"id 全集数漂移（d1024 批3 解冻后现契约 217），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -3387,7 +3439,9 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
-    无内联 width:auto；id 全集数 225 / data-i18n 键集 190 契约数零漂移
+    无内联 width:auto；id 全集数 217 / data-i18n 键集 174 契约数零漂移
+    （d1024 批3 件B：TM/断点 8 id 撤除、17 个静态 data-i18n 锚随区块撤除，
+    tm_enable_label 因右栏 sys-summary 行仍消费而保留）
     （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
     模型行零 id/零 data-i18n，两契约数不漂移）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
@@ -3398,7 +3452,7 @@ def test_batch3_ai_config_row_pins_survive():
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 225, f"id 全集数漂移（契约 225），实为 {len(ids)}"
+    assert len(ids) == 217, f"id 全集数漂移（契约 217），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -3406,7 +3460,7 @@ def test_batch3_ai_config_row_pins_survive():
     # + 翻译TAB快捷钮独立键 start_btn_tab（d1023 同日 owner 指定）
     # 解冻后契约值（D2026-1023-02/03；快照钉⑤b 为全集全等断言，此行只锁计数，
     # 漂移细节归钉⑤b）
-    assert len(i18n) == 191, f"data-i18n 键集数漂移（契约 191），实为 {len(i18n)}"
+    assert len(i18n) == 174, f"data-i18n 键集数漂移（契约 174），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -7088,6 +7142,10 @@ def test_js_sources_layer_pinned():
        旧钉 69a0a0e4… / bbc5807a… 退役）；
        d1024-批2 主审直修换代（验收期弹窗回填缺陷：句末去句号/行首>>两下拉
        自会话已应用参数回填，app-modal.js +71B）：全库 7507ae15…/494,443B；
+       d1024-批3 换代（件B「TM 与学习闸＋断点与日志」合并弹窗，D2026-1024-01）：
+       refine 家族 98e5cbd2…/212,736B、全库 90417ed6…/507,247B（index.html
+       两区块撤除改入口组、app-msg.js +13 键、app-modal.js tmBreak kind、
+       app-refine-core.js 会话态+入口组+8 键接线；旧钉 7c947e25… / 7507ae15… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7100,7 +7158,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "7507ae15300df26e6699bc22e4872d05180afc92750875e25a5a81c7c948763f"), \
+        "90417ed639bf5301ae039fb22f86a5ba3cda2804a507daed95b735c2e166587f"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7110,7 +7168,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "7c947e25261d1306a23775438f8a42eb2d631401fe94173fe377a3fd7c7335e1"), \
+        "98e5cbd2a274d3fd1d33e7bb32f50658bd7387cd79b99c368eff14b9e3b611c3"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7130,10 +7188,10 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (62277,
-                       "854996d63f40f46e9130df111b8d7b07aa09d022cb48cdf69a8a6f49179fcef4"),
-        "app-modal.js": (101525,
-                         "13f1946dc9c9334cb98d91e4a2f54b27ae074ce4aaa8dce7c1cbf9dfd98b54a7"),
+        "app-msg.js": (63963,
+                       "90b22e75e0a3087c2dbe4132c60059ed0816b116071522b5ea26c9f17b158cb5"),
+        "app-modal.js": (109622,
+                         "75500628887025ea83e7afd938cdf8aa1a3b13f8415fce1738ca13c6f7a79f1d"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (21361,
@@ -7160,8 +7218,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-refine-core.js": (12839,
-                               "a84c934544272e7595307f8333b2e4846c49f5b5ea3e8a469e1540804e66cc39"),
+        "app-refine-core.js": (15860,
+                               "adfb6b79ecadbb4cbc3c3d794d87e702e108b90d71a98daf0e6009aca24271f9"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
         "app-refine-glossary.js": (6588,
@@ -7232,12 +7290,13 @@ def test_refine_family_deshell_pinned():
         assert html.count(f'src="{name}"') == 1, f"{name} 在 index.html 出现次数 != 1"
 
 
-# 批4 全局面冻结名单（175 个；末次变更=d1024 批2 件A 清洗弹窗三顶层声明）
+# 批4 全局面冻结名单（177 个；末次变更=d1024 批3 件B TM/断点合并弹窗两顶层声明）
 _REFINE_TOP_NAMES = frozenset({
     "$", "AI_CLOUD_PROVIDERS", "ASR_SOURCE_LABELS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
     "DICT_STOP_GRACE_MS", "FULLCHAIN_SCOPE_NOTE", "GUIDE_ITEMS_MODAL_TITLE",
     "GUIDE_ITEMS_OPEN_BTN_LABEL", "GUIDE_SUFFIX", "MODEL_REFRESH_SVG", "REFINE_PROVIDER_URLS",
     "__warmupInflight", "_appliedPolishParams", "_dictBusyKind", "_dictCustomDir",
+    "_tmBreakParams",
     "_dictDirCache", "_dictEnsureHint",
     "_dictEnsureKindRow", "_dictNeedsMigration", "_dictOldDir", "_dictRefreshHint",
     "_dictRefreshKindRow", "_dictSourcesCache", "_dictStatusCache", "_dictStopPending",
@@ -7268,7 +7327,7 @@ _REFINE_TOP_NAMES = frozenset({
     "previewSeekHandlers", "readPositiveInt", "readRefineConcurrency", "readRefineCtx",
     "refineAiAnalyze", "refreshAnalysisModels", "refreshFallbackModels", "refreshModels",
     "refreshServiceQuickRow", "refreshTrioSelect", "rematchPreviewMedia", "renderMediaTag",
-    "renderPolishAdvSummary",
+    "renderPolishAdvSummary", "renderTmBreakAdvSummary",
     "saveCleanerDir", "saveStageEndpoints", "saveStageKey", "savedAiModel", "savedStageModels",
     "showPreviewError", "stageEndpoint", "stageEndpointFor", "stageKeyFor", "stageKeyOrNull",
     "stageStatus", "syncServiceQuickFromStages", "testAnalysisModel", "testStage", "testTrioModel",
@@ -7279,7 +7338,7 @@ _REFINE_TOP_NAMES = frozenset({
 
 
 def test_refine_global_surface_pinned():
-    """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 172 个名字，且与其余分文件零重名。"""
+    """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 177 个名字，且与其余分文件零重名。"""
     pat_fn = re.compile(r"^  (?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(")
     pat_var = re.compile(r"^  (?:const|let|var)\s+([A-Za-z_$][\w$]*)")
     refine_names = []

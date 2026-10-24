@@ -240,19 +240,20 @@ _ADVANCED_CONTROL_IDS = (
     # 翻译与词库
     "refineGl1", "refineGl2", "refineSourceFilter", "refineAutoSynopsis",
     "refineAdaptiveThresholds",
-    # TM 与学习闸
-    "refineTmEnable", "refineTmDb", "refineTmThreshold",
-    "refineGlossaryLearn", "refineGlossaryConflictBlock",
-    # 断点与日志（refineDryRun 试运行勾选已按 owner 反馈整体移除）
-    "resumeToggle", "refineForceResume", "debugLogging",
     # 兜底与并发（含 ⟳ 刷新按钮）
     "refineFallbackModel", "refreshFallbackModels", "refineFallbackLocal",
     "refineBatchLocal", "refineBatchCloud", "refineConcurrency",
 )
+# D2026-1024-01 批3 件B：「TM 与学习闸」「断点与日志」两区块 8 控件
+# （refineTmEnable/refineTmDb/refineTmThreshold/refineGlossaryLearn/
+# refineGlossaryConflictBlock/resumeToggle/refineForceResume/debugLogging）
+# 迁入 AppModal.tmBreak 合并弹窗，静态 id 随区块撤除（快照 ids 225→217），
+# 本元组随批移除；弹窗控件改由会话态 _tmBreakParams 承载（见
+# test_gui_js_static.py::test_tm_break_options_session_state_pins）。
 
 
 def test_advanced_settings_panel_keeps_all_control_ids():
-    """折叠收纳后 18 控件+1 按钮的 id 必须仍存在于 index.html（各恰好一次）。"""
+    """折叠收纳后 10 控件的 id 必须仍存在于 index.html（各恰好一次）。"""
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
     missing = [i for i in _ADVANCED_CONTROL_IDS if f'id="{i}"' not in html]
     assert not missing, f"index.html 丢失高级设置控件 id: {missing}"
@@ -335,11 +336,17 @@ def test_html_has_no_unmarked_user_visible_chinese():
 # 不再满足两级句式结构（「技术细节：」段已删），从本元组移出，
 # 由下方 _SIMPLIFIED_TITLE_TEXTS 专属钉接管（基线只增不减）。
 _ADVANCED_REWRITE_TITLE_KEYS = (
-    "adaptive_thresholds_title", "tm_enable_title",
-    "tm_threshold_title", "resume_title", "force_resume_title",
+    "adaptive_thresholds_title",
     # 2.7.0 批2（D2026-1004-04）：fallback_local/profile 两键两级句式改写，
     # 补双侧同值钉（app.js MSG ↔ index.html 内联 title，基线 +2）
     "fallback_local_title", "profile_title",
+)
+# D2026-1024-01 批3 件B：tm_enable/tm_threshold/resume/force_resume 四键
+# 随「TM 与学习闸」「断点与日志」区块迁入合并弹窗，index.html 内联 title
+# 锚撤除，HTML 侧同步钉退位；改钉 MSG 值两级句式结构 + 弹窗消费点键级
+# （app-modal.js tmBreak kind 逐键挂 MSG.<key>，键值原文保留）
+_TM_BREAK_POPUP_TITLE_KEYS = (
+    "tm_enable_title", "tm_threshold_title", "resume_title", "force_resume_title",
 )
 _ADVANCED_NOTICE_KEY = "advanced_settings_notice"
 _ADVANCED_NOTICE_TEXT = "以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。"
@@ -392,6 +399,24 @@ def test_advanced_tooltip_two_tier_values_sync_between_html_and_js(key):
     # 两级句式结构钉：恰一个换行，第二行以「技术细节：」顶格起（原技术表述保留段）
     assert js_value.count("\n") == 1
     assert js_value.split("\n")[1].startswith("技术细节：")
+
+
+@pytest.mark.parametrize("key", _TM_BREAK_POPUP_TITLE_KEYS)
+def test_tm_break_popup_title_keys_structure_and_wiring(key):
+    """批3 件B 迁入合并弹窗的四 title 键：MSG 值两级句式结构保持 +
+    app-modal.js tmBreak 弹窗逐键消费（title 全文随 MSG 键值原文保留）。
+
+    index.html 内联 title 锚已随区块撤除（原 HTML↔MSG 双侧同值钉退位，
+    见 _TM_BREAK_POPUP_TITLE_KEYS 处注记）。"""
+    js_value = _js_msg_value(key)
+    # 两级句式结构钉：恰一个换行，第二行以「技术细节：」顶格起
+    assert js_value.count("\n") == 1, f"{key}: 两级句式换行数漂移"
+    assert js_value.split("\n")[1].startswith("技术细节："), \
+        f"{key}: 第二行未以「技术细节：」顶格起"
+    modal_src = (WEBVIEW_GUI_DIR / "assets" / "app-modal.js").read_text(
+        encoding="utf-8")
+    assert f"MSG.{key}" in modal_src, \
+        f"tmBreak 弹窗未挂 {key}（长提示丢失）"
 
 
 def test_advanced_settings_notice_value_sync_between_html_and_js():

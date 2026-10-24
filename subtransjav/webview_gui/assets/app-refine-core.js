@@ -24,6 +24,21 @@
   // 清洗参数（null=全默认口径）；不落 localStorage，刷新自然复位 ----
   let _appliedPolishParams = null;
 
+  // ---- TM 与断点合并弹窗会话态（D2026-1024-01 批3 件B）：原「TM 与学习闸」
+  // 「断点与日志」两区块静态控件迁入 AppModal.tmBreak 弹窗；当前会话值
+  // （初值=原静态控件初始值：TM 开/断点开，learned/冲突禁入/强制恢复/
+  // 详细日志关，库路径/阈值空串）；不落 localStorage，刷新自然复位 ----
+  let _tmBreakParams = {
+    tm_enable: true,
+    tm_db: '',
+    tm_threshold: '',
+    glossary_learn: false,
+    glossary_conflict_block: false,
+    resume: true,
+    force_resume: false,
+    verbose: false,
+  };
+
   // 每阶段独立的接口地址输入框
   function stageEndpoint(n) {
     const v = ($('refineS' + n + 'Endpoint') || {}).value;
@@ -177,21 +192,24 @@
       fallback_local: !!($('refineFallbackLocal') || {}).checked,
       fallback_model: (($('refineFallbackModel') || {}).value || '').trim(),
       cleaner_config_dir: (($('refineCleanerConfig') || {}).value || '').trim(),
-      resume: !!($('resumeToggle') && $('resumeToggle').checked),
+      // 断点/日志/TM 8 键（D2026-1024-01 批3 件B）：键名与取值语义零变化，
+      // 取值来源由静态控件 DOM $() 改为会话态 _tmBreakParams（控件迁入
+      // AppModal.tmBreak 合并弹窗，保存结算写回会话态）
+      resume: !!_tmBreakParams.resume,
       // 强制断点恢复：--force-resume 隐含 --resume 由 RefineConfig.__post_init__ 保证，前端只传一个键
-      force_resume: !!($('refineForceResume') || {}).checked,
+      force_resume: !!_tmBreakParams.force_resume,
       // 学习闸开关：默认 false 不拼旗标（api.py 侧按需转 --glossary-learn / --glossary-conflict-block）
-      glossary_learn: !!($('refineGlossaryLearn') || {}).checked,
-      glossary_conflict_block: !!($('refineGlossaryConflictBlock') || {}).checked,
-      verbose: !!($('debugLogging') || {}).checked,
+      glossary_learn: !!_tmBreakParams.glossary_learn,
+      glossary_conflict_block: !!_tmBreakParams.glossary_conflict_block,
+      verbose: !!_tmBreakParams.verbose,
       source_filter: (($('refineSourceFilter') || {}).value || 'default'),
       auto_synopsis: !($('refineAutoSynopsis') && !$('refineAutoSynopsis').checked),
       // H4b 条目级阈值自适应：默认不勾选不传旗标（api.py 侧按需转 --adaptive-thresholds）
       adaptive_thresholds: !!($('refineAdaptiveThresholds') || {}).checked,
       // 翻译记忆库：勾选取消时才传 no_tm（--no-tm）；路径/阈值非空才传
-      no_tm: !!($('refineTmEnable') && !$('refineTmEnable').checked),
-      tm_db: (($('refineTmDb') || {}).value || '').trim(),
-      tm_threshold: (($('refineTmThreshold') || {}).value || '').trim(),
+      no_tm: !_tmBreakParams.tm_enable,
+      tm_db: (_tmBreakParams.tm_db || '').trim(),
+      tm_threshold: (_tmBreakParams.tm_threshold || '').trim(),
       // 2.1 翻译方向（D2026-0930-04 定案①）：缺省 ja/zh 由 api 侧过滤
       // 不产生旗标；指令卡路径有值才传（缺卡由 CLI validate 报错）
       source_lang: ($('directionSource') || {}).value || '',
@@ -267,6 +285,55 @@
         });
       });
       renderPolishAdvSummary();
+    };
+    // 本文件在 body 尾同步加载（DOM 已就绪）；readyState 兜底防早载
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fill);
+    } else {
+      fill();
+    }
+  })();
+
+  // ---- TM 与断点入口组（D2026-1024-01 批3 件B）：原「TM 与学习闸」
+  // 「断点与日志」两区块撤除迁入 AppModal.tmBreak 合并弹窗；入口组标题+
+  // 说明+入口钮+summary 行全 JS 态 MSG 填充（组内零 id/零静态 data-i18n）；
+  // 入口钮开弹窗（回填会话当前值），保存结算后写回会话态并刷新 summary；
+  // summary 基线四项（TM 开关/TM 阈值/断点恢复/详细日志）+偏离项拼接
+  // （状态词/偏离片段随值内联，同 encode 摘要行函数键先例） ----
+  function renderTmBreakAdvSummary() {
+    const row = document.querySelector('.tm-break-params-summary');
+    if (!row) return;
+    const p = _tmBreakParams;
+    const parts = [
+      '翻译记忆库：' + (p.tm_enable ? '开' : '关'),
+      'TM 阈值：' + (String(p.tm_threshold).trim() || '默认'),
+      '断点恢复：' + (p.resume ? '开' : '关'),
+      '详细日志：' + (p.verbose ? '开' : '关'),
+    ];
+    if (String(p.tm_db || '').trim()) parts.push('TM 库路径：自定义');
+    if (p.glossary_learn) parts.push('自学习：开');
+    if (p.glossary_conflict_block) parts.push('冲突禁入：开');
+    if (p.force_resume) parts.push('强制恢复：开');
+    row.textContent = parts.join(' · ');
+  }
+
+  (function initTmBreakAdvGroup() {
+    const fill = () => {
+      const title = document.querySelector('.tm-break-adv-title');
+      if (title) title.textContent = MSG.tmBreakAdvGroupTitle;
+      const desc = document.querySelector('.tm-break-adv-desc');
+      if (desc) desc.textContent = MSG.tmBreakAdvDesc;
+      document.querySelectorAll('.tm-break-params-open-btn').forEach((btn) => {
+        btn.textContent = MSG.tmBreakAdvOpenBtn;
+        btn.addEventListener('click', async () => {
+          const r = await AppModal.tmBreak({ last: _tmBreakParams });
+          if (r && r.ok) {
+            _tmBreakParams = r.params;
+            renderTmBreakAdvSummary();
+          }
+        });
+      });
+      renderTmBreakAdvSummary();
     };
     // 本文件在 body 尾同步加载（DOM 已就绪）；readyState 兜底防早载
     if (document.readyState === 'loading') {
