@@ -286,6 +286,11 @@ class RefineConfig:
     polish_extend_short_into_gap: bool = False  # 占位，本轮无行为（钉死）
     polish_rewrap_enabled: bool = True        # 拆行重排开关，默认开（D2026-1024-01 批1）
     polish_clamp_long_enabled: bool = True    # 超长缩短钳制开关，默认开（D2026-1024-01 批1）
+    # 源文假名清洗（D2026-1025-01 批3a）：ja→zh 源文侧纯假名短句合并/
+    # 孤立喘息删除。合并默认开（批2 离线 A/B 7 部实测语料误删 0、纯假名
+    # 短句约减半）；喘息删除默认关（opt-in）。仅 ja→zh 方向生效。
+    source_kana_merge_enabled: bool = True
+    source_kana_moan_delete_enabled: bool = False
     # 槽位结构永久保留 4 槽（D2026-0922-02 裁决三）；enabled 仅影响
     # manifest/GUI 展示，对 v2 按 tag→槽位取数无行为影响。槽1/3 为
     # v2 未用槽，默认停用，避免 validate() 对空模型/key 误报。

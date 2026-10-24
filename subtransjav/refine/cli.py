@@ -86,6 +86,18 @@ def build_parser():
                    action="store_false",
                    help="关闭超长缩短钳制（默认开：超 7000ms 条目缩短到上限）")
 
+    # ---- 源文假名清洗（ja→zh，D2026-1025-01 批3a）----
+    p.add_argument("--source-kana-merge", dest="source_kana_merge_enabled",
+                   action="store_true", default=True,
+                   help="源文纯假名短句/喘息并入相邻条（默认开，D2026-1025-01）")
+    p.add_argument("--no-source-kana-merge",
+                   dest="source_kana_merge_enabled", action="store_false",
+                   help="关闭源文假名短句合并（--source-kana-merge 反向旗标）")
+    p.add_argument("--source-kana-moan-delete",
+                   dest="source_kana_moan_delete_enabled",
+                   action="store_true", default=False,
+                   help="删除孤立喘息条目（前后间隙均 >1200ms；默认关）")
+
     for n, label in ((1, "阶段A"), (3, "阶段B")):
         g = p.add_argument_group(f"{label}（槽位 s{n}）")
         g.add_argument(f"--s{n}-provider",
@@ -416,6 +428,8 @@ def config_from_args(args):
         polish_remove_dialogue_gt=args.polish_remove_dialogue_gt,
         polish_rewrap_enabled=args.polish_rewrap_enabled,
         polish_clamp_long_enabled=args.polish_clamp_long_enabled,
+        source_kana_merge_enabled=args.source_kana_merge_enabled,
+        source_kana_moan_delete_enabled=args.source_kana_moan_delete_enabled,
     )
     # A1 缺省重绑定：仅显式传 --v2-ctx 时赋值（构造后赋值天然处于分层链
     # 最高优先级）；不传时 dataclass 缺省 16384 与 user_settings/env 分层
