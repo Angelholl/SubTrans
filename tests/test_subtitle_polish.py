@@ -70,6 +70,8 @@ def test_policy_defaults_single_source():
         "min_gap_ms": 83.416,
         "remove_dialogue_gt": False,
         "extend_short_into_gap": False,
+        "rewrap_enabled": True,
+        "clamp_long_enabled": True,
     }
 
 
@@ -239,6 +241,25 @@ def test_wrap_forced_when_unfittable():
     assert stats["lines_rewrapped"] == 1
 
 
+def test_rewrap_disabled_skips_rewrap():
+    """rewrap_enabled=False：需拆行长条不拆，行结构原样，lines_rewrapped 恒 0。"""
+    source = "一" * 20
+    text, stats = _one(source, {"rewrap_enabled": False})
+    assert text == source
+    assert stats["lines_rewrapped"] == 0
+
+
+def test_invariants_with_rewrap_off():
+    """rewrap 关时出口不变量按开关裁剪：3 行长条保持 3 行（行数不变量豁免）、幂等保持。"""
+    entries = [_entry(1, 0, 2000, "甲\n乙\n丙")]
+    once, stats = polish_entries(entries, {"rewrap_enabled": False})
+    assert len(once) == 1
+    assert once[0]["text"].split("\n") == ["甲", "乙", "丙"]
+    assert stats["lines_rewrapped"] == 0
+    twice, _ = polish_entries(once, {"rewrap_enabled": False})
+    assert twice == once
+
+
 # --- 时间轴：顺序 ①重叠消解 → ②时长钳制 → ③最小间隔 ------------------------
 
 
@@ -271,6 +292,18 @@ def test_short_duration_reported_not_extended():
     assert _span(out[0]) == (0, 300)
     assert stats["short_reported"] == 1
     assert stats["long_clamped"] == 0
+
+
+def test_clamp_disabled_skips_clamp():
+    """clamp_long_enabled=False：超长条目时长不变、long_clamped 恒 0；过短报告不受影响。"""
+    entries = [
+        _entry(1, 0, 9000, "甲"),       # 超 7000ms 上限
+        _entry(2, 25000, 25300, "乙"),  # 300ms 过短
+    ]
+    out, stats = polish_entries(entries, {"clamp_long_enabled": False})
+    assert _span(out[0]) == (0, 9000)
+    assert stats["long_clamped"] == 0
+    assert stats["short_reported"] == 1
 
 
 def test_overlap_zero_duration_defense_pushes_later_start():
@@ -465,5 +498,40 @@ def test_config_hash_polish_three_states():
     h_on_default = _hash(polish_enabled=True)
     h_on_changed = _hash(polish_enabled=True, polish_max_line_chars=12,
                          polish_quote_style="curly")
+    h_on_rewrap_off = _hash(polish_enabled=True, polish_rewrap_enabled=False)
     assert h_off == h_off_changed
     assert len({h_off, h_on_default, h_on_changed}) == 3
+    assert h_on_default != h_on_rewrap_off  # 开-默认 ≠ 开-rewrap 关
+
+
+def test_config_policy_bool_switches():
+    """config 折算：默认两开关 True；显式 False 走 _POLISH_BOOL_FIELDS 映射生效。"""
+    from subtransjav.refine.config import RefineConfig, polish_policy_from_config
+
+    def _policy(**kw):
+        return polish_policy_from_config(RefineConfig(
+            inputs=[], templates_dir="", tm_enabled=False, **kw))
+
+    policy = _policy()
+    assert policy["rewrap_enabled"] is True
+    assert policy["clamp_long_enabled"] is True
+    policy_off = _policy(polish_rewrap_enabled=False,
+                         polish_clamp_long_enabled=False)
+    assert policy_off["rewrap_enabled"] is False
+    assert policy_off["clamp_long_enabled"] is False
+
+
+def test_cli_new_switch_flags():
+    """CLI：--polish-no-rewrap / --polish-no-clamp-long → cfg False；缺省 True。"""
+    from subtransjav.refine.cli import build_parser, config_from_args
+
+    args = build_parser().parse_args(["-i", "x.srt"])
+    cfg = config_from_args(args)
+    assert cfg.polish_rewrap_enabled is True
+    assert cfg.polish_clamp_long_enabled is True
+
+    args_off = build_parser().parse_args(
+        ["-i", "x.srt", "--polish-no-rewrap", "--polish-no-clamp-long"])
+    cfg_off = config_from_args(args_off)
+    assert cfg_off.polish_rewrap_enabled is False
+    assert cfg_off.polish_clamp_long_enabled is False

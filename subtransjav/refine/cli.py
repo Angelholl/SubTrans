@@ -77,6 +77,12 @@ def build_parser():
                         "（默认 corner）")
     p.add_argument("--polish-remove-dialogue-gt", action="store_true",
                    help="删除行首对话标记 >>（默认保留）")
+    p.add_argument("--polish-no-rewrap", dest="polish_rewrap_enabled",
+                   action="store_false",
+                   help="关闭拆行重排（默认开：超宽/超行文本自动重排）")
+    p.add_argument("--polish-no-clamp-long", dest="polish_clamp_long_enabled",
+                   action="store_false",
+                   help="关闭超长缩短钳制（默认开：超 7000ms 条目缩短到上限）")
 
     for n, label in ((1, "阶段A"), (3, "阶段B")):
         g = p.add_argument_group(f"{label}（槽位 s{n}）")
@@ -405,6 +411,8 @@ def config_from_args(args):
         polish_min_gap_ms=args.polish_min_gap_ms,
         polish_quote_style=args.polish_quote_style,
         polish_remove_dialogue_gt=args.polish_remove_dialogue_gt,
+        polish_rewrap_enabled=args.polish_rewrap_enabled,
+        polish_clamp_long_enabled=args.polish_clamp_long_enabled,
     )
     # A1 缺省重绑定：仅显式传 --v2-ctx 时赋值（构造后赋值天然处于分层链
     # 最高优先级）；不传时 dataclass 缺省 16384 与 user_settings/env 分层
