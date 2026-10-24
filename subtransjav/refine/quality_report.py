@@ -50,6 +50,16 @@ _SENSITIVE_HINTS: tuple[str, ...] = (
 
 # 漏覆盖清单上限（超出注明"其余 N 条略"）
 _MISS_LIST_LIMIT = 20
+
+# 对齐/覆盖判定容差（D2026-1025-01 批1）：写入侧 P4 最短间隔钳制把终稿
+# 相邻条目结束时间削短 ~84ms（83.416ms 常量落地），精确 span 字典命中会
+# 对同批条目两侧双误报（整条缺失＋未对齐均为幻影）。判定/回捞统一走
+# 容差匹配：start 距离 ≤ 容差记候选；合并形态（终稿条目 span 为期望多条
+# 并集）以重叠 ≥50%（按期望 span 时长归一，且终稿条目开始不晚于期望
+# 开始＋容差，防"整体后移恰好重叠 50%"被误判为覆盖）兜底记为覆盖。
+# 仅判定与回捞口径变更，报告行文案与统计键名不变。
+_ALIGN_TOLERANCE_MS = 100
+_ALIGN_COVER_RATIO = 0.5
 # 未翻译小节列出上限（超出注明"其余 N 条略"）
 _UNTRANSLATED_LIST_LIMIT = 20
 # 假名残留片段清单上限（同一条目内；超出显示"等 N 段"）
@@ -997,15 +1007,56 @@ def build_quality_report(orig_entries: list, final_entries: list,
 
     expected_by_span = _index_by_span(expected)
     final_by_span = _index_by_span(final_entries)
+    # 容差扫描用全量 (span, entry) 序列（span 有效性在匹配器内过滤）
+    expected_pairs = [(_timing_span(e["timing"]), e) for e in expected]
+    final_pairs = [(_timing_span(e["timing"]), e) for e in final_entries]
+
+    def _tolerance_hits(span, by_span, pairs, overlap_fallback) -> list:
+        """span 的容差匹配条目列表（D2026-1025-01 批1）。
+
+        匹配序：精确 span 命中 → start 距离 ≤ _ALIGN_TOLERANCE_MS 候选 →
+        重叠覆盖兜底（仅 overlap_fallback 方向启用：终稿条目 span 为期望
+        多条并集的合并形态，重叠 ≥50% 按期望 span 时长归一，且终稿条目
+        开始不晚于期望开始＋容差）。「终稿→期望」方向不开重叠兜底：
+        整体后移的独立条目（如整体偏移 500ms）不得因恰好重叠 50% 被判
+        对齐（test_pipeline_v2 既有钉）。span 以秒计，容差按 ms 换算。
+        """
+        exact = by_span.get(span)
+        if exact:
+            return exact
+        if span[0] < 0:
+            return []
+        tol = _ALIGN_TOLERANCE_MS / 1000.0
+        near = [e for s, e in pairs if s[0] >= 0 and abs(s[0] - span[0]) <= tol]
+        if near:
+            return near
+        if not overlap_fallback:
+            return []
+        covered = []
+        for s, e in pairs:
+            if s[0] < 0 or s[0] > span[0] + tol:
+                continue
+            ov = min(span[1], s[1]) - max(span[0], s[0])
+            if ov > 0 and ov / (span[1] - span[0]) >= _ALIGN_COVER_RATIO:
+                covered.append(e)
+        return covered
+
+    def _final_hits(span) -> list:
+        """期望 span → 终稿条目（期望侧为查询方，开重叠兜底）。"""
+        return _tolerance_hits(span, final_by_span, final_pairs, True)
+
+    def _expected_hits(span) -> list:
+        """终稿 span → 期望条目（期望侧为候选方，不开重叠兜底）。"""
+        return _tolerance_hits(span, expected_by_span, expected_pairs, False)
 
     def _span_text(span) -> str:
         return "".join((e["text"] or "").strip()
-                       for e in final_by_span.get(span, []))
+                       for e in _final_hits(span))
 
     def _expected_src(span) -> str:
         """终稿条目对应期望条目的源文（找不到返回空串）。"""
         return "".join((e["text"] or "").strip()
-                       for e in expected_by_span.get(span, []))
+                       for e in _expected_hits(span))
 
     # ------------------------------------------------------------------
     # 复核清单收集（条目为多行文本块，序号在汇总时统一编号）
@@ -1077,7 +1128,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
     missed = []               # 口径1：整条缺失
     missed_untranslated = []  # 口径2：条目在但未译
     for e in kanji_orig:
-        hits = final_by_span.get(_timing_span(e["timing"])) or []
+        hits = _final_hits(_timing_span(e["timing"]))
         if not hits:
             missed.append(e)
         elif all(_is_untranslated(h.get("text") or "") for h in hits):
@@ -1132,11 +1183,13 @@ def build_quality_report(orig_entries: list, final_entries: list,
     # 5) 时间轴未对齐（对预合并后期望时间轴）
     misaligned = [e for e in final_entries
                   if _timing_span(e["timing"])[0] >= 0
-                  and _timing_span(e["timing"]) not in expected_by_span]
+                  and not _expected_hits(_timing_span(e["timing"]))]
     for e in misaligned:
         span = _timing_span(e["timing"])
         exp_hits = [x for x in expected
-                    if _timing_span(x["timing"])[0] == span[0]]
+                    if _timing_span(x["timing"])[0] >= 0
+                    and abs(_timing_span(x["timing"])[0] - span[0])
+                    <= _ALIGN_TOLERANCE_MS / 1000.0]
         exp_timing = _fmt_timing(exp_hits[0]["timing"]) if exp_hits \
             else "（无同起点期望条目）"
         items.append(("未对齐", [
@@ -1151,7 +1204,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
     # 统计
     # ------------------------------------------------------------------
     aligned = sum(1 for e in final_entries
-                  if _timing_span(e["timing"]) in expected_by_span)
+                  if _expected_hits(_timing_span(e["timing"])))
     align_rate = (aligned / len(final_entries) * 100) if final_entries else 0.0
     miss_rate = (missed_total / len(kanji_orig) * 100) if kanji_orig else 0.0
 
@@ -1224,7 +1277,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
         n_noise_kept = int(merge_stats.get("clean_kept_by_noise_gate", 0) or 0)
         m_marked = 0
         for t in merge_stats.get("clean_kept_by_noise_gate_timings") or []:
-            hits = final_by_span.get(_timing_span(t)) or []
+            hits = _final_hits(_timing_span(t))
             # 未译判定与 TM 学习闸/漏覆盖口径2 同源（_is_untranslated，
             # strip 后前缀匹配——前导空白占位形态同样计入）
             if hits and _is_untranslated(hits[0].get("text") or ""):

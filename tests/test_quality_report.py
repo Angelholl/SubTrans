@@ -1019,3 +1019,110 @@ def test_cps_too_fast_retranslate_hint():
     from subtransjav.refine.action_retranslate import _CATEGORY_HINTS
     assert "压缩字数" in _CATEGORY_HINTS["cps_too_fast"]
     assert "不得删除条目" in _CATEGORY_HINTS["cps_too_fast"]
+
+
+# ----------------------------------------------------------------------
+# 对齐/覆盖判定容差匹配（D2026-1025-01 批1）
+# ----------------------------------------------------------------------
+
+def test_clamped_end_not_reported_missing_or_misaligned():
+    """钳制形态①：P4 最短间隔钳制把终稿结束时间削短 ~84ms（源
+    00:00:05,000 → 终稿 00:00:04,916）。旧精确 span 判定对同一条目
+    两侧双误报（整条缺失＋未对齐均为幻影）；容差匹配下判覆盖＋对齐。"""
+    exp = [{"index": 1, "timing": "00:00:00,000 --> 00:00:05,000",
+            "text": "漢字のテスト"}]
+    final = [{"index": 1, "timing": "00:00:00,000 --> 00:00:04,916",
+              "text": "已译"}]
+    report = build_quality_report(exp, final, "demo")
+    assert "整条缺失 1" not in report, report    # 钳制形态不得误报缺失
+    assert "[时间轴未对齐]" not in report, report  # 不得误报未对齐
+    assert "时间轴对齐率（对预合并后期望时间轴）: 100.0%" in report
+
+
+def test_true_missing_still_reported():
+    """钳制形态②：终稿无任何容差内条目 → 仍列实义漏覆盖
+    （真缺失不因容差放行）。"""
+    exp = [{"index": 1, "timing": "00:00:00,000 --> 00:00:05,000",
+            "text": "漢字のテスト"}]
+    final = [{"index": 1, "timing": "00:00:10,000 --> 00:00:15,000",
+              "text": "无关条目"}]
+    report = build_quality_report(exp, final, "demo")
+    assert "整条缺失 1" in report
+    assert "[实义漏覆盖] #1" in report
+
+
+def test_adjacent_clamped_cues_pair_correctly():
+    """钳制形态③：相邻两条均被钳削结束时间 → 各自按 start 容差正确
+    配对不串门——#1 的假名残留源文回捞必须命中第 1 条期望（含相同
+    假名串），而非第 2 条。"""
+    exp = [
+        {"index": 1, "timing": "00:00:00,000 --> 00:00:02,000",
+         "text": "かな一漢字"},
+        {"index": 2, "timing": "00:00:02,000 --> 00:00:04,000",
+         "text": "漢字二"},
+    ]
+    final = [
+        {"index": 1, "timing": "00:00:00,000 --> 00:00:01,916",
+         "text": "かな"},
+        {"index": 2, "timing": "00:00:02,000 --> 00:00:03,916",
+         "text": "訳二"},
+    ]
+    report = build_quality_report(exp, final, "demo")
+    assert "源: かな一漢字" in report           # 源文回捞命中第 1 条期望
+    assert "源文对应条目含相同串" in report
+    assert "整条缺失" not in report
+    assert "[实义漏覆盖]" not in report
+    assert "[时间轴未对齐]" not in report
+    assert "时间轴对齐率（对预合并后期望时间轴）: 100.0%" in report
+
+
+def test_merged_final_covers_expected_spans():
+    """钳制形态④：合并形态——终稿单条 span 为期望多条并集。中间段
+    期望（start 无容差内终稿候选）以重叠覆盖兜底（≥50%，按期望 span
+    时长归一）记为覆盖，不报缺失；终稿条目经 start 容差对齐。"""
+    exp = [
+        {"index": 1, "timing": "00:00:00,000 --> 00:00:02,000",
+         "text": "漢字一"},
+        {"index": 2, "timing": "00:00:02,000 --> 00:00:04,000",
+         "text": "漢字二"},
+        {"index": 3, "timing": "00:00:04,000 --> 00:00:06,000",
+         "text": "漢字三"},
+    ]
+    final = [{"index": 1, "timing": "00:00:00,000 --> 00:00:06,000",
+              "text": "合并译文"}]
+    report = build_quality_report(exp, final, "demo")
+    assert "整条缺失" not in report
+    assert "[时间轴未对齐]" not in report
+    assert "时间轴对齐率（对预合并后期望时间轴）: 100.0%" in report
+
+
+def test_noise_gate_timings_clamped_lookup():
+    """噪声闸门 M 统计的对回终稿走同一容差匹配器：免删 timing 为钳制
+    前记录，终稿条目结束时间被削短 ~84ms 仍可对回（M 不失真为 0）。"""
+    exp = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
+            "text": "かな漢字"}]
+    final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:01,916",
+              "text": "[未翻译] かな漢字"}]
+    stats = {"clean_kept_by_noise_gate": 1,
+             "clean_kept_by_noise_gate_timings":
+                 ["00:00:01,000 --> 00:00:02,000"]}
+    shown = build_quality_report(exp, final, "demo", merge_stats=stats)
+    assert "纯假名实义保留: 1（其中 [未翻译] 标记 1）" in shown
+
+
+def test_large_shift_still_misaligned():
+    """等价加强（test_pipeline_v2.py 既有钉）：start 整体偏移 500ms
+    （>容差）仍判未对齐；终稿条目只晚开始、不构成对期望 span 的
+    合并并集覆盖 → 对应期望仍计整条缺失。"""
+    exp = [
+        {"index": 1, "timing": "00:00:07,000 --> 00:00:08,000",
+         "text": "挿入する"},
+        {"index": 2, "timing": "00:00:09,000 --> 00:00:10,000",
+         "text": "ボクたちの部長"},
+    ]
+    final = [{"index": 1, "timing": "00:00:07,500 --> 00:00:08,500",
+              "text": "插进去"}]
+    report = build_quality_report(exp, final, "demo")
+    assert "时间轴未对齐" in report
+    assert "实义内容漏覆盖: 2/2 (100.0%)" in report
+    assert "时间轴对齐率（对预合并后期望时间轴）: 0.0%" in report
