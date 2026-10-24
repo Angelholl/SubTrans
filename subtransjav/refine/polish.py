@@ -28,6 +28,8 @@ POLICY_DEFAULTS: dict = {
     "min_gap_ms": 83.416,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
     "remove_dialogue_gt": False,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
     "extend_short_into_gap": False,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
+    "rewrap_enabled": True,  # 拆行重排开关，默认开（D2026-1024-01 批1，非 PROVISIONAL）
+    "clamp_long_enabled": True,  # 超长缩短钳制开关，默认开（D2026-1024-01 批1，非 PROVISIONAL）
 }
 
 #: stats 键（批3 报告消费，命名钉死）
@@ -290,6 +292,9 @@ def _polish_text(text, policy, stats):
         working = "\n".join(rebuilt)
 
     # 规则 7：拆行重排（已 ≤max_lines 时不再触发，保证幂等）
+    # rewrap_enabled=False（D2026-1024-01 批1）：完全不进拆行，行结构原样保留。
+    if not policy["rewrap_enabled"]:
+        return working
     max_chars = int(policy["max_line_chars"])
     max_lines = int(policy["max_lines"])
     lines = [line for line in working.split("\n") if line]
@@ -353,12 +358,13 @@ def _polish_timings(entries, policy, stats):
             spans[idx - 1], spans[idx] = _shrink_before(prev, cur, gap)
             stats["overlaps_resolved"] += 1
 
-    # ② 时长钳制：超长缩短；过短只报告不延长（D8）
+    # ② 时长钳制：超长缩短（clamp_long_enabled=False 时不做，D2026-1024-01 批1）；
+    # 过短只报告不延长（D8），报告恒开、不受钳制开关影响。
     for idx, span in enumerate(spans):
         if span is None:
             continue
         start, end = span
-        if end - start > max_duration:
+        if end - start > max_duration and policy["clamp_long_enabled"]:
             end = start + max_duration
             stats["long_clamped"] += 1
         if end - start < min_duration:
@@ -385,14 +391,19 @@ def _polish_timings(entries, policy, stats):
         entry["timing"] = f"{_format_ms(span[0])} --> {_format_ms(span[1])}"
 
 
-def _assert_invariants(entries, max_lines):
-    """出口不变量：无空条目、无零/负时长、无重叠、每条目 ≤max_lines 行。"""
+def _assert_invariants(entries, max_lines, *, check_line_limit=True):
+    """出口不变量：无空条目、无零/负时长、无重叠、每条目 ≤max_lines 行。
+
+    check_line_limit=False（rewrap 关，D2026-1024-01 批1）：行数超限断言豁免
+    （关闭拆行时多行输入原样保留），其余不变量恒开。
+    """
     for entry in entries:
         assert entry["text"].strip(), "polish 出口不变量：空条目未删除"
         span = _parse_timing(entry["timing"])
         assert span is not None, "polish 出口不变量：时间轴不可解析"
         assert span[1] > span[0], "polish 出口不变量：零/负时长"
-        assert len(entry["text"].split("\n")) <= max_lines, "polish 出口不变量：行数超限"
+        if check_line_limit:
+            assert len(entry["text"].split("\n")) <= max_lines, "polish 出口不变量：行数超限"
     for prev, cur in zip(entries, entries[1:], strict=False):
         assert _parse_timing(prev["timing"])[1] <= _parse_timing(cur["timing"])[0], (
             "polish 出口不变量：相邻条目重叠"
@@ -423,5 +434,6 @@ def polish_entries(entries, options=None):
         kept.append(entry)
 
     _polish_timings(kept, policy, stats)
-    _assert_invariants(kept, int(policy["max_lines"]))
+    _assert_invariants(kept, int(policy["max_lines"]),
+                       check_line_limit=bool(policy["rewrap_enabled"]))
     return kept, stats

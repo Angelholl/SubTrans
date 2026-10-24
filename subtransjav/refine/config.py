@@ -284,6 +284,8 @@ class RefineConfig:
     polish_strip_final_period: bool = True
     polish_remove_dialogue_gt: bool = False
     polish_extend_short_into_gap: bool = False  # 占位，本轮无行为（钉死）
+    polish_rewrap_enabled: bool = True        # 拆行重排开关，默认开（D2026-1024-01 批1）
+    polish_clamp_long_enabled: bool = True    # 超长缩短钳制开关，默认开（D2026-1024-01 批1）
     # 槽位结构永久保留 4 槽（D2026-0922-02 裁决三）；enabled 仅影响
     # manifest/GUI 展示，对 v2 按 tag→槽位取数无行为影响。槽1/3 为
     # v2 未用槽，默认停用，避免 validate() 对空模型/key 误报。
@@ -652,6 +654,8 @@ _POLISH_BOOL_FIELDS = (
     ("polish_strip_final_period", "strip_final_period"),
     ("polish_remove_dialogue_gt", "remove_dialogue_gt"),
     ("polish_extend_short_into_gap", "extend_short_into_gap"),
+    ("polish_rewrap_enabled", "rewrap_enabled"),
+    ("polish_clamp_long_enabled", "clamp_long_enabled"),
 )
 
 
