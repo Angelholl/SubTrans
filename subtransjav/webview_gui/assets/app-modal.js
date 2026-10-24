@@ -1482,11 +1482,11 @@ const AppModal = {
         const elPeriod = mkSelectField(grid1, MSG.polishLblStripPeriod, [
             { v: 'default', t: MSG.polishPeriodDefault },
             { v: 'keep', t: MSG.polishPeriodKeep },
-        ], 'default', MSG.polishNoteStripPeriod);
+        ], last.keep_final_period ? 'keep' : 'default', MSG.polishNoteStripPeriod);
         const elGt = mkSelectField(grid1, MSG.polishLblDialogGt, [
             { v: 'default', t: MSG.polishGtDefault },
             { v: 'remove', t: MSG.polishGtRemove },
-        ], 'default', MSG.polishNoteDialogGt);
+        ], last.remove_dialogue_gt ? 'remove' : 'default', MSG.polishNoteDialogGt);
         const elRewrap = mkToggle(grid1, MSG.polishLblRewrap, MSG.polishNoteRewrap,
             last.rewrap_enabled !== false);
 
