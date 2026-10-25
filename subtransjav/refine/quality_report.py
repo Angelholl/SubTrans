@@ -1331,11 +1331,16 @@ def build_quality_report(orig_entries: list, final_entries: list,
 
     # 源文假名清洗统计行（D2026-1025-01 批3a）：merge_stats["kana_merged"]
     # 等键缺失（未运行/非 ja→zh/两开关全关）时整行省略（只加不减契约）。
+    # 批6 a 项（D2026-1025-01 规格 v3 §7）：有豁免时行尾追加「 · 豁免 Z」
+    # （kana_exempted 键缺失/0 值不显示，既有键名与文案格式不动）。
     if "kana_merged" in merge_stats or "kana_moan_deleted" in merge_stats:
         kana_line = (f"源文清洗: 合并 "
                      f"{int(merge_stats.get('kana_merged', 0) or 0)}"
                      f" · 删喘息 "
                      f"{int(merge_stats.get('kana_moan_deleted', 0) or 0)}")
+        kana_exempt_n = int(merge_stats.get("kana_exempted", 0) or 0)
+        if kana_exempt_n:
+            kana_line += f" · 豁免 {kana_exempt_n}"
     else:
         kana_line = None
 
@@ -1440,6 +1445,26 @@ def build_quality_report(orig_entries: list, final_entries: list,
                          f" 原文: {(row.get('text') or '')[:60]}")
         if len(kana_del_rows) > _MISS_LIST_LIMIT:
             lines.append(f"（其余 {len(kana_del_rows) - _MISS_LIST_LIMIT}"
+                         f" 条略）")
+        lines.append("-" * 60)
+    # 源文假名清洗豁免台账（D2026-1025-01 批6 a 项，规格 v3 §7）：应答词
+    # 豁免条逐条列出（kana_exempted_ledger 缺失/为空时整节省略，照删喘息
+    # 台账先例），上限同 _MISS_LIST_LIMIT。单行形态：
+    #   #index timing core=… gap=…ms 邻:… ← …
+    kana_exempt_rows = merge_stats.get("kana_exempted_ledger") or []
+    if kana_exempt_rows:
+        lines.append(f"【源文清洗豁免】应答词保留共 {len(kana_exempt_rows)} 条"
+                     f"（豁免封闭表命中，永不并入/删除）")
+        for row_i, row in enumerate(kana_exempt_rows[:_MISS_LIST_LIMIT], 1):
+            gap_v = row.get("gap")
+            gap_s = f"{gap_v}ms" if gap_v is not None else "null"
+            nb = row.get("neighbor_text")
+            nb_s = nb if nb else "null"
+            lines.append(f"  #{row_i} {_fmt_timing(row.get('timing') or '')}"
+                         f" core={row.get('core') or ''} gap={gap_s}"
+                         f" 邻:{nb_s} ← {(row.get('text') or '')[:40]}")
+        if len(kana_exempt_rows) > _MISS_LIST_LIMIT:
+            lines.append(f"（其余 {len(kana_exempt_rows) - _MISS_LIST_LIMIT}"
                          f" 条略）")
         lines.append("-" * 60)
     # 处置章节：闸门0 送翻前删除台账（gate0_deletions 未提供时整节省略）

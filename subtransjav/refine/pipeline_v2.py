@@ -1219,8 +1219,9 @@ def _kana_clean_stage(entries: list, cfg: RefineConfig) -> tuple:
     仅 ja→zh（与 v2_rules 同门条件，防误伤其他语言——分类器也只触
     纯假名条目）且至少一个开关启用时生效；其余情形原样返回
     (entries, None)。返回 stats 键：kana_merged / kana_moan_deleted /
-    kana_moan_deleted_timings / kana_kept（并入 merge_stats 流，供
-    质量报告消费）。
+    kana_moan_deleted_timings / kana_kept / kana_exempted /
+    kana_exempted_ledger（批6 a 项 D2026-1025-01 规格 v3 §7 新增后两键；
+    并入 merge_stats 流，供质量报告消费）。
     """
     if (getattr(cfg, "source_lang", None) or "ja",
             getattr(cfg, "target_lang", None) or "zh") != ("ja", "zh"):
@@ -1764,6 +1765,12 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                         kana_stats.get("kana_moan_deleted_timings") or [])
                     merge_stats["kana_kept"] = int(
                         kana_stats.get("kana_kept", 0) or 0)
+                    # 批6 a 项（D2026-1025-01 规格 v3 §7）：豁免计数与台账
+                    # 同挂数据链路（不参与 manifest 指纹，无 config 键）
+                    merge_stats["kana_exempted"] = int(
+                        kana_stats.get("kana_exempted", 0) or 0)
+                    merge_stats["kana_exempted_ledger"] = list(
+                        kana_stats.get("kana_exempted_ledger") or [])
                 # polish 清洗 stats（D2026-1023-03）：本批只挂数据链路，
                 # 质量报告展示层=批3，此处不渲染。
                 if polish_stats is not None:
