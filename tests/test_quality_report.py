@@ -1193,3 +1193,82 @@ def test_build_quality_report_garble_hear_auto_scan_no_false_positive():
     report = build_quality_report(orig, final, "demo")
     assert "疑似听错" not in report
 
+
+
+# ----------------------------------------------------------------------
+# 源文假名清洗豁免子行与豁免台账区（D2026-1025-01 批6 a 项，规格 v3 §7）
+# ----------------------------------------------------------------------
+
+def _kana_exempt_report(merge_stats, orig_total):
+    t1 = "00:00:01,000 --> 00:00:02,000"
+    orig = [{"index": i, "timing": t1, "text": f"ソ{i}"} for i in range(1, 6)]
+    final = [{"index": i, "timing": t1, "text": f"第{i}行"}
+             for i in range(1, orig_total - 2 + 1)]
+    return build_quality_report(orig, final, "demo",
+                                expected_entries=orig,
+                                merge_stats=merge_stats,
+                                orig_total=orig_total)
+
+
+def test_quality_report_kana_exempt_subline_and_ledger_section():
+    """有豁免时行尾追加「 · 豁免 Z」＋【源文清洗豁免】台账区（单行形态
+    #index timing core=… gap=…ms 邻:… ← …，卡面 6）。"""
+    merge_stats = {
+        "premerge_merged": 0,
+        "kana_merged": 2,
+        "kana_moan_deleted": 0,
+        "kana_moan_deleted_timings": [],
+        "kana_kept": 3,
+        "kana_exempted": 2,
+        "kana_exempted_ledger": [
+            {"timing": "00:00:02,600 --> 00:00:02,700", "text": "はい",
+             "core": "はい", "gap": 600, "neighbor_text": "好きだ"},
+            {"timing": "00:00:04,000 --> 00:00:04,100", "text": "マジで",
+             "core": "まじで", "gap": None, "neighbor_text": None},
+        ],
+    }
+    report = _kana_exempt_report(merge_stats, orig_total=5)
+    assert "源文清洗: 合并 2 · 删喘息 0 · 豁免 2" in report
+    assert "【源文清洗豁免】应答词保留共 2 条" in report
+    assert ("#1 00:00:02,600 --> 00:00:02,700 core=はい gap=600ms"
+            " 邻:好きだ ← はい") in report
+    assert ("#2 00:00:04,000 --> 00:00:04,100 core=まじで gap=null"
+            " 邻:null ← マジで") in report
+
+
+def test_quality_report_kana_exempt_zero_or_missing_not_shown():
+    """kana_exempted 键缺失/0 值不显示（卡面 6）：子行不带豁免、台账区缺席。"""
+    base = {"premerge_merged": 0, "kana_merged": 1, "kana_moan_deleted": 0,
+            "kana_moan_deleted_timings": [], "kana_kept": 1}
+    report = _kana_exempt_report(dict(base), orig_total=4)
+    assert "源文清洗: 合并 1 · 删喘息 0" in report
+    assert "· 豁免" not in report
+    assert "【源文清洗豁免】" not in report
+
+    zero = dict(base, kana_exempted=0, kana_exempted_ledger=[])
+    report = _kana_exempt_report(zero, orig_total=4)
+    assert "源文清洗: 合并 1 · 删喘息 0" in report
+    assert "· 豁免" not in report
+    assert "【源文清洗豁免】" not in report
+
+
+def test_quality_report_kana_exempt_ledger_limit_20():
+    """豁免台账区上限 20、超限「其余 N 条略」（照删喘息台账先例，卡面 6）。"""
+    ledger = []
+    for i in range(25):
+        m, s = divmod(i, 60)
+        ledger.append({"timing": f"00:{m:02d}:{s:02d},000 --> "
+                                 f"00:{m:02d}:{s:02d},500",
+                       "text": "はい", "core": "はい", "gap": i,
+                       "neighbor_text": "好きだ"})
+    merge_stats = {
+        "premerge_merged": 0, "kana_merged": 0, "kana_moan_deleted": 0,
+        "kana_moan_deleted_timings": [], "kana_kept": 25,
+        "kana_exempted": 25, "kana_exempted_ledger": ledger,
+    }
+    report = _kana_exempt_report(merge_stats, orig_total=25)
+    assert "【源文清洗豁免】应答词保留共 25 条" in report
+    assert ("#20 00:00:19,000 --> 00:00:19,500 core=はい gap=19ms"
+            " 邻:好きだ ← はい") in report
+    assert "#21 " not in report
+    assert "（其余 5 条略）" in report
