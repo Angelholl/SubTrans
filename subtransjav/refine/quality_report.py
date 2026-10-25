@@ -29,6 +29,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
+from .garble_detect import scan_garble_suspects
 from .pass_disagreement import (
     REVIEW_OPTIONAL_THRESHOLD,
     REVIEW_STRICT_THRESHOLD,
@@ -72,6 +73,8 @@ _RULE_DIST_LIMIT = 3
 _GARBLE_LIST_LIMIT = 20
 # 误听疑似改写小节逐条列出上限（超出注明"其余 N 条略"）
 _MISHEAR_LIST_LIMIT = 20
+# 疑似听错小节逐条列出上限（D2026-1025-01 批4；超出注明"其余 N 条略"）
+_GARBLE_HEAR_LIST_LIMIT = 20
 # 术语冲突观察小节逐条列出上限（超出注明"其余 N 条略"）
 _CONFLICT_LIST_LIMIT = 20
 # 术语冲突观察小节"按术语分布"最多列出的术语个数
@@ -370,6 +373,34 @@ def render_mishear_review_section(sidecar_review: list | None) -> str:
         lines.append(f"    译: {s.get('zh_preview', '')}")
     if total > _MISHEAR_LIST_LIMIT:
         lines.append(f"（其余 {total - _MISHEAR_LIST_LIMIT} 条略）")
+    return "\n".join(lines)
+
+
+def render_garble_hear_section(result: dict | None) -> str:
+    """渲染「疑似听错」章节（D2026-1025-01 批4 ASR 错音打标）为文本（纯函数）。
+
+    result 为 garble_detect.scan_garble_suspects 返回值
+    ``{"available": bool, "items": [...]}``；None（未采集）或
+    available=False（sudachi 不可用，报告该维度缺席）或 0 条（N=0 整行
+    缺席，照「源文清洗」子行惯例）时整节省略。
+    命中口径：日文源文剥标点后核心长 ≥ MIN_CORE_CHARS 且分词未知词
+    字符占比 ≥ OOV_RATIO_THRESHOLD——**只标不删不改正文、禁 LLM 改写**，
+    供人工对照音频复核；超上限注明"其余 N 条略"。
+    """
+    if not result or not result.get("available"):
+        return ""
+    rows = list(result.get("items") or [])
+    if not rows:
+        return ""
+    total = len(rows)
+    lines = ["【疑似听错】"]
+    lines.append(f"共 {total} 条：源文疑似 ASR 听错（分词未知词占比超阈），"
+                 f"仅打标不删不改正文，请对照音频复核")
+    for s in rows[:_GARBLE_HEAR_LIST_LIMIT]:
+        lines.append(f"  #{s.get('index')} {_fmt_timing(s.get('timing', ''))}"
+                     f" 源: {s.get('text', '')}")
+    if total > _GARBLE_HEAR_LIST_LIMIT:
+        lines.append(f"（其余 {total - _GARBLE_HEAR_LIST_LIMIT} 条略）")
     return "\n".join(lines)
 
 
@@ -772,6 +803,8 @@ _SECTION_NOTES: tuple[tuple[str, str], ...] = (
      "　（译文出现乱码腔或与原文语义脱节的行，请对照原文逐条确认）"),
     ("【误听疑似改写】",
      "　（上游语音识别可能误听导致的改写行，请对照音频确认）"),
+    ("【疑似听错】",
+     "　（源文疑似 ASR 听错的行，只标不删不改正文，请对照音频确认）"),
     ("【术语冲突观察】",
      "　（译文与词表规定译法不一致的观察记录，供术语口径统一时裁定）"),
     ("【术语一致性】",
@@ -882,7 +915,8 @@ def build_quality_report(orig_entries: list, final_entries: list,
                          media_path: str = "",
                          media_path_source: str = "",
                          audio_insights: dict | None = None,
-                         cps_action: dict | None = None) -> str:
+                         cps_action: dict | None = None,
+                         garble_hear: dict | None = None) -> str:
     """对比 期望条目（预合并后） 与 终稿条目，返回复核工单式报告文本。
 
     cps_action：2.0.1 CPS 行动层参数 {"threshold": float,
@@ -958,6 +992,13 @@ def build_quality_report(orig_entries: list, final_entries: list,
         时【疑似漏听观测（音频能量粗筛）】章节整体省略且导读无
         suspected_missed_speech 条目。候选只进观测类别，绝不置行动
         条目（current_text 恒为 None）。
+    garble_hear : dict | None
+        疑似听错扫描结果（D2026-1025-01 批4，garble_detect.
+        scan_garble_suspects 返回值 {"available", "items"}）；None
+        （缺省）时对源文条目就地扫描（条目级假名门兜底语言门控，
+        与 kana_clean 同门的调用方 ja→zh 门可另行叠加），显式传入
+        dict（含 available=False 降级形态）时直接消费不重扫。不可用
+        或 0 条时【疑似听错】章节与【统计】区"疑似听错"子行整行缺席。
 
     条数核对恒等式（统计段"条数核对"行）各项定义：
       原文 N —— 闸门0 前原始条目总数（orig_total，缺省按上述推算）；
@@ -1419,6 +1460,16 @@ def build_quality_report(orig_entries: list, final_entries: list,
     if mishear_text:
         lines.extend(mishear_text.splitlines())
         lines.append("-" * 60)
+    # 疑似听错章节（D2026-1025-01 批4 ASR 错音打标）：置于【误听疑似
+    # 改写】之后。garble_hear 入参 None 时对源文条目就地扫描（纯报告
+    # 面，只标不删不改正文）；不可用或 0 条时整节省略（扫描降级绝不
+    # 抛错阻断报告生成）。渲染逻辑提为纯函数 render_garble_hear_section
+    garble_hear_res: dict = garble_hear if isinstance(garble_hear, dict) \
+        else scan_garble_suspects(orig_entries)
+    garble_hear_text = render_garble_hear_section(garble_hear_res)
+    if garble_hear_text:
+        lines.extend(garble_hear_text.splitlines())
+        lines.append("-" * 60)
     # 术语冲突观察小节（v1.2.2 D1 观察闸）：置于【误听疑似改写】之后
     # （glossary_conflicts 未提供时整节省略），渲染逻辑提为纯函数
     # render_conflict_section
@@ -1483,6 +1534,12 @@ def build_quality_report(orig_entries: list, final_entries: list,
         lines.append(noise_line)
     if kana_line:
         lines.append(kana_line)
+    # 疑似听错统计子行（D2026-1025-01 批4）：N=0 或扫描不可用时整行
+    # 缺席（照「源文清洗」子行键缺失不显示惯例，只加不减契约）
+    garble_hear_n = (len(garble_hear_res.get("items") or [])
+                     if garble_hear_res.get("available") else 0)
+    if garble_hear_n:
+        lines.append(f"疑似听错: {garble_hear_n} 条")
     # 字幕清洗统计（D2026-1023-03 批3）：polish_stats 经 merge_stats["polish"]
     # 数据链路传入（pipeline_v2 批次内挂入）；未启用清洗时整行省略，
     # 0 值键不输出（只列实际发生的变换）。
