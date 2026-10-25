@@ -3036,3 +3036,201 @@ def test_config_hash_kana_defaults_byte_identical():
     changed2 = compute_config_hash(_make_cfg(
         tmp_path="unused", source_kana_merge_enabled=False))
     assert changed2 != base
+
+
+# ---------------------------------------------------------------------------
+# D2026-1025-01 批6 b 项：替2 条件注入＋行数守卫（flagged 批专项）
+# ---------------------------------------------------------------------------
+
+class InjStubClient:
+    """全接口桩：build_batches + translate_batch + translate_entries。
+
+    记录每次调用的 (user_prompt, indices) 以断言注入块有无与字节一致；
+    script batch 的行为可用 script 钩子按 (indices, prompt) 定制。
+    """
+
+    INJ_MARK = "禁止新增换行"
+
+    def __init__(self, batch_size=30):
+        self.batch_size = batch_size
+        self.batch_calls = []       # [(user_prompt, [index])]
+        self.entries_calls = []     # [(user_prompt, [index])]
+        self.script = None          # fn(indices, prompt) -> dict | None
+
+    def build_batches(self, entries, max_batch_size, scene_threshold=60.0):
+        size = min(max_batch_size, self.batch_size)
+        return [entries[i:i + size] for i in range(0, len(entries), size)]
+
+    def _answer(self, entries, prompt):
+        idxs = [e["index"] for e in entries]
+        if self.script is not None:
+            custom = self.script(idxs, prompt)
+            if custom is not None:
+                return custom
+        return {i: f"译{i}" for i in idxs}
+
+    def translate_batch(self, entries, *, system_text, user_prompt,
+                        allow_empty_deletions, max_output_tokens=None):
+        self.batch_calls.append((user_prompt, [e["index"] for e in entries]))
+        return self._answer(entries, user_prompt)
+
+    def translate_entries(self, entries, *, system_text, user_prompt,
+                          max_batch_size=30, allow_empty_deletions=False,
+                          scene_threshold=60.0, progress=None):
+        from subtransjav.translate.llm_client import BatchResult
+        self.entries_calls.append(
+            (user_prompt, [e["index"] for e in entries]))
+        ans = self._answer(entries, user_prompt)
+        failed = [e["index"] for e in entries if e["index"] not in ans]
+        return BatchResult(translations=ans, deleted=set(), failed=failed)
+
+
+_INJ_BASE_PROMPT = "阶段A 基准提示词"
+
+
+def _flagged_entries():
+    return [{"index": i, "timing": f"00:00:0{i},000 --> 00:00:0{i},500",
+             "text": t}
+            for i, t in enumerate(["こんにちは", "はい。そうです",
+                                   "えっ。そう。知らなかった",
+                                   "また明日"], 1)]
+
+
+def _prompt_has_line(prompt, n):
+    """断言注入块行号清单含「第 …n… 行」（含多行清单的中间位）。"""
+    return f"第 {n} 行" in prompt or f"、{n} 行" in prompt
+
+
+def test_flagged_batch_injection_single_call_ok(tmp_path):
+    """守卫①：注入批行数正确 → 单次调用成功；注入块行号只含本批
+    flagged 行（不同批各带各自行号清单）。"""
+    cfg = _make_cfg(tmp_path)
+    todo = _flagged_entries()          # 2、3 号 flagged（分属不同批）
+    client = InjStubClient(batch_size=2)
+    result = pv._run_with_fallback(
+        cfg, "A", client, todo, system_text="sys",
+        user_prompt=_INJ_BASE_PROMPT, max_batch_size=2,
+        allow_empty_deletions=False,
+        flagged=pv.detect_dialogue_rows(todo))
+    assert set(result.translations) == {1, 2, 3, 4}
+    assert not result.failed
+    # 两批都命中 flagged → 两批都走 translate_batch 且带注入块
+    assert len(client.batch_calls) == 2
+    assert client.entries_calls == []
+    p12 = next(p for p, i in client.batch_calls if i == [1, 2])
+    p34 = next(p for p, i in client.batch_calls if i == [3, 4])
+    assert _prompt_has_line(p12, 2) and not _prompt_has_line(p12, 3)
+    assert _prompt_has_line(p34, 3) and not _prompt_has_line(p34, 2)
+    for p in (p12, p34):
+        assert p.startswith(_INJ_BASE_PROMPT)
+        assert InjStubClient.INJ_MARK in p
+
+
+def test_flagged_batch_plain_prompt_byte_identical(tmp_path):
+    """守卫①对照：含无 flagged 行的批，注入前缀之外不改动；纯无
+    flagged 批走 translate_entries 且 prompt 与基准逐字节一致。"""
+    cfg = _make_cfg(tmp_path)
+    todo = [{"index": 1, "timing": "", "text": "こんにちは"},
+            {"index": 2, "timing": "", "text": "はい。そうです"},
+            {"index": 3, "timing": "", "text": "おやすみ"}]
+    client = InjStubClient(batch_size=30)
+    pv._run_with_fallback(
+        cfg, "A", client, todo, system_text="sys",
+        user_prompt=_INJ_BASE_PROMPT, max_batch_size=30,
+        allow_empty_deletions=False,
+        flagged=pv.detect_dialogue_rows(todo))
+    # 单批含 flagged 行 → 注入批走 translate_batch
+    assert len(client.batch_calls) == 1
+    prompt, idxs = client.batch_calls[0]
+    assert idxs == [1, 2, 3]
+    assert prompt == _INJ_BASE_PROMPT + "\n\n" + \
+        pv.build_injection_block(todo, {2})
+    assert client.entries_calls == []
+
+
+def test_no_flagged_legacy_path_untouched(tmp_path):
+    """无 flagged：整量走既有 translate_entries，prompt 逐字节一致，
+    零 translate_batch 调用（无注入路径零变化）。"""
+    cfg = _make_cfg(tmp_path)
+    todo = _flagged_entries()
+    todo[1]["text"] = "今日はいい天気だ。"      # 消除 flagged
+    todo[2]["text"] = "それは良かった"
+    client = InjStubClient()
+    result = pv._run_with_fallback(
+        cfg, "A", client, todo, system_text="sys",
+        user_prompt=_INJ_BASE_PROMPT, max_batch_size=30,
+        allow_empty_deletions=False,
+        flagged=pv.detect_dialogue_rows(todo))
+    assert set(result.translations) == {1, 2, 3, 4}
+    assert client.batch_calls == []
+    assert len(client.entries_calls) == 1
+    assert client.entries_calls[0][0] == _INJ_BASE_PROMPT
+
+
+def test_guard_retry_without_injection_block(tmp_path):
+    """守卫②：注入批行数不符 → 第二次调用 prompt 不含注入块。"""
+    cfg = _make_cfg(tmp_path)
+    todo = _flagged_entries()
+    client = InjStubClient(batch_size=30)
+
+    def script(idxs, prompt):
+        if InjStubClient.INJ_MARK in prompt:
+            return {idxs[0]: f"译{idxs[0]}"}    # 注入批只回 1 行 → 守卫触发
+        return {i: f"译{i}" for i in idxs}       # 去注入重试 → 全量恢复
+
+    client.script = script
+    result = pv._run_with_fallback(
+        cfg, "A", client, todo, system_text="sys",
+        user_prompt=_INJ_BASE_PROMPT, max_batch_size=30,
+        allow_empty_deletions=False,
+        flagged=pv.detect_dialogue_rows(todo))
+    assert not result.failed
+    assert set(result.translations) == {1, 2, 3, 4}
+    assert len(client.batch_calls) == 2
+    first_p, _ = client.batch_calls[0]
+    second_p, _ = client.batch_calls[1]
+    assert InjStubClient.INJ_MARK in first_p      # 首次带注入
+    assert InjStubClient.INJ_MARK not in second_p  # 重试去注入
+    assert second_p == _INJ_BASE_PROMPT
+
+
+def test_guard_exhausted_walks_failed_chain(tmp_path):
+    """守卫③：二次仍不符 → 走既有 failed 链路（不抛异常、不吞行、
+    已恢复行保留，缺行交 [未翻译] 语义）。"""
+    cfg = _make_cfg(tmp_path)
+    todo = _flagged_entries()
+    client = InjStubClient(batch_size=30)
+
+    def script(idxs, prompt):
+        return {idxs[0]: f"译{idxs[0]}"}   # 恒只回首行：注入/去注入都不足
+
+    client.script = script
+    result = pv._run_with_fallback(
+        cfg, "A", client, todo, system_text="sys",
+        user_prompt=_INJ_BASE_PROMPT, max_batch_size=30,
+        allow_empty_deletions=False,
+        flagged=pv.detect_dialogue_rows(todo))
+    # 不抛异常；每行要么有译文要么进 failed（绝不静默吞）
+    seen = set(result.translations) | set(result.failed)
+    assert seen == {1, 2, 3, 4}
+    # 缺行走既有缺行链路：translate_entries 以基准 prompt 重试缺失行
+    assert len(client.batch_calls) == 2
+    guard_entries = [c for c in client.entries_calls
+                     if c[0] == _INJ_BASE_PROMPT]
+    assert guard_entries, "缺行应以基准 prompt 走 translate_entries 链路"
+
+
+def test_guard_stub_without_batch_iface_degrades_cleanly(tmp_path):
+    """桩缺 build_batches/translate_batch（既有 FakeClient 形态）→
+    优雅降级走整量链路，prompt 逐字节一致、行为零变化。"""
+    cfg = _make_cfg(tmp_path)
+    todo = _flagged_entries()
+    client = FakeClient()
+    result = pv._run_with_fallback(
+        cfg, "A", client, todo, system_text="sys",
+        user_prompt=_INJ_BASE_PROMPT, max_batch_size=30,
+        allow_empty_deletions=False,
+        flagged=pv.detect_dialogue_rows(todo))
+    assert set(result.translations) == {1, 2, 3, 4}
+    assert len(client.calls) == 1
+    assert client.entry_log[0] and True
