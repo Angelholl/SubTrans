@@ -51,6 +51,7 @@ from .config import (
     ensure_language_support,
     polish_policy_from_config,
 )
+from .dialogue_detect import build_injection_block, detect_dialogue_rows
 from .events import EventEmitter
 from .filters import build_srt, parse_srt
 from .glossary_conflict import (
@@ -563,25 +564,151 @@ def _fallback_enabled(cfg: RefineConfig, tag: str) -> bool:
             and cfg.stages[V2_STAGE_SLOT[tag]].provider not in ("lmstudio", "ollama"))
 
 
+def _translate_single_batch(client, batch: list, *, system_text: str,
+                            user_prompt: str, allow_empty_deletions: bool):
+    """单批单次调用（D2026-1025-01 行数守卫的调用原语）。
+
+    镜像 llm_client.translate_entries 内部对 translate_batch 的调用
+    形态（含 max_output_tokens 估算），异常由调用方消化。
+    """
+    mot = None
+    cc = getattr(client, "config", None)
+    n_ctx = getattr(cc, "n_ctx", None)
+    if n_ctx:
+        from subtransjav.translate.llm_client import compute_max_output_tokens
+        mot = compute_max_output_tokens(len(batch), n_ctx, cc.token_budget)
+    return client.translate_batch(
+        batch, system_text=system_text, user_prompt=user_prompt,
+        allow_empty_deletions=allow_empty_deletions,
+        max_output_tokens=mot)
+
+
+def _run_flagged_batches(client, todo: list, *, system_text: str,
+                         user_prompt: str, max_batch_size: int,
+                         allow_empty_deletions: bool, flagged: set,
+                         progress_cb):
+    """D2026-1025-01 批6 b 项：批级条件注入＋行数契约守卫。
+
+    - 仅 flagged 批在 user_prompt 尾部追加注入块；未 flagged 批整量
+      走既有 translate_entries 链路（prompt 字节级不变）。
+    - 注入批行数守卫：单次调用返回行数＝输入条数即成功；否则去掉
+      注入块原样重试一次；仍不等 → 走既有缺行链路（translate_entries
+      定向重试 → failed → [未翻译]），绝不静默吞、绝不物理删行。
+    - 注入批数、守卫触发数、重试后恢复数均留痕（print + logger）。
+    """
+    from subtransjav.translate.llm_client import BatchResult
+
+    batches = client.build_batches(todo, max_batch_size)
+    inj_batches = [b for b in batches
+                   if any(e["index"] in flagged for e in b)]
+    plain_entries = [e for b in batches
+                     if not any(e["index"] in flagged for e in b)
+                     for e in b]
+
+    translations: dict = {}
+    deleted: set = set()
+    failed: list = []
+    if plain_entries:
+        result = client.translate_entries(
+            plain_entries, system_text=system_text, user_prompt=user_prompt,
+            max_batch_size=max_batch_size,
+            allow_empty_deletions=allow_empty_deletions,
+            progress=progress_cb)
+        translations.update(result.translations)
+        deleted |= result.deleted
+        failed.extend(result.failed)
+
+    guard_hits = 0
+    recovered = 0
+    for k, batch in enumerate(inj_batches, 1):
+        block = build_injection_block(batch, flagged)
+        inj_prompt = f"{user_prompt}\n\n{block}"
+        try:
+            res = _translate_single_batch(
+                client, batch, system_text=system_text,
+                user_prompt=inj_prompt,
+                allow_empty_deletions=allow_empty_deletions)
+        except Exception as exc:    # noqa: BLE001 守卫接管（同批级隔离口径）
+            print(f"   ⚠️ 注入批 {k} 调用失败，转入行数守卫: {exc}")
+            res = {}
+        if len(res) == len(batch):
+            translations.update(res)
+            continue
+        guard_hits += 1
+        logger.warning(
+            "[b项] 注入批 %d 行数不守恒（输入 %d / 输出 %d），"
+            "去掉注入块原样重试一次", k, len(batch), len(res))
+        try:
+            res2 = _translate_single_batch(
+                client, batch, system_text=system_text,
+                user_prompt=user_prompt,     # 原样（不含注入块）
+                allow_empty_deletions=allow_empty_deletions)
+        except Exception as exc:    # noqa: BLE001 转缺行链路
+            print(f"   ⚠️ 注入批 {k} 去注入重试失败，转入缺行链路: {exc}")
+            res2 = {}
+        merged = dict(res)
+        merged.update(res2)
+        if len(merged) == len(batch):
+            recovered += len(merged) - len(res)
+            translations.update(merged)
+            continue
+        # 仍不等 → 既有缺行链路（定向重试 → failed → [未翻译]）
+        missing = [e for e in batch if e["index"] not in merged]
+        r3 = client.translate_entries(
+            missing, system_text=system_text, user_prompt=user_prompt,
+            max_batch_size=max_batch_size,
+            allow_empty_deletions=allow_empty_deletions,
+            progress=progress_cb)
+        merged.update(r3.translations)
+        recovered += len(r3.translations)
+        failed.extend(i for i in r3.failed if i not in merged)
+        deleted |= r3.deleted
+        translations.update(merged)
+        logger.warning(
+            "[b项] 注入批 %d 守卫重试后仍缺 %d 条，"
+            "按既有 failed 链路交 [未翻译]",
+            k, len(batch) - len(merged))
+    if inj_batches:
+        print(f"   🛡️ 行数守卫: 注入批 {len(inj_batches)} 个 / "
+              f"触发 {guard_hits} 次 / 重试恢复 {recovered} 条")
+    return BatchResult(translations=translations, deleted=deleted,
+                       failed=failed)
+
+
 def _run_with_fallback(cfg: RefineConfig, tag: str, client,
                        todo: list, *, system_text: str, user_prompt: str,
                        max_batch_size: int, allow_empty_deletions: bool,
-                       emitter=None):
+                       emitter=None, flagged: set | None = None):
     """云端阶段执行 + 故障接管：失败行（批失败/缺行）切换本地模型重跑一次。
 
     result.failed 中被本地接管修复的行移回 translations。
     emitter 非 None 时，⏳ 批次进度同步映射为 phase_progress 事件。
+    flagged 非 None（D2026-1025-01 批6 b 项）时仅 flagged 批条件注入
+    ＋行数守卫；flagged 为空/None 时无注入路径零变化。
     """
 
     def _progress(m):
         print(f"   ⏳ {m}")
         _emit_batch_progress(emitter, tag, m)
 
-    result = client.translate_entries(
-        todo, system_text=system_text, user_prompt=user_prompt,
-        max_batch_size=max_batch_size,
-        allow_empty_deletions=allow_empty_deletions,
-        progress=_progress)
+    if flagged and hasattr(client, "build_batches") \
+            and hasattr(client, "translate_batch"):
+        result = _run_flagged_batches(
+            client, todo, system_text=system_text, user_prompt=user_prompt,
+            max_batch_size=max_batch_size,
+            allow_empty_deletions=allow_empty_deletions,
+            flagged=flagged, progress_cb=_progress)
+    else:
+        if flagged:
+            # 桩客户端缺批级接口（既有测试桩形态）——降级整量链路，
+            # 不注入（prompt 字节级不变，行为与无注入路径一致）
+            logger.info("[b项] 客户端缺 build_batches/translate_batch，"
+                        "跳过条件注入（降级整量链路）")
+        result = client.translate_entries(
+            todo, system_text=system_text, user_prompt=user_prompt,
+            max_batch_size=max_batch_size,
+            allow_empty_deletions=allow_empty_deletions,
+            progress=_progress)
 
     failed_entries = [e for e in todo if e["index"] in result.failed]
     if failed_entries and _fallback_enabled(cfg, tag):
@@ -788,6 +915,12 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
     todo = _inject_stage_a_assists(cfg, entries, todo, tm,
                                    collector=collector, file_name=file_name)
 
+    # D2026-1025-01 批6 b 项：替2 条件注入——确定性检测上游 ASR 同 cue
+    # 自并行（陈述句＋应答词同条 / 单 cue 双句末标点）。仅对送 LLM 的
+    # todo 行检测（TM 命中行零调用无需注入）；flagged 为空时无注入
+    # 路径零变化（字节级不触碰 prompt）。
+    flagged = detect_dialogue_rows(todo)
+
     src_text = "\n".join(e["text"] for e in entries)
     gl_block = _v2_glossary_block(cfg, "A", src_text, glossary)
     sidecar_block = _v2_sidecar_block(src_text, sidecar)
@@ -802,7 +935,8 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
         user_prompt=user_prompt, max_batch_size=cfg.batch_for(stage_cfg),
         # D1：禁用留空删除——空译文按缺行处理（客户端定向重试 → failed），
         # 最终仍无译文的行加 [未翻译] 标记保留（删除权收归闸门0）。
-        allow_empty_deletions=False, emitter=emitter)
+        allow_empty_deletions=False, emitter=emitter,
+        flagged=flagged)
 
     out_entries = []
     for e in entries:
