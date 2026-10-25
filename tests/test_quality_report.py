@@ -1126,3 +1126,70 @@ def test_large_shift_still_misaligned():
     assert "时间轴未对齐" in report
     assert "实义内容漏覆盖: 2/2 (100.0%)" in report
     assert "时间轴对齐率（对预合并后期望时间轴）: 0.0%" in report
+
+
+# ----------------------------------------------------------------------
+# 疑似听错（D2026-1025-01 批4 garble_detect 接线）
+# ----------------------------------------------------------------------
+
+def test_render_garble_hear_section_variants():
+    """渲染分支：None/不可用/0 条整节省略；有行逐条 `#index timing 源:`
+    单行形态；超上限注明「其余 N 条略」。"""
+    from subtransjav.refine.quality_report import render_garble_hear_section
+    t = "00:00:01,000 --> 00:00:02,000"
+    assert render_garble_hear_section(None) == ""
+    assert render_garble_hear_section({"available": False, "items": []}) == ""
+    assert render_garble_hear_section({"available": True, "items": []}) == ""
+    one = render_garble_hear_section({"available": True, "items": [
+        {"index": 7, "timing": t, "text": "ゔぁれんじゃ", "oov_ratio": 1.0}]})
+    assert "【疑似听错】" in one
+    assert "共 1 条" in one
+    assert f"  #7 {t} 源: ゔぁれんじゃ" in one
+    rows = [{"index": i, "timing": t, "text": "ゔぁれんじゃ",
+             "oov_ratio": 1.0} for i in range(22)]
+    over = render_garble_hear_section({"available": True, "items": rows})
+    assert "共 22 条" in over
+    assert "（其余 2 条略）" in over
+    assert over.count("源: ゔぁれんじゃ") == 20
+
+
+def test_build_quality_report_garble_hear_row_and_stats():
+    """报告接线：注入命中结果时【疑似听错】章节＋【统计】区"疑似听错 N 条"
+    子行同时呈现（统计行文案照「源文清洗」子行惯例）。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    orig = [{"index": 1, "timing": t, "text": "ゔぁれんじゃ"}]
+    final = [{"index": 1, "timing": t, "text": "奇怪的台词"}]
+    report = build_quality_report(
+        orig, final, "demo",
+        garble_hear={"available": True, "items": [
+            {"index": 1, "timing": t, "text": "ゔぁれんじゃ",
+             "oov_ratio": 1.0}]})
+    assert "【疑似听错】" in report
+    assert f"  #1 {t} 源: ゔぁれんじゃ" in report
+    assert "疑似听错: 1 条" in report
+    # 章节白话注解随标题注入（_SECTION_NOTES additive）
+    assert "只标不删不改正文" in report
+
+
+def test_build_quality_report_garble_hear_absent_when_unavailable_or_zero():
+    """N=0 或不可用时统计子行与章节整行缺席（照「源文清洗」子行惯例）；
+    注入结果直接消费、不触发就地重扫。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    orig = [{"index": 1, "timing": t, "text": "ゔぁれんじゃ"}]
+    final = [{"index": 1, "timing": t, "text": "奇怪的台词"}]
+    for res in ({"available": False, "items": []},
+                {"available": True, "items": []}):
+        report = build_quality_report(orig, final, "demo", garble_hear=res)
+        assert "疑似听错" not in report
+        assert "【疑似听错】" not in report
+
+
+def test_build_quality_report_garble_hear_auto_scan_no_false_positive():
+    """缺省就地扫描（garble_hear=None）：正常日文源文不产生疑似听错行
+    （保守取向；sudachi 不可用环境同样缺席=降级口径）。"""
+    t = "00:00:01,000 --> 00:00:02,000"
+    orig = [{"index": 1, "timing": t, "text": "今日はいい天気ですね"}]
+    final = [{"index": 1, "timing": t, "text": "今天天气真好"}]
+    report = build_quality_report(orig, final, "demo")
+    assert "疑似听错" not in report
+
