@@ -410,6 +410,41 @@ def test_tm_break_options_session_state_pins():
             f"_tmBreakParams 默认值偏离原控件初始值: {key} 应为 {val}"
 
 
+def test_source_kana_options_wiring_pinned():
+    """D2026-1025-01 批3b：字幕清洗参数弹窗分区三「源文清洗」两复选接线钉。
+
+    ① app-msg.js 新增 5 个 JS 态 MSG 键（零静态 data-i18n，不进 index.html）；
+    ② app-modal.js polish kind 分区三：分区标题 + 两控件 + 回填默认态
+       （合并缺省勾选=管线 True / 删喘息缺省不勾=管线 False，重开回填
+       opts.last——d472e95 回填缺陷勿复发）+ collect 写入两键；
+    ③ buildRefineOptions 消费两键（缺省反射管线默认 True/False）。
+    """
+    for key in ("sourceKanaSecTitle", "sourceKanaLblMerge", "sourceKanaNoteMerge",
+                "sourceKanaLblMoanDelete", "sourceKanaNoteMoanDelete"):
+        assert key in _js_msg_keys(), f"app-msg.js 缺 JS 态键: {key}"
+    # 零静态键：index.html 不出现任何 sourceKana 锚（控件全 JS 态）
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert "sourceKana" not in html, "index.html 不得含 sourceKana 静态锚"
+
+    modal_src = (ASSETS / "app-modal.js").read_text(encoding="utf-8")
+    polish_fn = _extract_function(modal_src, "polish")
+    assert "MSG.sourceKanaSecTitle" in polish_fn, "polish 弹窗缺分区三标题填充"
+    assert "last.source_kana_merge !== false" in polish_fn, \
+        "合并复选缺省态须为勾选（!== false=反射管线默认 True，且重开回填会话值）"
+    assert "last.source_kana_moan_delete === true" in polish_fn, \
+        "删喘息复选缺省态须为不勾（=== true=反射管线默认 False，且重开回填会话值）"
+    assert "source_kana_merge: elKanaMerge.checked," in polish_fn, \
+        "collect 缺 source_kana_merge 写入"
+    assert "source_kana_moan_delete: elKanaMoanDelete.checked," in polish_fn, \
+        "collect 缺 source_kana_moan_delete 写入"
+
+    opts = _extract_function(_app_js_source(), "buildRefineOptions")
+    assert "_appliedPolishParams.source_kana_merge !== false" in opts, \
+        "buildRefineOptions 缺 source_kana_merge 会话态取值（缺省=反射管线 True）"
+    assert "!!((_appliedPolishParams || {}).source_kana_moan_delete)" in opts, \
+        "buildRefineOptions 缺 source_kana_moan_delete 会话态取值（缺省=反射管线 False）"
+
+
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""
@@ -7150,6 +7185,10 @@ def test_js_sources_layer_pinned():
        refine 家族 98e5cbd2…/212,736B、全库 90417ed6…/507,247B（index.html
        两区块撤除改入口组、app-msg.js +13 键、app-modal.js tmBreak kind、
        app-refine-core.js 会话态+入口组+8 键接线；旧钉 7c947e25… / 7507ae15… 退役）；
+       d1025-批3b 换代（源文清洗分区三两复选，D2026-1025-01）：
+       refine 家族 b1c0057a…/213,278B、全库 a4cafd6c…/509,637B（app-msg.js
+       +5 键、app-modal.js polish kind 分区三、app-refine-core.js
+       buildRefineOptions +2 键接线；旧钉 98e5cbd2… / 90417ed6… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7162,7 +7201,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "90417ed639bf5301ae039fb22f86a5ba3cda2804a507daed95b735c2e166587f"), \
+        "a4cafd6c2474ef33e429e2460c63fd7d3761a044baaf13125e56750b588d54b9"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7172,7 +7211,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "98e5cbd2a274d3fd1d33e7bb32f50658bd7387cd79b99c368eff14b9e3b611c3"), \
+        "b1c0057a509e8363d1437f359aa0ec3dd866d8c6bb6a85d81d936557c8f9e909"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7192,10 +7231,10 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (63963,
-                       "90b22e75e0a3087c2dbe4132c60059ed0816b116071522b5ea26c9f17b158cb5"),
-        "app-modal.js": (109622,
-                         "75500628887025ea83e7afd938cdf8aa1a3b13f8415fce1738ca13c6f7a79f1d"),
+        "app-msg.js": (64661,
+                       "5ab4ef19329d149bd896fa15e4cf5e58f10d5088f0e7ca249c1a4e6d99db472f"),
+        "app-modal.js": (110772,
+                         "f0ab0e9ba60bb5844e189d9d854fa522e72dfb808ea6f505f453ef0e09be8c00"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (21361,
@@ -7222,8 +7261,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-refine-core.js": (15860,
-                               "adfb6b79ecadbb4cbc3c3d794d87e702e108b90d71a98daf0e6009aca24271f9"),
+        "app-refine-core.js": (16402,
+                               "d70d09af037dee8f9fad382f064194cb867fe299ffec1e191cce26066d6f6bf2"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
         "app-refine-glossary.js": (6588,

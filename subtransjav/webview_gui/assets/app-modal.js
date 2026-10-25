@@ -1379,7 +1379,8 @@ const AppModal = {
     // （mk/mkField/mkSelect 闭包 + _bindSkeletonOnce 统一骨架绑定，复用
     // #appModal 骨架），压制式弹出·单滚动分区纵排（v4 原型终裁）。
     // 布局：jobs-line + 分区一「文本规范」（6 参数）+ 分区二「时间轴」
-    // （3 参数+口径提示行）；开关两枚照 encode 增强开关 .enc-field.full
+    // （3 参数+口径提示行）+ 分区三「源文清洗」（2 复选，D2026-1025-01
+    // 批3b）；开关两枚照 encode 增强开关 .enc-field.full
     // 内联 label 画法（pp-toggle-cell.full 同栅格语义）。
     // 零 id（骨架既有 id 之外零新增）、文案全 MSG 键（批2 卡面照抄）。
     // 结算：保存（ok 键/Enter）={ok:true, params}；取消/ESC/遮罩={ok:false}；
@@ -1512,6 +1513,20 @@ const AppModal = {
             last.clamp_long_enabled !== false);
         mk('div', 'enc-eta-row', sec2).textContent = MSG.polishTimingCaliber;
 
+        // —— 分区三：源文清洗（D2026-1025-01 批3b，两复选）——
+        // 独立于总开关的管线级源文侧清洗（批3a _kana_clean_stage 同门）：
+        // 默认态反射管线默认（合并开/删喘息关）；回填一律自 opts.last
+        // （会话已应用参数，重开回填当前会话值——d472e95 回填缺陷勿复发）
+        const sec3 = mk('div', 'enc-section', body);
+        mk('h4', null, sec3).textContent = MSG.sourceKanaSecTitle;
+        const grid3 = mk('div', 'enc-grid', sec3);
+        const elKanaMerge = mkToggle(grid3, MSG.sourceKanaLblMerge,
+            MSG.sourceKanaNoteMerge,
+            last.source_kana_merge !== false);      // 缺省=默认勾选（管线 True）
+        const elKanaMoanDelete = mkToggle(grid3, MSG.sourceKanaLblMoanDelete,
+            MSG.sourceKanaNoteMoanDelete,
+            last.source_kana_moan_delete === true); // 缺省=默认不勾（管线 False）
+
         const collect = () => ({
             max_line_chars: elMaxChars.value.trim(),
             max_lines: elMaxLines.value.trim(),
@@ -1522,6 +1537,8 @@ const AppModal = {
             max_duration_ms: elMaxDur.value.trim(),
             min_gap_ms: elMinGap.value.trim(),
             clamp_long_enabled: elClamp.checked,
+            source_kana_merge: elKanaMerge.checked,
+            source_kana_moan_delete: elKanaMoanDelete.checked,
         });
         // 同 encode 先例：闭包 collect 暴露给统一骨架 ok/Enter 分派
         this._polishCollect = collect;
