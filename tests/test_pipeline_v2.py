@@ -2911,11 +2911,13 @@ def test_resume_rejects_changed_stage_prompts(tmp_path, monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 
 def _kana_entries():
+    # 改钉（D2026-1025-01 规格 v3 §1/§6）：うん 现入豁免表永不并——改用
+    # 集外短句 カメラ，间隙收至 200ms（FRAGMENT_GAP_MS）钉并入主路径。
     return [
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
          "text": "好きだ"},
-        {"index": 2, "timing": "00:00:02,500 --> 00:00:02,700",
-         "text": "うん"},                    # 间隙 500 → 并入前条
+        {"index": 2, "timing": "00:00:02,200 --> 00:00:02,400",
+         "text": "カメラ"},                  # 间隙 200 → 并入前条
         {"index": 3, "timing": "00:00:06,000 --> 00:00:06,100",
          "text": "あぁ"},                    # 孤立喘息（前后间隙均 >1200）
         {"index": 4, "timing": "00:00:09,100 --> 00:00:10,000",
@@ -2924,11 +2926,12 @@ def _kana_entries():
 
 
 def test_kana_stage_default_merges_short():
-    """默认开合并：纯假名短句并入前条（ja→zh）。"""
+    """默认开合并：纯假名短句并入前条（ja→zh）。
+    改钉（规格 v3 §1/§6）：夹具 うん→カメラ（うん 现入豁免表永不并）。"""
     entries = _kana_entries()
     out, stats = pv._kana_clean_stage(entries, _make_cfg(tmp_path="unused"))
     assert stats is not None
-    assert [e["text"] for e in out] == ["好きだうん", "あぁ", "やめて"]
+    assert [e["text"] for e in out] == ["好きだカメラ", "あぁ", "やめて"]
     assert stats["kana_merged"] == 1
 
 
@@ -2943,11 +2946,12 @@ def test_kana_stage_default_keeps_isolated_moan():
 
 
 def test_kana_stage_delete_opt_in():
-    """开删除后：孤立喘息删除＋相邻喘息并入（不误删）。"""
+    """开删除后：孤立喘息删除＋相邻喘息并入（不误删）。
+    改钉（规格 v3 §1/§6）：夹具 うん→カメラ（うん 现入豁免表永不并）。"""
     cfg = _make_cfg(tmp_path="unused",
                     source_kana_moan_delete_enabled=True)
     out, stats = pv._kana_clean_stage(_kana_entries(), cfg)
-    assert [e["text"] for e in out] == ["好きだうん", "やめて"]
+    assert [e["text"] for e in out] == ["好きだカメラ", "やめて"]
     assert stats["kana_moan_deleted"] == 1
     assert stats["kana_moan_deleted_timings"] == [
         {"timing": "00:00:06,000 --> 00:00:06,100", "text": "あぁ"}]
