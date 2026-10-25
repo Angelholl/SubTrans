@@ -236,6 +236,15 @@ const MSG = {
     polishNoteClampLong: '单条显示超过「时长上限」时自动切走多余时长；关闭则超长条目只记入报告、不缩短。',
     polishTimingCaliber: '口径提示：最小间隔 83.4 ms ≈ 2 帧 @ 23.976fps，指「相邻两条之间的空档」，与「最短显示时长」不是一个参数，勿与 833 ms 口径混淆。',
 
+    // 源文清洗分区（D2026-1025-01 批3b）：字幕清洗参数弹窗分区三两复选，
+    // 全 JS 态文案（零静态 data-i18n，不进 index.html，i18n 快照键数不动）；
+    // 小注词表口径与批3a kana_clean 模块单一来源
+    sourceKanaSecTitle: '源文清洗',
+    sourceKanaLblMerge: '源文短句合并',
+    sourceKanaNoteMerge: '把源文中的短假名句并入相邻句（仅 ja→zh 生效）；默认开启，取消则逐条保留原样。',
+    sourceKanaLblMoanDelete: '删除孤立喘息',
+    sourceKanaNoteMoanDelete: '仅删孤立喘息词（ああ/ん 等），词表与批3a 模块单一来源；本开关会话级生效、不持久化。',
+
     // TM 与断点合并弹窗（D2026-1024-01 批3 件B）：高级参数 TAB「TM 与断点」
     // 入口组+弹窗壳文案；8 控件标签/长提示 title/placeholder/分区标题全部
     // 复用既有键（tm_* / glossary_* / resume_* / force_resume_* / verbose_* /

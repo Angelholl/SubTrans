@@ -354,6 +354,16 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
         if options.get("polish_no_clamp_long") is True:
             args.append("--polish-no-clamp-long")
 
+    # 源文假名清洗两开关（D2026-1025-01 批3b，弹窗分区三）：独立于
+    # --polish 的白名单布尔转发（管线级 _kana_clean_stage 同门，批3a）；
+    # 默认（merge=True/moan=False）零旗标=字节不变；合并默认开，GUI 显式
+    # 传 False 才发 --no-source-kana-merge（is False/is True 严格布尔口径，
+    # 同 polish 布尔转发先例）
+    if options.get("source_kana_merge") is False:
+        args.append("--no-source-kana-merge")
+    if options.get("source_kana_moan_delete") is True:
+        args.append("--source-kana-moan-delete")
+
     # v2 两阶段管线（阶段A→s1 槽位、阶段B→s3 槽位）
     if options.get("profile"):
         args.extend(["--profile", str(options["profile"])])

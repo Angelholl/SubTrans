@@ -320,6 +320,50 @@ def test_build_refine_args_polish_invalid_string_ignored():
     assert args[args.index("--polish-max-lines") + 1] == "4"
 
 
+# ---------------------------------------------------------------------------
+# 源文假名清洗两开关白名单转发（D2026-1025-01 批3b）：独立于 --polish；
+# 默认（merge=True/moan=False）零旗标=字节不变；合并显式 False 才发
+# --no-source-kana-merge（is False/is True 严格布尔口径）
+# ---------------------------------------------------------------------------
+
+def test_build_refine_args_source_kana_defaults_zero_flags():
+    """缺省/默认态（merge=True 或缺席、moan=False 或缺席）零旗标。"""
+    for options in ({"inputs": ["a.srt"]},
+                    {"inputs": ["a.srt"], "source_kana_merge": True},
+                    {"inputs": ["a.srt"], "source_kana_moan_delete": False},
+                    {"inputs": ["a.srt"], "source_kana_merge": True,
+                     "source_kana_moan_delete": False}):
+        args = _build_refine_args(options)
+        assert "--no-source-kana-merge" not in args, f"默认态不得发反旗标: {options}"
+        assert "--source-kana-moan-delete" not in args, f"默认态零旗标破: {options}"
+
+
+def test_build_refine_args_source_kana_merge_false_negative_flag():
+    """source_kana_merge=False（GUI 取消勾选）→ 发 --no-source-kana-merge。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "source_kana_merge": False})
+    assert args.count("--no-source-kana-merge") == 1
+    assert "--source-kana-merge" not in args  # 正向旗标不存在于 CLI，勿拼
+    assert "--source-kana-moan-delete" not in args
+
+
+def test_build_refine_args_source_kana_moan_delete_true_forwarded():
+    """source_kana_moan_delete=True（GUI 勾选）→ 发 --source-kana-moan-delete。"""
+    args = _build_refine_args({"inputs": ["a.srt"],
+                               "source_kana_moan_delete": True})
+    assert args.count("--source-kana-moan-delete") == 1
+    assert "--no-source-kana-merge" not in args
+
+
+def test_build_refine_args_source_kana_independent_of_polish_enabled():
+    """两开关独立于 polish_enabled：polish 关时仍按值转发（管线级清洗）。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "polish_enabled": False,
+                               "source_kana_merge": False,
+                               "source_kana_moan_delete": True})
+    assert "--no-source-kana-merge" in args
+    assert "--source-kana-moan-delete" in args
+    assert "--polish" not in args
+
+
 class _StopLaunch(Exception):
     """fake Popen 哨兵：捕获拼好的 args 后终止启动流程。"""
 

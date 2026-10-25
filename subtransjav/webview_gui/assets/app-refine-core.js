@@ -167,6 +167,14 @@
       // 折算 9 键（未应用=全默认，一律不给键）；白名单转发语义见
       // api.py _build_refine_args（空值/0/default 一律不产生旗标）
       ...appliedPolishOptionFields(),
+      // 源文假名清洗两开关（D2026-1025-01 批3b）：会话级值存于
+      // _appliedPolishParams（清洗弹窗分区三保存写回，与 9 个 polish_* 键
+      // 同会话态）；未开过弹窗（null）=缺省反射管线默认 True/False；
+      // api 侧白名单转发，默认态零旗标=字节不变
+      source_kana_merge: _appliedPolishParams
+        ? _appliedPolishParams.source_kana_merge !== false
+        : true,
+      source_kana_moan_delete: !!((_appliedPolishParams || {}).source_kana_moan_delete),
       profile: ($('refineProfile') || {}).value || 'local',
       v2_concurrency: readRefineConcurrency(),
       v2_ctx: readRefineCtx(),
