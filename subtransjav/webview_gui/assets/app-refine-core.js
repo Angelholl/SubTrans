@@ -212,6 +212,8 @@
       verbose: !!_tmBreakParams.verbose,
       source_filter: (($('refineSourceFilter') || {}).value || 'default'),
       auto_synopsis: !($('refineAutoSynopsis') && !$('refineAutoSynopsis').checked),
+      // ⑥a 人物提示子开关（D2026-1025-01 裁决⑥）：默认不勾选不传旗标
+      synopsis_cast_enabled: !!(($('refineSynopsisCast') || {}).checked),
       // H4b 条目级阈值自适应：默认不勾选不传旗标（api.py 侧按需转 --adaptive-thresholds）
       adaptive_thresholds: !!($('refineAdaptiveThresholds') || {}).checked,
       // 翻译记忆库：勾选取消时才传 no_tm（--no-tm）；路径/阈值非空才传

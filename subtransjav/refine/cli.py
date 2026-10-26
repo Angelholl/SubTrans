@@ -224,6 +224,9 @@ def build_parser():
                              "一字符不变；非缺省方向产物 _final_{lang}）")
     grp_v2.add_argument("--no-auto-synopsis", action="store_true",
                         help="关闭剧情自摘要（Beta：默认开启；摘要仅注入翻译提示词，不产生任何输出内容）")
+    grp_v2.add_argument("--synopsis-cast", dest="synopsis_cast_enabled",
+                        action="store_true", default=False,
+                        help="剧情摘要附人物表（⑥a 人物提示子开关，默认关；仅人数/称呼/关系，供翻译人称/敬语参考）")
     p.add_argument("--event-format", choices=["text", "ndjson"], default="text",
                    help="事件输出格式：text=人类可读（默认）| ndjson=结构化事件行（GUI 用，人类文本转 stderr）")
     p.add_argument("--heartbeat-interval", type=float, default=20.0,
@@ -407,6 +410,7 @@ def config_from_args(args):
         v2_concurrency=args.v2_concurrency,
         v2_source_filter=args.source_filter,
         auto_synopsis=not args.no_auto_synopsis,
+        synopsis_cast_enabled=args.synopsis_cast_enabled,
         asr_meta=args.asr_meta,
         asr_telemetry=args.asr_telemetry,
         media_path=args.media_path,

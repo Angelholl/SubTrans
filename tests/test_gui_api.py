@@ -364,6 +364,32 @@ def test_build_refine_args_source_kana_independent_of_polish_enabled():
     assert "--polish" not in args
 
 
+def test_build_refine_args_synopsis_cast_true_forwarded():
+    """⑥a：synopsis_cast_enabled=True（GUI 勾选）→ 发 --synopsis-cast。"""
+    args = _build_refine_args({"inputs": ["a.srt"],
+                               "synopsis_cast_enabled": True})
+    assert args.count("--synopsis-cast") == 1
+    assert "--no-auto-synopsis" not in args
+
+
+def test_build_refine_args_synopsis_cast_default_and_false_no_flag():
+    """⑥a：缺省/False（默认关）不发旗标；False 也不发反转旗标（默认已关）。"""
+    args = _build_refine_args({"inputs": ["a.srt"]})
+    assert "--synopsis-cast" not in args
+    args = _build_refine_args({"inputs": ["a.srt"],
+                               "synopsis_cast_enabled": False})
+    assert "--synopsis-cast" not in args
+
+
+def test_build_refine_args_synopsis_cast_independent_of_auto_synopsis():
+    """⑥a：人物提示独立于剧情自摘要总开关——auto_synopsis=False 时
+    cast=True 仍转发（语义独立：前者管摘要有无，后者管人物表行）。"""
+    args = _build_refine_args({"inputs": ["a.srt"], "auto_synopsis": False,
+                               "synopsis_cast_enabled": True})
+    assert "--no-auto-synopsis" in args
+    assert "--synopsis-cast" in args
+
+
 class _StopLaunch(Exception):
     """fake Popen 哨兵：捕获拼好的 args 后终止启动流程。"""
 

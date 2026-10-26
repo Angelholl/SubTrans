@@ -445,6 +445,30 @@ def test_source_kana_options_wiring_pinned():
         "buildRefineOptions 缺 source_kana_moan_delete 会话态取值（缺省=反射管线 False）"
 
 
+def test_synopsis_cast_wiring_pinned():
+    """⑥a 人物提示子开关接线钉（D2026-1025-01 裁决⑥，2026-10-27）。
+
+    ① index.html 剧情自摘要邻位新增 refineSynopsisCast 复选框（默认不勾
+       =管线 default-OFF；带 synopsis_cast_label/title 两静态 i18n 键）；
+    ② app-msg.js 两 MSG 键（W2 双表同步钉消费面）；
+    ③ buildRefineOptions 消费 synopsis_cast_enabled（勾选才 true）。
+    """
+    for key in ("synopsis_cast_label", "synopsis_cast_title"):
+        assert key in _js_msg_keys(), f"app-msg.js 缺 MSG 键: {key}"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'id="refineSynopsisCast"' in html, "index.html 缺 refineSynopsisCast"
+    assert 'data-i18n="synopsis_cast_label"' in html, "缺 synopsis_cast_label 锚"
+    assert 'data-i18n-title="synopsis_cast_title"' in html, \
+        "缺 synopsis_cast_title 锚"
+    # 默认不勾（⑥a default-OFF）：该 input 行不得带 checked
+    seg = html[html.index('id="refineSynopsisCast"') - 120:
+               html.index('id="refineSynopsisCast"') + 120]
+    assert "checked" not in seg, "refineSynopsisCast 须默认不勾（default-OFF）"
+    opts = _extract_function(_app_js_source(), "buildRefineOptions")
+    assert "!!(($('refineSynopsisCast') || {}).checked)" in opts, \
+        "buildRefineOptions 缺 synopsis_cast_enabled 消费（勾选才 true）"
+
+
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""
@@ -1416,8 +1440,10 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # d1023-polish 批3（D2026-1023-03）：+polishEnabled（清洗总开关，
     # 显式解冻 224→225；带 data-i18n=polish_enabled_label）；
     # d1024 批3 件B（D2026-1024-01）：TM/断点 8 静态 id 撤除迁入合并弹窗，
-    # 显式解冻 225→217
-    assert len(ids) == 217, f"id 全集数漂移（d1024 批3 解冻后现契约 217），实为 {len(ids)}"
+    # 显式解冻 225→217；d1025-⑥a 换代（D2026-1025-01 裁决⑥，2026-10-27）：
+    # 剧情自摘要邻位 +refineSynopsisCast（人物提示子开关，默认不勾），
+    # 显式解冻 217→218
+    assert len(ids) == 218, f"id 全集数漂移（d1025-⑥a 解冻后现契约 218），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -3488,15 +3514,17 @@ def test_batch3_ai_config_row_pins_survive():
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    assert len(ids) == 217, f"id 全集数漂移（契约 217），实为 {len(ids)}"
+    # d1025-⑥a（D2026-1025-01 裁决⑥）：+refineSynopsisCast，显式解冻 217→218
+    assert len(ids) == 218, f"id 全集数漂移（契约 218），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
     # + 字幕清洗一键 polish_enabled_label（D2026-1023-03 批3）
     # + 翻译TAB快捷钮独立键 start_btn_tab（d1023 同日 owner 指定）
     # 解冻后契约值（D2026-1023-02/03；快照钉⑤b 为全集全等断言，此行只锁计数，
-    # 漂移细节归钉⑤b）
-    assert len(i18n) == 174, f"data-i18n 键集数漂移（契约 174），实为 {len(i18n)}"
+    # 漂移细节归钉⑤b）；d1025-⑥a（D2026-1025-01 裁决⑥）+2 键
+    # （synopsis_cast_label/synopsis_cast_title）→ 176
+    assert len(i18n) == 176, f"data-i18n 键集数漂移（契约 176），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -7189,6 +7217,10 @@ def test_js_sources_layer_pinned():
        refine 家族 b1c0057a…/213,278B、全库 a4cafd6c…/509,637B（app-msg.js
        +5 键、app-modal.js polish kind 分区三、app-refine-core.js
        buildRefineOptions +2 键接线；旧钉 98e5cbd2… / 90417ed6… 退役）；
+       d1025-⑥a 换代（人物提示子开关，D2026-1025-01 裁决⑥，2026-10-27）：
+       refine 家族 d48cd305…/213,447B、全库 bbfa628a…/510,011B（index.html
+       +refineSynopsisCast 复选框、app-msg.js +2 键、app-refine-core.js
+       buildRefineOptions +1 键接线；旧钉 b1c0057a… / a4cafd6c… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7201,7 +7233,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "a4cafd6c2474ef33e429e2460c63fd7d3761a044baaf13125e56750b588d54b9"), \
+        "bbfa628a98a7dda3454b80d6d2432cbd78a4e534bee7f3bd06d382635c795dcb"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7211,7 +7243,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "b1c0057a509e8363d1437f359aa0ec3dd866d8c6bb6a85d81d936557c8f9e909"), \
+        "d48cd3058fc99afc70101c16a420247c0c99a3a6564306663432611d10cd7b7e"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7231,8 +7263,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (64661,
-                       "5ab4ef19329d149bd896fa15e4cf5e58f10d5088f0e7ca249c1a4e6d99db472f"),
+        "app-msg.js": (64866,
+                       "4734def132400faa0779b6551487e5e2bc5a6d3a4d0e9b6854f17cb610448657"),
         "app-modal.js": (110772,
                          "f0ab0e9ba60bb5844e189d9d854fa522e72dfb808ea6f505f453ef0e09be8c00"),
         "app-error-handler.js": (745,
@@ -7261,8 +7293,8 @@ def test_js_split_integrity_pinned():
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (3978,
                         "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
-        "app-refine-core.js": (16402,
-                               "d70d09af037dee8f9fad382f064194cb867fe299ffec1e191cce26066d6f6bf2"),
+        "app-refine-core.js": (16571,
+                               "2788adf6dfa2c2c5a415e6cb4fb3044fb118ff8d2342d497eae79df386e24c60"),
         "app-refine-models.js": (13345,
                                  "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
         "app-refine-glossary.js": (6588,

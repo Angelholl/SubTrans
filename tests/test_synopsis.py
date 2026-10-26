@@ -175,8 +175,14 @@ def test_prompt_elements_complete(tmp_path):
     assert "禁止补足跳跃段内容" in call["system"]
     assert "忽略纯噪声行" in call["system"]
     assert "3-5 行" in call["user"]
-    assert "主要人物表" in call["user"]
-    assert "各人物称呼与关系" in call["user"]
+    # ⑥a 默认 OFF：任务段无人物表行；cast_enabled=True 恢复 v2 人物表行
+    assert "主要人物表" not in call["user"]
+    assert "各人物称呼与关系" not in call["user"]
+    on_client = CountingClient()
+    syn.request_synopsis(on_client, "サンプル", provider="p", model="m",
+                         cache_dir=str(tmp_path / "c"), cast_enabled=True)
+    assert "主要人物表" in on_client.chat_calls[0]["user"]
+    assert "各人物称呼与关系" in on_client.chat_calls[0]["user"]
     assert "核心剧情线" in call["user"]
     assert "场景构成" in call["user"]
     assert "禁止编造源文没有的内容" in call["user"]
@@ -206,7 +212,8 @@ def test_cache_hit_avoids_llm_and_atomic_write(tmp_path):
                               cache_dir=cdir)
     assert t1 == t2 == "梗概甲"
     assert len(client.chat_calls) == 1      # 第二次命中缓存，不再打 LLM
-    key = syn.cache_key("p", "m1", "同じ入力")
+    key = syn.cache_key("p", "m1", "同じ入力",
+                        task_prompt=syn._SYNOPSIS_TASK_PROMPT_NO_CAST)
     f = Path(cdir) / f"{key}.txt"
     assert f.is_file()                       # 原子写产物存在
     assert f.read_text(encoding="utf-8") == "梗概甲"   # 内容一致
@@ -418,7 +425,8 @@ def test_request_synopsis_temperature_missing_warns_once(tmp_path,
 
 def test_request_synopsis_truncated_no_cache(tmp_path, caplog):
     cdir = tmp_path / "c"
-    key = syn.cache_key("p", "m", "入力")
+    key = syn.cache_key("p", "m", "入力",
+                        task_prompt=syn._SYNOPSIS_TASK_PROMPT_NO_CAST)
     client = CountingClient("梗概被截断", finish_reason="length")
     before = syn.synopsis_truncation_stats()
     with caplog.at_level(logging.INFO,
@@ -442,7 +450,8 @@ def test_request_synopsis_finish_none_warns_and_caches(tmp_path, caplog):
         out = syn.request_synopsis(client, "入力", provider="p", model="m",
                                    cache_dir=str(cdir))
     assert out == "梗概无finish"                     # 按未截断正常处理
-    key = syn.cache_key("p", "m", "入力")
+    key = syn.cache_key("p", "m", "入力",
+                        task_prompt=syn._SYNOPSIS_TASK_PROMPT_NO_CAST)
     assert Path(cdir, f"{key}.txt").read_text(encoding="utf-8") \
         == "梗概无finish"
     warns = [r for r in caplog.records if "finish_reason" in r.message]
@@ -456,7 +465,8 @@ def test_request_synopsis_normal_writes_cache_and_stats(tmp_path):
     out = syn.request_synopsis(client, "入力", provider="p", model="m",
                                cache_dir=str(cdir))
     assert out == "梗概正常"
-    key = syn.cache_key("p", "m", "入力")
+    key = syn.cache_key("p", "m", "入力",
+                        task_prompt=syn._SYNOPSIS_TASK_PROMPT_NO_CAST)
     assert Path(cdir, f"{key}.txt").is_file()        # 原子写缓存照旧
     after = syn.synopsis_truncation_stats()
     assert after["total"] == before["total"] + 1
@@ -479,7 +489,8 @@ def test_cast_sidecar_written_when_cast_line_present(tmp_path):
     out = syn.request_synopsis(client, "入力", provider="p", model="m",
                                cache_dir=str(cdir))
     assert out
-    key = syn.cache_key("p", "m", "入力")
+    key = syn.cache_key("p", "m", "入力",
+                        task_prompt=syn._SYNOPSIS_TASK_PROMPT_NO_CAST)
     cast = Path(cdir, f"{key}.cast.md")
     assert cast.is_file()
     assert "主要人物表" in cast.read_text(encoding="utf-8")
@@ -553,3 +564,88 @@ def test_chat_body_unchanged_returns_str():
     fake = _FakeOpenAI(content="本体输出", finish_reason="stop")
     client = _fake_llm_client(fake)
     assert client._chat("sys", "user", max_tokens=500) == "本体输出"
+
+
+# ---------------------------------------------------------------------------
+# ⑥a 人物表子开关（D2026-1025-01 裁决⑥，2026-10-27）
+# ---------------------------------------------------------------------------
+
+def test_task_prompt_cast_variants():
+    """no-cast 版仅删人物表行、其余逐字不动（cast-OFF 同构基线）；cast 版
+    保留 v2 三行结构且人物表行禁第二段字段措辞。"""
+    cast = syn._SYNOPSIS_TASK_PROMPT
+    no_cast = syn._SYNOPSIS_TASK_PROMPT_NO_CAST
+    assert "主要人物表" in cast and "人数、各人物称呼与关系" in cast
+    cast_row = ("- 主要人物表：人数、各人物称呼与关系（有文本证据才写；"
+                "证据不足就在该行写「信息不足」）\n")
+    assert cast_row in cast
+    assert no_cast == cast.replace(cast_row, "")   # 仅删人物表行
+    assert "性别" not in cast and "身份" not in cast and "年龄" not in cast
+
+
+def test_cli_flag_synopsis_cast():
+    args = build_parser().parse_args(["--synopsis-cast"])
+    assert args.synopsis_cast_enabled is True
+    args = build_parser().parse_args([])
+    assert args.synopsis_cast_enabled is False
+
+
+def test_request_synopsis_cast_flag_prompt_and_cache_isolation(tmp_path):
+    """⑥a deepseek 增补①：开关态进 prompt/缓存键——ON/OFF 键不同、两份
+    缓存不串；OFF 仍出摘要（关人物表不连带关摘要）且 user 提示词无人物表
+    行，ON 有。"""
+    cdir = tmp_path / "c"
+    off_client = CountingClient("梗概无人物")
+    out = syn.request_synopsis(off_client, "入力", provider="p", model="m",
+                               cache_dir=str(cdir), cast_enabled=False)
+    assert out == "梗概无人物"                       # OFF 不连带关摘要
+    assert "主要人物表" not in off_client.chat_calls[0]["user"]
+    on_client = CountingClient("梗概有人物")
+    out2 = syn.request_synopsis(on_client, "入力", provider="p", model="m",
+                                cache_dir=str(cdir), cast_enabled=True)
+    assert out2 == "梗概有人物"
+    assert "主要人物表" in on_client.chat_calls[0]["user"]
+    assert len(list(Path(cdir).glob("*.txt"))) == 2  # 两键两缓存，不串
+    key_off = syn.cache_key("p", "m", "入力",
+                            task_prompt=syn._SYNOPSIS_TASK_PROMPT_NO_CAST)
+    key_on = syn.cache_key("p", "m", "入力",
+                           task_prompt=syn._SYNOPSIS_TASK_PROMPT)
+    assert key_off != key_on
+    assert (Path(cdir) / f"{key_off}.txt").is_file()
+    assert (Path(cdir) / f"{key_on}.txt").is_file()
+
+
+def test_config_hash_sensitive_to_synopsis_cast_switch():
+    """⑥a C1：无条件入 _CONFIG_FIELDS；ON/OFF 两态指纹不同；且 OFF 态指纹
+    与开关引入前（字段缺席模拟）不同＝有意失配（不套用默认值缺席归一）。"""
+    import subtransjav.refine.manifest as mf
+    assert "synopsis_cast_enabled" in mf._CONFIG_FIELDS
+    base = compute_config_hash(_make_cfg())
+    assert compute_config_hash(_make_cfg(synopsis_cast_enabled=True)) != base
+    reduced = tuple(f for f in mf._CONFIG_FIELDS
+                    if f != "synopsis_cast_enabled")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(mf, "_CONFIG_FIELDS", reduced)
+        legacy = compute_config_hash(_make_cfg())
+    assert legacy != base    # 有意失配：OFF 态指纹≠开关引入前指纹
+
+
+def test_pipeline_cast_flag_wiring(tmp_path, monkeypatch):
+    """⑥a 接线：cfg.synopsis_cast_enabled 透传 request_synopsis——默认
+    OFF 提示词无人物表行，ON 有；摘要照常生成并注入（中间态约束：默认
+    OFF 仅减人物表，其余 v2 行为不变）。"""
+    in_srt = _pipeline_env(tmp_path, monkeypatch)
+    monkeypatch.setattr(syn, "SYNOPSIS_CACHE_DIR", str(tmp_path / "scache"))
+    for flag in (False, True):
+        # force=True：两轮共用 tmp 目录，防第二轮「终稿已存在跳过」短路
+        cfg = _make_cfg(synopsis_cast_enabled=flag, force=True)
+        fake = CountingClient(synopsis_text="梗概标记")
+        monkeypatch.setattr(pv, "_make_client", lambda c, t, _f=fake: _f)
+        out = pv._run_single_v2(cfg, str(in_srt))
+        assert len(fake.chat_calls) == 1
+        user = fake.chat_calls[0]["user"]
+        assert ("主要人物表" in user) is flag
+        content = Path(out).read_text(encoding="utf-8")
+        assert "审1" in content                     # 管线照常
+        assert pv._SYNOPSIS_BLOCK_TAG in "\n".join(
+            p["system"] for p in fake.prompts)      # 摘要照常注入
