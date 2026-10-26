@@ -387,6 +387,38 @@ class LLMClient:
                 time.sleep(wait)
         raise LLMError(f"LLM 调用失败: {last_err}")
 
+    def _chat_with_finish(self, system_text: str, user_text: str,
+                          max_tokens: int | None = None) -> tuple:
+        """_chat 薄封装（D2026-1025-01）：返回 (text, finish_reason) 二元组。
+
+        不改动 _chat 本体的签名与行为——完整复用其既有请求路径（瞬态退避/
+        思考模型兜底/异常归一），通过临时包装 client.chat.completions.create
+        捕获最近一次响应对象取 finish_reason；端不回传或路径未覆盖时返回
+        (text, None)。异常语义与 _chat 一致（向上抛出，由调用方处置）。
+        临时包装仅在调用期间挂载，finally 必还原；摘要调用在管线侧已收敛
+        为串行（concurrency=1），包装窗口内无并发批共用该客户端。
+        """
+        client = self._ensure_openai_client()
+        captured: dict = {"finish_reason": None}
+        original_create = client.chat.completions.create
+
+        def _capturing_create(**kwargs):
+            resp = original_create(**kwargs)
+            try:
+                fr = getattr(resp.choices[0], "finish_reason", None)
+                captured["finish_reason"] = \
+                    str(fr) if fr is not None else None
+            except Exception:  # noqa: BLE001 响应形态异常 → 按取不到处理
+                captured["finish_reason"] = None
+            return resp
+
+        client.chat.completions.create = _capturing_create
+        try:
+            text = self._chat(system_text, user_text, max_tokens=max_tokens)
+        finally:
+            client.chat.completions.create = original_create
+        return text, captured["finish_reason"]
+
     @staticmethod
     def _is_connection_refused(err: Exception) -> bool:
         """连接拒绝/代理不可达类判定（O6）。
