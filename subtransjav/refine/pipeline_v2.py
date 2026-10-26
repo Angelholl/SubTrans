@@ -91,6 +91,7 @@ from .synopsis import (
     SYNOPSIS_TIMEOUT_DEFAULT_S,
     build_synopsis_input,
     request_synopsis,
+    synopsis_truncation_stats,
 )
 from .v2_context_blocks import (  # noqa: F401
     _SIDECAR_MISHEAR_HEADER,
@@ -280,18 +281,26 @@ def _ensure_auto_synopsis(cfg: RefineConfig, entries: list,
             cfg, provider)
         client = _make_client(cfg, "A")
         # 摘要调用独立配置：串行 + 独立超时（min(timeout_llm, 300s)）；
-        # 输出预算由 request_synopsis 独立传 max_tokens=300，不走阶段A
+        # 输出预算由 request_synopsis 独立传 max_tokens=500，不走阶段A
         # 的批级 max_tokens 预算（compute_max_output_tokens）。
         with contextlib.suppress(Exception):
             client.config.timeout = min(
                 float(getattr(cfg, "timeout_llm", SYNOPSIS_TIMEOUT_DEFAULT_S)),
                 SYNOPSIS_TIMEOUT_CAP_S)
             client.config.concurrency = 1
+        # 温度显式传入（机械 cache 键四成分之一）：取 client 实例的温度
+        # 属性；取不到记 None 进键（request_synopsis 内 warning 一次）。
+        temperature = getattr(getattr(client, "config", None),
+                              "temperature", None)
         text = request_synopsis(client, sampled, provider=provider,
-                                model=model)
+                                model=model, temperature=temperature)
     except Exception as e:
         print(f"   ℹ️ 剧情自摘要(beta): 失败跳过（{e}）")
         return None
+    # 截断率入账收尾一行（既有日志风格；不进质量报告/manifest）
+    stats = synopsis_truncation_stats()
+    print(f"   📊 synopsis 调用 {stats['total']} 次"
+          f"·截断 {stats['truncated']} 次")
     if not text:
         print("   ℹ️ 剧情自摘要(beta): 失败跳过（空输出）")
         return None
