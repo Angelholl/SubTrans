@@ -35,7 +35,7 @@ classifiers = [
 
 # 翻译引擎核心依赖（refine v2 两阶段流水线 + OpenAI 兼容通道）
 dependencies = [
-    "openai>=1.35.0",         # OpenAI 兼容接口（deepseek/zen/lmstudio/siliconflow/custom）
+    "openai>=1.35.0,<3.38",   # OpenAI 兼容接口（deepseek/zen/lmstudio/siliconflow/custom）；3.38.0（2026-10-26 发布）改 400 错误信息形态致 llm_client「未加载模型」分类失配（tests/test_llm_client.py 3 例红，CI run 40372694477 全腿红＋worktree fresh 复现），3.37.0 为 10-25 绿 CI fresh 安装实证版；重开上界前须先适配分类器并本地复验
     "httpx>=0.27",            # llm_client O6 回环直连客户端（translate/llm_client.py）
     "requests",
     "regex",                  # 正则引擎（deletion_patch 直接 import）
