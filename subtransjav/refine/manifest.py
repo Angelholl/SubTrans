@@ -401,6 +401,12 @@ _CONFIG_FIELDS = (
     # 已知边界，换 --s1-model 或改采样行为后须 --force 重跑兜底）
     "auto_synopsis",
     "synopsis_max_chars",
+    # ⑥a 人物表子开关（D2026-1025-01 裁决⑥ C1，2026-10-27）：与
+    # auto_synopsis 同性质（直接影响提示词内容）须入指纹；default-OFF
+    # 改变 v2 既有默认行为，不套用「默认值缺席归一」——接受一次性有意
+    # 指纹失配（旧 manifest 须 --force 或重跑，既有口径），OFF 态指纹与
+    # 开关引入前不同是有意失配（单测钉）。
+    "synopsis_cast_enabled",
     "fallback_local",
     "fallback_model",
     # v1.5 媒体路径链路（D2026-0929-04 P2）：路径类字段默认不进指纹；用户

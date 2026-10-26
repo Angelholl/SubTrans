@@ -63,6 +63,8 @@ TUNABLE_FIELD_TYPES = {
     # v1.2.2 Beta 剧情自摘要：开关（bool 白名单字面量收敛）与采样字符预算
     "auto_synopsis": bool,
     "synopsis_max_chars": int,
+    # ⑥a 人物表子开关（D2026-1025-01 裁决⑥）：同 auto_synopsis 收敛口径
+    "synopsis_cast_enabled": bool,
     # H4b：条目级阈值自适应开关（bool 白名单字面量收敛）与显式遥测路径
     "adaptive_thresholds": bool,
     "asr_telemetry": str,
@@ -408,6 +410,13 @@ class RefineConfig:
     # 可经 user_settings.json / SUBTRANSJAV_AUTO_SYNOPSIS 覆盖。
     auto_synopsis: bool = True
     synopsis_max_chars: int = 6000  # 抽样文本字符预算（桶采样总限幅）
+    # ⑥a 人物表子开关（D2026-1025-01 裁决⑥，2026-10-27）：synopsis v2 任务
+    # 段「主要人物表」行独立开关，默认 OFF（⑥b 验收未落前保持 OFF、人物表
+    # 不进直审材料）；ON 恢复 v2 既有行为。C1：无条件入 manifest
+    # _CONFIG_FIELDS（default-OFF 改变 v2 默认行为，不套用「默认值缺席归一」
+    # ——一次性有意指纹失配，裁决⑥ C1 成文）。
+    # 可经 user_settings.json / SUBTRANSJAV_SYNOPSIS_CAST_ENABLED 覆盖。
+    synopsis_cast_enabled: bool = False
     # 2.6.0 批 2（D2026-1002-03）：--ai-analyze 注入跨片聚合统计开关
     # （默认开；纯读取侧——只影响分析 prompt，不改管线产物，故不进
     # manifest _CONFIG_FIELDS，asr_meta 路径同款判例；构建失败按无聚合

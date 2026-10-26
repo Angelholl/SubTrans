@@ -841,3 +841,34 @@ def test_simulator_module_equivalence_v3():
         assert mod_st["kana_moan_deleted"] == sim_st["deleted"], idx
         assert mod_st["kana_exempted"] == sim_st["exempted"], idx
 
+
+# ---------------------------------------------------------------------------
+# ③A2 tripwire（D2026-1025-01 裁决③，2026-10-27 落档批）
+# ---------------------------------------------------------------------------
+
+def test_a2_tripwire_not_implemented():
+    """tripwire（可失效不变量，非永真装饰）：A2 同 core 相邻对合并不落码
+    （0-⑥ 实测同 core 12<20，门已关）。任一断言失败＝A2 相关面被改动，
+    须回读 decision-log D2026-1025-01 裁决③（触发源挂②④＋母体扩面）重议
+    后再动，禁止直接改断言数字消音。"""
+    import dataclasses
+
+    import subtransjav.refine.kana_clean as kc
+    import subtransjav.refine.manifest as mf
+    from subtransjav.refine.config import RefineConfig
+
+    assert kc.FRAGMENT_GAP_MS == 200, (
+        "FRAGMENT_GAP_MS 偏离 200（D2026-1025-01 裁决③ tripwire）："
+        "A2 触发源挂②④＋母体扩面，改值前须回读裁决重议")
+    a2_names = [n for n in dir(kc) if "A2" in n.upper()]
+    assert not a2_names, (
+        f"kana_clean 出现 A2 符号 {a2_names}（D2026-1025-01 裁决③ tripwire）："
+        "A2 白名单须保持为空（不落码拍板态），引入前先回读裁决重议")
+    cfg_a2 = [f.name for f in dataclasses.fields(RefineConfig)
+              if "a2" in f.name.lower()]
+    assert not cfg_a2, (
+        f"RefineConfig 出现 A2 字段 {cfg_a2}（D2026-1025-01 裁决③ tripwire）")
+    mf_a2 = [f for f in mf._CONFIG_FIELDS if "a2" in f.lower()]
+    assert not mf_a2, (
+        f"_CONFIG_FIELDS 出现 A2 字段 {mf_a2}（D2026-1025-01 裁决③ tripwire）")
+

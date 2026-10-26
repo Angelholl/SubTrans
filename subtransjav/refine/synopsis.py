@@ -56,13 +56,23 @@ SYNOPSIS_SYSTEM_PROMPT = (
     "以下片段来自整片不同位置的抽样，时间上不连续；"
     "信息跨片段缺失属正常，禁止补足跳跃段内容；忽略纯噪声行。")
 
-# user 提示词任务段：3-5 行概括 + 只输出梗概 + 禁止编造 + 信息不足逃生口。
-# 第一段人物表只做称呼/关系确定性（D2026-1025-01 行⑤）：措辞禁出现
-# 「性别」「身份」「年龄」等第二段字段（防越段）。
+# user 提示词任务段两变体（⑥a 人物表子开关，D2026-1025-01 裁决⑥）：
+# cast 版＝v2 既有三行结构（人物表行在前，第一段只做称呼/关系确定性，
+# 措辞禁出现「性别」「身份」「年龄」等第二段字段防越段）；no-cast 版仅删
+# 人物表行、其余逐字不动（＝cast-OFF 同构批基线）。两变体正文均入缓存键
+# hash（task_prompt 为 cache_key 成分）——开关态进 prompt/缓存键（deepseek
+# 增补①），ON/OFF 键必不同、不串缓存。
 _SYNOPSIS_TASK_PROMPT = (
     "任务：根据以上抽样片段，用 3-5 行中文概括整部影片：\n"
     "- 主要人物表：人数、各人物称呼与关系（有文本证据才写；"
     f"证据不足就在该行写「{_INSUFFICIENT_MARK}」）\n"
+    "- 核心剧情线（威胁/冲突等）\n"
+    "- 场景构成\n"
+    "约束：只输出梗概本身；禁止编造源文没有的内容；"
+    f"某项信息不足就在该行写「{_INSUFFICIENT_MARK}」。")
+
+_SYNOPSIS_TASK_PROMPT_NO_CAST = (
+    "任务：根据以上抽样片段，用 3-5 行中文概括整部影片：\n"
     "- 核心剧情线（威胁/冲突等）\n"
     "- 场景构成\n"
     "约束：只输出梗概本身；禁止编造源文没有的内容；"
@@ -251,9 +261,15 @@ def _atomic_write_text(path: Path, text: str) -> None:
 def request_synopsis(client, sampled_text: str, *, provider: str, model: str,
                      cache_dir: str | None = None,
                      max_tokens: int = SYNOPSIS_MAX_TOKENS,
-                     temperature: float | None = None) -> str | None:
+                     temperature: float | None = None,
+                     cast_enabled: bool = False) -> str | None:
     """一次 LLM 调用生成剧情梗概（带磁盘缓存）。任何失败返回 None。
 
+    - cast_enabled（⑥a 人物表子开关，D2026-1025-01 裁决⑥，默认 False）：
+      False＝任务段用 _SYNOPSIS_TASK_PROMPT_NO_CAST（仅删人物表行）；True
+      ＝_SYNOPSIS_TASK_PROMPT（v2 既有三行结构）。开关态经 task_prompt 进
+      缓存键 hash，ON/OFF 键必不同、不串缓存（仅新任务生效）；OFF 不连带
+      关摘要（无人物表行照常出梗概，sidecar 无人物行自然跳过）；
     - 缓存键见 cache_key（机械 hash 键：提示词正文/max_tokens/temperature
       任一变化 → 键变）；命中（非空缓存文件）直接返回，不触发 LLM；
     - 未命中走 client._chat_with_finish 薄封装（取 finish_reason；stub 无
@@ -275,9 +291,11 @@ def request_synopsis(client, sampled_text: str, *, provider: str, model: str,
         _TEMP_WARNED = True
         _LOG.warning("[synopsis] 未取得调用温度（client 温度属性缺失），"
                      "cache 键温度成分记 None")
+    task_prompt = (_SYNOPSIS_TASK_PROMPT if cast_enabled
+                   else _SYNOPSIS_TASK_PROMPT_NO_CAST)
     key = cache_key(provider or "", model or "", text,
                     system_prompt=SYNOPSIS_SYSTEM_PROMPT,
-                    task_prompt=_SYNOPSIS_TASK_PROMPT,
+                    task_prompt=task_prompt,
                     max_tokens=max_tokens, temperature=temperature)
     cpath = Path(cache_dir or SYNOPSIS_CACHE_DIR) / f"{key}.txt"
     with _key_lock(key):
@@ -289,7 +307,7 @@ def request_synopsis(client, sampled_text: str, *, provider: str, model: str,
                     return cached
         except OSError:
             pass                       # 缓存读取失败按未命中处理
-        user_text = f"{text}\n\n{_SYNOPSIS_TASK_PROMPT}"
+        user_text = f"{text}\n\n{task_prompt}"
         chat_finish = getattr(client, "_chat_with_finish", None)
         try:
             if callable(chat_finish):

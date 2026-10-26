@@ -832,6 +832,9 @@
                         <label class="inline-field" data-i18n-title="synopsis_title" title="剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容">
                             <input type="checkbox" id="refineAutoSynopsis" checked> <span data-i18n="synopsis_label">剧情自摘要</span>
                         </label>
+                        <label class="inline-field" data-i18n-title="synopsis_cast_title" title="人物提示（Beta）：勾选后剧情摘要将附人物表（仅人数/称呼/关系），辅助翻译人称与敬语；默认关闭">
+                            <input type="checkbox" id="refineSynopsisCast"> <span data-i18n="synopsis_cast_label">人物提示</span>
+                        </label>
                         <label class="inline-field" data-i18n-title="adaptive_thresholds_title" title="按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。
 技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注">
                             <input type="checkbox" id="refineAdaptiveThresholds"> <span data-i18n="adaptive_thresholds_label">阈值自适应</span>

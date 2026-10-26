@@ -293,7 +293,9 @@ def _ensure_auto_synopsis(cfg: RefineConfig, entries: list,
         temperature = getattr(getattr(client, "config", None),
                               "temperature", None)
         text = request_synopsis(client, sampled, provider=provider,
-                                model=model, temperature=temperature)
+                                model=model, temperature=temperature,
+                                cast_enabled=bool(getattr(
+                                    cfg, "synopsis_cast_enabled", False)))
     except Exception as e:
         print(f"   ℹ️ 剧情自摘要(beta): 失败跳过（{e}）")
         return None

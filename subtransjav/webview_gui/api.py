@@ -288,6 +288,7 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
       deepseek_key / zen_key / custom_key: str
       source_filter: str                闸门0 源侧幻觉检测档位 strict|default|off（缺省 default 不传参）
       auto_synopsis: bool               剧情自摘要（默认 True；显式 False 才传 --no-auto-synopsis）
+      synopsis_cast_enabled: bool       人物提示子开关（⑥a，默认 False；勾选才传 --synopsis-cast）
       adaptive_thresholds: bool         条目级阈值自适应（H4b，默认 False；勾选才传 --adaptive-thresholds）
       source_lang / target_lang: str    翻译方向（2.1 D2026-0930-04 定案① GUI 补齐；
                                         缺省 ja/zh 不传参=CLI 缺省字节不变；非缺省才传）
@@ -459,6 +460,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
     # 剧情自摘要（默认开启；仅显式关闭时传反转开关）
     if options.get("auto_synopsis") is False:
         args.append("--no-auto-synopsis")
+
+    # ⑥a 人物提示子开关（D2026-1025-01 裁决⑥，默认关闭；勾选才传旗标，
+    # 严格布尔口径同 polish/源文清洗先例，独立于 auto_synopsis 分支）
+    if options.get("synopsis_cast_enabled") is True:
+        args.append("--synopsis-cast")
 
     # H4b 条目级阈值自适应（默认关闭；显式勾选才传旗标）
     if options.get("adaptive_thresholds"):

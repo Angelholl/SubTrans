@@ -161,6 +161,7 @@
     "refineServiceQuickLocalHint",
     "refineSourceFilter",
     "refineStartBtn",
+    "refineSynopsisCast",
     "refineTemplateReload",
     "refineTemplateSave",
     "refineTemplateStage",
@@ -367,6 +368,8 @@
     "start_btn_tab",
     "status_idle",
     "stop_btn",
+    "synopsis_cast_label",
+    "synopsis_cast_title",
     "synopsis_label",
     "synopsis_title",
     "sys_summary_title",
@@ -419,7 +422,8 @@
       "字幕清洗总开关 GUI 面（D2026-1023-03 批3）：index.html 输出目录 section 新增 polishEnabled 复选框+app-msg.js 一键 polish_enabled_label，ids 224→225；i18n_keys 189→190",
       "翻译TAB快捷开始钮独立文案键（d1023 owner 2026-10-23 指定「开始翻译」四字）：app-msg.js 一键 start_btn_tab（右栏主钮 start_btn 不动），ids 225 不动；i18n_keys 190→191",
       "字幕清洗参数弹窗（D2026-1024-01 批2 件A）：index.html 高级参数 TAB 压制组邻位新增「字幕清洗」入口组（照压制入口组模式，全 JS 态 MSG 零静态 data-i18n/零 id）+app-msg.js 41 键（polish_adv_*/polish_popup_* 前缀）+app-modal.js polish kind+app-refine-core.js 会话态与 buildRefineOptions 9 键接线，ids 225 不动；i18n_keys 191 不动（入口组零静态键）",
-      "TM与断点合并弹窗（D2026-1024-01 批3 件B）：index.html 高级参数 TAB 原「TM 与学习闸」「断点与日志」两区块撤除、原位改「TM 与断点」入口组（照批2 字幕清洗入口组模式，全 JS 态 MSG 零静态 data-i18n/零 id），8 控件迁入 app-modal.js tmBreak kind 合并弹窗（标签/title/placeholder 复用既有键，弹窗 DOM 零新增 id）；app-refine-core.js 会话态 _tmBreakParams＋buildRefineOptions 8 键改走会话态；app-msg.js +13 键；ids 225→217（8 静态 id 撤除）；i18n_keys 191→174（17 锚随区块撤除，tm_enable_label 因右栏 sys-summary 行仍消费而保留）"
+      "TM与断点合并弹窗（D2026-1024-01 批3 件B）：index.html 高级参数 TAB 原「TM 与学习闸」「断点与日志」两区块撤除、原位改「TM 与断点」入口组（照批2 字幕清洗入口组模式，全 JS 态 MSG 零静态 data-i18n/零 id），8 控件迁入 app-modal.js tmBreak kind 合并弹窗（标签/title/placeholder 复用既有键，弹窗 DOM 零新增 id）；app-refine-core.js 会话态 _tmBreakParams＋buildRefineOptions 8 键改走会话态；app-msg.js +13 键；ids 225→217（8 静态 id 撤除）；i18n_keys 191→174（17 锚随区块撤除，tm_enable_label 因右栏 sys-summary 行仍消费而保留）",
+    "⑥a 人物提示子开关（D2026-1025-01 裁决⑥，2026-10-27 主模型直执）：index.html 剧情自摘要邻位新增 refineSynopsisCast 复选框（默认不勾）+app-msg.js 两 MSG 键（synopsis_cast_label/synopsis_cast_title）+app-refine-core.js buildRefineOptions +1 键接线+api.py 白名单转发 --synopsis-cast；ids 217→218；i18n_keys 174→176（解冻依据=裁决⑥ GUI 形态成文：整合进 auto_synopsis 区单 checkbox「人物提示」）"
     ]
   }
 }

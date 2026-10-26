@@ -425,6 +425,8 @@ const MSG = {
     sf_title: '翻译前自动清理原文里的乱码、复读等可疑内容。严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。',
     synopsis_label: '剧情自摘要',
     synopsis_title: '剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容',
+    synopsis_cast_label: '人物提示',
+    synopsis_cast_title: '人物提示（Beta）：勾选后剧情摘要将附人物表（仅人数/称呼/关系），辅助翻译人称与敬语；默认关闭',
     adaptive_thresholds_label: '阈值自适应',
     adaptive_thresholds_title: '按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。\n技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注',
     fallback_local_label: '云端故障时本地接管',
