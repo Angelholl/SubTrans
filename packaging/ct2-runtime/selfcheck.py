@@ -9,7 +9,6 @@ import ctranslate2
 
 assert ctranslate2.__version__ == "4.8.4", ctranslate2.__version__
 assert av.__version__.startswith("13."), av.__version__
-import faster_whisper  # noqa: E402
 from faster_whisper import WhisperModel  # noqa: F401,E402
 
 print("ct2-runtime-selfcheck OK")
