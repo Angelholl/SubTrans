@@ -2,7 +2,7 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## [3.0.7] - 未发布
+## [3.0.7] - 2026-10-28
 
 ### 新增
 
