@@ -1449,8 +1449,9 @@ def test_premerge_ellipsis_then_incomplete_start_merges():
     assert out[0]["text"] == "なんか…えっと、その"
 
 
-# 真实回归 fixture：提取自 4k2.me@sample-c（一次测试）条目 9-12，逐字未改。
-# 旧行为曾把 9+10 合并为 42,679→50,479、11+12 合并为 51,259→57,039。
+# 回归 fixture：双省略号链 9+10 / 11+12 两组（D2026-1028-01 起为保性质合成
+# 台词，时值逐帧保持原实测值；旧行为曾把 9+10 合并为 42,679→50,479、
+# 11+12 合并为 51,259→57,039）。
 _PREMERGE_FIXTURE = (Path(__file__).parent / "fixtures" / "premerge"
                      / "overmerge_9_10_11_12.srt")
 
@@ -1468,7 +1469,7 @@ def _premerge_cfg(**kw):
 
 
 def test_premerge_fixture_real_overmerge_chain_not_merged():
-    """真实回归 fixture（4k2.me@sample-c 条目 9-12）：双省略号链
+    """回归 fixture（双省略号链 9+10 / 11+12）：双省略号链
     9+10 / 11+12 均不得合并（旧产物 42,679→50,479 与 51,259→57,039）。
 
     三重防线：RC1 剥离行尾省略号后「です/になります」恢复句末判定；
