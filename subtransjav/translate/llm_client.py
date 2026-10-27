@@ -132,6 +132,10 @@ _MARK_SPLIT = re.compile(r"^#(\d+)\s*$", re.MULTILINE)
 _EXPECT_LINE = re.compile(r"^\s*Translation>\s*$")
 _EXPECT_INLINE = re.compile(r"^\s*Translation>\s?(.*)$")
 
+# 提示词教给 LLM 的占位标记（无尾空格形态，与 refine 侧
+# UNTRANSLATED_PREFIX 带尾空格形态并存）；仅用于识别"裸占位"输出。
+_UNTRANSLATED_MARK = "[未翻译]"
+
 
 # ---------------------------------------------------------------------------
 # 协议解析（纯函数，便于单测）
@@ -550,6 +554,13 @@ class LLMClient:
                 text = parsed[idx]
                 if text == "" and not allow_empty_deletions:
                     continue     # 不允许删除时，空译文视为缺行
+                # 裸占位串（"[未翻译]" 后无任何内容）不是删除请求，也
+                # 不能当译文收下——否则直落缓存/成品成为零内容字幕行。
+                # 按缺行处理：定向重试仍输出裸占位则走 failed 链路，由
+                # 调用方回退原文+[未翻译] 标记。合规形态（占位+原文）不受
+                # 影响。
+                if text.strip() == _UNTRANSLATED_MARK:
+                    continue
                 result[idx] = text
         return result
 
