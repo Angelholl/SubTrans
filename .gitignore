@@ -70,3 +70,31 @@ dict/
 # 本地安全源在 ~/.zcode/tools/；以下条目防御脚本副本、安全源、统计产物误入公开仓库
 governance/scan-min/
 governance-secret-keywords.json
+
+# 内部工作材料（D2026-1028-01 公开仓 push 面收窄）：讨论/测试/判定材料只留本地
+# （备份=树外 internal-archive 下 repo-purge-backup-20261028），严禁入库
+artifacts/
+spike/
+docs/design/
+docs/archive/
+docs/governance/
+docs/decision-log.md
+docs/decision-log-archive-*.md
+docs/cps-batchE-20260929.json
+docs/cps-batchE-20260929.txt
+docs/cps-定标报告-20260930.md
+docs/B2-门②语料基线-20260926.md
+docs/真机走查清单-*.md
+docs/模型测试两轮交接.md
+docs/测试基线语言假设分类-*.md
+docs/mimosa-findings-甄别表.md
+docs/领域包-hardened-审计-*.md
+docs/evidence-manifest.md
+tools/ruling_b6.py
+tools/ruling_b6_web.py
+tools/sensitive_b6_web.py
+tools/model_matrix_run.py
+tools/spike_review_report.json
+tests/test_gen_sensitive_trans.py
+tests/test_sensitive_b6_web.py
+tests/test_ruling_b6_web.py
