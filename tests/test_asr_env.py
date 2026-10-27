@@ -5,7 +5,22 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+# 本文件全部为 legacy whisper 链契约钉——ct2 引擎就绪（本机实装后 _ct2_ready()
+# 为真）会劫持分派层，统一隔离（ct2 契约钉在 test_asr_ct2.py）。
+import pytest
+
 from subtransjav.refine import asr_env
+
+
+@pytest.fixture(autouse=True)
+def _no_ct2_engine(monkeypatch):
+    monkeypatch.setattr(asr_env, "_ct2_ready", lambda: False)
+    # probe 的 ct2 状态面在本文件钉为静态快照（真实自检子进程会污染
+    # subprocess.run 捕获断言；ct2 面自身契约在 test_asr_ct2.py）
+    monkeypatch.setattr(
+        asr_env, "_ct2_status",
+        lambda: {"installed": False, "selfcheck_ok": False,
+                 "model_present": False, "model": "large-v2", "models": []})
 
 # ---------------------------------------------------------------------------
 # probe_asr_env：候选优先级 + selfcheck 真实契约（C2/C9）

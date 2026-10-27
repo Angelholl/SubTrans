@@ -473,9 +473,11 @@ def save_probe_cache(probe: dict, path: str = "") -> bool:
 
 
 def _candidate_pythons(asr_python_setting: str = "") -> list[tuple[str, str]]:
-    """候选链（脱钩后）：env > settings > ct2 自管运行时 > 无。
+    """legacy whisper 链候选（脱钩后）：env > settings，无机器相关缺省。
 
-    ct2 运行时=本机数据根按需安装（asr_runtime 安装链），无机器相关缺省。"""
+    ct2 引擎不在此链——它经 _ct2_ready() 在 run_transcription/
+    batch_transcribe_clips 入口分派（ct2 运行时 python 跑不了 whisper 后端，
+    混入候选链只会产生必然失败的自检）。"""
     out: list[tuple[str, str]] = []
     env_p = os.environ.get(_ASR_PYTHON_ENV, "").strip()
     if env_p:
@@ -483,13 +485,6 @@ def _candidate_pythons(asr_python_setting: str = "") -> list[tuple[str, str]]:
     setting = (asr_python_setting or "").strip()
     if setting:
         out.append(("settings", setting))
-    try:
-        from . import asr_runtime
-        rt = asr_runtime.runtime_python()
-        if rt:
-            out.append(("ct2-runtime", rt))
-    except Exception:      # noqa: BLE001 候选链探测永不阻断
-        pass
     return out
 
 

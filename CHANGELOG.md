@@ -6,10 +6,16 @@
 
 ### 新增
 
+- **转写引擎与上游环境正式脱钩（3.1 脱钩轮）**：应用不再依赖任何外部转写环境安装——引擎候选链改为「环境变量 > 设置显式指定 > 自管 CT2 运行时」，移除机器相关缺省路径；媒体对照/漏听对照链自动分派 CT2 引擎（就绪即走），legacy whisper 链降级为显式指定才可达的兼容通道；无任何引擎时对照链如实降级跳过并给出安装指引，不影响翻译主链路。CT2 运行时与模型件经守卫下载链（https 域白名单+重定向逐跳校验+sha256 逐字节核验+防 zip-slip 解包）按需安装到数据根，安装/下载/自检均可命令行操作（`python -m subtransjav.refine.asr_runtime install / download-model / status / selfcheck`）。
+- **CT2 转写确定性断行接入（3.2.1）**：ct2 转写输出的长行自动按词级时间戳+每行字数上限+停顿检测切分（`--no-line-break` 可关），词级 sidecar 始终保留原始数据可回放。
 - **正确率评测 harness（3.1.0 测量地基，CLI）**：新增 `python -m subtransjav.refine.eval_baseline`——对同一媒体上的一或多个转写引擎 SRT 产出代理指标报告（幻听代理=语音窗口低重叠行占比、漏听代理=语音未覆盖占比、双引擎一致率=时轴贪婪匹配+文本相似、CPS 分位），JSON+Markdown 双件落盘；语音窗口检测复用既有检测原语，媒体/ffmpeg 缺失时窗口类指标显式 null 并注明原因，绝不误当全静音。代理指标只作涨跌比较，不承诺句级正确率绝对值。
-- **CT2 转写引擎自管运行时与 ct2 后端（3.2.0，实验性，默认不启用）**：新增 `python -m subtransjav.refine.asr_runtime`（install/status/selfcheck）——转写引擎运行环境与主程序解耦的按需安装链（预打包件主路径+在线依赖降级路径，依赖全钉）；`subtransjav.refine.asr_runner` 新增 `--engine ct2` 整片转写模式（缺省 whisper 既有链行为零变化），支持词级时间戳、VAD、上下文条件等旋钮（缺省值为占位，待真机语料校准），产出 SRT 与词级 sidecar；预打包件与模型镜像发布后经核验方可点亮下载。
+- **CT2 转写引擎自管运行时与 ct2 后端（3.2.0，实验性）**：新增 `python -m subtransjav.refine.asr_runtime`（install/status/selfcheck/download-model）——转写引擎运行环境与主程序解耦的按需安装链（预打包件主路径+在线依赖降级路径，依赖全钉）；`subtransjav.refine.asr_runner` 新增 `--engine ct2` 整片转写模式（缺省 whisper 既有链行为零变化），支持词级时间戳、VAD、上下文条件等旋钮（缺省值为占位，待真机语料校准），产出 SRT 与词级 sidecar；预打包件与模型镜像发布后经实下载核验方可点亮下载。
 - **CT2 长行断行器（3.2.1，CLI）**：新增 `python -m subtransjav.refine.line_breaker`——基于词级时间戳、每行字数上限与停顿检测的确定性长行切分（社区反馈的 CT2 长行问题的自动化解法），保证文本守恒、时间轴覆盖守恒与达标行幂等。
 - **全自动质量闭环预置机制（3.3.0，默认关）**：新增 `subtransjav/refine/quality_autoloop.py` 编排骨架（分析→计划→修复→复验→放行/降级人工），默认关闭且不接入任何生产链路；放行门为预注册量化门（Wilson 下界），门数值未定即永远降级人工（fail-closed）；每次自动动作强制携带台账上下文。激活需三项前置齐备（评审放行、基线门数值、真实语料债务清偿），见 `--status` 输出。
+
+### 变更
+
+- **ASR 探测状态新增 ct2 一栏**：`refine_asr_status` 探测结果附带 ct2 运行时状态（已装/自检/模型在位/模型清单），新增 `refine_ct2_status`、`refine_ct2_install`、`refine_ct2_model_download` 三个桥端点（GUI 面板接线待界面预算流程）。
 
 ## [3.0.7] - 2026-10-28
 

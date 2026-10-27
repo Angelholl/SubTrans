@@ -235,7 +235,8 @@ def _segments_to_srt(segments: list) -> str:
 def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                               srt_out: str, *, beam_size: int,
                               vad_filter: bool, condition_previous: bool,
-                              compute_type: str = "int8") -> int:
+                              compute_type: str = "int8",
+                              line_break: bool = True) -> int:
     """ct2 整片转写：SRT＋词级 sidecar（断行器 3.2.1 的消费输入）。"""
     if not model_dir or not os.path.isdir(model_dir):
         print(json.dumps({"ok": False,
@@ -261,7 +262,10 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                          ensure_ascii=False))
         return 1
     try:
-        model_obj = WhisperModel(model_dir, device="auto", compute_type=compute_type)
+        # device 钉 cpu（骨架期）：ct2 wheel 对半套 CUDA DLL（如系统 PATH 残留
+        # cublas）会 auto 探测后加载失败——GPU 通道归后续批（DLL 集齐+双检，
+        # 沿 NVENC 双检先例），CPU int8 RTF≈0.98x 已实测可用。
+        model_obj = WhisperModel(model_dir, device="cpu", compute_type=compute_type)
         segments_iter, info = model_obj.transcribe(
             media, language=language, beam_size=beam_size,
             vad_filter=vad_filter, condition_on_previous_text=condition_previous,
@@ -285,7 +289,17 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     out_path = pathlib.Path(srt_out)
     if out_path.parent and str(out_path.parent):
         out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(_segments_to_srt(segs), encoding="utf-8", newline="\n")
+    # 断行器接入（3.2.1，D2026-1028-03）：词级时间戳+CPS+停顿确定性切分，
+    # 缺省开（社区实证 CT2 长行问题）；--no-line-break 关闭走原生段。
+    # sidecar 始终保留原始词级数据（断行器输入可回放）。
+    srt_segments = segs
+    if line_break and any(len(s.get("words") or []) >= 2 for s in segs):
+        try:
+            from .line_breaker import break_segments
+            srt_segments = break_segments(segs)
+        except Exception:   # noqa: BLE001 断行故障不阻断转写产出
+            srt_segments = segs
+    out_path.write_text(_segments_to_srt(srt_segments), encoding="utf-8", newline="\n")
     sidecar = {"schema": "subtransjav.ct2.words/1", "language": info.language,
                "duration": float(info.duration), "model_dir": model_dir,
                "beam_size": beam_size, "vad_filter": vad_filter,
@@ -333,6 +347,8 @@ def main(argv=None) -> int:
                              "（PROVISIONAL；缺省关=幻听缓解）")
     parser.add_argument("--compute-type", default="int8",
                         help="ct2 量化形态（PROVISIONAL；CPU int8/GPU float16）")
+    parser.add_argument("--no-line-break", action="store_true",
+                        help="ct2 关闭确定性断行（缺省开=长行自动切分）")
     args = parser.parse_args(argv)
     if args.selfcheck:
         return _selfcheck(args.model, args.model_dir)
@@ -352,7 +368,8 @@ def main(argv=None) -> int:
             args.media, args.model_dir, args.language, args.srt_out,
             beam_size=args.beam_size, vad_filter=not args.no_vad_filter,
             condition_previous=args.condition_previous,
-            compute_type=args.compute_type)
+            compute_type=args.compute_type,
+            line_break=not args.no_line_break)
     if args.media or args.srt_out:
         print(json.dumps({"ok": False,
                           "error": "--media/--srt-out 仅在 --engine ct2 下可用"},
