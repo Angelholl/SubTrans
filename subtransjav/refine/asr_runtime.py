@@ -29,6 +29,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import threading
 
 from .. import paths
 from ..utils.subprocess_flags import CREATE_NO_WINDOW
@@ -85,7 +86,22 @@ _SPAWN_FLAGS = CREATE_NO_WINDOW
 
 
 def runtime_root() -> str:
-    """运行时落位：数据根 runtime/ct2（user_dirs 体系内，随数据根迁移）。"""
+    """运行时落位：数据根 runtime/ct2（随数据根迁移）。
+
+    例外（脱钩轮）：数据根=仓库根（pip/源码开发形态）时不落仓库树——
+    site-packages 内第三方自带测试文件会污染全树安全扫描面，改落
+    %LOCALAPPDATA%/SubTrans/runtime/ct2（与 frozen 缺省数据根同域）；
+    可经 SUBTRANSJAV_CT2_RUNTIME_DIR 显式覆盖。"""
+    override = os.environ.get("SUBTRANSJAV_CT2_RUNTIME_DIR", "").strip()
+    if override:
+        return override
+    try:
+        if paths.data_root().resolve() == paths.app_root().resolve():
+            local = pathlib.Path(os.environ.get("LOCALAPPDATA",
+                                                str(pathlib.Path.home())))
+            return str(local / "SubTrans" / "runtime" / "ct2")
+    except OSError:
+        pass
     return paths.data_subdir("runtime", "ct2")
 
 
@@ -335,6 +351,61 @@ def install(provider: str = "auto") -> int:
         return _install_via_venv()
     print("未知 provider: " + provider + "（可用 auto|zip|venv）")
     return 2
+
+
+# ---------------------------------------------------------------------------
+# 异步操作面（api 桥消费；GUI 接线待钉⑤解冻提案，见 D2026-1028-03 脱钩轮）
+# ---------------------------------------------------------------------------
+
+_OP_LOCK = threading.Lock()
+_OP_STATE: dict = {"phase": "idle", "kind": "", "detail": "", "rc": None}
+
+
+def operation_progress() -> dict:
+    """当前异步操作快照（phase ∈ idle/running/done/failed；只读零副作用）。"""
+    with _OP_LOCK:
+        return dict(_OP_STATE)
+
+
+def _set_op(phase: str, kind: str = "", detail: str = "", rc: object = None) -> None:
+    with _OP_LOCK:
+        _OP_STATE.update(phase=phase, kind=kind, detail=detail, rc=rc)
+
+
+def start_install(provider: str = "auto") -> dict:
+    """后台线程执行运行时安装（api 桥入口；重复启动拒绝）。"""
+    with _OP_LOCK:
+        if _OP_STATE["phase"] == "running":
+            return {"started": False, "reason": "已有 ct2 安装任务在跑"}
+        _OP_STATE.update(phase="running", kind="install", detail="", rc=None)
+
+    def _run() -> None:
+        try:
+            rc = install(provider)
+            _set_op("done" if rc == 0 else "failed", "install", rc=rc)
+        except Exception as e:      # noqa: BLE001 线程兜底
+            _set_op("failed", "install", detail=str(e), rc=1)
+
+    threading.Thread(target=_run, daemon=True, name="ct2-install").start()
+    return {"started": True, "provider": provider}
+
+
+def start_model_download(model: str = "large-v2") -> dict:
+    """后台线程执行模型下载（verified 门在 download_model 内）。"""
+    with _OP_LOCK:
+        if _OP_STATE["phase"] == "running":
+            return {"started": False, "reason": "已有 ct2 任务在跑"}
+        _OP_STATE.update(phase="running", kind="model", detail="", rc=None)
+
+    def _run() -> None:
+        try:
+            rc = download_model(model)
+            _set_op("done" if rc == 0 else "failed", "model", rc=rc)
+        except Exception as e:      # noqa: BLE001 线程兜底
+            _set_op("failed", "model", detail=str(e), rc=1)
+
+    threading.Thread(target=_run, daemon=True, name="ct2-model-dl").start()
+    return {"started": True, "model": model}
 
 
 def ct2_runner_command(media_path: str, srt_out: str, model: str = "large-v2",

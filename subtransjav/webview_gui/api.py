@@ -1652,6 +1652,45 @@ class TranslateAPI:
             _log_exc("refine_asr_download_progress")
             return {"success": False, "error": str(e)}
 
+    def refine_ct2_status(self) -> dict[str, Any]:
+        """CT2 转写引擎自管运行时状态（3.2.0/D2026-1028-03 脱钩轮）。
+
+        返回 provider_status()（installed/selfcheck/pins/models）+ 异步
+        操作快照（install/model 下载 phase）。只读零副作用；GUI 接线待
+        钉⑤解冻提案，本端点先供桥面与诊断。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            return {"success": True,
+                    **asr_runtime.provider_status(),
+                    "operation": asr_runtime.operation_progress()}
+        except Exception as e:
+            _log_exc("refine_ct2_status")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_install(self, provider: str = "auto") -> dict[str, Any]:
+        """后台启动 CT2 运行时安装（进度经 refine_ct2_status.operation 轮询）。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            if provider not in ("auto", "zip", "venv"):
+                return {"success": False, "error": f"非法 provider: {provider}"}
+            result = asr_runtime.start_install(str(provider))
+            return {"success": bool(result.get("started")),
+                    **result}
+        except Exception as e:
+            _log_exc("refine_ct2_install")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_model_download(self, model: str = "large-v2") -> dict[str, Any]:
+        """后台启动 CT2 模型件下载（verified 门；进度同上轮询）。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            result = asr_runtime.start_model_download(str(model))
+            return {"success": bool(result.get("started")),
+                    **result}
+        except Exception as e:
+            _log_exc("refine_ct2_model_download")
+            return {"success": False, "error": str(e)}
+
     def refine_pick_dict_dir(self) -> dict[str, Any]:
         """自定义词典目录收口（批1b 件1）：原生对话框 → 持久登记 → 注入生效。
 

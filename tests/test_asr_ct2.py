@@ -3,6 +3,8 @@
 import json
 import pathlib
 import sys
+import threading
+import time
 import types
 
 from subtransjav.refine import asr_env, asr_runner, asr_runtime
@@ -227,11 +229,12 @@ class TestDecouple:
         assert "_UPSTREAM_DEFAULT_PYTHON" not in src
         assert "whisperJAV" not in src.replace("WhisperJAV 运行 manifest", "")
 
-    def test_candidate_chain_includes_ct2_runtime(self, tmp_path, monkeypatch):
+    def test_candidate_chain_legacy_only_no_machine_default(self, tmp_path, monkeypatch):
+        # ct2 不混入 legacy 候选链（跑不了 whisper 后端）；机器绑定缺省清除
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
         monkeypatch.delenv("SUBTRANSJAV_ASR_PYTHON", raising=False)
         cands = asr_env._candidate_pythons("")
-        assert [src for src, _py in cands] == ["ct2-runtime"]
+        assert cands == []   # 无 env/settings → 空链（ct2 走分派层）
 
     def test_candidate_chain_env_first(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
@@ -268,3 +271,54 @@ class TestDecouple:
         st = asr_env._ct2_status()
         assert st["installed"] is False and st["model_present"] is False
         assert st["model"] == "large-v2"
+
+
+class TestAsyncOps:
+    def setup_method(self):
+        # 全局操作态隔离（线程异步测试不串场）
+        asr_runtime._set_op("idle", "", "")
+
+    def test_install_async_lifecycle(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(asr_runtime, "install", lambda provider="auto": 0)
+        r = asr_runtime.start_install("venv")
+        assert r["started"] is True
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            snap = asr_runtime.operation_progress()
+            if snap["phase"] in ("done", "failed"):
+                break
+            time.sleep(0.05)
+        snap = asr_runtime.operation_progress()
+        assert snap["phase"] == "done" and snap["rc"] == 0
+        r2 = asr_runtime.start_install("venv")
+        assert r2["started"] in (True, False)   # idle 后可重入
+
+    def test_double_start_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        started = threading.Event()
+
+        def slow_install(provider="auto"):
+            started.set()
+            time.sleep(0.5)
+            return 0
+
+        monkeypatch.setattr(asr_runtime, "install", slow_install)
+        r1 = asr_runtime.start_install("venv")
+        assert r1["started"] is True
+        started.wait(2)
+        r2 = asr_runtime.start_install("venv")
+        assert r2["started"] is False and "在跑" in r2["reason"]
+
+    def test_model_download_async_gate(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        r = asr_runtime.start_model_download("large-v2")
+        assert r["started"] is True
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            snap = asr_runtime.operation_progress()
+            if snap["phase"] in ("done", "failed"):
+                break
+            time.sleep(0.05)
+        snap = asr_runtime.operation_progress()
+        assert snap["phase"] == "failed" and snap["rc"] == 3   # verified 门
