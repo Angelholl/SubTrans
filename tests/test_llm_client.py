@@ -572,6 +572,44 @@ def test_unloaded_error_is_not_transient():
     assert LLMClient._is_model_unloaded(_Err400Other()) is False
 
 
+class _Err400Unloaded38x(Exception):
+    """openai>=3.38 形态（D2026-1028-02）：SDK 对非标准错误体（error 为
+    字符串）不再把 body 拼进 str(err)——str 只剩 "Error code: 400"，
+    特征串只在结构化字段 body / response.text。"""
+
+    status_code = 400
+
+    def __init__(self, with_response: bool = True):
+        super().__init__()
+        self.body = {"error": "Model unloaded by user or API request."}
+        if with_response:
+            self.response = type("R", (), {"text":
+                "Error code: 400 - {'error': 'Model unloaded by user "
+                "or API request.'}"})()
+
+    def __str__(self):
+        return "Error code: 400"
+
+
+def test_model_unloaded_38x_body_fallback():
+    """3.38 形态：str 无特征串 → body 原始体兜底命中。"""
+    assert LLMClient._is_model_unloaded(_Err400Unloaded38x(with_response=False)) is True
+
+
+def test_model_unloaded_38x_response_text_fallback():
+    """3.38 形态：str 无特征串 → response 文本兜底命中。"""
+    e = _Err400Unloaded38x()
+    e.body = None
+    assert LLMClient._is_model_unloaded(e) is True
+
+
+def test_other_400_38x_still_not_misjudged():
+    """3.38 形态下其他 400 文本（inactivity 卸载）仍不误判为 user 卸载。"""
+    e = _Err400Unloaded38x(with_response=False)
+    e.body = {"error": "model unloaded due to inactivity"}
+    assert LLMClient._is_model_unloaded(e) is False
+
+
 def test_batch_recovery_via_unloaded_callback():
     """首请求抛 unloaded 400 → 回调恢复后整批重试成功；回调恰一次。"""
     calls = []
