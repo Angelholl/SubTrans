@@ -445,7 +445,12 @@ class LLMClient:
     def _is_model_unloaded(err: Exception) -> bool:
         """识别「HTTP 400 + model unloaded by user」引擎卸载错误（大小写
         不敏感）。status_code 缺失时仅凭特征串判定（openai 包装层可能
-        丢失结构化字段）。非 400 状态不命中，401/403 短路不受影响。"""
+        丢失结构化字段）。非 400 状态不命中，401/403 短路不受影响。
+
+        openai>=3.38 形态回归（D2026-1028-02）：SDK 对非标准错误体
+        （error 为字符串，LM Studio 形态）不再把 body 拼进 str(err)——
+        str 只剩 "Error code: 400"。特征串判定源扩为 str(err)、body
+        原始体、response 文本三者任一命中。"""
         status = getattr(err, "status_code", None)
         if status is not None:
             try:
@@ -453,7 +458,14 @@ class LLMClient:
                     return False
             except (TypeError, ValueError):
                 pass    # 状态码非数字 → 交由特征串兜底判定
-        return _MODEL_UNLOADED_MARKER in str(err).lower()
+        texts = [str(err)]
+        body = getattr(err, "body", None)
+        if body is not None:
+            texts.append(str(body))
+        resp_text = getattr(getattr(err, "response", None), "text", None)
+        if resp_text:
+            texts.append(str(resp_text))
+        return any(_MODEL_UNLOADED_MARKER in t.lower() for t in texts)
 
     @staticmethod
     def _is_transient(err: Exception) -> bool:
