@@ -108,11 +108,17 @@ def test_pattern_contract_gitignore_or_decisionlog():
     或 decision-log 条目 D2026-0916-01 清单里 grep 到（防漂移）。"""
     assert BANNED_PATTERNS, "名单不得为空"
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
-    dlog = (ROOT / "docs" / "decision-log.md").read_text(encoding="utf-8")
+    dlog_path = ROOT / "docs" / "decision-log.md"
+    # D2026-1028-01 公开仓收窄：decision-log 转本地留档（.gitignore 忽略），
+    # 全新 clone 无此文件 → decision-log 出处断言仅在文件存在时执行。
+    assert "docs/decision-log.md" in gitignore, "decision-log 本地留档未入 .gitignore"
+    dlog = dlog_path.read_text(encoding="utf-8") if dlog_path.exists() else None
     for pattern, source in BANNED_PATTERNS:
         assert source, f"{pattern} 缺出处标注"
         literal = pattern.split("/")[0] if "*" in pattern else pattern
         if "decision-log" in source:
+            if dlog is None:
+                continue
             assert literal in dlog, f"{pattern} 未见于 decision-log 清单"
         else:
             assert literal in gitignore, f"{pattern} 未见于 .gitignore 现值"
