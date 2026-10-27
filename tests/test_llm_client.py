@@ -216,6 +216,62 @@ def test_failed_lines_reported_not_raised():
         server.stop()
 
 
+def test_bare_untranslated_placeholder_treated_as_missing():
+    """裸占位串（"[未翻译]" 后无内容）按缺行处理，定向重试可补回。
+
+    缺陷背景：模型对模糊残句会确定性地输出裸占位串，此前被当正常
+    译文收下直落缓存/成品，成为零内容字幕行（真机实证）。
+    """
+    server = FakeServer([
+        "#1\nTranslation>\n你好\n#2\nTranslation>\n[未翻译]",  # 首批：#2 裸占位
+        "#2\nTranslation>\n请多指教",                          # 定向重试补回
+    ])
+    try:
+        r = _client(server).translate_entries(
+            _entries("こんにちは", "よろしく"),
+            system_text="", user_prompt="p", max_batch_size=10)
+        assert r.translations == {1: "你好", 2: "请多指教"}
+        assert r.failed == []
+        assert len(server.requests) == 2   # 确认走了定向重试
+    finally:
+        server.stop()
+
+
+def test_bare_untranslated_placeholder_budget_exhausted_to_failed():
+    """裸占位串持续复现（确定性模型）→ 重试预算耗尽后归入 failed，
+    绝不作为译文收下；交由调用方回退原文+[未翻译] 标记。"""
+    bare = "#1\nTranslation>\n[未翻译]"
+    server = FakeServer([bare, bare, bare])   # 首批 + 重试预算 2 轮
+    try:
+        r = _client(server).translate_entries(
+            _entries("あいうえお"),
+            system_text="", user_prompt="p", max_batch_size=10)
+        assert r.translations == {}
+        assert r.failed == [1]
+    finally:
+        server.stop()
+
+
+def test_untranslated_placeholder_with_content_still_accepted():
+    """合规占位形态（"[未翻译] 原文"/带尾空格）保留原文内容，不按缺行
+    处理——回退语义由调用方（占位+原文）承载，本层只拦零内容裸占位。"""
+    server = FakeServer([
+        "#1\nTranslation>\n[未翻译] あいうえお\n"
+        "#2\nTranslation>\n[未翻译]\nあいうえお"
+    ])
+    try:
+        r = _client(server).translate_entries(
+            _entries("あいうえお", "あいうえお"),
+            system_text="", user_prompt="p", max_batch_size=10)
+        assert r.translations == {
+            1: "[未翻译] あいうえお",
+            2: "[未翻译]\nあいうえお",
+        }
+        assert r.failed == []
+    finally:
+        server.stop()
+
+
 def test_missing_retry_budget_exactly_two_rounds():
     """D7：缺行定向重试预算 N=2——模型恒定两行并一行返回时，
     恰好重试 2 轮后停止，剩余缺行按 failed 链路降级，不抛异常。"""
