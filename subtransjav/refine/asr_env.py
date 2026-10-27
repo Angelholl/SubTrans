@@ -1,13 +1,16 @@
 """ASR 环境探测与重转写（2.6.0 批 3 路线 B，D2026-1002-04-批3）。
 
 探测（零写路径，C9 优先级成文）：env ``SUBTRANSJAV_ASR_PYTHON`` >
-settings ``asr_python``（调用方传入）> 实测默认
-``D:\\whisperJAV\\python.exe``（维护点：owner 机事实，他机经 env/settings
-覆盖）> 不可用。探测＝上游 python 子进程 ``--selfcheck``（导入链+whisper
-可导入+模型缓存定位，不实际加载模型，C2），超时即杀；模型缓存枚举
-``~/.cache/whisper/*.pt``＋数据根 models/asr/*.pt（≥1GB 防半截）。
+settings ``asr_python``（调用方传入）> ct2 自管运行时（数据根按需安装，
+asr_runtime 安装链）> 不可用。探测＝候选 python 子进程 ``--selfcheck``
+（导入链+whisper 可导入+模型缓存定位，不实际加载模型，C2），超时即杀；
+模型缓存枚举 ``~/.cache/whisper/*.pt``＋数据根 models/asr/*.pt（≥1GB 防
+半截）。**上游 env 寄生已解除（D2026-1028-03 脱钩，owner 2026-10-28 令）：
+无机器相关缺省路径，legacy whisper 链仅 env/settings 显式可达；转写主路=
+ct2 引擎（_ct2_ready 分派）。**
 
-重转写＝上游 env 子进程（stdout JSON 契约），失败逐段降级。
+重转写＝引擎分派（ct2 优先，legacy env 子进程 stdout JSON 契约降级），
+失败逐段降级。
 2.7.1（D2026-1005-01 承接批）：运行器改 asr_runner.py 脚本路径直调
 （_runner_script_path 随包定位 + spec datas 单文件；-m 形态仅 dev-only
 回退）；ffmpeg 探测泛化（_candidate_ffmpeg_dirs 上游 env 自带目录，
@@ -34,6 +37,7 @@ resolve_model_dir 保证"探测枚举"与"运行加载"同序（缓存 ~/.cache/
 import contextlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -43,8 +47,10 @@ from pathlib import Path
 from subtransjav import paths
 from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW  # windowed 防黑框单一来源（批0）
 
-# C9：探测优先级 env > settings（调用方传入）> 实测默认 > 不可用
-_UPSTREAM_DEFAULT_PYTHON = r"D:\whisperJAV\python.exe"   # 维护点：owner 机事实
+# C9：探测优先级 env > settings（调用方传入）> ct2 自管运行时 > 不可用。
+# 上游 env 寄生已解除（D2026-1028-03 脱钩，owner 2026-10-28 令）：不再内置
+# 任何机器相关缺省路径；legacy whisper 链仅经 env/settings 显式指定可达。
+_CT2_DEFAULT_MODEL = "large-v2"
 _ASR_PYTHON_ENV = "SUBTRANSJAV_ASR_PYTHON"
 _SELFCHECK_TIMEOUT_S = 60
 _MODEL_MIN_BYTES = 1024 * 1024 * 1024        # 1GB：防半截下载
@@ -467,6 +473,9 @@ def save_probe_cache(probe: dict, path: str = "") -> bool:
 
 
 def _candidate_pythons(asr_python_setting: str = "") -> list[tuple[str, str]]:
+    """候选链（脱钩后）：env > settings > ct2 自管运行时 > 无。
+
+    ct2 运行时=本机数据根按需安装（asr_runtime 安装链），无机器相关缺省。"""
     out: list[tuple[str, str]] = []
     env_p = os.environ.get(_ASR_PYTHON_ENV, "").strip()
     if env_p:
@@ -474,7 +483,13 @@ def _candidate_pythons(asr_python_setting: str = "") -> list[tuple[str, str]]:
     setting = (asr_python_setting or "").strip()
     if setting:
         out.append(("settings", setting))
-    out.append(("default", _UPSTREAM_DEFAULT_PYTHON))
+    try:
+        from . import asr_runtime
+        rt = asr_runtime.runtime_python()
+        if rt:
+            out.append(("ct2-runtime", rt))
+    except Exception:      # noqa: BLE001 候选链探测永不阻断
+        pass
     return out
 
 
@@ -645,7 +660,8 @@ def probe_asr_env(asr_python_setting: str = "",
                     "ffmpeg": ffmpeg,
                     "ffmpeg_path": ff_path,
                     "triage": "ok" if ffmpeg else "ffmpeg-missing",
-                    "stderr_tail": tail}
+                    "stderr_tail": tail,
+                    "ct2": _ct2_status()}
         last_err = f"{source}:{py} selfcheck 未通过"
         last_triage = _triage_selfcheck(err, tail)
         last_tail = tail
@@ -654,19 +670,122 @@ def probe_asr_env(asr_python_setting: str = "",
             "model_present": model_present, "models": models,
             "models_hf": models_hf,
             "ffmpeg": bool(ff_path), "ffmpeg_path": ff_path,
-            "triage": last_triage, "stderr_tail": last_tail}
+            "triage": last_triage, "stderr_tail": last_tail, "ct2": _ct2_status()}
+
+
+def _ct2_status() -> dict:
+    """probe 附加 ct2 运行时状态（脱钩后 GUI 面的引擎一栏数据源）。"""
+    try:
+        from . import asr_runtime
+        installed = asr_runtime.is_installed()
+        model_present = bool(asr_runtime.resolve_ct2_model_dir(_CT2_DEFAULT_MODEL))
+        ok = False
+        if installed:
+            ok, _detail = asr_runtime.selfcheck()
+        return {"installed": installed, "selfcheck_ok": ok,
+                "model_present": model_present,
+                "model": _CT2_DEFAULT_MODEL,
+                "models": asr_runtime.CT2_MODELS}
+    except Exception as e:      # noqa: BLE001 probe 永不阻断
+        return {"installed": False, "selfcheck_ok": False,
+                "model_present": False, "model": _CT2_DEFAULT_MODEL,
+                "models": [], "error": str(e)}
 
 
 # ---------------------------------------------------------------------------
 # 重转写与对照块
 # ---------------------------------------------------------------------------
 
+def _ct2_ready() -> bool:
+    """ct2 引擎就绪判定（运行时已装 ∧ 缺省模型已落位）；探测永不抛。"""
+    try:
+        from . import asr_runtime
+        return (asr_runtime.is_installed()
+                and bool(asr_runtime.resolve_ct2_model_dir(_CT2_DEFAULT_MODEL)))
+    except Exception:      # noqa: BLE001
+        return False
+
+
+def _srt_file_to_contract(srt_path: str) -> dict:
+    """ct2 产出的 SRT → 运行器 JSON 契约形态（text+segments；置信键缺省
+    由消费方按存在性读取，C13 口径）。"""
+    from .filters import parse_srt
+    with open(srt_path, encoding="utf-8") as f:
+        entries = parse_srt(f.read())
+    segments = []
+    texts = []
+    for e in entries:
+        timing = str(e.get("timing") or "")
+        text = str(e.get("text") or "").strip()
+        if not text:
+            continue
+        m = _TIMING_SPAN_RE.search(timing)
+        if m:
+            g = [int(x) for x in m.groups()]
+            start = g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000.0
+            end = g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000.0
+            segments.append({"start": start, "end": end, "text": text})
+        texts.append(text)
+    return {"ok": True, "text": "".join(texts), "segments": segments}
+
+
+_TIMING_SPAN_RE = re.compile(
+    r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})")
+
+
+def _run_transcription_ct2(clip_path: str, language: str,
+                           timeout: int = 300) -> dict:
+    """ct2 引擎单片段重转写（自管运行时子进程；SRT→契约回读）。"""
+    import tempfile
+
+    from . import asr_runtime
+    model_dir = asr_runtime.resolve_ct2_model_dir(_CT2_DEFAULT_MODEL)
+    if not model_dir:
+        return {"ok": False, "text": "",
+                "error": "ct2 模型未落位（先经引擎页/CLI 下载模型件）"}
+    fd, tmp_srt = tempfile.mkstemp(suffix=".srt", prefix="ct2clip_")
+    os.close(fd)
+    try:
+        cmd = asr_runtime.ct2_runner_command(str(clip_path), tmp_srt,
+                                             model_dir=model_dir,
+                                             model=_CT2_DEFAULT_MODEL)
+        proc = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace",
+            timeout=timeout, cwd=str(paths.app_root()),
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            creationflags=CREATE_NO_WINDOW)
+        for line in (proc.stdout or "").splitlines():
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    payload = json.loads(line)
+                except ValueError:
+                    continue
+                if payload.get("ok") and os.path.isfile(tmp_srt):
+                    out = _srt_file_to_contract(tmp_srt)
+                    out["engine"] = "ct2"
+                    return out
+                if not payload.get("ok"):
+                    return {"ok": False, "text": "",
+                            "error": str(payload.get("error") or "ct2 转写失败")}
+        return {"ok": False, "text": "",
+                "error": f"ct2 运行器无有效输出（rc={proc.returncode}）"}
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "text": "", "error": f"ct2 子进程失败: {e}"}
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_srt)
+
+
 def run_transcription(clip_path: str, asr_python: str = "",
                       model: str = "large-v2", language: str = "ja",
                       timeout: int = 300) -> dict:
-    """单片段重转写（上游 env 子进程；JSON 契约解析；失败降级 dict）。
+    """单片段重转写（引擎分派：ct2 自管运行时优先，legacy whisper 链降级；
+    JSON 契约解析；失败降级 dict）。
 
     返回 {"ok": bool, "text": str, "error": str}。"""
+    if _ct2_ready() and not asr_python:
+        return _run_transcription_ct2(clip_path, language, timeout)
     python = ""
     for _src, cand in _candidate_pythons(asr_python):
         if os.path.isfile(cand):
@@ -674,7 +793,9 @@ def run_transcription(clip_path: str, asr_python: str = "",
             break
     if not python:
         return {"ok": False, "text": "",
-                "error": "上游 ASR Python 不可用（探测降级）"}
+                "error": "ASR 引擎不可用（探测降级）——安装 CT2 转写引擎："
+                         "python -m subtransjav.refine.asr_runtime install，"
+                         "或在引擎页操作"}
     cmd = _runner_command(python, "--audio", str(clip_path),
                           "--model", model, "--language", language)
     # 探测与加载同序（2.6.1 修订 D2026-1002-06）：数据根落位时显式传
@@ -788,6 +909,26 @@ def batch_transcribe_clips(media_path: str, timings: list[str], *,
     skipped_note = (f"切片跳过 {sliced.get('skipped', 0)} 段"
                     f"（超上限 {_MAX_CLIPS} 或 ffmpeg 失败）"
                     if sliced.get("skipped") else "切片失败")
+    # 引擎分派（脱钩后）：ct2 自管运行时就绪 → 逐片 ct2 转写（每片独立
+    # 进程 load；CPU cap 语义由调用侧 max_clips 承担）；否则 legacy whisper
+    # 批量链（env/settings 候选）。
+    if _ct2_ready():
+        total_ct2 = len(clips)
+        for done_ct2, c in enumerate(clips, 1):
+            r = _run_transcription_ct2(c["path"], "ja")
+            if r.get("ok"):
+                by_timing[c["timing"]] = {
+                    "timing": c["timing"], "ok": True,
+                    "text": str(r.get("text") or ""),
+                    "segments": r.get("segments") or [], "error": ""}
+            else:
+                by_timing[c["timing"]] = failed(
+                    c["timing"], str(r.get("error") or "ct2 转写失败"))
+            done_ct2 += 1
+            if progress is not None:
+                with contextlib.suppress(Exception):
+                    progress(done_ct2, total_ct2)
+        return [by_timing[t] for t in timings]
     python = _resolve_asr_python("")
     if not python:
         for t in timings:
