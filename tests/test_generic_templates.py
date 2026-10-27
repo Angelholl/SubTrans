@@ -5,17 +5,16 @@
 2. 通用模板无 JAV/成人专属残留措辞（grep 级断言）；
 3. 四级回落：显式文件优先 / 数据根 config/templates 优先于包内 /
    仅包内时成功读取 / 全缺时明确报错；
-4. 数据根旧卡优先语义（存量用户自定义模板不受影响——钉住）；
-5. hardened 领域分布审计表存在且覆盖全部词条（keywords + patterns）。
+4. 数据根旧卡优先语义（存量用户自定义模板不受影响——钉住）。
+
+hardened 领域分布审计表属内部留档，不在公开仓，相关覆盖核对移入内部记录。
 """
 
 from pathlib import Path
 
 import pytest
-import yaml
 
 from subtransjav.refine import pipeline_v2
-from subtransjav.refine.cleaner_rules import resolve_data_file
 from subtransjav.refine.pipeline_v2 import V2_TEMPLATE_FILES, _read_v2_card
 
 # ---------------------------------------------------------------------------
@@ -23,8 +22,6 @@ from subtransjav.refine.pipeline_v2 import V2_TEMPLATE_FILES, _read_v2_card
 # ---------------------------------------------------------------------------
 
 PKG_TEMPLATES = Path(pipeline_v2.__file__).parent / "defaults" / "templates"
-REPO_ROOT = Path(pipeline_v2.__file__).parents[2]
-AUDIT_DOC = REPO_ROOT / "docs" / "领域包-hardened-审计-20260930.md"
 
 # 通用卡内不得残留的 JAV/成人专属措辞（grep 级断言用）
 FORBIDDEN_TOKENS = [
@@ -115,27 +112,3 @@ def test_fallback_all_missing_raises(tmp_path, monkeypatch):
     with pytest.raises(Exception) as ei:
         _read_v2_card("A", "", str(tmp_path / "no-td"))
     assert "v2 角色卡缺失" in str(ei.value)
-
-
-# ---------------------------------------------------------------------------
-# 5. hardened 审计表覆盖全部词条
-# ---------------------------------------------------------------------------
-
-def _hardened_yaml() -> dict:
-    p = resolve_data_file("hardened_phrases.yaml")
-    return yaml.safe_load(p.read_text(encoding="utf-8"))
-
-
-def test_hardened_audit_doc_exists():
-    assert AUDIT_DOC.is_file(), f"审计表缺失：{AUDIT_DOC}"
-
-
-def test_hardened_audit_covers_all_keywords_and_patterns():
-    data = _hardened_yaml()
-    # 文档为 markdown 表格：`\|` 是转义管道，比对前两侧统一去反斜杠
-    doc = AUDIT_DOC.read_text(encoding="utf-8").replace("\\", "")
-    missing = [w for w in data.get("keywords", []) if w not in doc]
-    assert not missing, f"审计表遗漏 keywords：{missing}"
-    for pat in data.get("patterns", []):
-        plain = pat.replace("\\", "")
-        assert plain in doc, f"审计表遗漏 pattern：{pat}"
