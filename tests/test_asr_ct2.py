@@ -5,7 +5,7 @@ import pathlib
 import sys
 import types
 
-from subtransjav.refine import asr_runner, asr_runtime
+from subtransjav.refine import asr_env, asr_runner, asr_runtime
 
 
 class TestEngineRouting:
@@ -216,3 +216,55 @@ class TestAsrRuntime:
         assert rc == 0
         st = json.loads(capsys.readouterr().out)
         assert st["installed"] is False
+
+
+class TestDecouple:
+    """上游脱钩（D2026-1028-03 owner 令）：候选链 ct2 化+引擎分派。"""
+
+    def test_no_hardcoded_upstream_default(self):
+        import inspect
+        src = inspect.getsource(asr_env)
+        assert "_UPSTREAM_DEFAULT_PYTHON" not in src
+        assert "whisperJAV" not in src.replace("WhisperJAV 运行 manifest", "")
+
+    def test_candidate_chain_includes_ct2_runtime(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.delenv("SUBTRANSJAV_ASR_PYTHON", raising=False)
+        cands = asr_env._candidate_pythons("")
+        assert [src for src, _py in cands] == ["ct2-runtime"]
+
+    def test_candidate_chain_env_first(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "env.exe"))
+        (tmp_path / "env.exe").write_text("", encoding="utf-8")
+        cands = asr_env._candidate_pythons("")
+        assert cands[0][0] == "env"
+
+    def test_run_transcription_dispatches_ct2(self, tmp_path, monkeypatch):
+        # ct2 就绪 → ct2 路径（monkeypatch _run_transcription_ct2 捕获调用）
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
+        seen = {}
+
+        def fake_ct2(clip, language, timeout=300):
+            seen["clip"] = clip
+            return {"ok": True, "text": "CT2OUT", "segments": []}
+
+        monkeypatch.setattr(asr_env, "_run_transcription_ct2", fake_ct2)
+        r = asr_env.run_transcription("clip.wav")
+        assert r["ok"] is True and r["text"] == "CT2OUT"
+        assert seen["clip"] == "clip.wav"
+
+    def test_run_transcription_legacy_when_ct2_absent(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(asr_env, "_ct2_ready", lambda: False)
+        monkeypatch.delenv("SUBTRANSJAV_ASR_PYTHON", raising=False)
+        r = asr_env.run_transcription("clip.wav")
+        assert r["ok"] is False and "探测降级" in r["error"]
+        assert "asr_runtime install" in r["error"]
+
+    def test_probe_includes_ct2_section(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        st = asr_env._ct2_status()
+        assert st["installed"] is False and st["model_present"] is False
+        assert st["model"] == "large-v2"
