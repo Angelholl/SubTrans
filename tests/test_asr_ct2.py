@@ -144,16 +144,40 @@ class TestAsrRuntime:
         st = asr_runtime.provider_status()
         assert st["installed"] is False
         assert st["selfcheck"] == "fail"
-        assert st["zip_published"] is False
+        assert st["zip_published"] is True      # pin 已填（构建实录）
         assert st["pinned_deps"] == ["faster-whisper==1.2.1", "ctranslate2==4.8.4",
                                      "av==13.1.0"]
-        assert st["models"][0]["verified"] is False
+        assert st["models"][0]["verified"] is False   # 上架门：实下载核验前不开
 
-    def test_install_zip_unpublished_honest_error(self, tmp_path, monkeypatch, capsys):
+    def test_install_zip_download_failure_honest(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+
+        def boom(*a, **k):
+            raise RuntimeError("sha256 不符（模拟）")
+
+        monkeypatch.setattr(asr_runtime, "_guarded_download", boom)
         rc = asr_runtime.install("zip")
+        assert rc == 1
+        assert "运行时安装失败" in capsys.readouterr().out
+
+    def test_install_zip_happy_path_mocked(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(asr_runtime, "_guarded_download",
+                            lambda *a, **k: None)
+        monkeypatch.setattr(asr_runtime, "_safe_extract_zip",
+                            lambda *a, **k: None)
+        monkeypatch.setattr(asr_runtime, "selfcheck",
+                            lambda: (True, "ct2-runtime-selfcheck OK"))
+        rc = asr_runtime.install("zip")
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "sha256 核验通过" in out and "自检" in out
+
+    def test_download_model_verified_gate(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        rc = asr_runtime.download_model("large-v2")
         assert rc == 3
-        assert "尚未发布" in capsys.readouterr().out
+        assert "verified=False" in capsys.readouterr().out
 
     def test_install_venv_rejected_when_frozen(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
