@@ -25,6 +25,13 @@
 - 品牌钉口径：`docs/design/**` 已整体豁免出 `tests/test_brand_allowlist.py` 判定面（guard 断言锁死，扩大豁免须先评议）；产品面（源码/UI 资产/打包/发布资产/根级文档）仍 default-deny 全量钉死，新增文件含旧品牌词即红。
 
 
+## 公开仓 push 面收窄（D2026-1028-01，owner 三令）
+
+- **只推版本迭代内容**：源码、tests、packaging、.github、README/CHANGELOG/手册/roadmap、产品向工具脚本。
+- **禁推清单（只 commit 留本地，严禁出现在公开仓）**：`artifacts/`、`spike/`、`docs/design/**`、`docs/archive/**`、`docs/governance/**`、`docs/decision-log*.md`、讨论/评议/测试/标注/判定材料及其工具（tools/ruling_b6*、tools/sensitive_b6_web、tools/model_matrix_run 等）、语料/媒体/标注数据、凭据类文件。以上均已入 `.gitignore`；今后新位置的同性质文件同样不得 add（先补 .gitignore 再落盘）。
+- 语料码/片名/内部裁决细节不得进 commit message 与产品文档；产品文档引用内部记录一律写「存内部记录」不写路径。
+- commit message 的产品化摘要可提测试结论数字，不引用片名与内部判定过程。
+
 ## 设计任务派发约定（design-expert 长时中断根治，D2026-1012-01）
 
 - **分件派发**：设计产出物逐件为独立交付单元，单次派发 ≤2 件；每件完成立即写盘到目标路径，不得积攒在会话内等最终报告。
