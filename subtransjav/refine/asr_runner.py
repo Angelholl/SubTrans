@@ -206,6 +206,100 @@ def _run_transcribe_clips(clips_json: str, model: str, language: str,
     return 0
 
 
+# ===================== ct2 后端（3.2.0，D2026-1028-03） =====================
+# 运行环境=自管 CT2 运行时（asr_runtime 安装链），本文件在该解释器下以脚本
+# 直调执行（自包含、不依赖 subtransjav 包）。四旋钮缺省全部 PROVISIONAL，
+# 最终缺省组合待金标逐一 A/B 后预注册定案（评议员修正项）。
+
+def _segments_to_srt(segments: list) -> str:
+    """ct2 segment list → SRT 文本（纯函数；时间戳钳非负）。"""
+
+    def fmt(t: float) -> str:
+        if t < 0:
+            t = 0.0
+        ms = int(round(t * 1000))
+        h, rem = divmod(ms, 3600000)
+        m, rem = divmod(rem, 60000)
+        s, ms2 = divmod(rem, 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms2:03d}"
+
+    out = []
+    for i, seg in enumerate(segments, 1):
+        out.append(str(i))
+        out.append(f"{fmt(float(seg['start']))} --> {fmt(float(seg['end']))}")
+        out.append(str(seg.get("text") or "").strip())
+        out.append("")
+    return "\n".join(out)
+
+
+def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
+                              srt_out: str, *, beam_size: int,
+                              vad_filter: bool, condition_previous: bool,
+                              compute_type: str = "int8") -> int:
+    """ct2 整片转写：SRT＋词级 sidecar（断行器 3.2.1 的消费输入）。"""
+    if not model_dir or not os.path.isdir(model_dir):
+        print(json.dumps({"ok": False,
+                          "error": "ct2 模型目录无效: " + str(model_dir)
+                                   + "（调用方经 asr_runtime."
+                                     "resolve_ct2_model_dir 解析后传 "
+                                     "--model-dir）"},
+                         ensure_ascii=False))
+        return 2
+    if not os.path.isfile(media):
+        print(json.dumps({"ok": False,
+                          "error": "媒体不存在: " + str(media)},
+                         ensure_ascii=False))
+        return 2
+    try:
+        from faster_whisper import WhisperModel
+    except Exception as e:   # noqa: BLE001
+        print(json.dumps({"ok": False,
+                          "error": "faster_whisper 导入失败（CT2 运行时未安装"
+                                   "或损坏，先运行 python -m "
+                                   "subtransjav.refine.asr_runtime install）: "
+                                   + str(e)},
+                         ensure_ascii=False))
+        return 1
+    try:
+        model_obj = WhisperModel(model_dir, device="auto", compute_type=compute_type)
+        segments_iter, info = model_obj.transcribe(
+            media, language=language, beam_size=beam_size,
+            vad_filter=vad_filter, condition_on_previous_text=condition_previous,
+            word_timestamps=True)
+        segs = []
+        for s in segments_iter:
+            words = []
+            for w in (s.words or []):
+                if w.start is None or w.end is None:
+                    continue
+                words.append({"start": float(w.start), "end": float(w.end),
+                              "word": w.word, "probability": float(w.probability)})
+            segs.append({"start": float(s.start), "end": float(s.end),
+                         "text": s.text, "words": words})
+    except Exception as e:   # noqa: BLE001 转写失败按契约返回
+        print(json.dumps({"ok": False,
+                          "error": "ct2 转写失败: " + str(e)},
+                         ensure_ascii=False))
+        return 1
+    import pathlib
+    out_path = pathlib.Path(srt_out)
+    if out_path.parent and str(out_path.parent):
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(_segments_to_srt(segs), encoding="utf-8", newline="\n")
+    sidecar = {"schema": "subtransjav.ct2.words/1", "language": info.language,
+               "duration": float(info.duration), "model_dir": model_dir,
+               "beam_size": beam_size, "vad_filter": vad_filter,
+               "condition_on_previous_text": condition_previous,
+               "segments": segs}
+    out_path.with_suffix(out_path.suffix + ".words.json").write_text(
+        json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps({"ok": True, "srt": srt_out, "segments": len(segs),
+                      "duration": float(info.duration),
+                      "words_sidecar": str(out_path) + ".words.json"},
+                     ensure_ascii=False))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="asr_runner",
@@ -223,9 +317,47 @@ def main(argv=None) -> int:
     parser.add_argument("--language", default="ja")
     parser.add_argument("--selfcheck", action="store_true",
                         help="自检：导入链+whisper 可导入+模型缓存定位")
+    # ---- 3.2.0 ct2 后端（缺省 whisper=零行为变化）----
+    parser.add_argument("--engine", default="whisper", choices=["whisper", "ct2"],
+                        help="转写引擎（缺省 whisper=既有链零变化）")
+    parser.add_argument("--media", default="",
+                        help="ct2 整片模式：媒体路径（与 --audio/--clips-json 互斥）")
+    parser.add_argument("--srt-out", default="",
+                        help="ct2 整片模式：SRT 输出路径（同时产 .words.json sidecar）")
+    parser.add_argument("--beam-size", type=int, default=5,
+                        help="ct2 束宽（PROVISIONAL，待金标 A/B 定案）")
+    parser.add_argument("--no-vad-filter", action="store_true",
+                        help="ct2 关闭 Silero VAD（PROVISIONAL；缺省开）")
+    parser.add_argument("--condition-previous", action="store_true",
+                        help="ct2 开启 condition_on_previous_text"
+                             "（PROVISIONAL；缺省关=幻听缓解）")
+    parser.add_argument("--compute-type", default="int8",
+                        help="ct2 量化形态（PROVISIONAL；CPU int8/GPU float16）")
     args = parser.parse_args(argv)
     if args.selfcheck:
         return _selfcheck(args.model, args.model_dir)
+    if args.engine == "ct2":
+        if args.audio or args.clips_json:
+            print(json.dumps({"ok": False,
+                              "error": "--engine ct2 整片模式与 "
+                                       "--audio/--clips-json 互斥"},
+                             ensure_ascii=False))
+            return 2
+        if not args.srt_out:
+            print(json.dumps({"ok": False,
+                              "error": "--engine ct2 需要 --srt-out"},
+                             ensure_ascii=False))
+            return 2
+        return _run_transcribe_media_ct2(
+            args.media, args.model_dir, args.language, args.srt_out,
+            beam_size=args.beam_size, vad_filter=not args.no_vad_filter,
+            condition_previous=args.condition_previous,
+            compute_type=args.compute_type)
+    if args.media or args.srt_out:
+        print(json.dumps({"ok": False,
+                          "error": "--media/--srt-out 仅在 --engine ct2 下可用"},
+                         ensure_ascii=False))
+        return 2
     if args.clips_json:
         if args.audio:
             print(json.dumps({"ok": False,
