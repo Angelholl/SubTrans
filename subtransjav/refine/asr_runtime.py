@@ -23,8 +23,10 @@ selfcheck 版本断言。
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import pathlib
 import subprocess
 import sys
 
@@ -42,6 +44,7 @@ __all__ = [
     "provider_status",
     "install",
     "selfcheck",
+    "download_model",
     "ct2_model_dir",
     "resolve_ct2_model_dir",
     "ct2_runner_command",
@@ -55,20 +58,24 @@ PINNED_DEPS: list[str] = [
     "av==13.1.0",
 ]
 
-# 案 A 预打包件 pin（双空=未发布态；owner 镜像上传后填入并过实下载核验）
-RUNTIME_ZIP_URL = ""
-RUNTIME_ZIP_SHA256 = ""
+# 案 A 预打包件 pin（构建实录 sha256；URL 走 hf-mirror 中转，完整性锚=
+# sha256 pin 本身——镜像仓库内容变更即校验拒载，与词典链同威胁模型）
+RUNTIME_ZIP_URL = ("https://hf-mirror.com/Angelholl/subtrans-ct2-runtime"
+                   "/resolve/main/subtrans-ct2-runtime-1.0.0-win64.zip")
+RUNTIME_ZIP_SHA256 = "c0eb408fc4404cb96c35faaede4b149398880c169d9c9e01db7dc23104daf1bb"
+RUNTIME_ZIP_BYTES = 106267550
 
-# CT2 模型元数据（照 ASR_RECOMMENDED_MODELS 推荐制口径：只给自备元信息，
-# verified=False 禁下载；pin 待镜像上传后补并过实下载核验）
+# CT2 模型元数据（zip 打包件 pin；verified=True 须经生产路径实下载逐字节
+# 核验后翻转——上架门沿词典链先例）
 CT2_MODELS: list[dict] = [
     {
         "model": "large-v2",
         "backend": "ct2",
-        "bytes": 3086912962,       # model.bin（spike 逐字节核验上游 manifest）
-        "sha256": "",              # 待 zip 打包+镜像上传后 pin
-        "url": "",                 # 待镜像发布
-        "verified": False,
+        "bytes": 3089579624,       # zip 打包件（model.bin/config/tokenizer/vocab 四件）
+        "sha256": "4ca806c0061940ad903fe2e41d7f4a424b4a1cfe2f352a335cefc23e87fe1932",
+        "url": ("https://hf-mirror.com/Angelholl/faster-whisper-large-v2-ct2"
+                "/resolve/main/faster-whisper-large-v2-ct2.zip"),
+        "verified": False,         # 待镜像上传+生产路径实下载核验后翻转
         "desc": "CT2 版 large-v2（社区天花板配置 int8_float16 同源权重）",
     },
 ]
@@ -206,17 +213,116 @@ def _install_via_venv() -> int:
     return 0 if ok else 1
 
 
+def _sha256_of(path: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _guarded_download(url: str, dest: str, expected_sha256: str,
+                      expected_bytes: int = 0, progress=None) -> None:
+    """守卫下载（复用 dict_manager 下载原语）+sha256 逐字节核验。
+
+    _http_get 自带：https+域白名单（hf-mirror.com/cas-bridge 在案）、重定向
+    逐跳守卫、两跳代理状态机、.part 原子落盘、Content-Length 核验。本函数
+    追加 pin 级 sha256 校验（词典链同威胁模型：镜像内容变更即拒载）。"""
+    from .dict_manager import DictDownloadError, _http_get, _validate_url
+    _validate_url(url)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    try:
+        _http_get(url, dest, progress=progress)
+    except DictDownloadError as e:
+        raise RuntimeError("下载失败: " + str(e)) from e
+    if expected_bytes and os.path.getsize(dest) != expected_bytes:
+        raise RuntimeError("尺寸不符: 预期 " + str(expected_bytes) + "B，实得 "
+                           + str(os.path.getsize(dest)) + "B")
+    got = _sha256_of(dest)
+    if got != expected_sha256:
+        with contextlib.suppress(OSError):
+            os.remove(dest)
+        raise RuntimeError("sha256 不符（预期 " + expected_sha256[:16] + "…，实得 "
+                           + got[:16] + "…）——镜像件与 pin 不匹配，已删除残件")
+
+
+def _safe_extract_zip(zip_path: str, dest_dir: str) -> None:
+    """防 zip-slip 解包：逐成员校验后落位（运行时/模型 zip 共用）。"""
+    import zipfile
+    dest_res = pathlib.Path(dest_dir).resolve()
+    with zipfile.ZipFile(zip_path) as z:
+        for member in z.namelist():
+            if member.startswith("/") or os.path.isabs(member):
+                raise RuntimeError("zip 成员为绝对路径: " + member)
+            norm = member.replace("\\", "/")
+            if os.pardir in pathlib.PurePosixPath(norm).parts:
+                raise RuntimeError("zip 成员越界: " + member)
+            target = (dest_res / norm).resolve()
+            if dest_res != target and dest_res not in target.parents:
+                raise RuntimeError("zip 成员越出目标目录: " + member)
+        z.extractall(dest_dir)
+
+
 def _install_via_zip() -> int:
-    """案 A：预打包件下载+pin 核验+解包（pin 未发布态人话报错）。"""
+    """案 A：预打包件守卫下载+sha256 核验+防 zip-slip 解包+自检。"""
+    root = runtime_root()
+    if is_installed():
+        print("运行时已存在: " + root + "（重装请先手动删除该目录）")
+        return 1
     if not (RUNTIME_ZIP_URL and RUNTIME_ZIP_SHA256):
-        print("案 A 预打包运行时件尚未发布（缺 URL/sha256 pin）——"
-              "待镜像上传后由发版批填入；pip/源码形态当前可用降级路径："
-              "python -m subtransjav.refine.asr_runtime install --provider venv")
+        print("案 A 预打包运行时件尚未发布（缺 URL/sha256 pin）；"
+              "pip/源码形态可用降级路径：install --provider venv")
         return 3
-    # 下载链接线=下一批（复用 dict_manager 白名单+逐跳守卫+sha256 核验范式），
-    # pin 填充前此分支不可达。
-    print("zip provider 下载链随镜像发布批接线（pin 在位才会到达此行）")
-    return 3
+    tmp_zip = paths.data_subdir("runtime", "ct2-runtime.zip.part.tmp")
+    try:
+        print("[1/3] 守卫下载运行时件（" + format(RUNTIME_ZIP_BYTES / 1048576, ".0f")
+              + "MB）")
+        _guarded_download(RUNTIME_ZIP_URL, tmp_zip, RUNTIME_ZIP_SHA256,
+                          RUNTIME_ZIP_BYTES)
+        print("[2/3] sha256 核验通过，解包到 " + root)
+        _safe_extract_zip(tmp_zip, root)
+    except RuntimeError as e:
+        print("运行时安装失败: " + str(e))
+        return 1
+    with contextlib.suppress(OSError):
+        os.remove(tmp_zip)
+    print("[3/3] 自检")
+    ok, detail = selfcheck()
+    print(detail)
+    return 0 if ok else 1
+
+
+def download_model(model: str = "large-v2", progress=None) -> int:
+    """CT2 模型 zip 守卫下载+核验+解包到 models/ct2/<model>（verified 门）。"""
+    entry = next((m for m in CT2_MODELS if m["model"] == model), None)
+    if entry is None:
+        print("未知 ct2 模型: " + model)
+        return 2
+    if not entry.get("verified"):
+        print("模型件未经生产路径实下载核验（verified=False），下载门未开——"
+              "沿词典链上架门纪律，镜像上传后核验翻转即可用")
+        return 3
+    dest_model_dir = os.path.join(ct2_model_dir(), model)
+    if os.path.isdir(dest_model_dir) and os.path.isfile(
+            os.path.join(dest_model_dir, "model.bin")):
+        print("模型已落位: " + dest_model_dir)
+        return 1
+    zip_path = paths.data_subdir("models", "ct2", model + "-ct2.zip.tmp")
+    print("[1/3] 守卫下载模型件（" + format(int(entry["bytes"]) / 1048576, ".0f")
+          + "MB）")
+    _guarded_download(str(entry["url"]), zip_path, str(entry["sha256"]),
+                      int(entry["bytes"]), progress=progress)
+    print("[2/3] sha256 核验通过，解包到 " + dest_model_dir)
+    _safe_extract_zip(zip_path, dest_model_dir)
+    with contextlib.suppress(OSError):
+        os.remove(zip_path)
+    print("[3/3] 落位核验")
+    if not os.path.isfile(os.path.join(dest_model_dir, "model.bin")):
+        print("解包后缺 model.bin——镜像件结构异常")
+        return 1
+    print("模型就绪: " + dest_model_dir)
+    return 0
 
 
 def install(provider: str = "auto") -> int:
@@ -264,9 +370,13 @@ def main(argv: list[str] | None = None) -> int:
     p_install.add_argument("--provider", default="auto", choices=["auto", "zip", "venv"])
     sub.add_parser("status", help="状态快照（JSON）")
     sub.add_parser("selfcheck", help="安装后自检")
+    p_dl = sub.add_parser("download-model", help="下载 CT2 模型件（verified 门）")
+    p_dl.add_argument("--model", default="large-v2")
     args = parser.parse_args(argv)
     if args.cmd == "install":
         return install(args.provider)
+    if args.cmd == "download-model":
+        return download_model(args.model)
     if args.cmd == "status":
         print(json.dumps(provider_status(), ensure_ascii=False, indent=2))
         return 0
