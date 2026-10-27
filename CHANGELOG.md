@@ -2,6 +2,15 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [未发布]
+
+### 新增
+
+- **正确率评测 harness（3.1.0 测量地基，CLI）**：新增 `python -m subtransjav.refine.eval_baseline`——对同一媒体上的一或多个转写引擎 SRT 产出代理指标报告（幻听代理=语音窗口低重叠行占比、漏听代理=语音未覆盖占比、双引擎一致率=时轴贪婪匹配+文本相似、CPS 分位），JSON+Markdown 双件落盘；语音窗口检测复用既有检测原语，媒体/ffmpeg 缺失时窗口类指标显式 null 并注明原因，绝不误当全静音。代理指标只作涨跌比较，不承诺句级正确率绝对值。
+- **CT2 转写引擎自管运行时与 ct2 后端（3.2.0，实验性，默认不启用）**：新增 `python -m subtransjav.refine.asr_runtime`（install/status/selfcheck）——转写引擎运行环境与主程序解耦的按需安装链（预打包件主路径+在线依赖降级路径，依赖全钉）；`subtransjav.refine.asr_runner` 新增 `--engine ct2` 整片转写模式（缺省 whisper 既有链行为零变化），支持词级时间戳、VAD、上下文条件等旋钮（缺省值为占位，待真机语料校准），产出 SRT 与词级 sidecar；预打包件与模型镜像发布后经核验方可点亮下载。
+- **CT2 长行断行器（3.2.1，CLI）**：新增 `python -m subtransjav.refine.line_breaker`——基于词级时间戳、每行字数上限与停顿检测的确定性长行切分（社区反馈的 CT2 长行问题的自动化解法），保证文本守恒、时间轴覆盖守恒与达标行幂等。
+- **全自动质量闭环预置机制（3.3.0，默认关）**：新增 `subtransjav/refine/quality_autoloop.py` 编排骨架（分析→计划→修复→复验→放行/降级人工），默认关闭且不接入任何生产链路；放行门为预注册量化门（Wilson 下界），门数值未定即永远降级人工（fail-closed）；每次自动动作强制携带台账上下文。激活需三项前置齐备（评审放行、基线门数值、真实语料债务清偿），见 `--status` 输出。
+
 ## [3.0.7] - 2026-10-28
 
 ### 新增
