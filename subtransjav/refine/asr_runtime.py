@@ -39,8 +39,11 @@ __all__ = [
     "RUNTIME_ZIP_URL",
     "RUNTIME_ZIP_SHA256",
     "CT2_MODELS",
+    "RUNTIME_MANIFEST_NAME",
+    "RUNTIME_LAYOUT_VERSION",
     "runtime_root",
     "runtime_python",
+    "read_runtime_manifest",
     "is_installed",
     "provider_status",
     "install",
@@ -62,9 +65,9 @@ PINNED_DEPS: list[str] = [
 # 案 A 预打包件 pin（构建实录 sha256；URL 走 hf-mirror 中转，完整性锚=
 # sha256 pin 本身——镜像仓库内容变更即校验拒载，与词典链同威胁模型）
 RUNTIME_ZIP_URL = ("https://hf-mirror.com/Angelholl/subtrans-ct2-runtime"
-                   "/resolve/main/subtrans-ct2-runtime-1.0.0-win64.zip")
-RUNTIME_ZIP_SHA256 = "c0eb408fc4404cb96c35faaede4b149398880c169d9c9e01db7dc23104daf1bb"
-RUNTIME_ZIP_BYTES = 106267550
+                   "/resolve/main/subtrans-ct2-runtime-1.1.0-win64.zip")
+RUNTIME_ZIP_SHA256 = "a53da81338238ad5a7cc6d27ac373bd3666a3a1029b0bda53e98f0cbc8795140"
+RUNTIME_ZIP_BYTES = 109673863
 
 # CT2 模型元数据（zip 打包件 pin；verified=True 须经生产路径实下载逐字节
 # 核验后翻转——上架门沿词典链先例）
@@ -83,6 +86,18 @@ CT2_MODELS: list[dict] = [
 
 # 子进程统一形态：参数列表+shell=False+无窗口（CREATE_NO_WINDOW 单一来源）
 _SPAWN_FLAGS = CREATE_NO_WINDOW
+
+# 定稿布局契约（D2026-1028-04）：认证只绑定 manifest 单一布局
+# （python/ + site-packages/ + runtime.json + selfcheck.py），fallback
+# 探测（Scripts/、python/、根）仅作诊断不作生产认证路径。
+RUNTIME_MANIFEST_NAME = "runtime.json"
+RUNTIME_LAYOUT_VERSION = 1
+_RUNTIME_FALLBACK_PYTHONS = (
+    os.path.join("Scripts", "python.exe"),     # 案 C venv 形态
+    os.path.join("python", "python.exe"),      # 定稿 embed 布局
+    "python.exe",                              # 平铺（诊断用，认证不认）
+)
+_INSTALL_TOP_MEMBERS = ("runtime.json", "selfcheck.py", "python", "site-packages")
 
 
 def runtime_root() -> str:
@@ -105,8 +120,58 @@ def runtime_root() -> str:
     return paths.data_subdir("runtime", "ct2")
 
 
+def read_runtime_manifest(root: str = "") -> dict | None:
+    """读+校验运行时 manifest；缺失/非法一律返回 None（不抛，诊断面用）。
+
+    认证语义（D2026-1028-04）：layout_version 匹配 + python_exe/site_packages
+    为相对路径且解包落位真实存在。zip_sha256 由安装器核验后回写，本函数
+    不作强校验（有无皆可读）。"""
+    base = root or runtime_root()
+    try:
+        data = json.loads(pathlib.Path(base, RUNTIME_MANIFEST_NAME)
+                          .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if data.get("layout_version") != RUNTIME_LAYOUT_VERSION:
+        return None
+    py_rel = data.get("python_exe")
+    sp_rel = data.get("site_packages")
+    if not py_rel or not sp_rel or os.path.isabs(str(py_rel)) \
+            or os.path.isabs(str(sp_rel)):
+        return None
+    if not os.path.isfile(os.path.join(base, str(py_rel))):
+        return None
+    if not os.path.isdir(os.path.join(base, str(sp_rel))):
+        return None
+    return data
+
+
+def _probe_runtime_python(root: str = "") -> str:
+    """fallback 探测（Scripts/、python/、根）——仅诊断非生产认证路径。"""
+    base = root or runtime_root()
+    for rel in _RUNTIME_FALLBACK_PYTHONS:
+        cand = os.path.join(base, rel)
+        if os.path.isfile(cand):
+            return os.path.normpath(cand)
+    return ""
+
+
 def runtime_python() -> str:
-    return os.path.join(runtime_root(), "Scripts", "python.exe")
+    """运行时解释器：manifest 声明优先，无 manifest 退化 fallback 探测
+    （供 selfcheck/runner 诊断性使用；认证判定见 is_installed）。"""
+    manifest = read_runtime_manifest()
+    if manifest:
+        return os.path.normpath(
+            os.path.join(runtime_root(), str(manifest["python_exe"])))
+    return _probe_runtime_python()
+
+
+def is_installed() -> bool:
+    """运行时已安装＝manifest 认证布局在位（D2026-1028-04：verified 只
+    绑定定稿单一布局，不做多布局全兼容认证）。"""
+    return read_runtime_manifest() is not None
 
 
 def ct2_model_dir() -> str:
@@ -126,26 +191,49 @@ def resolve_ct2_model_dir(model: str, model_dir: str = "") -> str:
     return ""
 
 
-def is_installed() -> bool:
-    py = runtime_python()
-    return bool(py) and os.path.isfile(py)
-
-
+# 1s 正弦波音频链自检体（d1028-32 selfcheck 契约：import 全链+版本钉+
+# 真音频解码 rc=0；numpy/wave 在运行时 site-packages/stdlib 内）
+_SELFHECK_AUDIO_BODY = (
+    "import wave, tempfile, os\n"
+    "import numpy as np\n"
+    "sr = 16000\n"
+    "t = np.arange(sr) / sr\n"
+    "pcm = (0.5 * np.sin(2 * np.pi * 440.0 * t) * 32767).astype('int16')\n"
+    "fd, path = tempfile.mkstemp(suffix='.wav')\n"
+    "os.close(fd)\n"
+    "try:\n"
+    "    with wave.open(path, 'wb') as w:\n"
+    "        w.setnchannels(1)\n"
+    "        w.setsampwidth(2)\n"
+    "        w.setframerate(sr)\n"
+    "        w.writeframes(pcm.tobytes())\n"
+    "    from faster_whisper.audio import decode_audio\n"
+    "    audio = decode_audio(path, sampling_rate=sr)\n"
+    "    assert audio.shape[0] == sr, audio.shape\n"
+    "finally:\n"
+    "    os.remove(path)\n"
+)
 _SELFHECK_SNIPPET = (
     "import ctranslate2, av\n"
     "assert ctranslate2.__version__ == '4.8.4', ctranslate2.__version__\n"
     "assert av.__version__.startswith('13.'), av.__version__\n"
     "import faster_whisper\n"
     "from faster_whisper import WhisperModel  # noqa: F401\n"
+    + _SELFHECK_AUDIO_BODY +
     "print('ct2-runtime-selfcheck OK')\n"
 )
 
 
 def selfcheck() -> tuple[bool, str]:
-    """运行时自检：导入链+版本钉断言（模型无关，不下载任何模型）。"""
-    if not is_installed():
-        return False, "运行时未安装（" + runtime_root() + " 无 python.exe）"
-    cmd = [runtime_python(), "-c", _SELFHECK_SNIPPET]
+    """运行时自检：import 全链+版本钉+1s 正弦波音频链（模型无关，不下载
+    任何模型）。执行形态＝selfcheck.py（定稿布局自带）优先，缺脚本退化
+    -c 片段（案 C venv 无 manifest 也可自检——认证判定另见 is_installed）。"""
+    py = runtime_python()
+    if not py:
+        return False, "运行时未安装（" + runtime_root() \
+            + " 无 manifest 且 fallback 探测无 python.exe）"
+    script = os.path.join(runtime_root(), "selfcheck.py")
+    cmd = [py, script] if os.path.isfile(script) else [py, "-c", _SELFHECK_SNIPPET]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120,
                               encoding="utf-8", errors="replace", shell=False,
@@ -160,11 +248,22 @@ def selfcheck() -> tuple[bool, str]:
 
 
 def provider_status() -> dict:
-    """状态快照（GUI/CLI 双消费）。"""
-    ok, detail = selfcheck() if is_installed() else (False, "未安装")
+    """状态快照（GUI/CLI 双消费）。
+
+    installed＝manifest 认证布局（D2026-1028-04）；probe＝fallback 探测
+    结果（诊断面，认证不认）；certified＝认证通过（manifest+清单校验+
+    自检过）。"""
+    manifest = read_runtime_manifest()
+    probe = _probe_runtime_python()
+    py = os.path.normpath(os.path.join(runtime_root(),
+                                       str(manifest["python_exe"]))) \
+        if manifest else probe
+    ok, detail = selfcheck() if py else (False, "未安装")
     return {
-        "installed": is_installed(),
-        "python": runtime_python() if is_installed() else "",
+        "installed": manifest is not None,
+        "python": py,
+        "probe": probe,
+        "certified": manifest is not None and ok,
         "selfcheck": "pass" if ok else "fail",
         "detail": detail,
         "zip_published": bool(RUNTIME_ZIP_URL and RUNTIME_ZIP_SHA256),
@@ -176,6 +275,10 @@ def provider_status() -> dict:
 def _pip_env() -> dict:
     env = dict(os.environ)
     env.setdefault("PYTHONUTF8", "1")
+    # 镜像下载子进程代理中和（D2026-1028-04）：仅注入子进程环境不污染
+    # 全局——pip 镜像源走境内直连，系统代理反成坏损/限速源
+    env["no_proxy"] = "*"
+    env["NO_PROXY"] = "*"
     return env
 
 
@@ -192,14 +295,18 @@ def _pip_install_cmd(runtime_py: str, index_args: list[str]) -> list[str]:
 
 
 def _install_via_venv() -> int:
-    """案 C：现场 venv+pip 装全钉依赖（spike 全链实证；仅非 frozen 形态）。"""
+    """案 C：现场 venv+pip 装全钉依赖（spike 全链实证；仅非 frozen 形态）。
+
+    venv 布局（Scripts/python.exe）无 manifest——selfcheck 经 fallback
+    探测可跑，但认证面（is_installed/provider_status.installed）不认：
+    D2026-1028-04 认证只绑定定稿布局。"""
     if getattr(sys, "frozen", False):
         print("frozen 安装形态无解释器可建 venv——请使用案 A 预打包件"
-              "（当前未发布，待镜像上传+pin）；pip/源码形态可用 "
+              "（下载+sha256 pin 自动安装）；pip/源码形态可用 "
               "--provider venv。")
         return 3
     root = runtime_root()
-    if is_installed():
+    if _probe_runtime_python():
         print("运行时已存在: " + root + "（重装请先手动删除该目录）")
         return 1
     base = sys.executable
@@ -280,8 +387,81 @@ def _safe_extract_zip(zip_path: str, dest_dir: str) -> None:
         z.extractall(dest_dir)
 
 
+def _verify_zip_layout(zip_path: str) -> None:
+    """定稿布局内容清单校验（sha256 之后的第二道门，D2026-1028-04）。
+
+    必含：runtime.json／selfcheck.py／python/python.exe 入口／
+    site-packages/ 前缀成员／三个关键依赖标记（faster_whisper/ctranslate2/
+    av）。不符即失败，诊断含「布局」。"""
+    import zipfile
+    with zipfile.ZipFile(zip_path) as z:
+        names = [n.replace("\\", "/") for n in z.namelist()]
+    name_set = set(names)
+    missing: list[str] = [x for x in ("runtime.json", "selfcheck.py",
+                                      "python/python.exe")
+                          if x not in name_set]
+    if not any(n.startswith("site-packages/") for n in names):
+        missing.append("site-packages/")
+    for dep in ("faster_whisper", "ctranslate2", "av"):
+        if not any(n.startswith("site-packages/" + dep + "/") for n in names):
+            missing.append("site-packages/" + dep + "/")
+    if missing:
+        raise RuntimeError(
+            "zip 布局不符定稿契约（缺: " + ", ".join(missing) +
+            "）——须为 python/ + site-packages/ + runtime.json + selfcheck.py "
+            "布局（D2026-1028-04）")
+
+
+def _write_manifest_after_extract(root: str, zip_sha256: str) -> dict:
+    """解包后 manifest 落位核验+回写 zip_sha256（安装器为 manifest 写入方）。
+
+    zip 内自带 runtime.json（构建期定 python_exe/site_packages/layout_version），
+    安装器校验字段与落位后补 zip_sha256（zip 自身 sha 在打包期内无法自嵌）。"""
+    mpath = os.path.join(root, RUNTIME_MANIFEST_NAME)
+    try:
+        data = json.loads(pathlib.Path(mpath).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise RuntimeError("解包产物缺 " + RUNTIME_MANIFEST_NAME
+                           + " 或非合法 JSON——布局契约不符") from e
+    if not isinstance(data, dict) \
+            or data.get("layout_version") != RUNTIME_LAYOUT_VERSION:
+        raise RuntimeError(RUNTIME_MANIFEST_NAME
+                           + " layout_version 非法——布局契约不符")
+    py_rel = data.get("python_exe")
+    sp_rel = data.get("site_packages")
+    if not py_rel or not sp_rel or os.path.isabs(str(py_rel)) \
+            or os.path.isabs(str(sp_rel)):
+        raise RuntimeError(RUNTIME_MANIFEST_NAME
+                           + " 字段非法（python_exe/site_packages 须相对路径）"
+                           "——布局契约不符")
+    if not os.path.isfile(os.path.join(root, str(py_rel))):
+        raise RuntimeError("python_exe 落位缺失: " + str(py_rel)
+                           + "——布局契约不符")
+    if not os.path.isdir(os.path.join(root, str(sp_rel))):
+        raise RuntimeError("site_packages 落位缺失: " + str(sp_rel)
+                           + "——布局契约不符")
+    data["zip_sha256"] = zip_sha256
+    pathlib.Path(mpath).write_text(
+        json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return data
+
+
+def _cleanup_install_members(root: str) -> None:
+    """布局/manifest 校验失败后清理本次解包引入的顶层成员（只删定稿布局
+    四件名，不触 root 下其他内容——如案 C venv 残留的 Scripts/）。"""
+    import shutil
+    for name in _INSTALL_TOP_MEMBERS:
+        p = os.path.join(root, name)
+        if os.path.isdir(p):
+            shutil.rmtree(p, ignore_errors=True)
+        elif os.path.isfile(p):
+            with contextlib.suppress(OSError):
+                os.remove(p)
+
+
 def _install_via_zip() -> int:
-    """案 A：预打包件守卫下载+sha256 核验+防 zip-slip 解包+自检。"""
+    """案 A：预打包件守卫下载+sha256 核验+布局清单校验+防 zip-slip 解包
+    +manifest 落位+自检（D2026-1028-04 核验门全序）。"""
     root = runtime_root()
     if is_installed():
         print("运行时已存在: " + root + "（重装请先手动删除该目录）")
@@ -292,18 +472,22 @@ def _install_via_zip() -> int:
         return 3
     tmp_zip = paths.data_subdir("runtime", "ct2-runtime.zip.part.tmp")
     try:
-        print("[1/3] 守卫下载运行时件（" + format(RUNTIME_ZIP_BYTES / 1048576, ".0f")
+        print("[1/4] 守卫下载运行时件（" + format(RUNTIME_ZIP_BYTES / 1048576, ".0f")
               + "MB）")
         _guarded_download(RUNTIME_ZIP_URL, tmp_zip, RUNTIME_ZIP_SHA256,
                           RUNTIME_ZIP_BYTES)
-        print("[2/3] sha256 核验通过，解包到 " + root)
+        print("[2/4] sha256 核验通过，布局清单校验")
+        _verify_zip_layout(tmp_zip)
+        print("[3/4] 布局校验通过，解包到 " + root)
         _safe_extract_zip(tmp_zip, root)
+        _write_manifest_after_extract(root, RUNTIME_ZIP_SHA256)
     except RuntimeError as e:
+        _cleanup_install_members(root)
         print("运行时安装失败: " + str(e))
         return 1
     with contextlib.suppress(OSError):
         os.remove(tmp_zip)
-    print("[3/3] 自检")
+    print("[4/4] 自检")
     ok, detail = selfcheck()
     print(detail)
     return 0 if ok else 1

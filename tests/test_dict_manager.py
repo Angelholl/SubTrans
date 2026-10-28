@@ -1183,3 +1183,85 @@ def test_download_dict_stop_in_extract_loop_cleanup(monkeypatch, tmp_path):
     d = tmp_path / "dict" / "sudachi"
     assert not any(d.glob("system_core.dic.downloading*"))
     assert not any(d.glob("*.extracting"))
+
+
+# ---------------------------------------------------------------------------
+# 429/5xx 指数退避（d1028-36，D2026-1028-04）
+# ---------------------------------------------------------------------------
+def _http_error_responder(code: int, retry_after: str | None = None):
+    headers = {"Retry-After": retry_after} if retry_after is not None else {}
+
+    def _responder(req):
+        raise urllib.error.HTTPError(req.full_url, code, "err", headers,
+                                     io.BytesIO(b""))
+
+    return _responder
+
+
+def _patch_sleep(monkeypatch) -> list:
+    calls: list = []
+    monkeypatch.setattr(dm.time, "sleep", lambda s: calls.append(s))
+    return calls
+
+
+def test_retry_statuses_cover_rate_limit_family():
+    assert dm._HTTP_RETRY_STATUSES == (429, 502, 503, 504)
+
+
+def test_http_get_429_retry_after_then_success(monkeypatch, tmp_path):
+    """Retry-After 可解析：优先于指数基数（仍受 jitter ±20%）。"""
+    payload = b"RETRY-OK"
+    state = {"n": 0}
+
+    def _responder(req):
+        state["n"] += 1
+        if state["n"] <= 2:      # 第一轮两跳（系统代理+直连）均 429 → 触发退避
+            raise urllib.error.HTTPError(req.full_url, 429, "err",
+                                         {"Retry-After": "7"}, io.BytesIO(b""))
+        return _StreamResponse(payload, chunk=64, total=len(payload))
+
+    _patch_build_opener(monkeypatch, _responder)
+    sleeps = _patch_sleep(monkeypatch)
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    assert Path(dest).read_bytes() == payload
+    assert len(sleeps) == 1
+    assert 7 * 0.8 <= sleeps[0] <= 7 * 1.2
+
+
+def test_http_get_429_exponential_backoff_exhausted(monkeypatch, tmp_path):
+    """无 Retry-After：指数基数 1,2,4s（jitter ±20% 内）；3 轮重试耗尽
+    抛末次原错误（消息含 HTTP 429）。"""
+    _patch_build_opener(monkeypatch, _http_error_responder(429))
+    sleeps = _patch_sleep(monkeypatch)
+    dest = str(tmp_path / "x.whl")
+    with pytest.raises(dm.DictDownloadError) as ei:
+        dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    assert "HTTP 429" in str(ei.value)
+    assert len(sleeps) == dm._HTTP_RETRY_MAX
+    for got, i in zip(sleeps, range(dm._HTTP_RETRY_MAX), strict=False):
+        base = dm._HTTP_RETRY_BASE_S * (2 ** i)
+        assert base * 0.8 <= got <= base * 1.2
+    assert not Path(dest).exists()
+
+
+def test_http_get_403_not_retried(monkeypatch, tmp_path):
+    """非可重试状态（403）零退避直抛（两跳语义照旧）。"""
+    _patch_build_opener(monkeypatch, _http_error_responder(403))
+    sleeps = _patch_sleep(monkeypatch)
+    with pytest.raises(dm.DictDownloadError) as ei:
+        dm._http_get("https://files.pythonhosted.org/x.whl",
+                     str(tmp_path / "x.whl"))
+    assert "HTTP 403" in str(ei.value)
+    assert sleeps == []
+
+
+def test_http_get_retry_after_capped(monkeypatch, tmp_path):
+    """Retry-After 超大（3600s）受 cap 60s 约束。"""
+    _patch_build_opener(monkeypatch, _http_error_responder(429, "3600"))
+    sleeps = _patch_sleep(monkeypatch)
+    with pytest.raises(dm.DictDownloadError):
+        dm._http_get("https://files.pythonhosted.org/x.whl",
+                     str(tmp_path / "x.whl"))
+    assert sleeps
+    assert all(s <= dm._HTTP_RETRY_CAP_S * 1.2 for s in sleeps)
