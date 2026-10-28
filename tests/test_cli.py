@@ -640,3 +640,25 @@ def test_harden_stdio_tolerates_broken_streams(monkeypatch):
     monkeypatch.setattr("sys.stderr", _FakeStream(tty=False))
     _harden_stdio()
     assert broken.calls == [{"encoding": "utf-8", "errors": "backslashreplace"}]
+
+
+# ---------------------------------------------------------------------------
+# 3.2 退役批（D2026-1029-01）：--asr-python/--asr-model 废弃壳一版
+# （legacy whisper 链硬删；旗标收下即暖警告，无功能作用不阻断）
+# ---------------------------------------------------------------------------
+
+def test_cli_asr_flags_deprecated_shell_warning(capsys):
+    """传入退役旗标 → stderr 一行退役警告，主流程不受阻（--where 正常退出 0）。"""
+    from subtransjav.refine.cli import main
+    rc = main(["--asr-model", "large-v2", "--asr-python", "x.exe", "--where"])
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "已退役" in err and "ct2" in err
+
+
+def test_cli_asr_flags_absent_no_warning(capsys):
+    """未传退役旗标 → 无警告（防误伤常态调用）。"""
+    from subtransjav.refine.cli import main
+    rc = main(["--where"])
+    assert rc == 0
+    assert "已退役" not in capsys.readouterr().err

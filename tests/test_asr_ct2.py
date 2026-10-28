@@ -303,6 +303,32 @@ class TestConfidencePassthrough:
         assert seg.get("compression_ratio") == 1.5
 
 
+    def test_batch_ct2_only_no_whisper_fallback(self, tmp_path, monkeypatch):
+        """退役批对冲钉：批量链 ct2 唯一——运行时/模型未落位时逐 timing
+        如实报错（不再有 legacy whisper 回落分支）。"""
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            asr_env, "slice_clips",
+            lambda media, timings, max_clips=20: {
+                "ok": True,
+                "clips": [{"path": "c1.wav", "timing": self._T}],
+                "error": "", "skipped": 0})
+        r = asr_env.batch_transcribe_clips("media.mp4", [self._T])
+        assert r[0]["ok"] is False
+        assert "模型未落位" in r[0]["error"]
+
+    def test_batch_slice_failure_honest(self, tmp_path, monkeypatch):
+        """切片整段失败 → 全 timing 如实标记（不静默，C17 口径）。"""
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(
+            asr_env, "slice_clips",
+            lambda media, timings, max_clips=20: {
+                "ok": False, "clips": [], "error": "ffmpeg 不可用",
+                "skipped": 0})
+        r = asr_env.batch_transcribe_clips("media.mp4", [self._T])
+        assert r[0]["ok"] is False and "切片失败" in r[0]["error"]
+
+
 class TestAsyncOps:
     def setup_method(self):
         # 全局操作态隔离（线程异步测试不串场）
