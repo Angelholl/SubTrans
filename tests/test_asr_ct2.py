@@ -12,20 +12,15 @@ from subtransjav.refine import asr_env, asr_runner, asr_runtime
 
 
 class TestEngineRouting:
-    """缺省与互斥：不带 --engine 时一切走 whisper 老路（零行为变化）。"""
+    """缺省与参数面：3.2 退役批起 ct2 唯一引擎（--engine 旗标保留=命令
+    契约稳定；legacy whisper 形态钉随硬删移除）。"""
 
-    def test_default_engine_is_whisper_path(self, capsys):
-        # 无 --engine、无 --audio → whisper 路径的参数校验报错（不触 whisper 导入）
+    def test_default_engine_is_ct2_requires_media(self, capsys):
+        # 无 --media → 参数校验报错（不触 faster_whisper 导入）
         rc = asr_runner.main([])
         assert rc == 2
         out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-        assert out["ok"] is False and "音频不存在" in out["error"]
-
-    def test_media_only_rejected_on_whisper(self, capsys):
-        rc = asr_runner.main(["--media", "x.mp4"])
-        assert rc == 2
-        out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-        assert "仅在 --engine ct2" in out["error"]
+        assert out["ok"] is False and "--media" in out["error"]
 
     def test_ct2_requires_srt_out(self, tmp_path, capsys):
         media = tmp_path / "a.wav"
@@ -34,13 +29,6 @@ class TestEngineRouting:
         assert rc == 2
         out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
         assert "--srt-out" in out["error"]
-
-    def test_ct2_mutex_with_audio(self, tmp_path, capsys):
-        rc = asr_runner.main(["--engine", "ct2", "--media", "x", "--srt-out",
-                              "o.srt", "--audio", "y"])
-        assert rc == 2
-        out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-        assert "互斥" in out["error"]
 
     def test_ct2_missing_media(self, tmp_path, capsys):
         rc = asr_runner.main(["--engine", "ct2", "--media", str(tmp_path / "gone.wav"),
@@ -232,27 +220,18 @@ class TestAsrRuntime:
 
 
 class TestDecouple:
-    """上游脱钩（D2026-1028-03 owner 令）：候选链 ct2 化+引擎分派。"""
+    """退役批（D2026-1029-01）源码面钉：legacy whisper 链无残留+ct2 唯一分派。"""
 
-    def test_no_hardcoded_upstream_default(self):
+    def test_no_whisper_backend_residual(self):
         import inspect
         src = inspect.getsource(asr_env)
-        assert "_UPSTREAM_DEFAULT_PYTHON" not in src
-        assert "whisperJAV" not in src.replace("WhisperJAV 运行 manifest", "")
-
-    def test_candidate_chain_legacy_only_no_machine_default(self, tmp_path, monkeypatch):
-        # ct2 不混入 legacy 候选链（跑不了 whisper 后端）；机器绑定缺省清除
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-        monkeypatch.delenv("SUBTRANSJAV_ASR_PYTHON", raising=False)
-        cands = asr_env._candidate_pythons("")
-        assert cands == []   # 无 env/settings → 空链（ct2 走分派层）
-
-    def test_candidate_chain_env_first(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-        monkeypatch.setenv("SUBTRANSJAV_ASR_PYTHON", str(tmp_path / "env.exe"))
-        (tmp_path / "env.exe").write_text("", encoding="utf-8")
-        cands = asr_env._candidate_pythons("")
-        assert cands[0][0] == "env"
+        # legacy whisper 链符号随硬删清零（退役批源码面钉，ct2 口径；
+        # def 级锚防 ct2_runner_command/resolve_ct2_model_dir 活符号误伤）
+        for sym in ("def _candidate_pythons", "def _runner_command",
+                    "def _spawn_runner", "def probe_asr_env",
+                    "ASR_RECOMMENDED_MODELS: list", "def resolve_model_dir",
+                    "def enumerate_models_three_sources"):
+            assert sym not in src, f"legacy whisper 链残留: {sym}"
 
     def test_run_transcription_dispatches_ct2(self, tmp_path, monkeypatch):
         # ct2 就绪 → ct2 路径（monkeypatch _run_transcription_ct2 捕获调用）
@@ -269,12 +248,13 @@ class TestDecouple:
         assert r["ok"] is True and r["text"] == "CT2OUT"
         assert seen["clip"] == "clip.wav"
 
-    def test_run_transcription_legacy_when_ct2_absent(self, tmp_path, monkeypatch):
+    def test_run_transcription_engine_absent_guides_install(self, tmp_path,
+                                                            monkeypatch):
+        # ct2 未装：唯一错误出口＝安装导向人话（退役批对冲钉，「唯一引擎，
+        # 首次使用需安装」口径；不再有 legacy whisper 回落）
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-        monkeypatch.setattr(asr_env, "_ct2_ready", lambda: False)
-        monkeypatch.delenv("SUBTRANSJAV_ASR_PYTHON", raising=False)
         r = asr_env.run_transcription("clip.wav")
-        assert r["ok"] is False and "探测降级" in r["error"]
+        assert r["ok"] is False and "唯一引擎" in r["error"]
         assert "asr_runtime install" in r["error"]
 
     def test_probe_includes_ct2_section(self, tmp_path, monkeypatch):

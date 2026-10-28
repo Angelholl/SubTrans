@@ -5,6 +5,7 @@ subtransjav-refine 命令行入口
 import argparse
 import contextlib
 import os
+import sys
 from typing import Any, cast
 
 
@@ -265,13 +266,15 @@ def build_parser():
                                  " LM Studio 按需加载，ctx/并发/端点与 AI "
                                  "分析同源；不跑 run_v2、不落任何产物）")
     # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照的 ASR 指定（镜像
-    # --ai-model 直连先例；不入 manifest 指纹——负向钉随批）
+    # --ai-model 直连先例；不入 manifest 指纹——负向钉随批）。
+    # 3.2 退役批（D2026-1029-01）：废弃壳一版——legacy whisper 链已删，
+    # 转写唯一引擎=ct2；旗标收下即暖警告（stderr 一行），无功能作用。
     grp_action.add_argument("--asr-model", default="",
-                            help="媒体重点对照 ASR 模型名"
-                                 "（缺省 large-v2，~/.cache/whisper 缓存）")
+                            help="已退役（转写唯一引擎=ct2），保留仅为命令"
+                                 "兼容，传入无功能作用")
     grp_action.add_argument("--asr-python", default="",
-                            help="本地 ASR 用的上游环境 Python 路径"
-                                 "（缺省按 env/实测默认探测）")
+                            help="已退役（转写唯一引擎=ct2），保留仅为命令"
+                                 "兼容，传入无功能作用")
     # 2.6.1 修订（D2026-1002-06，owner 反馈验证可选化）：媒体重点对照开关
     # 显式 CLI 层（镜像 v2_ctx/source_lang "缺省不赋"模式：不传=保 dataclass
     # 缺省 False 以让引擎页开关/user_settings/env 分层链生效；不入 manifest
@@ -696,6 +699,13 @@ def main(argv=None):
     apply_model_cache_env()
 
     args = build_parser().parse_args(argv)
+
+    # 3.2 退役批（D2026-1029-01）：legacy whisper 链废弃壳——旗标收下即
+    # 暖警告（stderr 一行，不失效不阻断），转写唯一引擎=ct2。
+    if (getattr(args, "asr_model", "") or "").strip() \
+            or (getattr(args, "asr_python", "") or "").strip():
+        print("--asr-model/--asr-python 已退役（转写唯一引擎=ct2），"
+              "传入无功能作用", file=sys.stderr)
 
     # 数据路径诊断（独立早退：先于 config_from_args，纯诊断不建配置不建目录）
     if getattr(args, "where", False):

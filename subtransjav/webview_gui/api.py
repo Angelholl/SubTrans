@@ -1604,53 +1604,10 @@ class TranslateAPI:
             _log_exc("refine_dict_download_progress")
             return {"success": False, "error": str(e)}
 
-    def refine_asr_download(self, model: str, source: str = "auto") -> dict[str, Any]:
-        """显式下载推荐 ASR 模型（2.6.3 批B，D2026-1003-01 ②）。
+    # 3.2 退役批（D2026-1029-01）：refine_asr_download/refine_asr_download_
+    # progress 端点随 legacy whisper 模型下载链（asr_downloader）删除；
+    # 模型下载走 CT2 引擎面板 refine_ct2_model_download。
 
-        model 白名单=推荐清单中 support=="available" 的 name；source ∈
-        {auto, official, mirror}（镜像 PENDING 时 mirror 显式报"暂无可用
-        镜像源"）。同步执行（3GB 档大文件，GUI 侧经 refine_asr_download_
-        progress 1s 轮询）；AsrDownloadError/AsrChecksumError 统一转
-        success=False + error（校验失败为后者的子类，一并覆盖）。
-        """
-        try:
-            from subtransjav.refine import asr_env
-            from subtransjav.refine.asr_downloader import (
-                AsrChecksumError,
-                AsrDownloadError,
-                download_asr_model,
-            )
-            ok_models = {str(e.get("name"))
-                         for e in asr_env.ASR_RECOMMENDED_MODELS
-                         if e.get("support") == "available"}
-            if str(model or "") not in ok_models:
-                return {"success": False,
-                        "error": f"未知或不可下载的 ASR 模型: {model}"}
-            if source not in ("auto", "official", "mirror"):
-                return {"success": False, "error": f"非法下载源: {source}"}
-            path = download_asr_model(str(model), source)
-            return {"success": True, "path": path}
-        except AsrChecksumError as e:
-            return {"success": False, "error": str(e)}
-        except AsrDownloadError as e:
-            return {"success": False, "error": str(e)}
-        except Exception as e:
-            _log_exc("refine_asr_download")
-            return {"success": False, "error": str(e)}
-
-    def refine_asr_download_progress(self, model: str) -> dict[str, Any]:
-        """ASR 模型下载进度快照（2.6.3 批B；只读零副作用）。
-
-        快照结构与词典下载进度同形：phase ∈ download/verify/done/failed，
-        可选 note=源回退可见提示（评议员条件①）。"""
-        try:
-            from subtransjav.refine.asr_downloader import (
-                asr_download_progress,
-            )
-            return {"success": True, **asr_download_progress(str(model))}
-        except Exception as e:
-            _log_exc("refine_asr_download_progress")
-            return {"success": False, "error": str(e)}
 
     def refine_ct2_status(self) -> dict[str, Any]:
         """CT2 转写引擎自管运行时状态（3.2.0/D2026-1028-03 脱钩轮）。
@@ -3996,27 +3953,14 @@ class TranslateAPI:
                   r.get("supported"), r.get("already_hot"),
                   r.get("skipped"), r.get("state"), r.get("reason"))
 
-    def _asr_probe_cache_path(self) -> str:
-        """探测快照落点（tests 可 monkeypatch；fail-soft 返回 "" 禁用缓存）。"""
-        try:
-            from subtransjav.refine import asr_env
-            return asr_env.probe_cache_path()
-        except Exception:
-            return ""
-
     def refine_asr_status(self, force: bool = False) -> dict[str, Any]:
-        """零写路径探测＋已存 ASR 选择回显（设置 KV asr_model/asr_python）。
+        """转写引擎状态面（3.2 退役批 ct2 唯一引擎，D2026-1029-01）。
 
-        2.6.1 修订（D2026-1002-06，模型推荐制）：新增 recommended（推荐
-        清单逐条 present/path/expected_path）、models_dir/cache_dir（两处
-        落位绝对路径）、crosscheck_enabled（设置 KV 回显）——下载链已删，
-        前端只展示"自备落位指引"。既有键全保留。
-        2.7.1（D2026-1005-01 承接批，评议 R5）：探测结果磁盘级快照缓存
-        （数据根 config/asr_probe_cache.json，TTL 10 分钟）——非 force 且
-        快照在龄→立即返回快照（probe_cached=True）；force（「重新探测」
-        按钮）或超龄/缺失→同步探测并写回快照。models_hf=HF hub cache
-        第 3 落位枚举（面板「需适配」来源）；triage/stderr_tail/ffmpeg_path
-        三分类诊断透出。"""
+        legacy whisper 探测/推荐清单/模型落位字段随链删除；返回 ct2
+        运行时状态（asr_env._ct2_status 单一来源）＋crosscheck_enabled
+        （设置 KV 回显）＋saved_* 废弃壳回显（legacy 设置 KV 原样透出，
+        消费链已退役）。force 参数保留（调用兼容，探测快照缓存语义已
+        随探测链删除，当前无效果）。"""
         try:
             asr_python = ""
             asr_model = ""
@@ -4031,38 +3975,11 @@ class TranslateAPI:
             except Exception:
                 pass
             from subtransjav.refine import asr_env
-            cache_path = self._asr_probe_cache_path()
-            r: dict[str, Any] | None = None
-            probe_cached = False
-            if not force and cache_path:
-                r = asr_env.load_probe_cache(cache_path)
-                probe_cached = r is not None
-            if r is None:
-                r = asr_env.probe_asr_env(asr_python_setting=asr_python)
-                if cache_path:
-                    asr_env.save_probe_cache(r, cache_path)
-            by_name = {m.get("name"): m for m in (r.get("models") or [])}
-            recommended: list[dict[str, Any]] = []
-            for entry in asr_env.ASR_RECOMMENDED_MODELS:
-                stem = str(entry.get("model") or entry.get("name") or "")
-                hit = by_name.get(stem)
-                recommended.append({
-                    **entry,
-                    "present": hit is not None,
-                    "path": str((hit or {}).get("path") or ""),
-                    "expected_path": os.path.join(asr_env.ASR_MODELS_ROOT,
-                                                  f"{stem}.pt"),
-                })
-            r["recommended"] = recommended
-            r["models_dir"] = asr_env.ASR_MODELS_ROOT
-            r["cache_dir"] = asr_env.ASR_CACHE_DIR
-            r["crosscheck_enabled"] = crosscheck_enabled
-            r["probe_cached"] = probe_cached
-            r["probe_cache_path"] = cache_path
-            r["success"] = True
-            r["saved_model"] = asr_model
-            r["saved_python"] = asr_python
-            return r
+            return {"success": True, "engine": "ct2",
+                    "ct2": asr_env._ct2_status(),
+                    "crosscheck_enabled": crosscheck_enabled,
+                    "saved_model": asr_model,
+                    "saved_python": asr_python}
         except Exception as e:
             _log_exc("refine_asr_status")
             return {"success": False, "error": str(e)}

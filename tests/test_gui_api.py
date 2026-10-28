@@ -817,12 +817,12 @@ def test_refine_get_stage_settings_first_run_flag(gui_api_obj, tmp_path,
 
 
 # ---------------------------------------------------------------------------
-# 2.6.1 修订（D2026-1002-06，模型推荐制+验证可选化）：ASR status 增强
-# recommended/models_dir/cache_dir/crosscheck_enabled + 设置 KV 直存
+# 3.2 退役批（D2026-1029-01）：refine_asr_status ct2 唯一状态面——
+# legacy 探测/推荐清单/落位/快照缓存字段随链删除
 # ---------------------------------------------------------------------------
-def test_refine_asr_status_recommended_and_crosscheck(gui_api_obj, tmp_path,
-                                                      monkeypatch):
-    """status 含 recommended（present/path/expected_path）与两处落位/开关。"""
+def test_refine_asr_status_ct2_only_shape(gui_api_obj, tmp_path,
+                                          monkeypatch):
+    """status=ct2 状态单一来源＋crosscheck 回显＋saved_* 废弃壳回显。"""
     from subtransjav.refine import asr_env
     path = tmp_path / "refine_stage_settings.json"
     path.write_text(
@@ -832,29 +832,16 @@ def test_refine_asr_status_recommended_and_crosscheck(gui_api_obj, tmp_path,
         encoding="utf-8")
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(path))
-
-    def _fake_probe(asr_python_setting=""):
-        return {"available": False, "reason": "x",
-                "models": [{"name": "large-v2",
-                            "path": "C:/cache/large-v2.pt", "bytes": 3}]}
-
-    monkeypatch.setattr(asr_env, "probe_asr_env", _fake_probe)
-    # 2.7.1：探测快照缓存路径隔离（防写真实数据根）
-    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
-                        lambda: str(tmp_path / "asr_probe_cache.json"))
+    canned = {"installed": False, "selfcheck_ok": False,
+              "model_present": False, "model": "large-v2", "models": []}
+    monkeypatch.setattr(asr_env, "_ct2_status", lambda: canned)
     r = gui_api_obj.refine_asr_status()
     assert r["success"] is True
-    recs = {e["name"]: e for e in r["recommended"]}
-    w = recs["whisper-large-v2"]
-    assert w["present"] is True
-    assert w["path"] == "C:/cache/large-v2.pt"
-    assert w["expected_path"] == os.path.join(asr_env.ASR_MODELS_ROOT,
-                                              "large-v2.pt")
-    q = recs["qwen3-asr-1.7b"]
-    assert q["present"] is False and q["support"] == "planned"
-    assert r["models_dir"] == asr_env.ASR_MODELS_ROOT
-    assert r["cache_dir"] == asr_env.ASR_CACHE_DIR
+    assert r["engine"] == "ct2"
+    assert r["ct2"] == canned
     assert r["crosscheck_enabled"] is True
+    assert r["saved_model"] == "large-v2"
+    assert r["saved_python"] == ""
 
 
 def test_refine_asr_status_crosscheck_default_false(gui_api_obj, tmp_path,
@@ -865,10 +852,10 @@ def test_refine_asr_status_crosscheck_default_false(gui_api_obj, tmp_path,
     path.write_text('{"stages": [], "settings": {}}', encoding="utf-8")
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(path))
-    monkeypatch.setattr(asr_env, "probe_asr_env",
-                        lambda asr_python_setting="": {"models": []})
-    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
-                        lambda: str(tmp_path / "asr_probe_cache.json"))
+    monkeypatch.setattr(asr_env, "_ct2_status",
+                        lambda: {"installed": False, "selfcheck_ok": False,
+                                 "model_present": False, "model": "large-v2",
+                                 "models": []})
     r = gui_api_obj.refine_asr_status()
     assert r["success"] is True
     assert r["crosscheck_enabled"] is False
@@ -4303,65 +4290,10 @@ def test_review_transcode_inflight_lock(gui_api_obj, monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 2.6.3 批B（D2026-1003-01 ②）：ASR 下载器端点 + source 透传 + sources 摘要
+# 3.2 退役批（D2026-1029-01）：refine_asr_download/download_progress 端点随
+# legacy whisper 模型下载链（asr_downloader）删除（相关测试一并移除）；
+# 模型下载走 CT2 引擎面板 refine_ct2_model_download。
 # ---------------------------------------------------------------------------
-def test_refine_asr_download_invalid_model_and_source(gui_api_obj):
-    """model 白名单（support=="available"）与 source 白名单硬拒。"""
-    got = gui_api_obj.refine_asr_download("nope")
-    assert got["success"] is False and "未知或不可下载" in got["error"]
-    got2 = gui_api_obj.refine_asr_download("qwen3-asr-1.7b")    # planned 不可下
-    assert got2["success"] is False and "未知或不可下载" in got2["error"]
-    got3 = gui_api_obj.refine_asr_download("whisper-large-v2", "bogus")
-    assert got3["success"] is False and "非法下载源" in got3["error"]
-
-
-def test_refine_asr_download_success_and_failure(gui_api_obj, monkeypatch,
-                                                 tmp_path):
-    from subtransjav.refine import asr_downloader as ad
-    rec = {}
-
-    def _fake(model, source="auto"):
-        rec["args"] = (model, source)
-        return str(tmp_path / "large-v2.pt")
-
-    monkeypatch.setattr(ad, "download_asr_model", _fake)
-    got = gui_api_obj.refine_asr_download("whisper-large-v2", "mirror")
-    assert got["success"] is True
-    assert got["path"] == str(tmp_path / "large-v2.pt")
-    assert rec["args"] == ("whisper-large-v2", "mirror")
-
-    def _busy(model, source="auto"):
-        raise ad.AsrDownloadError("该模型已有下载进行中")
-
-    monkeypatch.setattr(ad, "download_asr_model", _busy)
-    got2 = gui_api_obj.refine_asr_download("whisper-large-v2")
-    assert got2["success"] is False and "已有下载进行中" in got2["error"]
-
-    def _checksum(model, source="auto"):
-        raise ad.AsrChecksumError("SHA256 校验失败，已拒绝落位")
-
-    monkeypatch.setattr(ad, "download_asr_model", _checksum)
-    got3 = gui_api_obj.refine_asr_download("whisper-large-v2")
-    assert got3["success"] is False and "SHA256" in got3["error"]
-
-
-def test_refine_asr_download_progress_endpoint(gui_api_obj, monkeypatch):
-    """进度端点形状：success + 快照同形透传（含 note 可见提示）；无记录
-    success + 空。"""
-    from subtransjav.refine import asr_downloader as ad
-    monkeypatch.setattr(ad, "_ASR_DOWNLOAD_PROGRESS", {
-        "whisper-large-v2": {
-            "kind": "whisper-large-v2", "phase": "download",
-            "downloaded": 5, "total": 10, "error": None,
-            "note": "官方源不可达，已回退国内镜像"}})
-    got = gui_api_obj.refine_asr_download_progress("whisper-large-v2")
-    assert got["success"] is True
-    assert got["phase"] == "download"
-    assert got["downloaded"] == 5 and got["total"] == 10
-    assert got["note"] == "官方源不可达，已回退国内镜像"
-    empty = gui_api_obj.refine_asr_download_progress("nope")
-    assert empty == {"success": True}
-
 
 def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
     """source 透传（D2026-1003-06 条件②）：official/mirror 双参调用；
@@ -4402,74 +4334,9 @@ def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 2.7.1（D2026-1005-01 承接批，评议 R5）：refine_asr_status 探测快照缓存
-# + 三落位枚举/三分类透出（models_hf/triage/probe_cached）
+# 3.2 退役批（D2026-1029-01）：探测快照缓存/三分类透出钉随 legacy 探测链删除
+# （ct2 状态面 shape 钉见 test_refine_asr_status_ct2_only_shape）
 # ---------------------------------------------------------------------------
-
-def test_refine_asr_status_probe_cache_roundtrip(gui_api_obj, tmp_path,
-                                                 monkeypatch):
-    """非 force 读快照立即返回（probe_cached=True）并回填 decorations；
-    force=True 绕过缓存重新探测；超龄缓存不命中。
-    设置存储隔离到 tmp：本机真实 refine_stage_settings.json 可能含
-    media_crosscheck_enabled="1" 等用户态（2026-10-05 真机污染案例，
-    crosscheck 断言不得依赖本机文件）。"""
-    from subtransjav.refine import asr_env
-    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
-                        lambda: str(tmp_path / "refine_stage_settings.json"))
-    cache = tmp_path / "asr_probe_cache.json"
-    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
-                        lambda: str(cache))
-    calls = []
-    real_probe = asr_env.probe_asr_env
-
-    def _probe(asr_python_setting=""):
-        calls.append(1)
-        return real_probe(asr_python_setting="")
-
-    monkeypatch.setattr(asr_env, "probe_asr_env", _probe)
-    r1 = gui_api_obj.refine_asr_status()
-    assert r1["success"] is True and r1["probe_cached"] is False
-    assert len(calls) == 1
-    assert cache.is_file()
-    r2 = gui_api_obj.refine_asr_status()
-    assert r2["success"] is True and r2["probe_cached"] is True
-    assert len(calls) == 1                       # 快照命中，不再探测
-    assert r2["models_dir"] == asr_env.ASR_MODELS_ROOT
-    assert r2["crosscheck_enabled"] is False
-    r3 = gui_api_obj.refine_asr_status(force=True)
-    assert r3["probe_cached"] is False and len(calls) == 2
-    # 超龄失效
-    data = json.loads(cache.read_text(encoding="utf-8"))
-    data["timestamp"] -= 601
-    cache.write_text(json.dumps(data), encoding="utf-8")
-    r4 = gui_api_obj.refine_asr_status()
-    assert r4["probe_cached"] is False and len(calls) == 3
-
-
-def test_refine_asr_status_passthrough_triage_and_hf(gui_api_obj, tmp_path,
-                                                     monkeypatch):
-    """probe 结果的 triage/stderr_tail/models_hf/ffmpeg_path 原样透出。
-    设置存储隔离到 tmp（同 2026-10-05 本机设置态污染案例，防复发）。"""
-    from subtransjav.refine import asr_env
-    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
-                        lambda: str(tmp_path / "refine_stage_settings.json"))
-
-    def _probe(asr_python_setting=""):
-        return {"available": False, "reason": "x", "models": [],
-                "models_hf": [{"name": "Org/m", "source": "hf-hub",
-                               "path": "p", "bytes": 1,
-                               "format": "ct2",
-                               "backend_state": "adapter-needed"}],
-                "ffmpeg": False, "ffmpeg_path": "",
-                "triage": "module-missing", "stderr_tail": "tail..."}
-    monkeypatch.setattr(asr_env, "probe_asr_env", _probe)
-    monkeypatch.setattr(gui_api_obj, "_asr_probe_cache_path",
-                        lambda: str(tmp_path / "asr_probe_cache.json"))
-    r = gui_api_obj.refine_asr_status()
-    assert r["triage"] == "module-missing"
-    assert r["stderr_tail"] == "tail..."
-    assert r["models_hf"][0]["backend_state"] == "adapter-needed"
-    assert r["ffmpeg_path"] == ""
 
 
 # ---------------------------------------------------------------------------

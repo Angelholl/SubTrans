@@ -9,7 +9,7 @@
     {基名}.{语言码}.pass1.srt
     {基名}.{语言码}.pass2.srt
     {基名}.{语言码}.merged.subtransjav.srt
-    {基名}.{语言码}.merged.whisperjav.srt   （上游 WhisperJAV 原生命名）
+    {基名}.{语言码}.merged.whisperjav.srt   （上游转写工作流原生命名，历史产物兼容）
 """
 
 import logging

@@ -1,7 +1,7 @@
 """
-上游 ASR 运行信号通道（H4a 薄版）
+上游 ASR 运行信号通道（H4a 薄版；历史产物只读兼容）
 =================================
-读取上游 WhisperJAV 运行 manifest（whisperjav_run.json），提取转写可信度
+读取上游转写工作流运行 manifest（whisperjav_run.json），提取转写可信度
 信号（run 状态 / 语音覆盖率），供两处消费：
 
 - pipeline 闸门0：run 状态可疑时收紧检测（tighten），覆盖率过低时告警；
@@ -67,8 +67,8 @@ _TELEMETRY_SIGNAL_FIELDS = (
     "cuda_used_mb", "cuda_allocated_mb", "cuda_reserved_mb", "rss_mb",
 )
 
-# 场景低信任判定常量（实测出处：whisperjav 1.9.3 Balanced 模式 4 份 BAL
-# 样本 .abtest/out/BAL__*/raw_subs/*.asr_telemetry.jsonl——硬信号在正常
+# 场景低信任判定常量（实测出处：上游转写 Balanced 模式实测样本
+# asr_telemetry.jsonl 统计，实测明细存内部记录——硬信号在正常
 # 转写中稀有，可单独收紧；max_no_speech_prob 单独命中约 40% 场景
 # （静音/音乐段常态），单独使用会大范围误收紧，故与 mean_avg_logprob 合取）。
 _TRUST_MAX_COMPRESSION_RATIO = 2.4   # 压缩比硬上限（>此值多为循环/幻听）
