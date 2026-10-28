@@ -98,6 +98,9 @@ class BatchResult:
     translations: dict             # index -> text
     deleted: set                   # index 集合（留空=删除）
     failed: list                   # 重试后仍无法解析的 index（协议失败行）
+    untranslated: frozenset = frozenset()   # failed 子集：裸占位串形态行
+    # （d1028-37 观测件，D2026-1028-05 B5 拍板臂 A 维持＋第三案：模型对
+    # 残句确定性拒译的频率与挽回信号单列带出，零行为变更；空集=无）
 
     @property
     def ok_count(self) -> int:
@@ -304,6 +307,9 @@ class LLMClient:
         # 由 _recovery_lock 串行化，先到者消耗信用，后到者走现状路径
         self._recovery_lock = threading.Lock()
         self._recovery_credit = 1
+        # 裸占位串观测集（d1028-37 第三案）：translate_batch 判定归集，
+        # translate_entries 终局对 failed 行分类——零行为变更纯观测
+        self._placeholder_hits: set = set()
 
     # -- 单批请求 -----------------------------------------------------------
 
@@ -571,6 +577,8 @@ class LLMClient:
                 # 调用方回退原文+[未翻译] 标记。合规形态（占位+原文）不受
                 # 影响。
                 if text.strip() == _UNTRANSLATED_MARK:
+                    with self._lock:    # 观测归集（并发批安全），行为不变
+                        self._placeholder_hits.add(idx)
                     continue
                 result[idx] = text
         return result
@@ -589,6 +597,7 @@ class LLMClient:
         """
         batches = self.build_batches(entries, max_batch_size, scene_threshold)
         total = len(batches)
+        self._placeholder_hits.clear()   # 观测集按本次全量翻译归集
         self._log(f"[llm] 共 {len(entries)} 条，分 {total} 批"
                   f"（并发={self.config.concurrency}）")
 
@@ -712,5 +721,8 @@ class LLMClient:
                     translations[idx] = text
             else:
                 failed.append(idx)
+        # 观测件（d1028-37 第三案）：failed 中裸占位串形态行单列带出
+        untranslated = frozenset(
+            i for i in failed if i in self._placeholder_hits)
         return BatchResult(translations=translations, deleted=deleted,
-                           failed=failed)
+                           failed=failed, untranslated=untranslated)
