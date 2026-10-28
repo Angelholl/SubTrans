@@ -2,15 +2,15 @@
 
 > 由 SubTransJAV 项目迭代而来：原 JAV 领域专用字幕翻译工具，现为通用字幕翻译与精修工具链。
 
-自带角色卡与词典的双引擎字幕翻译与精修工具链：LLM 提示词工程 + 术语自学习（自动学习默认关闭）+ 幻觉检测 + 质量审校，日→中方向开箱即用，配套 Whisper 转写工具链使用；初始自带通用模板，动漫、GAL 等领域可自设模板与规则。
+自带角色卡与词典的双引擎字幕翻译与精修工具链：LLM 提示词工程 + 术语自学习（自动学习默认关闭）+ 幻觉检测 + 质量审校，日→中方向开箱即用，内置 CT2 本地转写引擎支撑媒体对照与漏听核对（按需安装）；初始自带通用模板，动漫、GAL 等领域可自设模板与规则。
 
-A dual-engine subtitle translation & refinement toolkit (evolved from the SubTransJAV project) with built-in persona templates and dictionaries: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review, Japanese→Chinese out of the box. Works with Whisper-based transcription toolchains; ships with a general-purpose template, and domain templates (anime, GAL, etc.) can be customized.
+A dual-engine subtitle translation & refinement toolkit (evolved from the SubTransJAV project) with built-in persona templates and dictionaries: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review, Japanese→Chinese out of the box. Ships with a built-in CT2 transcription engine (opt-in install) for media cross-checks and missed-line verification; ships with a general-purpose template, and domain templates (anime, GAL, etc.) can be customized.
 
 ## 下载与安装
 
 - **EXE 安装包（主推）**：普通用户只需读本节——到 [Releases](../../releases) 页下载安装包（`SubTrans-setup-*.exe`）双击安装即可；系统要求与安装步骤见下方[安装](#安装) ①。
 - 进阶 / 开发者：源码（`首次安装.bat`）或 pip 方式安装，见下方[安装](#安装) ②③。
-- 首次启动后应用会在后台自动检测上游 ASR 环境（短暂启动一次 Python 子进程，通常数秒）；检测期间不影响正常翻译操作，结果稍后显示在引擎页。
+- 转写功能基于内置 CT2 运行时（运行时约 109MB、模型约 3GB，均不预装）：首次使用前在引擎页一键安装/下载即可；未安装不影响翻译主流程（媒体对照/漏听核对如实跳过）。
 
 本文档以中文为主体；英文用户可直接跳转 [English Quickstart](#english-quickstart)。
 
@@ -31,12 +31,12 @@ A dual-engine subtitle translation & refinement toolkit (evolved from the SubTra
 - **压制成品输出**：翻译完成后可自动压制（GPU 编码），成品已存在但字幕更新时自动重压
 - AI 质量分析（质量与建议页）：模型读取质量报告、导读条目与术语冲突汇总，输出术语/TM/一般观察三类建议，逐条人工确认后才写库，永不自动落库
 - 文本层质量巡检：单行超长进质量报告导读行动条目、可条目级定点重翻；语速（CPS）与时间轴间隙为纯观测，不触发自动重翻
-- **视听对比（疑似漏听检测）**：以媒体音轨为参照比对字幕覆盖率，疑似漏听条目进质量报告导读并可快速试听（mkv 经 ffmpeg 抽取）；检测路径为 ffmpeg 抽取音频 → 能量粗筛（「粗筛」即指此能量级初筛，精核由全链自动化的漏听二级 whisper 转写承担）；未装 ffmpeg 时该检测不产出，不影响翻译主流程。全链自动化的漏听二级核对经三维置信门分档，高置信自动补行缺省关闭（校准门达标才启用）。CLI 经 `--media-path` 指定媒体文件
+- **视听对比（疑似漏听检测）**：以媒体音轨为参照比对字幕覆盖率，疑似漏听条目进质量报告导读并可快速试听（mkv 经 ffmpeg 抽取）；检测路径为 ffmpeg 抽取音频 → 能量粗筛（「粗筛」即指此能量级初筛，精核由全链自动化的漏听二级本地转写（CT2 引擎）承担）；未装 ffmpeg 时该检测不产出，不影响翻译主流程。全链自动化的漏听二级核对经三维置信门分档，高置信自动补行缺省关闭（校准门达标才启用）。CLI 经 `--media-path` 指定媒体文件
 - 幻觉检测 + 加固短语规则（YAML，可自行维护）
 - 双语字幕上下文预审（跨行上下文，防误翻）
 - 质量报告 + 双引擎分歧分析
 - 校对视图（校对页）：导入视频与字幕并排人工复核——字幕列表与播放双向联动、质量报告疑点段转跳/试听/确认标记、行内改译文、保存自动备份原文件并重编号（UTF-8 重写，兼容 GBK 读取）
-- ASR 模型管理（引擎页）：自动探测本机已有模型（上游 WhisperJAV 环境与常见缓存）下拉即用，未装时提供推荐模型自备指引；词典一键下载；媒体音频对照验证为可选开关（默认关闭，全程本地）
+- CT2 转写引擎面板（引擎页）：运行时安装与模型下载一键操作、状态自检行内展示；词典一键下载；媒体音频对照验证为可选开关（默认关闭，全程本地）
 - 本地上下文窗口缺省 16384：可经 `config/user_settings.json`（`v2_ctx_local`）、环境变量或 `--v2-ctx` 分层覆盖
 - 词库治理：全角/半角（NFKC）归一与拉丁词界匹配、单批注入上限 100 条、结构化 JSON 防注入包装、三级词库链冲突可见化
 - Webview GUI + CLI 双入口
@@ -129,21 +129,9 @@ GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留
 - 本地服务（lmstudio / ollama / siliconflow / custom）模型均需 `--s1-model` / `--s3-model` 显式指定（GUI 在引擎页选择）；云端 deepseek / zen 有内置默认模型。`--profile` 与模型搭配无关。
 - 测试语料为 JAV 影片（日译中方向），结论仅代表该领域实测表现；通用场景请选择你自备的通用翻译模型（如 qwen / gemma 等），席位搭配逻辑仍可参考。
 
-## 上游转写配置推荐（WhisperJAV，可选上游）
+## 关于上游转写（历史产物只读兼容）
 
-> 本节为 JAV 源转写实测精简版；其他类型片源直接使用任意 Whisper 转写产物（SRT）即可，无需套用本节配置。完整两轮 11 部全片实测（备选拍档、提速/求净按片开关、时间轴备注、不推荐清单、微调模型）见 [docs/模型与转写实测推荐.md](docs/模型与转写实测推荐.md)。
-
-默认推荐：两遍 ensemble，覆盖优先（两轮实测均全场第一，维持不变）：
-
-```bat
-whisperjav <视频> --ensemble ^
-  --pass1-pipeline qwen --pass1-sensitivity aggressive --pass1-scene-detector semantic --pass1-speech-segmenter whisperseg ^
-  --pass2-pipeline qwen --pass2-sensitivity aggressive --pass2-scene-detector semantic --pass2-speech-segmenter ten ^
-  --merge-strategy pass1_primary
-```
-
-- **为什么覆盖优先**：漏掉的台词在下游不可恢复，而重复/碎行噪声会被本项目的闸门过滤＋预合并吸收——实测该配置产物喂入下游过滤，4800+ 行仅删除 4 行。
-- **升级注意**：不要 `pip install -U whisperjav`（会连带更换 CPU 版 torch），用官方 release wheel 加 `--no-deps` 安装。
+本项目转写已内置（CT2 自管运行时，见上方特性与安装说明），不依赖、不分发任何上游转写环境。对既有用户的历史产物保持**只读兼容**：上游 WhisperJAV 工作流产出的源文 SRT（`.merged.whisperjav` 命名族）、运行清单 `whisperjav_run.json` 与遥测旁车 `.asr_telemetry.jsonl` 可直接作为输入被识别与配对（媒体配对、条目级阈值自适应等特性照常生效）。上游工具自身的用法不在本文档范围；历史实测记录见 [docs/模型与转写实测推荐.md](docs/模型与转写实测推荐.md)（存档性质）。
 
 ## 架构一览
 

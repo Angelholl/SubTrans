@@ -16,6 +16,11 @@
 ### 变更
 
 - **ASR 探测状态新增 ct2 一栏**：`refine_asr_status` 探测结果附带 ct2 运行时状态（已装/自检/模型在位/模型清单），新增 `refine_ct2_status`、`refine_ct2_install`、`refine_ct2_model_download` 三个桥端点（GUI 面板接线待界面预算流程）。
+- **转写引擎 ct2 唯一化（3.2 退役批）**：legacy whisper 后端退役——`asr_runner` 仅保留 `--engine ct2` 整片转写模式；引擎分派删除 whisper 回落分支，未安装运行时时报错文案统一导向 ct2 安装（「唯一引擎，首次使用需安装」）；CLI `--asr-python`/`--asr-model` 与对应设置项保留一版废弃壳（传入提示已退役，无功能作用）。ct2 转写产物补齐三维置信键透传（no_speech_prob/avg_logprob/compression_ratio）——此前 ct2 臂缺键使漏听二级核对的三维置信门静默失效，本批随退役一并修复。
+
+### 移除
+
+- **legacy whisper 模型下载与管理面**：`asr_downloader` 模块（.pt 模型三源下载引擎）与推荐模型目录（ASR_RECOMMENDED_MODELS）删除；GUI「ASR 模型」卡收敛为 CT2 单面板（引擎状态/安装/模型下载），上游环境探测红绿灯、.pt 模型下拉与「模型管理」面板移除；`refine_asr_download` 系桥端点删除。用户历史产物读取兼容**保留**（`.merged` 命名族源文 SRT／`whisperjav_run.json` 运行清单／遥测旁车文件）。
 
 ## [3.0.7] - 2026-10-28
 
