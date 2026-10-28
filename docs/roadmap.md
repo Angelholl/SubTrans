@@ -165,7 +165,7 @@
 - **骨架批** ✅（2026-10-28，owner 开工令=3.1-3.3 骨架全建）：评测 harness `subtransjav/refine/eval_baseline.py`（代理指标四件+Wilson 门原语+引擎槽位注册表+JSON/MD 报告；诚实退化窗口缺失显式 null；20 钉纯合成夹具）；全量 2788+4；提交 9002d2e。GUI 报告页=后续批（钉⑤解冻流程）。
 - **基线实跑首件** ✅（2026-10-29）：eval_baseline 对 e2e8.wav（83.9s 拼接音频）ct2 臂真跑出报告（17 行；hallucination_proxy 70.6%/omission 19.8%/CPS p50 3.61，窗口检测正常 windows_error=null）——ct2 臂当日可得实证（运行时 venv+模型落位+真转写 17 段正确日文 rc=0）；**legacy whisper 臂＝本机无上游环境（脱钩后候选链 env>settings 均空），按口径显式 null 不填假数**——该 null 本身即「安装版用户 ASR 现状」的实证基线。报告存内部记录（树外 %TEMP%/eval-310/）；②d 217 条已标注普查并入评测资产（候补金标，登记 D2026-1025-01）。双臂 agreement 待 ct2 长片产物与上游环境补齐后出。
 
-## 3.2.0 —— CT2 转写引擎（默认关，opt-in）（D2026-1028-03 立项）⬜
+## 3.2.0 —— CT2 转写引擎（唯一引擎；运行时/模型显式安装 opt-in 维持）（D2026-1028-03 立项；D2026-1029-01 退役批）⬜
 
 - **自管 ASR 运行时**：按需安装独立运行时，摆脱上游 env 寄生（现状 asr_env.py 硬编码本机上游路径，安装版 ASR 实际不可用——本项=给安装版用户首次解锁 ASR）；**分发机制开工前置 spike 三案对拍**（A 预打包 runtime zip 照词典链先例/B python-embed+离线 wheels/C 在线 venv+pip 镜像），干净环境"下载→安装→selfcheck→转写"全链数字入档后定案（HRO-1 采纳）。
 - **引擎与模型**：faster-whisper large-v2（Systran 转换版，单 zip 打包复用 sha256 pin 下载链+镜像上传）+ asr_runner ct2 后端（clips 切片/UTF-8 加固/selfcheck 保留）；上游 whisper 与 ct2 并行一个真机周期后另拍切缺省。
@@ -174,6 +174,9 @@
 - **骨架批** ✅（2026-10-28）：自管运行时 `asr_runtime.py`（install/status/selfcheck；案 A pin 双空=未发布态；案 C frozen 拒绝）+ asr_runner ct2 整片后端（`--engine` 缺省 whisper=零行为变化；四旋钮 PROVISIONAL；SRT+词级 sidecar schema subtransjav.ct2.words/1）；15 钉（fake 模块全函数 e2e）；全量 2803+4；提交 504c749。
 - **布局契约批（D2026-1028-04）** ✅（2026-10-28，commit 0b0af60）：生产路径「装完仍判未安装」三方布局不一致真缺陷收口——运行时认证改 manifest 契约（runtime.json：layout_version/python_exe/site_packages，安装器核验后回写 zip_sha256；fallback 探测仅诊断非认证）+ zip 安装布局清单校验门（不符即拒+解包残留清理）+ selfcheck 升级（selfcheck 脚本优先+1s 正弦波音频链）+ 定稿布局确定性构建脚本实装（tools/build_ct2_runtime，重建件 1.1.0=109,673,863B sha256 a53da813…真构建+真产物 selfcheck rc=0）+ 429/5xx 退避与 no_proxy 代理中和（dict_manager）+ 契约测试 14 钉防再漂移（全量 2852+4 只增）。细节存内部记录（D2026-1028-04 执行追记）。**遗留（卡外收尾）=HF 重传 1.1.0（待 owner token）→生产路径 install→真 e2e→verified 翻转**。
 - **脱钩轮（owner 2026-10-28 无人值守令：CT2 做完+HF 上传代做+解决安装版无 ASR+上游正式脱钩）** ✅ 全落（细节存内部记录 D2026-1028-03 追记）：①上游绑定清除——候选链去机器相关缺省路径（env>settings，legacy whisper 链仅显式可达），转写主路=ct2 引擎分派（run_transcription/batch_transcribe_clips 入口 _ct2_ready），probe 状态面增 ct2 一栏；②守卫下载链接线实装（https 域白名单+重定向逐跳+sha256 pin 逐字节+防 zip-slip；运行时+模型双件）；③双 zip 构建完成（large-v2 3,089,579,624B/运行时 106,267,550B 均含构建实录 sha256）+pin 回填；④断行器接入 ct2 写盘链（缺省开，--no-line-break 可关；sidecar 恒存原始词级）；⑤api 桥三端点（refine_ct2_status/install/model_download）+异步操作面；⑥**本机 e2e 实证**：运行时自检 OK+真转写出正确日文分段（引擎分派→运行时子进程→SRT→契约回读，拼接音频 RTF≈1.0）；⑦运行时落位规则=数据根非仓库根时 runtime/ct2、仓库根（pip/源码开发形态）外置 LOCALAPPDATA 防 site-packages 污染扫描面。全量 2838+4；提交 3eb8297/b5b56e2/ad81b80。**遗留=HF 上传（两件已构建核验，待 owner token；runbook 存内部记录）+模型 verified 翻转+GUI 面板接线（钉⑤解冻提案，待裁决）**。
+- **退役批（D2026-1029-01，owner 六项拍板全按推荐，2026-10-29）** 🔄：legacy whisper 后端硬删＋CLI/设置废弃壳一版＋ct2 三维置信键透传捆绑（在线缺陷修复：ct2 臂缺键使漏听二级置信门静默失效）；ct2 维持显式安装 opt-in（「唯一引擎，首次使用需安装」文案）；asr_meta 输入兼容三面保留（run.json／.merged 命名族／asr_telemetry 遥测）；GUI ASR 卡收敛 ct2 单面板（id/键解冻提案另走）；文档收敛短注（README 上游节＋手册 §2.5）；C22 拆两件（契约补齐随本批，140/140 回放实跑留 3.2.1 前置）；测试基线净减授权 30-45 钉。卡=d1029-全脱钩退役-批清单（存内部记录）。
+- **件B GPU 通道（D2026-1029-02 立项，件B 先行）** ⬜：独立 DLL 补丁包 opt-in——**主程序轻量化硬约束**（运行时主 zip 不并入 DLL；安装后检测 GPU 能力，用户需要再装，无 GPU 零打扰）；DLL 源=nvidia 官方 pip wheel，体积 1GB zip 量级（评议修正值）；**第 0 步=Blackwell/sm_120 本机 30 分钟 go/no-go 实测**；验收含半套 DLL 失败注入钉+GPU/CPU 同媒体对拍+int8 系精度对拍一次关闭+真机 e2e；实装卡排退役批收口后。
+- **件A 双 pass 覆盖合并（D2026-1029-02 立项）** ⬜：pass1 精准档+pass2 召回档时轴空洞填充（上游 F06 同构），合并 SRT+双 pass sidecar 幂等可回放；评测门分层统计（全片＋填充段子集分报幻听代理）；实装前置=退役批批1 置信透传＋四旋钮 A/B 定案；「媒体→源文 SRT」CLI 入口先行（最小单 pass 先行解耦），GUI 另拍。
 - **目标时点**：2026-11 中下旬（~11-25）。
 
 ### 3.2.1 —— 断行器+C22 重校准+幻觉词表（3.2.0 拆版，D2026-1028-03）⬜
