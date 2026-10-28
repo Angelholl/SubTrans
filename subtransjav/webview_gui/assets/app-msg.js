@@ -907,6 +907,19 @@ const MSG = {
     asrCrosscheckLabel: '启用媒体重点对照（本地切片重转写验证）',
     asrCrosscheckTitle: '用于翻译完成后对媒体切片做本地重转写重点对照；须自备上游 Python 环境，未配置不影响正常翻译。',
     asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
+    // CT2 转写引擎面板（钉⑤解冻提案 d1028-38：面板标题为唯一静态键
+    // （双表同名，HTML data-i18n+MSG），其余全 JS 态键零静态 i18n 消耗；
+    // api 桥三端点接线，安装/下载=后台异步操作面）
+    ct2_panel_title: 'CT2 转写引擎（实验性，默认关）',
+    ct2InstallBtn: '安装运行时',
+    ct2InstallRunning: '安装中…（守卫下载＋布局校验＋自检）',
+    ct2ModelBtn: '下载模型',
+    ct2ModelDownloading: '模型下载中…',
+    ct2NotInstalledFmt: extra => `运行时未安装${extra || ''}（安装后自动布局校验＋自检）`,
+    ct2ReadyFmt: (cert, detail) => `运行时已装（认证 ${cert}｜自检：${detail}）`,
+    ct2FailFmt: e => `CT2 状态获取失败：${e}`,
+    ct2ModelPendingFmt: s => `模型 large-v2：${s}`,
+    ct2OpFailFmt: (kind, rc) => `${kind}失败（rc=${rc}），详见运行日志`,
     // 2.7.1 模型管理面板（D2026-1005-01 承接批，AppModal kind='models'；
     // 全 JS 态键不受静态 cap 200 约束，由 test_gui_js_static 定向断言守护）
     asrModelsBtn: '模型管理',

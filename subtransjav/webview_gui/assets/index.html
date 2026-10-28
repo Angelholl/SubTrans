@@ -440,6 +440,25 @@
                     </div>
                 </div>
 
+                <!-- CT2 转写引擎面板（钉⑤解冻提案 d1028-38，D2026-1028-03 脱钩轮
+                     待裁决项→「全部开工」令批准）：id +4 / 静态 data-i18n 键 +1；
+                     api 桥三端点 refine_ct2_status/install/model_download 接线，
+                     按钮/状态全 JS 态文案（MSG 键零静态消耗，沿词典卡先例）；
+                     安装/下载=后台异步操作面 1s 轮询，终态自动翻转 -->
+                <div class="form-card" data-testid="ct2-panel">
+                    <div class="form-card-header" data-i18n="ct2_panel_title">CT2 转写引擎（实验性，默认关）</div>
+                    <div class="section-content">
+                        <div class="action-row">
+                            <span id="refineCt2Status" class="muted"></span>
+                            <button type="button" id="refineCt2InstallBtn" class="btn btn-compact"><span></span></button>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <span id="refineCt2ModelStatus" class="muted"></span>
+                            <button type="button" id="refineCt2ModelBtn" class="btn btn-compact"><span></span></button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
                      2.6.5 段2（D2026-1004-01 #4/#5）：空态引导条 #dictEmpty 显式删除
                      （FROZEN_IDS 215→214 / FROZEN_I18N_KEYS 189→187 双重钉），空态

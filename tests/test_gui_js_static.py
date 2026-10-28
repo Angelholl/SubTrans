@@ -1442,8 +1442,8 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # d1024 批3 件B（D2026-1024-01）：TM/断点 8 静态 id 撤除迁入合并弹窗，
     # 显式解冻 225→217；d1025-⑥a 换代（D2026-1025-01 裁决⑥，2026-10-27）：
     # 剧情自摘要邻位 +refineSynopsisCast（人物提示子开关，默认不勾），
-    # 显式解冻 217→218
-    assert len(ids) == 218, f"id 全集数漂移（d1025-⑥a 解冻后现契约 218），实为 {len(ids)}"
+    # 显式解冻 217→218；d1028-38 换代（CT2 面板，钉⑤解冻提案）：+4 → 222
+    assert len(ids) == 222, f"id 全集数漂移（d1028-38 解冻后现契约 222），实为 {len(ids)}"
     # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
     bind = _extract_function(src, "bindDom")
     assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
@@ -1878,7 +1878,9 @@ def test_asr_card_restructured_no_hardcoded_english():
     """
     html = INDEX_HTML.read_text(encoding="utf-8")
     start = html.index("<!-- ASR 模型管理")
-    end = html.index("<!-- 词典管理", start)
+    # d1028-38：ASR 卡与词典卡之间插入 CT2 面板卡（钉⑤解冻提案）——ASR 卡
+    # 切片终点改指 CT2 面板注释（词典管理锚已不再紧邻 ASR 卡）
+    end = html.index("<!-- CT2 转写引擎面板", start)
     card = html[start:end]
     for banned in ("Re-detect", "Media crosscheck", "upstream python"):
         assert banned not in card, f"ASR 卡残留硬编码英文: {banned}"
@@ -3501,7 +3503,8 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
-    无内联 width:auto；id 全集数 217 / data-i18n 键集 174 契约数零漂移
+    无内联 width:auto；id 全集数 222 / data-i18n 键集 177 契约数零漂移
+    （d1028-38 前为 218/176，CT2 面板 +4 id +1 键随钉⑤解冻提案换代）
     （d1024 批3 件B：TM/断点 8 id 撤除、17 个静态 data-i18n 锚随区块撤除，
     tm_enable_label 因右栏 sys-summary 行仍消费而保留）
     （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
@@ -3514,8 +3517,10 @@ def test_batch3_ai_config_row_pins_survive():
         assert f'id="{dom_id}"' in row, f"配置行缺少锚点: {dom_id}"
     assert 'style="width:auto' not in row, "配置行残留内联 width:auto"
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
-    # d1025-⑥a（D2026-1025-01 裁决⑥）：+refineSynopsisCast，显式解冻 217→218
-    assert len(ids) == 218, f"id 全集数漂移（契约 218），实为 {len(ids)}"
+    # d1025-⑥a（D2026-1025-01 裁决⑥）：+refineSynopsisCast，显式解冻 217→218；
+    # d1028-38（CT2 面板，钉⑤解冻提案）：+4（refineCt2Status/InstallBtn/
+    # ModelStatus/ModelBtn）→ 222
+    assert len(ids) == 222, f"id 全集数漂移（契约 222），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -3523,8 +3528,9 @@ def test_batch3_ai_config_row_pins_survive():
     # + 翻译TAB快捷钮独立键 start_btn_tab（d1023 同日 owner 指定）
     # 解冻后契约值（D2026-1023-02/03；快照钉⑤b 为全集全等断言，此行只锁计数，
     # 漂移细节归钉⑤b）；d1025-⑥a（D2026-1025-01 裁决⑥）+2 键
-    # （synopsis_cast_label/synopsis_cast_title）→ 176
-    assert len(i18n) == 176, f"data-i18n 键集数漂移（契约 176），实为 {len(i18n)}"
+    # （synopsis_cast_label/synopsis_cast_title）→ 176；
+    # d1028-38（CT2 面板）+1 键（ct2_panel_title）→ 177
+    assert len(i18n) == 177, f"data-i18n 键集数漂移（契约 177），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -7221,6 +7227,11 @@ def test_js_sources_layer_pinned():
        refine 家族 d48cd305…/213,447B、全库 bbfa628a…/510,011B（index.html
        +refineSynopsisCast 复选框、app-msg.js +2 键、app-refine-core.js
        buildRefineOptions +1 键接线；旧钉 b1c0057a… / a4cafd6c… 退役）；
+       d1028-38 换代（CT2 面板接线，钉⑤解冻提案 d1028-38，2026-10-29）：
+       refine 家族 11392646…/216,672B、全库 bff0fd35…/514,159B（index.html
+       +ct2 form-card 4 id、app-msg.js +10 键（ct2_panel_title 静态键双表
+       同名）、app-refine-asr.js 尾部 ct2 接线块；旧钉 d48cd305… /
+       bbfa628a… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7233,7 +7244,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "bbfa628a98a7dda3454b80d6d2432cbd78a4e534bee7f3bd06d382635c795dcb"), \
+        "bff0fd357530994782b7a7e18adfa52ba7dcba577923e795647002f9349eb0cc"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7243,7 +7254,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "d48cd3058fc99afc70101c16a420247c0c99a3a6564306663432611d10cd7b7e"), \
+        "1139264600ae160ad5045574a87101252f1c1ba5c10bdd30b332d302dc51e263"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7263,8 +7274,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (64866,
-                       "4734def132400faa0779b6551487e5e2bc5a6d3a4d0e9b6854f17cb610448657"),
+        "app-msg.js": (65789,
+                       "121d5ae8b69f3e56ad19ba2ff9a286a720d619eb81b3dc1bd5100ebdac7f6a2b"),
         "app-modal.js": (110772,
                          "f0ab0e9ba60bb5844e189d9d854fa522e72dfb808ea6f505f453ef0e09be8c00"),
         "app-error-handler.js": (745,
@@ -7311,8 +7322,8 @@ def test_js_split_integrity_pinned():
                              "ce941f6b1605d221321a52daaaf9e896b7ce64d570fd1125d8913a1219792de9"),
         "app-refine-batchfix.js": (25976,
                                    "fb802a9b43e509aad696be184fd8b16fd925da89ae6f577dab00665ccfd1ea4a"),
-        "app-refine-asr.js": (5258,
-                              "24da1757e9defaba78ccb935e7708497ba8ac6b948ae79bee787ab70247b7776"),
+        "app-refine-asr.js": (8483,
+                              "75e40b82e45bb5b3a0389b89409bb71fd4ee61138f0580c4b202550de0a33014"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
         "app-refine-bind.js": (17441,
@@ -7370,6 +7381,9 @@ _REFINE_TOP_NAMES = frozenset({
     "$", "AI_CLOUD_PROVIDERS", "ASR_SOURCE_LABELS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
     "DICT_STOP_GRACE_MS", "FULLCHAIN_SCOPE_NOTE", "GUIDE_ITEMS_MODAL_TITLE",
     "GUIDE_ITEMS_OPEN_BTN_LABEL", "GUIDE_SUFFIX", "MODEL_REFRESH_SVG", "REFINE_PROVIDER_URLS",
+    # d1028-38（CT2 面板接线）：+7 顶层函数（钉⑤解冻提案）
+    "ct2Install", "ct2ModelDownload", "ct2ModelLine", "ct2Poll",
+    "ct2Refresh", "ct2Render", "ct2Set",
     "__warmupInflight", "_appliedPolishParams", "_dictBusyKind", "_dictCustomDir",
     "_tmBreakParams",
     "_dictDirCache", "_dictEnsureHint",
