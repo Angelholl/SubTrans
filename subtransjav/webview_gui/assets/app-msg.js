@@ -660,15 +660,11 @@ const MSG = {
     sys_summary_title: '系统状态',
     sys_summary_unavailable: '不可用',
     sys_summary_version: '版本',
-    // 批3 扩展（D2026-1002-12）：角色卡行 + ASR 行动态渲染所需键（全 JS 态，
-    // 零静态 i18n 消耗；角色卡标签复用 templates_dir_label，ASR 行用短标签
-    // sys_asr_row_label 防溢出，全称经行级 title 悬停呈现——D2026-1004-01 段2 追回）
+    // 批3 扩展（D2026-1002-12）：角色卡行动态渲染所需键（全 JS 态，
+    // 零静态 i18n 消耗；角色卡标签复用 templates_dir_label。
+    // 3.2 退役批 D2026-1029-01：ASR 行随 whisper 探测面删除，sys_asr_* 四键同删）
     sys_roles_count: n => `${n} 张`,
     sys_roles_fallback: '内置回落',
-    sys_asr_row_label: 'ASR 模型',
-    sys_asr_undetected: '未探测',
-    sys_asr_unconfigured: '未配置',
-    sys_asr_ready: m => `就绪 · ${m}`,
     media_source_label: '媒体来源',
     media_source_auto: '自动发现',
     media_source_explicit: '显式指定',
@@ -884,33 +880,18 @@ const MSG = {
     // 后端侧同义键=strings.py fix_ai_indep_half_ignored，双表镜像）
     aiIndepHalfIgnored: '分析独立配置不完整，已忽略',
     batchFixSourceTag: s => `（生效源：${s}）`,
-    // 2.6.0 批3（D2026-1002-04-批3）：ASR 模型管理（媒体重点对照，音频零出域）。
-    // asr_panel_title 为静态 data-i18n 键（HTML+MSG+钉⑤三处同步）；其余 JS 态
-    asr_panel_title: 'ASR 模型（媒体重点对照）',
-    asrRefreshBtn: '重新探测',
-    asrProbeReady: (ver, m) => `上游 ASR 就绪（whisper ${ver}｜模型缓存 ${m}）`,
-    asrProbeNoModel: '模型缓存缺失（可自备推荐模型）',
-    asrProbeFail: e => `上游 ASR 不可用：${e}`,
-    // 2.7.1（D2026-1005-01 承接批）：红绿灯🟡档文案（上游通但缺模型/缺 ffmpeg）
-    asrProbeUpstreamOk: '上游环境可达；模型或 ffmpeg 有缺口——打开「模型管理」查看/补齐',
-    asrSelectPlaceholder: '选择 ASR 模型（媒体重点对照用）',
-    // 2.7.3 件③：ASR 状态三口径对齐——红绿灯空态文案 + 下拉占位项
-    // （全 JS 态零静态 id/data-i18n；strings.py 双表同步）
-    asrModelUnselected: '未选择',
-    asrModelPlaceholder: '未选择（点选即保存）',
-    asrSaved: '已保存 ASR 模型选择',
-    // 批2（D2026-1002-12 拍板点1）：ASR 卡重整空态/说明文案（JS 态零静态键）
-    asr_env_undetected: '未探测——点击「重新探测」检测本机 ASR 环境',
+    // 3.2 退役批（D2026-1029-01）：ASR 卡收敛媒体重点对照单卡（whisper 半边
+    // 36 键删除，见 d1029-退役批GUI解冻提案.md 逐名列账）。
+    // asr_panel_title 为静态 data-i18n 键（HTML+MSG 同步）
+    asr_panel_title: '媒体重点对照（本地转写验证）',
+    asrSaved: '已保存设置',
     asrCrosscheckNote: n => `；本地转写 ${n} 段对照`,
-    // 2.6.1 修订（D2026-1002-06，模型推荐制）；2.7.1：入口说明独立行删除
-    // （asr_entry 系提示并入开关 title 悬停，asrCrosscheckTitle）
     asrCrosscheckLabel: '启用媒体重点对照（本地切片重转写验证）',
-    asrCrosscheckTitle: '用于翻译完成后对媒体切片做本地重转写重点对照；须自备上游 Python 环境，未配置不影响正常翻译。',
-    asrPythonPlaceholder: '上游环境 Python 路径（如 D:\\whisperJAV\\python.exe）',
+    asrCrosscheckTitle: '用于翻译完成后对媒体切片做本地重转写重点对照（CT2 引擎）；引擎未安装时如实跳过，不影响正常翻译。',
     // CT2 转写引擎面板（钉⑤解冻提案 d1028-38：面板标题为唯一静态键
     // （双表同名，HTML data-i18n+MSG），其余全 JS 态键零静态 i18n 消耗；
-    // api 桥三端点接线，安装/下载=后台异步操作面）
-    ct2_panel_title: 'CT2 转写引擎（实验性，默认关）',
+    // api 桥三端点接线，安装/下载=后台异步操作面；3.2 退役批起唯一引擎主位）
+    ct2_panel_title: 'CT2 转写引擎（唯一引擎，首次使用需安装）',
     ct2InstallBtn: '安装运行时',
     ct2InstallRunning: '安装中…（守卫下载＋布局校验＋自检）',
     ct2ModelBtn: '下载模型',
@@ -920,34 +901,9 @@ const MSG = {
     ct2FailFmt: e => `CT2 状态获取失败：${e}`,
     ct2ModelPendingFmt: s => `模型 large-v2：${s}`,
     ct2OpFailFmt: (kind, rc) => `${kind}失败（rc=${rc}），详见运行日志`,
-    // 2.7.1 模型管理面板（D2026-1005-01 承接批，AppModal kind='models'；
-    // 全 JS 态键不受静态 cap 200 约束，由 test_gui_js_static 定向断言守护）
-    asrModelsBtn: '模型管理',
-    mpTitle: 'ASR 模型管理',
-    mpPathWhisper: 'Whisper 默认缓存',
-    mpPathData: '应用模型目录',
-    mpOpenDir: '打开文件夹',
-    mpUnadaptedBanner: n => `检测到 ${n} 个 HF hub 模型尚未适配当前后端（CT2/transformers 布局）；适配器上线（2.8.0）后此处可直接选用。`,
-    mpTierFast: '快速档 · 内存 ≤2GB',
-    mpTierBalanced: '均衡档',
-    mpTierPrecise: '高精档 · 内存 ≥8GB',
-    mpSpeedLabel: '速度',
-    mpPrecisionLabel: '精度',
-    mpSpecNote: '推荐参考：静态评定，非实测',
-    mpStateReady: '可用',
-    mpStateAdapter: '需适配',
-    mpStatePlanned: '规划中',
-    mpUnverifiedTitle: '下载元数据未核验：请自备落位',
-    mpAdapterTitle: '后端未适配（仅展示）',
-    mpPlannedTitle: '规划中（2.9.0 适配器上线后可用）',
-    mpVariantsLabel: '变体',
-    mpNeedProbe: '暂无探测结果——请先点击「重新探测」',
-    // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：ASR 下载器 + 词典
-    // 源选择（全 JS 态键，零静态 i18n 消耗；index.html 冻结期 body 全 createElement）
-    // 2.7.1：下载标题/元信息行键随旧源选择模态链删除
-    // （面板下载行内化）；asrDlStart/asrDlDone/asrDlFailed/asrDlNoCancel 为
-    // AppModal.download 方法体内引用+定向钉，保留
-    asrDownloadBtn: '下载…',
+    // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：词典源选择
+    // （全 JS 态键，零静态 i18n 消耗；asrDl* 为 AppModal.download 方法体
+    // 引用+定向钉保留；asrDownloadBtn/mp* 面板键随 AppModal.models 删除）
     asrDlStart: '开始下载',
     asrDlDone: '下载完成',
     asrDlFailed: '下载失败',

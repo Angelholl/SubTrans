@@ -119,20 +119,8 @@ const SystemSummary = {
         roles.querySelector('.sys-summary-key').textContent
             = MSG.templates_dir_label;
         card.appendChild(roles);
-        const asr = document.createElement('div');
-        asr.className = 'sys-summary-row';
-        asr.dataset.sysRow = 'asr';
-        asr.innerHTML = '<div class="sys-summary-keyrow">'
-            + '<span class="sys-summary-key"></span>'
-            + '<span class="sys-summary-stat val-muted"></span>'
-            + '<button type="button" class="btn btn-ghost btn-compact"'
-            + ' data-sys-action="asr-probe"></button></div>';
-        asr.querySelector('.sys-summary-key').textContent = MSG.sys_asr_row_label;
-        asr.title = MSG.asr_panel_title;
-        asr.querySelector('button').textContent = MSG.asrRefreshBtn;
-        card.appendChild(asr);
-        asr.querySelector('.sys-summary-stat').textContent
-            = MSG.sys_asr_undetected;
+        // 3.2 退役批（D2026-1029-01）：ASR 行随 whisper 探测面删除
+        // （引擎状态在「ASR 与词典」页 CT2 面板承载）
     },
 
     // 批3 扩展（D2026-1002-12）：角色卡目录行（复用 refine_list_templates，
@@ -159,42 +147,6 @@ const SystemSummary = {
         }
         this._setPathValue(val, text);
         if (stat) stat.textContent = statText;
-    },
-
-    // 批3 扩展（D2026-1002-12）：ASR 行显式探测（首屏不自动探测——上游
-    // selfcheck 慢，避免卡首屏）；成功="就绪 · 已存模型名/未配置"，
-    // 失败透出原因（复用 asr 相关既有键文案）。
-    // 2.6.5 段2（D2026-1004-01 #2）：探测结果改写 keyrow 右 stat 槽
-    async probeAsr() {
-        const row = document.querySelector(
-            '#systemSummaryCard [data-sys-row="asr"]');
-        if (!row) return;
-        const stat = row.querySelector('.sys-summary-stat');
-        const btn = row.querySelector('[data-sys-action="asr-probe"]');
-        if (btn) btn.disabled = true;
-        if (stat) stat.textContent = '…';
-        try {
-            const r = await pywebview.api.refine_asr_status();
-            let text;
-            if (!r || !r.success) {
-                text = MSG.asrProbeFail((r && r.error) || MSG.unknown);
-            } else if (r.available) {
-                text = MSG.sys_asr_ready(
-                    r.model_present && r.saved_model
-                        ? r.saved_model : MSG.sys_asr_unconfigured);
-                if (stat) stat.classList.remove('val-muted');
-            } else {
-                text = MSG.asrProbeFail(r.reason || '');
-            }
-            if (stat) stat.textContent = text;
-        } catch (e) {
-            // 收口件②：异常分支不走裸 e.message，与失败分支同口径包 asrProbeFail
-            const text = MSG.asrProbeFail(
-                (e && e.message) || MSG.unknown);
-            if (stat) stat.textContent = text;
-        } finally {
-            if (btn) btn.disabled = false;
-        }
     }
 };
 
