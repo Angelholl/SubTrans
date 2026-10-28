@@ -428,8 +428,8 @@ _DIAG_FIELDS = ("expected_bytes", "actual_bytes", "content_encoding",
 class _DictGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
     """逐跳校验的重定向处理器（dict 链本地版，D2026-1004-01 C6/候选B1）。
 
-    不复用 asr_downloader 版（勿 import）：错误类型必须为 DictDownloadError
-    （不是 AsrDownloadError），白名单必须用本模块 _URL_HOST_ALLOW——经
+    错误类型必须为 DictDownloadError（非通用下载错误），白名单必须用
+    本模块 _URL_HOST_ALLOW——经
     ``_validate_url`` 同时落实 https 强制 + 固定域名白名单。
     ``max_redirections=5``；重定向目标非 https 或域名不在白名单即拒
     （fp.close() 后抛，防半开连接泄漏）。
