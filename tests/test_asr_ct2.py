@@ -166,8 +166,11 @@ class TestAsrRuntime:
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(asr_runtime, "_guarded_download",
                             lambda *a, **k: None)
+        monkeypatch.setattr(asr_runtime, "_verify_zip_layout", lambda p: None)
         monkeypatch.setattr(asr_runtime, "_safe_extract_zip",
                             lambda *a, **k: None)
+        monkeypatch.setattr(asr_runtime, "_write_manifest_after_extract",
+                            lambda root, sha: {"zip_sha256": sha})
         monkeypatch.setattr(asr_runtime, "selfcheck",
                             lambda: (True, "ct2-runtime-selfcheck OK"))
         rc = asr_runtime.install("zip")

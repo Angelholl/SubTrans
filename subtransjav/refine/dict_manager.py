@@ -22,13 +22,18 @@
   引擎页按钮下载式补齐。
 """
 
+import contextlib
 import hashlib
 import logging
 import os
+import random
 import threading
+import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from subtransjav import paths
 
@@ -65,9 +70,15 @@ class DictDownloadError(RuntimeError):
 
     失败诊断字段（D2026-1004-01 C3）：``_http_get`` 失败时挂 ``diag``
     （结构见 ``_DIAG_FIELDS``），随 failed 快照透出供 GUI/日志定位。
+
+    退避层消费字段（D2026-1028-04）：HTTPError 转义时挂 ``http_status``
+    （429/502/503/504 触发指数退避）与 ``retry_after``（Retry-After 头
+    可解析秒数；不可解析为 None 走指数）。不进 diag（七键契约钉死）。
     """
 
     diag: dict | None = None
+    http_status: int | None = None
+    retry_after: float | None = None
 
 
 class DictChecksumError(RuntimeError):
@@ -443,10 +454,10 @@ def _check_stop(stop_event: threading.Event | None) -> None:
         raise DictDownloadStopped("词典下载已被用户停止")
 
 
-def _http_get(url: str, dest: str, progress=None,
-              stop_event: threading.Event | None = None) -> None:
-    """下载到 dest（流式分块落盘，.part 先写再原子改名；dest 由调用方
-    约束在数据根词典目录内且父目录已建）。
+def _http_get_once(url: str, dest: str, progress=None,
+                   stop_event: threading.Event | None = None) -> None:
+    """单轮下载到 dest（流式分块落盘，.part 先写再原子改名；dest 由调用方
+    约束在数据根词典目录内且父目录已建）。429/5xx 退避重试层见 _http_get。
 
     2.5.0 修复A：弃全量进内存（full 的 137MB zip + 内存缓冲双份不可接受），
     1MB 分块直接写盘。
@@ -546,6 +557,15 @@ def _http_get(url: str, dest: str, progress=None,
             raise
         except DictDownloadError as e:
             last_err = e
+        except urllib.error.HTTPError as e:
+            # HTTPError 单列转义（D2026-1028-04）：挂 http_status/retry_after
+            # 供退避层判重试；e.fp 响应体即关防半开连接泄漏
+            last_err = DictDownloadError(f"{url} HTTP {e.code}: {e}")
+            last_err.__cause__ = e
+            last_err.http_status = e.code
+            last_err.retry_after = _retry_after_seconds(e.headers)
+            with contextlib.suppress(Exception):
+                e.close()
         except Exception as e:  # noqa: BLE001 - 网络层统一转义
             last_err = DictDownloadError(f"{url} -> {type(e).__name__}: {e}")
             last_err.__cause__ = e   # 保底链：等价原 raise ... from e
@@ -560,9 +580,57 @@ def _http_get(url: str, dest: str, progress=None,
 
 
 def _unlink_quiet(path: str) -> None:
-    import contextlib
     with contextlib.suppress(OSError):
         Path(path).unlink()
+
+
+def _retry_after_seconds(headers: Any | None) -> float | None:
+    """Retry-After 头解析（秒数形态）；缺席/非数值（HTTP-date 等）为 None
+    走指数退避。"""
+    raw = headers.get("Retry-After") if headers is not None else None
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+# 429/5xx 指数退避（D2026-1028-04）：base 1s 倍增、cap 60s、jitter ±20%，
+# Retry-After 头可解析则优先（仍受 cap 约束）
+_HTTP_RETRY_STATUSES = (429, 502, 503, 504)
+_HTTP_RETRY_BASE_S = 1.0
+_HTTP_RETRY_CAP_S = 60.0
+_HTTP_RETRY_MAX = 3
+
+
+def _http_get(url: str, dest: str, progress=None,
+              stop_event: threading.Event | None = None) -> None:
+    """下载到 dest＝单轮两跳语义（_http_get_once）+ 429/5xx 指数退避层。
+
+    可重试状态（429/502/503/504）按 base 1s 倍增、cap 60s、jitter ±20%
+    重试至 _HTTP_RETRY_MAX 轮；Retry-After 可解析则优先（仍受 cap 约束）；
+    每轮重试打印日志（重试次数入日志）；重试耗尽抛末次原错误（错误信息
+    保留末次异常原文，不包消息改写）。签名与失败语义（DictDownloadError
+    ＋diag 七键）不变。"""
+    retry_index = 0
+    while True:
+        try:
+            return _http_get_once(url, dest, progress=progress,
+                                  stop_event=stop_event)
+        except DictDownloadError as e:
+            status = getattr(e, "http_status", None)
+            if status not in _HTTP_RETRY_STATUSES or retry_index >= _HTTP_RETRY_MAX:
+                raise
+            ra = getattr(e, "retry_after", None)
+            delay = min(_HTTP_RETRY_BASE_S * (2 ** retry_index), _HTTP_RETRY_CAP_S)
+            if ra is not None:
+                delay = min(max(ra, _HTTP_RETRY_BASE_S), _HTTP_RETRY_CAP_S)
+            delay *= random.uniform(0.8, 1.2)
+            retry_index += 1
+            print(f"[下载] HTTP {status} 限流/暂不可用，退避重试 "
+                  f"{retry_index}/{_HTTP_RETRY_MAX}（等待 {delay:.1f}s）")
+            time.sleep(delay)
 
 
 def _extract_dic(archive_path: str, member_suffix: str,
