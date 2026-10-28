@@ -737,6 +737,11 @@ def _run_with_fallback(cfg: RefineConfig, tag: str, client,
                 result.failed.remove(idx)
         result.deleted |= fb_result.deleted
         result.failed = [i for i in result.failed if i not in fb_result.deleted]
+        # 观测件同步（d1028-37）：被本地接管挽回的行不再计占位串形态
+        ph: frozenset = getattr(result, "untranslated", frozenset())
+        if ph:
+            result.untranslated = frozenset(
+                i for i in ph if i in result.failed)
     return result
 
 
@@ -965,7 +970,12 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
 
     failed = set(result.failed)
     if failed:
-        print(f"   ⚠️ {len(failed)} 条阶段A失败，交阶段B补译")
+        # 观测件（d1028-37 第三案，D2026-1028-05 B5 拍板臂 A 维持）：裸占位
+        # 串形态（模型确定性拒译）与一般缺行分列——积累真信号后再议回退臂
+        ph = frozenset(getattr(result, "untranslated", None) or frozenset())
+        ph_failed = failed & ph
+        ph_note = f"（其中裸占位串 {len(ph_failed)} 条）" if ph_failed else ""
+        print(f"   ⚠️ {len(failed)} 条阶段A失败，交阶段B补译{ph_note}")
         # D7：缺行定向重试预算耗尽后的降级台账（缺行条目已按既有 failed
         # 链路置 [未翻译] 交阶段B补译，绝不整文件失败）
         from subtransjav.translate.llm_client import MISSING_RETRY_BUDGET
@@ -980,6 +990,13 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
                           action="置 [未翻译] 交阶段B补译",
                           affected_count=len(failed),
                           severity=SEVERITY_WARNING)
+            if ph_failed:
+                collector.add(stage="A", file=file_name,
+                              reason=f"裸占位串形态 {len(ph_failed)} 条"
+                                     f"（模型确定性拒译，观测件单列）",
+                              action="随缺行链路置 [未翻译] 交阶段B补译",
+                              affected_count=len(ph_failed),
+                              severity=SEVERITY_WARNING)
     return StageAResult(entries=out_entries, deleted=set(result.deleted),
                         failed=failed, exact_hits=exact)
 

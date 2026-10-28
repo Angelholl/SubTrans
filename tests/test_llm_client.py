@@ -252,6 +252,51 @@ def test_bare_untranslated_placeholder_budget_exhausted_to_failed():
         server.stop()
 
 
+def test_placeholder_observation_single_out_on_exhausted():
+    """观测件（d1028-37 第三案）：重试耗尽后裸占位串行单列带出
+    （untranslated 为 failed 子集）；一般缺行不进 untranslated。"""
+    bare = "#1\nTranslation>\n[未翻译]"
+    missing = "#1\nTranslation>\n[未翻译]\n#2\nTranslation>\n你好"  # #1 占位+#2 成功
+    server = FakeServer([missing, bare, bare])
+    try:
+        r = _client(server).translate_entries(
+            _entries("あいうえお", "かきくけこ"),
+            system_text="", user_prompt="p", max_batch_size=10)
+        assert r.failed == [1]
+        assert r.untranslated == frozenset({1})
+    finally:
+        server.stop()
+
+
+def test_placeholder_observation_empty_after_retry_recovery():
+    """观测件：定向重试补回的行不残留占位观测（untranslated 空）。"""
+    server = FakeServer([
+        "#1\nTranslation>\n你好\n#2\nTranslation>\n[未翻译]",
+        "#2\nTranslation>\n请多指教",
+    ])
+    try:
+        r = _client(server).translate_entries(
+            _entries("こんにちは", "よろしく"),
+            system_text="", user_prompt="p", max_batch_size=10)
+        assert r.failed == []
+        assert r.untranslated == frozenset()
+    finally:
+        server.stop()
+
+
+def test_plain_missing_line_not_in_untranslated():
+    """纯缺行（响应缺行非占位串形态）→ failed 带出但 untranslated 为空。"""
+    server = FakeServer(["#1\nTranslation>\n你好"])   # 输入两行输出一行
+    try:
+        r = _client(server).translate_entries(
+            _entries("こんにちは", "よろしく"),
+            system_text="", user_prompt="p", max_batch_size=10)
+        assert 2 in r.failed
+        assert r.untranslated == frozenset()
+    finally:
+        server.stop()
+
+
 def test_untranslated_placeholder_with_content_still_accepted():
     """合规占位形态（"[未翻译] 原文"/带尾空格）保留原文内容，不按缺行
     处理——回退语义由调用方（占位+原文）承载，本层只拦零内容裸占位。"""
