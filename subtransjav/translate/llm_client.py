@@ -381,8 +381,10 @@ class LLMClient:
                 # D2026-0924-02：引擎被卸载（400 + 特征串）→ 专用异常类型，
                 # 不进瞬态退避（重载引擎 60-120s，5s 重试无意义），由批循环
                 # 的 unloaded_recovery 回调负责重对齐后整批重试
-                if self._is_model_unloaded(e):
-                    raise ModelUnloadedError(f"LLM 调用失败: {e}") from e
+                unloaded = self._model_unloaded_detail(e)
+                if unloaded is not None:
+                    raise ModelUnloadedError(
+                        f"LLM 调用失败: {unloaded}") from e
                 if attempt >= cfg.max_retries or not self._is_transient(e):
                     raise LLMError(f"LLM 调用失败: {e}") from e
                 wait = cfg.backoff_time * (2 ** attempt)
@@ -445,21 +447,27 @@ class LLMClient:
             "unable to connect to proxy", "cannot connect to proxy",
             "积极拒绝", "拒绝连接"))
 
-    @staticmethod
-    def _is_model_unloaded(err: Exception) -> bool:
+    @classmethod
+    def _is_model_unloaded(cls, err: Exception) -> bool:
         """识别「HTTP 400 + model unloaded by user」引擎卸载错误（大小写
-        不敏感）。status_code 缺失时仅凭特征串判定（openai 包装层可能
-        丢失结构化字段）。非 400 状态不命中，401/403 短路不受影响。
+        不敏感）。非 400 状态不命中，401/403 短路不受影响。"""
+        return cls._model_unloaded_detail(err) is not None
+
+    @classmethod
+    def _model_unloaded_detail(cls, err: Exception) -> str | None:
+        """卸载错误的特征串判定＋保留文本提取（命中返回含特征串的原始
+        文本，供 ModelUnloadedError 消息保留错误细节；未命中 None）。
 
         openai>=3.38 形态回归（D2026-1028-02）：SDK 对非标准错误体
         （error 为字符串，LM Studio 形态）不再把 body 拼进 str(err)——
-        str 只剩 "Error code: 400"。特征串判定源扩为 str(err)、body
-        原始体、response 文本三者任一命中。"""
+        str 只剩 "Error code: 400"。判定源扩为 str(err)、body 原始体、
+        response 文本三者任一命中；消息同样须取自命中源（str 已无细节，
+        D2026-1028-05 B1 fresh 回归实证补齐）。"""
         status = getattr(err, "status_code", None)
         if status is not None:
             try:
                 if int(status) != 400:
-                    return False
+                    return None
             except (TypeError, ValueError):
                 pass    # 状态码非数字 → 交由特征串兜底判定
         texts = [str(err)]
@@ -469,7 +477,10 @@ class LLMClient:
         resp_text = getattr(getattr(err, "response", None), "text", None)
         if resp_text:
             texts.append(str(resp_text))
-        return any(_MODEL_UNLOADED_MARKER in t.lower() for t in texts)
+        for t in texts:
+            if _MODEL_UNLOADED_MARKER in t.lower():
+                return t
+        return None
 
     @staticmethod
     def _is_transient(err: Exception) -> bool:

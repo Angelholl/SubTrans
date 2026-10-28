@@ -652,6 +652,20 @@ def test_model_unloaded_38x_body_fallback():
     assert LLMClient._is_model_unloaded(_Err400Unloaded38x(with_response=False)) is True
 
 
+def test_model_unloaded_38x_detail_message_source():
+    """3.38 形态消息保留（D2026-1028-05 B1 fresh 回归补钉）：分类命中时
+    异常消息取自含特征串的判定源（str(err) 已无细节），ModelUnloadedError
+    消息保 match 面可用；3.37 形态行为不变（detail=str(err)）；非卸载 400
+    返回 None。"""
+    detail = LLMClient._model_unloaded_detail(
+        _Err400Unloaded38x(with_response=False))
+    assert detail is not None and "Model unloaded" in detail
+    assert f"LLM 调用失败: {detail}".find("Model unloaded") > 0
+    assert LLMClient._model_unloaded_detail(_Err400Unloaded()) \
+        == str(_Err400Unloaded())
+    assert LLMClient._model_unloaded_detail(_Err400Other()) is None
+
+
 def test_model_unloaded_38x_response_text_fallback():
     """3.38 形态：str 无特征串 → response 文本兜底命中。"""
     e = _Err400Unloaded38x()

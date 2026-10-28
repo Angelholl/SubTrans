@@ -35,7 +35,7 @@ classifiers = [
 
 # 翻译引擎核心依赖（refine v2 两阶段流水线 + OpenAI 兼容通道）
 dependencies = [
-    "openai>=1.35.0,<3.38",   # OpenAI 兼容接口（deepseek/zen/lmstudio/siliconflow/custom）；3.38.0（2026-10-26 发布）改 400 错误信息形态致 llm_client「未加载模型」分类失配（tests/test_llm_client.py 3 例红，CI run 40372694477 全腿红＋worktree fresh 复现），3.37.0 为 10-25 绿 CI fresh 安装实证版；重开上界前须先适配分类器并本地复验
+    "openai>=1.35.0,<3.39",   # OpenAI 兼容接口（deepseek/zen/lmstudio/siliconflow/custom）；3.38 失配已适配（5974144 分类器三源判定＋本批消息保留 _model_unloaded_detail），worktree fresh 3.38.0 全量实证绿（D2026-1028-05 B1）；上界钉保留——上游响应形态再变即静默失配，fresh 腿随上游漂移不可控
     "httpx>=0.27",            # llm_client O6 回环直连客户端（translate/llm_client.py）
     "requests",
     "regex",                  # 正则引擎（deletion_patch 直接 import）
@@ -95,6 +95,7 @@ markers = ["gui: 需要 pywebview（gui extra）的用例"]
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+exclude = [".tmp"]   # pytest --basetemp 约定目录（测试夹具残留不入检查面）
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B", "SIM"]
