@@ -730,7 +730,11 @@ _TIMING_SPAN_RE = re.compile(
 
 def _run_transcription_ct2(clip_path: str, language: str,
                            timeout: int = 300) -> dict:
-    """ct2 引擎单片段重转写（自管运行时子进程；SRT→契约回读）。"""
+    """ct2 引擎单片段重转写（自管运行时子进程）。
+
+    契约回读优先级（D2026-1029-01 批1 置信透传）：runner stdout segments
+    数组（含置信三键）优先；无段数组时回退 SRT 解析（老 runner 兼容）。
+    SRT 由 runner 照常写出（整片形态即成品件，此处临时件仅作兜底源）。"""
     import tempfile
 
     from . import asr_runtime
@@ -756,10 +760,18 @@ def _run_transcription_ct2(clip_path: str, language: str,
                     payload = json.loads(line)
                 except ValueError:
                     continue
-                if payload.get("ok") and os.path.isfile(tmp_srt):
-                    out = _srt_file_to_contract(tmp_srt)
-                    out["engine"] = "ct2"
-                    return out
+                if payload.get("ok"):
+                    segs = payload.get("segments")
+                    if isinstance(segs, list):
+                        text = "".join(
+                            str((s or {}).get("text") or "").strip()
+                            for s in segs if isinstance(s, dict))
+                        return {"ok": True, "text": text,
+                                "segments": segs, "engine": "ct2"}
+                    if os.path.isfile(tmp_srt):
+                        out = _srt_file_to_contract(tmp_srt)
+                        out["engine"] = "ct2"
+                        return out
                 if not payload.get("ok"):
                     return {"ok": False, "text": "",
                             "error": str(payload.get("error") or "ct2 转写失败")}

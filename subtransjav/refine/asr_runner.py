@@ -211,6 +211,16 @@ def _run_transcribe_clips(clips_json: str, model: str, language: str,
 # 直调执行（自包含、不依赖 subtransjav 包）。四旋钮缺省全部 PROVISIONAL，
 # 最终缺省组合待金标逐一 A/B 后预注册定案（评议员修正项）。
 
+def _opt_float(v) -> float | None:
+    """可选浮点规整（None 安全；非数值保守取 None，消费方按存在性读取）。"""
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _segments_to_srt(segments: list) -> str:
     """ct2 segment list → SRT 文本（纯函数；时间戳钳非负）。"""
 
@@ -237,7 +247,11 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                               vad_filter: bool, condition_previous: bool,
                               compute_type: str = "int8",
                               line_break: bool = True) -> int:
-    """ct2 整片转写：SRT＋词级 sidecar（断行器 3.2.1 的消费输入）。"""
+    """ct2 整片转写：SRT＋词级 sidecar（断行器 3.2.1 的消费输入）。
+
+    stdout 契约（D2026-1029-01 批1 置信透传）：segments=完整段数组（含
+    faster_whisper 原生置信三键 no_speech_prob/avg_logprob/compression_
+    ratio，None 安全；此前仅回计数导致消费侧三维置信门静默失效）。"""
     if not model_dir or not os.path.isdir(model_dir):
         print(json.dumps({"ok": False,
                           "error": "ct2 模型目录无效: " + str(model_dir)
@@ -278,8 +292,17 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                     continue
                 words.append({"start": float(w.start), "end": float(w.end),
                               "word": w.word, "probability": float(w.probability)})
+            # 置信三键透传（D2026-1029-01 批1）：faster_whisper segment 原生
+            # 属性，None 安全（消费方按存在性读取；getattr 兜底防异常 fork
+            # 缺属性）。
             segs.append({"start": float(s.start), "end": float(s.end),
-                         "text": s.text, "words": words})
+                         "text": s.text, "words": words,
+                         "no_speech_prob": _opt_float(
+                             getattr(s, "no_speech_prob", None)),
+                         "avg_logprob": _opt_float(
+                             getattr(s, "avg_logprob", None)),
+                         "compression_ratio": _opt_float(
+                             getattr(s, "compression_ratio", None))})
     except Exception as e:   # noqa: BLE001 转写失败按契约返回
         print(json.dumps({"ok": False,
                           "error": "ct2 转写失败: " + str(e)},
@@ -307,7 +330,7 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                "segments": segs}
     out_path.with_suffix(out_path.suffix + ".words.json").write_text(
         json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(json.dumps({"ok": True, "srt": srt_out, "segments": len(segs),
+    print(json.dumps({"ok": True, "srt": srt_out, "segments": segs,
                       "duration": float(info.duration),
                       "words_sidecar": str(out_path) + ".words.json"},
                      ensure_ascii=False))

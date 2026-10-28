@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import types
+from types import SimpleNamespace
 
 from subtransjav.refine import asr_env, asr_runner, asr_runtime
 
@@ -80,8 +81,11 @@ class _FakeWord:
 
 
 class _FakeSeg:
-    def __init__(self, s, e, t, words):
+    def __init__(self, s, e, t, words, nsp=0.1, alp=-0.5, cr=1.2):
         self.start, self.end, self.text, self.words = s, e, t, words
+        self.no_speech_prob = nsp
+        self.avg_logprob = alp
+        self.compression_ratio = cr
 
 
 class _FakeInfo:
@@ -120,7 +124,11 @@ class TestCt2E2EWithFake:
                               "--srt-out", str(srt_out), "--model-dir", str(mdir)])
         assert rc == 0
         out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-        assert out["ok"] is True and out["segments"] == 2
+        assert out["ok"] is True
+        # 批1 置信透传：stdout segments=完整段数组（含三维置信键）
+        assert isinstance(out["segments"], list) and len(out["segments"]) == 2
+        assert out["segments"][0]["no_speech_prob"] == 0.1
+        assert out["segments"][1]["avg_logprob"] == -0.5
         text = srt_out.read_text(encoding="utf-8")
         assert "00:00:00,500 --> 00:00:02,500" in text
         assert "こんにちは" in text
@@ -274,6 +282,45 @@ class TestDecouple:
         st = asr_env._ct2_status()
         assert st["installed"] is False and st["model_present"] is False
         assert st["model"] == "large-v2"
+
+
+class TestConfidencePassthrough:
+    """ct2 链三维置信键透传（D2026-1029-01 批1，HRO 修复）。
+
+    faster_whisper segment 原生 no_speech_prob/avg_logprob/compression_ratio
+    此前在 runner 段构建与 SRT 回读两处被丢弃，漏听二级三维置信门静默失效
+    （missed_insert C22 依赖）。钉①＝batch ct2 路径 mock runner stdout 带
+    三键→返回 segments 含三键（现行实现红）；钉②＝classify 收 ct2 形态段
+    （nsp>0.6）→grade=low（门恢复生效，test_missed_insert 侧）。"""
+
+    _T = "00:00:01,000 --> 00:00:03,000"
+
+    def test_batch_ct2_path_passes_confidence_keys(self, tmp_path,
+                                                   monkeypatch):
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
+        monkeypatch.setattr(
+            asr_env, "slice_clips",
+            lambda media, timings, max_clips=20: {
+                "ok": True,
+                "clips": [{"path": "c1.wav", "timing": self._T}],
+                "error": "", "skipped": 0})
+        monkeypatch.setattr(asr_runtime, "resolve_ct2_model_dir",
+                            lambda *a, **k: str(tmp_path / "m"))
+        payload = json.dumps({"ok": True, "segments": [
+            {"start": 1.0, "end": 3.0, "text": " あ ",
+             "no_speech_prob": 0.8, "avg_logprob": -0.2,
+             "compression_ratio": 1.5}]}, ensure_ascii=False)
+        monkeypatch.setattr(
+            asr_env.subprocess, "run",
+            lambda *a, **k: SimpleNamespace(stdout=payload + "\n",
+                                            stderr="", returncode=0))
+        r = asr_env.batch_transcribe_clips("media.mp4", [self._T])
+        assert r[0]["ok"] is True
+        seg = (r[0].get("segments") or [{}])[0]
+        assert seg.get("no_speech_prob") == 0.8
+        assert seg.get("avg_logprob") == -0.2
+        assert seg.get("compression_ratio") == 1.5
 
 
 class TestAsyncOps:
