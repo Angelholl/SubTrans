@@ -100,6 +100,17 @@ def test_classify_confidence_three_dimensions():
     assert v["grade"] == "high"
 
 
+def test_classify_ct2_product_confidence_gate_effective():
+    """钉②（D2026-1029-01 批1）：ct2 产物形态段（三维键在位）nsp>0.6 →
+    grade=low——证明三维门随 ct2 置信透传修复恢复生效（透传链钉①见
+    test_asr_ct2.TestConfidencePassthrough）。"""
+    seg = _good_segment(no_speech_prob=0.8)
+    v = mi.classify_transcript(T_WINDOW, [seg], "本当にすみません",
+                               _good_windows())
+    assert v["grade"] == "low"
+    assert "no_speech_prob_over" in v["reasons"]
+
+
 def test_classify_repeat_loop_signal():
     """假名单元平铺（source_hallucination 同源信号）→ low。"""
     v = mi.classify_transcript(T_WINDOW, [_good_segment()],
