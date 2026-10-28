@@ -123,5 +123,89 @@
     if (window.__asrTabHookDone) return;
     window.__asrTabHookDone = true;
     asrRefresh(false);
+    ct2Refresh();
   };
+
+  // ===== CT2 转写引擎面板（钉⑤解冻提案 d1028-38：api 桥三端点接线，
+  // D2026-1028-03 脱钩轮待裁决项→「全部开工」令批准。状态/安装/模型行全
+  // JS 态文案；安装与模型下载=后台异步操作面 1s 轮询 operation 至终态自动
+  // 翻转；本批零后端改动，ct2 缺省仍默认关） =====
+
+  function ct2Set(elId, text) {
+    const el = $(elId);
+    if (el) el.textContent = text || '';
+  }
+
+  function ct2ModelLine(models) {
+    const m = (models && models[0]) || null;
+    if (!m) return MSG.ct2ModelPendingFmt('—');
+    return MSG.ct2ModelPendingFmt((m.desc || m.model) + (m.verified
+      ? '｜已核验' : '｜待镜像核验（下载门未开）'));
+  }
+
+  function ct2Render(r) {
+    if (!r || !r.success) {
+      ct2Set('refineCt2Status', MSG.ct2FailFmt((r && r.error) || ''));
+      return;
+    }
+    ct2Set('refineCt2Status', r.installed
+      ? MSG.ct2ReadyFmt(r.certified ? '通过' : '未过', r.detail || '')
+      : MSG.ct2NotInstalledFmt(r.zip_published ? '' : '（件未发布）'));
+    ct2Set('refineCt2ModelStatus', ct2ModelLine(r.models));
+    const op = r.operation || {};
+    const busy = op.phase === 'running';
+    const ib = $('refineCt2InstallBtn');
+    if (ib) {
+      ib.disabled = busy;
+      ib.querySelector('span').textContent =
+        busy && op.kind === 'install' ? MSG.ct2InstallRunning : MSG.ct2InstallBtn;
+    }
+    const db = $('refineCt2ModelBtn');
+    if (db) {
+      db.disabled = busy;
+      db.querySelector('span').textContent =
+        busy && op.kind === 'model' ? MSG.ct2ModelDownloading : MSG.ct2ModelBtn;
+    }
+    if (busy) {
+      setTimeout(ct2Poll, 1000);          // 后台操作面 1s 轮询至终态
+    } else if (op.phase === 'failed') {
+      ct2Set('refineCt2Status', MSG.ct2OpFailFmt(op.kind === 'model'
+        ? '模型下载' : '安装', op.rc));
+    }
+  }
+
+  function ct2Poll() {
+    window.pywebview.api.refine_ct2_status().then(ct2Render)
+      .catch((e) => ct2Set('refineCt2Status', MSG.ct2FailFmt(String(e))));
+  }
+
+  function ct2Refresh() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    ct2Poll();
+  }
+
+  function ct2Install() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    ct2Set('refineCt2Status', MSG.ct2InstallRunning);
+    window.pywebview.api.refine_ct2_install('auto').then((r) => {
+      if (r && r.started === false) ct2Set('refineCt2Status', r.reason || '');
+      setTimeout(ct2Poll, 500);
+    }).catch((e) => ct2Set('refineCt2Status', MSG.ct2FailFmt(String(e))));
+  }
+
+  function ct2ModelDownload() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    ct2Set('refineCt2ModelStatus', MSG.ct2ModelDownloading);
+    window.pywebview.api.refine_ct2_model_download('large-v2').then((r) => {
+      if (r && r.started === false) ct2Set('refineCt2ModelStatus', r.reason || '');
+      setTimeout(ct2Poll, 500);
+    }).catch((e) => ct2Set('refineCt2Status', MSG.ct2FailFmt(String(e))));
+  }
+
+  (() => {
+    const ib = $('refineCt2InstallBtn');
+    if (ib) ib.addEventListener('click', ct2Install);
+    const db = $('refineCt2ModelBtn');
+    if (db) db.addEventListener('click', ct2ModelDownload);
+  })();
 
