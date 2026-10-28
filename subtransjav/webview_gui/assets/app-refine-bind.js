@@ -203,45 +203,15 @@
       rbBind.textContent = MSG.fullchainRollbackBtn;
       rbBind.addEventListener('click', () => fullchainRollbackRun());
     }
-    // ASR 模型管理（2.6.0 批3；批2 D2026-1002-12 卡重整：空态/说明/占位文案
-    // JS 态填充，HTML 不留英文占位）
-    const asrBtn = $('asrRefreshBtn');
-    if (asrBtn) {
-      const t = asrBtn.querySelector('span');
-      if (t) t.textContent = MSG.asrRefreshBtn;
-      asrBtn.addEventListener('click', () => asrRefresh(true));   // 强制刷新（绕过快照缓存）
-    }
-    const asrEnv = $('asrEnvStatus');
-    if (asrEnv) asrEnv.textContent = MSG.asr_env_undetected;
-    // 2.7.1：模型管理面板入口（.asr-models-btn class 锚，零新增 id）
-    const asrModelsBtn = document.querySelector('.asr-models-btn');
-    if (asrModelsBtn) {
-      const t = asrModelsBtn.querySelector('span');
-      if (t) t.textContent = MSG.asrModelsBtn;
-      asrModelsBtn.addEventListener('click', () => asrOpenModelsPanel());
-    }
-    const asrSelPh = $('asrModelSel');
-    if (asrSelPh) {
-      const ph = asrSelPh.querySelector('option[value=""]');
-      if (ph) ph.textContent = MSG.asrSelectPlaceholder;
-    }
-    // 批3 扩展（D2026-1002-12）：系统状态卡 ASR 行「重新探测」事件委托——
-    // 行由 SystemSummary 动态渲染（零新增静态 id），委托绑卡上按
-    // data-sys-action 分流；首屏不自动探测（上游 selfcheck 慢）
-    const sysCard = $('systemSummaryCard');
-    if (sysCard) sysCard.addEventListener('click', (e) => {
-      if (e.target.closest('[data-sys-action="asr-probe"]')) {
-        SystemSummary.probeAsr();
-      }
-    });
-    // 2.6.1 修订（D2026-1002-06）：验证开关 + 上游 Python 路径（下载按钮删除）；
-    // 批2：asrSaved 仅在保存成功后写入（失败透出错误，与空态占位区分）
+    // 媒体重点对照（3.2 退役批 D2026-1029-01：whisper 半边绑定删除——
+    // asrRefreshBtn/asrEnvStatus/asr-models-btn/asrModelSel/asrPythonInput/
+    // 系统状态卡 asr-probe 委托全部移除；仅保 crosscheck 开关绑定。
+    // asrSaved 仅在保存成功后写入（失败透出错误））
     const asrTgl = $('asrCrosscheckToggle');
     if (asrTgl) {
       const lbl = asrTgl.parentElement
         ? asrTgl.parentElement.querySelector('span') : null;
       if (lbl) lbl.textContent = MSG.asrCrosscheckLabel;
-      // 2.7.1：入口说明独立行删除，说明文案并入开关 title 悬停
       asrTgl.title = MSG.asrCrosscheckTitle;
       asrTgl.addEventListener('change', async () => {
         if (!window.pywebview || !window.pywebview.api) return;
@@ -256,37 +226,6 @@
         }
       });
     }
-    const asrPy = $('asrPythonInput');
-    if (asrPy) {
-      asrPy.placeholder = MSG.asrPythonPlaceholder;
-      asrPy.title = MSG.asrPythonPlaceholder;
-      asrPy.addEventListener('change', async () => {
-        if (!window.pywebview || !window.pywebview.api) return;
-        try {
-          const r = await window.pywebview.api.refine_save_stage_settings(
-            null, null, { asr_python: asrPy.value.trim() });
-          asrStatus(r && r.success ? MSG.asrSaved
-            : '❌ ' + ((r && r.error) || MSG.unknown));
-        } catch (e) {
-          asrStatus('❌ ' + e);
-        }
-      });
-    }
-    const asrSel = $('asrModelSel');
-    if (asrSel) asrSel.addEventListener('change', async () => {
-      if (!window.pywebview || !window.pywebview.api) return;
-      // 2.7.3 件③（评议员条件⑥）：占位空值不保存、不覆盖既有 saved_model
-      // （占位项恰为当前选中时用户点选=空操作）
-      if (asrSel.value === '') return;
-      try {
-        const r = await window.pywebview.api.refine_save_stage_settings(
-          null, null, { asr_model: asrSel.value });
-        asrStatus(r && r.success ? MSG.asrSaved
-          : '❌ ' + ((r && r.error) || MSG.unknown));
-      } catch (e) {
-        asrStatus('❌ ' + e);
-      }
-    });
 
     // 快速试听（D2026-0929-09）：条目试听按钮事件委托 + 浮层关闭 +
     // 媒体来源条「更换」展开 + 覆盖路径应用

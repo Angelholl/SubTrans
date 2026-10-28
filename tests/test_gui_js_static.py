@@ -901,27 +901,11 @@ def test_guide_json_blocks_initial_hidden():
 
 
 def test_asr_python_input_hint():
-    """ASR Python 输入框悬停全文提示 + min-width:0 防贴边裁切。
-
-    钉：
-    - app.js 含 asrPy.title = MSG.asrPythonPlaceholder（且紧随 placeholder
-      注入行同分支内）；
-    - style.css 含 #asrPythonInput { min-width: 0; }（允许空白弹性匹配）。
-    """
+    """3.2 退役批（D2026-1029-01）：asrPythonInput 输入框随 whisper 半边
+    删除（原悬停提示/min-width 钉随之移除；style.css 残留死样式不钉不删）。"""
     source = _app_js_source()
-    # app.js：title 同步注入，且在 asrPy.placeholder 行同一分支内
-    assert "asrPy.title = MSG.asrPythonPlaceholder" in source, \
-        "app.js 需包含 asrPy.title = MSG.asrPythonPlaceholder"
-    # 紧随 placeholder 注入行同一分支：确保在 asrPy.placeholder 赋值之后
-    m = re.search(
-        r"asrPy\.placeholder\s*=\s*MSG.asrPythonPlaceholder;"
-        r".*?asrPy\.title\s*=\s*MSG.asrPythonPlaceholder;",
-        source, re.S)
-    assert m, "asrPy.title 必须紧随 asrPy.placeholder 同一分支内注入"
-    # style.css：min-width:0 防内容固有宽顶出贴卡裁切
-    css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    assert "#asrPythonInput { min-width: 0; }" in css, \
-        "style.css 需包含 #asrPythonInput { min-width: 0; }"
+    assert "asrPythonPlaceholder" not in source, \
+        "asrPythonPlaceholder 应随退役批删除"
 
 
 def test_glossary_blocks_collapsible_pinned():
@@ -1407,21 +1391,20 @@ def test_log_drain_loop_pinned():
 
 
 def test_batch3_system_summary_dynamic_rows_pinned():
-    """③系统状态卡扩展：两行动态渲染（零新增静态 id）+ 委托绑定 + 新 MSG 键。
+    """③系统状态卡扩展：角色卡行动态渲染（零新增静态 id）。
 
-    - 角色卡/ASR 两行由 SystemSummary 动态建（data-sys-row 定位，
-      行样式复用 .sys-summary-row），index.html 无任何 data-sys 静态锚；
-    - ASR「重新探测」走事件委托绑 #systemSummaryCard（data-sys-action
-      分流，按钮零 id），probeAsr 为唯一显式探测入口（首屏不自动探测）；
-    - TM/词典行改"状态 · 路径"合并值（补 db_path / effective_dir）；
-    - id 全集数随 FROZEN_IDS 契约延续（2.6.3 批C D2026-1003-01 P4 显式
-      解冻 213→215：tabBtnAsrdict/tab-asrdict）。
+    - 3.2 退役批（D2026-1029-01）：ASR 行随 whisper 探测面删除
+      （data-sys-row="asr"/asr-probe 委托/probeAsr 同删），仅余角色卡行；
+    - 角色卡行由 SystemSummary 动态建（data-sys-row 定位，
+      行样式复用 .sys-summary-row），index.html 无任何 data-sys 静态锚。
     """
     src = _app_js_source()
-    for frag in ("data-sys-row=\"roles\"", "data-sys-row=\"asr\"",
-                 "data-sys-action=\"asr-probe\"",
+    for frag in ("data-sys-row=\"roles\"",
                  "sys-summary-row", "sys-summary-val"):
         assert frag in src, f"app.js 缺少批3动态行接线: {frag}"
+    for gone in ('data-sys-row="asr"', 'data-sys-action="asr-probe"',
+                 "probeAsr"):
+        assert gone not in src, f"whisper 探测行残留: {gone}"
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert "data-sys-row" not in html and "data-sys-action" not in html, \
         "摘要卡动态行不得新增静态锚（FROZEN_IDS 已满，行全由 JS 渲染）"
@@ -1442,20 +1425,9 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # d1024 批3 件B（D2026-1024-01）：TM/断点 8 静态 id 撤除迁入合并弹窗，
     # 显式解冻 225→217；d1025-⑥a 换代（D2026-1025-01 裁决⑥，2026-10-27）：
     # 剧情自摘要邻位 +refineSynopsisCast（人物提示子开关，默认不勾），
-    # 显式解冻 217→218；d1028-38 换代（CT2 面板，钉⑤解冻提案）：+4 → 222
-    assert len(ids) == 222, f"id 全集数漂移（d1028-38 解冻后现契约 222），实为 {len(ids)}"
-    # 委托绑定在 bindDom；探测为显式入口（probeAsr 调 refine_asr_status）
-    bind = _extract_function(src, "bindDom")
-    assert "systemSummaryCard" in bind and "data-sys-action" in bind, \
-        "bindDom 缺系统状态卡事件委托"
-    probe = _extract_function(src, "probeAsr")
-    assert "refine_asr_status" in probe, "probeAsr 必须调 refine_asr_status"
-    # 收口件②：失败(!success)/不可用/异常三分支全部经 asrProbeFail 包文案，
-    # 不得出现裸 e.message 直显
-    assert probe.count("MSG.asrProbeFail") == 3, \
-        "probeAsr 失败口径漂移（三分支须统一 asrProbeFail）"
-    assert "e.message : String(e)" not in probe, \
-        "probeAsr 异常分支残留裸 message 直显"
+    # 显式解冻 217→218；d1028-38 换代（CT2 面板，钉⑤解冻提案）：+4 → 222；
+    # d1029 退役批换代（whisper 半边删除，解冻提案）：-4 → 218
+    assert len(ids) == 218, f"id 全集数漂移（d1029 退役批后现契约 218），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -1467,10 +1439,9 @@ def test_batch3_system_summary_dynamic_rows_pinned():
         assert frag in seg, f"摘要卡缺少合并值字段: {frag}"
     assert not re.search(r"return `[^`]*tm_enable_label", seg), \
         "TM 行值模板拼入 tm_enable_label（与行标签重复，违反状态·路径合并语义）"
-    # 新 MSG 键存在（全中文，JS 态零静态 i18n 消耗）
+    # 新 MSG 键存在（全中文，JS 态零静态 i18n 消耗；退役批：sys_asr_* 四键删）
     keys = _js_msg_keys()
-    for key in ("sys_roles_count", "sys_roles_fallback", "sys_asr_undetected",
-                "sys_asr_unconfigured", "sys_asr_ready"):
+    for key in ("sys_roles_count", "sys_roles_fallback"):
         assert key in keys, f"MSG 缺少批3新键: {key}"
 
 
@@ -1869,56 +1840,57 @@ def test_model_selects_empty_placeholder_pinned():
 
 
 def test_asr_card_restructured_no_hardcoded_english():
-    """拍板点1：ASR 卡重整（仅入口与文案，不加执行能力）。
+    """3.2 退役批（D2026-1029-01）：ASR 卡收敛 ct2 单面板。
 
-    结构序=header 行（标题+重新探测）→ 状态行 → 说明行 → 模型行 →
-    开关行 → 推荐清单；卡内不得残留 "Re-detect"/"Media crosscheck"/
-    "upstream python" 硬编码英文（文案全 JS 态键填充，零静态 i18n 消耗）；
-    asrSaved 仅在保存成功后写入（与空态占位区分）；无任何新增执行按钮。
+    卡序=CT2 引擎面板（主位）→ 媒体重点对照卡（crosscheck 开关+状态行）；
+    whisper 半边（红绿灯/模型下拉/python 输入/重新探测/模型管理入口）全部
+    移除；asrSaved 仅在保存成功后写入（唯一残留保存链=crosscheck）。
     """
     html = INDEX_HTML.read_text(encoding="utf-8")
-    start = html.index("<!-- ASR 模型管理")
-    # d1028-38：ASR 卡与词典卡之间插入 CT2 面板卡（钉⑤解冻提案）——ASR 卡
-    # 切片终点改指 CT2 面板注释（词典管理锚已不再紧邻 ASR 卡）
-    end = html.index("<!-- CT2 转写引擎面板", start)
-    card = html[start:end]
+    # 退役批：CT2 面板升主位（卡序对调），其后再媒体重点对照卡
+    ct2_start = html.index("<!-- CT2 转写引擎面板")
+    asr_start = html.index("<!-- 媒体重点对照卡", ct2_start)
+    dict_start = html.index("<!-- 词典管理", asr_start)
+    assert ct2_start < asr_start < dict_start, "卡序漂移（CT2 主位→对照卡→词典卡）"
+    ct2_card = html[ct2_start:asr_start]
+    asr_card = html[asr_start:dict_start]
     for banned in ("Re-detect", "Media crosscheck", "upstream python"):
-        assert banned not in card, f"ASR 卡残留硬编码英文: {banned}"
-    # 结构序（2.7.1 D2026-1005-01）：header 行（标题+模型管理+重新探测）→
-    # asrEnvStatus → asrModelSel → asrCrosscheckToggle（说明行/推荐清单
-    # 折叠区已删：说明并入开关 title、模型管理迁 AppModal models 面板）
-    anchors = ['data-i18n="asr_panel_title"',
-               'class="btn btn-secondary btn-compact asr-models-btn"',
-               'id="asrRefreshBtn"', 'id="asrEnvStatus"',
-               'id="asrModelSel"', 'id="asrStatus"',
-               'id="asrCrosscheckToggle"', 'id="asrPythonInput"']
-    pos = [card.index(a) for a in anchors]
-    assert pos == sorted(pos), "ASR 卡结构序漂移（header→模型管理→探测→状态→模型→开关）"
-    assert 'data-testid="asr-models-btn"' in card, "模型管理入口 data-testid 缺失"
-    # 按钮口径：模型管理 + 重新探测 两个（2.7.1）
-    assert len(re.findall(r"<button\b", card)) == 2, \
-        "ASR 卡按钮=模型管理+重新探测两个（2.7.1 口径）"
-    # JS 态文案填充钉 + asrSaved 保存成功门控
+        assert banned not in asr_card + ct2_card, "残留硬编码英文"
+    # whisper 半边 id 全数移除（解冻提案 d1029-退役批GUI解冻提案.md）
+    for gone in ('id="asrEnvStatus"', 'id="asrModelSel"',
+                 'id="asrPythonInput"', 'id="asrRefreshBtn"',
+                 'asr-models-btn'):
+        assert gone not in asr_card + ct2_card, f"whisper 半边残留: {gone}"
+    # CT2 面板接线面 id 四件原样（d1028-38 面不动）+ 唯一引擎定位文案
+    for anchor in ('id="refineCt2Status"', 'id="refineCt2InstallBtn"',
+                   'id="refineCt2ModelStatus"', 'id="refineCt2ModelBtn"',
+                   '唯一引擎，首次使用需安装'):
+        assert anchor in ct2_card, f"CT2 面板锚缺失: {anchor}"
+    # 对照卡结构序：标题 → crosscheck 开关 → asrStatus
+    anchors = ['data-i18n="asr_panel_title"', 'id="asrCrosscheckToggle"',
+               'id="asrStatus"']
+    pos = [asr_card.index(a) for a in anchors]
+    assert pos == sorted(pos), "对照卡结构序漂移（标题→开关→状态行）"
+    # JS 态文案填充钉 + asrSaved 保存成功门控（唯一残留保存链）
     bind = _extract_function(_app_js_source(), "bindDom")
-    for frag in ("MSG.asrRefreshBtn", "MSG.asr_env_undetected",
-                 "MSG.asrModelsBtn", "MSG.asrSelectPlaceholder",
-                 "MSG.asrCrosscheckLabel", "MSG.asrCrosscheckTitle",
-                 "MSG.asrPythonPlaceholder"):
-        assert frag in bind, f"bindDom 缺 ASR 卡 JS 态文案填充: {frag}"
-    assert bind.count("MSG.asrSaved") == 3 and \
-        bind.count("r.success ? MSG.asrSaved") == 3, \
-        "asrSaved 必须仅在保存成功后写入（三处保存链均门控）"
+    for frag in ("MSG.asrCrosscheckLabel", "MSG.asrCrosscheckTitle"):
+        assert frag in bind, f"bindDom 缺对照卡 JS 态文案填充: {frag}"
+    assert bind.count("MSG.asrSaved") == 1 and \
+        bind.count("r.success ? MSG.asrSaved") == 1, \
+        "asrSaved 必须仅在保存成功后写入（唯一 crosscheck 保存链）"
 
 
 def test_batch2_new_msg_keys_pinned():
-    """批2 新增 JS 态 MSG 键存在（全中文文案，零静态 i18n 消耗）。"""
+    """批2 新增 JS 态 MSG 键存在（全中文文案，零静态 i18n 消耗）。
+    3.2 退役批：asr_env_undetected 随 whisper 探测面删除。"""
     src = _app_js_source()
     keys = _js_msg_keys()
-    for key in ("model_list_empty_hint", "asr_env_undetected"):
+    for key in ("model_list_empty_hint",):
         assert key in keys, f"MSG 缺少批2新键: {key}"
         m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
         assert m and m.group(1), f"MSG 键 {key} 文案为空"
     assert "asr_entry_hint" not in keys, "说明行独立键应随 2.7.1 删除（并入 asrCrosscheckTitle）"
+    assert "asr_env_undetected" not in keys, "探测空态键应随 3.2 退役批删除"
 
 
 # ---------------------------------------------------------------------------
@@ -1965,76 +1937,34 @@ def test_app_modal_download_pinned():
         assert key in keys, f"MSG 缺少批B新键: {key}"
 
 
-def test_asr_models_panel_pinned():
-    """2.7.1 件3（D2026-1005-01）：模型管理面板（AppModal kind='models'）。
-
-    复用 #appModal 骨架 + .modal-lg；body 全 createElement（零 id/data-i18n）；
-    评议 C3 守卫隔离：_settle 的 no-op 分支只命中 download kind，models
-    关闭永不阻塞；下载行内进度复用 .dl-progress-*、诊断网格复用
-    .dict-diag-grid；三态双门控 + verified 硬门槛（未核验禁下载）；
-    重开面板经 refine_asr_download_progress 恢复轮询。"""
-    src = _app_js_source()
-    assert "models(opts)" in src, "AppModal.models 缺失"
-    body = _extract_function(src, "models")
-    assert "mp-body" in body and "modal-lg" in body, "骨架扩宽/样式类缺失"
-    assert "createElement" in body, "面板须 createElement 注入"
-    assert "mp-tier" in body, "三档分组缺失"
-    assert "mp-chip-ready" in body and "mp-chip-adapter" in body         and "mp-chip-planned" in body, "三态 chip 缺失"
-    assert "mp-dot" in body and "filled" in body, "五格点阵缺失"
-    assert "dl-progress-bar" in body, "行内进度须复用 .dl-progress-*"
-    assert "dict-diag-grid" in body, "失败诊断网格须复用 .dict-diag-grid"
-    assert "refine_asr_download(" in body, "下载桥调用缺失"
-    assert "refine_asr_download_progress(" in body, "进度快照桥缺失"
-    assert "startPolling" in body, "重开恢复轮询缺失"
-    assert "MB/s" in body, "前端增量 MB/s 计算缺失"
-    assert "entry.verified !== true" in body, "verified 硬门槛缺失"
-    assert "MSG.mpAdapterTitle" in body and "MSG.mpUnverifiedTitle" in body         and "MSG.mpPlannedTitle" in body, "三态禁用 tooltip 文案缺失"
-    assert "MSG.mpUnadaptedBanner" in body, "未适配 banner 缺失"
-    assert "MSG.mpPathWhisper" in body and "MSG.mpPathData" in body,         "路径栏两行缺失"
-    # C3：_settle 不含 models 分支（关闭永不阻塞）
-    settle = _extract_function(src, "_settle")
-    assert "_kind === 'models'" not in settle,         "models kind 不得进 _settle 阻塞守卫（评议 C3）"
-    # 入口链：bindDom 绑 .asr-models-btn → asrOpenModelsPanel → AppModal.models
-    bind = _extract_function(src, "bindDom")
-    assert "asrOpenModelsPanel()" in bind, "面板入口绑定缺失"
-    openfn = _extract_function(src, "asrOpenModelsPanel")
-    assert "AppModal.models(" in openfn, "面板打开调用缺失"
-    assert "MSG.mpNeedProbe" in openfn, "无探测结果引导缺失"
-
 def test_asr_d271_msg_keys_pinned():
-    """2.7.1 新增 JS 态 MSG 键定向断言（评议 C1：JS 态键不受静态 cap 200
-    约束，由本测试守护）；红绿灯/下拉来源标注/三态文案/死键清理同钉。"""
+    """3.2 退役批（D2026-1029-01）改写：2.7.1 whisper 面键（红绿灯/模型管理
+    面板 mp* 系/asrProbe* 系）随链全删；死键清理钉扩容。"""
     src = _app_js_source()
     keys = _js_msg_keys()
-    new_keys = (
-        "asrProbeUpstreamOk", "asrCrosscheckTitle", "asrModelsBtn",
-        "mpTitle", "mpPathWhisper", "mpPathData", "mpOpenDir",
-        "mpUnadaptedBanner", "mpTierFast", "mpTierBalanced", "mpTierPrecise",
-        "mpSpeedLabel", "mpPrecisionLabel", "mpSpecNote", "mpStateReady",
-        "mpStateAdapter", "mpStatePlanned", "mpUnverifiedTitle",
-        "mpAdapterTitle", "mpPlannedTitle", "mpVariantsLabel", "mpNeedProbe",
-    )
-    for key in new_keys:
-        assert key in keys, f"MSG 缺少 2.7.1 新键: {key}"
-    # 死键清理钉：旧键随调用链删除
+    # 退役批死键：红绿灯/下拉/模型管理面板 36 键（解冻提案逐名）
     for dead in ("asr_entry_hint", "asrRecTitle", "asrPresent", "asrMissing",
                  "asrPlanned", "asrSrcOverseas", "asrSrcDomestic",
-                 "asrPlaceHint", "asrDownloadTitle", "asrDlNoCancel"):
-        assert dead not in keys, f"2.7.1 死键残留: {dead}"
-    # 红绿灯：三色点注入 + 三态映射（asrApplyEnvStatus）
-    fn = _extract_function(src, "asrApplyEnvStatus")
-    assert "status-dot asr-dot" in fn, "状态点 class 缺失"
-    assert "dot-ok" in fn and "dot-warn" in fn and "dot-err" in fn,         "三色点映射缺失"
-    assert "ffmpeg-missing" in fn and "python-unavailable" in fn,         "triage 映射缺失（whisper-import-failed/module-missing 归红档 else 分支）"
-    # 下拉：来源标注 + 完整路径 title + qwen 占位删除
-    refresh = _extract_function(src, "asrRefresh")
-    assert "ASR_SOURCE_LABELS" in refresh, "下拉来源标注缺失"
-    assert "o.title = m.path" in refresh, "option title=完整路径缺失"
-    assert "__qwen__" not in src, "qwen disabled 占位应已删除"
-    assert "force === true" in refresh, "force 绕过缓存参数缺失"
-    # 首启空闲探测 + ASR 页懒探测钩子
-    assert "refine_asr_status()" in src, "首启后台探测缺失"
-    assert "__asrTabHook" in src, "ASR 页懒探测钩子缺失"
+                 "asrPlaceHint", "asrDownloadTitle", "asrDlNoCancel",
+                 "asrRefreshBtn", "asrProbeReady", "asrProbeNoModel",
+                 "asrProbeFail", "asrProbeUpstreamOk", "asrSelectPlaceholder",
+                 "asrModelUnselected", "asrModelPlaceholder",
+                 "asr_env_undetected", "asrPythonPlaceholder",
+                 "asrModelsBtn", "asrDownloadBtn", "mpTitle",
+                 "mpPathWhisper", "mpPathData", "mpOpenDir",
+                 "mpUnadaptedBanner", "mpTierFast", "mpTierBalanced",
+                 "mpTierPrecise", "mpSpeedLabel", "mpPrecisionLabel",
+                 "mpSpecNote", "mpStateReady", "mpStateAdapter",
+                 "mpStatePlanned", "mpUnverifiedTitle", "mpAdapterTitle",
+                 "mpPlannedTitle", "mpVariantsLabel", "mpNeedProbe",
+                 "sys_asr_row_label", "sys_asr_undetected",
+                 "sys_asr_unconfigured", "sys_asr_ready"):
+        assert dead not in keys, f"退役批死键残留: {dead}"
+    # whisper 面函数随链删除；crosscheck 懒刷新钩子保留
+    assert "asrApplyEnvStatus" not in src, "红绿灯函数应随退役批删除"
+    assert "asrOpenModelsPanel" not in src, "面板入口函数应随退役批删除"
+    assert "ASR_SOURCE_LABELS" not in src, "下拉来源标注应随退役批删除"
+    assert "__asrTabHook" in src, "ASR 页懒刷新钩子缺失"
 
 
 def test_asr_d271_residue_pinned():
@@ -2253,18 +2183,19 @@ def test_d1021_card4_endpoint_card_structure_pinned():
 
 
 def test_batch_c_asrdict_tab_order_pinned():
-    """批C 新钉：tab-asrdict 面板在 tab-engine 面板之后；ASR 卡与词典卡
-    注释整体位于 tab-asrdict 内且词典注释在 ASR 注释之后（两卡相邻）。"""
+    """批C 新钉：tab-asrdict 面板在 tab-engine 面板之后；3.2 退役批卡序=
+    CT2 引擎面板（主位）→ 媒体重点对照卡 → 词典卡（三注释依次相邻）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     i_engine = html.index('id="tab-engine"')
     i_asrdict = html.index('id="tab-asrdict"')
     i_glossary = html.index('id="tab-glossary"')
     assert i_engine < i_asrdict < i_glossary, "tab-asrdict 面板必须位于 tab-engine 之后、tab-glossary 之前"
     panel = html[i_asrdict:i_glossary]
-    i_asr_comment = panel.index("<!-- ASR 模型管理")
+    i_ct2 = panel.index("<!-- CT2 转写引擎面板")
+    i_asr_comment = panel.index("<!-- 媒体重点对照卡")
     i_dict_comment = panel.index("<!-- 词典管理")
-    assert i_asr_comment < i_dict_comment, \
-        "词典卡注释必须在 ASR 卡注释之后（两卡迁入次序保持）"
+    assert i_ct2 < i_asr_comment < i_dict_comment, \
+        "卡序漂移（CT2 主位→对照卡→词典卡）"
 
 
 def test_batch_c_msg_tabengine_renamed_pinned():
@@ -2442,17 +2373,19 @@ def test_appmodal_unified_skeleton_binding_pinned():
     assert "root.dataset.bound" in binder, "守卫必须在 _bindSkeletonOnce 内"
     assert "if (!root.dataset.bound)" not in src, \
         "逐模态绑定块必须绝迹（首绑互窃根源）"
-    # ② 七个打开路径逐一补绑
-    for method in ("_open", "download", "editor", "models", "encode",
+    # ② 打开路径逐一补绑（3.2 退役批：models 方法随链删除，余六路）
+    for method in ("_open", "download", "editor", "encode",
                    "batchFixPreview", "tmEdit"):
         body = _extract_function(src, method)
         assert "_bindSkeletonOnce(root)" in body, \
             f"{method} 打开路径缺 _bindSkeletonOnce(root)（首开互窃回归）"
     # ③ kind→语义矩阵
     assert "this._kind === 'tmEdit' || this._kind === 'editor'" in okv \
-        and "this._kind === 'download' || this._kind === 'models'" in okv \
+        and "this._kind === 'download'" in okv \
         and "return undefined;" in okv, \
-        "矩阵缺 no-op 分支（tmEdit/editor Enter 不提交、download/models 无确认语义）"
+        "矩阵缺 no-op 分支（tmEdit/editor Enter 不提交、download 无确认语义）"
+    assert "this._kind === 'models'" not in okv, \
+        "models kind 应随 3.2 退役批从矩阵移除"
     assert "this._kind === 'prompt') return (input && input.value)" in okv, \
         "prompt 须带输入值结算"
     assert "this._kind === 'encode'" in okv and "_encodeCollect" in okv \
@@ -2521,50 +2454,29 @@ def test_batch_d_css_modal_lg_pinned():
 # ---------------------------------------------------------------------------
 
 def test_asr_status_three_view_alignment_pinned():
-    """件③回归钉：红绿灯/下拉/摘要卡三处 UI 口径对齐，空态不得假显 large-v2。
+    """件③回归钉（3.2 退役批改写）：假选中问题载体（红绿灯/下拉/摘要卡
+    探测 UI）随 whisper 半边全删，诚实性约束以「删除净尽」形态维持。
 
-    人工推演（假选中场景）：asrRefresh 清空重建下拉后仅在有 saved 且命中
-    本机清单时设 sel.value；saved 空时不设值 → 浏览器默认选中第一项
-    option = 用户未选却显示已选（假选中）；红绿灯 saved 空时硬编码兜底
-    'large-v2' 同属假显（后端 CLI 不带 --asr-model 缺省 large-v2 是合法
-    降级，asr_runner/quality_advisor 不动，本件只修 UI 诚实性）：
-    - 红绿灯 asrApplyEnvStatus：兜底改 MSG.asrModelUnselected；
-    - 下拉 asrRefresh：saved 空/不在清单时显式 sel.value='' + JS 渲染
-      占位 option（MSG.asrModelPlaceholder，零静态 id/data-i18n——
-      FROZEN_IDS=213 / i18n=189 既有钉零改动）；
-    - change 处理器（bindDom 内 asrSel 链）：空值守卫（评议员条件⑥）
-      ——占位空值不保存、不覆盖既有 saved_model（占位项恰为当前选中
-      时点选=空操作）；
-    - 摘要卡 probeAsr：model_present && saved_model 双门控本已诚实，
-      失败三分支 asrProbeFail 恰 3 次口径不变（防连带漂移复述钉）。
+    - 3.2 退役批（D2026-1029-01）：asrApplyEnvStatus/asrRefresh 下拉段/
+      摘要卡 probeAsr 全删；asrModelUnselected/asrModelPlaceholder 两键同删；
+    - crosscheck 开关与 asrStatus 状态行保留（编排开关非 whisper 专属）；
+    - 词典下载缓解引导（D 缓解）部分原样保留。
     """
     src = _app_js_source()
-    apply_body = _extract_function(src, "asrApplyEnvStatus")
-    assert "'large-v2'" not in apply_body, \
-        "红绿灯残留 large-v2 硬编码兜底（saved 空时假显已选模型）"
-    assert "MSG.asrModelUnselected" in apply_body, \
-        "红绿灯 saved 空态须走 MSG.asrModelUnselected"
-    refresh = _extract_function(src, "asrRefresh")
-    assert "sel.value = ''" in refresh, \
-        "下拉 saved 空态须显式归零选中（消灭浏览器默认选中第一项的假选中）"
-    assert "MSG.asrModelPlaceholder" in refresh, "下拉占位 option 须挂新键文案"
-    assert "createElement('option')" in refresh, \
-        "占位 option 必须 JS 渲染（零静态 id/data-i18n）"
+    assert "asrApplyEnvStatus" not in src, "红绿灯函数应随退役批删除"
+    assert "asrModelPlaceholder" not in src \
+        and "asrModelUnselected" not in src, "假选中修正键应随退役批删除"
     html = INDEX_HTML.read_text(encoding="utf-8")
-    assert "asrModelPlaceholder" not in html and "asrModelUnselected" not in html, \
-        "件③新键文案不得静态写入 index.html"
+    assert 'id="asrModelSel"' not in html, "模型下拉应随退役批删除"
+    assert "asrModelPlaceholder" not in html and \
+        "asrModelUnselected" not in html, "件③新键文案不得静态写入 index.html"
     bind = _extract_function(src, "bindDom")
-    assert re.search(r"asrSel\.value === ''\s*\)\s*return", bind), \
-        "asrSel change 缺空值守卫（占位空值不得写回 saved_model，评议员条件⑥）"
+    assert "asrSel" not in bind, "下拉 change 链应随退役批删除"
     keys = _js_msg_keys()
     for key in ("asrModelUnselected", "asrModelPlaceholder"):
-        assert key in keys, f"MSG 缺少件③新键: {key}"
-        m = re.search(rf"^\s*{key}:\s*'([^']*)'", src, re.M)
-        assert m and m.group(1), f"MSG 键 {key} 文案为空"
-    # 摘要卡口径不变：probeAsr 失败三分支 asrProbeFail 恰 3 次（既有钉复述）
-    probe = _extract_function(src, "probeAsr")
-    assert probe.count("MSG.asrProbeFail") == 3, \
-        "摘要卡 asrProbeFail 三分支口径漂移（件③不得增删）"
+        assert key not in keys, f"假选中修正键应随退役批删除: {key}"
+    # 摘要卡：ASR 行随退役批删除（probeAsr 三分支复述钉随之移除）
+    assert "probeAsr" not in src, "摘要卡探测函数应随退役批删除"
     # 词典下载缓解引导（D 缓解）：三点核心信息在既有 hint 键文案内
     assert "dict_install_hint" in keys, "MSG 缺 dict_install_hint 键"
     assert "两跳" in src and "--dict-from-file" in src and "切换镜像" in src, \
@@ -3503,8 +3415,9 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
-    无内联 width:auto；id 全集数 222 / data-i18n 键集 177 契约数零漂移
-    （d1028-38 前为 218/176，CT2 面板 +4 id +1 键随钉⑤解冻提案换代）
+    无内联 width:auto；id 全集数 218 / data-i18n 键集 177 契约数零漂移
+    （d1028-38 后为 222/177，CT2 面板 +4 id +1 键；3.2 退役批 whisper
+    半边 -4 id：asrEnvStatus/asrModelSel/asrPythonInput/asrRefreshBtn → 218）
     （d1024 批3 件B：TM/断点 8 id 撤除、17 个静态 data-i18n 锚随区块撤除，
     tm_enable_label 因右栏 sys-summary 行仍消费而保留）
     （全集逐键相等断言在 test_ui_phase3_redlines 钉⑤a/⑤b；P2 删修复
@@ -3519,8 +3432,9 @@ def test_batch3_ai_config_row_pins_survive():
     ids = set(re.findall(r'(?<![\w-])id="([^"]+)"', html))
     # d1025-⑥a（D2026-1025-01 裁决⑥）：+refineSynopsisCast，显式解冻 217→218；
     # d1028-38（CT2 面板，钉⑤解冻提案）：+4（refineCt2Status/InstallBtn/
-    # ModelStatus/ModelBtn）→ 222
-    assert len(ids) == 222, f"id 全集数漂移（契约 222），实为 {len(ids)}"
+    # ModelStatus/ModelBtn）→ 222；
+    # d1029 退役批（whisper 半边删除，解冻提案）：-4 → 218
+    assert len(ids) == 218, f"id 全集数漂移（契约 218），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -7244,7 +7158,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "bff0fd357530994782b7a7e18adfa52ba7dcba577923e795647002f9349eb0cc"), \
+        "7fe89fb5b8d28f03a675e1829e630e7687c5836efb4b7f7e7dd6a7000191fbaf"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7254,7 +7168,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "1139264600ae160ad5045574a87101252f1c1ba5c10bdd30b332d302dc51e263"), \
+        "7f7950fbc52736c12c248961b059b24d4757f682bef9ce0d852884502cf31836"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7274,10 +7188,10 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (65789,
-                       "121d5ae8b69f3e56ad19ba2ff9a286a720d619eb81b3dc1bd5100ebdac7f6a2b"),
-        "app-modal.js": (110772,
-                         "f0ab0e9ba60bb5844e189d9d854fa522e72dfb808ea6f505f453ef0e09be8c00"),
+        "app-msg.js": (63065,
+                       "0253633c4b4d7dca6b22f9c556109d9f88d035fdf01c9bfd2a6e81c5aa7079e4"),
+        "app-modal.js": (92946,
+                         "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (21361,
@@ -7288,8 +7202,8 @@ def test_js_split_integrity_pinned():
                             "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
         "app-progress.js": (3070,
                             "e19571ec0a38d3e517501efb735771b31a0ac5a7ea39b371e29de596e19f2763"),
-        "app-system-summary.js": (9494,
-                                  "980cfd6a394de75f0f346387a382bc8cc302482a41605d4839551d5599b143c9"),
+        "app-system-summary.js": (7226,
+                                  "473f93109c558675ac87cf17833b25e1f603b833b0921d113fe1b050113b5b64"),
         "app-tm-query.js": (4893,
                             "c923272db15462c77875acdb27a32cc202860bd07fdf3245220bf1c4f70a4a2e"),
         "app-directory.js": (3149,
@@ -7322,12 +7236,12 @@ def test_js_split_integrity_pinned():
                              "ce941f6b1605d221321a52daaaf9e896b7ce64d570fd1125d8913a1219792de9"),
         "app-refine-batchfix.js": (25976,
                                    "fb802a9b43e509aad696be184fd8b16fd925da89ae6f577dab00665ccfd1ea4a"),
-        "app-refine-asr.js": (8483,
-                              "75e40b82e45bb5b3a0389b89409bb71fd4ee61138f0580c4b202550de0a33014"),
+        "app-refine-asr.js": (4220,
+                             "d8e416aa0df8de04498c11954972dc42e21949b6dc8fbc61355df62c2e60b5a2"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
-        "app-refine-bind.js": (17441,
-                               "469e85818b7c18aa585899283aa2ea3789b4bb88863365f9a7886d69932afce9"),
+        "app-refine-bind.js": (14663,
+                               "df9d8889685d44789fbe7894769172b28ece737dbe8b234f1acbfaeb743db91f"),
         "app-refine-dataroot.js": (2310,
                                    "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
         "app-refine-dict.js": (34748,
@@ -7378,7 +7292,7 @@ def test_refine_family_deshell_pinned():
 
 # 批4 全局面冻结名单（177 个；末次变更=d1024 批3 件B TM/断点合并弹窗两顶层声明）
 _REFINE_TOP_NAMES = frozenset({
-    "$", "AI_CLOUD_PROVIDERS", "ASR_SOURCE_LABELS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
+    "$", "AI_CLOUD_PROVIDERS", "DICT_KINDS", "DICT_KIND_DISPLAY_ORDER",
     "DICT_STOP_GRACE_MS", "FULLCHAIN_SCOPE_NOTE", "GUIDE_ITEMS_MODAL_TITLE",
     "GUIDE_ITEMS_OPEN_BTN_LABEL", "GUIDE_SUFFIX", "MODEL_REFRESH_SVG", "REFINE_PROVIDER_URLS",
     # d1028-38（CT2 面板接线）：+7 顶层函数（钉⑤解冻提案）
@@ -7394,7 +7308,7 @@ _REFINE_TOP_NAMES = frozenset({
     "aiRenderResult", "aiReportPath", "aiRestoreBtn", "aiRestoreTm", "aiStatus",
     "aiUpdateTmTarget", "analyzeResolution", "appliedPolishOptionFields",
     "applyProviderEndpoint", "applySavedStageSettings",
-    "applyServiceQuickProvider", "asrApplyEnvStatus", "asrOpenModelsPanel", "asrRefresh",
+    "applyServiceQuickProvider", "asrRefresh",
     "asrStatus", "attachPreviewSeekListeners", "batchFixRefresh", "batchFixRun",
     "bfRefreshEffective", "bfStatus", "bindCleanerDirControls", "bindDirectionControls", "bindDom",
     "buildRefineOptions", "clearPreviewError", "closeAudioPreview", "dataRootBrowse",
@@ -7402,12 +7316,12 @@ _REFINE_TOP_NAMES = frozenset({
     "dictDownload", "dictFailureText", "dictLoad", "dictMigrate", "dictPickDir",
     "dictRenderDetail", "dictRequestStop", "dictRestoreDir", "dictShowStatus",
     "ensureGuideStatusLine", "ensurePreviewErrorSlot", "ensurePreviewLoadingNote", "esc", "fcFmt",
-    "fileUrlOf", "fmtGB", "fullchainRollbackRun", "fullchainStatusRefresh", "glAdd", "glDel",
+    "fileUrlOf", "fullchainRollbackRun", "fullchainStatusRefresh", "glAdd", "glDel",
     "glExport", "glImport", "glLearnedLoad", "glLoad", "glRender", "glRows", "glSave", "glStatus",
     "guideAutoDetect", "guideCopyPath", "guideCustomStatus", "guideItemCardHtml", "guideLoad",
     "guidePath", "guideRender", "guideRenderTxt", "guideStalenessCheck", "guideStatus",
     "inferredMediaCache", "isAiCloudProvider", "lastActionItems", "lastAiSuggestions",
-    "lastAsrProbe", "lastGuideData", "lastLoadedGuideMtime", "lastLoadedGuidePath",
+    "lastGuideData", "lastLoadedGuideMtime", "lastLoadedGuidePath",
     "lastLoadedIsTxt", "lastLoadedReportTxtPath", "lastPreviewTiming", "lastPreviewToken",
     "loadRemote", "markInferredMedia", "maybeShowDataGuide", "mediaMissingHint",
     "mediaOverridePath", "modelEmptyOptionHTML", "openAudioPreview", "openDir",

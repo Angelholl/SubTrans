@@ -409,44 +409,13 @@
                     </div>
                 </div>
 
-                <!-- ASR 模型管理（2.6.0 批3，D2026-1002-04-批3；2.7.1 重整
-                     D2026-1005-01 承接批：删说明独立行（asr_entry 提示并入
-                     asrCrosscheckToggle 的 title 悬停）、删推荐清单折叠区
-                     （模型管理能力迁 AppModal models 面板；入口按钮走
-                     .asr-models-btn class 锚，零新增 id）。asrEnvStatus 状态行
-                     前置三色状态点由 JS 注入（.status-dot.asr-dot，复用既有
-                     状态点类，零新增 id/静态键）。
-                     结构序：header 行（标题+模型管理+重新探测）→ 状态行
-                     （asrEnvStatus）→ 模型行 → 开关行；文案全 JS 态填充
-                     （bindDom），HTML 不留英文占位 -->
-                <div class="form-card">
-                    <div class="action-row">
-                        <div class="form-card-header" data-i18n="asr_panel_title">ASR 模型（媒体重点对照）</div>
-                        <button type="button" class="btn btn-secondary btn-compact asr-models-btn" data-testid="asr-models-btn"><span></span></button>
-                        <button type="button" id="asrRefreshBtn" class="btn btn-compact"><span></span></button>
-                    </div>
-                    <div class="section-content">
-                        <div class="action-row">
-                            <span id="asrEnvStatus" class="muted"></span>
-                        </div>
-                        <div class="field-row" style="margin-top:6px;">
-                            <select id="asrModelSel" class="form-select compact" style="width:auto;"><option value="" disabled selected></option></select>
-                            <span id="asrStatus" class="muted"></span>
-                        </div>
-                        <div class="field-row" style="margin-top:6px;">
-                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
-                            <input id="asrPythonInput" class="form-input compact" style="width:auto; flex:1;">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- CT2 转写引擎面板（钉⑤解冻提案 d1028-38，D2026-1028-03 脱钩轮
-                     待裁决项→「全部开工」令批准）：id +4 / 静态 data-i18n 键 +1；
+                <!-- CT2 转写引擎面板（3.2 退役批 D2026-1029-01 升主位：唯一引擎
+                     「首次使用需安装」定位；d1028-38 接线面 id/键不动）：
                      api 桥三端点 refine_ct2_status/install/model_download 接线，
                      按钮/状态全 JS 态文案（MSG 键零静态消耗，沿词典卡先例）；
                      安装/下载=后台异步操作面 1s 轮询，终态自动翻转 -->
                 <div class="form-card" data-testid="ct2-panel">
-                    <div class="form-card-header" data-i18n="ct2_panel_title">CT2 转写引擎（实验性，默认关）</div>
+                    <div class="form-card-header" data-i18n="ct2_panel_title">CT2 转写引擎（唯一引擎，首次使用需安装）</div>
                     <div class="section-content">
                         <div class="action-row">
                             <span id="refineCt2Status" class="muted"></span>
@@ -455,6 +424,25 @@
                         <div class="field-row" style="margin-top:6px;">
                             <span id="refineCt2ModelStatus" class="muted"></span>
                             <button type="button" id="refineCt2ModelBtn" class="btn btn-compact"><span></span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 媒体重点对照卡（3.2 退役批 D2026-1029-01 收敛：whisper 半边
+                     删除——asrEnvStatus 红绿灯/asrModelSel/asrPythonInput/
+                     asrRefreshBtn/模型管理入口全部移除（解冻提案
+                     d1029-退役批GUI解冻提案.md 逐名列账）；保 crosscheck 开关
+                     与 asrStatus 状态行，文案全 JS 态填充（bindDom）） -->
+                <div class="form-card">
+                    <div class="action-row">
+                        <div class="form-card-header" data-i18n="asr_panel_title">媒体重点对照（本地转写验证）</div>
+                    </div>
+                    <div class="section-content">
+                        <div class="field-row">
+                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <span id="asrStatus" class="muted"></span>
                         </div>
                     </div>
                 </div>
