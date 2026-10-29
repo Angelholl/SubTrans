@@ -2,26 +2,31 @@
 
 本项目的所有显著变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## [未发布]
+## [3.1.0] - 2026-10-30
 
 ### 新增
 
-- **CT2 GPU 加速通道（3.2.1 件B，opt-in）**：安装后自动检测 NVIDIA GPU 能力——检测到 CUDA 设备时可下载 GPU DLL 补丁包（约 1.1GB，守卫下载＋sha256＋布局校验，nvidia 官方 pip wheel 同源构建）启用 GPU 转写（int8_float16），装载失败自动回退 CPU（int8）；未装补丁包/无 GPU 用户路径零变化（CPU int8）。CLI `python -m subtransjav.refine.asr_runtime gpu-patch`（检测/本地 zip 安装；在线下载待镜像上架点亮），GUI 引擎页「GPU 加速」行按需提示。
-- **转写引擎与上游环境正式脱钩（3.1 脱钩轮）**：应用不再依赖任何外部转写环境安装——引擎候选链改为「环境变量 > 设置显式指定 > 自管 CT2 运行时」，移除机器相关缺省路径；媒体对照/漏听对照链自动分派 CT2 引擎（就绪即走），legacy whisper 链降级为显式指定才可达的兼容通道；无任何引擎时对照链如实降级跳过并给出安装指引，不影响翻译主链路。CT2 运行时与模型件经守卫下载链（https 域白名单+重定向逐跳校验+sha256 逐字节核验+防 zip-slip 解包）按需安装到数据根，安装/下载/自检均可命令行操作（`python -m subtransjav.refine.asr_runtime install / download-model / status / selfcheck`）。
-- **CT2 转写确定性断行接入（3.2.1）**：ct2 转写输出的长行自动按词级时间戳+每行字数上限+停顿检测切分（`--no-line-break` 可关），词级 sidecar 始终保留原始数据可回放。
-- **正确率评测 harness（3.1.0 测量地基，CLI）**：新增 `python -m subtransjav.refine.eval_baseline`——对同一媒体上的一或多个转写引擎 SRT 产出代理指标报告（幻听代理=语音窗口低重叠行占比、漏听代理=语音未覆盖占比、双引擎一致率=时轴贪婪匹配+文本相似、CPS 分位），JSON+Markdown 双件落盘；语音窗口检测复用既有检测原语，媒体/ffmpeg 缺失时窗口类指标显式 null 并注明原因，绝不误当全静音。代理指标只作涨跌比较，不承诺句级正确率绝对值。
-- **CT2 转写引擎自管运行时与 ct2 后端（3.2.0，实验性）**：新增 `python -m subtransjav.refine.asr_runtime`（install/status/selfcheck/download-model）——转写引擎运行环境与主程序解耦的按需安装链（预打包件主路径+在线依赖降级路径，依赖全钉）；`subtransjav.refine.asr_runner` 新增 `--engine ct2` 整片转写模式（缺省 whisper 既有链行为零变化），支持词级时间戳、VAD、上下文条件等旋钮（缺省值为占位，待真机语料校准），产出 SRT 与词级 sidecar；预打包件与模型镜像发布后经实下载核验方可点亮下载。
-- **CT2 长行断行器（3.2.1，CLI）**：新增 `python -m subtransjav.refine.line_breaker`——基于词级时间戳、每行字数上限与停顿检测的确定性长行切分（社区反馈的 CT2 长行问题的自动化解法），保证文本守恒、时间轴覆盖守恒与达标行幂等。
-- **全自动质量闭环预置机制（3.3.0，默认关）**：新增 `subtransjav/refine/quality_autoloop.py` 编排骨架（分析→计划→修复→复验→放行/降级人工），默认关闭且不接入任何生产链路；放行门为预注册量化门（Wilson 下界），门数值未定即永远降级人工（fail-closed）；每次自动动作强制携带台账上下文。激活需三项前置齐备（评审放行、基线门数值、真实语料债务清偿），见 `--status` 输出。
+- **CT2 GPU 加速通道（opt-in）**：安装后自动检测 NVIDIA GPU 能力——检测到 CUDA 设备时可下载 GPU DLL 补丁包（约 1.1GB，守卫下载＋sha256＋布局校验，NVIDIA 官方 pip wheel 同源构建）启用 GPU 转写（int8_float16），装载失败自动回退 CPU（int8）；未装补丁包/无 GPU 用户路径零变化（CPU int8）。CLI `python -m subtransjav.refine.asr_runtime gpu-patch`（检测/本地 zip 安装；在线下载通道将在补丁包镜像上架后的后续版本点亮），GUI 引擎页「GPU 加速」行按需提示。
+- **转写引擎与上游环境正式脱钩**：应用不再依赖任何外部转写环境安装——引擎候选链改为「环境变量 > 设置显式指定 > 自管 CT2 运行时」，移除机器相关缺省路径；媒体对照/漏听对照链自动分派 CT2 引擎（就绪即走），legacy whisper 链降级为显式指定才可达的兼容通道；无任何引擎时对照链如实降级跳过并给出安装指引，不影响翻译主链路。CT2 运行时与模型件经守卫下载链（https 域白名单+重定向逐跳校验+sha256 逐字节核验+防 zip-slip 解包）按需安装到数据根，安装/下载/自检均可命令行操作（`python -m subtransjav.refine.asr_runtime install / download-model / status / selfcheck`）。
+- **CT2 转写确定性断行接入**：ct2 转写输出的长行自动按词级时间戳+每行字数上限+停顿检测切分（`--no-line-break` 可关），词级 sidecar 始终保留原始数据可回放。
+- **正确率评测 harness（CLI）**：新增 `python -m subtransjav.refine.eval_baseline`——对同一媒体上的一或多个转写引擎 SRT 产出代理指标报告（幻听代理=语音窗口低重叠行占比、漏听代理=语音未覆盖占比、双引擎一致率=时轴贪婪匹配+文本相似、CPS 分位），JSON+Markdown 双件落盘；语音窗口检测复用既有检测原语，媒体/ffmpeg 缺失时窗口类指标显式 null 并注明原因，绝不误当全静音。代理指标只作涨跌比较，不承诺句级正确率绝对值。
+- **CT2 转写引擎自管运行时与 ct2 后端（实验性）**：新增 `python -m subtransjav.refine.asr_runtime`（install/status/selfcheck/download-model）——转写引擎运行环境与主程序解耦的按需安装链（预打包件主路径+在线依赖降级路径，依赖全钉）；`subtransjav.refine.asr_runner` `--engine ct2` 整片转写模式支持词级时间戳、VAD、上下文条件等旋钮（缺省值待真机语料校准），产出 SRT 与词级 sidecar。
+- **CT2 长行断行器（CLI）**：新增 `python -m subtransjav.refine.line_breaker`——基于词级时间戳、每行字数上限与停顿检测的确定性长行切分（社区反馈的 CT2 长行问题的自动化解法），保证文本守恒、时间轴覆盖守恒与达标行幂等。
+- **全自动质量闭环预置机制（默认关）**：新增「分析→计划→修复→复验→放行/降级人工」编排骨架，默认关闭且不接入任何生产链路；放行门为预注册量化门（Wilson 下界），门数值未定即永远降级人工（fail-closed）；每次自动动作强制携带台账上下文。激活需三项前置齐备（评审放行、基线门数值、真实语料债务清偿），见 `--status` 输出。
 
 ### 变更
 
-- **ASR 探测状态新增 ct2 一栏**：`refine_asr_status` 探测结果附带 ct2 运行时状态（已装/自检/模型在位/模型清单），新增 `refine_ct2_status`、`refine_ct2_install`、`refine_ct2_model_download` 三个桥端点（GUI 面板接线待界面预算流程）。
-- **转写引擎 ct2 唯一化（3.2 退役批）**：legacy whisper 后端退役——`asr_runner` 仅保留 `--engine ct2` 整片转写模式；引擎分派删除 whisper 回落分支，未安装运行时时报错文案统一导向 ct2 安装（「唯一引擎，首次使用需安装」）；CLI `--asr-python`/`--asr-model` 与对应设置项保留一版废弃壳（传入提示已退役，无功能作用）。ct2 转写产物补齐三维置信键透传（no_speech_prob/avg_logprob/compression_ratio）——此前 ct2 臂缺键使漏听二级核对的三维置信门静默失效，本批随退役一并修复。
+- **ASR 探测状态新增 ct2 一栏**：`refine_asr_status` 探测结果附带 ct2 运行时状态（已装/自检/模型在位/模型清单），新增 `refine_ct2_status`、`refine_ct2_install`、`refine_ct2_model_download` 三个桥端点。
+- **转写引擎 ct2 唯一化**：legacy whisper 后端退役——`asr_runner` 仅保留 `--engine ct2` 整片转写模式；引擎分派删除 whisper 回落分支，未安装运行时时报错文案统一导向 ct2 安装（「唯一引擎，首次使用需安装」）；CLI `--asr-python`/`--asr-model` 与对应设置项保留一版废弃壳（传入提示已退役）。ct2 转写产物补齐三维置信键透传（no_speech_prob/avg_logprob/compression_ratio）——修复此前 ct2 臂缺键导致漏听二级核对三维置信门静默失效的问题。
 
 ### 移除
 
-- **legacy whisper 模型下载与管理面**：`asr_downloader` 模块（.pt 模型三源下载引擎）与推荐模型目录（ASR_RECOMMENDED_MODELS）删除；GUI「ASR 模型」卡收敛为 CT2 单面板（引擎状态/安装/模型下载），上游环境探测红绿灯、.pt 模型下拉与「模型管理」面板移除；`refine_asr_download` 系桥端点删除。用户历史产物读取兼容**保留**（`.merged` 命名族源文 SRT／`whisperjav_run.json` 运行清单／遥测旁车文件）。
+- **legacy whisper 模型下载与管理面**：`asr_downloader` 模块（.pt 模型三源下载引擎）与推荐模型目录删除；GUI「ASR 模型」卡收敛为 CT2 单面板（引擎状态/安装/模型下载），上游环境探测红绿灯、.pt 模型下拉与「模型管理」面板移除；`refine_asr_download` 系桥端点删除。用户历史产物读取兼容**保留**（`.merged` 命名族源文 SRT／`whisperjav_run.json` 运行清单／遥测旁车文件）。
+
+### 修复
+
+- **CT2 断行器打包形态静默失效**：安装包此前（≤3.0.7）未随包携带断行器模块，frozen 直调形态下断行装载失败被静默吞掉、SRT 回退原生长行；现已随包修复并以双路径冒烟钉固化（开启臂 SRT 与断行器直出逐字节一致、`--no-line-break` 臂与原生输出一致）。
+- **CT2 自管运行时上架点亮＋下载链三缺陷修复**：运行时预打包件 1.1.0 与 large-v2 CT2 模型镜像经生产路径实下载核验点亮（守卫安装→模型下载→安装态真机转写 e2e 全链 rc=0，模型下载门开启）；随核验修复三缺陷——①运行时件 sha256 pin 误回构建期源内容哈希而非产物文件哈希（生产下载核验必失败，构建脚本口径一并勘正）；②守卫下载两跳状态机的 attempt#2「强制直连」兜底实际复用被系统代理原地改写的请求对象，直连跳从未真正直连（hf-mirror 308 回源站链路实证；词典下载链同源受益）；③模型镜像件带单内层目录未压平，落位核验永失败（解包后自动压平归位）。
 
 ## [3.0.7] - 2026-10-28
 
@@ -39,9 +44,7 @@
 
 ### 修复
 
-- **CT2 断行器打包形态静默失效修复（3.2.1）**：安装包此前未随包携带断行器模块，frozen 直调形态下断行装载失败被静默吞掉、SRT 回退原生长行；现已随包修复并以双路径冒烟钉固化（开启臂 SRT 与断行器直出逐字节一致、`--no-line-break` 臂与原生输出一致）。
 - **占位串泄漏封堵**：模型对无法辨识的模糊句若只输出裸「[未翻译]」占位串（标记后无任何内容），此前会被当正常译文收下直落缓存与字幕成品，成为零内容字幕行；现于翻译客户端收口层按缺行处理——定向重试（预算 2 轮）仍输出裸占位则归入失败链路，由管线回退原文＋「[未翻译]」标记交阶段B 补译，终稿不再出现零内容占位行；合规形态（占位＋原文，保留源文内容）不受影响。（D2026-1025-01 观察项）
-- **CT2 自管运行时上架点亮＋下载链三缺陷修复**：运行时预打包件 1.1.0 与 large-v2 CT2 模型镜像经生产路径实下载核验点亮（守卫安装→模型下载→安装态真机转写 e2e 全链 rc=0，模型下载门开启）；随核验修复三缺陷——①运行时件 sha256 pin 误回构建期源内容哈希而非产物文件哈希（生产下载核验必失败，构建脚本口径一并勘正）；②守卫下载两跳状态机的 attempt#2「强制直连」兜底实际复用被系统代理原地改写的请求对象，直连跳从未真正直连（hf-mirror 308 回源站链路实证；词典下载链同源受益）；③模型镜像件带单内层目录未压平，落位核验永失败（解包后自动压平归位）。
 
 ## [3.0.6] - 2026-10-23
 
