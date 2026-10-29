@@ -1619,9 +1619,22 @@ class TranslateAPI:
             from subtransjav.refine import asr_runtime
             return {"success": True,
                     **asr_runtime.provider_status(),
+                    "gpu_patch": asr_runtime.gpu_patch_status(),
                     "operation": asr_runtime.operation_progress()}
         except Exception as e:
             _log_exc("refine_ct2_status")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_gpu_install(self) -> dict[str, Any]:
+        """后台启动 GPU DLL 补丁包下载安装（件B opt-in；前端只在有 GPU 且
+        补丁未齐时暴露按钮，无 GPU 用户零打扰）。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            result = asr_runtime.start_gpu_patch_install()
+            return {"success": bool(result.get("started")),
+                    **result}
+        except Exception as e:
+            _log_exc("refine_ct2_gpu_install")
             return {"success": False, "error": str(e)}
 
     def refine_ct2_install(self, provider: str = "auto") -> dict[str, Any]:

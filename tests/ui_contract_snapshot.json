@@ -116,6 +116,8 @@
     "refineCleanerConfig",
     "refineCleanerConfigShow",
     "refineConcurrency",
+    "refineCt2GpuBtn",
+    "refineCt2GpuStatus",
     "refineCt2InstallBtn",
     "refineCt2ModelBtn",
     "refineCt2ModelStatus",

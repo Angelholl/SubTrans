@@ -1426,8 +1426,9 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # 显式解冻 225→217；d1025-⑥a 换代（D2026-1025-01 裁决⑥，2026-10-27）：
     # 剧情自摘要邻位 +refineSynopsisCast（人物提示子开关，默认不勾），
     # 显式解冻 217→218；d1028-38 换代（CT2 面板，钉⑤解冻提案）：+4 → 222；
-    # d1029 退役批换代（whisper 半边删除，解冻提案）：-4 → 218
-    assert len(ids) == 218, f"id 全集数漂移（d1029 退役批后现契约 218），实为 {len(ids)}"
+    # d1029 退役批换代（whisper 半边删除，解冻提案）：-4 → 218；
+    # 件B GPU 补丁包换代（D2026-1029-02 拍板③，ct2-gpu-row 2 id）：+2 → 220
+    assert len(ids) == 220, f"id 全集数漂移（件B ct2-gpu-row 后现契约 220），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -3434,7 +3435,7 @@ def test_batch3_ai_config_row_pins_survive():
     # d1028-38（CT2 面板，钉⑤解冻提案）：+4（refineCt2Status/InstallBtn/
     # ModelStatus/ModelBtn）→ 222；
     # d1029 退役批（whisper 半边删除，解冻提案）：-4 → 218
-    assert len(ids) == 218, f"id 全集数漂移（契约 218），实为 {len(ids)}"
+    assert len(ids) == 220, f"id 全集数漂移（契约 220），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -7146,6 +7147,10 @@ def test_js_sources_layer_pinned():
        +ct2 form-card 4 id、app-msg.js +10 键（ct2_panel_title 静态键双表
        同名）、app-refine-asr.js 尾部 ct2 接线块；旧钉 d48cd305… /
        bbfa628a… 退役）；
+       件B GPU 补丁包换代（D2026-1029-02 拍板③，2026-10-29）：
+       refine 家族 8d61da5a…/210,979B、全库 62f15a10…/486,531B（index.html
+       +ct2-gpu-row 2 id、app-msg.js +8 键、app-refine-asr.js ct2GpuLine/
+       ct2GpuInstall 接线；旧钉 11392646… / bff0fd35… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7158,7 +7163,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "7fe89fb5b8d28f03a675e1829e630e7687c5836efb4b7f7e7dd6a7000191fbaf"), \
+        "62f15a10b24b6ccd86f528d424d732c72acdb0c6da977cbf6273a8b05f14267a"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7168,7 +7173,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "7f7950fbc52736c12c248961b059b24d4757f682bef9ce0d852884502cf31836"), \
+        "8d61da5ae9637d17f3499db4350d76c7f3f9d26c687676619b7adb8f58f76429"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7188,8 +7193,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (63065,
-                       "0253633c4b4d7dca6b22f9c556109d9f88d035fdf01c9bfd2a6e81c5aa7079e4"),
+        "app-msg.js": (63948,
+                       "2dadeb39eed73ef5e3a1ed3d97de3c7a7b1ea6d824c389bc2da4814a7fee1304"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7236,8 +7241,8 @@ def test_js_split_integrity_pinned():
                              "ce941f6b1605d221321a52daaaf9e896b7ce64d570fd1125d8913a1219792de9"),
         "app-refine-batchfix.js": (25976,
                                    "fb802a9b43e509aad696be184fd8b16fd925da89ae6f577dab00665ccfd1ea4a"),
-        "app-refine-asr.js": (4220,
-                             "d8e416aa0df8de04498c11954972dc42e21949b6dc8fbc61355df62c2e60b5a2"),
+        "app-refine-asr.js": (5568,
+                             "6436749377821f256d93502b1973ca5ae794f4871f2e83af10f6e916dbf29a4c"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
         "app-refine-bind.js": (14663,
@@ -7337,6 +7342,9 @@ _REFINE_TOP_NAMES = frozenset({
     "timingToSeconds", "tmOriginalSeed", "tmOriginalTargets", "tmResolveEntry", "tplDirState",
     "tplGotoEdit", "tplLoad", "tplRefreshSelect", "tplRenderDatalist", "tplRenderOptions",
     "tplSave", "trioStatus", "updateMediaSourceBar", "warmupMaybeStart",
+    # 件B GPU 补丁包（D2026-1029-02 拍板③）：ct2GpuLine 状态行文案＋ct2GpuInstall
+    # opt-in 下载接线（app-refine-asr.js）
+    "ct2GpuLine", "ct2GpuInstall",
 })
 
 
