@@ -2237,6 +2237,84 @@ class TranslateAPI:
     _GUIDE_TXT_SUFFIX = "_质量报告.txt"
     # 报告 txt 只读展示上限（防超大报告卡 UI；超出截断并置 truncated）
     _GUIDE_TXT_MAX_CHARS = 1_000_000
+    # 评测报告只读面（3.1.1 件B B2，D2026-1030-02）：数据根 reports/eval/
+    # 下 *-baseline.json 白名单只读，不扩安全面
+    _EVAL_REPORT_SUFFIX = "-baseline.json"
+    _EVAL_REPORT_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+-baseline\.json$")
+    _EVAL_REPORTS_LIST_MAX = 20
+
+    @staticmethod
+    def _eval_reports_base_dir() -> Path:
+        """评测报告目录锚点＝数据根 reports/eval/（B1 CLI 缺省同源）。"""
+        return Path(paths.data_subdir("reports", "eval")).resolve()
+
+    def _eval_report_guard(self, name: str) -> Path:
+        """评测报告读侧守卫（B2，独立实现，不引用写侧 _safe_stem）。
+
+        三层：文件名白名单正则（无分隔符，杜绝穿越词）→ resolve 包含性
+        （须仍落在 reports/eval 内，防绝对路径/软链逃逸）→ resolve 后
+        文件名不变（防软链换名绕后缀白名单）。"""
+        n = str(name or "").strip()
+        if not self._EVAL_REPORT_NAME_RE.fullmatch(n):
+            raise ValueError(msg("eval_report_bad_name"))
+        base = self._eval_reports_base_dir()
+        p = (base / n).resolve()
+        if base not in p.parents or p.name != n:
+            raise ValueError(msg("eval_report_path_escape"))
+        if not p.is_file():
+            raise ValueError(msg("eval_report_not_file", name=n))
+        return p
+
+    def eval_reports_list(self) -> dict[str, Any]:
+        """评测报告目录列表（只读；3.1.1 件B B2 桥端点）。
+
+        列数据根 reports/eval/ 下 *-baseline.json（mtime 降序，上限
+        _EVAL_REPORTS_LIST_MAX）；目录未生成 → success+空列表
+        （空态引导语义，非错误）。"""
+        try:
+            base = self._eval_reports_base_dir()
+            if not base.is_dir():
+                return {"success": True, "reports": [], "dir": str(base),
+                        "empty_reason": msg("eval_reports_dir_missing")}
+            items: list[dict[str, Any]] = []
+            for p in base.glob("*" + self._EVAL_REPORT_SUFFIX):
+                try:
+                    st = p.stat()
+                except OSError:
+                    continue
+                items.append({"name": p.name, "mtime": int(st.st_mtime),
+                              "size": st.st_size})
+            items.sort(key=lambda x: (-x["mtime"], x["name"]))
+            return {"success": True,
+                    "reports": items[:self._EVAL_REPORTS_LIST_MAX],
+                    "dir": str(base)}
+        except Exception as e:
+            _log_exc("eval_reports_list")
+            return {"success": False, "error": str(e)}
+
+    def eval_reports_get(self, name: str) -> dict[str, Any]:
+        """读单份评测报告 JSON（只读白名单；3.1.1 件B B2 桥端点）。
+
+        守卫＝_eval_report_guard（白名单正则＋resolve 包含性＋resolve 后
+        名字不变）；解析非 JSON 对象 → 结构化拒绝。"""
+        try:
+            p = self._eval_report_guard(name)
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return {"success": False,
+                        "error": msg("eval_report_bad_format")}
+            return {"success": True, "name": p.name,
+                    "mtime": int(p.stat().st_mtime), "data": data}
+        except ValueError as ve:
+            return {"success": False, "error": str(ve)}
+        except json.JSONDecodeError:
+            _log_exc("eval_reports_get")
+            return {"success": False,
+                    "error": msg("eval_report_bad_format")}
+        except Exception as e:
+            _log_exc("eval_reports_get")
+            return {"success": False, "error": str(e)}
 
     def read_output_artifact(self, path: str) -> dict[str, Any]:
         """读取输出目录中的质量报告成品（白名单双后缀，均只读）。

@@ -27,6 +27,7 @@ JS_FILES = [
     "app-shortcuts.js",     # 段3k 原 app-main.js L1783-1830：KeyboardShortcuts（批3）
     "app-about.js",         # 段3l 原 app-main.js L1832-1854：showAbout + closeAbout（批3）
     "app-tabs.js",          # 段3m 原 app-main.js L1856-1934：TAB_HOOKS + switchTab（批3）
+    "app-eval-reports.js",  # 3.1.1 件B（D2026-1030-02）：评测报告页（只读消费，页内全 JS 态）
     "app-refine-core.js",  # 原 app-main.js L1-160：Refine 核心助手与端点（批4）
     "app-refine-models.js",  # 原 app-main.js L161-453：模型刷新与测试（批4）
     "app-refine-glossary.js",  # 原 app-main.js L454-619：词库表格编辑器（批4）

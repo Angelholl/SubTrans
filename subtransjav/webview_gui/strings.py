@@ -396,6 +396,12 @@ MSG = {
     # 启动自愈（gui.log 一行；kind 取 ai_analyze/batch_fix 机器码）
     "selfheal_cleaned": "已清理上次残留子进程（kind={kind} pid={pid}）",
     "selfheal_psutil_missing": "psutil 不可用，跳过残留子进程自愈扫描",
+    # 评测报告只读面（3.1.1 件B，D2026-1030-02 B2）
+    "eval_report_bad_name": "非法评测报告文件名",
+    "eval_report_path_escape": "评测报告路径越界",
+    "eval_report_not_file": "评测报告不存在: {name}",
+    "eval_report_bad_format": "评测报告格式错误（非 JSON 对象）",
+    "eval_reports_dir_missing": "评测报告目录尚未生成（先用 eval_baseline 出报告）",
 }
 
 

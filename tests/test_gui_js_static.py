@@ -1427,8 +1427,11 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # 剧情自摘要邻位 +refineSynopsisCast（人物提示子开关，默认不勾），
     # 显式解冻 217→218；d1028-38 换代（CT2 面板，钉⑤解冻提案）：+4 → 222；
     # d1029 退役批换代（whisper 半边删除，解冻提案）：-4 → 218；
-    # 件B GPU 补丁包换代（D2026-1029-02 拍板③，ct2-gpu-row 2 id）：+2 → 220
-    assert len(ids) == 220, f"id 全集数漂移（件B ct2-gpu-row 后现契约 220），实为 {len(ids)}"
+    # 件B GPU 补丁包换代（D2026-1029-02 拍板③，ct2-gpu-row 2 id）：+2 → 220；
+    # 3.1.1 件B（D2026-1030-02 B3，评测报告页）：+7（tabBtnEvalReports/
+    # tab-eval-reports/evalReportsSection/evalReportsToolbar/
+    # evalReportsSelect/evalReportsRefreshBtn/evalReportsBody）→ 227
+    assert len(ids) == 227, f"id 全集数漂移（3.1.1 件B 评测报告页后现契约 227），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -3434,8 +3437,9 @@ def test_batch3_ai_config_row_pins_survive():
     # d1025-⑥a（D2026-1025-01 裁决⑥）：+refineSynopsisCast，显式解冻 217→218；
     # d1028-38（CT2 面板，钉⑤解冻提案）：+4（refineCt2Status/InstallBtn/
     # ModelStatus/ModelBtn）→ 222；
-    # d1029 退役批（whisper 半边删除，解冻提案）：-4 → 218
-    assert len(ids) == 220, f"id 全集数漂移（契约 220），实为 {len(ids)}"
+    # d1029 退役批（whisper 半边删除，解冻提案）：-4 → 218；
+    # 3.1.1 件B（D2026-1030-02 B3，评测报告页）：+7 → 227
+    assert len(ids) == 227, f"id 全集数漂移（契约 227），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -3444,8 +3448,10 @@ def test_batch3_ai_config_row_pins_survive():
     # 解冻后契约值（D2026-1023-02/03；快照钉⑤b 为全集全等断言，此行只锁计数，
     # 漂移细节归钉⑤b）；d1025-⑥a（D2026-1025-01 裁决⑥）+2 键
     # （synopsis_cast_label/synopsis_cast_title）→ 176；
-    # d1028-38（CT2 面板）+1 键（ct2_panel_title）→ 177
-    assert len(i18n) == 177, f"data-i18n 键集数漂移（契约 177），实为 {len(i18n)}"
+    # d1028-38（CT2 面板）+1 键（ct2_panel_title）→ 177；
+    # 3.1.1 件B（D2026-1030-02 B3）+1 键（tabEvalReports，导航与页头
+    # 同键双元素，页内零静态 data-i18n）→ 178
+    assert len(i18n) == 178, f"data-i18n 键集数漂移（契约 178），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -5020,6 +5026,8 @@ _B10_PANEL_LABELS = {
     "tab-asrdict": "ASR 与词典",
     "tab-glossary": "词库与模板",
     "tab-advanced": "高级参数",
+    # 3.1.1 件B（D2026-1030-02 B3）：评测报告页签解冻（7→8 页）
+    "tab-eval-reports": "评测报告",
 }
 
 
@@ -5088,7 +5096,7 @@ def test_b10_tabpanels_role_and_label_pinned():
         assert "aria-labelledby" not in tag, \
             f"#{tab_id} 走了 aria-labelledby（须 aria-label 静态文本，禁新增 id）"
     panel_count = html.count('role="tabpanel"')
-    assert panel_count == 7, f"role=tabpanel 应恰 7 处（实测 {panel_count}）"
+    assert panel_count == 8, f"role=tabpanel 应恰 8 处（实测 {panel_count}）"
 
 
 def test_b10_nav_aria_controls_pinned():
@@ -5096,7 +5104,7 @@ def test_b10_nav_aria_controls_pinned():
     （同一按钮 data-tab == aria-controls == 目标页既有 id；集合双向相等）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     tags = re.findall(r'<button[^>]*data-tab="([^"]+)"[^>]*>', html, re.S)
-    assert len(tags) == 7, f"带 data-tab 的按钮应恰 7 个（实测 {len(tags)}）"
+    assert len(tags) == 8, f"带 data-tab 的按钮应恰 8 个（实测 {len(tags)}）"
     controls = []
     for m in re.finditer(
             r'<button[^>]*class="side-tab-btn[^"]*"[^>]*data-tab="([^"]+)"[^>]*>',
@@ -5107,8 +5115,8 @@ def test_b10_nav_aria_controls_pinned():
         assert cm.group(1) == tab_id, \
             f"aria-controls 与 data-tab 不一致: {cm.group(1)} != {tab_id}"
         controls.append(cm.group(1))
-    assert len(controls) == 7, \
-        f".side-tab-btn 应恰 7 个且均带 aria-controls（实测 {len(controls)}）"
+    assert len(controls) == 8, \
+        f".side-tab-btn 应恰 8 个且均带 aria-controls（实测 {len(controls)}）"
     assert set(controls) == set(_B10_PANEL_LABELS), \
         f"aria-controls 与 .tab-page id 集合不一一对应: {sorted(set(controls) ^ set(_B10_PANEL_LABELS))}"
 
@@ -5125,7 +5133,7 @@ def test_b10_zero_new_id_zero_new_key_pinned():
     nav_html = nav.group(0)
     msg_keys = _js_msg_keys()
     head_count = html.count('<div class="page-head">')
-    assert head_count == 7, f"页头应恰 7 处（7 页各一，实测 {head_count}）"
+    assert head_count == 8, f"页头应恰 8 处（8 页各一，实测 {head_count}）"
     for tab_id, (key, _text) in _B10_NEW_HEADS.items():
         frag = _b10_tab_page_body(html, tab_id)
         block = re.search(
@@ -7158,12 +7166,14 @@ def test_js_sources_layer_pinned():
         "app-file-list.js", "app-console.js", "app-activity.js", "app-progress.js",
         "app-system-summary.js", "app-tm-query.js", "app-directory.js", "app-translator.js",
         "app-theme.js", "app-shortcuts.js", "app-about.js", "app-tabs.js",
+        # 3.1.1 件B（D2026-1030-02）：评测报告页随批入列（app-tabs 后）
+        "app-eval-reports.js",
         "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "62f15a10b24b6ccd86f528d424d732c72acdb0c6da977cbf6273a8b05f14267a"), \
+        "359be38a1c1b9601f4fa302d5ee5141c54a67415b50ddf1878ad5df5b2060706"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7193,8 +7203,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (63948,
-                       "2dadeb39eed73ef5e3a1ed3d97de3c7a7b1ea6d824c389bc2da4814a7fee1304"),
+        "app-msg.js": (65131,
+                       "0b4a3f558de588d583cda248bd75b8d55eb36f51539ae3b86981bf55490c72bd"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7273,7 +7283,8 @@ def test_js_split_integrity_pinned():
                  "app-activity.js", "app-progress.js", "app-system-summary.js",
                  "app-tm-query.js", "app-directory.js", "app-translator.js",
                  "app-theme.js", "app-shortcuts.js", "app-about.js",
-                 "app-tabs.js", "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js",
+                 "app-tabs.js", "app-eval-reports.js",
+                 "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
              )]
     assert order == sorted(order), \

@@ -143,8 +143,10 @@ def test_nav_grouping_pinned():
     """导航三分结构钉（批 1 立钉、批 2a 随批更新）：组标题与按钮顺序显式冻结。
 
     工作区组=字幕翻译/校对（批 2a D2026-1002-09 占位转正为
-    .side-tab-btn#tabBtnReview）/质量与建议；设置组=API 与模型选择/
-    ASR 与词典（2.6.3 批C D2026-1003-01 P4 插入）/词库与模板/高级参数。
+    .side-tab-btn#tabBtnReview）/质量与建议/评测报告（3.1.1 件B
+    D2026-1030-02 B3，与校对/结果页同级的结果查看类页签）；
+    设置组=API 与模型选择/ASR 与词典（2.6.3 批C D2026-1003-01 P4 插入）/
+    词库与模板/高级参数。
     """
     m = re.search(r'<nav class="rail-nav".*?</nav>', HTML, re.S)
     assert m, "未找到 rail-nav 导航块"
@@ -161,7 +163,8 @@ def test_nav_grouping_pinned():
             groups[current].append(tab)
     assert list(groups.keys()) == ["nav_group_workspace", "nav_group_quality"], \
         f"导航分组标题顺序漂移：{list(groups.keys())}"
-    assert groups["nav_group_workspace"] == ["tab-translate", "tab-review", "tab-guide"], \
+    assert groups["nav_group_workspace"] == \
+        ["tab-translate", "tab-review", "tab-guide", "tab-eval-reports"], \
         f"工作区组 data-tab 顺序漂移：{groups['nav_group_workspace']}"
     assert groups["nav_group_quality"] == \
         ["tab-engine", "tab-asrdict", "tab-glossary", "tab-advanced"], \
