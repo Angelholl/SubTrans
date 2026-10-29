@@ -6,6 +6,7 @@
 
 ### 新增
 
+- **CT2 GPU 加速通道（3.2.1 件B，opt-in）**：安装后自动检测 NVIDIA GPU 能力——检测到 CUDA 设备时可下载 GPU DLL 补丁包（约 1.1GB，守卫下载＋sha256＋布局校验，nvidia 官方 pip wheel 同源构建）启用 GPU 转写（int8_float16），装载失败自动回退 CPU（int8）；未装补丁包/无 GPU 用户路径零变化（CPU int8）。CLI `python -m subtransjav.refine.asr_runtime gpu-patch`（检测/本地 zip 安装；在线下载待镜像上架点亮），GUI 引擎页「GPU 加速」行按需提示。
 - **转写引擎与上游环境正式脱钩（3.1 脱钩轮）**：应用不再依赖任何外部转写环境安装——引擎候选链改为「环境变量 > 设置显式指定 > 自管 CT2 运行时」，移除机器相关缺省路径；媒体对照/漏听对照链自动分派 CT2 引擎（就绪即走），legacy whisper 链降级为显式指定才可达的兼容通道；无任何引擎时对照链如实降级跳过并给出安装指引，不影响翻译主链路。CT2 运行时与模型件经守卫下载链（https 域白名单+重定向逐跳校验+sha256 逐字节核验+防 zip-slip 解包）按需安装到数据根，安装/下载/自检均可命令行操作（`python -m subtransjav.refine.asr_runtime install / download-model / status / selfcheck`）。
 - **CT2 转写确定性断行接入（3.2.1）**：ct2 转写输出的长行自动按词级时间戳+每行字数上限+停顿检测切分（`--no-line-break` 可关），词级 sidecar 始终保留原始数据可回放。
 - **正确率评测 harness（3.1.0 测量地基，CLI）**：新增 `python -m subtransjav.refine.eval_baseline`——对同一媒体上的一或多个转写引擎 SRT 产出代理指标报告（幻听代理=语音窗口低重叠行占比、漏听代理=语音未覆盖占比、双引擎一致率=时轴贪婪匹配+文本相似、CPS 分位），JSON+Markdown 双件落盘；语音窗口检测复用既有检测原语，媒体/ffmpeg 缺失时窗口类指标显式 null 并注明原因，绝不误当全静音。代理指标只作涨跌比较，不承诺句级正确率绝对值。
