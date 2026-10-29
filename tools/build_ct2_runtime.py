@@ -29,6 +29,7 @@ selfcheck.py），替代已上传的 embed 平铺件（与 asr_runtime 认证契
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -141,22 +142,27 @@ def _stage_tree(embed_zip: str, site_packages: str, work: str) -> pathlib.Path:
 
 
 def _pack_zip(stage: pathlib.Path, out: str) -> tuple[str, int, int]:
-    """确定性打包：成员按路径排序+固定时间戳（同输入同 sha256）。"""
+    """确定性打包：成员按路径排序+固定时间戳（同输入同 sha256）。
+
+    返回 sha256=产物 zip 文件本体哈希（=asr_runtime._guarded_download
+    对下载件的核验口径；d1028-36 曾误回源内容拼接哈希，见 d1028-35 勘误）。
+    """
     files: list[pathlib.Path] = sorted(
         p for p in stage.rglob("*") if p.is_file())
     count = 0
-    h_src = __import__("hashlib").sha256()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         for f in files:
             rel = f.relative_to(stage).as_posix()
-            data = f.read_bytes()
-            h_src.update(data)
             zi = zipfile.ZipInfo(rel, date_time=(1980, 1, 1, 0, 0, 0))
             zi.compress_type = zipfile.ZIP_DEFLATED
             zi.external_attr = 0o644 << 16
-            z.writestr(zi, data)
+            z.writestr(zi, f.read_bytes())
             count += 1
-    return h_src.hexdigest(), os.path.getsize(out), count
+    h = hashlib.sha256()
+    with open(out, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest(), os.path.getsize(out), count
 
 
 def main(argv: list[str] | None = None) -> int:

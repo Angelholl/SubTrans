@@ -66,11 +66,13 @@ PINNED_DEPS: list[str] = [
 # sha256 pin 本身——镜像仓库内容变更即校验拒载，与词典链同威胁模型）
 RUNTIME_ZIP_URL = ("https://hf-mirror.com/Angelholl/subtrans-ct2-runtime"
                    "/resolve/main/subtrans-ct2-runtime-1.1.0-win64.zip")
-RUNTIME_ZIP_SHA256 = "a53da81338238ad5a7cc6d27ac373bd3666a3a1029b0bda53e98f0cbc8795140"
+RUNTIME_ZIP_SHA256 = "f092beaea5f27ca7f316f0d3de730f93409a861ab2a9b238678c798799c08bfa"
 RUNTIME_ZIP_BYTES = 109673863
 
 # CT2 模型元数据（zip 打包件 pin；verified=True 须经生产路径实下载逐字节
-# 核验后翻转——上架门沿词典链先例）
+# 核验后翻转——上架门沿词典链先例。2026-10-29 三门已过：install 真下载
+# 110MB→download_model 真下载 2946MB→84s 日语音频安装态真转写，见
+# d1028-35 runbook 执行记录与 D2026-1028-04 ④）
 CT2_MODELS: list[dict] = [
     {
         "model": "large-v2",
@@ -79,7 +81,7 @@ CT2_MODELS: list[dict] = [
         "sha256": "4ca806c0061940ad903fe2e41d7f4a424b4a1cfe2f352a335cefc23e87fe1932",
         "url": ("https://hf-mirror.com/Angelholl/faster-whisper-large-v2-ct2"
                 "/resolve/main/faster-whisper-large-v2-ct2.zip"),
-        "verified": False,         # 待镜像上传+生产路径实下载核验后翻转
+        "verified": True,          # 2026-10-29 生产路径三门核验过（见上注）
         "desc": "CT2 版 large-v2（社区天花板配置 int8_float16 同源权重）",
     },
 ]
@@ -493,6 +495,30 @@ def _install_via_zip() -> int:
     return 0 if ok else 1
 
 
+def _normalize_model_layout(dest_model_dir: str) -> None:
+    """单内层目录压平归位（d1028-35 重传勘因）：镜像模型件带单内层目录
+    faster-whisper-large-v2/，落位契约=dest 根直接见 model.bin
+    （resolve_ct2_model_dir 消费面）；已见 model.bin 即幂等返回。
+    移动为同名覆盖语义（解包全新 dest 下无冲突面）；OSError 静默返回，
+    交由调用方 model.bin 落位核验诚实失败。"""
+    if os.path.isfile(os.path.join(dest_model_dir, "model.bin")):
+        return
+    try:
+        subdirs = [n for n in os.listdir(dest_model_dir)
+                   if os.path.isdir(os.path.join(dest_model_dir, n))]
+        if len(subdirs) != 1:
+            return
+        inner = os.path.join(dest_model_dir, subdirs[0])
+        if not os.path.isfile(os.path.join(inner, "model.bin")):
+            return
+        for member in os.listdir(inner):
+            os.replace(os.path.join(inner, member),
+                       os.path.join(dest_model_dir, member))
+        os.rmdir(inner)
+    except OSError:
+        return
+
+
 def download_model(model: str = "large-v2", progress=None) -> int:
     """CT2 模型 zip 守卫下载+核验+解包到 models/ct2/<model>（verified 门）。"""
     entry = next((m for m in CT2_MODELS if m["model"] == model), None)
@@ -518,6 +544,7 @@ def download_model(model: str = "large-v2", progress=None) -> int:
     with contextlib.suppress(OSError):
         os.remove(zip_path)
     print("[3/3] 落位核验")
+    _normalize_model_layout(dest_model_dir)
     if not os.path.isfile(os.path.join(dest_model_dir, "model.bin")):
         print("解包后缺 model.bin——镜像件结构异常")
         return 1

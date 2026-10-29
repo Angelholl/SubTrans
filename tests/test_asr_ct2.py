@@ -1,6 +1,7 @@
 # 3.2.0 CT2 骨架批钉（D2026-1028-03）：ct2 后端契约+运行时模块纯函数面。
 # 全程零真实模型/零网络；ct2 转写链用注入 fake 模块走全函数。
 import json
+import os
 import pathlib
 import sys
 import threading
@@ -145,7 +146,7 @@ class TestAsrRuntime:
         assert st["zip_published"] is True      # pin 已填（构建实录）
         assert st["pinned_deps"] == ["faster-whisper==1.2.1", "ctranslate2==4.8.4",
                                      "av==13.1.0"]
-        assert st["models"][0]["verified"] is False   # 上架门：实下载核验前不开
+        assert st["models"][0]["verified"] is True    # 2026-10-29 三门核验后翻转
 
     def test_install_zip_download_failure_honest(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
@@ -176,9 +177,39 @@ class TestAsrRuntime:
 
     def test_download_model_verified_gate(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        # verified 现已翻转 True（三门核验过）；门的关断语义仍须钉住——
+        # 强制 False 回放关断路径
+        monkeypatch.setitem(asr_runtime.CT2_MODELS[0], "verified", False)
         rc = asr_runtime.download_model("large-v2")
         assert rc == 3
         assert "verified=False" in capsys.readouterr().out
+
+    def test_download_model_flattens_single_inner_dir(self, tmp_path,
+                                                      monkeypatch):
+        """回归钉（d1028-35 重传勘因）：镜像模型件带单内层目录
+        faster-whisper-large-v2/——解包后必须压平归位到 dest 根
+        （model.bin 落位契约=resolve_ct2_model_dir 消费面），否则
+        verified 门生产核验永不可过。"""
+        import io
+        import zipfile as zf
+
+        buf = io.BytesIO()
+        with zf.ZipFile(buf, "w") as z:
+            z.writestr("faster-whisper-large-v2/model.bin", b"MBIN")
+            z.writestr("faster-whisper-large-v2/config.json", b"{}")
+
+        def fake_download(url, dest, sha, size, progress=None):
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            pathlib.Path(dest).write_bytes(buf.getvalue())
+
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setattr(asr_runtime, "_guarded_download", fake_download)
+        monkeypatch.setitem(asr_runtime.CT2_MODELS[0], "verified", True)
+        rc = asr_runtime.download_model("large-v2")
+        assert rc == 0
+        dest = tmp_path / "models" / "ct2" / "large-v2"
+        assert (dest / "model.bin").read_bytes() == b"MBIN"
+        assert not (dest / "faster-whisper-large-v2").exists()
 
     def test_install_venv_rejected_when_frozen(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
@@ -368,6 +399,8 @@ class TestAsyncOps:
 
     def test_model_download_async_gate(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        # verified 已翻转 True；门的关断语义回放须强制 False（防真实 3GB 下载）
+        monkeypatch.setitem(asr_runtime.CT2_MODELS[0], "verified", False)
         r = asr_runtime.start_model_download("large-v2")
         assert r["started"] is True
         deadline = time.time() + 5
