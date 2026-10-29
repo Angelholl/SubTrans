@@ -1977,9 +1977,9 @@ def test_asr_d271_residue_pinned():
         assert banned not in html, f"index.html 残留: {banned}"
         assert banned not in src, f"app.js 残留: {banned}"
         assert banned not in css, f"style.css 残留: {banned}"
-    # 2.7.1 组件样式族在位（.mp-*），三色点扩展在位
-    assert ".mp-tier" in css and ".mp-chip-ready" in css, ".mp-* 样式缺失"
-    assert ".mp-dot.filled" in css, "点阵样式缺失"
+    # 2.7.1 组件样式族（.mp-*）已随批4 AppModal.models 删除（D2026-1029-01 尾单②）
+    assert ".mp-tier" not in css and ".mp-chip-ready" not in css, ".mp-* 死样式残留"
+    assert ".mp-dot.filled" not in css, "点阵死样式残留"
     assert ".status-dot.dot-ok" in css and ".status-dot.dot-err" in css,         "三色点样式缺失"
 
 
@@ -6368,7 +6368,7 @@ def test_p01_surface_layering_pinned():
         ".rail background 须降为 var(--bg)（左栏降为应用底灰，A1-②）"
     assert has(".main", "background: var(--surface)"), \
         ".main 须新增 background: var(--surface)（中栏转白=全屏唯一亮区）"
-    for sel in (".card", ".section", ".form-card", ".mp-tier",
+    for sel in (".card", ".section", ".form-card",
                 ".adv-group", ".media-source-bar"):
         assert has(sel, "background: var(--surface-2)"), \
             f"{sel} background 须为 var(--surface-2)（中栏子卡）"
