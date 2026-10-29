@@ -43,6 +43,16 @@
       ? '｜已核验' : '｜待镜像核验（下载门未开）'));
   }
 
+  function ct2GpuLine(gp) {
+    if (!gp) return MSG.ct2GpuUnknown;
+    if (!gp.cuda_visible) return MSG.ct2GpuNoCuda;      // 无 GPU 零打扰
+    if (gp.complete) return MSG.ct2GpuReadyFmt(gp.dll_dir || '');
+    if (gp.installed) return MSG.ct2GpuIncompleteFmt(
+      (gp.missing || []).length);
+    if (!gp.online_pin_ready) return MSG.ct2GpuUnpublished;
+    return MSG.ct2GpuOfferFmt;
+  }
+
   function ct2Render(r) {
     if (!r || !r.success) {
       ct2Set('refineCt2Status', MSG.ct2FailFmt((r && r.error) || ''));
@@ -66,11 +76,21 @@
       db.querySelector('span').textContent =
         busy && op.kind === 'model' ? MSG.ct2ModelDownloading : MSG.ct2ModelBtn;
     }
+    const gp = r.gpu_patch || null;
+    ct2Set('refineCt2GpuStatus', ct2GpuLine(gp));
+    const gb = $('refineCt2GpuBtn');
+    if (gb) {
+      const offer = !!gp && gp.cuda_visible && !gp.complete;
+      gb.disabled = busy || !offer || !gp.online_pin_ready;
+      gb.querySelector('span').textContent =
+        busy && op.kind === 'gpu' ? MSG.ct2GpuInstalling : MSG.ct2GpuBtn;
+    }
     if (busy) {
       setTimeout(ct2Poll, 1000);          // 后台操作面 1s 轮询至终态
     } else if (op.phase === 'failed') {
-      ct2Set('refineCt2Status', MSG.ct2OpFailFmt(op.kind === 'model'
-        ? '模型下载' : '安装', op.rc));
+      const kindName = op.kind === 'model' ? '模型下载'
+        : op.kind === 'gpu' ? 'GPU 补丁包' : '安装';
+      ct2Set('refineCt2Status', MSG.ct2OpFailFmt(kindName, op.rc));
     }
   }
 
@@ -102,9 +122,20 @@
     }).catch((e) => ct2Set('refineCt2Status', MSG.ct2FailFmt(String(e))));
   }
 
+  function ct2GpuInstall() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    ct2Set('refineCt2GpuStatus', MSG.ct2GpuInstalling);
+    window.pywebview.api.refine_ct2_gpu_install().then((r) => {
+      if (r && r.started === false) ct2Set('refineCt2GpuStatus', r.reason || '');
+      setTimeout(ct2Poll, 500);
+    }).catch((e) => ct2Set('refineCt2GpuStatus', MSG.ct2FailFmt(String(e))));
+  }
+
   (() => {
     const ib = $('refineCt2InstallBtn');
     if (ib) ib.addEventListener('click', ct2Install);
     const db = $('refineCt2ModelBtn');
     if (db) db.addEventListener('click', ct2ModelDownload);
+    const gb = $('refineCt2GpuBtn');
+    if (gb) gb.addEventListener('click', ct2GpuInstall);
   })();

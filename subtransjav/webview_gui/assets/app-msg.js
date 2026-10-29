@@ -901,6 +901,16 @@ const MSG = {
     ct2FailFmt: e => `CT2 状态获取失败：${e}`,
     ct2ModelPendingFmt: s => `模型 large-v2：${s}`,
     ct2OpFailFmt: (kind, rc) => `${kind}失败（rc=${rc}），详见运行日志`,
+    // GPU DLL 补丁包行（件B D2026-1029-02 拍板③：opt-in；无 GPU 零打扰=
+    // 只显一行说明不启按钮；在线件未发布态如实显示）
+    ct2GpuBtn: '下载 GPU 补丁包',
+    ct2GpuInstalling: 'GPU 补丁包下载安装中…（约 1GB，守卫下载＋布局校验）',
+    ct2GpuNoCuda: 'GPU 加速：未检测到可用 CUDA 设备（CPU 模式）',
+    ct2GpuReadyFmt: dir => `GPU 加速：补丁包已装（${dir}），转写自动启用`,
+    ct2GpuIncompleteFmt: n => `GPU 加速：补丁不完整（缺 ${n} 件），转写将回退 CPU——请重新下载补丁包`,
+    ct2GpuUnpublished: 'GPU 加速：本机有 CUDA 设备，可下载补丁包启用 GPU 转写（在线件尚未发布）',
+    ct2GpuOfferFmt: 'GPU 加速：本机有 CUDA 设备，下载补丁包即可启用 GPU 转写',
+    ct2GpuUnknown: 'GPU 加速：状态未知',
     // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：词典源选择
     // （全 JS 态键，零静态 i18n 消耗；asrDl* 为 AppModal.download 方法体
     // 引用+定向钉保留；asrDownloadBtn/mp* 面板键随 AppModal.models 删除）
