@@ -38,6 +38,37 @@ def test_runner_package_form_same_function():
     assert asr_runner._load_break_segments() is line_breaker.break_segments
 
 
+def test_runner_wiring_line_break_default_on():
+    """接线钉（3.2.1 件①）：缺省 main→写盘链传 line_break=True（断行缺省开）。"""
+    mod = _load_runner_standalone()
+    captured = {}
+
+    def fake_run(media, model_dir, language, srt_out, **kw):
+        captured.update(kw)
+        return 0
+
+    mod._run_transcribe_media_ct2 = fake_run
+    assert mod.main(["--media", "a.wav", "--srt-out", "a.srt"]) == 0
+    assert captured.get("line_break") is True, \
+        "缺省未传 line_break=True——断行缺省开语义断裂"
+
+
+def test_runner_wiring_no_line_break_flag_off():
+    """接线钉（3.2.1 件①）：--no-line-break 时 line_break=False（开关可回退）。"""
+    mod = _load_runner_standalone()
+    captured = {}
+
+    def fake_run(media, model_dir, language, srt_out, **kw):
+        captured.update(kw)
+        return 0
+
+    mod._run_transcribe_media_ct2 = fake_run
+    assert mod.main(["--media", "a.wav", "--srt-out", "a.srt",
+                     "--no-line-break"]) == 0
+    assert captured.get("line_break") is False, \
+        "--no-line-break 未关断行——开关回退路径断裂"
+
+
 def test_runner_standalone_secrets_hijack_guard_intact():
     """装载后脚本目录不回注 sys.path（refine/secrets.py 劫持守卫不劣化）。"""
     import os
