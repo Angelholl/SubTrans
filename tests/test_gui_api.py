@@ -7106,3 +7106,118 @@ def test_encode_needs_confirm_mtime_requeue(gui_api_obj, monkeypatch,
     assert calls == [{"n": 1, "allow_overwrite": False},
                      {"n": 1, "allow_overwrite": True}]
     assert any("重新压制" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# eval_reports_list / eval_reports_get：评测报告只读桥（3.1.1 件B B2）
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def _eval_dir(tmp_path, monkeypatch):
+    """评测报告目录打桩到 tmp（api.paths.data_subdir 重定向）。"""
+    import subtransjav.webview_gui.api as api_mod
+    eval_dir = tmp_path / "reports" / "eval"
+    eval_dir.mkdir(parents=True)
+    monkeypatch.setattr(api_mod.paths, "data_subdir",
+                        lambda *parts: str(tmp_path.joinpath(*parts)))
+    return eval_dir
+
+
+def _mk_report(eval_dir, name, report=None):
+    p = eval_dir / name
+    p.write_text(json.dumps(
+        report if report is not None else
+        {"schema": "subtransjav.eval_baseline/1", "media": "a.mp4",
+         "generated_at": "2026-10-30T00:00:00+00:00",
+         "engines": {}, "pairs": {}}, ensure_ascii=False),
+        encoding="utf-8")
+    return p
+
+
+def test_eval_reports_list_sorted_capped_and_dir(gui_api_obj, _eval_dir):
+    """列表：mtime 降序＋上限 20＋dir 回显（空态引导用）。"""
+    for i in range(25):
+        _mk_report(_eval_dir, f"rep{i:02d}-baseline.json")
+        os.utime(_eval_dir / f"rep{i:02d}-baseline.json",
+                 (1_700_000_000 + i,) * 2)
+    ( _eval_dir / "ign.txt").write_text("x", encoding="utf-8")
+    got = gui_api_obj.eval_reports_list()
+    assert got["success"] is True
+    assert got["dir"] == str(_eval_dir.resolve())
+    assert len(got["reports"]) == 20
+    names = [r["name"] for r in got["reports"]]
+    assert names[0] == "rep24-baseline.json"
+    assert names[-1] == "rep05-baseline.json"
+    assert all(n.endswith("-baseline.json") for n in names)
+
+
+def test_eval_reports_list_missing_dir_empty_not_error(gui_api_obj, tmp_path,
+                                                       monkeypatch):
+    """目录未生成 → success+空列表+empty_reason（引导语义非错误）。"""
+    import subtransjav.webview_gui.api as api_mod
+    monkeypatch.setattr(api_mod.paths, "data_subdir",
+                        lambda *parts: str(tmp_path.joinpath(*parts)))
+    got = gui_api_obj.eval_reports_list()
+    assert got["success"] is True
+    assert got["reports"] == []
+    assert got.get("empty_reason")
+
+
+def test_eval_reports_get_ok(gui_api_obj, _eval_dir):
+    """合法读取：data 透传＋name/mtime 回显。"""
+    _mk_report(_eval_dir, "ep1-baseline.json",
+               {"schema": "subtransjav.eval_baseline/1", "media": "ep1.mp4"})
+    got = gui_api_obj.eval_reports_get("ep1-baseline.json")
+    assert got["success"] is True
+    assert got["name"] == "ep1-baseline.json"
+    assert got["data"]["media"] == "ep1.mp4"
+
+
+def test_eval_reports_get_bad_format(gui_api_obj, _eval_dir):
+    """非 JSON 对象（数组）→ 结构化拒绝。"""
+    p = _eval_dir / "arr-baseline.json"
+    p.write_text("[]", encoding="utf-8")
+    got = gui_api_obj.eval_reports_get("arr-baseline.json")
+    assert got["success"] is False
+    assert got["error"]
+
+
+@pytest.mark.parametrize("bad", [
+    "../evil-baseline.json",
+    "sub/ep-baseline.json",
+    "ep-baseline.json\\..\\..\\x",
+    "C:\\abs\\ep-baseline.json",
+    "ep.json",
+    "ep-baseline.txt",
+    "",
+    "   ",
+    ".hidden-baseline.json",
+])
+def test_eval_reports_get_traversal_and_suffix_rejected(gui_api_obj,
+                                                        _eval_dir, bad):
+    """穿越/绝对路径/子目录/错后缀/空名一律结构化拒绝（读侧守卫）。"""
+    _mk_report(_eval_dir, "ep-baseline.json")
+    got = gui_api_obj.eval_reports_get(bad)
+    assert got["success"] is False
+    assert got["error"]
+
+
+def test_eval_reports_get_missing_file(gui_api_obj, _eval_dir):
+    got = gui_api_obj.eval_reports_get("gone-baseline.json")
+    assert got["success"] is False
+    assert "不存在" in got["error"]
+
+
+def test_eval_reports_get_symlink_escape_rejected(gui_api_obj, _eval_dir,
+                                                  tmp_path):
+    """软链换名逃逸拒绝（resolve 后名字不变检查；Windows 无符号链接
+    权限时 skip）。"""
+    target = tmp_path / "outside-secret.json"
+    target.write_text("{}", encoding="utf-8")
+    link = _eval_dir / "innocent-baseline.json"
+    try:
+        os.symlink(target, link)
+    except OSError:
+        pytest.skip("当前环境无符号链接权限")
+    got = gui_api_obj.eval_reports_get("innocent-baseline.json")
+    assert got["success"] is False

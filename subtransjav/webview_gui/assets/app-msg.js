@@ -950,6 +950,27 @@ const MSG = {
     tmSearchColTarget: '译文',
     tmSearchColStage: '阶段',
     tmSearchColHits: '命中',
+    // ---- 评测报告页（3.1.1 件B，D2026-1030-02 B3；页内全 JS 态键，
+    // 静态键仅导航/页头复用 tabEvalReports 一枚）----
+    tabEvalReports: '评测报告',
+    evalRefreshBtn: '刷新',
+    evalListFailed: '评测报告列表加载失败',
+    evalEmptyHint: '暂无评测报告：在命令行运行 eval_baseline 生成报告后点「刷新」。',
+    evalEmptyDir: '评测报告目录尚未生成（先用 eval_baseline 出报告）。报告目录：',
+    evalDataRoot: '报告目录：',
+    evalSelectHint: '选择一份报告查看详情',
+    evalWindowsDegraded: '语音窗口检测退化：窗口类指标本轮为 null（不代表全静音）',
+    evalNoPairs: '无双臂可比（单引擎报告）',
+    evalHallucination: '幻听代理（低重叠行占比，越低越好）',
+    evalOmission: '漏听代理（语音未覆盖占比，越低越好）',
+    evalCpsLabel: 'CPS p50/p90/max',
+    evalLinesLabel: '行数',
+    evalNoCI: '—',
+    evalPairsHead: '双引擎一致率',
+    evalMediaLabel: '媒体',
+    evalGenLabel: '生成时间',
+    evalEngineCountLabel: '引擎臂数',
+    evalLoadFailed: '评测报告读取失败',
 };
 
 // i18n 注入：DOMContentLoaded 时把 MSG 写回带 data-i18n* 标记的元素

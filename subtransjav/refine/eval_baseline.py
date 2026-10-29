@@ -31,25 +31,32 @@ import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 
+from .. import paths
 from . import audio_detect
 from .filters import parse_srt
 
 __all__ = [
+    "WILSON_Z_95",
     "wilson_lower_bound",
+    "wilson_interval",
     "speech_windows_full",
     "hallucination_proxy",
     "omission_proxy",
     "agreement",
     "cps_stats",
     "evaluate",
+    "default_out_dir",
     "write_report",
     "register_engine",
     "run_engine",
     "main",
 ]
 
-# Wilson 下界（预注册量化门共用原语；与 tools/c22_calibration 同公式同 z）
-_WILSON_Z = 1.96
+# Wilson 下界（预注册量化门共用原语；与 tools/c22_calibration 同公式，
+# z 值统一 1.959963984540054——D2026-1029-11 ④/D2026-1030-02 B1 定案，
+# 两处相等由测试钉锁死防漂移）
+WILSON_Z_95 = 1.959963984540054
+_WILSON_Z = WILSON_Z_95
 
 
 def wilson_lower_bound(successes: int, n: int, z: float = _WILSON_Z) -> float:
@@ -60,7 +67,21 @@ def wilson_lower_bound(successes: int, n: int, z: float = _WILSON_Z) -> float:
     denom = 1 + z * z / n
     centre = p + z * z / (2 * n)
     margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
-    return max(0.0, (centre - margin) / denom)
+    # 先 clamp 分子再除（p=0 时 centre==margin 理论相等，浮点残差应为 0）
+    return max(0.0, centre - margin) / denom
+
+
+def wilson_interval(successes: int, n: int) -> dict:
+    """Wilson score 95% 双端区间（二项比例；n=0 → {"lo": 0.0, "hi": 0.0}）。
+
+    hi 由对称性取 1 − 下界(n − successes, n)；仅用于二项计数比
+    （hallucination_proxy 行比/agreement 匹配比），分位数与秒比不给
+    区间（D2026-1030-02 B1 口径）。"""
+    if n <= 0:
+        return {"lo": 0.0, "hi": 0.0}
+    lo = wilson_lower_bound(successes, n)
+    hi = 1.0 - wilson_lower_bound(n - successes, n)
+    return {"lo": round(lo, 4), "hi": round(hi, 4)}
 
 
 _TIMING_RE = re.compile(
@@ -126,14 +147,16 @@ def hallucination_proxy(entries: list[dict],
         if span:
             spans.append(span)
     if not spans:
-        return {"lines": 0, "suspect": 0, "ratio": None}
+        return {"lines": 0, "suspect": 0, "ratio": None, "wilson": None}
     suspect = 0
     for s0, e0 in spans:
         dur = e0 - s0
         covered = sum(_overlap((s0, e0), w) for w in windows)
         if dur > 0 and covered / dur < min_overlap:
             suspect += 1
-    return {"lines": len(spans), "suspect": suspect, "ratio": round(suspect / len(spans), 4)}
+    return {"lines": len(spans), "suspect": suspect,
+            "ratio": round(suspect / len(spans), 4),
+            "wilson": wilson_interval(suspect, len(spans))}
 
 
 def omission_proxy(entries: list[dict],
@@ -202,6 +225,8 @@ def agreement(entries_a: list[dict], entries_b: list[dict],
         "lines_b": n_b,
         "rate_a": round(matched / n_a, 4) if n_a else None,
         "rate_b": round(matched / n_b, 4) if n_b else None,
+        "rate_a_wilson": wilson_interval(matched, n_a) if n_a else None,
+        "rate_b_wilson": wilson_interval(matched, n_b) if n_b else None,
     }
 
 
@@ -358,6 +383,12 @@ def write_report(report: dict, out_dir: str, stem: str) -> tuple[str, str]:
     return str(json_path), str(md_path)
 
 
+def default_out_dir() -> str:
+    """报告缺省输出目录＝数据根 reports/eval/（D2026-1030-02 B1 定案；
+    GUI 空态引导同步显示该绝对路径）。"""
+    return paths.data_subdir("reports", "eval")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m subtransjav.refine.eval_baseline",
@@ -367,7 +398,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--srt", action="append", required=True,
                         metavar="ENGINE=PATH",
                         help="引擎 SRT，可重复：--srt upstream=a.srt --srt ct2=b.srt")
-    parser.add_argument("--out", required=True, help="报告输出目录")
+    parser.add_argument("--out", default=None,
+                        help="报告输出目录（缺省=数据根 reports/eval/）")
     parser.add_argument("--stem", default="", help="报告文件名前缀（缺省=媒体名）")
     args = parser.parse_args(argv)
     srt_by_engine: dict[str, str] = {}
@@ -383,7 +415,7 @@ def main(argv: list[str] | None = None) -> int:
     report = evaluate(args.media, srt_by_engine)
     stem = args.stem or (os.path.splitext(os.path.basename(args.media))[0] if args.media
                          else "eval")
-    json_path, md_path = write_report(report, args.out, stem)
+    json_path, md_path = write_report(report, args.out or default_out_dir(), stem)
     print("report: " + json_path)
     print("report: " + md_path)
     return 0

@@ -6,6 +6,7 @@ import pathlib
 import pytest
 
 from subtransjav.refine.eval_baseline import (
+    WILSON_Z_95,
     _safe_stem,
     agreement,
     cps_stats,
@@ -13,6 +14,7 @@ from subtransjav.refine.eval_baseline import (
     hallucination_proxy,
     omission_proxy,
     report_markdown,
+    wilson_interval,
     wilson_lower_bound,
     write_report,
 )
@@ -45,7 +47,9 @@ class TestWilson:
 
     def test_bounds_and_zero_n(self):
         assert wilson_lower_bound(0, 0) == 0.0
-        assert wilson_lower_bound(0, 100) == 0.0
+        # p=0 理论下界 0；z 统一为高精度值后浮点路径残差 ~1e-18 级
+        # （z=1.96 时代恰好舍入 0），放宽到 1e-12 量级断言
+        assert wilson_lower_bound(0, 100) == pytest.approx(0.0, abs=1e-12)
         assert wilson_lower_bound(100, 100) == pytest.approx(0.963, abs=1e-2)
         assert 0.0 <= wilson_lower_bound(3, 7) <= 1.0
 
@@ -54,7 +58,8 @@ class TestHallucinationProxy:
     def test_fully_covered_line_not_suspect(self):
         entries = [_ent(1, 1.5, 4.0, "あ")]
         r = hallucination_proxy(entries, WIN)
-        assert r == {"lines": 1, "suspect": 0, "ratio": 0.0}
+        assert r == {"lines": 1, "suspect": 0, "ratio": 0.0,
+                     "wilson": wilson_interval(0, 1)}
 
     def test_silent_span_line_is_suspect(self):
         # 5.0-6.0 落在两窗口之间的静音带（重叠 0）
@@ -73,7 +78,7 @@ class TestHallucinationProxy:
 
     def test_no_valid_spans(self):
         assert hallucination_proxy([{"timing": "bad", "text": "x"}], WIN) == {
-            "lines": 0, "suspect": 0, "ratio": None}
+            "lines": 0, "suspect": 0, "ratio": None, "wilson": None}
 
 
 class TestOmissionProxy:
@@ -187,3 +192,69 @@ class TestCli:
         rc3 = main(["--media", "", "--srt", "upstream=" + str(tmp_path / "gone.srt"),
                     "--out", out])
         assert rc3 == 2
+
+
+# ------------------------------------------------ 3.1.1 件B B1（D2026-1030-02）
+# Wilson 区间增补＋z 统一＋CLI 缺省 --out（D2026-1029-11 ④ 联动）。
+
+def test_wilson_z_unified_across_modules():
+    """z 统一钉：eval_baseline 与 tools/c22_calibration 两处 z 同值
+    1.959963984540054（D2026-1029-11 ④；防漂移物理钉）。"""
+    import importlib.util
+    tool_path = (pathlib.Path(__file__).resolve().parents[1] / "tools"
+                 / "c22_calibration.py")
+    spec = importlib.util.spec_from_file_location("c22_cal_z_pin", tool_path)
+    assert spec is not None and spec.loader is not None
+    c22 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(c22)
+    assert WILSON_Z_95 == 1.959963984540054
+    assert c22._WILSON_Z == WILSON_Z_95
+
+
+class TestWilsonInterval:
+    def test_symmetry_and_endpoints(self):
+        assert wilson_interval(0, 0) == {"lo": 0.0, "hi": 0.0}
+        iv = wilson_interval(72, 72)
+        assert iv["lo"] == pytest.approx(0.9493, abs=1e-3)
+        assert 0.0 < iv["lo"] < iv["hi"] <= 1.0
+        assert iv["hi"] == pytest.approx(
+            1.0 - wilson_lower_bound(0, 72), abs=1e-9)
+        iv2 = wilson_interval(3, 10)
+        assert iv2["lo"] <= 0.3 <= iv2["hi"]
+
+    def test_lo_hi_rounded(self):
+        iv = wilson_interval(1, 3)
+        for v in iv.values():
+            assert round(v, 4) == v
+
+
+class TestEvaluateWilsonFields:
+    def test_hallucination_has_wilson_window_missing_none(self):
+        entries = [_ent(1, 1.5, 4.0, "あ")]
+        r = hallucination_proxy(entries, WIN)
+        assert r["wilson"]["lo"] <= r["wilson"]["hi"]
+        # 窗口缺失＝整个 proxy 为 None（诚实退化），非 wilson 键 None
+        assert hallucination_proxy(entries, None) is None
+
+    def test_agreement_rate_wilson_fields(self):
+        a = [_ent(1, 1.0, 3.0, "あ"), _ent(2, 6.0, 8.0, "い")]
+        b = [_ent(1, 1.0, 3.0, "あ")]
+        r = agreement(a, b)
+        assert r["rate_a_wilson"] is not None
+        assert r["rate_a_wilson"]["lo"] <= r["rate_a_wilson"]["hi"]
+        assert r["rate_b_wilson"] is not None
+
+    def test_omission_and_cps_carry_no_wilson(self):
+        entries = [_ent(1, 1.5, 4.0, "ありがとう ございます")]
+        om = omission_proxy(entries, WIN)
+        assert "wilson" not in om
+        cp = cps_stats(entries)
+        assert "wilson" not in cp
+
+
+def test_default_out_dir_is_data_root_reports_eval(monkeypatch, tmp_path):
+    """CLI 缺省 --out＝数据根 reports/eval/（D2026-1030-02 B1 定案）。"""
+    import subtransjav.refine.eval_baseline as eb
+    monkeypatch.setattr(eb.paths, "data_subdir",
+                        lambda *parts: str(tmp_path.joinpath(*parts)))
+    assert eb.default_out_dir() == str(tmp_path / "reports" / "eval")

@@ -63,6 +63,14 @@
                         data-tab="tab-guide" role="tab" aria-selected="false"
                         aria-controls="tab-guide"
                         data-i18n-title="tabGuide" title="质量与建议"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span><span class="side-tab-text" data-i18n="tabGuide">质量与建议</span></button>
+                <!-- 评测报告页签（3.1.1 件B，D2026-1030-02 B3）：工作区组尾
+                     （与校对/质量与建议同级的结果查看类页签，规格 d1029-310-件⑤
+                     「与校对/结果页同级」）；只读消费 eval_baseline 报告；页头
+                     复用 tabEvalReports 键，页内零 data-i18n（键 cap 硬约束） -->
+                <button type="button" class="side-tab-btn" id="tabBtnEvalReports"
+                        data-tab="tab-eval-reports" role="tab" aria-selected="false"
+                        aria-controls="tab-eval-reports"
+                        data-i18n-title="tabEvalReports" title="评测报告"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-8"/></svg></span><span class="side-tab-text" data-i18n="tabEvalReports">评测报告</span></button>
                 <div class="nav-section" data-i18n="nav_group_quality">设置</div>
 
                 <button type="button" class="side-tab-btn" id="tabBtnEngine"
@@ -1141,6 +1149,30 @@
                      （artifact_note 键退役，快照 187→186 显式解冻，Ref: D2026-1013-01 追记） -->
             </div>
 
+            <!-- 评测报告页（3.1.1 件B，D2026-1030-02 B3）：只读消费
+                 eval_baseline 报告 JSON（桥端点白名单 B2）；页头复用
+                 tabEvalReports 键（导航与页头同键双元素，零新增静态键）；
+                 页内零 data-i18n/全 JS 态注入（app-eval-reports.js，
+                 沿 review 页键 cap 硬约束模式） -->
+            <div class="tab-page" id="tab-eval-reports" data-testid="tab-eval-reports"
+                 role="tabpanel" aria-label="评测报告">
+                <div class="page-head">
+                    <div class="page-head-text">
+                        <h1 class="page-title" data-i18n="tabEvalReports">评测报告</h1>
+                    </div>
+                </div>
+                <section class="section console-section" id="evalReportsSection"
+                         data-testid="eval-reports-section">
+                    <div class="eval-toolbar" id="evalReportsToolbar">
+                        <select id="evalReportsSelect" class="eval-reports-select"
+                                aria-label="评测报告选择"></select>
+                        <button type="button" id="evalReportsRefreshBtn"
+                                class="btn btn-ghost btn-sm"></button>
+                    </div>
+                    <div id="evalReportsBody" data-testid="eval-reports-body"></div>
+                </section>
+            </div>
+
             <!-- 卡4：系统状态摘要（D2026-1001 批3 owner 拍板 A 案；只读现成接口，逐项降级。
                  2.6.5 段2 D2026-1004-01 #2 两行式改版：版本入标题行（id 保留仅移动，
                  sys_summary_version 键随行保留使 FROZEN_I18N_KEYS 恰 189→187）、
@@ -1290,6 +1322,7 @@
     <script src="app-shortcuts.js"></script>
     <script src="app-about.js"></script>
     <script src="app-tabs.js"></script>
+    <script src="app-eval-reports.js"></script>
     <script src="app-refine-core.js"></script>
     <script src="app-refine-models.js"></script>
     <script src="app-refine-glossary.js"></script>
