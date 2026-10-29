@@ -144,10 +144,16 @@ def _run_transcription_ct2(clip_path: str, language: str,
         cmd = asr_runtime.ct2_runner_command(str(clip_path), tmp_srt,
                                              model_dir=model_dir,
                                              model=_CT2_DEFAULT_MODEL)
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+        # 件B GPU 补丁包：DLL 目录 PATH 前置（runner 经 --gpu-dll-dir 双检
+        # 决定是否走 gpu；此处注入保证 CUDA DLL 对子进程可解析）。
+        gpd = asr_runtime.gpu_patch_dir()
+        if not asr_runtime.gpu_patch_missing_dlls():
+            env["PATH"] = gpd + os.pathsep + env.get("PATH", "")
         proc = subprocess.run(
             cmd, capture_output=True, encoding="utf-8", errors="replace",
             timeout=timeout, cwd=str(paths.app_root()),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            env=env,
             creationflags=CREATE_NO_WINDOW)
         for line in (proc.stdout or "").splitlines():
             line = line.strip()

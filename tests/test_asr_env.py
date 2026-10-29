@@ -160,7 +160,7 @@ def test_asr_runner_import_chain_stdlib_only():
                      if isinstance(node, ast.Import)
                      else [node.module or ""])
             top_imports.extend(names)
-    assert top_imports == ["argparse", "json", "os", "sys"], \
+    assert top_imports == ["argparse", "contextlib", "json", "os", "sys"], \
         f"运行器顶部导入面漂移（C3 导入图钉）: {top_imports}"
 
 

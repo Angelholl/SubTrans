@@ -21,6 +21,7 @@
 """
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -77,11 +78,88 @@ def _segments_to_srt(segments: list) -> str:
     return "\n".join(out)
 
 
+# GPU DLL 补丁包必需清单（D2026-1029-02 拍板③；勘探卡
+# d1029-件B-GPU补丁包-勘探卡.md §2）：cublas 两件（CT2 wheel 不带）＋
+# cudnn 主件与八子件（CT2 wheel 只带主分发器）。缺任一=补丁不完整→
+# cpu 回退（半套 DLL 注入钉钉住该分支可达性）。
+GPU_DLL_REQUIRED = (
+    "cublas64_12.dll", "cublasLt64_12.dll",
+    "cudnn64_9.dll", "cudnn_adv64_9.dll", "cudnn_cnn64_9.dll",
+    "cudnn_engines_precompiled64_9.dll",
+    "cudnn_engines_runtime_compiled64_9.dll",
+    "cudnn_graph64_9.dll", "cudnn_heuristic64_9.dll",
+    "cudnn_ops64_9.dll",
+)
+GPU_COMPUTE_TYPE = "int8_float16"   # 拍板③：可用→gpu(int8_float16)
+CPU_COMPUTE_TYPE = "int8"           # 现状缺省，零行为变化
+
+
+def gpu_dll_missing(gpu_dll_dir: str) -> list[str]:
+    """补丁包 DLL 完整性检查（双检①）：返回缺失清单（空=齐全）。"""
+    if not gpu_dll_dir or not os.path.isdir(gpu_dll_dir):
+        return list(GPU_DLL_REQUIRED)
+    return [d for d in GPU_DLL_REQUIRED
+            if not os.path.isfile(os.path.join(gpu_dll_dir, d))]
+
+
+def resolve_device(device: str, gpu_dll_dir: str, cuda_count: int,
+                   compute_type: str | None) -> tuple[str, str, str]:
+    """device 解析（纯函数，双检②在调用方注入 cuda_count）。
+
+    返回 (device, compute_type, note)。auto：DLL 齐全∧cuda_count>0 →
+    gpu(int8_float16)；否则 cpu(int8)。显式 cpu 恒 cpu。显式 gpu 但检测
+    不过也回退 cpu（拍板③：失败→cpu 回退）。compute_type 显式传入则
+    尊重用户值不改写。note=解析说明（stderr 诊断用，不进机器契约）。"""
+    missing = gpu_dll_missing(gpu_dll_dir)
+    explicit_ct = compute_type
+    if device == "cpu":
+        return ("cpu", explicit_ct or CPU_COMPUTE_TYPE, "device=cpu 显式指定")
+    if missing:
+        head = "、".join(missing[:3])
+        tail = f" 等 {len(missing)} 件" if len(missing) > 3 else ""
+        return ("cpu", explicit_ct or CPU_COMPUTE_TYPE,
+                "gpu 补丁不完整（缺 " + head + tail + "）→cpu 回退")
+    if cuda_count <= 0:
+        return ("cpu", explicit_ct or CPU_COMPUTE_TYPE,
+                "无可用 CUDA 设备→cpu 回退")
+    return ("gpu", explicit_ct or GPU_COMPUTE_TYPE, "gpu 双检通过")
+
+
+def _load_model(model_dir: str, device: str, compute_type: str,
+                gpu_dll_dir: str = ""):
+    """装载 WhisperModel：gpu 装载失败→cpu 回退（拍板③，双检③真用检）。
+
+    回退时 stderr 明示（诊断不进 stdout 机器契约）。返回 (model, device,
+    compute_type)——回退后 device/compute_type 为实际生效值。"""
+    from faster_whisper import WhisperModel
+    if device != "gpu":
+        return (WhisperModel(model_dir, device="cpu",
+                             compute_type=compute_type), "cpu", compute_type)
+    # DLL 目录自行注册（双检①之外的装载保险）：父链（asr_env PATH 注入）
+    # 缺席的直调形态也能解析补丁 DLL；两通道均失败则走下方 cpu 回退。
+    if gpu_dll_dir and os.path.isdir(gpu_dll_dir):
+        with contextlib.suppress(OSError):
+            os.add_dll_directory(gpu_dll_dir)
+        os.environ["PATH"] = gpu_dll_dir + os.pathsep + os.environ.get("PATH", "")
+    try:
+        return (WhisperModel(model_dir, device="cuda",
+                             compute_type=compute_type), "gpu", compute_type)
+    except Exception as e:   # noqa: BLE001 半套 DLL/驱动异常等一律回退
+        with contextlib.suppress(Exception):
+            print("[asr_runner] gpu 装载失败→cpu 回退: " + str(e),
+                  file=sys.stderr)
+        return (WhisperModel(model_dir, device="cpu",
+                             compute_type=CPU_COMPUTE_TYPE),
+                "cpu", CPU_COMPUTE_TYPE)
+
+
 def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                               srt_out: str, *, beam_size: int,
                               vad_filter: bool, condition_previous: bool,
                               compute_type: str = "int8",
-                              line_break: bool = True) -> int:
+                              line_break: bool = True,
+                              device: str = "auto",
+                              gpu_dll_dir: str = "") -> int:
     """ct2 整片转写：SRT＋词级 sidecar（断行器 3.2.1 的消费输入）。
 
     stdout 契约（D2026-1029-01 批1 置信透传）：segments=完整段数组（含
@@ -101,7 +179,7 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                          ensure_ascii=False))
         return 2
     try:
-        from faster_whisper import WhisperModel
+        import faster_whisper  # noqa: F401 可用性预检（人话报错先行）
     except Exception as e:   # noqa: BLE001
         print(json.dumps({"ok": False,
                           "error": "faster_whisper 导入失败（CT2 运行时未安装"
@@ -111,10 +189,23 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                          ensure_ascii=False))
         return 1
     try:
-        # device 钉 cpu（骨架期）：ct2 wheel 对半套 CUDA DLL（如系统 PATH 残留
-        # cublas）会 auto 探测后加载失败——GPU 通道归后续批（DLL 集齐+双检，
-        # 沿 NVENC 双检先例），CPU int8 RTF≈0.98x 已实测可用。
-        model_obj = WhisperModel(model_dir, device="cpu", compute_type=compute_type)
+        # device 选择（件B，D2026-1029-02 拍板③）：auto=双检（补丁 DLL 齐全
+        # ∧CUDA 设备可见）→gpu(int8_float16)，否则 cpu 回退；gpu 装载再败
+        # →cpu（_load_model 真用检）。未装补丁包/无 GPU＝与现状逐字节同
+        # 路径（cpu int8，零行为变化承诺）。
+        cuda_count = 0
+        if device in ("auto", "gpu"):
+            try:
+                import ctranslate2
+                cuda_count = ctranslate2.get_cuda_device_count()
+            except Exception:   # noqa: BLE001 无 ct2/探测失败=无 GPU
+                cuda_count = 0
+        dev, eff_ct, note = resolve_device(device, gpu_dll_dir, cuda_count,
+                                           compute_type)
+        if note and note != "device=cpu 显式指定":
+            print("[asr_runner] " + note, file=sys.stderr)
+        model_obj, dev, eff_ct = _load_model(model_dir, dev, eff_ct,
+                                             gpu_dll_dir)
         segments_iter, info = model_obj.transcribe(
             media, language=language, beam_size=beam_size,
             vad_filter=vad_filter, condition_on_previous_text=condition_previous,
@@ -218,6 +309,13 @@ def main(argv=None) -> int:
                              "（PROVISIONAL；缺省关=幻听缓解）")
     parser.add_argument("--compute-type", default="int8",
                         help="ct2 量化形态（PROVISIONAL；CPU int8/GPU float16）")
+    parser.add_argument("--device", default="auto", choices=["auto", "cpu", "gpu"],
+                        help="计算设备（件B：auto=补丁 DLL 齐全且 CUDA 可见"
+                             "→gpu(int8_float16)，否则 cpu；gpu 装载失败自动"
+                             "回退 cpu；未装补丁包=cpu 零行为变化）")
+    parser.add_argument("--gpu-dll-dir", default="",
+                        help="GPU DLL 补丁包目录（gpu-dll；缺省空=未装补丁"
+                             "→cpu）")
     parser.add_argument("--no-line-break", action="store_true",
                         help="ct2 关闭确定性断行（缺省开=长行自动切分）")
     args = parser.parse_args(argv)
@@ -236,7 +334,8 @@ def main(argv=None) -> int:
         beam_size=args.beam_size, vad_filter=not args.no_vad_filter,
         condition_previous=args.condition_previous,
         compute_type=args.compute_type,
-        line_break=not args.no_line_break)
+        line_break=not args.no_line_break,
+        device=args.device, gpu_dll_dir=args.gpu_dll_dir)
 
 
 if __name__ == "__main__":
