@@ -360,6 +360,45 @@ def test_http_get_poison_proxy_falls_back_direct(monkeypatch, tmp_path):
                    for h in handlers)
 
 
+def test_http_get_attempt2_request_not_poisoned_by_proxy_stamp(
+        monkeypatch, tmp_path):
+    """回归钉（d1028-35 重传勘因）：attempt#1 系统代理跳的真实
+    ProxyHandler.proxy_open 会经 ``req.set_proxy`` 原地改写请求对象
+    （host=代理）——_http_get_once 必须每跳重建 Request，否则 attempt#2
+    「强制直连」实际复用被代理标记污染的同一 Request，仍打到代理出口
+    （hf-mirror 308 回源站链路实证），两跳状态机语义失效。"""
+    payload = b"CLEAN-SECOND-HOP"
+    real_host = urllib.parse.urlsplit("https://files.pythonhosted.org/x.whl").netloc
+    attempt2_hosts: list[str] = []
+    monkeypatch.setattr(urllib.request, "getproxies",
+                        lambda: {"https": "http://127.0.0.1:1"})
+
+    def _factory(*handlers):
+        explicit = next((h for h in handlers
+                         if isinstance(h, urllib.request.ProxyHandler)), None)
+        # 真实 build_opener 语义：无显式 ProxyHandler=挂默认处理器走系统代理
+        proxies = (explicit.proxies if explicit is not None
+                   else urllib.request.getproxies())
+
+        def _open(req, timeout=10):
+            if proxies:
+                # 忠实模拟真实 proxy_open 副作用：原地污染请求对象后失败
+                req.set_proxy("127.0.0.1:1", "http")
+                raise urllib.error.URLError("代理不可达")
+            attempt2_hosts.append(req.host)
+            return _StreamResponse(payload, chunk=64, total=len(payload))
+
+        return types.SimpleNamespace(open=_open)
+
+    monkeypatch.setattr(urllib.request, "build_opener", _factory)
+    dest = str(tmp_path / "x.whl")
+    dm._http_get("https://files.pythonhosted.org/x.whl", dest)
+    assert Path(dest).read_bytes() == payload
+    assert len(attempt2_hosts) == 1
+    assert attempt2_hosts[0] == real_host, \
+        "attempt#2 必须收到未被 set_proxy 污染的全新 Request（host=目标机）"
+
+
 def test_checksum_mismatch_never_retried(monkeypatch, tmp_path):
     """D2026-1004-01 C2（防洗白，D2026-1003-06 边界）：清单 pin 错 →
     DictChecksumError 且底层 fetch 恰 1 次——无直连重试、无换源轮换；
