@@ -40,6 +40,7 @@ tm_full_backup_*.csv
 .abtest/
 .abtest2/
 .tmp374/
+.tmp/
 
 # 本地工具数据
 .zcode/
