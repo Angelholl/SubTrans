@@ -485,9 +485,6 @@ def _http_get_once(url: str, dest: str, progress=None,
     异常实例挂 ``.diag`` 诊断字段（C3，见 _DIAG_FIELDS）。
     """
     _validate_url(url)
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "subtransjav-dict",
-        "Accept-Encoding": "identity"})     # C1：pin 校验按落盘字节
     tmp = dest + ".part"
 
     def _collect_diag(expected: int | None, actual: int, enc: str,
@@ -510,6 +507,13 @@ def _http_get_once(url: str, dest: str, progress=None,
         done = 0
         enc = ""
         try:
+            # 每跳重建 Request（d1028-35 重传勘因钉）：attempt#1 系统代理跳
+            # 经真实 ProxyHandler.proxy_open 原地 set_proxy 污染共享 req
+            # （host=代理），复用会使 attempt#2「强制直连」实际仍走代理出口
+            # （hf-mirror 308 回源站链路实证）——两跳语义必须各自全新 Request
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "subtransjav-dict",
+                "Accept-Encoding": "identity"})     # C1：pin 校验按落盘字节
             if attempt == 1:
                 # 经默认处理器自动挂 getproxies() 系统代理（同裸 urlopen）
                 opener = urllib.request.build_opener(
