@@ -241,12 +241,7 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     # 断行器接入（3.2.1，D2026-1028-03）：词级时间戳+CPS+停顿确定性切分，
     # 缺省开（社区实证 CT2 长行问题）；--no-line-break 关闭走原生段。
     # sidecar 始终保留原始词级数据（断行器输入可回放）。
-    srt_segments = segs
-    if line_break and any(len(s.get("words") or []) >= 2 for s in segs):
-        try:
-            srt_segments = _load_break_segments()(segs)
-        except Exception:   # noqa: BLE001 断行故障不阻断转写产出
-            srt_segments = segs
+    srt_segments = _apply_line_break(segs, line_break)
     out_path.write_text(_segments_to_srt(srt_segments), encoding="utf-8", newline="\n")
     sidecar = {"schema": "subtransjav.ct2.words/1", "language": info.language,
                "duration": float(info.duration), "model_dir": model_dir,
@@ -260,6 +255,21 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                       "words_sidecar": str(out_path) + ".words.json"},
                      ensure_ascii=False))
     return 0
+
+
+def _apply_line_break(segs: list, line_break: bool) -> list:
+    """断行应用＋故障留痕回退（stderr 人话登记，不进机器契约）。"""
+    if not line_break or not any(len(s.get("words") or []) >= 2 for s in segs):
+        return segs
+    try:
+        return _load_break_segments()(segs)
+    except Exception as e:   # noqa: BLE001 断行故障不阻断转写产出
+        # 回退必须留痕：静默降级曾致打包形态缺件缺陷直到冒烟双路径才
+        # 拦获（2026-10-29），此处人话登记成因。
+        with contextlib.suppress(Exception):
+            print("[asr_runner] 断行器失败→SRT 回退原生长行: " + str(e),
+                  file=sys.stderr)
+        return segs
 
 
 def _load_break_segments():

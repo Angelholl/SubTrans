@@ -92,8 +92,8 @@ CT2_MODELS: list[dict] = [
 # URL/SHA 人话报错，本地 zip 通道不受影响）。构建=tools/build_gpu_patch.py。
 GPU_PATCH_DIRNAME = "gpu-dll"
 GPU_PATCH_ZIP_URL = ""       # 未发布态：owner 上传镜像后回填点亮
-GPU_PATCH_ZIP_SHA256 = "bc196eabfbee6389589b94306b06f965a736302cbc2670f33fcfa4f4dbba84b9"
-GPU_PATCH_ZIP_BYTES = 1211302239
+GPU_PATCH_ZIP_SHA256 = "1d9389d61b273149644ddc2803599be9c6cfb2a6e416c14a7bccb96ddb1a3693"
+GPU_PATCH_ZIP_BYTES = 1211323535
 
 # 子进程统一形态：参数列表+shell=False+无窗口（CREATE_NO_WINDOW 单一来源）
 _SPAWN_FLAGS = CREATE_NO_WINDOW
