@@ -4,7 +4,9 @@
 （python/ + site-packages/ + runtime.json + selfcheck.py）；manifest
 （runtime.json）为生产认证路径，fallback 探测（Scripts/、python/、根）
 仅诊断非认证；embed 平铺等错布局 install 必须失败且诊断含「布局」。
-verified 初值本卡不翻转（门禁翻转属主验收动作）。
+verified 已于 2026-10-29 随生产路径三门核验通过翻转 True
+（d1028-35 runbook 执行记录；门禁翻转后关断语义由 test_asr_ct2 强制
+False 回放钉住）。
 """
 
 from __future__ import annotations
