@@ -69,6 +69,16 @@ def collect_dlls(wheel: pathlib.Path, wanted: tuple[str, ...]) -> dict[str, byte
     return out
 
 
+def collect_licenses(wheel: pathlib.Path) -> bytes | None:
+    """抽取 wheel 内随包许可文本（NVIDIA 许可随包附义务，勘探卡 §6）。"""
+    with zipfile.ZipFile(wheel) as z:
+        for name in z.namelist():
+            n = name.replace("\\", "/")
+            if "dist-info/licenses/" in n and n.lower().endswith(".txt"):
+                return z.read(name)
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="build_gpu_patch")
     ap.add_argument("--cublas-wheel", required=True)
@@ -96,6 +106,12 @@ def main(argv: list[str] | None = None) -> int:
         print("wheel 内缺 DLL: " + ", ".join(missing))
         return 1
 
+    lic_cublas = collect_licenses(cublas_w)
+    lic_cudnn = collect_licenses(cudnn_w)
+    if lic_cublas is None or lic_cudnn is None:
+        print("wheel 内缺许可文本（licenses/License.txt）——拒绝构建"
+              "（NVIDIA 许可随包附义务）")
+        return 1
     manifest = {
         "schema": "subtransjav.gpu_patch/1",
         "built_at": args.built_at,
@@ -103,14 +119,22 @@ def main(argv: list[str] | None = None) -> int:
                            "nvidia-cudnn-cu12": CUDNN_PIN["version"]},
         "dlls": {d: hashlib.sha256(b).hexdigest() for d, b in dlls.items()},
     }
+    extra = {"licenses/License-cublas-cu12.txt": lic_cublas,
+             "licenses/License-cudnn-cu12.txt": lic_cudnn}
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for name in sorted(list(dlls) + ["gpu_patch_manifest.json"]):
+        for name in sorted(list(dlls) + list(extra)
+                           + ["gpu_patch_manifest.json"]):
             info = zipfile.ZipInfo(name, date_time=_ZIP_DATE)
             info.compress_type = zipfile.ZIP_DEFLATED
-            data = (json.dumps(manifest, ensure_ascii=False, indent=1)
-                    .encode("utf-8") if name.endswith(".json") else dlls[name])
+            if name.endswith(".json"):
+                data = json.dumps(manifest, ensure_ascii=False,
+                                  indent=1).encode("utf-8")
+            elif name in extra:
+                data = extra[name]
+            else:
+                data = dlls[name]
             z.writestr(info, data)
     print("产物: " + str(out))
     print("bytes=" + str(out.stat().st_size))

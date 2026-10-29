@@ -79,6 +79,24 @@ def test_packaging_spec_bundles_line_breaker_alongside_runner():
         "SubTrans.spec 未随包 line_breaker.py——frozen 断行静默失效复发"
 
 
+def test_line_break_failure_falls_back_with_stderr_note(capsys):
+    """回退留痕钉（2026-10-29 遗留清零）：断行器故障→原段回退＋stderr
+    人话登记（不进 stdout 机器契约；静默降级缺陷不复发）。"""
+    mod = _load_runner_standalone()
+    def _boom():
+        raise RuntimeError("line_breaker missing (injected)")
+    mod._load_break_segments = _boom
+    segs = [{"start": 0.0, "end": 2.0, "text": "あ" * 20,
+             "words": [{"start": 0.0, "end": 1.0, "word": "あ"},
+                        {"start": 1.0, "end": 2.0, "word": "あ"}]}]
+    out = mod._apply_line_break(segs, True)
+    assert out == segs, "故障回退必须返回原始段"
+    err = capsys.readouterr().err
+    assert "断行器失败" in err and "line_breaker missing" in err
+    # 开关关/无词级：完全不触碰断行器（零行为面）
+    assert mod._apply_line_break(segs, False) == segs
+
+
 def test_runner_standalone_secrets_hijack_guard_intact():
     """装载后脚本目录不回注 sys.path（refine/secrets.py 劫持守卫不劣化）。"""
     import os
