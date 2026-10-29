@@ -252,3 +252,86 @@ class TestRuntimeZipPin:
         assert "1.1.0" in asr_runtime.RUNTIME_ZIP_URL
         assert len(asr_runtime.RUNTIME_ZIP_SHA256) == 64
         assert asr_runtime.RUNTIME_ZIP_BYTES > 0
+
+
+# ---------------------------------------------------------------- GPU 补丁包
+
+def _runtime_skeleton(rt: Path) -> None:
+    """已安装运行时最小骨架（manifest 认证布局）。"""
+    (rt / "python").mkdir(parents=True)
+    (rt / "python" / "python.exe").write_bytes(b"stub")
+    (rt / "site-packages").mkdir()
+    (rt / "runtime.json").write_bytes(_manifest_bytes())
+
+
+def _gpu_patch_members() -> dict[str, bytes]:
+    from subtransjav.refine.asr_runner import GPU_DLL_REQUIRED
+    members = {"gpu_patch_manifest.json": json.dumps({
+        "built_at": "2026-10-29T00:00:00",
+        "wheel_versions": {"nvidia-cublas-cu12": "12.8.5.5",
+                           "nvidia-cudnn-cu12": "9.19.0.56"},
+        "dlls": {d: "stubsha" for d in GPU_DLL_REQUIRED},
+    }).encode("utf-8")}
+    for d in GPU_DLL_REQUIRED:
+        members[d] = b"stub-dll"
+    return members
+
+
+class TestGpuPatchContract:
+    def test_install_writes_manifest_and_status_complete(
+            self, tmp_path, isolated_env):
+        """补丁包安装全链：布局门→解包→DLL 对盘→runtime.json 增 gpu_patch
+        字段（未知键透传契约）→status complete=True。"""
+        _runtime_skeleton(isolated_env)
+        fixture = tmp_path / "gpu-patch.zip"
+        _build_zip(fixture, _gpu_patch_members())
+        rc = asr_runtime.install_gpu_patch(str(fixture))
+        assert rc == 0
+        manifest = asr_runtime.read_runtime_manifest()
+        assert manifest is not None
+        assert manifest["gpu_patch"]["wheel_versions"][
+            "nvidia-cudnn-cu12"] == "9.19.0.56"
+        assert asr_runtime.read_gpu_patch_manifest() is not None
+        status = asr_runtime.gpu_patch_status()
+        assert status["installed"] is True and status["complete"] is True
+        assert status["missing"] == []
+
+    def test_incomplete_layout_rejected(self, tmp_path, isolated_env,
+                                        capsys):
+        """半套 DLL zip（缺 cudnn_ops）：布局门拒绝 rc=1（回退分支源头）。"""
+        _runtime_skeleton(isolated_env)
+        members = _gpu_patch_members()
+        del members["cudnn_ops64_9.dll"]
+        fixture = tmp_path / "gpu-patch-half.zip"
+        _build_zip(fixture, members)
+        rc = asr_runtime.install_gpu_patch(str(fixture))
+        assert rc == 1
+        assert "布局" in capsys.readouterr().out
+
+    def test_install_requires_runtime_first(self, tmp_path, isolated_env):
+        """运行时未装：补丁包拒装 rc=3（依赖序 fail-closed）。"""
+        fixture = tmp_path / "gpu-patch.zip"
+        _build_zip(fixture, _gpu_patch_members())
+        assert asr_runtime.install_gpu_patch(str(fixture)) == 3
+
+    def test_runner_command_device_args_only_with_complete_patch(
+            self, isolated_env):
+        """命令构造钉：补丁齐全→--device auto＋--gpu-dll-dir；未装→不传
+        （零行为变化承诺：缺省命令面与件B 前逐字节同）。"""
+        _runtime_skeleton(isolated_env)
+        cmd = asr_runtime.ct2_runner_command("m.wav", "o.srt")
+        assert "--device" not in cmd and "--gpu-dll-dir" not in cmd
+        fixture_zip = isolated_env.parent / "gp.zip"
+        _build_zip(fixture_zip, _gpu_patch_members())
+        assert asr_runtime.install_gpu_patch(str(fixture_zip)) == 0
+        cmd2 = asr_runtime.ct2_runner_command("m.wav", "o.srt")
+        assert cmd2[cmd2.index("--device") + 1] == "auto"
+        assert cmd2[cmd2.index("--gpu-dll-dir") + 1] == \
+            str(isolated_env / "gpu-dll")
+
+    def test_online_pin_unpublished_state(self):
+        """在线 pin 未点亮态（owner 上传闸前）：URL 空＝在线下载走人话报错、
+        本地 zip 通道不受影响；sha/bytes 构建实录已回填（点亮只差 URL）。"""
+        assert asr_runtime.GPU_PATCH_ZIP_URL == ""
+        assert len(asr_runtime.GPU_PATCH_ZIP_SHA256) == 64
+        assert asr_runtime.GPU_PATCH_ZIP_BYTES > 0

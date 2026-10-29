@@ -86,6 +86,15 @@ CT2_MODELS: list[dict] = [
     },
 ]
 
+# GPU DLL 补丁包 pin（件B，D2026-1029-02 拍板③；勘探卡 §2/§6）：owner 硬
+# 约束=主程序轻量化，DLL 不进主包不进运行时主 zip，安装后按需 opt-in 下载。
+# 在线 pin 待补丁包经 HF 镜像上传后点亮（沿运行时 1.1.0 未点亮先例：缺
+# URL/SHA 人话报错，本地 zip 通道不受影响）。构建=tools/build_gpu_patch.py。
+GPU_PATCH_DIRNAME = "gpu-dll"
+GPU_PATCH_ZIP_URL = ""       # 未发布态：owner 上传镜像后回填点亮
+GPU_PATCH_ZIP_SHA256 = "bc196eabfbee6389589b94306b06f965a736302cbc2670f33fcfa4f4dbba84b9"
+GPU_PATCH_ZIP_BYTES = 1211302239
+
 # 子进程统一形态：参数列表+shell=False+无窗口（CREATE_NO_WINDOW 单一来源）
 _SPAWN_FLAGS = CREATE_NO_WINDOW
 
@@ -619,6 +628,165 @@ def start_model_download(model: str = "large-v2") -> dict:
     return {"started": True, "model": model}
 
 
+def gpu_patch_dir() -> str:
+    """GPU DLL 补丁包落位：runtime_root()/gpu-dll（数据根域，勘探卡 §4——
+    不进主程序包、不进运行时主 zip、不动 site-packages 完整性语义）。"""
+    return os.path.join(runtime_root(), GPU_PATCH_DIRNAME)
+
+
+def read_gpu_patch_manifest(gpd: str = "") -> dict | None:
+    """读补丁包 manifest（构建产物 gpu_patch_manifest.json；缺失/非法=None）。"""
+    try:
+        data = json.loads(pathlib.Path(
+            gpd or gpu_patch_dir(), "gpu_patch_manifest.json")
+            .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def gpu_patch_missing_dlls(gpd: str = "") -> list[str]:
+    """补丁完整性：必需 10 DLL 逐一对盘（缺任一=半套→cpu 回退语义的源头）。"""
+    from .asr_runner import GPU_DLL_REQUIRED
+    base = gpd or gpu_patch_dir()
+    return [d for d in GPU_DLL_REQUIRED
+            if not os.path.isfile(os.path.join(base, d))]
+
+
+def gpu_patch_status() -> dict:
+    """补丁包状态快照（CLI status / GUI 桥消费；无 GPU 零打扰=GUI 据此
+    只在 installed/complete=False 且 cuda_visible=True 时提示 opt-in）。"""
+    cuda_visible = 0
+    try:
+        import ctranslate2
+        cuda_visible = ctranslate2.get_cuda_device_count()
+    except Exception:   # noqa: BLE001 探测面永不抛
+        pass
+    missing = gpu_patch_missing_dlls()
+    return {"dll_dir": gpu_patch_dir(),
+            "installed": read_gpu_patch_manifest() is not None,
+            "complete": not missing,
+            "missing": missing,
+            "manifest": read_gpu_patch_manifest(),
+            "cuda_visible": cuda_visible > 0,
+            "online_pin_ready": bool(GPU_PATCH_ZIP_URL and GPU_PATCH_ZIP_SHA256)}
+
+
+def _verify_gpu_patch_layout(zip_path: str) -> None:
+    """补丁包布局清单门：10 DLL＋manifest json 缺一即拒（sha256 之外的
+    第二道门，运行时件同构）。"""
+    import zipfile
+
+    from .asr_runner import GPU_DLL_REQUIRED
+    with zipfile.ZipFile(zip_path) as z:
+        names = {n.replace("\\", "/") for n in z.namelist()}
+    missing = [n for n in ("gpu_patch_manifest.json",)
+               if n not in names]
+    missing += [d for d in GPU_DLL_REQUIRED if d not in names]
+    if missing:
+        raise RuntimeError("补丁包布局不符（缺: " + ", ".join(missing)
+                           + "）——须为 10 DLL＋gpu_patch_manifest.json 平铺布局")
+
+
+def install_gpu_patch(zip_path: str) -> int:
+    """本地 zip 安装 GPU 补丁包（在线通道待 pin 点亮）。
+
+    流程=布局清单门→防 zip-slip 解包到 gpu-dll/→DLL 逐一对盘→manifest
+    回写 runtime.json（gpu_patch 字段，未知键透传不拒）。运行时未装时拒绝
+    （补丁依赖运行时解释器的 ct2）。"""
+    if not is_installed():
+        print("CT2 运行时未安装——GPU 补丁包依赖运行时，先 install")
+        return 3
+    if not os.path.isfile(zip_path):
+        print("补丁包 zip 不存在: " + zip_path)
+        return 1
+    gpd = gpu_patch_dir()
+    try:
+        print("[1/3] 布局清单校验")
+        _verify_gpu_patch_layout(zip_path)
+        print("[2/3] 解包到 " + gpd)
+        _safe_extract_zip(zip_path, gpd)
+        missing = gpu_patch_missing_dlls()
+        if missing:
+            raise RuntimeError("解包后 DLL 缺件: " + ", ".join(missing))
+        pm = read_gpu_patch_manifest()
+        if pm is None:
+            raise RuntimeError("解包产物缺 gpu_patch_manifest.json")
+        print("[3/3] 回写 runtime.json gpu_patch 字段")
+        mpath = pathlib.Path(runtime_root(), RUNTIME_MANIFEST_NAME)
+        data = json.loads(mpath.read_text(encoding="utf-8"))
+        data["gpu_patch"] = {
+            "installed_at": pm.get("built_at") or "",
+            "wheel_versions": pm.get("wheel_versions") or {},
+            "dlls": pm.get("dlls") or {},
+        }
+        mpath.write_text(json.dumps(data, ensure_ascii=False, indent=1),
+                         encoding="utf-8")
+    except RuntimeError as e:
+        print("GPU 补丁包安装失败: " + str(e))
+        return 1
+    print("GPU 补丁包安装完成: " + gpd)
+    return 0
+
+
+def download_gpu_patch(progress=None) -> int:
+    """在线下载 GPU 补丁包（守卫下载+布局门+解包+manifest 回写）。
+
+    在线 pin 未点亮（owner 上传镜像回填前）＝人话报错 rc=3，本地 zip 通道
+    （install_gpu_patch）不受影响——沿运行时 1.1.0 未发布态先例。"""
+    if not (GPU_PATCH_ZIP_URL and GPU_PATCH_ZIP_SHA256):
+        print("GPU 补丁包在线件尚未发布（缺 URL/sha256 pin）——"
+              "上传镜像点亮后可用；本地 zip 可先经 gpu-patch --zip 安装")
+        return 3
+    if not is_installed():
+        print("CT2 运行时未安装——GPU 补丁包依赖运行时，先 install")
+        return 3
+    zip_path = paths.data_subdir("runtime", "ct2-gpu-patch.zip.tmp")
+    print("[1/4] 守卫下载 GPU 补丁包（"
+          + format(GPU_PATCH_ZIP_BYTES / 1048576, ".0f") + "MB）")
+    _guarded_download(GPU_PATCH_ZIP_URL, zip_path, GPU_PATCH_ZIP_SHA256,
+                      GPU_PATCH_ZIP_BYTES, progress=progress)
+    print("[2/4] sha256 核验通过，布局清单校验")
+    _verify_gpu_patch_layout(zip_path)
+    print("[3/4] 解包到 " + gpu_patch_dir())
+    _safe_extract_zip(zip_path, gpu_patch_dir())
+    with contextlib.suppress(OSError):
+        os.remove(zip_path)
+    missing = gpu_patch_missing_dlls()
+    if missing:
+        print("解包后 DLL 缺件: " + ", ".join(missing))
+        return 1
+    print("[4/4] manifest 回写")
+    mpath = pathlib.Path(runtime_root(), RUNTIME_MANIFEST_NAME)
+    data = json.loads(mpath.read_text(encoding="utf-8"))
+    pm = read_gpu_patch_manifest() or {}
+    data["gpu_patch"] = {"installed_at": pm.get("built_at") or "",
+                         "wheel_versions": pm.get("wheel_versions") or {},
+                         "dlls": pm.get("dlls") or {}}
+    mpath.write_text(json.dumps(data, ensure_ascii=False, indent=1),
+                     encoding="utf-8")
+    print("GPU 补丁包就绪: " + gpu_patch_dir())
+    return 0
+
+
+def start_gpu_patch_install() -> dict:
+    """后台线程执行 GPU 补丁包下载安装（GUI 桥消费；单槽操作面同款）。"""
+    with _OP_LOCK:
+        if _OP_STATE["phase"] == "running":
+            return {"started": False, "reason": "已有 ct2 任务在跑"}
+        _OP_STATE.update(phase="running", kind="gpu", detail="", rc=None)
+
+    def _run() -> None:
+        try:
+            rc = download_gpu_patch()
+            _set_op("done" if rc == 0 else "failed", "gpu", rc=rc)
+        except Exception as e:      # noqa: BLE001 线程兜底
+            _set_op("failed", "gpu", detail=str(e), rc=1)
+
+    threading.Thread(target=_run, daemon=True, name="ct2-gpu-patch").start()
+    return {"started": True}
+
+
 def ct2_runner_command(media_path: str, srt_out: str, model: str = "large-v2",
                        model_dir: str = "", *, beam_size: int = 5,
                        vad_filter: bool = True, condition_previous: bool = False) -> list[str]:
@@ -640,6 +808,11 @@ def ct2_runner_command(media_path: str, srt_out: str, model: str = "large-v2",
         cmd.append("--no-vad-filter")
     if condition_previous:
         cmd.append("--condition-previous")
+    # 件B（D2026-1029-02 拍板③）：补丁包在位才传 gpu-dll 目录与 auto——
+    # runner 侧双检（DLL 齐全∧CUDA 可见）→gpu(int8_float16)，失败 cpu 回退；
+    # 未装补丁包不传任何 device 参数＝现状 cpu int8 零行为变化。
+    if not gpu_patch_missing_dlls():
+        cmd += ["--device", "auto", "--gpu-dll-dir", gpu_patch_dir()]
     return cmd
 
 
@@ -654,11 +827,21 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("selfcheck", help="安装后自检")
     p_dl = sub.add_parser("download-model", help="下载 CT2 模型件（verified 门）")
     p_dl.add_argument("--model", default="large-v2")
+    p_gpu = sub.add_parser("gpu-patch", help="GPU DLL 补丁包（检测/安装）")
+    p_gpu.add_argument("--zip", default="",
+                       help="本地补丁包 zip 路径（在线通道待 pin 点亮）")
+    p_gpu.add_argument("--status-only", action="store_true",
+                       help="只输出状态 JSON 不安装")
     args = parser.parse_args(argv)
     if args.cmd == "install":
         return install(args.provider)
     if args.cmd == "download-model":
         return download_model(args.model)
+    if args.cmd == "gpu-patch":
+        if args.status_only or not args.zip:
+            print(json.dumps(gpu_patch_status(), ensure_ascii=False, indent=2))
+            return 0
+        return install_gpu_patch(args.zip)
     if args.cmd == "status":
         print(json.dumps(provider_status(), ensure_ascii=False, indent=2))
         return 0
