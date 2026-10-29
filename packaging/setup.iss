@@ -394,6 +394,67 @@ var
   DataDelete: Boolean;       // InitializeUninstall 定，usPostUninstall 执行
   DataRoot, DataSrc: String; // 解析结果与来源标签
 
+// ---------------------------------------------------------------------------
+// 目录防误装加固（D2026-1030-04）：3.1.0 实测事故——用户把既往安装目录改名
+// 后，Inno 默认 UsePreviousAppDir 仍沿用注册表陈旧 App Path 预填目录页，
+// 新版被默认装进改名后腾出名字的开发仓库工作树根。
+// 两层加固（UsePreviousAppDir 保持默认，正常升级原位语义不动）：
+//   F1 陈旧记录回落（交互向导）：目录页显示时，已装记录路径不存在或疑似
+//      开发仓库 → 预填回落编译默认 {autopf}\SubTrans；
+//   F2 开发仓库拒装（交互+静默双闸）：所选目录含 .git，或含 pyproject.toml
+//      且有 subtransjav/ 源码包目录 → 目录页 Next 与 PrepareToInstall 拒绝。
+// ---------------------------------------------------------------------------
+
+function IsDevRepoDir(const dir: String): Boolean;
+var
+  trimmed: String;
+begin
+  trimmed := Trim(dir);
+  if (Length(trimmed) >= 2) and (trimmed[1] = '"') and
+     (trimmed[Length(trimmed)] = '"') then
+    trimmed := Copy(trimmed, 2, Length(trimmed) - 2);
+  Result :=
+    DirExists(trimmed + '\.git') or
+    (FileExists(trimmed + '\pyproject.toml') and
+     DirExists(trimmed + '\subtransjav'));
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+var
+  ver, loc: String;
+begin
+  if CurPageID = wpSelectDir then
+  begin
+    ReadInstalledInfo(ver, loc);
+    if (loc <> '') and
+       ((not DirExists(loc)) or IsDevRepoDir(loc)) then
+      WizardForm.DirEdit.Text := ExpandConstant('{autopf}') + '\SubTrans';
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = wpSelectDir then
+  begin
+    if IsDevRepoDir(WizardForm.DirEdit.Text) then
+    begin
+      Result := False;
+      MsgBox('所选目录疑似开发仓库（含 .git，或 pyproject.toml + subtransjav 源码结构），' + #13#10 +
+             '不能作为 SubTrans 安装目录，否则会污染开发工作树。' + #13#10 +
+             '请另选实际安装目录。', mbError, MB_OK);
+    end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if IsDevRepoDir(WizardDirValue) then
+    Result := '安装目录是开发仓库（含 .git 或 pyproject.toml + subtransjav 源码结构），已阻止安装；' +
+              '静默安装请用 /DIR= 指定实际安装目录。';
+end;
+
 function InitializeSetup(): Boolean;
 var
   RC: Integer;

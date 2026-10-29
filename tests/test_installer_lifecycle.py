@@ -10,7 +10,9 @@
   空目录与失败分支；
 - 守卫反转注释：[UninstallDelete] 保持空段，绝不静默清理；
 - uninstall.bat：仅清快捷方式与缓存，不清理数据根内容（递归删除行
-  仅允许出现在 numba_cache 缓存清理处）。
+  仅允许出现在 numba_cache 缓存清理处）；
+- 目录防误装加固（D2026-1030-04）：F1 陈旧记录回落 + F2 开发仓库拒装
+  双闸（交互 NextButtonClick + 静默 PrepareToInstall）。
 
 配套 ISCC 编译冒烟（未安装 Inno Setup 6 时跳过）。
 """
@@ -256,3 +258,42 @@ def test_isscc_compile_smoke(tmp_path):
         shell=False, cwd=stage)
     assert proc.returncode == 0, \
         f"ISCC 编译失败 rc={proc.returncode}\n{proc.stdout}\n{proc.stderr}"
+
+
+# ---------------------------------------------------------------------------
+# 目录防误装加固（D2026-1030-04）
+# ---------------------------------------------------------------------------
+
+def test_stale_record_fallback_pinned(iss_text):
+    """F1 陈旧记录回落：记录目录不存在或疑似开发仓库 → 回落编译默认目录。
+
+    事故锚：3.1.0 实机安装目录被改名后注册表 App Path 陈旧，安装器默认
+    预填旧名，把新版装进了现开发仓库工作树根（D2026-1030-04）。
+    """
+    assert "procedure CurPageChanged(CurPageID: Integer);" in iss_text
+    assert "wpSelectDir" in iss_text
+    # 回落目标 = 编译默认目录 {autopf}\SubTrans
+    assert "ExpandConstant('{autopf}') + '\\SubTrans'" in iss_text
+    m = re.search(r"if \(loc <> ''\) and\n(.{0,200}?)then", iss_text, re.S)
+    assert m, "未找到 F1 回落条件"
+    cond = m.group(1)
+    assert "DirExists(loc)" in cond, "回落条件须含记录目录已失效分支"
+    assert "IsDevRepoDir(loc)" in cond, "回落条件须含开发仓库分支"
+
+
+def test_dev_repo_guard_pinned(iss_text):
+    """F2 开发仓库拒装：判定特征 + 交互/静默双闸。"""
+    assert "function IsDevRepoDir(const dir: String): Boolean;" in iss_text
+    m = re.search(r"function IsDevRepoDir.*?Result :=(.*?);", iss_text, re.S)
+    assert m, "未找到 IsDevRepoDir 判定体"
+    body = m.group(1)
+    assert "'\\.git'" in body, "判定须含 .git 目录特征"
+    assert "pyproject.toml" in body and "subtransjav" in body, \
+        "判定须含 pyproject.toml + subtransjav 源码结构特征"
+    # 双闸：交互目录页 NextButtonClick + 覆盖 /SILENT /DIR= 的 PrepareToInstall
+    assert "function NextButtonClick(CurPageID: Integer): Boolean;" in iss_text
+    assert "function PrepareToInstall(var NeedsRestart: Boolean): String;" in iss_text
+    assert "WizardDirValue" in iss_text
+    m2 = re.search(r"function PrepareToInstall.*?Result := '';(.*?)end;", iss_text, re.S)
+    assert m2 and "IsDevRepoDir" in m2.group(1), \
+        "PrepareToInstall 须在空串初值后做开发仓判定并返回阻断文案"
