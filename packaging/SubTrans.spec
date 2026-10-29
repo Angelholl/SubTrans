@@ -44,6 +44,11 @@ datas = [
     # 目录恒真故冒烟未拦）；2026-10-10 测试包轮实证修复
     (os.path.join(SPECPATH, "..", "subtransjav", "refine", "asr_runner.py"),
      os.path.join("subtransjav", "refine")),
+    # line_breaker.py 随包（3.2.1 件①）：asr_runner 脚本直调形态的断行器
+    # 回退装载按同目录文件路径解析（_load_break_segments），缺件=断行在
+    # frozen 形态静默降级回原生段（2026-10-29 测试包冒烟双路径实证拦获）。
+    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "line_breaker.py"),
+     os.path.join("subtransjav", "refine")),
 ]
 # 词典数据不进包（D3 去捆绑 D2026-1001）：sudachidict_core（system.dic 约
 # 208MB）不再随安装器分发，语法提示运行时 Dictionary() 失败走既有

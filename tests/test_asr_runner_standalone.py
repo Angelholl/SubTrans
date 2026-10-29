@@ -69,6 +69,16 @@ def test_runner_wiring_no_line_break_flag_off():
         "--no-line-break 未关断行——开关回退路径断裂"
 
 
+def test_packaging_spec_bundles_line_breaker_alongside_runner():
+    """回归钉（3.2.1 件①冒烟拦获缺陷）：spec 随包 asr_runner.py 时必须
+    同目录随包 line_breaker.py——直调形态断行器按同目录路径回退装载，
+    缺件=frozen 形态断行静默降级（2026-10-29 测试包双路径冒烟实证）。"""
+    spec = (pathlib.Path(__file__).resolve().parent.parent
+            / "packaging" / "SubTrans.spec").read_text(encoding="utf-8")
+    assert "line_breaker.py" in spec, \
+        "SubTrans.spec 未随包 line_breaker.py——frozen 断行静默失效复发"
+
+
 def test_runner_standalone_secrets_hijack_guard_intact():
     """装载后脚本目录不回注 sys.path（refine/secrets.py 劫持守卫不劣化）。"""
     import os
