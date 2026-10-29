@@ -153,8 +153,7 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     srt_segments = segs
     if line_break and any(len(s.get("words") or []) >= 2 for s in segs):
         try:
-            from .line_breaker import break_segments
-            srt_segments = break_segments(segs)
+            srt_segments = _load_break_segments()(segs)
         except Exception:   # noqa: BLE001 断行故障不阻断转写产出
             srt_segments = segs
     out_path.write_text(_segments_to_srt(srt_segments), encoding="utf-8", newline="\n")
@@ -170,6 +169,28 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                       "words_sidecar": str(out_path) + ".words.json"},
                      ensure_ascii=False))
     return 0
+
+
+def _load_break_segments():
+    """断行器装载（3.2.1 前置件①，D2026-1029-01 发现登记修复）。
+
+    包上下文（-m/测试形态）走相对导入；脚本直调形态无包上下文必
+    ImportError，回退按文件路径装载 line_breaker.py——该件零第三方
+    依赖零相对导入，可独立解析。不走 sys.path 注入（refine/ 内
+    secrets.py 劫持标准库，见模块顶部热修守卫）。"""
+    try:
+        from .line_breaker import break_segments
+        return break_segments
+    except ImportError:
+        import importlib.util
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "line_breaker.py")
+        spec = importlib.util.spec_from_file_location("_ct2_line_breaker", path)
+        if spec is None or spec.loader is None:
+            raise
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.break_segments
 
 
 def main(argv=None) -> int:

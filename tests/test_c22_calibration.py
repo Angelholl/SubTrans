@@ -164,3 +164,41 @@ def test_pin5_timings_labels_mismatch_main_exit_1(c22, tmp_path, capsys):
                    "--out", str(tmp_path / "report.md")])
     assert rc == 1
     assert "❌" in capsys.readouterr().out
+
+
+
+# ------------------------------------------------------------------ 前置件②
+# （d1029-3.2.1 前置件：回放臂 ct2 唯一引擎路径钉，D2026-1029-01 批6 直连
+# recipe 固化——runner 形态出段→grade 非空；legacy whisper 死代码不回潮）
+
+def test_replay_rows_grade_high_from_runner_payload(c22, tmp_path):
+    """mock runner 出段（含三维置信键）→ _replay_sample 出 high 行、
+    asr_error 空（grade 非空路径，批6 直连 recipe 等价断言）。"""
+    guide = _write_guide(tmp_path, [T1])
+    rows = c22._replay_sample({"guide": str(guide), "media": "x.mkv",
+                               "label": True, "timings": [T1]})
+    assert len(rows) == 1
+    assert rows[0]["grade"] == "high"
+    assert rows[0]["asr_error"] == ""
+
+
+def test_replay_failure_row_grade_empty(c22, monkeypatch, tmp_path):
+    """转写失败（error 文本）→ grade="empty" 且错误如实入
+    asr_error（不静默，环境层阻断可见）。"""
+    def _fail_batch(media, timings, **kwargs):
+        return [{"segments": [], "text": "", "error": "转写引擎未安装"}]
+    monkeypatch.setattr(c22, "batch_transcribe_clips", _fail_batch)
+    guide = _write_guide(tmp_path, [T1])
+    rows = c22._replay_sample({"guide": str(guide), "media": "x.mkv",
+                               "label": True, "timings": [T1]})
+    assert rows[0]["grade"] == "empty"
+    assert "转写引擎未安装" in rows[0]["asr_error"]
+
+
+def test_replay_arm_no_legacy_whisper_symbols():
+    """回放臂源文零 legacy whisper 残留（写死 whisper 子进程不回潮；
+    引擎唯一出口=batch_transcribe_clips ct2 分派）。"""
+    src = _TOOL_PATH.read_text(encoding="utf-8")
+    assert "asr_runner" not in src, "回放臂不得直调 runner 子进程"
+    assert re.search(r"whisper", src, re.I) is None,         "回放臂残留 legacy whisper 引用"
+    assert "batch_transcribe_clips" in src, "回放臂引擎出口缺失"
