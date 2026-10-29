@@ -77,6 +77,37 @@ def test_classify_energy_gate_skipped_on_error_or_missing():
     assert v["grade"] == "high"
 
 
+# ------------------------------------------------- d1030 卡1（D2026-1029-11 裁决①）
+# 能量门参数化（双读数）：speech_min_s kwarg；缺省=owner 终裁值不变。
+
+def test_classify_speech_min_s_none_skips_energy_gate():
+    """speech_min_s=None＝能量门不参与（非放行语义：后续判定链照走）。"""
+    v = mi.classify_transcript(T_WINDOW, [_good_segment()],
+                               "本当にすみません", _good_windows(),
+                               overlap_s=0.8, speech_min_s=None)
+    assert v["grade"] == "high"
+
+
+def test_classify_speech_min_s_custom_threshold_boundary():
+    """speech_min_s=0.5：0.8s 过门；0.5s 恰边界拒绝（≤语义随参数）。"""
+    v = mi.classify_transcript(T_WINDOW, [_good_segment()],
+                               "本当にすみません", _good_windows(),
+                               overlap_s=0.8, speech_min_s=0.5)
+    assert v["grade"] == "high"
+    v = mi.classify_transcript(T_WINDOW, [_good_segment()],
+                               "本当にすみません", _good_windows(),
+                               overlap_s=0.5, speech_min_s=0.5)
+    assert v["grade"] == "low" and v["reasons"][0] == "speech_le_1s"
+
+
+def test_classify_default_energy_threshold_unchanged():
+    """缺省不传＝owner 终裁 1.0 不变：0.9s 拒（既有 1.0/1.01 钉保活）。"""
+    v = mi.classify_transcript(T_WINDOW, [_good_segment()],
+                               "本当にすみません", _good_windows(),
+                               overlap_s=0.9)
+    assert v["grade"] == "low" and v["reasons"][0] == "speech_le_1s"
+
+
 def test_classify_confidence_three_dimensions():
     """三维置信（阈值同源 asr_meta._TRUST_*；nsp=max、logprob=mean）。"""
     base = dict(text="本当にすみません")

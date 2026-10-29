@@ -195,6 +195,118 @@ def test_replay_failure_row_grade_empty(c22, monkeypatch, tmp_path):
     assert "转写引擎未安装" in rows[0]["asr_error"]
 
 
+# ------------------------------------------------- d1030 卡1（D2026-1029-11 裁决①）
+# 门死锁修复＝双条件＋不可判档（fail-closed）；asr_error 分诊报告面单列；
+# 参照读数（不含 ≤1s 能量门）无门语义。
+
+def test_gate_verdict_dual_condition_and_unjudgeable():
+    """判定序钉：n_high < 30 → unjudgeable（不评估精确率）；达 n_high 后
+    须精确率下界与 coverage 地板双达标才 pass（PROVISIONAL 门值）。"""
+    assert mod._gate_verdict({"n_high": 29, "precision_lb": 0.99,
+                              "coverage": 0.90}) == "unjudgeable"
+    assert mod._gate_verdict({"n_high": 30, "precision_lb": 0.99,
+                              "coverage": 0.90}) == "pass"
+    assert mod._gate_verdict({"n_high": 40, "precision_lb": 0.96,
+                              "coverage": 0.49}) == "fail"
+    assert mod._gate_verdict({"n_high": 40, "precision_lb": 0.96,
+                              "coverage": 0.50}) == "pass"
+    assert mod._gate_verdict({"n_high": 40, "precision_lb": 0.94,
+                              "coverage": 0.90}) == "fail"
+
+
+def test_gate_unjudgeable_refuses_enable_exit_2(c22, tmp_path, monkeypatch,
+                                                capsys):
+    """n_high < 30 → --enable 拒写门控退出码 2（fail-closed 不破）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    guide = _write_guide(tmp_path, [T1])
+    manifest = _write_manifest(tmp_path, [
+        {"guide": str(guide), "media": "x.mkv", "label": True,
+         "timings": [T1], "labels": [True]}])
+    rc = c22.main(["--manifest", str(manifest),
+                   "--out", str(tmp_path / "r.md"), "--enable"])
+    assert rc == 2
+    assert not (tmp_path / "config" / "fullchain_c22.json").exists()
+    assert "不可判" in capsys.readouterr().out
+
+
+def test_aggregate_asr_error_triage_buckets(c22, monkeypatch, tmp_path):
+    """分诊计数：n_asr_error 与 empty 两桶（带 error／真空输出）；
+    主口径分母不动（n_total 含全部行，与 D2026-1029-06 报告可比）。"""
+    def _mixed_batch(media, timings, **kwargs):
+        return [{"segments": [], "text": "", "error": "切片失败"}
+                if t == T1 else
+                ({"segments": [], "text": "", "error": ""} if t == T2 else
+                 {"segments": [_GOOD_SEG], "text": "本当にすみません",
+                  "error": ""})
+                for t in timings]
+    monkeypatch.setattr(c22, "batch_transcribe_clips", _mixed_batch)
+    guide = _write_guide(tmp_path, [T1, T2, T3])
+    rows = c22._replay_sample({"guide": str(guide), "media": "x.mkv",
+                               "label": True})
+    agg = c22._aggregate(rows)
+    assert agg["n_asr_error"] == 1
+    assert agg["n_empty_with_error"] == 1
+    assert agg["n_empty_silent"] == 1
+    assert agg["n_total"] == 3
+    assert agg["n_high"] == 1
+
+
+def test_report_triage_column_and_verdict(c22, tmp_path, monkeypatch):
+    """报告面：asr_error 独立列（reasons 不再拼 error 文本）＋verdict
+    与分诊计数入汇总。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setattr(c22, "batch_transcribe_clips",
+                        lambda media, timings, **k: [
+                            {"segments": [], "text": "",
+                             "error": "转写引擎未安装"} for _ in timings])
+    guide = _write_guide(tmp_path, [T1])
+    manifest = _write_manifest(tmp_path, [
+        {"guide": str(guide), "media": "x.mkv", "label": True,
+         "timings": [T1], "labels": [True]}])
+    out = tmp_path / "r.md"
+    c22.main(["--manifest", str(manifest), "--out", str(out)])
+    text = out.read_text(encoding="utf-8")
+    assert "| asr_error |" in text
+    assert "asr_error=" not in text
+    assert "转写引擎未安装" in text
+    assert "unjudgeable" in text
+    assert "真空输出" in text and "带 error" in text
+
+
+def test_reference_readout_flips_energy_gate_rows(c22, tmp_path, monkeypatch):
+    """双读数：同一批转写产物二次 classify（speech_min_s=None，不重复
+    转写）——主口径能量门 low 行在参照口径按其余信号重判。"""
+    monkeypatch.setattr(c22, "detect_speech_windows",
+                        lambda media, timings: {T1: [(1.0, 1.5)]})
+    guide = _write_guide(tmp_path, [T1])
+    ctx: list[dict] = []
+    rows = c22._replay_sample({"guide": str(guide), "media": "x.mkv",
+                               "label": True, "timings": [T1],
+                               "labels": [True]}, ctx)
+    assert rows[0]["grade"] == "low"
+    assert rows[0]["reasons"][0] == "speech_le_1s"
+    ref_rows = c22._reclassify_no_energy_gate(ctx)
+    assert ref_rows[0]["grade"] == "high"
+
+
+def test_reference_section_no_gate_semantics(c22, tmp_path, monkeypatch):
+    """参照节物理隔离：只报计数与点精确率，无门判定语义字段。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    guide = _write_guide(tmp_path, [T1])
+    manifest = _write_manifest(tmp_path, [
+        {"guide": str(guide), "media": "x.mkv", "label": True,
+         "timings": [T1], "labels": [True]}])
+    out = tmp_path / "r.md"
+    c22.main(["--manifest", str(manifest), "--out", str(out)])
+    text = out.read_text(encoding="utf-8")
+    head, sep, ref = text.partition("## 参照读数")
+    assert sep, "参照节缺失"
+    assert "Wilson" not in ref
+    assert "verdict" not in ref
+    assert "达标" not in ref
+    assert "覆盖率" not in ref
+
+
 def test_replay_arm_no_legacy_whisper_symbols():
     """回放臂源文零 legacy whisper 残留（写死 whisper 子进程不回潮；
     引擎唯一出口=batch_transcribe_clips ct2 分派）。"""

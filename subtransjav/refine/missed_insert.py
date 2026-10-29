@@ -90,7 +90,8 @@ def _absurd_signal(text: str) -> bool:
 def classify_transcript(timing: str, segments: list, text_all: str,
                         speech_windows: dict,
                         *, overlap_s: float | None = None,
-                        language: str = "ja") -> dict:
+                        language: str = "ja",
+                        speech_min_s: float | None = SPEECH_MIN_SECONDS) -> dict:
     """三维置信门（纯函数）：{"grade": "high"|"low"|"empty", "reasons": [...]}。
 
     判定序（D2026-1009-02 批3 拍板10/11）＝判空 → ≤1s 放弃 → 三维置信
@@ -101,7 +102,11 @@ def classify_transcript(timing: str, segments: list, text_all: str,
       缺省＝能量数据不可得 → 跳过 ≤1s 门（C18 诚实退化：门数据缺失时
       不判放弃，交由三维置信与后续信号兜底）；
     - overlap_s 显式传入时优先于 speech_windows（调用方已实测口径）；
-    - language：多段模式由 runner 顶层 language 字段传递（非 ja → low）。
+    - language：多段模式由 runner 顶层 language 字段传递（非 ja → low）；
+    - speech_min_s：能量门阈值，缺省=owner 终裁值 SPEECH_MIN_SECONDS
+      （缺省行为零变化）；None＝能量门不参与判定（非「放行」语义，后续
+      判定链照走）——评测双读数参数化（D2026-1029-11 裁决①），仅评测
+      面使用，本模块仍不读配置。
     """
     segs = segments if isinstance(segments, list) else []
     if not segs or not (text_all or "").strip():
@@ -117,7 +122,8 @@ def classify_transcript(timing: str, segments: list, text_all: str,
                                      speech_windows.get(timing) or [])
     else:
         speech_s = None      # C18：能量门数据缺失，跳过（不静默判死）
-    if speech_s is not None and speech_s <= SPEECH_MIN_SECONDS:
+    if (speech_min_s is not None and speech_s is not None
+            and speech_s <= speech_min_s):
         return {"grade": "low",
                 "reasons": ["speech_le_1s",
                             f"speech_s={speech_s:.2f}"]}
