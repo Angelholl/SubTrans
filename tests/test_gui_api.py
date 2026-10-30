@@ -5300,6 +5300,144 @@ def test_encode_pairing_chain(gui_api_obj, tmp_path):
     assert gui_api_obj._resolve_video_for_subtitle(str(tmp_path / "vid2_final_cn.srt")) == ""
 
 
+# ---------------------------------------------------------------------------
+# 压制预检桥 encode_preflight：入队前一次性校验（不落队/不占互斥槽）。
+# 全程 mock 注入供给/探测/估算（不真调 ffmpeg/ffprobe、不碰真实子进程）。
+# ---------------------------------------------------------------------------
+
+def _install_preflight_stubs(gui_api_obj, monkeypatch, *, missing=(),
+                             ffprobe_path="ffprobe.exe", probe=None,
+                             speed=2.0, estimate=1234):
+    """供给/探测/估算/GPU 解析全打桩；返回 (supply, probe 调用记录)。"""
+    import subtransjav.refine.ffmpeg_supply as supply_mod
+    import subtransjav.refine.hardsub as hardsub_mod
+    import subtransjav.webview_gui.encode_queue as eq
+    supply = supply_mod.SupplyResult(
+        "ffmpeg.exe", ffprobe_path, {}, list(missing))
+    probe_calls: list = []
+
+    def _probe(ffprobe, video):
+        probe_calls.append((ffprobe, video))
+        return probe(ffprobe, video)
+
+    monkeypatch.setattr(supply_mod, "resolve_hardsub_ffmpeg",
+                        lambda *a, **k: supply)
+    monkeypatch.setattr(supply_mod, "probe_media", _probe)
+    monkeypatch.setattr(hardsub_mod, "speed_factor", lambda *a, **k: speed)
+    monkeypatch.setattr(eq, "estimate_output_bytes", lambda *a, **k: estimate)
+    monkeypatch.setattr(eq, "encode_active", lambda: False)
+    monkeypatch.setattr(gui_api_obj, "_resolve_gpu_for_preflight",
+                        lambda s, p: {"encoder": "h264_nvenc",
+                                      "reasons": ["stub"]})
+    return supply, probe_calls
+
+
+def test_encode_preflight_invalid_params_rejected(gui_api_obj):
+    """参数非法：_parse_encode_params 抛 ValueError → success=False 带原因，
+    不进入探测/估算（校验前置）。"""
+    r = gui_api_obj.encode_preflight(
+        [{"video_path": "v.mp4"}], {"video_format": "mpeg2"})
+    assert r["success"] is False and "视频格式" in r["error"]
+
+
+def test_encode_preflight_supply_missing_early_exit(gui_api_obj, tmp_path,
+                                                    monkeypatch):
+    """供给缺口：整批仅回存在性（不拼产物路径、不探测），supply_missing
+    原样透出供前端引导下载；gpu 解析走未就绪分支。"""
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"v")
+    sub = tmp_path / "v.srt"
+    sub.write_text("1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    _install_preflight_stubs(gui_api_obj, monkeypatch, missing=["缺 ffmpeg"])
+    r = gui_api_obj.encode_preflight(
+        [{"video_path": str(video), "subtitle_path": str(sub)}],
+        {"video_format": "h264"})
+    assert r["success"] is True
+    assert r["supply_missing"] == ["缺 ffmpeg"]
+    assert r["encode_running"] is False and r["total_eta_s"] == 0.0
+    item = r["items"][0]
+    assert item["video_exists"] is True and item["subtitle_exists"] is True
+    assert "out_path" not in item and "eta_s" not in item
+
+
+def test_encode_preflight_missing_video_skips_probe(gui_api_obj, tmp_path,
+                                                   monkeypatch):
+    """视频不存在（供给就绪）：存在性早退，不拼产物路径、不探测。"""
+    _supply, probe_calls = _install_preflight_stubs(
+        gui_api_obj, monkeypatch, probe=lambda p, v: None)
+    missing = tmp_path / "nope.mp4"
+    r = gui_api_obj.encode_preflight(
+        [{"video_path": str(missing)}], {"video_format": "h264"})
+    item = r["items"][0]
+    assert item["video_exists"] is False
+    assert "out_path" not in item
+    assert probe_calls == []
+
+
+def test_encode_preflight_probe_ok_eta_and_bytes(gui_api_obj, tmp_path,
+                                                monkeypatch):
+    """探测成功：out_path/overwrite/duration/音轨/eta/估算字节全量回填，
+    total_eta 累加；供给/探测均为注入值（断言只认 mock）。"""
+    import subtransjav.refine.ffmpeg_supply as supply_mod
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"v")
+    out = tmp_path / "v_hardsub.mp4"
+    out.write_bytes(b"old")            # 已存在 → overwrite=True
+    info = supply_mod.MediaInfo(duration_s=10.0, width=1920, height=1080,
+                                bit_rate_bps=4_000_000, has_audio=True,
+                                audio_codec="aac")
+    _supply, probe_calls = _install_preflight_stubs(
+        gui_api_obj, monkeypatch,
+        probe=lambda p, v: info, speed=2.5, estimate=777)
+    r = gui_api_obj.encode_preflight(
+        [{"video_path": str(video)}], {"video_format": "h264"})
+    assert probe_calls == [("ffprobe.exe", str(video))]
+    item = r["items"][0]
+    assert item["out_path"] == str(out) and item["overwrite"] is True
+    assert item["duration_s"] == 10.0
+    assert item["has_audio"] is True and item["audio_codec"] == "aac"
+    assert item["eta_s"] == 25.0
+    assert item["estimated_bytes"] == 777
+    assert r["total_eta_s"] == 25.0
+    assert r["gpu"] == {"encoder": "h264_nvenc", "reasons": ["stub"]}
+
+
+def test_encode_preflight_no_ffprobe_skips_probe(gui_api_obj, tmp_path,
+                                                monkeypatch):
+    """供给就绪但无 ffprobe：仍回产物路径/覆盖态，跳过探测（无 eta 字段）。"""
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"v")
+    _supply, probe_calls = _install_preflight_stubs(
+        gui_api_obj, monkeypatch, ffprobe_path="",
+        probe=lambda p, v: pytest.fail("无 ffprobe 不得探测"))
+    r = gui_api_obj.encode_preflight(
+        [{"video_path": str(video)}], {"video_format": "h264"})
+    item = r["items"][0]
+    assert item["out_path"] == str(tmp_path / "v_hardsub.mp4")
+    assert item["overwrite"] is False
+    assert "eta_s" not in item and "duration_s" not in item
+    assert probe_calls == [] and r["total_eta_s"] == 0.0
+
+
+def test_encode_preflight_probe_error_recorded(gui_api_obj, tmp_path,
+                                              monkeypatch):
+    """探测失败：FfprobeError 收敛为 item.probe_error（不抛、不计 eta），
+    其余条目照常返回。"""
+    import subtransjav.refine.ffmpeg_supply as supply_mod
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"v")
+
+    def _raise(ffprobe, path):
+        raise supply_mod.FfprobeError("坏媒体")
+
+    _install_preflight_stubs(gui_api_obj, monkeypatch, probe=_raise)
+    r = gui_api_obj.encode_preflight(
+        [{"video_path": str(video)}], {"video_format": "h264"})
+    item = r["items"][0]
+    assert item["probe_error"] == "坏媒体"
+    assert "eta_s" not in item and r["total_eta_s"] == 0.0
+
+
 def test_encode_presets_crud_and_cap(gui_api_obj, tmp_path, monkeypatch):
     """批2 预设：CRUD+上限 20+内置三档只读。"""
     import subtransjav.refine.config as cfg
@@ -6110,6 +6248,213 @@ def test_fullchain_cloud_provider_gate(gui_api_obj, monkeypatch, tmp_path,
     assert any("自动化未启动" in n for n in run.get("notices") or []), \
         "skipped 形态原因须落 last_run notices（D2026-1010-01 卡1）"
     assert gui_api_obj.fullchain_automation_status()["running"] is False
+
+
+# ---------------------------------------------------------------------------
+# 全链自动化状态机主体 _run_fullchain_automation 分支钉（直调，依赖全注入）：
+# 重入/解析异常/预热异常与跳过/导读缺失与校验失败/无可修/批失败/复验异常/
+# 整体失败。零真实子进程、零真实压制、零真实文件系统重活。
+# ---------------------------------------------------------------------------
+
+def _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path, *,
+                                  cfg=None, warm=None):
+    """链主体分支夹具：CONFIG_DIR 隔离 + 模型解析/预热/漏听段/压制开关
+    全替身（cfg 可为 dict 或 callable，便于注入异常）。"""
+    import subtransjav.refine.config as cfg_mod
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir(exist_ok=True)
+    monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(cfg_dir))
+    if cfg is None:
+        cfg = {"ok": True, "provider": "lmstudio", "model": "m1"}
+    monkeypatch.setattr(gui_api_obj, "_resolve_ai_model_config",
+                        cfg if callable(cfg) else (lambda *a, **k: cfg))
+    monkeypatch.setattr(gui_api_obj, "_warmup_resolve_current", lambda: warm)
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
+                        lambda m, p: {"success": True})
+    monkeypatch.setattr(gui_api_obj, "_run_fullchain_missed_stage",
+                        lambda ctx, run: None)
+    monkeypatch.setattr(gui_api_obj, "_encode_automation_enabled",
+                        lambda: False)
+    return cfg_dir
+
+
+def test_fullchain_automation_reentry_returns(gui_api_obj, monkeypatch,
+                                             tmp_path):
+    """入口重入判定：链已在飞 → 直接返回（不写快照、不复位在飞标志）。"""
+    gui_api_obj._init_ai_state()
+    cfg_dir = _install_fullchain_auto_stubs(gui_api_obj, monkeypatch,
+                                            tmp_path)
+    gui_api_obj._fullchain_running = True
+    try:
+        gui_api_obj._run_fullchain_automation({"files": {"ep01": "done"}})
+    finally:
+        gui_api_obj._fullchain_running = False
+    assert not (cfg_dir / "fullchain_last_run.json").exists(), \
+        "重入直接返回：不得写运行快照"
+
+
+def test_fullchain_automation_resolve_exception_skipped(gui_api_obj,
+                                                       monkeypatch, tmp_path):
+    """provider 解析抛异常：收敛为 cfg.ok=False 并落 skipped+原因+ended_at。"""
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("解析炸")
+
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path,
+                                  cfg=_boom)
+    gui_api_obj._run_fullchain_automation({"files": {}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "skipped"
+    assert "解析炸" in run["skip_reason"] and run["ended_at"]
+    assert any("自动化未启动" in n for n in run["notices"])
+
+
+def test_fullchain_automation_warmup_exception_continues(gui_api_obj,
+                                                        monkeypatch,
+                                                        tmp_path):
+    """链首预热抛异常：不阻断链（继续甄别/收尾），phase 仍 done。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path,
+                                  warm=("lmstudio", "m1"))
+
+    def _boom(_m, _p):
+        raise RuntimeError("预热炸")
+
+    monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model", _boom)
+    gui_api_obj._run_fullchain_automation({"files": {}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "done"
+    assert any("复验跳过" in n for n in run["notices"])
+
+
+def test_fullchain_automation_warmup_skip_notice(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """预热解析不可用（None）：通知「预热跳过」且链照常继续。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path,
+                                  warm=None)
+    gui_api_obj._run_fullchain_automation({"files": {}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert any("预热跳过" in n for n in run["notices"])
+    assert run["phase"] == "done"
+
+
+def test_fullchain_automation_no_guide_notice(gui_api_obj, monkeypatch,
+                                              tmp_path):
+    """done key 未解析到导读：诚实跳过（计数 files_done+1）并通知。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path)
+    monkeypatch.setattr(gui_api_obj, "_resolve_guide_for_done_key",
+                        lambda key: "")
+    gui_api_obj._run_fullchain_automation(
+        {"files": {"ep01": "done", "ep02": "error"}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["files_total"] == 1 and run["files_done"] == 1
+    assert any("未找到导读 json" in n for n in run["notices"])
+
+
+def test_fullchain_automation_guide_invalid_notice(gui_api_obj, monkeypatch,
+                                                   tmp_path):
+    """导读校验失败：跳过该文件（files_done+1）并通知原因。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path)
+    monkeypatch.setattr(gui_api_obj, "_resolve_guide_for_done_key",
+                        lambda key: str(tmp_path / "ep01_质量报告导读.json"))
+    monkeypatch.setattr(gui_api_obj, "_load_validated_guide",
+                        lambda p: ("", "", None, {"error": "导读损坏"}))
+    gui_api_obj._run_fullchain_automation({"files": {"ep01": "done"}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["files_done"] == 1
+    assert any("导读损坏" in n for n in run["notices"])
+
+
+def test_fullchain_automation_no_fixable_notice(gui_api_obj, monkeypatch,
+                                                tmp_path):
+    """甄别无 fixable 条目：通知跳过，不触批修复/不累计 pending。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path)
+    guide_path = str(tmp_path / "ep01_质量报告导读.json")
+    monkeypatch.setattr(gui_api_obj, "_resolve_guide_for_done_key",
+                        lambda key: guide_path)
+    monkeypatch.setattr(gui_api_obj, "_load_validated_guide",
+                        lambda p: (p, "ep01", {"items": []}, None))
+    monkeypatch.setattr(gui_api_obj, "_fullchain_fixable_entries",
+                        lambda p, s, g: [])
+    monkeypatch.setattr(gui_api_obj, "refine_batch_fix",
+                        lambda *a, **k: pytest.fail("无可修不得触批修复"))
+    gui_api_obj._run_fullchain_automation({"files": {"ep01": "done"}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["files_done"] == 1 and run["entries_pending"] == 0
+    assert any("无可自动修复条目" in n for n in run["notices"])
+
+
+def test_fullchain_automation_batch_exception_counts_failed(gui_api_obj,
+                                                            monkeypatch,
+                                                            tmp_path):
+    """单批抛异常：该批整体计失败（len(batch)），链继续不中断。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path)
+    guide_path = str(tmp_path / "ep01_质量报告导读.json")
+    monkeypatch.setattr(gui_api_obj, "_resolve_guide_for_done_key",
+                        lambda key: guide_path)
+    monkeypatch.setattr(gui_api_obj, "_load_validated_guide",
+                        lambda p: (p, "ep01", {"items": []}, None))
+    monkeypatch.setattr(gui_api_obj, "_fullchain_fixable_entries",
+                        lambda p, s, g: [{"index": 1}, {"index": 2}])
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("批炸")
+
+    monkeypatch.setattr(gui_api_obj, "refine_batch_fix", _boom)
+    gui_api_obj._run_fullchain_automation({"files": {"ep01": "done"}})
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "done"
+    assert run["entries_fixed"] == 0 and run["entries_failed"] == 2
+    assert any("失败 2 条" in n for n in run["notices"])
+
+
+def test_fullchain_automation_verify_exception_reported(gui_api_obj,
+                                                        monkeypatch,
+                                                        tmp_path):
+    """复验抛异常：如实计失败（不重试）并通知；from_fullchain=True 透传。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path)
+    guide_path = str(tmp_path / "ep01_质量报告导读.json")
+    (tmp_path / ("ep01" + TranslateAPI._AI_REPORT_SUFFIX)).write_text(
+        "x", encoding="utf-8")
+    monkeypatch.setattr(gui_api_obj, "_resolve_guide_for_done_key",
+                        lambda key: guide_path)
+    monkeypatch.setattr(gui_api_obj, "_load_validated_guide",
+                        lambda p: (p, "ep01", {"items": []}, None))
+    monkeypatch.setattr(gui_api_obj, "_fullchain_fixable_entries",
+                        lambda p, s, g: [])
+    calls: list = []
+
+    def _boom(*a, **k):
+        calls.append((a, k))
+        raise RuntimeError("复验炸")
+
+    monkeypatch.setattr(gui_api_obj, "refine_ai_analyze", _boom)
+    gui_api_obj._run_fullchain_automation({"files": {"ep01": "done"}})
+    assert calls and calls[0][1].get("from_fullchain") is True
+    run = gui_api_obj._fullchain_read_last_run()
+    assert run["phase"] == "done"
+    assert any("复验失败" in n for n in run["notices"])
+
+
+def test_fullchain_automation_outer_exception_marks_failed(gui_api_obj,
+                                                           monkeypatch,
+                                                           tmp_path):
+    """链体异常兜底：phase=failed + ended_at 补写 + 在飞标志复位。"""
+    _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path)
+    seen: list = []
+    state = {"n": 0}
+
+    def _write(run):
+        state["n"] += 1
+        seen.append(dict(run))
+        if state["n"] == 1:
+            raise RuntimeError("写快照炸")
+
+    monkeypatch.setattr(gui_api_obj, "_fullchain_write_last_run", _write)
+    gui_api_obj._run_fullchain_automation({"files": {}})
+    assert seen and seen[-1]["phase"] == "failed"
+    assert seen[-1]["ended_at"]
+    with gui_api_obj._ai_lock:
+        assert gui_api_obj._fullchain_running is False
 
 
 # ---------------- D2026-1010-01 卡1：done key basename → 会话路径快照解析 ----------------
@@ -7173,6 +7518,223 @@ def test_fullchain_missed_c18_no_media(gui_api_obj, monkeypatch, tmp_path,
     assert run["missed_skipped"] == 1
     assert detect_calls == [] and batch_calls == []
     assert any("无音频对照" in r.message for r in caplog.records)
+
+
+def test_fullchain_missed_invalid_guide_notice(gui_api_obj, monkeypatch,
+                                               tmp_path, caplog):
+    """导读校验失败：通知「漏听段跳过」+原因，零计数变化、零后续探测。"""
+    import logging
+
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(gui_api_obj, "_load_validated_guide",
+                        lambda p: ("", "", None, {"error": "导读损坏"}))
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(tmp_path / "ep01_质量报告导读.json"),
+              "p": "", "stem": _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 0
+    assert any("漏听段跳过" in r.message and "导读损坏" in r.message
+               for r in caplog.records)
+
+
+def test_fullchain_missed_detect_failure_c18_degrade(gui_api_obj, monkeypatch,
+                                                     tmp_path, caplog):
+    """语音窗口检测抛异常：诚实退化（C18）——全部跳过并通知，不落盘。"""
+    import logging
+
+    import subtransjav.refine.asr_env as asr_mod
+    import subtransjav.refine.audio_detect as ad_mod
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path)
+
+    def _boom(_media, _timings):
+        raise RuntimeError("探测炸")
+
+    monkeypatch.setattr(ad_mod, "detect_speech_windows", _boom)
+    monkeypatch.setattr(asr_mod, "batch_transcribe_clips",
+                        lambda m, t, **k: [{"timing": x, "ok": True,
+                                            "text": "", "segments": []}
+                                           for x in t])
+    monkeypatch.setattr(asr_mod, "cleanup_clips", lambda *a, **k: 0)
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide),
+              "stem": _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert any("检测/转写失败" in r.message for r in caplog.records)
+
+
+def test_fullchain_missed_batch_failure_c18_degrade(gui_api_obj, monkeypatch,
+                                                    tmp_path, caplog):
+    """批量转写抛异常：转写项全部 ok=False → 诚实退化（C18）全部跳过。"""
+    import logging
+
+    import subtransjav.refine.asr_env as asr_mod
+    import subtransjav.refine.audio_detect as ad_mod
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path)
+    monkeypatch.setattr(ad_mod, "detect_speech_windows",
+                        lambda m, t: {x: [(5.0, 8.0)] for x in t})
+
+    def _boom(_media, _timings, **_kw):
+        raise RuntimeError("转写炸")
+
+    monkeypatch.setattr(asr_mod, "batch_transcribe_clips", _boom)
+    monkeypatch.setattr(asr_mod, "cleanup_clips", lambda *a, **k: 0)
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide),
+              "stem": _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert any("检测/转写失败" in r.message for r in caplog.records)
+
+
+def test_fullchain_missed_cleanup_failure_tolerated(gui_api_obj, monkeypatch,
+                                                    tmp_path):
+    """切片清理抛异常：仅记日志，不阻断后续置信门/门控分叉。"""
+    import subtransjav.refine.asr_env as asr_mod
+    import subtransjav.refine.config as cfg
+    from subtransjav.refine.v2_outputs import final_stem
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path)
+    _install_missed_stubs(monkeypatch)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("清理炸")
+
+    monkeypatch.setattr(asr_mod, "cleanup_clips", _boom)
+    before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+        encoding="utf-8")
+    run = {"missed_skipped": 0}
+    gui_api_obj._run_fullchain_missed_stage(
+        [{"guide_path": str(guide), "p": str(guide),
+          "stem": _BF_GUIDE_STEM}], run)
+    # 门控缺省关：high 也放弃 → 计数 1，终稿零写入（清理失败不改变分叉）
+    assert run["missed_skipped"] == 1
+    assert (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+        encoding="utf-8") == before
+
+
+def test_fullchain_missed_item_skips_empty_timing_and_bad_transcript(
+        gui_api_obj, monkeypatch, tmp_path):
+    """逐条放弃：空 timing 与转写失败各计 1，high 条目按门控缺省关放弃。"""
+    import subtransjav.refine.asr_env as asr_mod
+    import subtransjav.refine.audio_detect as ad_mod
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    t_bad = "00:00:20,000 --> 00:00:23,000"
+    guide = _make_missed_env(tmp_path, items=[
+        _missed_item(9, _MT), _missed_item(10, t_bad),
+        _missed_item(11, "")])
+    monkeypatch.setattr(ad_mod, "detect_speech_windows",
+                        lambda m, t: {x: [(5.0, 8.0)] for x in t})
+
+    def _batch(_media, timings, **_kw):
+        return [{"timing": t, "ok": t != t_bad,
+                 "text": _MTEXT if t != t_bad else "",
+                 "segments": [{"no_speech_prob": 0.0,
+                               "avg_logprob": -0.1,
+                               "compression_ratio": 1.0}]}
+                for t in timings]
+
+    monkeypatch.setattr(asr_mod, "batch_transcribe_clips", _batch)
+    monkeypatch.setattr(asr_mod, "cleanup_clips", lambda *a, **k: 0)
+    run = {"missed_skipped": 0}
+    gui_api_obj._run_fullchain_missed_stage(
+        [{"guide_path": str(guide), "p": str(guide),
+          "stem": _BF_GUIDE_STEM}], run)
+    # 空 timing 1 + 转写失败 1 + 门控缺省关放弃 high 1
+    assert run["missed_skipped"] == 3
+
+
+def test_fullchain_missed_final_missing_abandons(gui_api_obj, monkeypatch,
+                                                 tmp_path, caplog):
+    """门控开但终稿缺失：自动补行整批放弃（零写入）并通知放弃数。"""
+    import logging
+
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path, final=False)
+    _install_missed_stubs(monkeypatch)
+    (tmp_path / "fullchain_c22.json").write_text(
+        json.dumps({"enabled": True}), encoding="utf-8")
+    run = {"missed_skipped": 0}
+    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        gui_api_obj._run_fullchain_missed_stage(
+            [{"guide_path": str(guide), "p": str(guide),
+              "stem": _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert any("终稿缺失" in r.message and "放弃 1 条" in r.message
+               for r in caplog.records)
+
+
+def test_fullchain_missed_write_failure_abandons(gui_api_obj, monkeypatch,
+                                                 tmp_path):
+    """台账写失败：该文件整体放弃——终稿/台账零落盘，计数如实。"""
+    import subtransjav.refine.action_retranslate as art
+    import subtransjav.refine.config as cfg
+    from subtransjav.refine.v2_outputs import final_stem
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path)
+    _install_missed_stubs(monkeypatch)
+    (tmp_path / "fullchain_c22.json").write_text(
+        json.dumps({"enabled": True}), encoding="utf-8")
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("台账炸")
+
+    monkeypatch.setattr(art, "_append_ledger", _boom)
+    before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+        encoding="utf-8")
+    run = {"missed_skipped": 0}
+    gui_api_obj._run_fullchain_missed_stage(
+        [{"guide_path": str(guide), "p": str(guide),
+          "stem": _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 1
+    assert (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+        encoding="utf-8") == before
+    assert not (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").exists()
+
+
+def test_fullchain_missed_extras_default_and_write_failure(gui_api_obj,
+                                                           monkeypatch,
+                                                           tmp_path):
+    """guide 无 extras 键时补行标记走默认 {}；导读写回失败仅记日志，
+    终稿/台账已落盘（写序契约不回退）。"""
+    import subtransjav.refine.config as cfg
+    import subtransjav.refine.fs_utils as fs_mod
+    from subtransjav.refine.filters import parse_srt
+    from subtransjav.refine.v2_outputs import final_stem
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    guide = _make_missed_env(tmp_path)          # 无 extras 键
+    _install_missed_stubs(monkeypatch)
+    (tmp_path / "fullchain_c22.json").write_text(
+        json.dumps({"enabled": True}), encoding="utf-8")
+    real_atomic = fs_mod._atomic_write_text
+
+    def _atomic(path, text, **kw):
+        if Path(path).name == guide.name:
+            raise RuntimeError("导读写炸")
+        return real_atomic(path, text, **kw)
+
+    monkeypatch.setattr(fs_mod, "_atomic_write_text", _atomic)
+    run = {"missed_skipped": 0}
+    gui_api_obj._run_fullchain_missed_stage(
+        [{"guide_path": str(guide), "p": str(guide),
+          "stem": _BF_GUIDE_STEM}], run)
+    assert run["missed_skipped"] == 0
+    final = parse_srt(
+        (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
+            encoding="utf-8"))
+    assert len(final) == 3                     # 终稿已补行
+    assert (tmp_path / f"{_BF_GUIDE_STEM}_重翻记录.json").is_file()
+    assert "extras" not in json.loads(guide.read_text(encoding="utf-8"))
 
 
 def test_fullchain_rollback_delete_clears_extras(gui_api_obj, tmp_path):
