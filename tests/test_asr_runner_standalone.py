@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import subprocess
+import sys
 
 _RUNNER = (pathlib.Path(__file__).resolve().parent.parent
            / "subtransjav" / "refine" / "asr_runner.py")
@@ -36,6 +38,39 @@ def test_runner_package_form_same_function():
     """包形态装载结果=包内 line_breaker.break_segments（同源不漂移）。"""
     from subtransjav.refine import asr_runner, line_breaker
     assert asr_runner._load_break_segments() is line_breaker.break_segments
+
+
+def test_runner_standalone_loads_pass_merge(tmp_path):
+    """独立脚本直调形态下双 pass 合并件可装载（卡C §七 勘误裁决 a）。
+
+    子进程 ``-I`` 隔离＋cwd=临时目录：仓库根不入 sys.path，等价运行时
+    venv 脚本直调形态（无包上下文、项目包不可导入）——此时只允许同目录
+    路径回退装载 pass_merge.py；回退缺件=双 pass 在 frozen/直调形态恒
+    不可用（明示报错，不静默）。
+    """
+    code = (
+        "import importlib.util, pathlib, sys\n"
+        "p = pathlib.Path(sys.argv[1])\n"
+        "s = importlib.util.spec_from_file_location('_ct2_runner_probe', p)\n"
+        "m = importlib.util.module_from_spec(s)\n"
+        "s.loader.exec_module(m)\n"
+        "assert 'subtransjav' not in sys.modules, '包上下文泄漏'\n"
+        "pm = m._load_pass_merge()\n"
+        "assert 'subtransjav' not in sys.modules, '包上下文泄漏'\n"
+        "assert callable(getattr(pm, 'merge_passes', None)), 'merge_passes 缺失'\n"
+        "assert getattr(pm, 'DUALPASS_SCHEMA', '') == "
+        "'subtransjav.ct2.dualpass/1'\n"
+        "assert pathlib.Path(pm.__file__).name == 'pass_merge.py'\n"
+    )
+    subprocess.run([sys.executable, "-I", "-c", code, str(_RUNNER)],
+                   cwd=str(tmp_path), check=True, capture_output=True,
+                   text=True, timeout=60)
+
+
+def test_runner_package_form_pass_merge_same_module():
+    """包形态装载结果=包内 pass_merge（同源不漂移，仍走相对导入）。"""
+    from subtransjav.refine import asr_runner, pass_merge
+    assert asr_runner._load_pass_merge() is pass_merge
 
 
 def test_runner_wiring_line_break_default_on():
@@ -77,6 +112,16 @@ def test_packaging_spec_bundles_line_breaker_alongside_runner():
             / "packaging" / "SubTrans.spec").read_text(encoding="utf-8")
     assert "line_breaker.py" in spec, \
         "SubTrans.spec 未随包 line_breaker.py——frozen 断行静默失效复发"
+
+
+def test_packaging_spec_bundles_pass_merge_alongside_runner():
+    """随包钉（卡C §七 勘误）：spec 随包 asr_runner.py 时必须同目录随包
+    pass_merge.py——直调形态按同目录路径回退装载，缺件=frozen 双 pass
+    不可用（明示报错，不静默）。"""
+    spec = (pathlib.Path(__file__).resolve().parent.parent
+            / "packaging" / "SubTrans.spec").read_text(encoding="utf-8")
+    assert "pass_merge.py" in spec, \
+        "SubTrans.spec 未随包 pass_merge.py——frozen 双 pass 不可用复发"
 
 
 def test_line_break_failure_falls_back_with_stderr_note(capsys):
