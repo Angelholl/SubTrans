@@ -335,3 +335,77 @@ class TestGpuPatchContract:
         assert asr_runtime.GPU_PATCH_ZIP_URL == ""
         assert len(asr_runtime.GPU_PATCH_ZIP_SHA256) == 64
         assert asr_runtime.GPU_PATCH_ZIP_BYTES > 0
+
+    def test_cuda_probe_goes_through_runtime_subprocess(self, isolated_env,
+                                                        monkeypatch):
+        """打包态恒灰回归（3.1.1 修，D2026-1030-03 点亮链发现）：CUDA 探测必须
+        经自管运行时子进程取真值，不再依赖应用进程可 import ctranslate2——
+        3.1.0 引擎脱钩后 ct2 非项目依赖，打包面不含它，原进程内探测恒 0。"""
+        monkeypatch.setattr(asr_runtime, "_cuda_probe_cache", None)
+        _runtime_skeleton(isolated_env)
+        captured: dict = {}
+
+        class _Proc:
+            returncode = 0
+            stdout = "1\n"
+            stderr = ""
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return _Proc()
+
+        monkeypatch.setattr(asr_runtime.subprocess, "run", fake_run)
+        assert asr_runtime.gpu_patch_status()["cuda_visible"] is True
+        assert captured["cmd"][0] == _norm(
+            str(isolated_env / "python" / "python.exe"))
+        assert "get_cuda_device_count" in captured["cmd"][2]
+
+    def test_cuda_probe_cached_across_status_polls(self, isolated_env,
+                                                   monkeypatch):
+        """GUI 引擎页 1s 轮询不得反复起进程：成功值按 TTL 缓存。"""
+        monkeypatch.setattr(asr_runtime, "_cuda_probe_cache", None)
+        _runtime_skeleton(isolated_env)
+        calls: list[int] = []
+
+        class _Proc:
+            returncode = 0
+            stdout = "2\n"
+            stderr = ""
+
+        def fake_run(cmd, **kwargs):
+            calls.append(1)
+            return _Proc()
+
+        monkeypatch.setattr(asr_runtime.subprocess, "run", fake_run)
+        assert asr_runtime.cuda_device_count() == 2
+        assert asr_runtime.cuda_device_count() == 2
+        assert len(calls) == 1
+
+    def test_cuda_probe_no_spawn_and_zero_without_runtime(self, isolated_env,
+                                                          monkeypatch):
+        """运行时未装＝不起探测进程、不缓存（install 完成即可探到真值）。"""
+        monkeypatch.setattr(asr_runtime, "_cuda_probe_cache", None)
+
+        def fake_run(cmd, **kwargs):
+            raise AssertionError("运行时未装不得起探测进程")
+
+        monkeypatch.setattr(asr_runtime.subprocess, "run", fake_run)
+        assert asr_runtime.cuda_device_count() == 0
+        assert asr_runtime._cuda_probe_cache is None
+
+    def test_cuda_probe_failure_degrades_to_zero(self, isolated_env,
+                                                 monkeypatch):
+        """探测失败（rc≠0/输出不可解析）＝0 不抛（探测面永不抛承诺），
+        且失败按短 TTL 缓存后重试。"""
+        monkeypatch.setattr(asr_runtime, "_cuda_probe_cache", None)
+        _runtime_skeleton(isolated_env)
+
+        class _Proc:
+            returncode = 1
+            stdout = ""
+            stderr = "ModuleNotFoundError: No module named 'ctranslate2'"
+
+        monkeypatch.setattr(asr_runtime.subprocess, "run",
+                            lambda cmd, **kw: _Proc())
+        assert asr_runtime.cuda_device_count() == 0
+        assert asr_runtime._cuda_probe_cache is not None
