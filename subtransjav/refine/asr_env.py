@@ -186,6 +186,64 @@ def _run_transcription_ct2(clip_path: str, language: str,
             os.unlink(tmp_srt)
 
 
+def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
+                            passes: int = 1, language: str = "ja",
+                            timeout: int = 0) -> dict:
+    """媒体整片→源文 SRT（3.2.0 件A 产品入口，D2026-1029-02 拍板②）。
+
+    最小形态、与双 pass 编排解耦：只做就绪判定＋runner 子进程直调＋
+    stdout JSON 契约回读（复用同一条 runner 链，不新起执行链）。
+    ``passes=1`` 缺省与现状单 pass 同参（零行为变化）；``passes=2`` 透传
+    ``--passes 2``（中间件与 dualpass sidecar 由 runner 落盘）。
+
+    返回 runner JSON 契约（ok/srt/segments/...）；失败带 error（不抛）。
+    """
+    from . import asr_runtime
+    if not _ct2_ready():
+        return {"ok": False, "srt": "",
+                "error": "转写引擎未安装（CT2 唯一引擎，首次使用需安装）——"
+                         "python -m subtransjav.refine.asr_runtime install，"
+                         "或在引擎页操作"}
+    if not media_path or not os.path.isfile(media_path):
+        return {"ok": False, "srt": "",
+                "error": "媒体文件不存在: " + str(media_path)}
+    model_dir = asr_runtime.resolve_ct2_model_dir(_CT2_DEFAULT_MODEL)
+    if not model_dir:
+        return {"ok": False, "srt": "",
+                "error": "ct2 模型未落位（先经引擎页/CLI 下载模型件）"}
+    out = srt_out or (os.path.splitext(media_path)[0] + ".srt")
+    cmd = asr_runtime.ct2_runner_command(media_path, out,
+                                         model_dir=model_dir,
+                                         model=_CT2_DEFAULT_MODEL)
+    if int(passes) != 1:
+        cmd += ["--passes", str(int(passes))]
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    gpd = asr_runtime.gpu_patch_dir()
+    if not asr_runtime.gpu_patch_missing_dlls():
+        env["PATH"] = gpd + os.pathsep + env.get("PATH", "")
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, encoding="utf-8", errors="replace",
+            timeout=timeout or None, cwd=str(paths.app_root()), env=env,
+            creationflags=CREATE_NO_WINDOW)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"ok": False, "srt": "", "error": f"ct2 子进程失败: {e}"}
+    for line in (proc.stdout or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            payload = json.loads(line)
+        except ValueError:
+            continue
+        if payload.get("ok"):
+            return payload
+        return {"ok": False, "srt": "",
+                "error": str(payload.get("error") or "ct2 转写失败")}
+    return {"ok": False, "srt": "",
+            "error": f"ct2 运行器无有效输出（rc={proc.returncode}）"}
+
+
 def run_transcription(clip_path: str, asr_python: str = "",
                       model: str = "large-v2", language: str = "ja",
                       timeout: int = 300) -> dict:

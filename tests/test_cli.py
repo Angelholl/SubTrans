@@ -662,3 +662,76 @@ def test_cli_asr_flags_absent_no_warning(capsys):
     rc = main(["--where"])
     assert rc == 0
     assert "已退役" not in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# 3.2.0 件A（D2026-1029-02 拍板②）：--transcribe-media 媒体直转接线
+# ---------------------------------------------------------------------------
+
+def test_cli_transcribe_media_not_ready_errors(tmp_path, monkeypatch, capsys):
+    """引擎未就绪 → 明示报错（提示安装链路）＋退出码非 0。"""
+    from subtransjav.refine import asr_env
+    monkeypatch.setattr(asr_env, "_ct2_ready", lambda: False)
+    media = tmp_path / "a.mp4"
+    media.write_bytes(b"x")
+    rc = main(["--transcribe-media", str(media)])
+    assert rc != 0
+    out = capsys.readouterr().out
+    assert "引擎未安装" in out and "asr_runtime install" in out
+
+
+def test_cli_transcribe_media_ready_passes_params(tmp_path, monkeypatch,
+                                                  capsys):
+    """就绪分支：--passes/--media/--srt-out 参数透传 runner 子进程。"""
+    import types as _types
+
+    from subtransjav.refine import asr_env, asr_runtime
+    media = tmp_path / "a.mp4"
+    media.write_bytes(b"x")
+    srt_out = tmp_path / "out" / "a.srt"
+    captured = {}
+
+    def _fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        return _types.SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps({"ok": True, "srt": str(srt_out)}) + "\n",
+            stderr="")
+
+    monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
+    monkeypatch.setattr(asr_runtime, "resolve_ct2_model_dir",
+                        lambda model: str(tmp_path / "model"))
+    monkeypatch.setattr(asr_env.subprocess, "run", _fake_run)
+    rc = main(["--transcribe-media", str(media),
+               "--transcribe-srt-out", str(srt_out), "--passes", "2"])
+    assert rc == 0
+    cmd = captured["cmd"]
+    assert "--passes" in cmd and cmd[cmd.index("--passes") + 1] == "2"
+    assert "--media" in cmd and str(media) in cmd
+    assert "--srt-out" in cmd and str(srt_out) in cmd
+    assert "✅" in capsys.readouterr().out
+
+
+def test_cli_transcribe_media_default_srt_out_from_media(tmp_path,
+                                                         monkeypatch):
+    """缺省输出路径=媒体同目录同名 .srt；单 pass 不加 --passes 旗标。"""
+    import types as _types
+
+    from subtransjav.refine import asr_env, asr_runtime
+    media = tmp_path / "a.mp4"
+    media.write_bytes(b"x")
+    captured = {}
+
+    def _fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        return _types.SimpleNamespace(
+            returncode=0, stdout='{"ok": true, "srt": "x"}\n', stderr="")
+
+    monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
+    monkeypatch.setattr(asr_runtime, "resolve_ct2_model_dir",
+                        lambda model: str(tmp_path / "model"))
+    monkeypatch.setattr(asr_env.subprocess, "run", _fake_run)
+    assert main(["--transcribe-media", str(media)]) == 0
+    cmd = captured["cmd"]
+    assert cmd[cmd.index("--srt-out") + 1] == str(tmp_path / "a.srt")
+    assert "--passes" not in cmd
