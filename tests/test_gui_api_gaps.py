@@ -484,3 +484,182 @@ def test_refine_review_pick_srt_cancelled(gui_api_obj, monkeypatch):
     r = gui_api_obj.refine_review_pick_srt()
     assert r["success"] is False
     assert r["cancelled"] is True
+
+
+# ---------------------------------------------------------------------------
+# C 组：子进程型端点（补卡7；桩内部安装/下载调用，不真起进程不真写网络）
+# ---------------------------------------------------------------------------
+
+def _capture_threads(monkeypatch, captured):
+    """打桩 ``threading.Thread``：只记录参数，不真起线程。"""
+    class FakeThread:
+        def __init__(self, target=None, name=None, daemon=None, args=(), kwargs=None):
+            captured.append({"target": target, "name": name,
+                             "daemon": daemon, "args": args})
+        def start(self):
+            return None
+
+    monkeypatch.setattr(api_mod.threading, "Thread", FakeThread)
+
+
+def test_refine_ct2_install_started(gui_api_obj, monkeypatch):
+    """api.py:1640 refine_ct2_install：started=True 透传成功并带 provider。"""
+    from subtransjav.refine import asr_runtime
+    seen = []
+
+    def _fake(provider):
+        seen.append(provider)
+        return {"started": True, "provider": provider}
+
+    monkeypatch.setattr(asr_runtime, "start_install", _fake)
+    r = gui_api_obj.refine_ct2_install("zip")
+    assert r == {"success": True, "started": True, "provider": "zip"}
+    assert seen == ["zip"]
+
+
+def test_refine_ct2_install_already_running(gui_api_obj, monkeypatch):
+    """api.py:1640 refine_ct2_install：重复启动被拒，reason 原样透传。"""
+    from subtransjav.refine import asr_runtime
+    monkeypatch.setattr(asr_runtime, "start_install",
+                        lambda p: {"started": False, "reason": "已有 ct2 安装任务在跑"})
+    r = gui_api_obj.refine_ct2_install("auto")
+    assert r["success"] is False
+    assert r["started"] is False
+    assert r["reason"] == "已有 ct2 安装任务在跑"
+
+
+def test_refine_ct2_install_invalid_provider_short_circuits(gui_api_obj, monkeypatch):
+    """api.py:1640 refine_ct2_install：非法 provider 前置拒绝，不调安装。"""
+    from subtransjav.refine import asr_runtime
+    seen = []
+    monkeypatch.setattr(asr_runtime, "start_install",
+                        lambda p: seen.append(p) or {"started": True})
+    r = gui_api_obj.refine_ct2_install("bogus")
+    assert r == {"success": False, "error": "非法 provider: bogus"}
+    assert seen == []
+
+
+def test_refine_ct2_install_internal_error(gui_api_obj, monkeypatch):
+    """api.py:1640 refine_ct2_install：内部异常降级为结构化失败。"""
+    from subtransjav.refine import asr_runtime
+
+    def _boom(provider):
+        raise RuntimeError("安装入口炸")
+
+    monkeypatch.setattr(asr_runtime, "start_install", _boom)
+    r = gui_api_obj.refine_ct2_install()
+    assert r["success"] is False
+    assert "安装入口炸" in r["error"]
+
+
+def test_refine_ct2_gpu_install_started(gui_api_obj, monkeypatch):
+    """api.py:1628 refine_ct2_gpu_install：started=True 透传成功。"""
+    from subtransjav.refine import asr_runtime
+    monkeypatch.setattr(asr_runtime, "start_gpu_patch_install",
+                        lambda: {"started": True})
+    assert gui_api_obj.refine_ct2_gpu_install() == {"success": True, "started": True}
+
+
+def test_refine_ct2_gpu_install_precheck_blocked(gui_api_obj, monkeypatch):
+    """api.py:1628 refine_ct2_gpu_install：前置拦截（未装运行时）透传 reason。"""
+    from subtransjav.refine import asr_runtime
+    monkeypatch.setattr(asr_runtime, "start_gpu_patch_install",
+                        lambda: {"started": False, "reason": "CT2 运行时未安装"})
+    r = gui_api_obj.refine_ct2_gpu_install()
+    assert r["success"] is False
+    assert r["started"] is False
+    assert r["reason"] == "CT2 运行时未安装"
+
+
+def test_refine_ct2_gpu_install_internal_error(gui_api_obj, monkeypatch):
+    """api.py:1628 refine_ct2_gpu_install：内部异常降级为结构化失败。"""
+    from subtransjav.refine import asr_runtime
+
+    def _boom():
+        raise RuntimeError("补丁安装入口炸")
+
+    monkeypatch.setattr(asr_runtime, "start_gpu_patch_install", _boom)
+    r = gui_api_obj.refine_ct2_gpu_install()
+    assert r["success"] is False
+    assert "补丁安装入口炸" in r["error"]
+
+
+def test_ffmpeg_supply_download_starts_worker(gui_api_obj, monkeypatch):
+    """api.py:5736 ffmpeg_supply_download：置 busy + downloading，daemon 线程发起。"""
+    captured = []
+    _capture_threads(monkeypatch, captured)
+    r = gui_api_obj.ffmpeg_supply_download()
+    assert r == {"success": True}
+    assert gui_api_obj._supply_busy is True
+    assert gui_api_obj._supply_state["phase"] == "downloading"
+    assert gui_api_obj._supply_state["received"] == 0
+    assert gui_api_obj._supply_state["total"] == 0
+    assert len(captured) == 1
+    assert captured[0]["name"] == "ffmpeg-supply-download"
+    assert captured[0]["daemon"] is True
+
+
+def test_ffmpeg_supply_download_rejects_duplicate(gui_api_obj):
+    """api.py:5736 ffmpeg_supply_download：busy 时重复发起结构化拒绝。"""
+    gui_api_obj._supply_busy = True
+    r = gui_api_obj.ffmpeg_supply_download()
+    assert r == {"success": False, "error": "ffmpeg 下载已在进行中"}
+
+
+def test_ffmpeg_supply_download_worker_completes(gui_api_obj, monkeypatch, tmp_path):
+    """api.py:5736 后台 worker：下载完成置 done、回进度并清 busy。"""
+    captured = []
+    _capture_threads(monkeypatch, captured)
+    from subtransjav import paths
+    from subtransjav.refine import ffmpeg_supply
+    calls = []
+
+    def _fake_download(root, progress_cb=None, stop_event=None):
+        calls.append((root, stop_event))
+        progress_cb(5, 10)
+
+    class FakeQueue:
+        def __init__(self):
+            self.reset_calls = 0
+
+        def reset_supply(self):
+            self.reset_calls += 1
+
+    queue = FakeQueue()
+    monkeypatch.setattr(ffmpeg_supply, "download_full_variant", _fake_download)
+    monkeypatch.setattr(paths, "data_root", lambda: tmp_path)
+    monkeypatch.setattr(gui_api_obj, "_encode_queue", lambda: queue)
+    gui_api_obj.ffmpeg_supply_download()
+    captured[0]["target"]()
+    assert calls[0][0] == str(tmp_path)
+    assert gui_api_obj._supply_state["phase"] == "done"
+    assert gui_api_obj._supply_state["received"] == 5
+    assert gui_api_obj._supply_busy is False
+    assert queue.reset_calls == 1
+
+
+def test_ffmpeg_supply_download_worker_failure(gui_api_obj, monkeypatch, tmp_path):
+    """api.py:5736 后台 worker：下载异常置 failed 并保留错误文本。"""
+    captured = []
+    _capture_threads(monkeypatch, captured)
+    from subtransjav import paths
+    from subtransjav.refine import ffmpeg_supply
+
+    def _boom(root, progress_cb=None, stop_event=None):
+        raise RuntimeError("网络断")
+
+    monkeypatch.setattr(ffmpeg_supply, "download_full_variant", _boom)
+    monkeypatch.setattr(paths, "data_root", lambda: tmp_path)
+    gui_api_obj.ffmpeg_supply_download()
+    captured[0]["target"]()
+    assert gui_api_obj._supply_state["phase"] == "failed"
+    assert gui_api_obj._supply_state["error"] == "网络断"
+    assert gui_api_obj._supply_busy is False
+
+
+def test_ffmpeg_supply_stop_sets_active_event(gui_api_obj):
+    """api.py:5770 ffmpeg_supply_stop：进行中下载置停止事件并返回成功。"""
+    event = api_mod.threading.Event()
+    gui_api_obj._supply_stop = event
+    assert gui_api_obj.ffmpeg_supply_stop() == {"success": True}
+    assert event.is_set()
