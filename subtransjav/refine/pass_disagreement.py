@@ -16,6 +16,7 @@ import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 from .filters import parse_srt
 
@@ -189,12 +190,13 @@ def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, na, nb).ratio()
 
 
-def _best_overlap(span: tuple[float, float], entries: list) -> dict | None:
+def _best_overlap(span: tuple[float, float],
+                  entries: list[dict[str, Any]]) -> dict[str, Any] | None:
     """在 entries 中找与 span 时间区间正重叠最大者；无重叠/负坐标返回 None。"""
     s0, e0 = span
     if s0 < 0 or e0 < 0:
         return None
-    best = None
+    best: dict[str, Any] | None = None
     best_overlap = 0.0
     for e in entries:
         s1, e1 = _timing_span(e["timing"])
@@ -240,7 +242,7 @@ def judge_artifact(iou: float, offset: float, text1: str, text2: str,
             and similarity < REVIEW_STRICT_THRESHOLD)
 
 
-def collect_disagreement(in_path: str) -> dict | None:
+def collect_disagreement(in_path: str) -> dict[str, Any] | None:
     """采集 in_path（合并产物）中双引擎分歧行。
 
     无 pass1/pass2 兄弟文件时返回 None；否则返回
