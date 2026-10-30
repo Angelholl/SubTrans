@@ -241,6 +241,8 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     # 断行器接入（3.2.1，D2026-1028-03）：词级时间戳+CPS+停顿确定性切分，
     # 缺省开（社区实证 CT2 长行问题）；--no-line-break 关闭走原生段。
     # sidecar 始终保留原始词级数据（断行器输入可回放）。
+    # 三面契约：stdout/sidecar 恒为原始段，断行仅入 SRT；SRT 真消费者=
+    # 媒体→源文 SRT 入口（3.2.0 件A）。
     srt_segments = _apply_line_break(segs, line_break)
     out_path.write_text(_segments_to_srt(srt_segments), encoding="utf-8", newline="\n")
     sidecar = {"schema": "subtransjav.ct2.words/1", "language": info.language,
@@ -259,7 +261,14 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
 
 def _apply_line_break(segs: list, line_break: bool) -> list:
     """断行应用＋故障留痕回退（stderr 人话登记，不进机器契约）。"""
-    if not line_break or not any(len(s.get("words") or []) >= 2 for s in segs):
+    if not line_break:
+        return segs
+    if not any(len(s.get("words") or []) >= 2 for s in segs):
+        # 词级缺失=降级而非用户意图：必须留痕（ct2 词级输出异常时
+        # 用户不知情，2026-10-31 卡A 可见性收尾）。
+        with contextlib.suppress(Exception):
+            print("[asr_runner] 词级缺失→断行跳过，SRT 保持原生长行",
+                  file=sys.stderr)
         return segs
     try:
         return _load_break_segments()(segs)
