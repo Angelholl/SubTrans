@@ -8,7 +8,10 @@ runner 在 ct2 运行时解释器下以脚本直调执行（asr_env._runner_scri
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
+import sys
+import types
 
 _RUNNER = (pathlib.Path(__file__).resolve().parent.parent
            / "subtransjav" / "refine" / "asr_runner.py")
@@ -95,6 +98,88 @@ def test_line_break_failure_falls_back_with_stderr_note(capsys):
     assert "断行器失败" in err and "line_breaker missing" in err
     # 开关关/无词级：完全不触碰断行器（零行为面）
     assert mod._apply_line_break(segs, False) == segs
+
+
+def test_wordless_segments_line_break_skipped_with_stderr_note(capsys):
+    """词级缺失钉（3.2.1 卡A，先红后绿）：全段无 words 时断行跳过必须
+    stderr 留痕（ct2 词级输出异常用户可见），并返回原始段。负向钉内含：
+    --no-line-break 显式关闭是用户意图非降级，零提示（防每次主动关断行
+    刷提示）。"""
+    mod = _load_runner_standalone()
+    segs = [{"start": 0.0, "end": 2.0, "text": "あ" * 20, "words": []},
+            {"start": 2.0, "end": 4.0, "text": "い" * 20}]
+    out = mod._apply_line_break(segs, True)
+    assert out == segs, "词级缺失必须返回原始段"
+    err = capsys.readouterr().err
+    assert "断行跳过" in err and "词级" in err, \
+        "词级缺失静默跳过——用户不知情（可见性缺口）"
+    # 负向钉：显式关闭不得提示（用户意图，非降级）
+    assert mod._apply_line_break(segs, False) == segs
+    assert capsys.readouterr().err == "", \
+        "显式关闭断行不得提示——主动关断行不应刷提示"
+
+
+def test_three_face_contract_srt_break_stdout_sidecar_raw(
+        tmp_path, monkeypatch, capsys):
+    """三面契约防漂移钉（现状即绿，非 TDD 件）：SRT 落盘=断行段；stdout
+    JSON `segments` 与 sidecar `segments` 恒为原始段。段级消费面（漏听插
+    缝 classify_transcript／C22 判档 tr.get("segments")／媒体对照）依赖
+    原始段语义——改 stdout 契约须新决策 ID（D2026-1030-06 卡A）。"""
+    mod = _load_runner_standalone()
+    raw_words = [types.SimpleNamespace(start=0.0, end=1.0, word="あ",
+                                       probability=0.9),
+                 types.SimpleNamespace(start=1.0, end=2.0, word="あ",
+                                       probability=0.8)]
+    raw_seg = types.SimpleNamespace(
+        start=0.0, end=2.0, text="あ" * 20, words=raw_words,
+        no_speech_prob=0.1, avg_logprob=-0.2, compression_ratio=1.0)
+    raw = [{"start": 0.0, "end": 2.0, "text": "あ" * 20,
+            "words": [{"start": 0.0, "end": 1.0, "word": "あ",
+                       "probability": 0.9},
+                      {"start": 1.0, "end": 2.0, "word": "あ",
+                       "probability": 0.8}],
+            "no_speech_prob": 0.1, "avg_logprob": -0.2,
+            "compression_ratio": 1.0}]
+
+    class _Info:
+        language = "ja"
+        duration = 2.0
+
+    class _Model:
+        def transcribe(self, media, **kw):
+            return iter([raw_seg]), _Info()
+
+    monkeypatch.setitem(sys.modules, "faster_whisper",
+                        types.SimpleNamespace())
+    monkeypatch.setattr(mod, "_load_model",
+                        lambda *a, **kw: (_Model(), "cpu", "int8"))
+
+    def _fake_break(segs):
+        return [{**s, "text": s["text"] + "◇"} for s in segs]
+
+    monkeypatch.setattr(mod, "_load_break_segments", lambda: _fake_break)
+
+    media = tmp_path / "a.wav"
+    media.write_bytes(b"RIFF")
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    srt_out = tmp_path / "out" / "a.srt"
+    rc = mod._run_transcribe_media_ct2(
+        str(media), str(model_dir), "ja", str(srt_out),
+        beam_size=1, vad_filter=False, condition_previous=False)
+    assert rc == 0
+    # 面①：SRT 落盘=断行段（可辨识变换生效）
+    assert "◇" in srt_out.read_text(encoding="utf-8"), \
+        "SRT 未使用断行段——断行接入断裂"
+    # 面②：stdout 机器契约 segments=原始段
+    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert payload["segments"] == raw, \
+        "stdout segments 漂移为断行段——段级消费面（漏听插缝/C22）受污染"
+    # 面③：sidecar 原始词级=原始段
+    sidecar = json.loads(
+        (srt_out.parent / "a.srt.words.json").read_text(encoding="utf-8"))
+    assert sidecar["segments"] == raw, \
+        "sidecar segments 漂移——断行器回放输入断裂"
 
 
 def test_runner_standalone_secrets_hijack_guard_intact():
