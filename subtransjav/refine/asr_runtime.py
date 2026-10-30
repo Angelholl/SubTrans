@@ -89,10 +89,13 @@ CT2_MODELS: list[dict] = [
 
 # GPU DLL 补丁包 pin（件B，D2026-1029-02 拍板③；勘探卡 §2/§6）：owner 硬
 # 约束=主程序轻量化，DLL 不进主包不进运行时主 zip，安装后按需 opt-in 下载。
-# 在线 pin 待补丁包经 HF 镜像上传后点亮（沿运行时 1.1.0 未点亮先例：缺
-# URL/SHA 人话报错，本地 zip 通道不受影响）。构建=tools/build_gpu_patch.py。
+# 在线 pin 已点亮（2026-10-30 时序锁 D2026-1029-11 ⑤全链走完：上传→远端
+# lfs.oid 对拍→会话态脚本冒烟三门＝真下载 1.21GB sha 核验＋install rc=0＋
+# runner gpu 双检真转写 rc=0）。许可复核结案见 D2026-1030-03。
+# 构建=tools/build_gpu_patch.py。
 GPU_PATCH_DIRNAME = "gpu-dll"
-GPU_PATCH_ZIP_URL = ""       # 未发布态：owner 上传镜像后回填点亮
+GPU_PATCH_ZIP_URL = ("https://hf-mirror.com/Angelholl/faster-whisper-large-v2-ct2"
+                     "/resolve/main/subtrans-gpu-dll-patch-1.0.1-win64.zip")
 GPU_PATCH_ZIP_SHA256 = "1d9389d61b273149644ddc2803599be9c6cfb2a6e416c14a7bccb96ddb1a3693"
 GPU_PATCH_ZIP_BYTES = 1211323535
 

@@ -17,10 +17,11 @@ import os
 import shutil
 import zipfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
-from subtransjav.refine import asr_runtime
+from subtransjav.refine import asr_runtime, dict_manager
 
 # ---------------------------------------------------------------- fixtures
 
@@ -329,12 +330,30 @@ class TestGpuPatchContract:
         assert cmd2[cmd2.index("--gpu-dll-dir") + 1] == \
             str(isolated_env / "gpu-dll")
 
-    def test_online_pin_unpublished_state(self):
-        """在线 pin 未点亮态（owner 上传闸前）：URL 空＝在线下载走人话报错、
-        本地 zip 通道不受影响；sha/bytes 构建实录已回填（点亮只差 URL）。"""
-        assert asr_runtime.GPU_PATCH_ZIP_URL == ""
-        assert len(asr_runtime.GPU_PATCH_ZIP_SHA256) == 64
-        assert asr_runtime.GPU_PATCH_ZIP_BYTES > 0
+    def test_online_pin_published_state(self):
+        """在线 pin 已点亮态（2026-10-30 时序锁全链走完：上传→远端 oid 对拍
+        →会话态冒烟三门过）。字面断言防漂移——原形状断言（len==64/bytes>0）
+        拦不住 pin 静默变更（D2026-1029-12 D1 追加门）；URL 域必落下载白名单
+        （huggingface.co 不放行，裁决⑤口径）。"""
+        assert asr_runtime.GPU_PATCH_ZIP_URL == (
+            "https://hf-mirror.com/Angelholl/faster-whisper-large-v2-ct2"
+            "/resolve/main/subtrans-gpu-dll-patch-1.0.1-win64.zip")
+        host = urlsplit(asr_runtime.GPU_PATCH_ZIP_URL).hostname
+        assert host in dict_manager._URL_HOST_ALLOW
+        assert asr_runtime.GPU_PATCH_ZIP_SHA256 == \
+            "1d9389d61b273149644ddc2803599be9c6cfb2a6e416c14a7bccb96ddb1a3693"
+        assert asr_runtime.GPU_PATCH_ZIP_BYTES == 1211323535
+
+    def test_gpu_patch_download_rejects_unpinned_host(self):
+        """点亮后守卫下载仍受域白名单约束：非白名单域（含 huggingface.co）
+        即拒——白名单与 pin 双门缺一不可（裁决⑤）。"""
+        from subtransjav.refine.dict_manager import DictDownloadError
+        with pytest.raises(DictDownloadError) as ei:
+            asr_runtime._guarded_download(
+                "https://huggingface.co/Angelholl/faster-whisper-large-v2-ct2"
+                "/resolve/main/subtrans-gpu-dll-patch-1.0.1-win64.zip",
+                "out.zip", asr_runtime.GPU_PATCH_ZIP_SHA256, 1)
+        assert "白名单" in str(ei.value)
 
     def test_cuda_probe_goes_through_runtime_subprocess(self, isolated_env,
                                                         monkeypatch):

@@ -908,7 +908,7 @@ const MSG = {
     ct2GpuNoCuda: 'GPU 加速：未检测到可用 CUDA 设备（CPU 模式）',
     ct2GpuReadyFmt: dir => `GPU 加速：补丁包已装（${dir}），转写自动启用`,
     ct2GpuIncompleteFmt: n => `GPU 加速：补丁不完整（缺 ${n} 件），转写将回退 CPU——请重新下载补丁包`,
-    ct2GpuUnpublished: 'GPU 加速：本机有 CUDA 设备，可下载补丁包启用 GPU 转写（在线件尚未发布）',
+    ct2GpuUnpublished: 'GPU 加速：本机有 CUDA 设备，GPU 补丁包在线件尚未发布（可经 CLI 用本地 zip 安装）',
     ct2GpuOfferFmt: 'GPU 加速：本机有 CUDA 设备，下载补丁包即可启用 GPU 转写',
     ct2GpuUnknown: 'GPU 加速：状态未知',
     // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：词典源选择
