@@ -10,6 +10,7 @@
 """
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -522,3 +523,418 @@ def test_retry_after_cancel_runs_again(tmp_path, fake_env, monkeypatch):
     assert new_id is not None
     assert wait_until(lambda: any(s["id"] == new_id and s["state"] == "done"
                                   for s in q.snapshot()))
+
+
+# ---------------------------------------------------------------------------
+# 互斥查询/翻译侧槽位（补钉：encode_active / claim_translate_slot / release）
+# ---------------------------------------------------------------------------
+def test_encode_active_reports_flag():
+    eq._encode_active = False
+    assert eq.encode_active() is False
+    eq._encode_active = True
+    assert eq.encode_active() is True
+
+
+def test_claim_release_translate_slot_semantics():
+    """翻译侧同锁 check-and-set：二次占用拒、压制中拒、释放幂等。"""
+    assert eq.claim_translate_slot() is True
+    assert eq.claim_translate_slot() is False      # 已在启动序
+    assert eq.claim_encode_slot() is False         # 翻译中 encode 拒
+    eq.release_translate_slot()
+    eq.release_translate_slot()                    # 幂等
+    assert eq.is_encode_slot_free() is True
+    assert eq.claim_encode_slot() is True
+
+
+# ---------------------------------------------------------------------------
+# 体积估算 VBR 模式
+# ---------------------------------------------------------------------------
+def test_estimate_output_bytes_vbr_mode():
+    """target_vbr：直接取参考表派生（不含源码率×1.1 兜底）。"""
+    params = hardsub.EncodeParams(video_format="h264", quality="balanced",
+                                  rate_mode="target_vbr")
+    est = eq.estimate_output_bytes(params, 50_000_000, 60.0)
+    assert est == int((5500 + 128) * 1000 / 8 * 60.0)
+    # 源码率极高也不抬高 VBR 口径
+    assert eq.estimate_output_bytes(params, 50_000_000, 60.0) == \
+        eq.estimate_output_bytes(params, 1, 60.0)
+
+
+# ---------------------------------------------------------------------------
+# 子进程封装（模块级函数，全 mock）
+# ---------------------------------------------------------------------------
+def test_spawn_ffmpeg_passes_window_flags(monkeypatch):
+    """list-args + PIPE + shell=False + CREATE_NO_WINDOW（不触真进程）。"""
+    recorded = {}
+    sentinel = object()
+
+    def fake_popen(argv, **kw):
+        recorded["argv"] = argv
+        recorded.update(kw)
+        return sentinel
+
+    monkeypatch.setattr(eq.subprocess, "Popen", fake_popen)
+    got = eq._spawn_ffmpeg(["ffmpeg", "-i", "x"])
+    assert got is sentinel
+    assert recorded["argv"] == ["ffmpeg", "-i", "x"]
+    assert recorded["shell"] is False
+    assert recorded["creationflags"] == eq.CREATE_NO_WINDOW
+    assert recorded["stdout"] is eq.subprocess.PIPE
+    assert recorded["stderr"] is eq.subprocess.PIPE
+
+
+class _KillableProc:
+    pid = 4242
+
+    def __init__(self):
+        self.kills = 0
+
+    def kill(self):
+        self.kills += 1
+
+
+def test_kill_tree_falls_back_when_tree_kill_unsuccessful(monkeypatch):
+    from subtransjav.utils import process_manager
+    monkeypatch.setattr(process_manager, "terminate_process_tree",
+                        lambda pid: {"success": False})
+    proc = _KillableProc()
+    eq._kill_tree(proc)
+    assert proc.kills == 1
+
+
+def test_kill_tree_swallows_exception_and_single_kills(monkeypatch):
+    from subtransjav.utils import process_manager
+
+    def boom(pid):
+        raise RuntimeError("psutil 不可用")
+
+    monkeypatch.setattr(process_manager, "terminate_process_tree", boom)
+    proc = _KillableProc()
+    eq._kill_tree(proc)          # 不抛、降级单杀
+    assert proc.kills == 1
+
+
+class _WaitProc:
+    """脚本化 wait：按序返回码或抛 TimeoutExpired。"""
+
+    pid = 777
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls = []
+        self.returncode = None
+
+    def wait(self, timeout=None):
+        self.calls.append(timeout)
+        step = self.script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        self.returncode = step
+        return step
+
+
+def test_wait_proc_timeout_kills_then_returns_code(monkeypatch):
+    from subtransjav.utils import process_manager
+    killed = []
+    monkeypatch.setattr(process_manager, "terminate_process_tree",
+                        lambda pid: (killed.append(pid), {"success": True})[1])
+    proc = _WaitProc([subprocess.TimeoutExpired("ffmpeg", 30.0), 7])
+    assert eq._wait_proc(proc, 30.0) == 7
+    assert killed == [proc.pid]
+    assert proc.calls == [30.0, 5]
+
+
+def test_wait_proc_timeout_without_exit_returns_minus_one(monkeypatch):
+    from subtransjav.utils import process_manager
+    monkeypatch.setattr(process_manager, "terminate_process_tree",
+                        lambda pid: {"success": True})
+    proc = _WaitProc([subprocess.TimeoutExpired("ffmpeg", 30.0),
+                      subprocess.TimeoutExpired("ffmpeg", 5.0)])
+    assert proc.returncode is None
+    assert eq._wait_proc(proc, 30.0) == -1
+
+
+def test_drain_stderr_none_stream_returns_early():
+    box = {}
+    eq._drain_stderr(SimpleNamespace(stderr=None), box)
+    assert "stderr_tail" not in box
+
+
+def test_drain_stderr_keeps_tail_window():
+    box = {}
+    eq._drain_stderr(SimpleNamespace(stderr=iter([b"a" * 900])), box)
+    assert box["stderr_tail"] == "a" * eq._STDERR_TAIL_CHARS
+
+
+def test_drain_stderr_swallows_read_error():
+    class BadIter:
+        def __iter__(self):
+            raise RuntimeError("pipe broken")
+
+    box = {}
+    eq._drain_stderr(SimpleNamespace(stderr=BadIter()), box)
+    assert box["stderr_tail"] == ""
+
+
+# ---------------------------------------------------------------------------
+# 供给缓存失效
+# ---------------------------------------------------------------------------
+def test_reset_supply_forces_re_resolve(monkeypatch):
+    calls = []
+
+    def fake_resolve(*a, **k):
+        calls.append(1)
+        return SUPPLY
+
+    monkeypatch.setattr(eq, "resolve_hardsub_ffmpeg", fake_resolve)
+    q = fresh_queue()
+    assert q._ensure_supply() is SUPPLY
+    assert len(calls) == 1
+    assert q._ensure_supply() is SUPPLY      # 命中缓存不重解析
+    assert len(calls) == 1
+    q.reset_supply()
+    assert q._supply is None
+    assert q._ensure_supply() is SUPPLY
+    assert len(calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# 入队拒绝：探测失败 / 时长无效
+# ---------------------------------------------------------------------------
+def test_enqueue_probe_error_rejects(tmp_path, fake_env, monkeypatch):
+    def boom(*a, **k):
+        raise fsup.FfprobeError("非 JSON 输出")
+
+    monkeypatch.setattr(eq, "probe_media", boom)
+    q = fresh_queue()
+    accepted, rejected = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert accepted == []
+    assert "媒体探测失败" in rejected[0][1]
+    assert "非 JSON" in rejected[0][1]
+    assert q.snapshot() == []
+
+
+def test_enqueue_invalid_duration_rejects(tmp_path, fake_env, monkeypatch):
+    monkeypatch.setattr(eq, "probe_media",
+                        lambda *a, **k: fsup.MediaInfo(duration_s=0.0, width=1920,
+                                                       height=1080, bit_rate_bps=0,
+                                                       has_audio=False,
+                                                       audio_codec=""))
+    q = fresh_queue()
+    accepted, rejected = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert accepted == []
+    assert "媒体时长无效" in rejected[0][1]
+
+
+# ---------------------------------------------------------------------------
+# 孤儿 .part 清扫：在跑任务豁免 / listdir 失败静默
+# ---------------------------------------------------------------------------
+def test_cleanup_orphan_parts_protects_running_part(tmp_path):
+    """在跑任务的 .part 不清（339/349）；其余同前缀孤儿照清。"""
+    running_part = tmp_path / "vid9_hardsub.mp4.part"
+    running_part.write_bytes(b"inflight")
+    stale = tmp_path / "vid9_hardsub_old.mp4.part"
+    stale.write_bytes(b"stale")
+    unrelated = tmp_path / "other.txt"
+    unrelated.write_text("keep", encoding="utf-8")
+    q = fresh_queue()
+    current = mkjob(tmp_path, 9)
+    current.params.out_path = str(running_part)
+    q._current = current
+    try:
+        q._cleanup_orphan_parts(str(tmp_path), "vid9_hardsub")
+    finally:
+        q._current = None
+    assert running_part.exists()
+    assert not stale.exists()
+    assert unrelated.exists()
+
+
+def test_cleanup_orphan_parts_listdir_oserror_is_silent(tmp_path, monkeypatch):
+    def boom(p):
+        raise OSError("dir gone")
+
+    monkeypatch.setattr(eq.os, "listdir", boom)
+    q = fresh_queue()
+    q._cleanup_orphan_parts(str(tmp_path), "prefix")   # 不抛
+
+
+# ---------------------------------------------------------------------------
+# worker 循环：停止位 / 未捕获异常兜底
+# ---------------------------------------------------------------------------
+def test_worker_loop_exits_when_stop_flag_and_idle():
+    q = fresh_queue()
+    q._stop = True
+    worker = threading.Thread(target=q._worker_loop, daemon=True)
+    worker.start()
+    worker.join(3.0)
+    assert not worker.is_alive()
+
+
+def test_worker_unhandled_exception_marks_failed(tmp_path, fake_env, monkeypatch):
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", FakeSpawner([dict(rc=0)]))
+    q = fresh_queue()
+
+    def boom(job):
+        raise RuntimeError("内部炸了")
+
+    monkeypatch.setattr(q, "_run_job", boom)
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert wait_until(lambda: accepted[0].state == "failed")
+    assert "内部炸了" in accepted[0].error
+
+
+def _inject_job(q, job):
+    """白盒投递：绕开 enqueue_batch 的探测缓存填充，专测 _run_job 的 probe 分支。"""
+    with q._cond:
+        q._seq += 1
+        job.id = f"{os.path.splitext(os.path.basename(job.video_path))[0]}-{q._seq}"
+        job.params.out_path = job.out_path + ".part"
+        job.state = "queued"
+        q._pending.append(job)
+        q._history.append(job)
+        q._ensure_worker_locked()
+        q._cond.notify_all()
+
+
+# ---------------------------------------------------------------------------
+# _run_job 分支
+# ---------------------------------------------------------------------------
+def test_run_job_probes_when_probe_cache_missing(tmp_path, fake_env, monkeypatch):
+    calls = []
+
+    def fake_probe(*a, **k):
+        calls.append(a)
+        return INFO
+
+    monkeypatch.setattr(eq, "probe_media", fake_probe)
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", FakeSpawner([dict(rc=0)]))
+    q = fresh_queue()
+    job = mkjob(tmp_path, 1)
+    assert job.probe is None
+    _inject_job(q, job)
+    assert wait_until(lambda: job.state == "done")
+    assert len(calls) == 1          # 缓存缺失 → _run_job 内补探测
+    assert calls[0][0] == SUPPLY.ffprobe_path
+
+
+def test_run_job_probe_error_fails_job(tmp_path, fake_env, monkeypatch):
+    def boom(*a, **k):
+        raise fsup.FfprobeError("坏容器")
+
+    monkeypatch.setattr(eq, "probe_media", boom)
+    q = fresh_queue()
+    job = mkjob(tmp_path, 1)
+    _inject_job(q, job)
+    assert wait_until(lambda: job.state == "failed")
+    assert "媒体探测失败" in job.error and "坏容器" in job.error
+
+
+def _gpu_supply(tmp_path, monkeypatch):
+    fake_ff = tmp_path / "ff_gpu.exe"
+    fake_ff.write_bytes(b"x")
+    monkeypatch.setattr(eq, "resolve_hardsub_ffmpeg",
+                        lambda *a, **k: fsup.SupplyResult(
+                            ffmpeg_path=str(fake_ff), ffprobe_path=str(fake_ff),
+                            capability={}, missing=[]))
+
+
+def test_run_job_gpu_resolve_exception_treated_unavailable(tmp_path, fake_env,
+                                                          monkeypatch):
+    """GPU 探测抛异常→按不可用显因（显式 gpu 拒、不起进程）。"""
+    _gpu_supply(tmp_path, monkeypatch)
+
+    def boom(*a, **k):
+        raise RuntimeError("nvenc 探测崩")
+
+    monkeypatch.setattr(eq, "resolve_gpu_encoder", boom)
+    spawner = FakeSpawner([dict(rc=0)])
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", spawner)
+    q = fresh_queue()
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1, backend="gpu")])
+    assert wait_until(lambda: accepted[0].state == "failed")
+    assert "GPU 编码不可用" in accepted[0].error
+    assert "nvenc 探测崩" in accepted[0].error
+    assert spawner.procs == []
+
+
+def test_run_job_build_args_value_error_fails(tmp_path, fake_env, monkeypatch):
+    def boom(*a, **k):
+        raise ValueError("黑名单参数 -filter_complex")
+
+    monkeypatch.setattr(eq.hardsub, "build_ffmpeg_args", boom)
+    spawner = FakeSpawner([dict(rc=0)])
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", spawner)
+    q = fresh_queue()
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert wait_until(lambda: accepted[0].state == "failed")
+    assert "参数构建失败" in accepted[0].error
+    assert spawner.procs == []
+
+
+def test_run_job_fallback_reason_becomes_note(tmp_path, fake_env, monkeypatch):
+    """C6：build 回落原因写入 note 透出 UI。"""
+    def fake_build(params, *a, **k):
+        return ["-y", params.out_path], "音频 copy 回落 aac"
+
+    monkeypatch.setattr(eq.hardsub, "build_ffmpeg_args", fake_build)
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", FakeSpawner([dict(rc=0)]))
+    q = fresh_queue()
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert wait_until(lambda: accepted[0].state == "done")
+    assert accepted[0].note == "音频 copy 回落 aac"
+
+
+def test_run_job_spawn_oserror_fails(tmp_path, fake_env, monkeypatch):
+    def boom(argv):
+        raise OSError("可执行文件缺失")
+
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", boom)
+    q = fresh_queue()
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert wait_until(lambda: accepted[0].state == "failed")
+    assert "ffmpeg 启动失败" in accepted[0].error
+
+
+def test_progress_parser_ignores_noise_lines(tmp_path, fake_env, monkeypatch):
+    """非 out_time_ms 行与不可解析值跳过，不影响成片。"""
+    spawner = FakeSpawner([dict(lines=[b"frame=12", b"fps=0", b"",
+                                       b"out_time_ms=not-a-number",
+                                       b"out_time_ms=30000000"])])
+    monkeypatch.setattr(eq, "_spawn_ffmpeg", spawner)
+    q = fresh_queue()
+    accepted, _ = q.enqueue_batch([mkjob(tmp_path, 1)])
+    assert wait_until(lambda: accepted[0].state == "done")
+    assert accepted[0].progress == 100
+
+
+# ---------------------------------------------------------------------------
+# 看门狗取消早退 / cancel 未知 id 空转
+# ---------------------------------------------------------------------------
+def test_watchdog_returns_immediately_when_cancelled():
+    q = fresh_queue()
+    proc = FakeProc(["-y", "out.mp4"])      # stdout 未消费 → poll() 恒 None
+    box = {"last": 0.0, "phase": "encode", "fin_start": 0.0, "fin_deadline": 120.0,
+           "cancel": True, "reason": "", "stderr_tail": "",
+           "wake": threading.Event()}
+    q._watchdog(proc, box, total_timeout=0.0)
+    assert box["reason"] == ""
+    assert proc.killed is False
+
+
+def test_cancel_unknown_id_is_noop(tmp_path, fake_env):
+    q = fresh_queue()
+    q.cancel("no-such-id")                 # 无 current/无 pending：直接返回
+    assert not q.is_running()
+    assert q.snapshot() == []
+
+
+# ---------------------------------------------------------------------------
+# 单例
+# ---------------------------------------------------------------------------
+def test_get_encode_queue_is_singleton(monkeypatch):
+    monkeypatch.setattr(eq, "_singleton", None)
+    first = eq.get_encode_queue()
+    second = eq.get_encode_queue()
+    assert first is second
+    assert isinstance(first, eq.EncodeQueue)
