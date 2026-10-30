@@ -199,15 +199,27 @@ def _transcribe_segments(model_obj, media: str, language: str, *,
 
 
 def _load_pass_merge():
-    """双 pass 合并纯函数装载（常规包导入，PyInstaller 静态分析随包）。
+    """双 pass 合并纯函数装载（D2026-1029-02 拍板①；卡C §七 勘误裁决 a）。
 
-    包形态（-m/GUI/测试）相对导入直接可用；无包上下文形态回退绝对包名
-    导入。不做文件路径装载、不改 packaging/SubTrans.spec。"""
+    包上下文（-m/GUI/测试形态）走相对导入；脚本直调形态无包上下文必
+    ImportError，回退按文件路径装载 pass_merge.py——该件零第三方依赖
+    零相对导入，可独立解析（镜像 _load_break_segments 对 line_breaker
+    的既有先例；随包条目见 packaging/SubTrans.spec datas）。不走
+    sys.path 注入（refine/ 内 secrets.py 劫持标准库，见模块顶部热修
+    守卫）。"""
     try:
         from . import pass_merge
+        return pass_merge
     except ImportError:
-        from subtransjav.refine import pass_merge
-    return pass_merge
+        import importlib.util
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "pass_merge.py")
+        spec = importlib.util.spec_from_file_location("_ct2_pass_merge", path)
+        if spec is None or spec.loader is None:
+            raise
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
 
 
 def _write_words_sidecar(path, segs: list, info, model_dir: str, *,
@@ -376,10 +388,12 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     if pass2_segs is not None:
         try:
             pm = _load_pass_merge()
-        except ImportError as e:   # 无包上下文形态如实报错（不静默降级）
+        except (ImportError, OSError) as e:
+            # 装载两形态（相对导入／同目录路径回退）均失败=随包缺件：
+            # 如实报错退出（不静默降级，§七 勘误）。
             print(json.dumps({"ok": False,
-                              "error": "双 pass 合并件不可用（当前形态无包"
-                                       "上下文）: " + str(e)},
+                              "error": "双 pass 合并件不可用（pass_merge "
+                                       "装载失败）: " + str(e)},
                              ensure_ascii=False))
             return 1
         return _write_dualpass_output(
