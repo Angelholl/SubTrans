@@ -18,6 +18,7 @@ kana_clean（预翻译源文清洗）→ 翻译 → polish（翻译后重排）�
 from __future__ import annotations
 
 import re
+from typing import Any
 
 __all__ = ["POLICY_DEFAULTS", "break_segment", "break_segments", "main"]
 
@@ -36,11 +37,11 @@ def _text_len(t: str) -> int:
     return len(_WS_RE.sub("", t or ""))
 
 
-def _join_words(words: list[dict]) -> str:
+def _join_words(words: list[dict[str, Any]]) -> str:
     return "".join(str(w.get("word") or "") for w in words)
 
 
-def _cov_span(words: list[dict]) -> tuple[float, float] | None:
+def _cov_span(words: list[dict[str, Any]]) -> tuple[float, float] | None:
     starts = [float(w["start"]) for w in words if w.get("start") is not None]
     ends = [float(w["end"]) for w in words if w.get("end") is not None]
     if not starts or not ends:
@@ -48,7 +49,7 @@ def _cov_span(words: list[dict]) -> tuple[float, float] | None:
     return min(starts), max(ends)
 
 
-def break_segment(seg: dict, params: dict[str, float] | None = None) -> list[dict]:
+def break_segment(seg: dict[str, Any], params: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """单片→多片确定性切分。达标原样返回（幂等）；无词级时间戳原样返回。"""
     p = dict(POLICY_DEFAULTS)
     if params:
@@ -79,8 +80,8 @@ def break_segment(seg: dict, params: dict[str, float] | None = None) -> list[dic
         return [seg]
 
     # 贪心累计：达到字符上限时，取窗内最后一个可用切点（优先停顿点）
-    parts: list[list[dict]] = []
-    cur: list[dict] = []
+    parts: list[list[dict[str, Any]]] = []
+    cur: list[dict[str, Any]] = []
     cur_chars = 0
     cut_map = {i: (pri, i) for pri, i in cuts}
     for i, w in enumerate(words):
@@ -112,10 +113,10 @@ def break_segment(seg: dict, params: dict[str, float] | None = None) -> list[dic
 
     # 过短片并入邻片（min_dur）；字符上限优先于时长下限——并入后超上限则
     # 不并（短但诚实的独立片好过超宽片）。
-    def _chunk_chars(chunk: list[dict]) -> int:
+    def _chunk_chars(chunk: list[dict[str, Any]]) -> int:
         return _text_len(_join_words(chunk))
 
-    merged: list[list[dict]] = []
+    merged: list[list[dict[str, Any]]] = []
     for chunk in parts:
         span = _cov_span(chunk)
         if (span and (span[1] - span[0]) < min_dur and merged
@@ -130,7 +131,7 @@ def break_segment(seg: dict, params: dict[str, float] | None = None) -> list[dic
             merged[1] = merged[0] + merged[1]
             merged.pop(0)
 
-    out: list[dict] = []
+    out: list[dict[str, Any]] = []
     for chunk in merged:
         span = _cov_span(chunk)
         if span is None:
@@ -140,9 +141,9 @@ def break_segment(seg: dict, params: dict[str, float] | None = None) -> list[dic
     return out if out else [seg]
 
 
-def break_segments(segments: list[dict], params: dict[str, float] | None = None) -> list[dict]:
+def break_segments(segments: list[dict[str, Any]], params: dict[str, float] | None = None) -> list[dict[str, Any]]:
     """segment 列表逐片断行（顺序保持）。"""
-    out: list[dict] = []
+    out: list[dict[str, Any]] = []
     for seg in segments:
         out.extend(break_segment(seg, params))
     return out

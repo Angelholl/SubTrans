@@ -76,3 +76,21 @@ def test_strict_scope_flags_complete():
         enabled = {key for key, value in section.items() if value is True}
         missing = sorted(_STRICT_FLAGS - enabled)
         assert not missing, f"{module} 的 strict 等价旗标被删减: {missing}"
+
+
+# 补卡6（D2026-1030-07 第 5 类二轮）：line_breaker 纳入 strict 面。
+# 独立断言，既有模块面 _STRICT_MODULES 与上述两条断言保持零改动。
+_LINE_BREAKER_MODULE = "subtransjav.refine.line_breaker"
+
+
+@pytest.mark.skipif(not _HAS_TOMLIB, reason="tomllib requires 3.11+")
+def test_line_breaker_in_strict_scope():
+    overrides = _module_overrides()
+    assert _LINE_BREAKER_MODULE in overrides, (
+        f"pyproject [[tool.mypy.overrides]] 缺 {_LINE_BREAKER_MODULE} strict 面")
+    section = overrides[_LINE_BREAKER_MODULE]
+    if section.get("strict") is True:
+        return
+    enabled = {key for key, value in section.items() if value is True}
+    missing = sorted(_STRICT_FLAGS - enabled)
+    assert not missing, f"{_LINE_BREAKER_MODULE} 的 strict 等价旗标被删减: {missing}"
