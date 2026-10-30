@@ -584,6 +584,129 @@ def test_refine_test_stage_closes_client_on_create_error(gui_api_obj, monkeypatc
 
 
 # ---------------------------------------------------------------------------
+# d1031 补卡池①：list_local_models / refine_test_stage 分支补全
+# 两端点替身（requests.get / OpenAI）注入，断言只认注入值，零真实网络。
+# ---------------------------------------------------------------------------
+
+def _install_fake_requests_get(monkeypatch, payload_by_suffix=None,
+                               error=None):
+    """替换 requests.get 为按 URL 后缀回放的替身（零网络），返回调用 URL 表。
+
+    payload_by_suffix: {url 后缀: json 载荷}；未命中后缀回 {"data": []}。
+    error 非 None 时任何请求一律抛出（模拟端点不可达/扫描异常）。
+    """
+    import requests
+
+    calls: list[str] = []
+
+    class _Resp:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    def _get(url, **kwargs):
+        calls.append(url)
+        if error is not None:
+            raise error
+        for suffix, payload in (payload_by_suffix or {}).items():
+            if url.endswith(suffix):
+                return _Resp(payload)
+        return _Resp({"data": []})
+
+    monkeypatch.setattr(requests, "get", _get)
+    return calls
+
+
+def test_list_local_models_empty_endpoint_returns_empty(
+        gui_api_obj, monkeypatch):
+    """模型目录为空：两路（已载/已下载）均无条目 → success 且空清单。"""
+    calls = _install_fake_requests_get(monkeypatch)
+    result = gui_api_obj.list_local_models()
+    assert result == {"success": True, "models": [], "loaded": []}
+    # 缺省端点 + /v1 后缀归一：先探已载再探已下载
+    assert calls == ["http://localhost:1234/v1/models",
+                     "http://localhost:1234/api/v0/models"]
+
+
+def test_list_local_models_merges_and_dedups_loaded_first(
+        gui_api_obj, monkeypatch):
+    """正常返回清单：已载前置 + 与已下载合并去重，/v1 后缀剥离成 root。"""
+    calls = _install_fake_requests_get(monkeypatch, {
+        "/v1/models": {"data": [{"id": "loaded-a"}, {"id": "shared"}]},
+        "/api/v0/models": {"data": [{"id": "shared"}, {"id": "down-b"}]},
+    })
+    result = gui_api_obj.list_local_models("http://127.0.0.1:9999/v1")
+    assert result["success"] is True
+    assert result["loaded"] == ["loaded-a", "shared"]
+    assert result["models"] == ["loaded-a", "shared", "down-b"]
+    assert calls == ["http://127.0.0.1:9999/v1/models",
+                     "http://127.0.0.1:9999/api/v0/models"]
+
+
+def test_list_local_models_scan_error_degrades_to_empty(
+        gui_api_obj, monkeypatch):
+    """扫描抛异常（端点不可达）：两路内部吞掉 → success 空清单不炸桥。"""
+    _install_fake_requests_get(monkeypatch,
+                               error=ConnectionError("connection refused"))
+    result = gui_api_obj.list_local_models()
+    assert result == {"success": True, "models": [], "loaded": []}
+
+
+def test_list_local_models_outer_error_structured(gui_api_obj):
+    """外层异常（端点参数形态非法）：结构化失败 + models 空表，不抛到前端。"""
+    class _BadEndpoint:
+        def rstrip(self, _chars):
+            raise ValueError("bad endpoint")
+
+    result = gui_api_obj.list_local_models(_BadEndpoint())
+    assert result["success"] is False
+    assert "bad endpoint" in result["error"]
+    assert result["models"] == []
+
+
+def test_refine_test_stage_empty_model_name_rejected(gui_api_obj):
+    """模型名为空/全空白：短路拒绝，不建客户端、不发请求。"""
+    result = gui_api_obj.refine_test_stage("lmstudio", "   ")
+    assert result == {"success": False, "error": "未填写模型名"}
+
+
+def test_refine_test_stage_reasoning_fallback_message(gui_api_obj, monkeypatch):
+    """子进程成功回读的等价形态：content 为空时回退 reasoning 尾巴文案。"""
+    def _create(**_kwargs):
+        message = SimpleNamespace(content="", reasoning_content="think-tail")
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+    class _FakeClient:
+        def __init__(self, **_kwargs):
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=_create))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    monkeypatch.setattr(openai, "OpenAI", _FakeClient)
+    result = gui_api_obj.refine_test_stage(
+        "lmstudio", "model-a", endpoint="http://localhost:1234/v1")
+    assert result["success"] is True
+    assert result["message"] == "(推理模型)...think-tail"
+
+
+def test_refine_test_stage_create_error_passthrough(gui_api_obj, monkeypatch):
+    """失败退出形态：异常类型名 + 原文透传，附修复提示，不吞错。"""
+    _install_fake_openai(monkeypatch, create_error=ValueError("bad key"))
+    result = gui_api_obj.refine_test_stage(
+        "lmstudio", "model-a", endpoint="http://localhost:1234/v1")
+    assert result["success"] is False
+    assert result["error"] == "ValueError: bad key"
+    assert isinstance(result["tip"], str) and result["tip"]
+
+
+# ---------------------------------------------------------------------------
 # 角色卡目录守卫（反路径穿越）：refine_get_template / refine_save_template
 # 仅放行 服务端默认目录 或 本会话登记的用户自选目录，其余一律拒绝。
 # ---------------------------------------------------------------------------
@@ -5633,6 +5756,125 @@ def test_warmup_probe_miss_downgrades_stale_loaded_state(gui_api_obj,
     r2 = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
     assert r2["state"] == "loading"
     assert len(argvs) == 2, "TTL 卸载后须重新预热（C4 真值覆写指纹缓存）"
+
+
+def _install_fake_models_probe(monkeypatch, payload, error=None):
+    """替换 requests.get（在载探活专用）：按注入载荷回放，记录调用 URL。"""
+    import requests
+
+    calls: list[str] = []
+
+    class _Resp:
+        def json(self):
+            return payload
+
+    def _get(url, **kwargs):
+        calls.append(url)
+        if error is not None:
+            raise error
+        return _Resp()
+
+    monkeypatch.setattr(requests, "get", _get)
+    return calls
+
+
+def test_warmup_probe_loaded_returns_ids(gui_api_obj, monkeypatch):
+    """C4 探活命中形态：/v1/models 回 data → 只取非空 id，端点 /v1 归一。"""
+    calls = _install_fake_models_probe(monkeypatch, {
+        "data": [{"id": "m1"}, {"id": ""}, {"noid": 1}, "junk"],
+    })
+    got = gui_api_obj._warmup_probe_loaded("http://localhost:1234/v1/")
+    assert got == ["m1"]
+    assert calls == ["http://localhost:1234/v1/models"]
+
+
+def test_warmup_probe_loaded_unreachable_returns_none(gui_api_obj, monkeypatch):
+    """C4 端点在不在：请求抛异常一律 None（调用方转 supported:false）。"""
+    _install_fake_models_probe(monkeypatch, {"data": []},
+                               error=ConnectionError("refused"))
+    assert gui_api_obj._warmup_probe_loaded("http://localhost:1234") is None
+
+
+def test_warmup_probe_loaded_empty_endpoint_skips_http(gui_api_obj,
+                                                       monkeypatch):
+    """空端点短路：不发起任何 HTTP 探活，直接 None。"""
+    calls = _install_fake_models_probe(monkeypatch, {"data": [{"id": "m1"}]})
+    assert gui_api_obj._warmup_probe_loaded("") is None
+    assert calls == []
+
+
+def test_warmup_bridge_probe_hit_marks_hot_no_spawn(gui_api_obj, monkeypatch):
+    """C4 在载优先：真探活回目标模型 → already_hot 且零 spawn（不重复拉起）。"""
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    _install_fake_models_probe(monkeypatch, {"data": [{"id": "m1"}]})
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    gui_api_obj._init_ai_state()
+
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r["success"] is True and r["already_hot"] is True
+    assert gui_api_obj._warmup_state["state"] == "hot"
+    assert argvs == [], "已在载不得重复 spawn 预热子进程"
+
+
+def test_warmup_bridge_empty_model_rejected(gui_api_obj, monkeypatch):
+    """模型名空/全空白：supported:false 短路，零探活零 spawn。"""
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    r = gui_api_obj.refine_warmup_analysis_model("  ", "lmstudio")
+    assert r["success"] is False and r["supported"] is False
+    assert "模型名为空" in r["reason"]
+    assert argvs == []
+
+
+def test_warmup_bridge_resolve_exception_unsupported(gui_api_obj,
+                                                     monkeypatch):
+    """C6 解析抛异常：转 supported:false + 原因透传，不冒泡到前端。"""
+    def _boom(*_a, **_kw):
+        raise RuntimeError("resolver down")
+
+    monkeypatch.setattr(gui_api_obj, "_resolve_ai_model_config", _boom)
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r["success"] is False and r["supported"] is False
+    assert r["reason"] == "模型解析失败: resolver down"
+    assert argvs == []
+
+
+def test_warmup_bridge_resolve_not_ok_reason_passthrough(gui_api_obj,
+                                                         monkeypatch):
+    """C6 解析拒绝：ok False 的人话 reason 原样回带，不 spawn。"""
+    monkeypatch.setattr(gui_api_obj, "_resolve_ai_model_config",
+                        lambda _p, _m: {"ok": False, "reason": "未配置分析模型",
+                                        "provider": "", "endpoint": "",
+                                        "model": "", "source": "",
+                                        "notes": []})
+    procs, argvs = _install_fake_warmup_spawn(monkeypatch)
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r["success"] is False and r["supported"] is False
+    assert r["reason"] == "未配置分析模型"
+    assert argvs == []
+
+
+def test_warmup_bridge_spawn_error_marks_failed(gui_api_obj, monkeypatch):
+    """spawn 抛异常：状态机 loading→failed 收口 + 错误透传，不留 loading 悬挂。"""
+    import subtransjav.webview_gui.api as api_mod
+    monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
+                        lambda: _fake_settings({}))
+    monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded", lambda ep: [])
+
+    def _bad_spawn(_args, **_kwargs):
+        raise OSError("spawn blocked")
+
+    monkeypatch.setattr(api_mod, "spawn_refine_cli", _bad_spawn)
+    gui_api_obj._init_ai_state()
+
+    r = gui_api_obj.refine_warmup_analysis_model("m1", "lmstudio")
+    assert r["success"] is False and r["supported"] is True
+    assert "预热子进程启动失败" in r["error"]
+    assert gui_api_obj._warmup_state["state"] == "failed"
+    assert gui_api_obj._warmup_state.get("finished_at")
+    assert gui_api_obj._warmup_proc is None
+
 
 
 # ---------------------------------------------------------------------------
