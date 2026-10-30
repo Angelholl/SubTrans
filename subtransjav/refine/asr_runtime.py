@@ -30,6 +30,7 @@ import pathlib
 import subprocess
 import sys
 import threading
+import time
 
 from .. import paths
 from ..utils.subprocess_flags import CREATE_NO_WINDOW
@@ -653,15 +654,50 @@ def gpu_patch_missing_dlls(gpd: str = "") -> list[str]:
             if not os.path.isfile(os.path.join(base, d))]
 
 
+# CUDA 探测（3.1.1 修，点亮链执行期发现 D2026-1030-03）：3.1.0 引擎脱钩后
+# ctranslate2 不再是应用依赖（pyproject 无、CI 构建环境无→打包面不含），原
+# 进程内 `import ctranslate2` 探测在打包态必失败→cuda_visible 恒 False→GUI
+# 「GPU 加速」行恒显「未检测到可用 CUDA 设备」＋下载按钮恒灰（在线 pin 点亮
+# 也不亮）。改经自管运行时 python 子进程取真值——与 asr_runner 的 device 双检
+# 同口径（运行时内 ct2 自带 CUDA 运行库，无需补丁 DLL 在 PATH）。
+# 缓存口径：GUI 引擎页 1s 轮询不反复起进程——成功按 TTL_OK 缓存，失败按
+# TTL_FAIL 短重试；运行时未装不起进程也不缓存（install 完成即可探到）。
+_CUDA_PROBE_SNIPPET = ("import ctranslate2;"
+                       "print(ctranslate2.get_cuda_device_count())")
+_CUDA_PROBE_TTL_OK = 300.0
+_CUDA_PROBE_TTL_FAIL = 30.0
+_cuda_probe_cache: tuple[float, int] | None = None    # (monotonic 到期, 计数)
+
+
+def cuda_device_count() -> int:
+    """CUDA 设备数（运行时子进程探测＋TTL 缓存；未装/探测失败一律 0）。"""
+    global _cuda_probe_cache
+    now = time.monotonic()
+    if _cuda_probe_cache is not None and now < _cuda_probe_cache[0]:
+        return _cuda_probe_cache[1]
+    py = runtime_python()
+    if not py:
+        return 0
+    count, ttl = 0, _CUDA_PROBE_TTL_FAIL
+    try:
+        proc = subprocess.run([py, "-c", _CUDA_PROBE_SNIPPET],
+                              capture_output=True, text=True, timeout=30,
+                              encoding="utf-8", errors="replace", shell=False,
+                              creationflags=_SPAWN_FLAGS)
+        if proc.returncode == 0:
+            count = int(proc.stdout.strip().splitlines()[-1])
+            ttl = _CUDA_PROBE_TTL_OK
+    except (OSError, ValueError, IndexError,
+            subprocess.TimeoutExpired):   # noqa: BLE001 探测面永不抛
+        count = 0
+    _cuda_probe_cache = (now + ttl, count)
+    return count
+
+
 def gpu_patch_status() -> dict:
     """补丁包状态快照（CLI status / GUI 桥消费；无 GPU 零打扰=GUI 据此
     只在 installed/complete=False 且 cuda_visible=True 时提示 opt-in）。"""
-    cuda_visible = 0
-    try:
-        import ctranslate2
-        cuda_visible = ctranslate2.get_cuda_device_count()
-    except Exception:   # noqa: BLE001 探测面永不抛
-        pass
+    cuda_visible = cuda_device_count() > 0
     missing = gpu_patch_missing_dlls()
     return {"dll_dir": gpu_patch_dir(),
             "installed": read_gpu_patch_manifest() is not None,
