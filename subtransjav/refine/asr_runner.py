@@ -17,7 +17,11 @@
 - 词级 sidecar（schema subtransjav.ct2.words/1）始终保留原始词级数据
   （断行器 3.2.1 的消费输入与回放源）；
 - 四旋钮缺省全部 PROVISIONAL，最终缺省组合待金标逐一 A/B 后预注册
-  定案（评议员修正项）。
+  定案（评议员修正项）；
+- ``--passes {1,2}``（3.2.0 件A，D2026-1029-02 拍板①）：缺省 1=单 pass
+  现状零行为变化；2=pass1 精准档＋pass2 召回档双 pass 覆盖合并，另留
+  pass1/pass2 中间件与 dualpass sidecar（缺省翻转归评测门后拍板，本处
+  不翻）。
 """
 
 import argparse
@@ -93,6 +97,13 @@ GPU_DLL_REQUIRED = (
 GPU_COMPUTE_TYPE = "int8_float16"   # 拍板③：可用→gpu(int8_float16)
 CPU_COMPUTE_TYPE = "int8"           # 现状缺省，零行为变化
 
+# 双 pass 召回档（预注册常量，D2026-1029-02 拍板①；数值出处＝内部追记
+# d1028-40-追记-件A-pass2预注册，禁临时调参）：pass2=vad_filter 关＋
+# beam_size 8，其余同 pass1（condition_on_previous_text 随 pass1、
+# word_timestamps 恒开）。
+PASS2_BEAM_SIZE = 8
+PASS2_VAD_FILTER = False
+
 
 def gpu_dll_missing(gpu_dll_dir: str) -> list[str]:
     """补丁包 DLL 完整性检查（双检①）：返回缺失清单（空=齐全）。"""
@@ -153,14 +164,150 @@ def _load_model(model_dir: str, device: str, compute_type: str,
                 "cpu", CPU_COMPUTE_TYPE)
 
 
+def _transcribe_segments(model_obj, media: str, language: str, *,
+                         beam_size: int, vad_filter: bool,
+                         condition_previous: bool):
+    """单 pass 转写→(段数组, info)；段含词级＋置信三键（D2026-1029-01）。
+
+    stdout 契约（D2026-1029-01 批1 置信透传）：segments=完整段数组（含
+    faster_whisper 原生置信三键 no_speech_prob/avg_logprob/compression_
+    ratio，None 安全；此前仅回计数导致消费侧三维置信门静默失效）。"""
+    segments_iter, info = model_obj.transcribe(
+        media, language=language, beam_size=beam_size,
+        vad_filter=vad_filter, condition_on_previous_text=condition_previous,
+        word_timestamps=True)
+    segs = []
+    for s in segments_iter:
+        words = []
+        for w in (s.words or []):
+            if w.start is None or w.end is None:
+                continue
+            words.append({"start": float(w.start), "end": float(w.end),
+                          "word": w.word, "probability": float(w.probability)})
+        # 置信三键透传（D2026-1029-01 批1）：faster_whisper segment 原生
+        # 属性，None 安全（消费方按存在性读取；getattr 兜底防异常 fork
+        # 缺属性）。
+        segs.append({"start": float(s.start), "end": float(s.end),
+                     "text": s.text, "words": words,
+                     "no_speech_prob": _opt_float(
+                         getattr(s, "no_speech_prob", None)),
+                     "avg_logprob": _opt_float(
+                         getattr(s, "avg_logprob", None)),
+                     "compression_ratio": _opt_float(
+                         getattr(s, "compression_ratio", None))})
+    return segs, info
+
+
+def _load_pass_merge():
+    """双 pass 合并纯函数装载（常规包导入，PyInstaller 静态分析随包）。
+
+    包形态（-m/GUI/测试）相对导入直接可用；无包上下文形态回退绝对包名
+    导入。不做文件路径装载、不改 packaging/SubTrans.spec。"""
+    try:
+        from . import pass_merge
+    except ImportError:
+        from subtransjav.refine import pass_merge
+    return pass_merge
+
+
+def _write_words_sidecar(path, segs: list, info, model_dir: str, *,
+                         beam_size: int, vad_filter: bool,
+                         condition_previous: bool) -> str:
+    """词级 sidecar（schema subtransjav.ct2.words/1）写盘，返回路径。"""
+    sidecar = {"schema": "subtransjav.ct2.words/1", "language": info.language,
+               "duration": float(info.duration), "model_dir": model_dir,
+               "beam_size": beam_size, "vad_filter": vad_filter,
+               "condition_on_previous_text": condition_previous,
+               "segments": segs}
+    path.write_text(json.dumps(sidecar, ensure_ascii=False, indent=1),
+                    encoding="utf-8")
+    return str(path)
+
+
+def _pass_artifact_paths(out_path):
+    """双 pass 中间件命名（.pass1.srt/.pass2.srt 族，与分歧采集同源）。"""
+    p1 = out_path.with_name(out_path.stem + ".pass1" + out_path.suffix)
+    p2 = out_path.with_name(out_path.stem + ".pass2" + out_path.suffix)
+    return p1, p2
+
+
+def _write_dualpass_output(out_path, srt_out: str, segs: list, info,
+                           pass2_segs: list, model_dir: str, pm, *,
+                           beam_size: int, vad_filter: bool,
+                           condition_previous: bool, line_break: bool) -> int:
+    """双 pass 产物面（D2026-1029-02 拍板①）。
+
+    主输出=覆盖合并结果（断行器链照常生效）；同目录留痕 pass1/pass2 原生
+    段 SRT＋各自词级 sidecar＋``<srt_out>.dualpass.json``（两 pass 原始段
+    与词级、各自参数、采纳映射——可回放可审计）。"""
+    import pathlib
+
+    merged = pm.merge_passes(segs, pass2_segs, duration=float(info.duration))
+    p1_path, p2_path = _pass_artifact_paths(out_path)
+    # 中间件保持原生段（留痕/回放源；断行只作用于成品主输出）
+    p1_path.write_text(_segments_to_srt(segs), encoding="utf-8", newline="\n")
+    p2_path.write_text(_segments_to_srt(pass2_segs), encoding="utf-8",
+                       newline="\n")
+    p1_side = _write_words_sidecar(
+        p1_path.with_suffix(p1_path.suffix + ".words.json"), segs, info,
+        model_dir, beam_size=beam_size, vad_filter=vad_filter,
+        condition_previous=condition_previous)
+    p2_side = _write_words_sidecar(
+        p2_path.with_suffix(p2_path.suffix + ".words.json"), pass2_segs, info,
+        model_dir, beam_size=PASS2_BEAM_SIZE, vad_filter=PASS2_VAD_FILTER,
+        condition_previous=condition_previous)
+    srt_segments = _apply_line_break(merged, line_break)
+    out_path.write_text(_segments_to_srt(srt_segments), encoding="utf-8",
+                        newline="\n")
+    main_side = _write_words_sidecar(
+        out_path.with_suffix(out_path.suffix + ".words.json"), merged, info,
+        model_dir, beam_size=beam_size, vad_filter=vad_filter,
+        condition_previous=condition_previous)
+    adopted = [{"pass2_index": i,
+                "start": float(pass2_segs[i]["start"]),
+                "end": float(pass2_segs[i]["end"])}
+               for i in pm.adopted_pass2_indices(segs, pass2_segs, merged)]
+    dual = {"schema": pm.DUALPASS_SCHEMA, "language": info.language,
+            "duration": float(info.duration), "model_dir": model_dir,
+            "gap_threshold_s": pm.GAP_THRESHOLD_S, "passes": 2,
+            "pass1": {"srt": str(p1_path), "words_sidecar": p1_side,
+                      "params": {"beam_size": beam_size,
+                                 "vad_filter": vad_filter,
+                                 "condition_on_previous_text":
+                                     condition_previous,
+                                 "word_timestamps": True},
+                      "segments": segs},
+            "pass2": {"srt": str(p2_path), "words_sidecar": p2_side,
+                      "params": {"beam_size": PASS2_BEAM_SIZE,
+                                 "vad_filter": PASS2_VAD_FILTER,
+                                 "condition_on_previous_text":
+                                     condition_previous,
+                                 "word_timestamps": True},
+                      "segments": pass2_segs},
+            "adopted": adopted}
+    dual_path = pathlib.Path(str(out_path) + ".dualpass.json")
+    dual_path.write_text(json.dumps(dual, ensure_ascii=False, indent=1),
+                         encoding="utf-8")
+    print(json.dumps({"ok": True, "srt": srt_out, "segments": merged,
+                      "duration": float(info.duration),
+                      "words_sidecar": main_side,
+                      "dualpass_sidecar": str(dual_path), "passes": 2},
+                     ensure_ascii=False))
+    return 0
+
+
 def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                               srt_out: str, *, beam_size: int,
                               vad_filter: bool, condition_previous: bool,
                               compute_type: str = "int8",
                               line_break: bool = True,
                               device: str = "auto",
-                              gpu_dll_dir: str = "") -> int:
+                              gpu_dll_dir: str = "",
+                              passes: int = 1) -> int:
     """ct2 整片转写：SRT＋词级 sidecar（断行器 3.2.1 的消费输入）。
+
+    ``passes=1``（缺省）=单 pass 现状零行为变化；``passes=2``=双 pass 覆盖
+    合并（D2026-1029-02 拍板①，产物面见 ``_write_dualpass_output``）。
 
     stdout 契约（D2026-1029-01 批1 置信透传）：segments=完整段数组（含
     faster_whisper 原生置信三键 no_speech_prob/avg_logprob/compression_
@@ -206,29 +353,17 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
             print("[asr_runner] " + note, file=sys.stderr)
         model_obj, dev, eff_ct = _load_model(model_dir, dev, eff_ct,
                                              gpu_dll_dir)
-        segments_iter, info = model_obj.transcribe(
-            media, language=language, beam_size=beam_size,
-            vad_filter=vad_filter, condition_on_previous_text=condition_previous,
-            word_timestamps=True)
-        segs = []
-        for s in segments_iter:
-            words = []
-            for w in (s.words or []):
-                if w.start is None or w.end is None:
-                    continue
-                words.append({"start": float(w.start), "end": float(w.end),
-                              "word": w.word, "probability": float(w.probability)})
-            # 置信三键透传（D2026-1029-01 批1）：faster_whisper segment 原生
-            # 属性，None 安全（消费方按存在性读取；getattr 兜底防异常 fork
-            # 缺属性）。
-            segs.append({"start": float(s.start), "end": float(s.end),
-                         "text": s.text, "words": words,
-                         "no_speech_prob": _opt_float(
-                             getattr(s, "no_speech_prob", None)),
-                         "avg_logprob": _opt_float(
-                             getattr(s, "avg_logprob", None)),
-                         "compression_ratio": _opt_float(
-                             getattr(s, "compression_ratio", None))})
+        segs, info = _transcribe_segments(
+            model_obj, media, language, beam_size=beam_size,
+            vad_filter=vad_filter, condition_previous=condition_previous)
+        pass2_segs: list | None = None
+        if passes == 2:
+            # 双 pass（D2026-1029-02 拍板①）：pass2=召回档预注册常量，其余
+            # 同 pass1；缺省单 pass 不触本分支（零行为变化）。
+            pass2_segs, _pass2_info = _transcribe_segments(
+                model_obj, media, language, beam_size=PASS2_BEAM_SIZE,
+                vad_filter=PASS2_VAD_FILTER,
+                condition_previous=condition_previous)
     except Exception as e:   # noqa: BLE001 转写失败按契约返回
         print(json.dumps({"ok": False,
                           "error": "ct2 转写失败: " + str(e)},
@@ -238,6 +373,19 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     out_path = pathlib.Path(srt_out)
     if out_path.parent and str(out_path.parent):
         out_path.parent.mkdir(parents=True, exist_ok=True)
+    if pass2_segs is not None:
+        try:
+            pm = _load_pass_merge()
+        except ImportError as e:   # 无包上下文形态如实报错（不静默降级）
+            print(json.dumps({"ok": False,
+                              "error": "双 pass 合并件不可用（当前形态无包"
+                                       "上下文）: " + str(e)},
+                             ensure_ascii=False))
+            return 1
+        return _write_dualpass_output(
+            out_path, srt_out, segs, info, pass2_segs, model_dir, pm,
+            beam_size=beam_size, vad_filter=vad_filter,
+            condition_previous=condition_previous, line_break=line_break)
     # 断行器接入（3.2.1，D2026-1028-03）：词级时间戳+CPS+停顿确定性切分，
     # 缺省开（社区实证 CT2 长行问题）；--no-line-break 关闭走原生段。
     # sidecar 始终保留原始词级数据（断行器输入可回放）。
@@ -328,6 +476,10 @@ def main(argv=None) -> int:
                              "→cpu）")
     parser.add_argument("--no-line-break", action="store_true",
                         help="ct2 关闭确定性断行（缺省开=长行自动切分）")
+    parser.add_argument("--passes", type=int, choices=[1, 2], default=1,
+                        help="转写遍数（3.2.0 件A：1=单 pass 现状缺省；"
+                             "2=pass1 精准档＋pass2 召回档覆盖合并，另留"
+                             "中间件与 dualpass sidecar；缺省翻转待评测门）")
     args = parser.parse_args(argv)
     if not args.media:
         print(json.dumps({"ok": False,
@@ -345,7 +497,8 @@ def main(argv=None) -> int:
         condition_previous=args.condition_previous,
         compute_type=args.compute_type,
         line_break=not args.no_line_break,
-        device=args.device, gpu_dll_dir=args.gpu_dll_dir)
+        device=args.device, gpu_dll_dir=args.gpu_dll_dir,
+        passes=args.passes)
 
 
 if __name__ == "__main__":
