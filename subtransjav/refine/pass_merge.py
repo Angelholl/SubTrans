@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 # 空洞采纳阈值（秒）：预注册值，评测门数据回呈后 owner 可调并重注册。
 GAP_THRESHOLD_S = 1.0
 
@@ -27,7 +29,7 @@ def _overlaps(a_start: float, a_end: float,
     return a_start < b_end and b_start < a_end
 
 
-def _gaps(main: list[dict], duration: float | None) -> list[tuple[float, float]]:
+def _gaps(main: list[dict[str, Any]], duration: float | None) -> list[tuple[float, float]]:
     """主干相邻段空洞（含片首/片尾空区）。
 
     duration 缺省（None）时片尾上界取 +inf——调用方无法给出全片时长时
@@ -47,9 +49,9 @@ def _gaps(main: list[dict], duration: float | None) -> list[tuple[float, float]]
     return gaps
 
 
-def merge_passes(pass1: list[dict], pass2: list[dict], *,
+def merge_passes(pass1: list[dict[str, Any]], pass2: list[dict[str, Any]], *,
                  gap_threshold_s: float = GAP_THRESHOLD_S,
-                 duration: float | None = None) -> list[dict]:
+                 duration: float | None = None) -> list[dict[str, Any]]:
     """pass1 覆盖优先 + pass2 空洞补全（返回按 start 排序的段数组）。
 
     - pass1 段对象原样保留（同一 dict 引用，文本/时间轴零改动）；
@@ -61,7 +63,7 @@ def merge_passes(pass1: list[dict], pass2: list[dict], *,
     usable = [(gs, ge) for gs, ge in _gaps(main, duration)
               if (ge - gs) > gap_threshold_s]
 
-    adopted: list[dict] = []
+    adopted: list[dict[str, Any]] = []
     for seg in sorted(pass2, key=lambda s: (float(s["start"]), float(s["end"]))):
         start = float(seg["start"])
         end = float(seg["end"])
@@ -84,8 +86,8 @@ def merge_passes(pass1: list[dict], pass2: list[dict], *,
     return merged
 
 
-def adopted_pass2_indices(pass1: list[dict], pass2: list[dict],
-                          merged: list[dict]) -> list[int]:
+def adopted_pass2_indices(pass1: list[dict[str, Any]], pass2: list[dict[str, Any]],
+                          merged: list[dict[str, Any]]) -> list[int]:
     """采纳映射：merged 中来自 pass2 的段下标（供 dualpass sidecar 审计）。
 
     按对象同一性比对（merge_passes 原样返回候选段对象），零文本比对开销。

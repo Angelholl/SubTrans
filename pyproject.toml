@@ -73,6 +73,34 @@ check_untyped_defs = true
 no_strict_optional = true
 exclude = ["build", "Temp"]
 
+# D2026-1030-07 补卡池白名单第 5 类：严格度扩面（只增不减口径）。
+# 纯逻辑模块先纳入 strict，防止注解退化为 Any；新增模块按同形态追加。
+# 注 1：mypy 2.3.1 的 `strict = true` 写在 overrides 内会触发全局
+# set_strict_flags()，把 strict 泄漏到全包（实测 954 条噪声），故按
+# `--strict` 等价旗标显式展开。
+# 注 2：warn_redundant_casts 在本版 PER_MODULE_OPTIONS 之外，无法按模块设；
+# strict_optional 按 `--strict` 定义本就不含，且本版 per-module 开启后会把
+# 省略 start 的切片（如 s[:n]）全判假错，故不设（全局 no_strict_optional
+# 维持现状）。
+[[tool.mypy.overrides]]
+module = [
+    "subtransjav.refine.pass_merge",
+    "subtransjav.refine.pass_disagreement",
+]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
+
 [project.scripts]
 subtransjav-refine = "subtransjav.refine.cli:main"
 subtransjav-gui = "subtransjav.webview_gui.main:main"
