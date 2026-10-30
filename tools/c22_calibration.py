@@ -3,6 +3,8 @@
 
 用法：
   python tools/c22_calibration.py --manifest <json> --out <report.md> [--enable]
+  python tools/c22_calibration.py --manifest <json> --out <report.md> \
+      --speech-min-s <float|none>
   python tools/c22_calibration.py --selftest --out <report.md>
 
 - manifest json＝[{"guide": 导读 json 路径, "media": 媒体路径,
@@ -82,6 +84,30 @@ _UNATTRIBUTED_MARKS = ("杂音无法判定", "复标不一致")
 # 参照口径（含喘息）回样标记：exclude_reason 含此子串者不进主口径统计、
 # 在参照口径回样（裁决②修正版：喘息类不进主分母＋含/不含双口径同报）
 _REF_INCLUDE_MARK = "喘息"
+# 「CLI 未给 --speech-min-s」哨兵：与显式 none（None）区分，缺省时不向
+# classify_transcript 传 speech_min_s kwarg（仍走产品缺省终裁值，零变化）
+_SPEECH_MIN_UNSET = object()
+
+
+def _parse_speech_min_s(raw: str) -> float | None:
+    """--speech-min-s 取值解析：浮点数或字面量 none（大小写不敏感）。"""
+    text = str(raw).strip()
+    if text.lower() == "none":
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"speech-min-s 须为浮点数或字面量 none，实际为 {raw!r}") from None
+
+
+def _speech_min_label(value: object) -> str:
+    """报告头声明用：缺省哨兵 → 产品终裁值说明；None → none；浮点 → %g。"""
+    if value is _SPEECH_MIN_UNSET:
+        return "缺省(产品终裁值)"
+    if value is None:
+        return "none"
+    return f"{float(value):g}"
 
 
 def wilson_lower_bound(successes: int, n: int, z: float = _WILSON_Z) -> float:
@@ -106,7 +132,8 @@ def _observation_timings(guide_path: str) -> list[str]:
             and it.get("category") == _OBS_CATEGORY and it.get("timing")]
 
 
-def _replay_sample(sample: dict, ctx: list[dict] | None = None) -> list[dict]:
+def _replay_sample(sample: dict, ctx: list[dict] | None = None,
+                   *, speech_min_s: object = _SPEECH_MIN_UNSET) -> list[dict]:
     """单样本回放：切片批量转写→逐 timing 三维分档。
 
     返回 [{"timing", "grade", "label", "reasons", "asr_error",
@@ -119,7 +146,9 @@ def _replay_sample(sample: dict, ctx: list[dict] | None = None) -> list[dict]:
     非空行不进主口径统计）；
     len(timings) 与各数组不等长 → ValueError 中文（fail-closed，
     不静默截断/不循环补齐），len(timings) 超 asr_env._MAX_CLIPS →
-    ValueError（先于引擎报错，构建侧分块），由 main 捕获转退出码 1。"""
+    ValueError（先于引擎报错，构建侧分块），由 main 捕获转退出码 1。
+    speech_min_s：仅显式传值（float 或 None）时透传主口径
+    classify_transcript；缺省哨兵＝不传 kwarg（产品终裁值零变化）。"""
     raw_timings = sample.get("timings")
     if raw_timings is not None and not isinstance(raw_timings, list):
         raise ValueError(f"manifest 条目 timings 须为 SRT 区间字符串数组，"
@@ -162,10 +191,13 @@ def _replay_sample(sample: dict, ctx: list[dict] | None = None) -> list[dict]:
     transcripts = batch_transcribe_clips(media, timings,
                                          max_clips=_MAX_CLIPS)
     rows: list[dict] = []
+    classify_kwargs: dict = {}
+    if speech_min_s is not _SPEECH_MIN_UNSET:
+        classify_kwargs["speech_min_s"] = speech_min_s
     for i, (t, tr) in enumerate(zip(timings, transcripts, strict=True)):
         verdict = classify_transcript(
             t, tr.get("segments") or [], tr.get("text") or "", windows,
-            language="ja")
+            language="ja", **classify_kwargs)
         row_label = label if labels is None else labels[i]
         exc = (str(exclude_reasons[i])
                if exclude_reasons and exclude_reasons[i] else None)
@@ -309,7 +341,8 @@ def _unattributed_excluded(agg: dict) -> int:
 
 def _write_report(out_path: str, rows: list[dict], agg: dict,
                   *, selftest: bool, enabled_written: bool, verdict: str,
-                  ref_agg: dict) -> None:
+                  ref_agg: dict,
+                  speech_min_s: object = _SPEECH_MIN_UNSET) -> None:
     n_all = agg.get("n_rows_all") or agg["n_total"]
     unattr = _unattributed_excluded(agg)
     unattr_rate = (unattr / n_all) if n_all else 0.0
@@ -321,6 +354,8 @@ def _write_report(out_path: str, rows: list[dict], agg: dict,
         "",
         f"- 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"- 模式：{'selftest（合成 segments，统计管线自检）' if selftest else '真实回放'}",
+        f"- 主口径 speech_min_s={_speech_min_label(speech_min_s)}"
+        "（参照口径恒 none，不受本值影响）",
         f"- 阈值声明：门判定双条件＝n_high ≥ {_GATE_MIN_HIGH}"
         f"（不足判不可判）且精确率 Wilson 95% 置信下界 ≥ "
         f"{_PRECISION_LB_GATE:.2f} 且覆盖率 ≥ {_GATE_COVERAGE_FLOOR:.2f}"
@@ -415,6 +450,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="达标时写 config/fullchain_c22.json 门控")
     parser.add_argument("--selftest", action="store_true",
                         help="合成 segments 统计管线自检（不切片不转写）")
+    parser.add_argument("--speech-min-s", dest="speech_min_s",
+                        type=_parse_speech_min_s,
+                        default=_SPEECH_MIN_UNSET,
+                        help="主口径能量门阈值（浮点数或字面量 none；缺省不传"
+                             "＝产品终裁值，零变化；参照口径恒 none 不受影响）")
     args = parser.parse_args(argv)
 
     ctx: list[dict] = []
@@ -442,7 +482,8 @@ def main(argv: list[str] | None = None) -> int:
                       "显式清单（至少其一）")
                 return 1
             try:
-                rows.extend(_replay_sample(sample, ctx))
+                rows.extend(_replay_sample(sample, ctx,
+                                           speech_min_s=args.speech_min_s))
             except ValueError as e:
                 # fail-closed：labels/timings 校验失败直接中止（不静默截断、
                 # 不循环补齐），退出码 1
@@ -479,7 +520,8 @@ def main(argv: list[str] | None = None) -> int:
                   "无法与引擎差区分）")
             _write_report(args.out, rows, agg, selftest=args.selftest,
                           enabled_written=False, verdict=verdict,
-                          ref_agg=ref_agg)
+                          ref_agg=ref_agg,
+                          speech_min_s=args.speech_min_s)
             return 2
         print(f"ℹ️ C22 不可判（n_high {agg['n_high']} < {_GATE_MIN_HIGH}）；"
               "门控未写")
@@ -491,13 +533,15 @@ def main(argv: list[str] | None = None) -> int:
                   "拒绝写门控（不达标=漏听条目全部放弃，owner 知情处置）")
             _write_report(args.out, rows, agg, selftest=args.selftest,
                           enabled_written=False, verdict=verdict,
-                          ref_agg=ref_agg)
+                          ref_agg=ref_agg,
+                          speech_min_s=args.speech_min_s)
             return 2
         print(f"ℹ️ C22 未达标（下界 {agg['precision_lb']:.4f}）；"
               "门控未写")
     _write_report(args.out, rows, agg, selftest=args.selftest,
                   enabled_written=enabled_written, verdict=verdict,
-                  ref_agg=ref_agg)
+                  ref_agg=ref_agg,
+                  speech_min_s=args.speech_min_s)
     print(f"📄 报告已落盘: {args.out}")
     return 0
 

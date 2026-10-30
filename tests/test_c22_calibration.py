@@ -428,3 +428,94 @@ def test_pin8_legacy_manifest_zero_exclusion(c22, tmp_path):
     assert agg["exclude_rate"] == 0.0
     assert agg["n_total"] == agg["n_rows_all"] == 2
     assert agg["n_excluded_by_reason"] == {}
+
+
+# ------------------------------------------------ d1031 卡（D2026-1030-06 ②）
+# 主口径 speech-min-s CLI override：缺省零变化；显式值进主口径 classify；
+# 参照口径恒 None 不被 flag 泄漏。
+
+def _windows_subsecond(media: str, timings: list[str]) -> dict:
+    """T1 能量 0.5s（≤产品缺省 1.0s）、T2 能量 2.0s（过门）。"""
+    return {T1: [(1.0, 1.5)], T2: [(4.0, 6.0)]}
+
+
+def _run_manifest(c22, tmp_path, monkeypatch, name: str,
+                  argv_extra: list[str]) -> str:
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setattr(c22, "detect_speech_windows", _windows_subsecond)
+    manifest = _write_manifest(tmp_path, [
+        {"media": "x.mkv", "label": True,
+         "timings": [T1, T2], "labels": [True, True]}], name=f"{name}.json")
+    out = tmp_path / f"{name}.md"
+    rc = c22.main(["--manifest", str(manifest), "--out", str(out),
+                   *argv_extra])
+    assert rc == 0
+    return out.read_text(encoding="utf-8")
+
+
+def _n_high(text: str) -> int:
+    m = re.search(r"- 判 high：(\d+) /", text)
+    assert m, "报告缺「判 high」行"
+    return int(m.group(1))
+
+
+def _ref_n_high(text: str) -> int:
+    head, sep, ref = text.partition("## 参照读数")
+    assert sep, "参照节缺失"
+    m = re.search(r"- n_high：(\d+)（label=true", ref)
+    assert m, "参照节缺 n_high 行"
+    return int(m.group(1))
+
+
+def test_pin9_default_speech_min_zero_change(c22, tmp_path, monkeypatch):
+    """钉1 缺省零变化：不传 --speech-min-s → 主口径仍走产品缺省 1.0s，
+    逐行读数与 verdict 同改动前一致；报告头声明「缺省(产品终裁值)」。"""
+    text = _run_manifest(c22, tmp_path, monkeypatch, "d", [])
+    assert "| 1 | " + T1 + " | low | True | speech_le_1s" in text
+    assert "| 2 | " + T2 + " | high | True" in text
+    assert _n_high(text) == 1
+    assert "unjudgeable" in text
+    assert "主口径 speech_min_s=缺省(产品终裁值)" in text
+
+
+def test_pin9_override_zero_promotes_subsecond_high(c22, tmp_path,
+                                                   monkeypatch):
+    """钉2 override 生效：--speech-min-s 0 → ≤1s 行不再被能量门判 low，
+    主口径判 high 数多于缺省 case。"""
+    default_text = _run_manifest(c22, tmp_path, monkeypatch, "dflt", [])
+    override_text = _run_manifest(c22, tmp_path, monkeypatch, "zero",
+                                  ["--speech-min-s", "0"])
+    assert _n_high(override_text) == _n_high(default_text) + 1
+    assert "| 1 | " + T1 + " | high | True" in override_text
+
+
+def test_pin9_none_equals_reference_readout(c22, tmp_path, monkeypatch):
+    """钉3 主口径=None 等值性：--speech-min-s none → 主口径 n_high 与
+    参照口径节（恒 None）读数一致。"""
+    text = _run_manifest(c22, tmp_path, monkeypatch, "none",
+                         ["--speech-min-s", "none"])
+    assert _n_high(text) == _ref_n_high(text) == 2
+    assert "| 1 | " + T1 + " | high | True" in text
+
+
+def test_pin9_report_header_declares_speech_min(c22, tmp_path, monkeypatch):
+    """钉4 报告头声明行：缺省与显式（浮点/字面 none）两形态均在。"""
+    default_text = _run_manifest(c22, tmp_path, monkeypatch, "d", [])
+    zero_text = _run_manifest(c22, tmp_path, monkeypatch, "z",
+                              ["--speech-min-s", "0"])
+    none_text = _run_manifest(c22, tmp_path, monkeypatch, "n",
+                              ["--speech-min-s", "NONE"])
+    assert "主口径 speech_min_s=缺省(产品终裁值)" in default_text
+    assert "主口径 speech_min_s=0" in zero_text
+    assert "主口径 speech_min_s=none" in none_text
+
+
+def test_pin9_reference_section_ignores_flag(c22, tmp_path, monkeypatch):
+    """钉5 flag 不泄漏到参照口径：两 flag 形态下参照节读数逐字一致。"""
+    default_text = _run_manifest(c22, tmp_path, monkeypatch, "d", [])
+    override_text = _run_manifest(c22, tmp_path, monkeypatch, "z",
+                                  ["--speech-min-s", "0"])
+    default_ref = default_text.partition("## 参照读数")[2]
+    override_ref = override_text.partition("## 参照读数")[2]
+    assert default_ref == override_ref
+    assert _n_high(default_text) != _n_high(override_text)
