@@ -275,7 +275,9 @@ MSG = {
     "encodeFmtAv1": "AV1（体积最小·耗时可能最长）",
     "encodeModalBackend": "后端",
     "encodeBackendAuto": "自动",
-    "encodeBackendGpu": "GPU（批2 提供）",
+    # encodeBackendGpu（卡C24）：零消费死镜像（R3 §一 B 类实证），活值基准
+    # 在 app-msg.js；两表值 parity 由 test_gui_js_static 跨表钉把关
+    "encodeBackendGpu": "GPU 加速",
     "encodeModalQuality": "画质",
     "encodeQCompress": "高压缩（体积优先）",
     "encodeQBalanced": "均衡（推荐）",

@@ -502,6 +502,43 @@ def test_no_files_selected_value_parity_pinned():
         f"strings.py={m_py.group(1)!r}")
 
 
+def test_encode_backend_gpu_value_parity_pinned():
+    """卡C24（D2026-1031-07）：encodeBackendGpu 双表值 parity 钉（K5 口径）。
+
+    压制后端下拉的 GPU 兜底文案双表同值（app-msg.js ↔ strings.py 镜像）；
+    旧钉只锁键存在性，本钉补跨表值 parity，堵「同键不同值」漂移口
+    （口径同卡K5/K4 parity 钉）。"""
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    m_py = re.search(r'"encodeBackendGpu":\s*"([^"]*)"', sp)
+    assert m_py, "strings.py 缺 encodeBackendGpu 镜像键"
+    m_js = re.search(r"\bencodeBackendGpu:\s*'([^']*)'", _app_js_source())
+    assert m_js, "app-msg.js 缺 MSG.encodeBackendGpu 镜像键"
+    assert m_js.group(1) == m_py.group(1), (
+        f"encodeBackendGpu 双表值漂移：JS={m_js.group(1)!r} "
+        f"strings.py={m_py.group(1)!r}")
+
+
+def test_ct2_gpu_unpublished_value_shape_pinned():
+    """卡C24（D2026-1031-07）：ct2GpuUnpublished 值形态钉——不得断言「尚未发布」。
+
+    3.1.1 已点亮在线通道，该回退分支（app-refine-asr.js:52 活消费）仍
+    写「在线件尚未发布」即陈旧断言；本钉锁住该词不回潮，并要求回退
+    口径写明「当前不可用」＋保留 CLI 本地 zip 出路。单表键，不入
+    strings.py（维持单表）。"""
+    m_js = re.search(r"\bct2GpuUnpublished:\s*'([^']*)'", _app_js_source())
+    assert m_js, "app-msg.js 缺 MSG.ct2GpuUnpublished 键"
+    value = m_js.group(1)
+    assert "尚未发布" not in value, (
+        f"ct2GpuUnpublished 仍为陈旧断言（在线件尚未发布）: {value!r}")
+    assert "当前不可用" in value, (
+        f"ct2GpuUnpublished 回退口径须写明「当前不可用」: {value!r}")
+    assert "本地 zip" in value, (
+        f"ct2GpuUnpublished 须保留 CLI 本地 zip 出路: {value!r}")
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    assert "ct2GpuUnpublished" not in sp, \
+        "ct2GpuUnpublished 须维持单表（不得入 strings.py 镜像）"
+
+
 def _direction_key_value_parity_pinned(key: str) -> None:
     """direction_* 三键双表值 parity 断言（卡CR2 共用实现）。
 
@@ -7260,6 +7297,11 @@ def test_js_sources_layer_pinned():
        d1031-卡K4 换代（no_files_selected 前端对齐后端，D2026-1031-07）：
        全库拼接 8c4231e5…/496,517B、app-msg.js 65,154B/88cc7b9a…（值
        「暂未选择文件」→「未选择文件」-3B，键数零变化）；
+       d1031-卡C24 换代（GPU 相关两处陈旧文案改值，D2026-1031-07）：
+       全库拼接 375359fe…/496,513B、app-msg.js 65,150B/15a0f167…（
+       encodeBackendGpu「GPU（批2 提供）」→「GPU 加速」-10B、
+       ct2GpuUnpublished「在线件尚未发布」→「在线通道当前不可用」+6B；
+       键数零变化，i18n 计数钉不动；app-refine-asr.js 冻结值零改动）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7274,7 +7316,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "8c4231e50db4b782d534dd1b2aa291c193ad7144e4f11cf1c3458866b8325824"), \
+        "375359feaccf5705ce7745e7bfc0d3219524a55c1f0c1e2b0f1f1e8689f10287"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7304,8 +7346,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (65154,
-                       "88cc7b9a7641393833354a2b096c8995a671de05eb7a588a12901a50f744b7af"),
+        "app-msg.js": (65150,
+                       "15a0f167b961aae97d83a069a1f5fced67bd32f0fe9bbd93841b8b2ccb1ca4a0"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
