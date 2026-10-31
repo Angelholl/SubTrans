@@ -85,7 +85,7 @@ _UNATTRIBUTED_MARKS = ("杂音无法判定", "复标不一致")
 # 在参照口径回样（裁决②修正版：喘息类不进主分母＋含/不含双口径同报）
 _REF_INCLUDE_MARK = "喘息"
 # 「CLI 未给 --speech-min-s」哨兵：与显式 none（None）区分，缺省时不向
-# classify_transcript 传 speech_min_s kwarg（仍走产品缺省终裁值，零变化）
+# classify_transcript 传 speech_min_s kwarg（缺省=产品终裁值，哨兵机制自翻转后不变）
 _SPEECH_MIN_UNSET = object()
 
 
@@ -148,7 +148,7 @@ def _replay_sample(sample: dict, ctx: list[dict] | None = None,
     不静默截断/不循环补齐），len(timings) 超 asr_env._MAX_CLIPS →
     ValueError（先于引擎报错，构建侧分块），由 main 捕获转退出码 1。
     speech_min_s：仅显式传值（float 或 None）时透传主口径
-    classify_transcript；缺省哨兵＝不传 kwarg（产品终裁值零变化）。"""
+    classify_transcript；缺省哨兵＝不传 kwarg（缺省=产品终裁值）。"""
     raw_timings = sample.get("timings")
     if raw_timings is not None and not isinstance(raw_timings, list):
         raise ValueError(f"manifest 条目 timings 须为 SRT 区间字符串数组，"
@@ -454,7 +454,7 @@ def main(argv: list[str] | None = None) -> int:
                         type=_parse_speech_min_s,
                         default=_SPEECH_MIN_UNSET,
                         help="主口径能量门阈值（浮点数或字面量 none；缺省不传"
-                             "＝产品终裁值，零变化；参照口径恒 none 不受影响）")
+                             "＝产品终裁值；参照口径恒 none 不受影响）")
     args = parser.parse_args(argv)
 
     ctx: list[dict] = []
