@@ -573,8 +573,12 @@ def test_timing_span_wide_hours_and_ms_precision():
     assert _timing_span("00:00:00,1234 --> 00:00:01,5") == (1.234, 1.005)
 
 
-def test_collect_disagreement_non_utf8_srt_raises(tmp_path):
-    """非 UTF-8 SRT 现状契约：直接 UnicodeDecodeError，无容错（:254-256）。"""
+def test_collect_disagreement_non_utf8_srt_tolerated(tmp_path):
+    """非 UTF-8 SRT 容错契约：errors="replace" 不再上抛（D2026-1031-04 ⑦①）。
+
+    旧钉（本卡落地前）为 ``pytest.raises(UnicodeDecodeError)`` 现状契约；
+    owner 拍板补容错后同一输入应正常返回 dict，故就地改写为容错契约。
+    """
     (tmp_path / "S.ja.pass1.srt").write_text(
         _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
     (tmp_path / "S.ja.pass2.srt").write_bytes(
@@ -583,8 +587,93 @@ def test_collect_disagreement_non_utf8_srt_raises(tmp_path):
     mp.write_text(
         _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
 
-    with pytest.raises(UnicodeDecodeError):
-        collect_disagreement(str(mp))
+    result = collect_disagreement(str(mp))
+    assert result == {"total": 1, "matched": 0, "rows": []}
+
+
+def _srt_with_illegal_bytes(entries, corrupt_first: bool = False) -> bytes:
+    """entries → SRT 字节；corrupt_first 时首条文本行尾部混入非法字节序列。"""
+    body = _srt(entries).encode("utf-8")
+    if not corrupt_first:
+        return body
+    # 定位第 3 个换行（index/timing/text 之后），把 b"\x93\x94\x95" 插入文本行末
+    first = body.index(b"\n")
+    second = body.index(b"\n", first + 1)
+    third = body.index(b"\n", second + 1)
+    return body[:third] + b"\x93\x94\x95" + body[third:]
+
+
+_ILLEGAL_LEG_TO_NAME = {
+    "own": "V.ja.merged.subtransjav.srt",
+    "pass1": "V.ja.pass1.srt",
+    "pass2": "V.ja.pass2.srt",
+}
+
+
+@pytest.mark.parametrize("leg", ["own", "pass1", "pass2"])
+def test_collect_disagreement_illegal_bytes_no_raise(tmp_path, leg):
+    """:256/:257/:258 三处读取任一损坏均不上抛，结构正常返回（D2026-1031-04 ⑦①）。"""
+    entries = [
+        (1, "00:00:01,000 --> 00:00:02,000", "同じ文本です"),
+        (2, "00:00:05,000 --> 00:00:06,000", "完全不同的文本甲"),
+    ]
+    for name in _ILLEGAL_LEG_TO_NAME.values():
+        (tmp_path / name).write_bytes(
+            _srt_with_illegal_bytes(entries,
+                                    corrupt_first=(name == _ILLEGAL_LEG_TO_NAME[leg])))
+
+    result = collect_disagreement(str(tmp_path / _ILLEGAL_LEG_TO_NAME["own"]))
+    assert isinstance(result, dict)
+    assert set(result) == {"total", "matched", "rows"}
+    assert result["total"] == 2
+    assert result["matched"] == 2
+    assert [r["index"] for r in result["rows"]] == [1, 2]
+    if leg in ("pass1", "pass2"):
+        # 损坏面进比对：非法三字节被替换为三个 U+FFFD，随行文本进 rows
+        texts = "".join(r["pass1"] + r["pass2"] for r in result["rows"])
+        assert "\ufffd" * 3 in texts
+
+
+def test_collect_disagreement_all_illegal_bytes_keeps_replacement_chars(tmp_path):
+    """三件套全损坏：不抛、rows 含 U+FFFD 且时间轴匹配结构不变。"""
+    entries = [(1, "00:00:01,000 --> 00:00:02,000", "同じ文本です")]
+    for name in _ILLEGAL_LEG_TO_NAME.values():
+        (tmp_path / name).write_bytes(
+            _srt_with_illegal_bytes(entries, corrupt_first=True))
+
+    result = collect_disagreement(str(tmp_path / _ILLEGAL_LEG_TO_NAME["own"]))
+    assert result is not None
+    assert result["total"] == 1
+    assert result["matched"] == 1
+    rows = result["rows"]
+    assert len(rows) == 1
+    assert "\ufffd" * 3 in rows[0]["pass1"]
+    assert "\ufffd" * 3 in rows[0]["pass2"]
+
+
+def test_collect_disagreement_legal_input_zero_change(tmp_path):
+    """全合法 UTF-8 三件套：输出逐键与改前契约一致（errors 参数零影响）。"""
+    entries = [(1, "00:00:01,000 --> 00:00:02,000", "同じ文本です")]
+    for name in _ILLEGAL_LEG_TO_NAME.values():
+        (tmp_path / name).write_bytes(_srt_with_illegal_bytes(entries))
+
+    result = collect_disagreement(str(tmp_path / _ILLEGAL_LEG_TO_NAME["own"]))
+    assert result == {
+        "total": 1,
+        "matched": 1,
+        "rows": [{
+            "index": 1,
+            "timing": "00:00:01,000 --> 00:00:02,000",
+            "pass1_timing": "00:00:01,000 --> 00:00:02,000",
+            "pass2_timing": "00:00:01,000 --> 00:00:02,000",
+            "pass1": "同じ文本です",
+            "pass2": "同じ文本です",
+            "similarity": 1.0,
+            "iou": 1.0,
+            "offset": 0.0,
+            "artifact": False,
+        }],
+    }
 
 
 def test_collect_disagreement_malformed_utf8_srt_contract(tmp_path):
