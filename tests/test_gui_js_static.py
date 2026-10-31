@@ -486,6 +486,22 @@ def test_encode_commit_rejected_value_parity_pinned():
         f"strings.py={m_py.group(1)!r}")
 
 
+def test_no_files_selected_value_parity_pinned():
+    """卡K4（D2026-1031-07）：no_files_selected 前后端措辞统一——JS MSG
+    镜像值与 strings.py 后端原生键值逐字等值（后端为语义源）。
+
+    两表各存一份同名键，旧钉只锁键存在性；本钉补跨表值 parity，
+    堵「同键不同值」漂移口（口径同卡K5 parity 钉）。"""
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    m_py = re.search(r'"no_files_selected":\s*"([^"]*)"', sp)
+    assert m_py, "strings.py 缺 no_files_selected 原生键"
+    m_js = re.search(r"\bno_files_selected:\s*'([^']*)'", _app_js_source())
+    assert m_js, "app-msg.js 缺 MSG.no_files_selected 镜像键"
+    assert m_js.group(1) == m_py.group(1), (
+        f"no_files_selected 双表值漂移：JS={m_js.group(1)!r} "
+        f"strings.py={m_py.group(1)!r}")
+
+
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""
@@ -7201,6 +7217,9 @@ def test_js_sources_layer_pinned():
        d1031-卡K5 换代（encodeCommitRejected 双语义对齐，D2026-1031-07）：
        全库拼接 4605504c…/496,520B、app-msg.js 65,157B/dc71ce47…、
        app-encode-dock.js 23,174B/539cfa44…（值对齐 + 插值位联动，键数零变化）；
+       d1031-卡K4 换代（no_files_selected 前端对齐后端，D2026-1031-07）：
+       全库拼接 8c4231e5…/496,517B、app-msg.js 65,154B/88cc7b9a…（值
+       「暂未选择文件」→「未选择文件」-3B，键数零变化）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7215,7 +7234,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "4605504c6db6d3baa667d2e5f1deb887ae8a875ad01126406457de58a61df68a"), \
+        "8c4231e50db4b782d534dd1b2aa291c193ad7144e4f11cf1c3458866b8325824"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7245,8 +7264,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (65157,
-                       "dc71ce47202730d504ded0052cf36328c3b6d9618b34441ec8dbda9bf65541b5"),
+        "app-msg.js": (65154,
+                       "88cc7b9a7641393833354a2b096c8995a671de05eb7a588a12901a50f744b7af"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,

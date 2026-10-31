@@ -285,7 +285,7 @@ const MSG = {
 
     // ---- Source 区 / 文件按钮 ----
     source_header: '拖拽 .srt 字幕文件到这里',
-    no_files_selected: '暂未选择文件',
+    no_files_selected: '未选择文件',
     // d1015-卡E（D2026-1015-05）：文件卡头「已选 X 个」计数（JS 态键，
     // 卡D 骨架 .card-head-count 由此填充；0 文件时不显示）
     selected_count: (n) => `已选 ${n} 个`,
