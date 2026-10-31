@@ -16,12 +16,18 @@ import os
 import re
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from subtransjav.refine.events import parse_event_line
+from subtransjav.refine.events import parse_event_line as _parse_event_line_untyped
 
 from .strings import msg
+
+# refine.events 尚未入 strict 面（parse_event_line 无注解），此处以 cast 声明
+# 调用契约：运行期恒等，不改任何逻辑。
+_parse_event_line = cast(
+    Callable[[str], dict[str, Any] | None], _parse_event_line_untyped)
 
 # 风险清单去重上限（超出后新的唯一风险仍计数，但明细列表只保留最近 100 条）
 RISKS_CAP = 100
@@ -49,7 +55,7 @@ _STAGE_LABEL_KEYS = {
 }
 
 
-def stage_label(phase) -> str:
+def stage_label(phase: Any) -> str:
     """把事件 phase 归一为可展示的阶段名；空值返回空串。"""
     if phase is None:
         return ""
@@ -64,7 +70,7 @@ def _join(*parts: str) -> str:
     return " ".join(p for p in parts if p)
 
 
-def _to_int(value):
+def _to_int(value: Any) -> int | None:
     """安全转 int；None/非数值返回 None（事件 payload 数值容错单点）。"""
     try:
         return int(value) if value is not None else None
@@ -190,8 +196,8 @@ def _default_strip_stem(stem: str) -> str:
         return stem
 
 
-def resume_state_for_path(path: str, exists=os.path.exists,
-                          strip_stem=None) -> dict[str, Any]:
+def resume_state_for_path(path: str, exists: Callable[[str], bool] = os.path.exists,
+                          strip_stem: Callable[[str], str] | None = None) -> dict[str, Any]:
     """计算单个输入 srt 的断点恢复状态。
 
     - 有 ``{stem}_final_{后缀}.srt``    → completed（整文件已完成）
@@ -268,7 +274,7 @@ class EventStreamParser:
     # ------------------------------------------------------------------
     def feed(self, line: str) -> dict[str, Any] | None:
         """喂入一行输出。返回本次解析出的事件；非事件行返回 None。"""
-        event = parse_event_line(line)
+        event = _parse_event_line(line)
         if event is None:
             with self._lock:
                 self._feed_legacy(line)

@@ -148,7 +148,7 @@ class EncodeJob:
     probe: MediaInfo | None = field(default=None, repr=False, compare=False)  # 入队探测缓存
     estimated_bytes: int = 0                  # 收尾相 deadline / 磁盘预检派生用
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         """json 可序列化快照（api 轮询用）。"""
         return {
             "id": self.id,
@@ -183,14 +183,14 @@ def estimate_output_bytes(params: hardsub.EncodeParams, bit_rate_bps: int,
 # ---------------------------------------------------------------------------
 
 
-def _spawn_ffmpeg(argv: list[str]) -> subprocess.Popen:
+def _spawn_ffmpeg(argv: list[str]) -> subprocess.Popen[bytes]:
     """list-args + CREATE_NO_WINDOW；stdout 收 -progress 行、stderr 排空。"""
     return subprocess.Popen(
         argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         shell=False, creationflags=CREATE_NO_WINDOW)  # windowed 防黑框（批0）
 
 
-def _kill_tree(proc: subprocess.Popen) -> None:
+def _kill_tree(proc: subprocess.Popen[bytes]) -> None:
     """进程树击杀；任何异常都降级单杀兜底，绝不阻断状态收口。"""
     try:
         from subtransjav.utils import process_manager
@@ -202,7 +202,7 @@ def _kill_tree(proc: subprocess.Popen) -> None:
             proc.kill()
 
 
-def _wait_proc(proc: subprocess.Popen, timeout: float) -> int:
+def _wait_proc(proc: subprocess.Popen[bytes], timeout: float) -> int:
     """限時等待退出；超时树杀后再兜底取码（永不抛 TimeoutExpired）。"""
     try:
         return proc.wait(timeout=timeout)
@@ -214,7 +214,7 @@ def _wait_proc(proc: subprocess.Popen, timeout: float) -> int:
             return proc.returncode if proc.returncode is not None else -1
 
 
-def _drain_stderr(proc: subprocess.Popen, box: dict) -> None:
+def _drain_stderr(proc: subprocess.Popen[bytes], box: dict[str, Any]) -> None:
     """stderr 排空线程：只留尾 800 字符供失败诊断。"""
     tail = ""
     if proc.stderr is None:
@@ -245,8 +245,8 @@ class EncodeQueue:
         self._pending: list[EncodeJob] = []
         self._history: list[EncodeJob] = []       # 全终态/在队任务快照源（只增）
         self._current: EncodeJob | None = None
-        self._current_box: dict | None = None
-        self._current_proc: subprocess.Popen | None = None
+        self._current_box: dict[str, Any] | None = None
+        self._current_proc: subprocess.Popen[bytes] | None = None
         self._worker: threading.Thread | None = None
         self._seq = 0
         self._supply: SupplyResult | None = None
@@ -500,7 +500,8 @@ class EncodeQueue:
                 if os.path.isfile(part_path):
                     os.unlink(part_path)
 
-    def _watchdog(self, proc: subprocess.Popen, box: dict, total_timeout: float) -> None:
+    def _watchdog(self, proc: subprocess.Popen[bytes], box: dict[str, Any],
+                  total_timeout: float) -> None:
         start = self._clock()
         while proc.poll() is None:
             now = self._clock()
@@ -568,7 +569,7 @@ class EncodeQueue:
             self._cond.notify_all()
             return fresh.id
 
-    def snapshot(self) -> list[dict]:
+    def snapshot(self) -> list[dict[str, Any]]:
         with self._cond:
             return [j.snapshot() for j in self._history]
 
