@@ -502,6 +502,46 @@ def test_no_files_selected_value_parity_pinned():
         f"strings.py={m_py.group(1)!r}")
 
 
+def _direction_key_value_parity_pinned(key: str) -> None:
+    """direction_* 三键双表值 parity 断言（卡CR2 共用实现）。
+
+    strings.py 为零消费死镜像（R3 §一 B 类实证），app-msg.js 为前端
+    活值基准；两表各存一份同名键，旧钉只锁键存在性，本实现补跨表
+    值 parity，堵「同键不同值」漂移口（口径同卡K5/K4 parity 钉）。
+    """
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    m_py = re.search(rf'"{re.escape(key)}":\s*"([^"]*)"', sp)
+    assert m_py, f"strings.py 缺 {key} 镜像键"
+    m_js = re.search(rf"\b{re.escape(key)}:\s*'([^']*)'", _app_js_source())
+    assert m_js, f"app-msg.js 缺 MSG.{key} 键"
+    assert m_js.group(1) == m_py.group(1), (
+        f"{key} 双表值漂移：JS={m_js.group(1)!r} "
+        f"strings.py={m_py.group(1)!r}")
+
+
+def test_direction_card_s1_label_value_parity_pinned():
+    """卡CR2（D2026-1031-07）：direction_card_s1_label 双表值逐字等值。
+
+    首轮现状核对实证 s1 标签后端镜像缺「（可选，留空=自动查找）」后缀
+    （K2 之前既有漂移）；本钉以 app-msg.js 活值为基准锁死。"""
+    _direction_key_value_parity_pinned("direction_card_s1_label")
+
+
+def test_direction_card_s3_label_value_parity_pinned():
+    """卡CR2（D2026-1031-07）：direction_card_s3_label 双表值逐字等值。
+
+    漂移形态同 s1 标签（缺「（可选，留空=自动查找）」后缀）；本钉以
+    app-msg.js 活值为基准锁死。"""
+    _direction_key_value_parity_pinned("direction_card_s3_label")
+
+
+def test_direction_hint_value_parity_pinned():
+    """卡CR2（D2026-1031-07）：direction_hint 双表值逐字等值。
+
+    现值两表本就同值（K2 已对齐），本钉为防漂移留存——改任一侧即红。"""
+    _direction_key_value_parity_pinned("direction_hint")
+
+
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""
