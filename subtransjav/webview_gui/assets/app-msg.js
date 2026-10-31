@@ -144,7 +144,7 @@ const MSG = {
     encodeSupplyDone: '完整版 ffmpeg 就绪，请重新点击「压制成品」发起压制',
     encodeOverwriteTitle: '覆盖确认',
     encodeOverwriteBody: '以下成品文件已存在，覆盖它们吗？\n\n{list}',
-    encodeCommitRejected: '未能入队：{e}',
+    encodeCommitRejected: '全部任务未能入队：{reason}',
     encodeConflict: '压制任务进行中，无法开始翻译——请等待压制完成，或在队列底条中取消压制任务',
     encodeTranslateConflict: '翻译任务进行中，无法加入压制队列——请等待翻译完成后再试',
     encodeCancelOneConfirm: '取消当前压制任务？',

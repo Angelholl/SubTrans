@@ -262,7 +262,7 @@ const EncodeDock = {
         if (!commit || commit.success === false) {
             const err = (commit && commit.error) || String(commit);
             AppModal.alert(MSG.encodeModalTitle,
-                MSG.encodeCommitRejected.replace('{e}', err));
+                MSG.encodeCommitRejected.replace('{reason}', err));
             return;
         }
         if (commit.rejected && commit.rejected.length > 0) {
