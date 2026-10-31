@@ -106,8 +106,9 @@ MSG = {
     "lang_ja": "日文",
     "lang_zh": "中文",
     "lang_en": "英文",
-    "direction_card_s1_label": "阶段A 角色卡",
-    "direction_card_s3_label": "阶段B 角色卡",
+    # 前端镜像同步键：与 app-msg.js 同值（值 parity 钉锁死）
+    "direction_card_s1_label": "阶段A 角色卡（可选，留空=自动查找）",
+    "direction_card_s3_label": "阶段B 角色卡（可选，留空=自动查找）",
     "direction_card_placeholder": "非缺省方向必填（.txt 路径）",
     "direction_hint": "缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错",
 
