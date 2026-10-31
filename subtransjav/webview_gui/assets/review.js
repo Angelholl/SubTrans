@@ -20,7 +20,7 @@ const REVIEW_MSG = {
     review_transcode_estimate: (s) => `预计转码约 ${s} 秒，点击按钮开始`,
     review_transcode_running: '转码进行中…',
     review_transcode_failed: '转码失败，请重试或手动转换格式',
-    review_bad_encoding: '字幕文件编码无法识别（仅支持 UTF-8 / GBK），请另存为 UTF-8 后重试',
+    review_bad_encoding: '字幕文件编码无法识别（仅支持 UTF-8 / GBK / CP932），请另存为 UTF-8 后重试',
     review_api_not_ready: '接口未就绪，请稍后再试',
     review_media_error: '无法解码该媒体，请尝试手动转码',
     // F2 错误分型（D2026-1007-02 C3）：probe 实证编解码探测通过
@@ -53,9 +53,9 @@ const REVIEW_MSG = {
     review_det_skip_btn: '跳过',
     review_det_no_srt: '先导入 .srt 字幕，方可转跳/试听',
     review_det_no_save: '判定标记仅本会话内生效，不落盘',
-    review_asr_card: 'ASR 语音对照为可选能力（依赖本机自备 whisper，非必需）：'
-        + '推荐 whisper-large-v2，自备落位 ~/.cache/whisper 或数据根 models/asr，'
-        + '配好后可在 API 与模型选择页旁的「ASR 与词典」页启用 ASR 验证。',
+    review_asr_card: 'ASR 语音对照为可选能力（本机 CT2 转写引擎）：'
+        + '模型可在「ASR 与词典」页一键下载（自动校验完整性），'
+        + '配好后在该页启用 ASR 验证。',
     review_asr_goto: '前往 ASR 与词典页',
     // ---- 批 4（D2026-1002-12）：审计④载入 dirty 守卫 ----
     review_load_dirty_confirm: '当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？',
