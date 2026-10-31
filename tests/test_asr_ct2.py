@@ -1,5 +1,6 @@
 # 3.2.0 CT2 骨架批钉（D2026-1028-03）：ct2 后端契约+运行时模块纯函数面。
 # 全程零真实模型/零网络；ct2 转写链用注入 fake 模块走全函数。
+import argparse
 import json
 import os
 import pathlib
@@ -8,6 +9,8 @@ import threading
 import time
 import types
 from types import SimpleNamespace
+
+import pytest
 
 from subtransjav.refine import asr_env, asr_runner, asr_runtime
 
@@ -525,3 +528,49 @@ class TestAsyncOps:
             time.sleep(0.05)
         snap = asr_runtime.operation_progress()
         assert snap["phase"] == "failed" and snap["rc"] == 3   # verified 门
+
+
+class TestRunnerParserExactMatch:
+    """runner parser 精确匹配钉（D2026-1031-04 ⑦②）：cmd 契约里的
+    --model 元素此前靠 argparse 前缀缩写被收进 --model-dir（后值覆盖
+    冲正才可用）；收敛后 --model 是真实选项、缩写一律拒绝。"""
+
+    @staticmethod
+    def _runner_parser(monkeypatch):
+        """捕获 main() 内联构造的 runner parser（不改源面结构）。"""
+        captured = []
+        real_parse_args = argparse.ArgumentParser.parse_args
+
+        def _capture(self, args=None, namespace=None):
+            captured.append(self)
+            return real_parse_args(self, args, namespace)
+
+        with monkeypatch.context() as m:
+            m.setattr(argparse.ArgumentParser, "parse_args", _capture)
+            rc = asr_runner.main([])
+        assert rc == 2, "main([]) 应先构造 parser 再报缺 --media"
+        assert captured, "未捕获到 runner parser 构造"
+        return captured[0]
+
+    def test_model_option_not_swallowed_by_model_dir(self, monkeypatch):
+        # 钉1：--model 精确命中自身，不再被 --model-dir 前缀缩写吞掉
+        parser = self._runner_parser(monkeypatch)
+        args = parser.parse_args(["--model", "large-v2", "--model-dir", "/x"])
+        assert args.model_dir == "/x"
+        assert args.model == "large-v2"
+
+    def test_abbreviation_rejected(self, monkeypatch):
+        # 钉2：allow_abbrev=False 生效——前缀缩写报 argparse error（rc=2）
+        parser = self._runner_parser(monkeypatch)
+        with pytest.raises(SystemExit) as ei:
+            parser.parse_args(["--mo", "x"])
+        assert ei.value.code == 2
+
+    def test_runner_command_keeps_model_element(self, tmp_path, monkeypatch):
+        # 钉3：ct2_runner_command 契约保活——--model 元素原样保留且
+        # 与 --model-dir 各自独立成对（cmd 构造面零变化）
+        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        cmd = asr_runtime.ct2_runner_command("m.mp4", "o.srt",
+                                             model_dir=str(tmp_path))
+        assert cmd[cmd.index("--model") + 1] == "large-v2"
+        assert cmd[cmd.index("--model-dir") + 1] == str(tmp_path)
