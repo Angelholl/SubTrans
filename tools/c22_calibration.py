@@ -7,11 +7,16 @@
 
 - manifest json＝[{"guide": 导读 json 路径, "media": 媒体路径,
   "label": true|false}, ...]（label=该间隙确有台词的真值，owner 独立
-  标注，与阈值测算方分离——防循环自证）；条目可带两个可选键（均缺省或
+  标注，与阈值测算方分离——防循环自证）；guide 与 "timings" 显式清单
+  至少其一（timings 非空时不读导读）；条目可带三个可选键（均缺省或
   null=旧行为）："labels"=bool 数组逐 timing 取 labels[i] 作该行真值
   （逐间隙口径，D2026-1009-02 §三）；"timings"=SRT 区间字符串数组，显式
-  清单取代导读派生（标注包只截前 20 条，显式清单才精确对齐）。两者长度
-  必须相等，不匹配即 raise 中文 ValueError → main 退出码 1（fail-closed）；
+  清单取代导读派生（标注包只截前 20 条，显式清单才精确对齐）；
+  "exclude_reasons"=逐 timing 排除原因数组（D2026-1029-11 裁决②/D3
+  排除面载体：非空行不进主口径统计，喘息类在参照口径回样）。数组长度
+  必须与 timings 相等，不匹配即 raise 中文 ValueError → main 退出码 1
+  （fail-closed）；单样本 timings 上限=asr_env._MAX_CLIPS（超限先于
+  引擎 fail-closed 报错，构建侧分块见 tools/build_c22_217_manifest.py）；
 - 流程：逐样本读导读 observation 条目（category=suspected_missed_speech）
   → slice+batch_transcribe_clips → classify_transcript 三维分档 → 聚合：
   高置信桶精确率（判 high 中 label=true 占比）+Wilson 95% 置信下界+
@@ -51,6 +56,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from subtransjav import paths  # noqa: E402
 from subtransjav.refine.asr_env import (  # noqa: E402
+    _MAX_CLIPS,
     batch_transcribe_clips,
     cleanup_clips,
 )
@@ -68,6 +74,14 @@ _GATE_COVERAGE_FLOOR = 0.50
 _WILSON_Z = 1.959963984540054
 _OBS_CATEGORY = "suspected_missed_speech"
 _GATE_RELPATH = ("config", "fullchain_c22.json")
+# 排除率上限（D2026-1029-12 D3；PROVISIONAL 预注册，owner 可终裁改值）：
+# 监管「不可归因排除」（杂音无法判定＋复标不一致）合计占全体候选行比例；
+# 喘息档系裁决固定排除语义（排除单列、参照口径回样），不设上限。
+_EXCLUDE_CAP_UNATTRIBUTED = 0.10
+_UNATTRIBUTED_MARKS = ("杂音无法判定", "复标不一致")
+# 参照口径（含喘息）回样标记：exclude_reason 含此子串者不进主口径统计、
+# 在参照口径回样（裁决②修正版：喘息类不进主分母＋含/不含双口径同报）
+_REF_INCLUDE_MARK = "喘息"
 
 
 def wilson_lower_bound(successes: int, n: int, z: float = _WILSON_Z) -> float:
@@ -95,53 +109,77 @@ def _observation_timings(guide_path: str) -> list[str]:
 def _replay_sample(sample: dict, ctx: list[dict] | None = None) -> list[dict]:
     """单样本回放：切片批量转写→逐 timing 三维分档。
 
-    返回 [{"timing", "grade", "label", "reasons", "asr_error"}]；切片/
-    转写失败→grade="empty"（不静默：错误进样本明细 asr_error 独立列）。
-    ctx 非空时顺带落转写上下文（供参照读数二次 classify，不重复转写）。
+    返回 [{"timing", "grade", "label", "reasons", "asr_error",
+    "exclude_reason"}]；切片/转写失败→grade="empty"（不静默：错误进
+    样本明细 asr_error 独立列）。ctx 非空时顺带落转写上下文（供参照
+    读数二次 classify，不重复转写）。
     可选键（缺省或 null=旧行为）："labels"=逐 timing 真值数组，
-    "timings"=显式清单（取代导读派生，标注包只截前 20 条观测）；
-    len(timings 或导读派生) != len(labels) → ValueError 中文（fail-closed，
-    不静默截断/不循环补齐），由 main 捕获转退出码 1。"""
+    "timings"=显式清单（非空时取代导读派生，导读可不提供），
+    "exclude_reasons"=逐 timing 排除原因数组（D2026-1029-11 裁决②/D3，
+    非空行不进主口径统计）；
+    len(timings) 与各数组不等长 → ValueError 中文（fail-closed，
+    不静默截断/不循环补齐），len(timings) 超 asr_env._MAX_CLIPS →
+    ValueError（先于引擎报错，构建侧分块），由 main 捕获转退出码 1。"""
     raw_timings = sample.get("timings")
     if raw_timings is not None and not isinstance(raw_timings, list):
         raise ValueError(f"manifest 条目 timings 须为 SRT 区间字符串数组，"
                          f"实际为 {type(raw_timings).__name__}")
-    derived = _observation_timings(str(sample.get("guide") or ""))
-    timings = [str(t) for t in raw_timings] if raw_timings else derived
+    timings = ([str(t) for t in raw_timings] if raw_timings
+               else _observation_timings(str(sample.get("guide") or "")))
     labels = sample.get("labels")
     if labels is not None and not isinstance(labels, list):
         raise ValueError(f"manifest 条目 labels 须为 bool 数组，"
                          f"实际为 {type(labels).__name__}")
+    exclude_reasons = sample.get("exclude_reasons")
+    if exclude_reasons is not None and not isinstance(exclude_reasons, list):
+        raise ValueError(f"manifest 条目 exclude_reasons 须为字符串数组，"
+                         f"实际为 {type(exclude_reasons).__name__}")
     if labels is not None and len(timings) != len(labels):
         raise ValueError(f"labels 与 timings 长度不匹配："
                          f"len(timings)={len(timings)} != "
                          f"len(labels)={len(labels)}，拒绝回放")
+    if exclude_reasons is not None and len(timings) != len(exclude_reasons):
+        raise ValueError(f"exclude_reasons 与 timings 长度不匹配："
+                         f"len(timings)={len(timings)} != "
+                         f"len(exclude_reasons)={len(exclude_reasons)}，"
+                         "拒绝回放")
+    if len(timings) > _MAX_CLIPS:
+        raise ValueError(
+            f"manifest 条目 timings {len(timings)} 条超出单样本上限 "
+            f"{_MAX_CLIPS}（引擎切片批量 fail-closed）；manifest 构建"
+            f"须按 ≤{_MAX_CLIPS} 条/样本分块"
+            "（tools/build_c22_217_manifest.py 已内置分块）")
     label = bool(sample.get("label"))
     if not timings:
         if ctx is not None:
             ctx.append({"timing": "", "segments": [], "text": "",
                         "windows": {}, "overlap_s": None, "label": label,
-                        "asr_error": ""})
+                        "asr_error": "", "exclude_reason": None})
         return [{"timing": "", "grade": "empty", "label": label,
-                 "reasons": ["no_observations"]}]
+                 "reasons": ["no_observations"], "exclude_reason": None}]
     media = str(sample.get("media") or "")
     windows = detect_speech_windows(media, timings)
-    transcripts = batch_transcribe_clips(media, timings)
+    transcripts = batch_transcribe_clips(media, timings,
+                                         max_clips=_MAX_CLIPS)
     rows: list[dict] = []
     for i, (t, tr) in enumerate(zip(timings, transcripts, strict=True)):
         verdict = classify_transcript(
             t, tr.get("segments") or [], tr.get("text") or "", windows,
             language="ja")
         row_label = label if labels is None else labels[i]
+        exc = (str(exclude_reasons[i])
+               if exclude_reasons and exclude_reasons[i] else None)
         rows.append({"timing": t, "grade": verdict["grade"],
                      "label": row_label,
                      "reasons": verdict["reasons"],
-                     "asr_error": tr.get("error") or ""})
+                     "asr_error": tr.get("error") or "",
+                     "exclude_reason": exc})
         if ctx is not None:
             ctx.append({"timing": t, "segments": tr.get("segments") or [],
                         "text": tr.get("text") or "", "windows": windows,
                         "overlap_s": None, "label": row_label,
-                        "asr_error": tr.get("error") or ""})
+                        "asr_error": tr.get("error") or "",
+                        "exclude_reason": exc})
     return rows
 
 
@@ -197,35 +235,54 @@ def _gate_verdict(agg: dict) -> str:
 
 
 def _reclassify_no_energy_gate(ctx: list[dict]) -> list[dict]:
-    """参照读数（D2026-1029-11 裁决① 双读数）：同一批转写产物以
-    speech_min_s=None 二次 classify（不重复转写，零新增引擎调用）。
+    """参照读数（D2026-1029-11 裁决① 双读数＋裁决② 含喘息双口径）：
+    同一批转写产物以 speech_min_s=None 二次 classify（不重复转写，零
+    新增引擎调用）。
 
+    排除面处置：exclude_reason 含「喘息」者在参照口径回样（label=true，
+    裁决②修正版——喘息类不进主分母但保留喘息场景唯一观测窗口）；
+    杂音/复标不一致行两口径均排除（exclude_reason 保留，出统计）。
     产出行形态与主口径 rows 同构；只供计数与点精确率呈现，不得带任何
     门判定语义（D3 口径：参照列无 Wilson 下界/覆盖率/verdict）。"""
     rows: list[dict] = []
     for c in ctx:
+        exc = c.get("exclude_reason") or None
         v = classify_transcript(c["timing"], c["segments"], c["text"],
                                 c.get("windows") or {},
                                 overlap_s=c.get("overlap_s"),
                                 speech_min_s=None)
+        ref_label = bool(c.get("label"))
+        ref_exc = exc
+        if exc and _REF_INCLUDE_MARK in str(exc):
+            ref_label = True
+            ref_exc = None
         rows.append({"timing": c["timing"], "grade": v["grade"],
-                     "label": bool(c.get("label")),
+                     "label": ref_label,
                      "reasons": v["reasons"],
-                     "asr_error": c.get("asr_error") or ""})
+                     "asr_error": c.get("asr_error") or "",
+                     "exclude_reason": ref_exc})
     return rows
 
 
 def _aggregate(rows: list[dict]) -> dict:
     """聚合指标：高置信桶精确率/Wilson 下界/覆盖率/召回＋分诊计数
-    （asr_error/empty 分桶，报告面单列，主口径分母不变）。"""
-    high = [r for r in rows if r.get("grade") == "high"]
+    （asr_error/empty 分桶，报告面单列）＋排除面计数（D2026-1029-12
+    D3：exclude_reason 非空行不进主口径统计——分母/召回均基于入样行；
+    无 exclude_reason 键的旧行为 = 零排除 = 分母与原 total 全等）。"""
+    excluded = [r for r in rows if r.get("exclude_reason")]
+    eff = [r for r in rows if not r.get("exclude_reason")]
+    high = [r for r in eff if r.get("grade") == "high"]
     tp = sum(1 for r in high if r.get("label"))
     n = len(high)
-    total = len(rows)
-    positives = sum(1 for r in rows if r.get("label"))
-    empty_rows = [r for r in rows if r.get("grade") == "empty"]
-    err_rows = [r for r in rows if r.get("asr_error")]
+    total = len(eff)
+    positives = sum(1 for r in eff if r.get("label"))
+    empty_rows = [r for r in eff if r.get("grade") == "empty"]
+    err_rows = [r for r in eff if r.get("asr_error")]
     empty_with_error = [r for r in empty_rows if r.get("asr_error")]
+    by_reason: dict[str, int] = {}
+    for r in excluded:
+        k = str(r.get("exclude_reason"))
+        by_reason[k] = by_reason.get(k, 0) + 1
     return {"n_high": n,
             "tp_high": tp,
             "precision": (tp / n) if n else 0.0,
@@ -236,12 +293,29 @@ def _aggregate(rows: list[dict]) -> dict:
             "n_positive": positives,
             "n_asr_error": len(err_rows),
             "n_empty_with_error": len(empty_with_error),
-            "n_empty_silent": len(empty_rows) - len(empty_with_error)}
+            "n_empty_silent": len(empty_rows) - len(empty_with_error),
+            "n_rows_all": len(rows),
+            "n_excluded": len(excluded),
+            "exclude_rate": (len(excluded) / len(rows)) if rows else 0.0,
+            "n_excluded_by_reason": by_reason}
+
+
+def _unattributed_excluded(agg: dict) -> int:
+    """不可归因排除合计（D3：杂音无法判定＋复标不一致；监管上限用）。"""
+    by_reason = agg.get("n_excluded_by_reason") or {}
+    return sum(v for k, v in by_reason.items()
+               if any(m in k for m in _UNATTRIBUTED_MARKS))
 
 
 def _write_report(out_path: str, rows: list[dict], agg: dict,
                   *, selftest: bool, enabled_written: bool, verdict: str,
                   ref_agg: dict) -> None:
+    n_all = agg.get("n_rows_all") or agg["n_total"]
+    unattr = _unattributed_excluded(agg)
+    unattr_rate = (unattr / n_all) if n_all else 0.0
+    over_cap = unattr_rate > _EXCLUDE_CAP_UNATTRIBUTED
+    breath_n = sum(v for k, v in (agg.get("n_excluded_by_reason") or {}).items()
+                   if _REF_INCLUDE_MARK in k)
     lines = [
         "# C22 校准回放报告",
         "",
@@ -274,31 +348,59 @@ def _write_report(out_path: str, rows: list[dict], agg: dict,
         f"- 门控文件：{'已写入' if enabled_written else '未写入'}"
         f"（config/fullchain_c22.json）",
         "",
+        "## 排除面（D2026-1029-11 裁决②/D2026-1029-12 D3）",
+        "",
+        f"- 排除行：{agg.get('n_excluded', 0)} / 全体候选 {n_all}"
+        f"（排除率 {agg.get('exclude_rate', 0.0):.4f}；排除行不进主口径"
+        "统计，排除行不删、清单见报告尾）",
+        f"- 分原因：{'；'.join(f'{k} {v}' for k, v in (agg.get('n_excluded_by_reason') or {}).items()) or '（无排除）'}",
+        f"- 不可归因排除（杂音无法判定＋复标不一致）：{unattr} 条，"
+        f"比率 {unattr_rate:.4f}／上限 {_EXCLUDE_CAP_UNATTRIBUTED:.2f}"
+        "（PROVISIONAL 预注册，owner 可终裁）："
+        + ("⚠️ WARN 超限——本读数仅呈报，不得作开门验收依据，须 owner 复核"
+           if over_cap else "未超限"),
+        f"- 喘息档（裁决固定排除语义，参照口径回样）：{breath_n} 条",
+        "",
         "## 样本明细",
         "",
-        "| # | timing | grade | label | reasons | asr_error |",
-        "|---|--------|-------|-------|---------|-----------|",
+        "| # | timing | grade | label | reasons | asr_error | exclude_reason |",
+        "|---|--------|-------|-------|---------|-----------|----------------|",
     ]
     for i, r in enumerate(rows, 1):
         reasons = "; ".join(r.get("reasons") or [])
         err = str(r.get("asr_error") or "").replace("|", "\\|")
+        exc = str(r.get("exclude_reason") or "").replace("|", "\\|")
         lines.append(f"| {i} | {r.get('timing')} | {r.get('grade')} "
-                     f"| {r.get('label')} | {reasons} | {err} |")
+                     f"| {r.get('label')} | {reasons} | {err} | {exc} |")
     lines += [
         "",
-        "## 参照读数（不含 ≤1s 能量门）",
+        "## 参照读数（不含 ≤1s 能量门；含喘息口径）",
         "",
         "参照口径＝同一批转写产物以 speech_min_s=None 二次 classify"
-        "（不重复转写）；本节无门判定语义，只报计数与点精确率"
-        "（D2026-1029-11 裁决①/D3 口径）。",
+        "（不重复转写）；喘息档排除行在本口径回样（label=true，裁决②"
+        "含/不含双口径同报——判定列唯一为本报告主口径）；本节无门判定"
+        "语义，只报计数与点精确率（D2026-1029-11 裁决①/D3 口径）。",
         "",
         f"- n_high：{ref_agg['n_high']}（label=true：{ref_agg['tp_high']}）"
         f" / n_total：{ref_agg['n_total']}",
         f"- 点精确率：{ref_agg['precision']:.4f}",
         f"- empty 分桶＝带 error {ref_agg['n_empty_with_error']}"
         f"／真空输出 {ref_agg['n_empty_silent']}；"
-        f"asr_error 行 {ref_agg['n_asr_error']}",
+        f"asr_error 行 {ref_agg['n_asr_error']}；两口径均排除行 "
+        f"{ref_agg.get('n_excluded', 0)}",
     ]
+    exc_rows = [r for r in rows if r.get("exclude_reason")]
+    if exc_rows:
+        lines += [
+            "",
+            "## 排除项清单（审计，D2026-1029-12 D3）",
+            "",
+            "| # | timing | exclude_reason |",
+            "|---|--------|----------------|",
+        ]
+        for i, r in enumerate(exc_rows, 1):
+            exc = str(r.get("exclude_reason") or "").replace("|", "\\|")
+            lines.append(f"| {i} | {r.get('timing')} | {exc} |")
     Path(out_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -334,8 +436,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         rows = []
         for i, sample in enumerate(manifest, 1):
-            if not isinstance(sample, dict) or not sample.get("guide"):
-                print(f"❌ manifest 第 {i} 项缺 guide 路径")
+            if (not isinstance(sample, dict)
+                    or not (sample.get("guide") or sample.get("timings"))):
+                print(f"❌ manifest 第 {i} 项缺 guide 路径或 timings "
+                      "显式清单（至少其一）")
                 return 1
             try:
                 rows.extend(_replay_sample(sample, ctx))

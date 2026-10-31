@@ -312,5 +312,119 @@ def test_replay_arm_no_legacy_whisper_symbols():
     引擎唯一出口=batch_transcribe_clips ct2 分派）。"""
     src = _TOOL_PATH.read_text(encoding="utf-8")
     assert "asr_runner" not in src, "回放臂不得直调 runner 子进程"
-    assert re.search(r"whisper", src, re.I) is None,         "回放臂残留 legacy whisper 引用"
+    assert re.search(r"whisper", src, re.I) is None,         "回放臂残留 legacy whisper 引用"
     assert "batch_transcribe_clips" in src, "回放臂引擎出口缺失"
+
+
+# ------------------------------------------------------- d1030 卡2（裁决②/D3）
+# 217 条挂接：exclude_reasons 数据载体＋排除面统计＋喘息双口径回样＋
+# guide 惰性化＋_MAX_CLIPS 透传前置防呆。
+
+def test_pin8_exclude_reasons_mismatch_raises(c22, tmp_path):
+    """exclude_reasons 与 timings 不等长 → 中文 ValueError（fail-closed）。"""
+    with pytest.raises(ValueError) as exc:
+        c22._replay_sample({"media": "x.mkv", "label": True,
+                            "timings": [T1, T2],
+                            "exclude_reasons": ["杂音无法判定"]})
+    assert _has_chinese(str(exc.value)) and "exclude_reasons" in str(exc.value)
+
+
+def test_pin8_exclude_rows_out_of_main_denominator(c22, tmp_path):
+    """排除行不进主口径统计：分母/召回基于入样行；排除面计数齐全。"""
+    guide = _write_guide(tmp_path, [T1, T2, T3])
+    rows = c22._replay_sample(
+        {"guide": str(guide), "media": "x.mkv", "label": True,
+         "labels": [True, True, True],
+         "exclude_reasons": [None, "前条喘息呻吟", "杂音无法判定"]})
+    agg = c22._aggregate(rows)
+    assert agg["n_rows_all"] == 3
+    assert agg["n_total"] == 1
+    assert agg["n_excluded"] == 2
+    assert agg["exclude_rate"] == pytest.approx(2 / 3)
+    assert agg["n_excluded_by_reason"] == {"前条喘息呻吟": 1,
+                                           "杂音无法判定": 1}
+    assert agg["n_high"] == 1
+
+
+def test_pin8_breath_ref_recovered_noise_excluded_both(c22, tmp_path):
+    """双口径：喘息排除行参照口径回样（label=true）；杂音行两口径均排除。"""
+    guide = _write_guide(tmp_path, [T1, T2])
+    ctx: list[dict] = []
+    c22._replay_sample(
+        {"guide": str(guide), "media": "x.mkv", "label": False,
+         "timings": [T1, T2], "labels": [False, False],
+         "exclude_reasons": ["前后喘息呻吟", "杂音无法判定"]}, ctx)
+    ref_rows = c22._reclassify_no_energy_gate(ctx)
+    ref_by_t = {r["timing"]: r for r in ref_rows}
+    assert ref_by_t[T1]["exclude_reason"] is None
+    assert ref_by_t[T1]["label"] is True
+    assert ref_by_t[T2]["exclude_reason"] == "杂音无法判定"
+    ref_agg = c22._aggregate(ref_rows)
+    assert ref_agg["n_total"] == 1
+    assert ref_agg["n_excluded"] == 1
+
+
+def test_pin8_exclusion_section_and_audit_list(c22, tmp_path, monkeypatch):
+    """报告面：排除面统计节＋分原因＋排除项清单表＋样本明细 exclude 列。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    manifest = _write_manifest(tmp_path, [
+        {"media": "x.mkv", "label": True,
+         "timings": [T1, T2], "labels": [True, False],
+         "exclude_reasons": [None, "后条喘息呻吟"]}])
+    out = tmp_path / "r.md"
+    rc = c22.main(["--manifest", str(manifest), "--out", str(out)])
+    assert rc == 0
+    text = out.read_text(encoding="utf-8")
+    assert "## 排除面" in text
+    assert "后条喘息呻吟 1" in text
+    assert "## 排除项清单" in text
+    assert "| exclude_reason |" in text
+
+
+def test_pin8_unattributed_over_cap_warn(c22, tmp_path, monkeypatch):
+    """不可归因排除率超预注册上限 → 报告 WARN 行（仅呈报不阻断）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    timings = [f"00:00:0{i},000 --> 00:00:0{i},500" for i in range(9)]
+    manifest = _write_manifest(tmp_path, [
+        {"media": "x.mkv", "label": True,
+         "timings": timings, "labels": [True] * 9,
+         "exclude_reasons": [None] * 8 + ["杂音无法判定"]}])
+    out = tmp_path / "r.md"
+    c22.main(["--manifest", str(manifest), "--out", str(out)])
+    text = out.read_text(encoding="utf-8")
+    assert "WARN 超限" in text
+
+
+def test_pin8_timings_over_max_clips_fails_closed(c22, tmp_path):
+    """timings 超 asr_env._MAX_CLIPS → 中文 ValueError（先于引擎防呆，
+    提示分块）。"""
+    timings = ["00:00:01,000 --> 00:00:02,000"] * (c22._MAX_CLIPS + 1)
+    with pytest.raises(ValueError) as exc:
+        c22._replay_sample({"media": "x.mkv", "label": True,
+                            "timings": timings})
+    assert _has_chinese(str(exc.value)) and "分块" in str(exc.value)
+
+
+def test_pin8_timings_without_guide_replays(c22, tmp_path, monkeypatch):
+    """guide 惰性化：无 guide 键、仅 timings 显式清单 → 回放正常
+    （main 层校验放宽为二者其一）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    manifest = _write_manifest(tmp_path, [
+        {"media": "x.mkv", "label": True,
+         "timings": [T1], "labels": [True]}])
+    out = tmp_path / "r.md"
+    rc = c22.main(["--manifest", str(manifest), "--out", str(out)])
+    assert rc == 0 and out.is_file()
+
+
+def test_pin8_legacy_manifest_zero_exclusion(c22, tmp_path):
+    """旧行为零外溢：无 exclude_reasons 键 → 零排除、分母=全体。"""
+    guide = _write_guide(tmp_path, [T1, T2])
+    rows = c22._replay_sample({"guide": str(guide), "media": "x.mkv",
+                               "label": True,
+                               "labels": [True, False]})
+    agg = c22._aggregate(rows)
+    assert agg["n_excluded"] == 0
+    assert agg["exclude_rate"] == 0.0
+    assert agg["n_total"] == agg["n_rows_all"] == 2
+    assert agg["n_excluded_by_reason"] == {}
