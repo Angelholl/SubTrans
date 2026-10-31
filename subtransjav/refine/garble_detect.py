@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Callable
+from typing import Any, cast
 
 from . import grammar_hint as _gh
 
@@ -61,7 +63,7 @@ def _core_chars(text: str) -> str:
     )
 
 
-def _tokenize_ja(text: str) -> list | None:
+def _tokenize_ja(text: str) -> list[Any] | None:
     """复用 grammar_hint 懒加载分词单例做形态素解析（不自建加载器）。
 
     经模块属性间接调用（monkeypatch 可达），返回 morpheme 列表；
@@ -69,7 +71,9 @@ def _tokenize_ja(text: str) -> list | None:
     None——调用方按降级处理，绝不抛错阻断报告。
     """
     try:
-        return _gh._tokenize_cached(text)
+        # grammar_hint 未入 strict 面（跨模块未注解调用），cast 仅声明
+        # morpheme 列表契约，运行期恒等（照 5d4810f 先例）。
+        return cast("list[Any] | None", _gh._tokenize_cached(text))
     except Exception:   # noqa: BLE001 - 报告面不阻断：分词异常按不可用降级
         return None
 
@@ -77,7 +81,9 @@ def _tokenize_ja(text: str) -> list | None:
 def _sudachi_ready() -> bool:
     """探测 sudachi 分词器可用性（懒加载探测，失败静默为不可用）。"""
     try:
-        return _gh._get_tokenizer() is not None
+        # 经属性间接调用保 monkeypatch 可达；cast 仅声明调用契约，
+        # 运行期恒等（照 5d4810f 先例）。
+        return cast("Callable[[], Any]", _gh._get_tokenizer)() is not None
     except Exception:   # noqa: BLE001 - 降级口径：任何初始化异常=不可用
         return False
 
@@ -119,7 +125,7 @@ def judge_garble_text(text: str) -> tuple[bool, float]:
     return ratio >= OOV_RATIO_THRESHOLD, ratio
 
 
-def scan_garble_suspects(entries: list) -> dict:
+def scan_garble_suspects(entries: list[Any]) -> dict[str, Any]:
     """扫描源文条目列表，产出质量报告「疑似听错」候选（只标不删）。
 
     Parameters
@@ -140,7 +146,7 @@ def scan_garble_suspects(entries: list) -> dict:
     try:
         if not _sudachi_ready():
             return {"available": False, "items": []}
-        items: list[dict] = []
+        items: list[dict[str, Any]] = []
         for e in (entries or []):
             if not isinstance(e, dict):
                 continue

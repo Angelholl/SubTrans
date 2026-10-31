@@ -93,6 +93,8 @@ module = [
     "subtransjav.webview_gui.user_dirs",
     "subtransjav.webview_gui.encode_queue",
     "subtransjav.webview_gui.event_stream",
+    "subtransjav.utils.process_manager",
+    "subtransjav.refine.garble_detect",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

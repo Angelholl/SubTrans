@@ -17,7 +17,7 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from subtransjav import paths
 from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW as _CREATE_NO_WINDOW  # 窗口标志单一来源
@@ -307,10 +307,11 @@ def kill_process_tree(pid: int, include_parent: bool = True) -> dict[str, Any]:
 _TASKKILL_TIMEOUT_S = 10.0  # taskkill 自身限时，防止其挂死拖垮调用方
 
 
-class _TreeRunResult(subprocess.CompletedProcess):
+class _TreeRunResult(subprocess.CompletedProcess[Any]):
     """run_with_timeout_tree 的返回类型：CompletedProcess 附加 timed_out 标记。"""
 
-    def __init__(self, args, returncode, stdout, stderr, timed_out: bool):
+    def __init__(self, args: Any, returncode: int, stdout: Any, stderr: Any,
+                 timed_out: bool):
         super().__init__(args, returncode, stdout, stderr)
         self.timed_out = timed_out
 
@@ -333,7 +334,7 @@ def _taskkill_tree(pid: int) -> tuple[bool, str]:
     return False, f"taskkill 退出码 {cp.returncode}"
 
 
-def _single_kill(proc: subprocess.Popen) -> None:
+def _single_kill(proc: subprocess.Popen[Any]) -> None:
     """终态兜底：直接子进程单杀（目标已死则无害）。"""
     try:
         proc.kill()
@@ -351,7 +352,7 @@ def run_with_timeout_tree(
     errors: str | None = None,
     env: dict[str, str] | None = None,
     cwd: str | None = None,
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[Any]:
     """带超时的子进程调用统一入口：超时即整树击杀，永不抛 TimeoutExpired。
 
     签名对齐 subprocess.run 风格（cmd 列表 + 必填 timeout + 常用透传参数），
@@ -485,7 +486,7 @@ def spawn_refine_cli(
     cwd: str = "",
     env_extra: dict[str, str] | None = None,
     **kwargs: Any,
-) -> subprocess.Popen | subprocess.CompletedProcess | None:
+) -> subprocess.Popen[Any] | subprocess.CompletedProcess[Any] | None:
     """refine CLI 子进程统一 spawn 入口（全项目三 spawn 点收敛到此）。
 
     收敛口径（改动前落点 → 现一律调本函数）：
@@ -568,7 +569,9 @@ def is_process_alive(pid: int) -> bool:
 
     try:
         proc = psutil.Process(pid)
-        return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
+        # psutil 无类型声明（跨模块未注解调用），is_running/status 在 mypy
+        # 视角为 Any；cast 仅声明 bool 契约，运行期恒等（照 5d4810f 先例）。
+        return cast(bool, proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE)
     except psutil.NoSuchProcess:
         return False
     except Exception:
