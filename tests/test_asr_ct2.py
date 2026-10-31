@@ -127,6 +127,120 @@ class TestCt2E2EWithFake:
         assert sidecar["segments"][0]["words"][0]["word"] == "こんにちは"
 
 
+class _FakeDualModel:
+    """双 pass fake：按 vad_filter 区分档位（pass1 VAD 开 / pass2 召回档关）。"""
+
+    calls: list = []
+
+    def __init__(self, model_dir, device=None, compute_type=None):
+        assert compute_type == "int8"
+        assert str(model_dir).endswith("m")
+        _FakeDualModel.calls = []
+
+    def transcribe(self, media, language=None, beam_size=None, vad_filter=None,
+                   condition_on_previous_text=None, word_timestamps=None):
+        assert word_timestamps is True          # 断行器依赖恒开
+        _FakeDualModel.calls.append({
+            "beam_size": beam_size, "vad_filter": vad_filter,
+            "condition_on_previous_text": condition_on_previous_text})
+        if vad_filter:                          # pass1 精准档
+            segs = [
+                _FakeSeg(0.5, 2.5, " こんにちは ",
+                         [_FakeWord(0.5, 2.5, "こんにちは", 0.9)]),
+                _FakeSeg(4.0, 5.0, "またね",
+                         [_FakeWord(4.0, 5.0, "またね", 0.8)]),
+            ]
+        else:                                   # pass2 召回档（vad 关/beam 8）
+            segs = [
+                _FakeSeg(2.8, 3.6, "そうですね",
+                         [_FakeWord(2.8, 3.6, "そうですね", 0.7)]),
+                _FakeSeg(1.0, 1.5, "重複",
+                         [_FakeWord(1.0, 1.5, "重複", 0.6)]),
+                _FakeSeg(5.2, 6.0, "末尾",
+                         [_FakeWord(5.2, 6.0, "末尾", 0.6)]),
+            ]
+        return iter(segs), _FakeInfo()
+
+
+class TestCt2DualPass:
+    """--passes 2 双 pass 覆盖合并（3.2.0 件A，D2026-1029-02 拍板①）。"""
+
+    def test_passes2_dual_products_and_recall_profile(self, tmp_path, capsys,
+                                                      monkeypatch):
+        fake = types.ModuleType("faster_whisper")
+        fake.WhisperModel = _FakeDualModel
+        monkeypatch.setitem(sys.modules, "faster_whisper", fake)
+        media = tmp_path / "a.wav"
+        media.write_bytes(b"RIFF")
+        mdir = tmp_path / "m"
+        mdir.mkdir()
+        srt_out = tmp_path / "out" / "a.srt"
+        rc = asr_runner.main(["--engine", "ct2", "--media", str(media),
+                              "--srt-out", str(srt_out),
+                              "--model-dir", str(mdir), "--passes", "2"])
+        assert rc == 0
+        # 恰调两次：pass1 精准档原样 / pass2 召回档预注册常量
+        assert _FakeDualModel.calls == [
+            {"beam_size": 5, "vad_filter": True,
+             "condition_on_previous_text": False},
+            {"beam_size": 8, "vad_filter": False,
+             "condition_on_previous_text": False},
+        ]
+        out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert out["ok"] is True and out["passes"] == 2
+        # 主输出=覆盖合并：空洞补全 2 段，重叠候选弃置
+        assert [s["text"].strip() for s in out["segments"]] == \
+            ["こんにちは", "そうですね", "またね", "末尾"]
+        text = srt_out.read_text(encoding="utf-8")
+        assert "そうですね" in text and "重複" not in text
+        # 产物面：pass1/pass2 中间件＋各自词级 sidecar＋dualpass sidecar
+        for name in ("a.pass1.srt", "a.pass2.srt",
+                     "a.pass1.srt.words.json", "a.pass2.srt.words.json",
+                     "a.srt.words.json", "a.srt.dualpass.json"):
+            assert (srt_out.parent / name).is_file(), name
+        dual = json.loads(
+            (srt_out.parent / "a.srt.dualpass.json").read_text(encoding="utf-8"))
+        assert dual["schema"] == "subtransjav.ct2.dualpass/1"
+        assert dual["gap_threshold_s"] == 1.0
+        assert dual["pass1"]["params"]["beam_size"] == 5
+        assert dual["pass2"]["params"] == {
+            "beam_size": 8, "vad_filter": False,
+            "condition_on_previous_text": False, "word_timestamps": True}
+        assert len(dual["pass1"]["segments"]) == 2
+        assert len(dual["pass2"]["segments"]) == 3
+        assert len(dual["adopted"]) == 2
+
+    def test_default_single_pass_zero_change(self, tmp_path, capsys,
+                                             monkeypatch):
+        """单 pass 零变化钉：不传 --passes → transcribe 恰一次、无新产物面。"""
+        calls = []
+
+        class _CountingModel(_FakeModel):
+            def __init__(self, *a, **k):
+                calls.append(1)
+                super().__init__(*a, **k)
+
+        fake = types.ModuleType("faster_whisper")
+        fake.WhisperModel = _CountingModel
+        monkeypatch.setitem(sys.modules, "faster_whisper", fake)
+        media = tmp_path / "a.wav"
+        media.write_bytes(b"RIFF")
+        mdir = tmp_path / "m"
+        mdir.mkdir()
+        srt_out = tmp_path / "out" / "a.srt"
+        rc = asr_runner.main(["--engine", "ct2", "--media", str(media),
+                              "--srt-out", str(srt_out),
+                              "--model-dir", str(mdir)])
+        assert rc == 0
+        assert len(calls) == 1
+        out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert out["ok"] is True and "passes" not in out
+        assert (srt_out.parent / "a.srt.words.json").is_file()
+        assert not (srt_out.parent / "a.pass1.srt").exists()
+        assert not (srt_out.parent / "a.pass2.srt").exists()
+        assert not (srt_out.parent / "a.srt.dualpass.json").exists()
+
+
 class TestSegmentsToSrt:
     def test_format_and_clamp(self):
         segs = [{"start": -0.2, "end": 1.0, "text": " あ "},

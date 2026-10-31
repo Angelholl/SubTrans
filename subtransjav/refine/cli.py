@@ -290,6 +290,22 @@ def build_parser():
                             help="AI 分析跨片统计窗口：7/30 天或 all=永久"
                                  "（缺省 30）")
 
+    # 3.2.0 件A（D2026-1029-02 拍板②）：媒体→源文 SRT 产品入口（CLI 先行，
+    # GUI 另拍）。早退分流，不进 run_v2、不建配置。
+    grp_transcribe = p.add_argument_group("媒体直转（源文 SRT）")
+    grp_transcribe.add_argument("--transcribe-media", metavar="MEDIA",
+                                default="",
+                                help="媒体文件路径：整片转写为源文 SRT 后退出"
+                                     "（需 CT2 引擎就绪）")
+    grp_transcribe.add_argument("--transcribe-srt-out", metavar="SRT",
+                                default="",
+                                help="源文 SRT 输出路径（缺省=媒体同目录同名"
+                                     " .srt）")
+    grp_transcribe.add_argument("--passes", type=int, choices=(1, 2), default=1,
+                                help="转写遍数：1=单 pass（缺省，零行为变化）；"
+                                     "2=双 pass 覆盖合并（另留中间件与"
+                                     " dualpass sidecar）")
+
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--clean-tmp-on-exit", action="store_true",
                    help="进程退出时自动清理 .refine_tmp 临时目录")
@@ -658,6 +674,23 @@ def _cmd_dict_download(kind: str, from_file: str = "",
     return 0
 
 
+def _cmd_transcribe_media(args) -> int:
+    """--transcribe-media：媒体→源文 SRT（3.2.0 件A，D2026-1029-02 拍板②）。
+
+    引擎未就绪由 asr_env 薄封装明示报错（提示安装链路），此处转退出码
+    非 0；成功打印成品路径。"""
+    from .asr_env import transcribe_media_to_srt
+    media = str(args.transcribe_media)
+    srt_out = str(getattr(args, "transcribe_srt_out", "") or "")
+    passes = int(getattr(args, "passes", 1) or 1)
+    r = transcribe_media_to_srt(media, srt_out, passes=passes)
+    if not r.get("ok"):
+        print(f"❌ 媒体直转失败: {r.get('error') or '未知错误'}")
+        return 1
+    print(f"✅ 源文 SRT 已写出: {r.get('srt') or srt_out}")
+    return 0
+
+
 def _harden_stdio():
     """stdio 加固（同 tools/guard_banned_paths.py），按管道/tty 区分策略。
 
@@ -728,6 +761,11 @@ def main(argv=None):
             args.dict_download,
             from_file=getattr(args, "dict_from_file", "") or "",
             allow_unverified=getattr(args, "dict_allow_unverified", False))
+
+    # ---- 媒体直转（3.2.0 件A，D2026-1029-02 拍板②）：--where 同层早退，
+    #      不进 run_v2、不建配置；未过就绪判定明示报错（退出码非 0） ----
+    if getattr(args, "transcribe_media", ""):
+        return _cmd_transcribe_media(args)
 
     # ---- EXE 首发数据迁移插桩（D2026-0929-05/07/08）：位于 --where 只读
     #      早退之后、config_from_args 之前；全容错，任何异常不阻塞 CLI ----

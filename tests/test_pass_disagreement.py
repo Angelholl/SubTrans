@@ -4,9 +4,12 @@ judge_artifact / 内部辅助函数 / collect_disagreement。
 """
 import csv
 import logging
+import random
+from pathlib import Path
 
 import pytest
 
+from subtransjav.refine import pass_disagreement as pd
 from subtransjav.refine.pass_disagreement import (
     REVIEW_STRICT_THRESHOLD,
     _best_overlap,
@@ -424,3 +427,182 @@ def test_pass_marker_consistency_pin():
         if is_pass_intermediate(stem):
             assert _MARKER_RE.search(stem), \
                 f"{stem} 判为 pass 中间稿却未命中 _MARKER_RE（pass 分支疑丢失）"
+
+
+# ---------------------------------------------------------------------------
+# 补卡2（D2026-1030-07）：pass_disagreement 模块边界薄弱分支
+# 断言一律以 subtransjav/refine/pass_disagreement.py 实码现状为准。
+# ---------------------------------------------------------------------------
+
+def _srt_ts(ms):
+    """毫秒整数 → SRT 时间码（合成夹具用，避免浮点格式化误差）。"""
+    h, rem = divmod(ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    s, ms_part = divmod(rem, 1_000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms_part:03d}"
+
+
+def test_best_overlap_tie_keeps_first_entry():
+    """_best_overlap 平局保留首个条目（:207-209 严格大于语义）。"""
+    entries = [
+        {"timing": "00:00:00,000 --> 00:00:05,000", "text": "first"},
+        {"timing": "00:00:05,000 --> 00:00:10,000", "text": "second"},
+    ]
+    # 两条与 span (0,10) 重叠均为 5.0 秒 → 平局，保留首个
+    assert _best_overlap((0.0, 10.0), entries) is entries[0]
+    # 后续条目重叠更大（7.0 秒）→ 允许替换，确认严格大于只挡平局
+    bigger = entries + [{"timing": "00:00:01,000 --> 00:00:08,000",
+                         "text": "third"}]
+    assert _best_overlap((0.0, 10.0), bigger) is bigger[2]
+
+
+def test_best_overlap_empty_entries_none():
+    """_best_overlap 空表 → None（:197-210）。"""
+    assert _best_overlap((0.0, 1.0), []) is None
+    assert _best_overlap((0.0, 1.0), ()) is None
+
+
+def test_probe_disagreement_mode_bare_exception_none(tmp_path, monkeypatch):
+    """probe_disagreement_mode 非 ValueError 异常兜底 → "none"（:159-160）。"""
+    mp = tmp_path / "P.ja.merged.subtransjav.srt"
+    mp.write_text("", encoding="utf-8")
+
+    def _boom(self):
+        raise OSError("is_file exploded")
+
+    # OSError 走裸 Exception 分支（ValueError 分支另有命名解析失败日志）
+    monkeypatch.setattr(Path, "is_file", _boom)
+    assert probe_disagreement_mode(str(mp)) == "none"
+
+
+def test_sibling_paths_lang_family_suffixes():
+    """_sibling_paths 语言族其余成员 japanese/chinese/translated（_LANG_RE :25）。"""
+    for lang in ("japanese", "chinese", "translated"):
+        _, p1, p2 = _sibling_paths(f"/tmp/X.{lang}.merged.whisperjav.srt")
+        assert p1.name == f"X.{lang}.pass1.srt"
+        assert p2.name == f"X.{lang}.pass2.srt"
+
+
+def test_sibling_paths_lang_case_sensitive_contract():
+    """_LANG_RE 小写锚定：大写语言码不剥离、回落 ja（_LANG_RE :25 现状契约）。"""
+    _, p1, p2 = _sibling_paths("/tmp/X.JA.merged.subtransjav.srt")
+    assert p1.name == "X.JA.ja.pass1.srt"
+    assert p2.name == "X.JA.ja.pass2.srt"
+    _, p1, p2 = _sibling_paths("/tmp/X.Japanese.merged.srt")
+    assert p1.name == "X.Japanese.ja.pass1.srt"
+    # 阶段标记同样大小写敏感：大写 MERGED 不命中 _MARKER_RE → ValueError
+    with pytest.raises(ValueError, match="命名解析失败"):
+        _sibling_paths("/tmp/X.ja.MERGED.subtransjav.srt")
+
+
+def test_collect_disagreement_iou_union_zero_defensive(tmp_path, monkeypatch):
+    """IoU 防御分支 union<=0 → 0.0（:268-270）。
+
+    自然样本不可达：_best_overlap 只返回与合法 span 正重叠的条目，故
+    e1>s1、e2>s2 且 overlap>0，union 必为正。此处用协作方 monkeypatch
+    构造零长度命中，钉住防御分支的现行返回值为 0.0。
+    """
+    (tmp_path / "Q.ja.pass1.srt").write_text(
+        _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
+    (tmp_path / "Q.ja.pass2.srt").write_text(
+        _srt([(1, "00:00:01,000 --> 00:00:02,000", "乙")]), encoding="utf-8")
+    mp = tmp_path / "Q.ja.merged.subtransjav.srt"
+    mp.write_text(_srt([(1, "00:00:01,000 --> 00:00:02,000", "丙")]),
+                  encoding="utf-8")
+
+    zero_len_hit = {"timing": "00:00:05,000 --> 00:00:05,000", "text": "同一文本"}
+    monkeypatch.setattr(pd, "_best_overlap", lambda span, entries: zero_len_hit)
+
+    result = collect_disagreement(str(mp))
+    assert result is not None
+    assert len(result["rows"]) == 1
+    assert result["rows"][0]["iou"] == 0.0
+    assert result["rows"][0]["offset"] == 0.0
+
+
+def test_collect_disagreement_iou_property_bounded(tmp_path):
+    """性质钉：随机合法样本下 iou∈[0,1]（固定种子，确定性）。
+
+    替代自然路径不可达的 union<=0 分支（:268-270）：_best_overlap 保证
+    正重叠命中，故 union 恒正；用性质断言守住 IoU 边界不越界。
+    """
+    rng = random.Random(20261031)
+    pool = "あいうえおかきくけこ甲乙丙丁"
+
+    def _text(n):
+        return "".join(rng.choice(pool) for _ in range(n))
+
+    merged_entries, p1_entries, p2_entries = [], [], []
+    for i in range(1, 16):
+        start_ms = 1_000 + (i - 1) * 3_000
+        end_ms = start_ms + 1_600
+        merged_entries.append(
+            (i, f"{_srt_ts(start_ms)} --> {_srt_ts(end_ms)}", _text(6)))
+        p1_entries.append(
+            (i, f"{_srt_ts(start_ms)} --> {_srt_ts(end_ms)}", _text(6)))
+        shift_ms = rng.choice((-600, -300, 0, 300, 600))
+        p2_entries.append(
+            (i, f"{_srt_ts(start_ms + shift_ms)} --> "
+                f"{_srt_ts(end_ms + shift_ms)}", _text(6)))
+
+    (tmp_path / "R.ja.pass1.srt").write_text(_srt(p1_entries), encoding="utf-8")
+    (tmp_path / "R.ja.pass2.srt").write_text(_srt(p2_entries), encoding="utf-8")
+    mp = tmp_path / "R.ja.merged.subtransjav.srt"
+    mp.write_text(_srt(merged_entries), encoding="utf-8")
+
+    result = collect_disagreement(str(mp))
+    assert result is not None
+    assert result["matched"] >= 1
+    for row in result["rows"]:
+        assert 0.0 <= row["iou"] <= 1.0
+        assert row["offset"] >= 0.0
+        assert 0.0 <= row["similarity"] <= 1.0
+
+
+def test_timing_span_wide_hours_and_ms_precision():
+    """_timing_span 超宽小时/4 位毫秒边界与 round(,3) 精度（:174-176）。"""
+    start, end = _timing_span("100:00:00,000 --> 100:00:00,001")
+    assert start == 360_000.0
+    assert end == pytest.approx(360_000.001, abs=1e-9)
+    start, end = _timing_span("999:59:59,999 --> 1000:00:00,001")
+    assert start == pytest.approx(3_599_999.999, abs=1e-6)
+    assert end == pytest.approx(3_600_000.001, abs=1e-6)
+    # 分钟/秒不做范围校验：按字面算术累加（非进位归一化）
+    assert _timing_span("00:60:00,000 --> 00:00:61,500") == (3600.0, 61.5)
+    # 毫秒位宽不做上限校验：4 位数字按 /1000 解释
+    assert _timing_span("00:00:00,1234 --> 00:00:01,5") == (1.234, 1.005)
+
+
+def test_collect_disagreement_non_utf8_srt_raises(tmp_path):
+    """非 UTF-8 SRT 现状契约：直接 UnicodeDecodeError，无容错（:254-256）。"""
+    (tmp_path / "S.ja.pass1.srt").write_text(
+        _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
+    (tmp_path / "S.ja.pass2.srt").write_bytes(
+        b"\xff\xfe\x00\x00 not utf-8")
+    mp = tmp_path / "S.ja.merged.subtransjav.srt"
+    mp.write_text(
+        _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
+
+    with pytest.raises(UnicodeDecodeError):
+        collect_disagreement(str(mp))
+
+
+def test_collect_disagreement_malformed_utf8_srt_contract(tmp_path):
+    """损坏但可解码的 SRT：parse_srt 解析为空 → total=0/matched=0/rows=[]。"""
+    (tmp_path / "T.ja.pass1.srt").write_text("垃圾内容", encoding="utf-8")
+    (tmp_path / "T.ja.pass2.srt").write_text("垃圾内容", encoding="utf-8")
+    mp = tmp_path / "T.ja.merged.subtransjav.srt"
+    mp.write_text("不是 SRT 的任何文本", encoding="utf-8")
+
+    result = collect_disagreement(str(mp))
+    assert result == {"total": 0, "matched": 0, "rows": []}
+
+
+def test_judge_artifact_equal_length_tie_prefers_text1():
+    """judge_artifact 短长侧等长时 short_str 取 text1（:231-232）。"""
+    # "はい" 与 "あい" 归一化后等长（2）；text1 命中白名单 → 判伪影
+    assert judge_artifact(0.9, 0.0, "はい", "あい", 0.20, 3.0,
+                          similarity=-1.0) is True
+    # 交换顺序：text1="あい" 未命中白名单，similarity 未知跳过 V3 → False
+    assert judge_artifact(0.9, 0.0, "あい", "はい", 0.20, 3.0,
+                          similarity=-1.0) is False

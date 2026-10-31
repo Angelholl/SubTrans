@@ -49,6 +49,11 @@ datas = [
     # frozen 形态静默降级回原生段（2026-10-29 测试包冒烟双路径实证拦获）。
     (os.path.join(SPECPATH, "..", "subtransjav", "refine", "line_breaker.py"),
      os.path.join("subtransjav", "refine")),
+    # pass_merge.py 随包（3.2.0 件A，卡C §七 勘误）：asr_runner 脚本直调
+    # 形态的双 pass 合并件回退装载按同目录文件路径解析（_load_pass_merge），
+    # 缺件=--passes 2 在 frozen 形态不可用（明示报错，不静默）。
+    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "pass_merge.py"),
+     os.path.join("subtransjav", "refine")),
 ]
 # 词典数据不进包（D3 去捆绑 D2026-1001）：sudachidict_core（system.dic 约
 # 208MB）不再随安装器分发，语法提示运行时 Dictionary() 失败走既有
