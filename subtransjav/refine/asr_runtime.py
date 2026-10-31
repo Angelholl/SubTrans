@@ -360,6 +360,17 @@ def _sha256_of(path: str) -> str:
     return h.hexdigest()
 
 
+def _verified_stamp(zip_path: str) -> dict:
+    """验证时刻＋本次 zip 实算 sha256（D1 加固，D2026-1031-04 ⑧）。
+
+    两键同语义：安装/下载成功回写 runtime.json 的 gpu_patch 字段，供
+    gpu_patch_status 回答「这个补丁包是不是上次核验过的那份」。sha256
+    一律对盘逐字节现算，不读 manifest 转手值。"""
+    from datetime import datetime
+    return {"last_verified_at": datetime.now().isoformat(timespec="seconds"),
+            "verified_sha256": _sha256_of(zip_path)}
+
+
 def _guarded_download(url: str, dest: str, expected_sha256: str,
                       expected_bytes: int = 0, progress=None) -> None:
     """守卫下载（复用 dict_manager 下载原语）+sha256 逐字节核验。
@@ -702,12 +713,18 @@ def gpu_patch_status() -> dict:
     只在 installed/complete=False 且 cuda_visible=True 时提示 opt-in）。"""
     cuda_visible = cuda_device_count() > 0
     missing = gpu_patch_missing_dlls()
+    manifest = read_gpu_patch_manifest()
+    gp = (read_runtime_manifest() or {}).get("gpu_patch")
+    if not isinstance(gp, dict):
+        gp = {}
     return {"dll_dir": gpu_patch_dir(),
-            "installed": read_gpu_patch_manifest() is not None,
+            "installed": manifest is not None,
             "complete": not missing,
             "missing": missing,
-            "manifest": read_gpu_patch_manifest(),
+            "manifest": manifest,
             "cuda_visible": cuda_visible > 0,
+            "last_verified_at": gp.get("last_verified_at"),
+            "verified_sha256": gp.get("verified_sha256"),
             "online_pin_ready": bool(GPU_PATCH_ZIP_URL and GPU_PATCH_ZIP_SHA256)}
 
 
@@ -758,6 +775,7 @@ def install_gpu_patch(zip_path: str) -> int:
             "installed_at": pm.get("built_at") or "",
             "wheel_versions": pm.get("wheel_versions") or {},
             "dlls": pm.get("dlls") or {},
+            **_verified_stamp(zip_path),
         }
         mpath.write_text(json.dumps(data, ensure_ascii=False, indent=1),
                          encoding="utf-8")
@@ -789,6 +807,7 @@ def download_gpu_patch(progress=None) -> int:
     _verify_gpu_patch_layout(zip_path)
     print("[3/4] 解包到 " + gpu_patch_dir())
     _safe_extract_zip(zip_path, gpu_patch_dir())
+    stamp = _verified_stamp(zip_path)
     with contextlib.suppress(OSError):
         os.remove(zip_path)
     missing = gpu_patch_missing_dlls()
@@ -801,7 +820,8 @@ def download_gpu_patch(progress=None) -> int:
     pm = read_gpu_patch_manifest() or {}
     data["gpu_patch"] = {"installed_at": pm.get("built_at") or "",
                          "wheel_versions": pm.get("wheel_versions") or {},
-                         "dlls": pm.get("dlls") or {}}
+                         "dlls": pm.get("dlls") or {},
+                         **stamp}
     mpath.write_text(json.dumps(data, ensure_ascii=False, indent=1),
                      encoding="utf-8")
     print("GPU 补丁包就绪: " + gpu_patch_dir())

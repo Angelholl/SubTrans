@@ -297,6 +297,63 @@ class TestGpuPatchContract:
         assert status["installed"] is True and status["complete"] is True
         assert status["missing"] == []
 
+    def test_install_records_verified_stamp(self, tmp_path, isolated_env):
+        """D1 加固（D2026-1031-04 ⑧）：安装成功回写验证时刻＋本次 zip 实算
+        sha256；既有 installed_at/wheel_versions/dlls 三键保持。"""
+        from datetime import datetime
+
+        _runtime_skeleton(isolated_env)
+        fixture = tmp_path / "gpu-patch.zip"
+        _build_zip(fixture, _gpu_patch_members())
+        sha = hashlib.sha256(fixture.read_bytes()).hexdigest()
+        assert asr_runtime.install_gpu_patch(str(fixture)) == 0
+        manifest = asr_runtime.read_runtime_manifest()
+        assert manifest is not None
+        gp = manifest["gpu_patch"]
+        assert gp["verified_sha256"] == sha
+        stamp = gp["last_verified_at"]
+        assert isinstance(stamp, str) and stamp
+        assert datetime.fromisoformat(stamp).isoformat(
+            timespec="seconds") == stamp
+        assert gp["installed_at"] and gp["dlls"] and gp["wheel_versions"]
+
+    def test_status_exposes_verified_stamp(self, tmp_path, isolated_env):
+        """status 顶层透出两键，值与 runtime.json 的 gpu_patch dict 一致。"""
+        _runtime_skeleton(isolated_env)
+        fixture = tmp_path / "gpu-patch.zip"
+        _build_zip(fixture, _gpu_patch_members())
+        sha = hashlib.sha256(fixture.read_bytes()).hexdigest()
+        assert asr_runtime.install_gpu_patch(str(fixture)) == 0
+        gp = asr_runtime.read_runtime_manifest()["gpu_patch"]
+        status = asr_runtime.gpu_patch_status()
+        assert status["last_verified_at"] == gp["last_verified_at"]
+        assert status["verified_sha256"] == sha
+
+    def test_status_legacy_manifest_without_stamp(self, tmp_path,
+                                                 isolated_env):
+        """旧态兼容：runtime.json 的 gpu_patch 无两键（伪造旧形态）→ status
+        两键 None，既有键读数零变化（不 break 既有消费面）。"""
+        _runtime_skeleton(isolated_env)
+        fixture = tmp_path / "gpu-patch.zip"
+        _build_zip(fixture, _gpu_patch_members())
+        assert asr_runtime.install_gpu_patch(str(fixture)) == 0
+        before = asr_runtime.gpu_patch_status()
+        mpath = isolated_env / "runtime.json"
+        data = json.loads(mpath.read_text(encoding="utf-8"))
+        data["gpu_patch"] = {k: data["gpu_patch"][k] for k in
+                             ("installed_at", "wheel_versions", "dlls")}
+        mpath.write_text(json.dumps(data, ensure_ascii=False, indent=1),
+                         encoding="utf-8")
+        after = asr_runtime.gpu_patch_status()
+        assert after["last_verified_at"] is None
+        assert after["verified_sha256"] is None
+        for key in ("dll_dir", "installed", "complete", "missing", "manifest",
+                    "cuda_visible", "online_pin_ready"):
+            assert after[key] == before[key]
+        assert after["installed"] is True and after["complete"] is True
+        assert after["missing"] == [] and after["manifest"] is not None
+        assert after["online_pin_ready"] is True
+
     def test_incomplete_layout_rejected(self, tmp_path, isolated_env,
                                         capsys):
         """半套 DLL zip（缺 cudnn_ops）：布局门拒绝 rc=1（回退分支源头）。"""
