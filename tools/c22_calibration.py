@@ -18,7 +18,7 @@
   排除面载体：非空行不进主口径统计，喘息类在参照口径回样）。数组长度
   必须与 timings 相等，不匹配即 raise 中文 ValueError → main 退出码 1
   （fail-closed）；单样本 timings 上限=asr_env._MAX_CLIPS（超限先于
-  引擎 fail-closed 报错，构建侧分块见 tools/build_c22_217_manifest.py）；
+  引擎 fail-closed 报错，构建侧分块方案存内部记录）；
 - 流程：逐样本读导读 observation 条目（category=suspected_missed_speech）
   → slice+batch_transcribe_clips → classify_transcript 三维分档 → 聚合：
   高置信桶精确率（判 high 中 label=true 占比）+Wilson 95% 置信下界+
@@ -177,7 +177,7 @@ def _replay_sample(sample: dict, ctx: list[dict] | None = None,
             f"manifest 条目 timings {len(timings)} 条超出单样本上限 "
             f"{_MAX_CLIPS}（引擎切片批量 fail-closed）；manifest 构建"
             f"须按 ≤{_MAX_CLIPS} 条/样本分块"
-            "（tools/build_c22_217_manifest.py 已内置分块）")
+            "（构建侧分块方案存内部记录）")
     label = bool(sample.get("label"))
     if not timings:
         if ctx is not None:
