@@ -44,10 +44,10 @@ def test_classify_empty_transcript():
 
 
 def test_classify_speech_le_1s_boundary_exact_rejected():
-    """边界钉：语音能量恰 =1.0s 一律放弃（owner 终裁措辞「≤1s」）。"""
+    """边界钉：显式 speech_min_s=1.0 时恰 =1.0s 放弃（「≤」语义）。"""
     v = mi.classify_transcript(T_WINDOW, [_good_segment()],
                                "本当にすみません", _good_windows(),
-                               overlap_s=1.0)
+                               overlap_s=1.0, speech_min_s=1.0)
     assert v["grade"] == "low"
     assert v["reasons"][0] == "speech_le_1s"
 
@@ -60,10 +60,11 @@ def test_classify_speech_above_1s_passes_gate():
 
 
 def test_classify_speech_windows_intersection_used():
-    """无 overlap_s 时由 speech_windows 与窗口交集计算。"""
+    """无 overlap_s 时由 speech_windows 与窗口交集计算（显式 1.0 阈值）。"""
     windows = {T_WINDOW: [(5.0, 5.8)]}          # 交集 0.8s ≤1s
     v = mi.classify_transcript(T_WINDOW, [_good_segment()],
-                               "本当にすみません", windows)
+                               "本当にすみません", windows,
+                               speech_min_s=1.0)
     assert v["grade"] == "low" and v["reasons"][0] == "speech_le_1s"
 
 
@@ -100,11 +101,35 @@ def test_classify_speech_min_s_custom_threshold_boundary():
     assert v["grade"] == "low" and v["reasons"][0] == "speech_le_1s"
 
 
-def test_classify_default_energy_threshold_unchanged():
-    """缺省不传＝owner 终裁 1.0 不变：0.9s 拒（既有 1.0/1.01 钉保活）。"""
+def test_classify_default_energy_threshold_off():
+    """缺省不传＝能量门关闭（D2026-1031-04 ①）：0.9s 短段不再一律放弃。"""
     v = mi.classify_transcript(T_WINDOW, [_good_segment()],
                                "本当にすみません", _good_windows(),
                                overlap_s=0.9)
+    assert v["grade"] == "high"
+
+
+# ------------------------------------- d1031 缺省翻转（D2026-1031-04 ①）
+# SPEECH_MIN_SECONDS→None：缺省＝能量门关闭；旧 1.0 行为经显式参数仍可达。
+
+def test_speech_min_seconds_constant_is_none():
+    """常量钉：产品缺省值＝owner 终裁 None。"""
+    assert mi.SPEECH_MIN_SECONDS is None
+
+
+def test_classify_default_equals_explicit_none():
+    """缺省等值钉：不传 speech_min_s ≡ 显式 None（同一输入输出逐键相等）。"""
+    args = (T_WINDOW, [_good_segment()], "本当にすみません", _good_windows())
+    assert (mi.classify_transcript(*args, overlap_s=0.8)
+            == mi.classify_transcript(*args, overlap_s=0.8,
+                                      speech_min_s=None))
+
+
+def test_classify_explicit_legacy_threshold_still_reachable():
+    """旧行为可达钉：显式 speech_min_s=1.0 时 ≤1s 短段仍判放弃档。"""
+    v = mi.classify_transcript(T_WINDOW, [_good_segment()],
+                               "本当にすみません", _good_windows(),
+                               overlap_s=1.0, speech_min_s=1.0)
     assert v["grade"] == "low" and v["reasons"][0] == "speech_le_1s"
 
 

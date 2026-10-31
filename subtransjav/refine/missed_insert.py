@@ -6,7 +6,8 @@
 - 生产者＝全链路自动化链内 F4 段（修复 → 漏听 → 复验状态机的"漏听"
   一环）：批量转写（asr_env.batch_transcribe_clips）→ 本模块
   classify_transcript 三维分档 → 高置信走 insert_candidates 自动补行，
-  低置信/判空直接放弃（owner 终裁：无核对卡，≤1s 语音能量一律放弃）；
+  低置信/判空直接放弃（owner 终裁：无核对卡；能量门缺省关闭，≤1s 短段
+  不再一律放弃，正常进三维置信门分档，D2026-1031-04 ①）；
 - 启用门＝C22 校准（tools/c22_calibration.py 离线回放，高置信桶精确率
   Wilson 95% 置信下界 ≥0.95 才允许真自动补行）：运行侧读
   ``config/fullchain_c22.json`` 的 enabled 标志（3B 接线，本模块不读
@@ -35,8 +36,9 @@ from .quality_report import _CPS_CJK_BASE, _CPS_MIN_DURATION_S, _CPS_TOLERANCE
 from .source_hallucination import _is_nonsense, _normalize_text
 from .v2_premerge import _timing_span
 
-# 语音能量 ≤1s 一律放弃（owner 终裁：1s 以内的语音能量放弃不影响观感）
-SPEECH_MIN_SECONDS = 1.0
+# 能量门缺省关闭（owner 终裁 D2026-1031-04 ①）：不设语音最短时长下限，
+# ≤1s 短段不再一律放弃，正常进三维置信门分档；旧 1.0 阈值可经显式传参复现。
+SPEECH_MIN_SECONDS = None
 # 荒谬性密度上限（字符/语音秒）＝3 × CPS 阅读上限（依据见模块 docstring）
 ABSURD_CHARS_PER_SEC = _CPS_CJK_BASE * _CPS_TOLERANCE * 3.0
 # 补行时长换算的 CPS 上限（防挤压：窗口够长时时长至少给到阅读上限换算值）
@@ -103,16 +105,17 @@ def classify_transcript(timing: str, segments: list, text_all: str,
       不判放弃，交由三维置信与后续信号兜底）；
     - overlap_s 显式传入时优先于 speech_windows（调用方已实测口径）；
     - language：多段模式由 runner 顶层 language 字段传递（非 ja → low）；
-    - speech_min_s：能量门阈值，缺省=owner 终裁值 SPEECH_MIN_SECONDS
-      （缺省行为零变化）；None＝能量门不参与判定（非「放行」语义，后续
-      判定链照走）——评测双读数参数化（D2026-1029-11 裁决①），仅评测
-      面使用，本模块仍不读配置。
+    - speech_min_s：能量门阈值，缺省=owner 终裁值 SPEECH_MIN_SECONDS＝None
+      （能量门缺省关闭：不设最短语音时长下限，短段正常进三维置信门分档）；
+      None＝能量门不参与判定（非「放行」语义，后续判定链照走）——显式传
+      1.0 可复现旧「≤1s 放弃」行为；评测双读数参数化（D2026-1029-11
+      裁决①），仅评测面使用，本模块仍不读配置。
     """
     segs = segments if isinstance(segments, list) else []
     if not segs or not (text_all or "").strip():
         return {"grade": "empty", "reasons": ["empty_transcript"]}
     reasons: list[str] = []
-    # b) ≤1s 语音能量一律放弃（owner 终裁；能量数据不可得则跳过此门）
+    # b) 能量门（缺省关闭：speech_min_s=None；能量数据不可得则跳过此门）
     if overlap_s is not None:
         speech_s = float(overlap_s)
     elif (isinstance(speech_windows, dict) and timing in speech_windows):
