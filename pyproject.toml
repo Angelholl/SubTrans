@@ -97,6 +97,8 @@ module = [
     "subtransjav.refine.garble_detect",
     "subtransjav.refine.quality_advisor",
     "subtransjav.refine.glossary_learn",
+    "subtransjav.refine.grammar_hint",
+    "subtransjav.refine.v2_learn",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

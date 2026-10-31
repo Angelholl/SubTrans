@@ -16,6 +16,7 @@ HRO-2（逐字节等价）与 D2026-0925-01（执行契约）。
 import logging
 import threading
 from pathlib import Path
+from typing import Any
 
 from .config import RefineConfig
 from .pipeline_support import learned_glossary_path
@@ -27,9 +28,10 @@ from .v2_premerge import _timing_span
 logger = logging.getLogger("subtransjav.refine.pipeline_v2")
 
 
+# collector 面（RiskCollector）未入 strict 注解面：Any 仅注解形态，运行期恒等。
 def _auto_learn_glossary(cfg: RefineConfig, in_path: str, out_final_path: str,
-                         collector=None, file_name: str = None,
-                         threads: list | None = None):
+                         collector: Any = None, file_name: str | None = None,
+                         threads: list[threading.Thread] | None = None) -> None:
     """自动词库学习：从 原文↔终稿 中提取术语对追加到 glossary_learned.csv。
 
     防污染：glossary_learn 内部做子串核验（原文/译文中必须真实存在），
@@ -54,7 +56,7 @@ def _auto_learn_glossary(cfg: RefineConfig, in_path: str, out_final_path: str,
                           severity=SEVERITY_INFO)
         return
 
-    def _learn_once():
+    def _learn_once() -> None:
         try:
             from .glossary_learn import learn_from_s2_output
             try:
@@ -87,10 +89,14 @@ def _auto_learn_glossary(cfg: RefineConfig, in_path: str, out_final_path: str,
     threads.append(t)
 
 
-def _learn_to_tm(tm: TranslationMemory, orig_entries: list,
-                 final_entries: list, flagged=None, gate=True,
-                 must_see_spans=None, collector=None, file_name: str = None,
-                 conflict_spans=None, block_conflicts=False) -> int | None:
+# collector 面（RiskCollector）未入 strict 注解面：Any 仅注解形态，运行期恒等。
+def _learn_to_tm(tm: TranslationMemory, orig_entries: list[dict[str, Any]],
+                 final_entries: list[dict[str, Any]], flagged: set[int] | None = None,
+                 gate: bool = True,
+                 must_see_spans: set[tuple[float, float]] | None = None,
+                 collector: Any = None, file_name: str | None = None,
+                 conflict_spans: set[tuple[float, float]] | None = None,
+                 block_conflicts: bool = False) -> int | None:
     """终稿学习：日文原文 → 最终中文。
 
     ⚠️ 双指针对齐（同起点多条按序消费），只学时间轴完全一致

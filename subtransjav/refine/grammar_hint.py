@@ -11,7 +11,19 @@ import re
 import threading
 from collections.abc import Callable
 from functools import lru_cache
-from typing import Any
+from typing import Any, Protocol
+
+
+class _Morpheme(Protocol):
+    """SudachiPy Morpheme 的最小结构契约（sudachipy 无类型存根）。
+
+    仅供注解面使用，运行期不改变任何对象形态。
+    """
+
+    def surface(self) -> str: ...
+
+    def part_of_speech(self) -> tuple[str, ...]: ...
+
 
 # ---------------------------------------------------------------------------
 # Lazy singleton tokenizer
@@ -43,7 +55,9 @@ def _bundled_dict_missing() -> bool:
     return not dic.is_file()
 
 
-def _get_tokenizer():
+# 返回类型 Any：sudachipy 为可选依赖且无类型存根，Tokenizer 仅在安装+词典
+# 就绪时存在，缺席走下方降级链（运行期恒等，仅注解形态）。
+def _get_tokenizer() -> Any:
     """懒加载 SudachiPy Dictionary 单例（双重检查锁，防并发重复初始化）。"""
     global _tokenizer_instance, _sudachi_available
     if _tokenizer_instance is not None:
@@ -102,12 +116,14 @@ def is_grammar_hint_available() -> bool:
 # ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=4096)
-def _tokenize_cached(text: str):
+def _tokenize_cached(text: str) -> list[_Morpheme] | None:
     """带缓存的形态素解析。返回 token 列表或 None。"""
     tok = _get_tokenizer()
     if tok is None:
         return None
     with _tokenize_lock:    # 同一 Tok 实例并发 tokenize 会 Already borrowed
+        # sudachipy 无类型存根（tokenize 返回 Any）：list[Any] 按契约视作
+        # morpheme 列表，运行期恒等（无需 cast，函数体零改动）。
         return list(tok.tokenize(text))
 
 
@@ -154,8 +170,8 @@ def release_tokenizer(
 # ---------------------------------------------------------------------------
 
 def _get_context_entries(
-    entries: list[dict], current_pos: int, before: int = 3, after: int = 3
-) -> tuple[list[dict], list[dict]]:
+    entries: list[dict[str, Any]], current_pos: int, before: int = 3, after: int = 3
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """提取当前条目前后的上下文条目。
 
     Parameters
@@ -187,23 +203,23 @@ def _get_context_entries(
 _NOUN_POS_PREFIXES = ("名詞",)
 
 
-def _is_noun(token) -> bool:
+def _is_noun(token: _Morpheme) -> bool:
     """检查 token 是否为名词。"""
     pos = token.part_of_speech()
     return pos[0] in _NOUN_POS_PREFIXES
 
 
-def _is_verb(token) -> bool:
+def _is_verb(token: _Morpheme) -> bool:
     """检查 token 是否为动词。"""
     return token.part_of_speech()[0] == "動詞"
 
 
-def _is_adjective(token) -> bool:
+def _is_adjective(token: _Morpheme) -> bool:
     """检查 token 是否为形容詞。"""
     return token.part_of_speech()[0] == "形容詞"
 
 
-def _is_connective_particle(token) -> bool:
+def _is_connective_particle(token: _Morpheme) -> bool:
     """检查 token 是否为接续助词（が/けど/けれども）。
 
     关键：が 可以是格助词（主语标记）或接続助词（转折铺垫）。
@@ -222,18 +238,18 @@ def _is_connective_particle(token) -> bool:
     return False
 
 
-def _is_particle(token, particle: str) -> bool:
+def _is_particle(token: _Morpheme, particle: str) -> bool:
     """检查 token 是否为指定助词。"""
     return token.surface() == particle and token.part_of_speech()[0] == "助詞"
 
 
-def _is_case_particle(token) -> bool:
+def _is_case_particle(token: _Morpheme) -> bool:
     """检查 token 是否为格助词（を/に/で/へ等）。"""
     pos = token.part_of_speech()
     return pos[0] == "助詞" and len(pos) > 1 and pos[1] == "格助詞"
 
 
-def _is_da_renyokei_de(token) -> bool:
+def _is_da_renyokei_de(token: _Morpheme) -> bool:
     """检查 token 是否为助動詞「だ」的連用形「で」（前接名词/形容动词）。
 
     区别于格助詞的「で」（POS[0]=="助詞"）：判断助动词的「で」
@@ -244,7 +260,7 @@ def _is_da_renyokei_de(token) -> bool:
     return token.surface() == "で" and pos[0] == "助動詞"
 
 
-def _is_clause_final_de(tokens, j: int) -> bool:
+def _is_clause_final_de(tokens: list[_Morpheme], j: int) -> bool:
     """检查 tokens[j]（surface 为「で」）是否处于句末/句中顿位置。
 
     Sudachi 実測：句末「名詞+で…」的「で」可能被标注为格助詞而非
@@ -262,7 +278,7 @@ def _is_clause_final_de(tokens, j: int) -> bool:
     return k == len(tokens) or has_kuten
 
 
-def _is_plural_pronoun_at(tokens, i: int) -> bool:
+def _is_plural_pronoun_at(tokens: list[_Morpheme], i: int) -> bool:
     """检查 tokens[i] 是否为复数人称代词（僕たち/私たち/俺たち/我々等）。
 
     Sudachi 实测两种分词形态均需覆盖：
@@ -298,7 +314,8 @@ _HINT_DE_RENTOU = (
 # Detection rules
 # ---------------------------------------------------------------------------
 
-def _detect_rules(text: str, context_before: list[dict], context_after: list[dict]) -> list[str]:
+def _detect_rules(text: str, context_before: list[dict[str, Any]],
+                  context_after: list[dict[str, Any]]) -> list[str]:
     """检测日語語法结构，返回提示列表。"""
     hints: list[str] = []
     tokens = _tokenize_cached(text)
@@ -399,7 +416,7 @@ def _detect_rules(text: str, context_before: list[dict], context_after: list[dic
 
 
 def _detect_rules_fallback(
-    text: str, context_before: list[dict], context_after: list[dict]
+    text: str, context_before: list[dict[str, Any]], context_after: list[dict[str, Any]]
 ) -> list[str]:
     """SudachiPy 不可用时的简单正则回退检测。"""
     hints: list[str] = []
@@ -441,7 +458,7 @@ def _detect_rules_fallback(
 def generate_grammar_hints(
     srt_content: str,
     current_index: int,
-    entries: list[dict] | None = None,
+    entries: list[dict[str, Any]] | None = None,
 ) -> str:
     """
     为指定 SRT 条目生成语法提示。
