@@ -22,6 +22,7 @@ import hashlib
 import os
 import uuid
 from pathlib import Path
+from typing import Literal
 
 try:                                    # Windows 首选
     import msvcrt
@@ -52,7 +53,7 @@ class ArtifactLockHandle:
     尽力删除锁文件（锁文件内容经持有者标识比对非己方时放弃删除并
     告警，宁残留勿误删）。"""
 
-    def __init__(self, path: str, fd, token: str = ""):
+    def __init__(self, path: str, fd: int, token: str = "") -> None:
         self.path = path
         self._fd = fd
         self._token = token
@@ -121,15 +122,15 @@ class ArtifactLockHandle:
                 os.close(self._fd)
 
     # 上下文管理器糖衣
-    def __enter__(self):
+    def __enter__(self) -> "ArtifactLockHandle":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> Literal[False]:
         self.release()
         return False
 
 
-def _lock_fd_exclusive(fd) -> None:
+def _lock_fd_exclusive(fd: int) -> None:
     """对 fd 首字节加独占锁（阻塞语义由调用方 nonblocking 标志决定）。
 
     Windows: msvcrt.locking LK_NBLCK（非阻塞独占，冲突抛 OSError）；
@@ -159,7 +160,7 @@ def _lock_fd_exclusive(fd) -> None:
         raise RuntimeError("no lock implementation")
 
 
-def acquire_artifact_lock(input_path: str, output_dir: str):
+def acquire_artifact_lock(input_path: str, output_dir: str) -> ArtifactLockHandle | None:
     """获取产物锁（三态契约）。
 
     - 返回 ArtifactLockHandle：持锁成功；
@@ -222,7 +223,7 @@ def acquire_artifact_lock(input_path: str, output_dir: str):
     return ArtifactLockHandle(lock_path, fd, token=token)
 
 
-def release_artifact_lock(handle) -> None:
+def release_artifact_lock(handle: ArtifactLockHandle | None) -> None:
     """释放锁句柄（幂等；None 安全）。"""
     if handle is not None:
         handle.release()

@@ -87,6 +87,8 @@ module = [
     "subtransjav.refine.pass_merge",
     "subtransjav.refine.pass_disagreement",
     "subtransjav.refine.line_breaker",
+    "subtransjav.refine.artifact_lock",
+    "subtransjav.refine.srt_encoding",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
