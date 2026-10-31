@@ -95,6 +95,8 @@ module = [
     "subtransjav.webview_gui.event_stream",
     "subtransjav.utils.process_manager",
     "subtransjav.refine.garble_detect",
+    "subtransjav.refine.quality_advisor",
+    "subtransjav.refine.glossary_learn",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

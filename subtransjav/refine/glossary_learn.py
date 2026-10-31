@@ -60,7 +60,7 @@ def extract_glossary_from_pair(src_text: str, translated_text: str,
                                model: str = "",
                                timeout_http: float = DEFAULT_TIMEOUT_HTTP,
                                timeout_probe: float = DEFAULT_TIMEOUT_PROBE
-                               ) -> list:
+                               ) -> list[tuple[str, str]]:
     """从一对日中翻译文本中提取术语。
 
     timeout_http / timeout_probe（P1-5 收口，默认值=历史现值 60/5）：
@@ -115,7 +115,7 @@ def extract_glossary_from_pair(src_text: str, translated_text: str,
         return []
 
 
-def _parse_csv_pairs(text: str) -> list:
+def _parse_csv_pairs(text: str) -> list[tuple[str, str]]:
     """解析 CSV 格式的术语对。"""
     pairs = []
     for line in text.strip().splitlines():
@@ -134,7 +134,7 @@ def _parse_csv_pairs(text: str) -> list:
     return pairs[:20]  # 最多 20 条
 
 
-def _read_learned_rows(path: str) -> "list | None":
+def _read_learned_rows(path: str) -> "list[tuple[str, str]] | None":
     """读取 learned 词库行：文件缺省返回 []；存在但读取/解析失败时
     告警并返回 None（区别于"空库"）。"""
     if not (path and os.path.isfile(path)):
@@ -151,7 +151,7 @@ def _read_learned_rows(path: str) -> "list | None":
         return None
 
 
-def load_learned_glossary(path: str) -> list:
+def load_learned_glossary(path: str) -> list[tuple[str, str]]:
     """加载已学习的词库（宽松口径：损坏视同空库，仅告警）。
 
     供只读/重置类消费者使用；覆盖式写回方须用
@@ -160,7 +160,7 @@ def load_learned_glossary(path: str) -> list:
     return _read_learned_rows(path) or []
 
 
-def load_learned_glossary_strict(path: str) -> "list | None":
+def load_learned_glossary_strict(path: str) -> "list[tuple[str, str]] | None":
     """加载已学习的词库（严格口径）：损坏返回 None 以区别于空库。
 
     learn_from_s2_output 等覆盖式写回方据此中止本次保存，防止旧学习
@@ -169,7 +169,7 @@ def load_learned_glossary_strict(path: str) -> "list | None":
     return _read_learned_rows(path)
 
 
-def save_learned_glossary(path: str, entries: list):
+def save_learned_glossary(path: str, entries: list[tuple[str, str]]) -> None:
     """保存已学习的词库（追加模式去重后全量写入；原子写入防崩溃损坏）。"""
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
@@ -198,7 +198,7 @@ def save_learned_glossary(path: str, entries: list):
 
 
 def _acquire_glossary_lock(learned_path: str, timeout: float = 5.0,
-                           stale_after: float = 60.0):
+                           stale_after: float = 60.0) -> str | None:
     """尝试获取词库写锁（跨进程）；返回锁文件路径，未获取返回 None。
 
     用于消除 load-modify-save 之间的 TOCTOU 竞态：并发 refine 同时加载
@@ -227,7 +227,7 @@ def _acquire_glossary_lock(learned_path: str, timeout: float = 5.0,
             time.sleep(0.1)
 
 
-def _release_glossary_lock(lock_path):
+def _release_glossary_lock(lock_path: str | None) -> None:
     if lock_path:
         with contextlib.suppress(OSError):
             os.remove(lock_path)

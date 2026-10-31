@@ -22,10 +22,14 @@ import re
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
+    import argparse
+
     from subtransjav.translate.llm_client import LLMClient
+
+    from .config import RefineConfig
 
 # 报告全文超过该字符数时按章节优先级裁剪（行动相关章节保留）
 _TRUNCATE_LIMIT = 12000
@@ -106,7 +110,7 @@ def _strip_json_fence(text: str) -> str:
     return t
 
 
-def _extract_json_object(text: str) -> dict | None:
+def _extract_json_object(text: str) -> dict[str, Any] | None:
     """从模型回复中提取 JSON 对象：剥围栏 → 直接 loads →
     首个 { 到末个 } 兜底 loads。失败返回 None。"""
     t = _strip_json_fence(text)
@@ -123,7 +127,7 @@ def _extract_json_object(text: str) -> dict | None:
     return None
 
 
-def _normalize_suggestions(parsed: dict) -> dict | None:
+def _normalize_suggestions(parsed: dict[str, Any]) -> dict[str, Any] | None:
     """校验/归一 suggestions 结构；形状不符返回 None（整体降级，禁半解析）。"""
     sug = parsed.get("suggestions")
     if not isinstance(sug, dict):
@@ -135,16 +139,16 @@ def _normalize_suggestions(parsed: dict) -> dict | None:
     if not isinstance(glossary_raw, list) or not isinstance(tm_raw, list) \
             or not isinstance(obs_raw, list):
         return None
-    glossary: list[dict] = []
+    glossary: list[dict[str, Any]] = []
     for g in glossary_raw:
         if isinstance(g, dict) and g.get("src") and g.get("target"):
-            entry: dict = {"src": str(g["src"]), "target": str(g["target"])}
+            entry: dict[str, Any] = {"src": str(g["src"]), "target": str(g["target"])}
             if g.get("aliases"):
                 entry["aliases"] = [str(a) for a in g["aliases"]]
             if g.get("reason"):
                 entry["reason"] = str(g["reason"])
             glossary.append(entry)
-    tm: list[dict] = []
+    tm: list[dict[str, Any]] = []
     for t in tm_raw:
         if isinstance(t, dict) and t.get("source") and t.get("target"):
             tm.append({"source": str(t["source"]),
@@ -160,11 +164,11 @@ def _normalize_suggestions(parsed: dict) -> dict | None:
     return {"glossary": glossary, "tm": tm, "observations": observations}
 
 
-def analyze_quality_report(report_txt: str, guide_json: dict,
+def analyze_quality_report(report_txt: str, guide_json: dict[str, Any],
                            conflict_summary: str, model: str,
                            chat_fn: Callable[[str, str], str],
                            aggregate_block: str = "",
-                           crosscheck_block: str = "") -> dict:
+                           crosscheck_block: str = "") -> dict[str, Any]:
     """组装提示词调用 LLM 并解析为建议结构（输出契约见模块 docstring）。
 
     chat_fn：单轮 chat 注入点（client._chat 同款签名，测试用 fake 注入）。
@@ -229,7 +233,7 @@ def analyze_quality_report(report_txt: str, guide_json: dict,
             "suggestions": suggestions}
 
 
-def write_ai_suggestions(stem: str, data: dict, out_dir: str = "") -> str:
+def write_ai_suggestions(stem: str, data: dict[str, Any], out_dir: str = "") -> str:
     """AI 建议件落盘 {stem}_AI质量建议.json（UTF-8，ensure_ascii=False）。"""
     d = Path(out_dir) if out_dir else Path(".")
     d.mkdir(parents=True, exist_ok=True)
@@ -268,7 +272,7 @@ def _load_conflict_summary(path: Path) -> str:
     return "\n".join(lines)
 
 
-def _make_ai_client(cfg, model_override: str = ""):
+def _make_ai_client(cfg: "RefineConfig", model_override: str = "") -> "LLMClient":
     """AI 分析 LLM 客户端注入点（模块级函数，便于测试 monkeypatch）。
 
     复用管线槽 A（阶段A）客户端工厂；model_override 非空时以
@@ -281,10 +285,11 @@ def _make_ai_client(cfg, model_override: str = ""):
         stages = list(cfg.stages)
         stages[0] = dataclasses.replace(stages[0], model=model_override)
         cfg = dataclasses.replace(cfg, stages=stages)
-    return _make_client(cfg, "A")
+    # _make_client 未入 strict 面：cast 仅声明契约，运行期恒等
+    return cast("LLMClient", _make_client(cfg, "A"))
 
 
-def _resolve_ai_model(cfg, model_override: str) -> str:
+def _resolve_ai_model(cfg: "RefineConfig", model_override: str) -> str:
     """model 字段取值：显式覆盖优先，否则槽0 模型（含服务商默认）。"""
     from .config import PROVIDER_MODEL_DEFAULTS
     if model_override:
@@ -293,7 +298,9 @@ def _resolve_ai_model(cfg, model_override: str) -> str:
     return stage.model or PROVIDER_MODEL_DEFAULTS.get(stage.provider, "")
 
 
-def _build_media_crosscheck(cfg, args, out_dir, guide: dict) -> tuple:
+def _build_media_crosscheck(cfg: "RefineConfig", args: "argparse.Namespace",
+                            out_dir: Path,
+                            guide: dict[str, Any]) -> tuple[str, list[Any]]:
     """媒体重点对照编排（批 3 路线 B）：媒体定位→候选切片→本地重转写→
     对照块。失败逐级降级（返回 ("", [])，绝不阻塞分析）。
 
@@ -346,7 +353,7 @@ def _build_media_crosscheck(cfg, args, out_dir, guide: dict) -> tuple:
         return "", []
 
 
-def run_ai_analyze(cfg, args) -> int:
+def run_ai_analyze(cfg: "RefineConfig", args: "argparse.Namespace") -> int:
     """--ai-analyze 主入口（cli.main 早退分流）。返回退出码：
     0=建议件已落盘（含 parse_ok=False 的降级件）/ 1=前置失败或执行异常。"""
     report_path = Path(getattr(args, "ai_analyze", "") or "")
@@ -380,7 +387,7 @@ def run_ai_analyze(cfg, args) -> int:
     # 音频零出域；2.6.1 修订 D2026-1002-06 默认关+可选化；双前置=有媒体
     # +有可用 ASR；失败逐级降级不阻塞分析；C8=分析后 best-effort 清理切片）
     crosscheck_block = ""
-    crosscheck_detail: list = []
+    crosscheck_detail: list[Any] = []
     if bool(getattr(cfg, "media_crosscheck_enabled", False)):
         crosscheck_block, crosscheck_detail = _build_media_crosscheck(
             cfg, args, report_path.parent, guide)
@@ -433,7 +440,7 @@ def run_ai_analyze(cfg, args) -> int:
     return 0
 
 
-def run_warmup(cfg, args) -> int:
+def run_warmup(cfg: "RefineConfig", args: "argparse.Namespace") -> int:
     """--warmup-analysis 主入口（cli.main 早退分流，D2026-1008-02 批3 P1）。
 
     C1 同源契约：cfg 由 config_from_args 构造（与 AI 分析完全同参——不传
