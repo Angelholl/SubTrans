@@ -88,7 +88,7 @@ MSG = {
 
     # ---- 词典管理（api.py，2.1 引擎页词典管理三区块）----
     "dict_kind_unsupported": "该词典暂不支持下载（仅 sudachi 提供下载式）",
-    "dict_download_failed": "词典下载失败（网络/源不可达）",
+    "dict_download_failed": "下载失败",
     "dict_checksum_failed": "词典校验失败（SHA256 不符，已拒绝落位）",
     # 2.7.3 件⑤（D2026-1005）：词典下载会话制——同 kind 互斥拒绝文案
     "dict_download_busy": "已有词典任务在进行中，请稍候或先停止当前下载。",
@@ -102,14 +102,14 @@ MSG = {
 
     # ---- 翻译方向（高级参数页，2.1 D2026-0930-04 定案① GUI 补齐）----
     "direction_label": "翻译方向",
-    "direction_title": "缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝",
+    "direction_title": "缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套角色卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝",
     "lang_ja": "日文",
     "lang_zh": "中文",
     "lang_en": "英文",
-    "direction_card_s1_label": "阶段A 指令卡",
-    "direction_card_s3_label": "阶段B 指令卡",
+    "direction_card_s1_label": "阶段A 角色卡",
+    "direction_card_s3_label": "阶段B 角色卡",
     "direction_card_placeholder": "非缺省方向必填（.txt 路径）",
-    "direction_hint": "缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套模板卡，缺卡启动即报错",
+    "direction_hint": "缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错",
 
     # ---- open_url / 目录（api.py）----
     "url_scheme_unsupported": "仅支持 http/https 链接",

@@ -264,7 +264,7 @@
                             <div class="stage-key">
                                 <label class="field-label">API Key</label>
                                 <input type="password" id="refineS1Key" class="form-input compact grow"
-                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
+                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥" autocomplete="off">
                                 <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
                                         data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                             </div>
@@ -312,7 +312,7 @@
                             <div class="stage-key">
                                 <label class="field-label">API Key</label>
                                 <input type="password" id="refineS3Key" class="form-input compact grow"
-                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥（LM Studio 免填）" autocomplete="off">
+                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥" autocomplete="off">
                                 <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
                                         data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                             </div>
@@ -567,7 +567,7 @@
                 <div class="group-title" data-i18n="direction_block_title">翻译方向与角色卡</div>
                 <div class="field-row">
                     <label class="inline-field"
-                           data-i18n-title="direction_title" title="缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套模板卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝">
+                           data-i18n-title="direction_title" title="缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套角色卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝">
                         <span data-i18n="direction_label">翻译方向</span>
                         <select id="directionSource" class="form-select compact" style="width:var(--w-direction-sel);">
                             <option value="ja" selected data-i18n="lang_ja">日文</option>
@@ -1060,7 +1060,7 @@
             </div>
 
             <!-- 卡3：两阶段流水线只读镜像（D2026-0930-09：整卡点击跳引擎页，无双向同步） -->
-            <div class="panel-card panel-card-link" id="pipelineCard" data-i18n-title="pipeline_card_hint" title="点击前往「引擎与模型」页修改" tabindex="0" role="link">
+            <div class="panel-card panel-card-link" id="pipelineCard" data-i18n-title="pipeline_card_hint" title="点击前往「API 与模型选择」页修改" tabindex="0" role="link">
                 <!-- 卡头标题行（d1013-卡O）：标题与压制参数钮并排，缩竖向空白 -->
                 <div class="pipeline-head-row">
                     <div class="block-title" data-i18n="refine_panel_title">两阶段流水线</div>
