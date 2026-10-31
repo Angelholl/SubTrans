@@ -18,7 +18,7 @@ const REVIEW_MSG = {
     review_transcode_btn: '手动转码预览',
     review_transcode_estimating: '该编码需转码后预览',
     review_transcode_estimate: (s) => `预计转码约 ${s} 秒，点击按钮开始`,
-    review_transcode_running: '转码进行中…',
+    review_transcode_busy: '转码进行中…',
     review_transcode_failed: '转码失败，请重试或手动转换格式',
     review_bad_encoding: '字幕文件编码无法识别（仅支持 UTF-8 / GBK / CP932），请另存为 UTF-8 后重试',
     review_api_not_ready: '接口未就绪，请稍后再试',
@@ -408,7 +408,7 @@ const ReviewUI = {
             if (hint && r.estimated_s) {
                 hint.textContent = REVIEW_MSG.review_transcode_estimate(r.estimated_s);
             }
-            this._status.setState({ state: 'busy', labelKey: 'review_transcode_running' });
+            this._status.setState({ state: 'busy', labelKey: 'review_transcode_busy' });
             this._pollTranscode();
         }).catch((err) => {
             console.error('[review] transcode error:', err);

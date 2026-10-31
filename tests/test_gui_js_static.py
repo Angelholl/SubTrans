@@ -2242,6 +2242,20 @@ def test_batch_c_review_goto_asrdict_pinned():
     assert "「ASR 与词典」页" in src, "review_asr_card 缺「ASR 与词典」页表述"
 
 
+def test_d1031_review_transcode_busy_renamed_pinned():
+    """d1031-卡K6 新钉（D2026-1031-07）：review.js 状态条 labelKey 键名消歧——
+    `review_transcode_running` → `review_transcode_busy`（值「转码进行中…」不动）；
+    后端同名键（重入守卫）语义独立，不在本钉范围。"""
+    src = _review_js_source()
+    keys = _review_msg_keys()
+    assert "review_transcode_busy" in keys, \
+        "REVIEW_MSG 缺 review_transcode_busy（改名未落）"
+    assert "review_transcode_running" not in src, \
+        "review.js 旧键名 review_transcode_running 残留（与后端重入守卫同名两义）"
+    assert "review_transcode_busy: '转码进行中…'" in src, \
+        "review_transcode_busy 值漂移（应保持「转码进行中…」）"
+
+
 def test_pipeline_card_hint_here_pinned():
     """d1013-卡1 新钉：pipelineCard 提示态惰性求值（D2026-1012-01 ⑨）。
 
