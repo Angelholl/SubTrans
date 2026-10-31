@@ -16,7 +16,7 @@ from subtransjav import paths
 REPO_ROOT = paths.app_root()
 
 
-def _resolve_safe_path(path: str, extra_roots=None) -> Path:
+def _resolve_safe_path(path: str, extra_roots: list[str] | None = None) -> Path:
     """Resolve *path* and verify it lives under an allowed root.
 
     Allowed roots（批1a D2026-1002-12 件2 白名单改革）:

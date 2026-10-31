@@ -89,6 +89,8 @@ module = [
     "subtransjav.refine.line_breaker",
     "subtransjav.refine.artifact_lock",
     "subtransjav.refine.srt_encoding",
+    "subtransjav.webview_gui.security",
+    "subtransjav.webview_gui.user_dirs",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
