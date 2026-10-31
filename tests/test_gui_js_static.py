@@ -2222,7 +2222,7 @@ def test_batch_c_review_goto_asrdict_pinned():
     assert 'data-tab="tab-asrdict"' in src, "review.js 跳转锚未改 tab-asrdict"
     assert "review_asr_goto: '前往 ASR 与词典页'" in src, \
         "review_asr_goto 文案未随改"
-    assert "API 与模型选择页" in src, "review_asr_card 缺「API 与模型选择页」表述"
+    assert "「ASR 与词典」页" in src, "review_asr_card 缺「ASR 与词典」页表述"
 
 
 def test_pipeline_card_hint_here_pinned():

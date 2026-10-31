@@ -67,6 +67,22 @@ def test_msg_fallbacks_never_raise():
     assert msg("translation_started") == "翻译已启动，共 {n} 个文件"  # 缺参回退原文
 
 
+def test_review_bad_encoding_text_parity_py_js():
+    """C1 卡A（D2026-1031-05）文案 parity 钉：编码无法识别两源逐字一致。
+
+    strings.py ``review_srt_bad_encoding`` 与 review.js ``review_bad_encoding``
+    须同值，且提及 CP932（判定梯 a' 加 cp932 兜底后文案随批同步）。
+    读文件用相对路径，勿整读大文件。
+    """
+    py_value = MSG["review_srt_bad_encoding"]
+    review_js = (WEBVIEW_GUI_DIR / "assets" / "review.js").read_text(
+        encoding="utf-8")
+    m = re.search(r"^\s*review_bad_encoding: '([^']*)',\s*$", review_js, re.M)
+    assert m, "review.js 缺 review_bad_encoding 单引号字符串值"
+    assert m.group(1) == py_value, "两源文案值不一致（须逐字一致）"
+    assert "CP932" in py_value, "文案未随判定梯补 CP932"
+
+
 # ---------------------------------------------------------------------------
 # 英文残留防回归（与验收 grep 同口径）
 # ---------------------------------------------------------------------------

@@ -3796,6 +3796,35 @@ def test_review_load_srt_bad_encoding(gui_api_obj, tmp_path):
     assert r["success"] is False and "编码" in r["error"]
 
 
+def test_review_load_srt_cp932(gui_api_obj, tmp_path):
+    """C1 卡A（D2026-1031-05）红→绿钉：SJIS 半角假名字幕不再硬错。
+
+    gbk 对半角假名失败 → cp932 兜底 → success=True、encoding="cp932"、
+    文本逐字还原（旧梯返 review_srt_bad_encoding 硬错）。
+    """
+    p = tmp_path / "d.srt"
+    p.write_bytes(
+        "1\n00:00:01,000 --> 00:00:02,000\nﾃｽﾄ字幕\n".encode("cp932"))
+    r = gui_api_obj.refine_review_load_srt(str(p))
+    assert r["success"] is True and r["encoding"] == "cp932"
+    assert r["count"] == 1 and r["blocks"][0]["text"] == "ﾃｽﾄ字幕"
+
+
+def test_review_load_srt_gbk_exact_text(gui_api_obj, tmp_path):
+    """C1 卡A 防漂移钉：GBK 中文 SRT 经 API 后文本逐字等值。
+
+    防 cp932 前置把 GBK 静默误判（判定梯顺序回潮）。
+    """
+    p = tmp_path / "e.srt"
+    p.write_bytes(
+        "1\n00:00:01,000 --> 00:00:02,000\n中文字幕测试，第一句话。\n\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n第二句话。\n".encode("gbk"))
+    r = gui_api_obj.refine_review_load_srt(str(p))
+    assert r["success"] is True and r["encoding"] == "gbk"
+    assert [b["text"] for b in r["blocks"]] == [
+        "中文字幕测试，第一句话。", "第二句话。"]
+
+
 def test_review_transcode_command_construction(gui_api_obj, monkeypatch,
                                                 tmp_path):
     """转码命令构造：libx264/veryfast/crf 23/aac/-progress pipe:1 +
