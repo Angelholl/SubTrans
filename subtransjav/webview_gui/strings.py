@@ -88,7 +88,7 @@ MSG = {
 
     # ---- 词典管理（api.py，2.1 引擎页词典管理三区块）----
     "dict_kind_unsupported": "该词典暂不支持下载（仅 sudachi 提供下载式）",
-    "dict_download_failed": "词典下载失败（网络/源不可达）",
+    "dict_download_failed": "下载失败",
     "dict_checksum_failed": "词典校验失败（SHA256 不符，已拒绝落位）",
     # 2.7.3 件⑤（D2026-1005）：词典下载会话制——同 kind 互斥拒绝文案
     "dict_download_busy": "已有词典任务在进行中，请稍候或先停止当前下载。",
