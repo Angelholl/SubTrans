@@ -253,9 +253,11 @@ def collect_disagreement(in_path: str) -> dict[str, Any] | None:
     if p1 is None or p2 is None:
         return None
 
-    own = parse_srt(Path(in_path).read_text(encoding="utf-8"))
-    pass1 = parse_srt(p1.read_text(encoding="utf-8"))
-    pass2 = parse_srt(p2.read_text(encoding="utf-8"))
+    # 容错口径：非法字节替换为 U+FFFD 并继续，不中断采集；损坏面进比对后
+    # 按文本差异自然分档（owner 拍板 D2026-1031-04 ⑦①）。
+    own = parse_srt(Path(in_path).read_text(encoding="utf-8", errors="replace"))
+    pass1 = parse_srt(p1.read_text(encoding="utf-8", errors="replace"))
+    pass2 = parse_srt(p2.read_text(encoding="utf-8", errors="replace"))
 
     rows = []
     for e in own:
