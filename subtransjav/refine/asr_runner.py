@@ -466,9 +466,16 @@ def _load_break_segments():
 
 
 def main(argv=None) -> int:
+    # D2026-1031-04 ⑦②：allow_abbrev=False——cmd 契约元素精确匹配。旧行为
+    # 依赖 "--model large-v2" 被 argparse 前缀缩写收进 --model-dir、再由显式
+    # --model-dir 后值覆盖冲正的巧合；关掉缩写后 runner 增 "--model…" 族选项
+    # 或调用方漏传 model_dir 都不再翻车。兼容性：runner 脚本随主安装分发
+    # （asr_env._runner_script_path() frozen/dev 双形态），旧发布版本自带旧
+    # runner 不受影响；运行时 venv 仅执行脚本，无需重建运行时 zip。
     parser = argparse.ArgumentParser(
         prog="asr_runner",
-        description="本地 ASR 重转写运行器（CT2 运行时解释器执行）")
+        description="本地 ASR 重转写运行器（CT2 运行时解释器执行）",
+        allow_abbrev=False)
     # 3.2 退役批（D2026-1029-01）：ct2 唯一引擎；--engine 旗标保留=命令
     # 契约稳定（legacy whisper 后端已硬删）。
     parser.add_argument("--engine", default="ct2", choices=["ct2"],
@@ -480,6 +487,10 @@ def main(argv=None) -> int:
     parser.add_argument("--model-dir", default="",
                         help="ct2 模型目录（asr_runtime.resolve_ct2_model_dir"
                              " 解析后传入）")
+    # cmd 契约元素（ct2_runner_command 恒传 --model large-v2）：精确匹配的
+    # 真实选项，runner 不读模型名（装载走 --model-dir），故仅信息性。
+    parser.add_argument("--model", default="large-v2",
+                        help="模型名（信息性；实际装载走 --model-dir 解析）")
     parser.add_argument("--language", default="ja")
     parser.add_argument("--beam-size", type=int, default=5,
                         help="ct2 束宽（PROVISIONAL，待金标 A/B 定案）")
