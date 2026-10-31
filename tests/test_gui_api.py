@@ -7349,10 +7349,14 @@ def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
 def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
                                                 tmp_path, caplog):
     """门控缺省关：high 也全放弃——零终稿写入/零台账 auto_insert，
-    notice 明示放弃数，last_run.missed_skipped 如实计数。"""
+    notice 明示放弃数，last_run.missed_skipped 如实计数。
+    隔离：CONFIG_DIR 打桩（防真实门控文件泄入——2026-10-31 校准 --enable
+    首次在盘落 config/fullchain_c22.json 时实测泄入翻红，主审亲修）。"""
     import logging
 
+    import subtransjav.refine.config as _cfg
     from subtransjav.refine.v2_outputs import final_stem
+    monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
     final_before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
