@@ -275,14 +275,15 @@ def test_report_triage_column_and_verdict(c22, tmp_path, monkeypatch):
 
 def test_reference_readout_flips_energy_gate_rows(c22, tmp_path, monkeypatch):
     """双读数：同一批转写产物二次 classify（speech_min_s=None，不重复
-    转写）——主口径能量门 low 行在参照口径按其余信号重判。"""
+    转写）——主口径能量门 low 行在参照口径按其余信号重判。
+    缺省已翻转为 None（D2026-1031-04 ①），能量门行为以显式 1.0 固定。"""
     monkeypatch.setattr(c22, "detect_speech_windows",
                         lambda media, timings: {T1: [(1.0, 1.5)]})
     guide = _write_guide(tmp_path, [T1])
     ctx: list[dict] = []
     rows = c22._replay_sample({"guide": str(guide), "media": "x.mkv",
                                "label": True, "timings": [T1],
-                               "labels": [True]}, ctx)
+                               "labels": [True]}, ctx, speech_min_s=1.0)
     assert rows[0]["grade"] == "low"
     assert rows[0]["reasons"][0] == "speech_le_1s"
     ref_rows = c22._reclassify_no_energy_gate(ctx)
@@ -468,24 +469,28 @@ def _ref_n_high(text: str) -> int:
 
 
 def test_pin9_default_speech_min_zero_change(c22, tmp_path, monkeypatch):
-    """钉1 缺省零变化：不传 --speech-min-s → 主口径仍走产品缺省 1.0s，
-    逐行读数与 verdict 同改动前一致；报告头声明「缺省(产品终裁值)」。"""
+    """钉1 缺省=产品终裁值 None（D2026-1031-04 ①翻转）：不传 --speech-min-s
+    → 能量门关闭，≤1s 行不再判 low，n_high 与参照口径等值；
+    报告头声明「缺省(产品终裁值)」形态不变。"""
     text = _run_manifest(c22, tmp_path, monkeypatch, "d", [])
-    assert "| 1 | " + T1 + " | low | True | speech_le_1s" in text
+    assert "| 1 | " + T1 + " | high | True" in text
+    assert "speech_le_1s" not in text.partition("## 参照读数")[0]
     assert "| 2 | " + T2 + " | high | True" in text
-    assert _n_high(text) == 1
+    assert _n_high(text) == _ref_n_high(text) == 2
     assert "unjudgeable" in text
     assert "主口径 speech_min_s=缺省(产品终裁值)" in text
 
 
 def test_pin9_override_zero_promotes_subsecond_high(c22, tmp_path,
                                                    monkeypatch):
-    """钉2 override 生效：--speech-min-s 0 → ≤1s 行不再被能量门判 low，
-    主口径判 high 数多于缺省 case。"""
-    default_text = _run_manifest(c22, tmp_path, monkeypatch, "dflt", [])
+    """钉2 override 生效：--speech-min-s 1.0（旧缺省阈值显式复现）→ ≤1s 行
+    判 low；--speech-min-s 0 → 同行判 high，判 high 数恰多 1。"""
+    legacy_text = _run_manifest(c22, tmp_path, monkeypatch, "dflt",
+                                ["--speech-min-s", "1.0"])
     override_text = _run_manifest(c22, tmp_path, monkeypatch, "zero",
                                   ["--speech-min-s", "0"])
-    assert _n_high(override_text) == _n_high(default_text) + 1
+    assert "| 1 | " + T1 + " | low | True | speech_le_1s" in legacy_text
+    assert _n_high(override_text) == _n_high(legacy_text) + 1
     assert "| 1 | " + T1 + " | high | True" in override_text
 
 
@@ -511,11 +516,13 @@ def test_pin9_report_header_declares_speech_min(c22, tmp_path, monkeypatch):
 
 
 def test_pin9_reference_section_ignores_flag(c22, tmp_path, monkeypatch):
-    """钉5 flag 不泄漏到参照口径：两 flag 形态下参照节读数逐字一致。"""
-    default_text = _run_manifest(c22, tmp_path, monkeypatch, "d", [])
+    """钉5 flag 不泄漏到参照口径：两 flag 形态下参照节读数逐字一致；
+    主口径差异改由显式 1.0（旧缺省）与 0 两 flag 呈现（缺省已翻转 None）。"""
+    legacy_text = _run_manifest(c22, tmp_path, monkeypatch, "d",
+                                ["--speech-min-s", "1.0"])
     override_text = _run_manifest(c22, tmp_path, monkeypatch, "z",
                                   ["--speech-min-s", "0"])
-    default_ref = default_text.partition("## 参照读数")[2]
+    default_ref = legacy_text.partition("## 参照读数")[2]
     override_ref = override_text.partition("## 参照读数")[2]
     assert default_ref == override_ref
-    assert _n_high(default_text) != _n_high(override_text)
+    assert _n_high(legacy_text) != _n_high(override_text)
