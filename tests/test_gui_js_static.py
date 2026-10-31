@@ -7302,6 +7302,11 @@ def test_js_sources_layer_pinned():
        encodeBackendGpu「GPU（批2 提供）」→「GPU 加速」-10B、
        ct2GpuUnpublished「在线件尚未发布」→「在线通道当前不可用」+6B；
        键数零变化，i18n 计数钉不动；app-refine-asr.js 冻结值零改动）；
+       d1031-卡C3b 换代（死键清理缩围，D2026-1031-07）：全库拼接
+       447e84ee…/496,202B、app-msg.js 64,839B/2d37e2b8…（删三死键
+       ——压制高级面板占位／镜像待验证提示／翻译冲突提示，-311B；
+       strings.py 侧同名镜像键其一随删；键数变化仅此三键，
+       FROZEN_I18N_KEYS 与 index.html 零触碰）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7316,7 +7321,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "375359feaccf5705ce7745e7bfc0d3219524a55c1f0c1e2b0f1f1e8689f10287"), \
+        "447e84eeb80fc452fc857fc4984c1a391563b159fbb52c801a0209828fca636e"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7346,8 +7351,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (65150,
-                       "15a0f167b961aae97d83a069a1f5fced67bd32f0fe9bbd93841b8b2ccb1ca4a0"),
+        "app-msg.js": (64839,
+                       "2d37e2b85e1203d2068a3e77ce9264a1623494b9f6960038018928dbc21e8686"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,

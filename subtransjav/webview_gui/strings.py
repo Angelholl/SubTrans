@@ -294,7 +294,6 @@ MSG = {
     "encodeAudioCopy": "直接复制（推荐）",
     "encodeModalEnhance": "画质增强（降噪+锐化；关闭=忠实源）",
     "encodeModalAdvanced": "高级",
-    "encodeModalAdvancedPh": "自定义参数 / 预设管理 —— 批2 面板完整化时启用",
     "encodePresetLabel": "预设",
     "encodePresetSave": "存为预设",
     "encodePresetDelete": "删除",
