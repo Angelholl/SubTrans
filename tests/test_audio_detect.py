@@ -5,8 +5,11 @@
 import json
 import math
 import struct
+import types
 import wave
 from pathlib import Path
+
+import pytest
 
 from subtransjav.refine import audio_detect as ad
 from subtransjav.refine.audio_detect import (
@@ -533,3 +536,175 @@ def test_detect_speech_windows_unparseable_timing_skipped(tmp_path,
     monkeypatch.setattr(ad, "_detect_temp_root", lambda: str(tmp_path))
     r = ad.detect_speech_windows(media, ["garbage"])
     assert "__error" not in r and r == {}
+
+
+# ---------------------------------------------------------------------------
+# 补卡8：模块边界（_find_ffmpeg / _extract_wav / _wav_tmp_path /
+# _hop_rms_series 位宽分支 / 纯函数小钉）。合成件零 ffmpeg、零子进程。
+# ---------------------------------------------------------------------------
+
+def _write_pcm_wav(path, nch: int, sampwidth: int, rate: int, samples):
+    """写任意位宽 PCM wav；samples 为交错帧的整数序列（8-bit 为无符号）。"""
+    if sampwidth == 1:
+        data = bytes(samples)
+    elif sampwidth == 2:
+        data = struct.pack(f"<{len(samples)}h", *samples)
+    else:
+        data = b"".join(int(v).to_bytes(sampwidth, "little", signed=True)
+                        for v in samples)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(nch)
+        w.setsampwidth(sampwidth)
+        w.setframerate(rate)
+        w.writeframes(data)
+    return str(path)
+
+
+def test_find_ffmpeg_which_miss_returns_none(monkeypatch):
+    """audio_detect.py:63-65：which 未命中 → None（不跑子进程）。"""
+    monkeypatch.setattr(ad.shutil, "which", lambda _name: None)
+
+    def _boom(*_a, **_k):
+        raise AssertionError("which 未命中时不得调用 subprocess.run")
+    monkeypatch.setattr(ad.subprocess, "run", _boom)
+    assert ad._find_ffmpeg() is None
+
+
+def test_find_ffmpeg_version_ok_returns_path(monkeypatch):
+    """audio_detect.py:59-74 正向分支：`ffmpeg -version` rc=0 → 返回 which 路径。"""
+    monkeypatch.setattr(ad.shutil, "which", lambda _name: "C:/fake/ffmpeg.exe")
+    calls = []
+
+    def _run(args, **kwargs):
+        calls.append((args, kwargs))
+        return types.SimpleNamespace(returncode=0, stderr=b"")
+    monkeypatch.setattr(ad.subprocess, "run", _run)
+    assert ad._find_ffmpeg() == "C:/fake/ffmpeg.exe"
+    assert calls[0][0] == ["C:/fake/ffmpeg.exe", "-version"]   # list-args 禁 shell
+    assert calls[0][1]["timeout"] == ad._FFPROBE_TIMEOUT_S
+    assert calls[0][1]["capture_output"] is True
+
+
+def test_find_ffmpeg_version_rc_nonzero_returns_none(monkeypatch):
+    """audio_detect.py:72-74：冒烟 rc!=0（PATH 残桩/损坏安装）→ None。"""
+    monkeypatch.setattr(ad.shutil, "which", lambda _name: "C:/fake/ffmpeg.exe")
+    monkeypatch.setattr(ad.subprocess, "run",
+                        lambda *_a, **_k: types.SimpleNamespace(returncode=1))
+    assert ad._find_ffmpeg() is None
+
+
+def test_find_ffmpeg_oserror_returns_none(monkeypatch):
+    """audio_detect.py:66-71：子进程抛 OSError → None（静默降级不阻断）。"""
+    monkeypatch.setattr(ad.shutil, "which", lambda _name: "C:/fake/ffmpeg.exe")
+
+    def _run(*_a, **_k):
+        raise OSError("cannot execute")
+    monkeypatch.setattr(ad.subprocess, "run", _run)
+    assert ad._find_ffmpeg() is None
+
+
+def test_extract_wav_nonzero_rc_raises_runtime_error(tmp_path, monkeypatch):
+    """audio_detect.py:86-89：抽取 rc!=0 → RuntimeError（stderr 尾部入报错）。"""
+    calls = []
+
+    def _run(args, **kwargs):
+        calls.append((args, kwargs))
+        return types.SimpleNamespace(returncode=2, stderr=b"bad input")
+    monkeypatch.setattr(ad.subprocess, "run", _run)
+    with pytest.raises(RuntimeError, match="ffmpeg 抽取音频失败"):
+        ad._extract_wav("ff", str(tmp_path / "m.mp4"),
+                        str(tmp_path / "out.wav"), 16000)
+    assert calls[0][0][:2] == ["ff", "-y"]                   # list-args 禁 shell
+    assert "16000" in calls[0][0]
+
+
+def test_extract_wav_missing_output_raises_runtime_error(tmp_path, monkeypatch):
+    """audio_detect.py:86：rc=0 但产物缺失 → 同样 RuntimeError。"""
+    monkeypatch.setattr(ad.subprocess, "run",
+                        lambda *_a, **_k: types.SimpleNamespace(
+                            returncode=0, stderr=b""))
+    with pytest.raises(RuntimeError, match="rc=0"):
+        ad._extract_wav("ff", str(tmp_path / "m.mp4"),
+                        str(tmp_path / "missing.wav"), 16000)
+
+
+def test_wav_tmp_path_hash_stable_and_identity_sensitive(tmp_path):
+    """audio_detect.py:129-140：同输入重跑同名；输入大小变化则改名。"""
+    media = tmp_path / "m.mp4"
+    media.write_bytes(b"fake")
+    p1 = ad._wav_tmp_path(str(tmp_path), str(media))
+    p2 = ad._wav_tmp_path(str(tmp_path), str(media))
+    assert p1 == p2
+    assert Path(p1).parent == tmp_path / "audio_detect"
+    name = Path(p1).name
+    assert name.startswith("ad_") and name.endswith(".wav")
+    assert len(name) == len("ad_") + 12 + len(".wav")        # sha1 截 12 位
+    media.write_bytes(b"fake-changed")                       # 大小变化 → 身份变化
+    assert ad._wav_tmp_path(str(tmp_path), str(media)) != p1
+
+
+def test_wav_tmp_path_stat_failure_uses_no_stat_fallback(tmp_path):
+    """audio_detect.py:137-138：媒体 stat 失败 → no-stat 身份兜底，稳定不抛。"""
+    ghost = str(tmp_path / "ghost.mp4")
+    p1 = ad._wav_tmp_path(str(tmp_path), ghost)
+    p2 = ad._wav_tmp_path(str(tmp_path), ghost)
+    assert p1 == p2 and Path(p1).name.startswith("ad_")
+    real = tmp_path / "real.mp4"
+    real.write_bytes(b"x")
+    assert ad._wav_tmp_path(str(tmp_path), str(real)) != p1
+
+
+def test_hop_rms_series_8bit_midpoint_debias_zero(tmp_path):
+    """audio_detect.py:182-189：8-bit 中点 128 去偏置后 RMS 全 0。"""
+    wav = _write_pcm_wav(tmp_path / "u8.wav", 1, 1, RATE, [128] * RATE)
+    rate, rms, duration = ad._hop_rms_series(wav)
+    assert rate == RATE and duration == 1.0
+    assert len(rms) == 100                                   # 10ms hop → 100 钉/秒
+    assert max(rms) == 0.0                                   # 未去偏置则为 128
+
+
+def test_hop_rms_series_8bit_square_wave_amplitude(tmp_path):
+    """audio_detect.py:182-189：8-bit 方波 ±100 → 每 hop RMS≈100（量纲对）。"""
+    samples = [228 if i % 2 == 0 else 28 for i in range(RATE)]
+    wav = _write_pcm_wav(tmp_path / "u8sq.wav", 1, 1, RATE, samples)
+    _rate, rms, _duration = ad._hop_rms_series(wav)
+    assert len(rms) == 100
+    assert rms == pytest.approx([100.0] * 100)
+
+
+def test_hop_rms_series_stereo_takes_first_channel(tmp_path):
+    """audio_detect.py:181：立体声只取首通道（右声道静音不稀释 RMS）。"""
+    samples = [10000, 0] * RATE                             # 左满幅、右静音
+    wav = _write_pcm_wav(tmp_path / "st.wav", 2, 2, RATE, samples)
+    _rate, rms, duration = ad._hop_rms_series(wav)
+    assert duration == 1.0 and len(rms) == 100
+    assert rms == pytest.approx([10000.0] * 100)             # 混两声道则为 ≈7071
+
+
+def test_hop_rms_series_unsupported_sampwidth_raises(tmp_path):
+    """audio_detect.py:190：24-bit 不支持位宽 → ValueError。"""
+    wav = _write_pcm_wav(tmp_path / "s24.wav", 1, 3, RATE, [0] * RATE)
+    with pytest.raises(ValueError, match="不支持位宽"):
+        ad._hop_rms_series(wav)
+
+
+def test_hop_rms_series_empty_stream_raises(tmp_path):
+    """audio_detect.py:163-164：nframes=0 → ValueError("空音频流")。"""
+    wav = _write_pcm_wav(tmp_path / "empty.wav", 1, 2, RATE, [])
+    with pytest.raises(ValueError, match="空音频流"):
+        ad._hop_rms_series(wav)
+
+
+def test_fmt_ms_format_and_clamp():
+    """audio_detect.py:229-235：SRT 时间戳形态 + 负数钳 0。"""
+    assert ad._fmt_ms(0) == "00:00:00,000"
+    assert ad._fmt_ms(3_661_007) == "01:01:01,007"
+    assert ad._fmt_ms(-5) == "00:00:00,000"
+
+
+def test_speech_segments_merge_and_tail_close():
+    """audio_detect.py:210-226：相邻超阈 hop 合并、尾部段以序列长度收口。"""
+    segs = ad._speech_segments([0.0, 5.0, 5.0, 0.0, 9.0], 1.0, 0.01)
+    assert [(round(s, 6), round(e, 6)) for s, e in segs] == [
+        (0.01, 0.03), (0.04, 0.05)]
+    assert ad._speech_segments([1.0], 1.0, 0.01) == []       # 严格大于阈值

@@ -8,12 +8,15 @@ import pytest
 from subtransjav.refine.eval_baseline import (
     WILSON_Z_95,
     _safe_stem,
+    _timing_span,
     agreement,
     cps_stats,
     evaluate,
     hallucination_proxy,
     omission_proxy,
     report_markdown,
+    run_engine,
+    speech_windows_full,
     wilson_interval,
     wilson_lower_bound,
     write_report,
@@ -258,3 +261,192 @@ def test_default_out_dir_is_data_root_reports_eval(monkeypatch, tmp_path):
     monkeypatch.setattr(eb.paths, "data_subdir",
                         lambda *parts: str(tmp_path.joinpath(*parts)))
     assert eb.default_out_dir() == str(tmp_path / "reports" / "eval")
+
+
+# ------------------------------------------------ 补卡1 边界扩补（D2026-1030-07 白名单第 1 类）
+# 只增不改：下列新钉逐条对齐实码分支（subtransjav/refine/eval_baseline.py），
+# 合成夹具零 ffmpeg/网络/模型；I/O 分支一律 monkeypatch，不真跑子进程。
+
+
+class TestTimingSpanBoundaries:
+    def test_zero_duration_returns_none(self):
+        # eval_baseline.py:92-101：end <= start → None（零时长行丢弃）
+        assert _timing_span("00:00:01,000 --> 00:00:01,000") is None
+
+    def test_reversed_range_returns_none(self):
+        # 同上：乱序行（end < start）→ None；正常行返回 (start, end) 元组
+        assert _timing_span("00:00:05,000 --> 00:00:02,000") is None
+        assert _timing_span("00:00:00,000 --> 00:00:02,500") == (0.0, 2.5)
+
+    def test_unparsable_returns_none(self):
+        # :92-95：正则不匹配 → None
+        assert _timing_span("") is None
+        assert _timing_span("1 --> 2") is None
+
+
+class TestOmissionProxyBoundaries:
+    def test_empty_window_list_total_zero(self):
+        # :167-169：windows=[] → total<=0 退化分支（ratio=None，不当成 0 报告）
+        assert omission_proxy([_ent(1, 1.0, 3.0, "あ")], []) == {
+            "speech_s": 0.0, "uncovered_s": 0.0, "ratio": None}
+
+    def test_ratio_capped_at_one(self):
+        # :177-178：min(1.0, uncovered/total) 上限。实码里 gap 逐窗截到窗长、
+        # uncovered<=total 恒成立（窗口自身重叠时同样成立），故 clamp 为结构性
+        # 保险而非法可达路径；此钉锁「无行覆盖时 ratio 恰为 1.0、绝不越界」。
+        windows = [(0.0, 4.0), (2.0, 6.0)]
+        r = omission_proxy([], windows)
+        assert r["speech_s"] == pytest.approx(8.0)
+        assert r["uncovered_s"] == pytest.approx(8.0)
+        assert r["ratio"] == 1.0
+
+
+class TestHallucinationMinOverlapBoundary:
+    def test_exact_threshold_not_suspect(self):
+        # :140/:152-155：covered/dur < min_overlap 为严格小于（无等号）；
+        # 行 0-1s 与窗口 0-0.5s 恰重叠 50%，min_overlap=0.5 时不算可疑。
+        entries = [_ent(1, 0.0, 1.0, "あ")]
+        r = hallucination_proxy(entries, [(0.0, 0.5)], min_overlap=0.5)
+        assert r["suspect"] == 0 and r["ratio"] == 0.0
+        # 阈值略高于实际覆盖率即翻为可疑，锁严格小于口径
+        r2 = hallucination_proxy(entries, [(0.0, 0.5)], min_overlap=0.51)
+        assert r2["suspect"] == 1 and r2["ratio"] == 1.0
+
+
+class TestAgreementBoundaries:
+    def test_empty_inputs_rate_none(self):
+        # :226-229：n_a==0 / n_b==0 → rate_* 与 wilson 均 None
+        r = agreement([], [])
+        assert r["matched"] == 0 and r["lines_a"] == 0 and r["lines_b"] == 0
+        assert r["rate_a"] is None and r["rate_b"] is None
+        assert r["rate_a_wilson"] is None and r["rate_b_wilson"] is None
+        # 仅一侧为空：另一侧分母非 0，rate 为 0.0 而非 None
+        r2 = agreement([_ent(1, 1.0, 3.0, "あ")], [])
+        assert r2["rate_a"] == 0.0 and r2["rate_b"] is None
+
+    def test_iou_exactly_threshold_matched(self):
+        # :204：iou >= iou_threshold 含等号。A(0,2)∩B(0,1)=1，并集 2 → IoU 恰 0.5
+        a = [_ent(1, 0.0, 2.0, "あ")]
+        b = [_ent(1, 0.0, 1.0, "あ")]
+        assert agreement(a, b)["matched"] == 1
+
+    def test_text_sim_exactly_threshold_matched(self):
+        # :216：sim >= sim_threshold 含等号；"abcde"/"abcxy" 匹配块 3 字、
+        # 总长 10 → ratio 恰 0.6，算匹配。
+        a = [_ent(1, 1.0, 3.0, "abcde")]
+        b = [_ent(1, 1.0, 3.0, "abcxy")]
+        assert agreement(a, b)["matched"] == 1
+        # 低于阈值（"ab" 两块 /10 = 0.4）不匹配，锁边界不放水
+        c = [_ent(1, 1.0, 3.0, "abxyz")]
+        assert agreement(a, c)["matched"] == 0
+
+    def test_touching_intervals_zero_overlap(self):
+        # :198：inter==0（区间首尾相接）→ continue，不产候选对；
+        # 两侧行数照计，rate 为 0.0（非 None）
+        a = [_ent(1, 1.0, 2.0, "あ")]
+        b = [_ent(1, 2.0, 3.0, "あ")]
+        r = agreement(a, b)
+        assert r["matched"] == 0
+        assert r["lines_a"] == 1 and r["lines_b"] == 1
+        assert r["rate_a"] == 0.0 and r["rate_b"] == 0.0
+
+
+class TestCpsMixedRows:
+    def test_bad_timing_rows_skipped(self):
+        # :237-248：非法 timing 行 continue（不进 durs/values）；lines 取合法行数。
+        # 合法 1 行（10 字 / 2s = 5.0）+ 零时长行 + 坏 timing 行 → lines=1
+        entries = [
+            _ent(1, 0.0, 2.0, "あ" * 10),
+            {"index": 2, "timing": "00:00:03,000 --> 00:00:03,000", "text": "い"},
+            {"index": 3, "timing": "garbage", "text": "う"},
+        ]
+        r = cps_stats(entries)
+        assert r["lines"] == 1
+        assert r["cps_p50"] == 5.0 and r["cps_p90"] == 5.0 and r["cps_max"] == 5.0
+        assert r["avg_dur_s"] == 2.0
+        # 全非法 → 空分支 lines=0
+        assert cps_stats([{"timing": "bad", "text": "x"}])["lines"] == 0
+
+
+class TestSpeechWindowsDegradation:
+    def test_ffmpeg_missing_returns_error(self, monkeypatch):
+        # :109-113：_find_ffmpeg() is None → {"__error": "未检测到 ffmpeg"}（禁真跑）
+        from subtransjav.refine import audio_detect
+        monkeypatch.setattr(audio_detect, "_find_ffmpeg", lambda: None)
+        assert speech_windows_full("whatever.mp4") == {"__error": "未检测到 ffmpeg"}
+
+    def test_missing_media_returns_error(self, monkeypatch, tmp_path):
+        # :114-115：ffmpeg 在但媒体不存在/为空 → {"__error": "无媒体文件"}
+        from subtransjav.refine import audio_detect
+        monkeypatch.setattr(audio_detect, "_find_ffmpeg", lambda: "ffmpeg-stub")
+        assert speech_windows_full(str(tmp_path / "gone.mp4")) == {"__error": "无媒体文件"}
+        assert speech_windows_full("") == {"__error": "无媒体文件"}
+
+    def test_detection_exception_returns_error(self, monkeypatch):
+        # :135：任一步抛异常 → 兜底 {"__error": "语音窗口检测失败: ..."}，绝不外抛
+        from subtransjav.refine import audio_detect
+
+        def _boom():
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(audio_detect, "_find_ffmpeg", _boom)
+        assert speech_windows_full("whatever.mp4") == {"__error": "语音窗口检测失败: boom"}
+
+
+class TestRunEngineUnregistered:
+    def test_unregistered_engine_raises(self):
+        # :269-276：未注册引擎 → RuntimeError，消息带引擎 id 与安装链提示
+        with pytest.raises(RuntimeError) as ei:
+            run_engine("ct2", "a.mp4", "work")
+        assert "ct2" in str(ei.value)
+        assert "未注册" in str(ei.value)
+
+
+class TestWriteReportEscapeGuard:
+    def test_escape_stem_raises_value_error(self, monkeypatch, tmp_path):
+        # :379-380：os.pardir in parts / parent != base 越界守卫（双保险）。
+        # 正常路径 stem 已被白名单净化不可越界，此处 monkeypatch 净化函数注入
+        # 越界前缀以触达守卫，验证仍抛 ValueError 且不落盘。
+        import subtransjav.refine.eval_baseline as eb
+        monkeypatch.setattr(eb, "_safe_stem", lambda _s: "../evil")
+        out = tmp_path / "out"
+        with pytest.raises(ValueError) as ei:
+            eb.write_report({"schema": "x"}, str(out), "any")
+        assert "越界" in str(ei.value)
+        assert not (tmp_path / "evil-baseline.json").exists()
+
+
+def test_safe_stem_all_illegal_falls_back_to_eval():
+    # :364-366：全非法字符 → 净化后 strip("._") 为空 → "eval"；纯点号同样
+    assert _safe_stem("///") == "eval"
+    assert _safe_stem("..") == "eval"
+
+
+def test_report_markdown_windows_error_degradation(monkeypatch, tmp_path):
+    # :328-330：windows_error 非空 → 退化提示行 + 窗口类指标 null（窗口缺失）。
+    # 窗口检测 monkeypatch 隔断，避免环境 ffmpeg 差异影响判定。
+    import subtransjav.refine.eval_baseline as eb
+    monkeypatch.setattr(eb, "speech_windows_full", lambda _p: {"__error": "无媒体文件"})
+    entries = [_ent(1, 1.0, 3.0, "あ")]
+    pa = make_srt(tmp_path, "a.srt", entries)
+    rep = eb.evaluate(str(tmp_path / "gone.mp4"), {"upstream": pa})
+    assert rep["windows_error"] == "无媒体文件"
+    assert rep["engines"]["upstream"]["omission_proxy"] is None
+    md = eb.report_markdown(rep)
+    assert "> 语音窗口检测退化：无媒体文件" in md
+    assert "幻听代理（低重叠行占比，越低越好）：null（窗口缺失）" in md
+    assert "漏听代理（语音未覆盖占比，越低越好）：null（窗口缺失）" in md
+
+
+def test_main_derives_stem_from_media_name(monkeypatch, tmp_path):
+    # :416-417：media 非空且未给 --stem → stem=媒体名去扩展名；窗口检测 monkeypatch 隔断
+    import subtransjav.refine.eval_baseline as eb
+    monkeypatch.setattr(eb, "speech_windows_full", lambda _p: {"__error": "无媒体文件"})
+    entries = [_ent(1, 1.0, 3.0, "あ")]
+    pa = make_srt(tmp_path, "a.srt", entries)
+    out = str(tmp_path / "r")
+    rc = eb.main(["--media", str(tmp_path / "clip.mp4"),
+                  "--srt", "upstream=" + pa, "--out", out])
+    assert rc == 0
+    assert (tmp_path / "r" / "clip-baseline.json").exists()
+    assert (tmp_path / "r" / "clip-baseline.md").exists()
