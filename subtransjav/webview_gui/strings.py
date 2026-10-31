@@ -254,6 +254,7 @@ MSG = {
     # 一键回滚结构化失败（3.0 批2：api.fullchain_rollback 终稿缺失分支）
     "fullchain_rollback_missing_final": "终稿字幕不存在，无法回滚：{path}",
     "encode_jobs_invalid": "入队任务无效：{reason}",
+    # 后端消费原生键：api.encode_commit 拒绝分支经 msg() 取本键（前端镜像见下）
     "encode_commit_rejected": "全部任务未能入队：{reason}",
     # 压制参数独立设置项（D2026-1008-01 批2：encode_save_params 失败 tip，
     # 对齐 _refine_error_tip 人话提示风格）
@@ -343,7 +344,8 @@ MSG = {
     "encodeSupplyDone": "完整版 ffmpeg 就绪，请重新点击「压制成品」发起压制",
     "encodeOverwriteTitle": "覆盖确认",
     "encodeOverwriteBody": "以下成品文件已存在，覆盖它们吗？\n\n{list}",
-    "encodeCommitRejected": "未能入队：{e}",
+    # 前端镜像同步键：与上方原生键 encode_commit_rejected 同值（值 parity 钉锁死）
+    "encodeCommitRejected": "全部任务未能入队：{reason}",
     "encodeCancelOneConfirm": "取消当前压制任务？",
     "encodeCancelAllConfirm": "取消当前任务并清空排队中的任务？",
     "encodeDockRunning": "压制中",

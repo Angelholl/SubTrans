@@ -469,6 +469,23 @@ def test_synopsis_cast_wiring_pinned():
         "buildRefineOptions 缺 synopsis_cast_enabled 消费（勾选才 true）"
 
 
+def test_encode_commit_rejected_value_parity_pinned():
+    """卡K5（D2026-1031-07）：encodeCommitRejected 双键共存消歧——JS MSG
+    镜像值与 strings.py 原生键 encode_commit_rejected 值逐字等值。
+
+    旧钉只锁两表键存在性，两键同名族却可各自改值而全绿；本钉补跨表
+    值 parity，堵「同键不同值」漂移口。"""
+    sp = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    m_py = re.search(r'"encode_commit_rejected":\s*"([^"]*)"', sp)
+    assert m_py, "strings.py 缺 encode_commit_rejected 原生键"
+    m_js = re.search(r"encodeCommitRejected:\s*'([^']*)'",
+                     _app_js_source())
+    assert m_js, "app-msg.js 缺 MSG.encodeCommitRejected 镜像键"
+    assert m_js.group(1) == m_py.group(1), (
+        f"encodeCommitRejected 双表值漂移：JS={m_js.group(1)!r} "
+        f"strings.py={m_py.group(1)!r}")
+
+
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""
@@ -7167,6 +7184,9 @@ def test_js_sources_layer_pinned():
        d1031-卡K2 换代（direction_title 词位替换随批更新：三源同步「模板卡」→
        「角色卡」，等长零字节数变化）：全库拼接 3f961383…/496,498B、app-msg.js
        65,140B/6577650a…（旧钉 540c4090… / 593dc46a… 退役）；
+       d1031-卡K5 换代（encodeCommitRejected 双语义对齐，D2026-1031-07）：
+       全库拼接 4605504c…/496,520B、app-msg.js 65,157B/dc71ce47…、
+       app-encode-dock.js 23,174B/539cfa44…（值对齐 + 插值位联动，键数零变化）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7181,7 +7201,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "3f96138391503c9415c342013b5ab6af4d4ebca76b3c40505330c3c45cdf9363"), \
+        "4605504c6db6d3baa667d2e5f1deb887ae8a875ad01126406457de58a61df68a"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7211,8 +7231,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (65140,
-                       "6577650a18b07e45f3a1994fa5c58a18ba5d33382aa6cb11c29632472ac03545"),
+        "app-msg.js": (65157,
+                       "dc71ce47202730d504ded0052cf36328c3b6d9618b34441ec8dbda9bf65541b5"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7273,8 +7293,8 @@ def test_js_split_integrity_pinned():
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
         "app-init.js": (9118,
                         "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
-        "app-encode-dock.js": (23169,
-                               "b3a94f95b2442ca0cec32c65f8c10f436e13998547e0b9c1aa02a5a5aebd6bfe"),
+        "app-encode-dock.js": (23174,
+                               "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,
                                   "f0e6c9269a346cfc7e0343e10a0d3304f5c73e1b4cbe1e6184f6f2df85b51c6b"),
     }
