@@ -7164,6 +7164,9 @@ def test_js_sources_layer_pinned():
        65,140B/593dc46a…，ct2GpuUnpublished 矛盾文案修正（在线件未发布态
        置灰按钮却写「可下载补丁包」，改为如实写「尚未发布（可经 CLI 用本地
        zip 安装）」；键数零变化，i18n 计数钉不动）；
+       d1031-卡K2 换代（direction_title 词位替换随批更新：三源同步「模板卡」→
+       「角色卡」，等长零字节数变化）：全库拼接 3f961383…/496,498B、app-msg.js
+       65,140B/6577650a…（旧钉 540c4090… / 593dc46a… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7178,7 +7181,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "540c40903d6f06295a5fc57b98c062388e41f75ec4ec2fb4203140e450107a20"), \
+        "3f96138391503c9415c342013b5ab6af4d4ebca76b3c40505330c3c45cdf9363"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7209,7 +7212,7 @@ def test_js_split_integrity_pinned():
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
         "app-msg.js": (65140,
-                       "593dc46a5346d0956adffe297eac96f39281b9fe928a275a6fac9acbb2a81540"),
+                       "6577650a18b07e45f3a1994fa5c58a18ba5d33382aa6cb11c29632472ac03545"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
