@@ -99,3 +99,6 @@ tools/spike_review_report.json
 tests/test_gen_sensitive_trans.py
 tests/test_sensitive_b6_web.py
 tests/test_ruling_b6_web.py
+
+# C22 门控运行态（D2026-1031-04 ① 终裁后 --enable 本地写；语义翻案=roadmap:193 独立拍板项仍挂 owner，不随门控写入顺带）
+config/fullchain_c22.json
