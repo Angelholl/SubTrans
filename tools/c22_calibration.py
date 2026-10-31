@@ -67,7 +67,7 @@ from subtransjav.refine.missed_insert import classify_transcript  # noqa: E402
 
 # C22 首版从严（owner 拍板②）：高置信桶精确率 Wilson 95% 置信下界门槛
 _PRECISION_LB_GATE = 0.95
-# 门双条件补充（D2026-1029-11 裁决①第 0 件；PROVISIONAL 预注册，owner 可终裁改值）：
+# 门双条件补充（D2026-1029-11 裁决①第 0 件；owner 已终裁 30/0.95/0.50，D2026-1031-04 ①）：
 # 高置信桶最小可判样本数——低于此值判「不可判」（样本不足无法与引擎差区分）
 _GATE_MIN_HIGH = 30
 # 覆盖率地板——high 占比低于此值即使精确率达标也不放行（防高放弃率下虚过）
@@ -76,7 +76,7 @@ _GATE_COVERAGE_FLOOR = 0.50
 _WILSON_Z = 1.959963984540054
 _OBS_CATEGORY = "suspected_missed_speech"
 _GATE_RELPATH = ("config", "fullchain_c22.json")
-# 排除率上限（D2026-1029-12 D3；PROVISIONAL 预注册，owner 可终裁改值）：
+# 排除率上限（D2026-1029-12 D3；PROVISIONAL 预注册，owner 未改值维持 0.10）：
 # 监管「不可归因排除」（杂音无法判定＋复标不一致）合计占全体候选行比例；
 # 喘息档系裁决固定排除语义（排除单列、参照口径回样），不设上限。
 _EXCLUDE_CAP_UNATTRIBUTED = 0.10
@@ -360,7 +360,7 @@ def _write_report(out_path: str, rows: list[dict], agg: dict,
         f"（不足判不可判）且精确率 Wilson 95% 置信下界 ≥ "
         f"{_PRECISION_LB_GATE:.2f} 且覆盖率 ≥ {_GATE_COVERAGE_FLOOR:.2f}"
         " 才允许 --enable 写门控（D2026-1009-02 第三节＋D2026-1029-11 "
-        "裁决① 门死锁修复；两新增门值 PROVISIONAL，owner 可终裁改值）",
+        "裁决① 门死锁修复；门值 30/0.95/0.50 owner 已终裁，D2026-1031-04 ①）",
         "",
         "## 指标",
         "",
@@ -391,7 +391,7 @@ def _write_report(out_path: str, rows: list[dict], agg: dict,
         f"- 分原因：{'；'.join(f'{k} {v}' for k, v in (agg.get('n_excluded_by_reason') or {}).items()) or '（无排除）'}",
         f"- 不可归因排除（杂音无法判定＋复标不一致）：{unattr} 条，"
         f"比率 {unattr_rate:.4f}／上限 {_EXCLUDE_CAP_UNATTRIBUTED:.2f}"
-        "（PROVISIONAL 预注册，owner 可终裁）："
+        "（PROVISIONAL 预注册，owner 未改值维持）："
         + ("⚠️ WARN 超限——本读数仅呈报，不得作开门验收依据，须 owner 复核"
            if over_cap else "未超限"),
         f"- 喘息档（裁决固定排除语义，参照口径回样）：{breath_n} 条",
