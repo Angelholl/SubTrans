@@ -97,8 +97,8 @@ GPU_DLL_REQUIRED = (
 GPU_COMPUTE_TYPE = "int8_float16"   # 拍板③：可用→gpu(int8_float16)
 CPU_COMPUTE_TYPE = "int8"           # 现状缺省，零行为变化
 
-# 双 pass 召回档（预注册常量，D2026-1029-02 拍板①；数值出处＝内部追记
-# d1028-40-追记-件A-pass2预注册，禁临时调参）：pass2=vad_filter 关＋
+# 双 pass 召回档（预注册常量，D2026-1029-02 拍板①；数值出处存内部记录，
+# 禁临时调参）：pass2=vad_filter 关＋
 # beam_size 8，其余同 pass1（condition_on_previous_text 随 pass1、
 # word_timestamps 恒开）。
 PASS2_BEAM_SIZE = 8
