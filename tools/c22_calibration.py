@@ -33,7 +33,9 @@
   speech_min_s=None 二次 classify（不重复转写）得参照读数；参照节无门
   判定语义（只报计数与点精确率，D3 口径）；
 - --enable：且 verdict=pass 才写 config/fullchain_c22.json
-  （{"enabled": true, "measured_at": ..., "precision_lb": ..., "n": ...}），
+  （{"enabled": true, "rules_sha1": ..., "app_version": ...,
+  "measured_at": ..., "precision_lb": ..., "n": ...}；指纹不可得拒绝写
+  退出码 2——读取侧指纹门槛 D2026-1101-01 §三④），
   否则拒绝并退出码 2（门控文件是 F4 真自动补行的批内开工开关，3B 读）；
 - --selftest：无真实媒体时的统计管线自检——构造合成 segments 直接过
   classify 聚合（不切片不转写），验证 harness 本身；
@@ -42,7 +44,7 @@
 全程离线零网络（真实转写经 batch_transcribe_clips 引擎分派＝CT2 唯一引擎
 本地子进程，D2026-1029-01 退役批口径；环境前置＝CT2 运行时认证安装+模型
 落位，未装时转写段如实报错不计入分档样本）；退出码：0=完成 /
-1=参数或运行失败 / 2=校准未达标拒绝写门控。
+1=参数或运行失败 / 2=校准未达标或指纹不可得拒绝写门控。
 """
 from __future__ import annotations
 
@@ -56,6 +58,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from subtransjav import data_migration as _dm  # noqa: E402
 from subtransjav import paths  # noqa: E402
 from subtransjav.refine.asr_env import (  # noqa: E402
     _MAX_CLIPS,
@@ -498,9 +501,19 @@ def main(argv: list[str] | None = None) -> int:
     enabled_written = False
     if verdict == "pass":
         if args.enable:
+            # 读取侧指纹门槛（D2026-1101-01 §三④）：写入行必须并入现行
+            # rules_sha1+app_version，否则读取侧判 fingerprint-missing 关门；
+            # 指纹不可得=无锁不写（与 seeding 同一 fail-closed 语义）。
+            rules_sha1, app_version = _dm.c22_gate_fingerprint()
+            if not rules_sha1:
+                print("❌ 规则集指纹不可得，拒绝写门控（无锁不写）",
+                      file=sys.stderr)
+                return 2
             gate_path.parent.mkdir(parents=True, exist_ok=True)
             gate_path.write_text(json.dumps(
                 {"enabled": True,
+                 "rules_sha1": rules_sha1,
+                 "app_version": app_version,
                  "measured_at": datetime.now().strftime(
                      "%Y-%m-%d %H:%M:%S"),
                  "precision_lb": round(agg["precision_lb"], 4),
