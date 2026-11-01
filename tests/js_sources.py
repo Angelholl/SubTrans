@@ -46,6 +46,7 @@ JS_FILES = [
     "app-init.js",          # 段3n 原 app-main.js L6295-6481：DOMContentLoaded 初始化 + RunControlsInit/refreshPipelineMirror + pywebviewready 钩子（批3）
     "app-encode-dock.js",   # 段3o 原 app-main.js L6483-6982：EncodeDock（批3）
     "app-feature-status.js", # 段3p 原 app-main.js L6984-7010：FeatureStatus（批3，文件末块）
+    "app-settings.js",      # d1102-件B2（D2026-1102-02）：设置 hub overlay（追加名单末尾）
 ]
 
 

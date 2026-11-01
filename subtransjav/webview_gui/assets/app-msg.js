@@ -456,10 +456,23 @@ const MSG = {
     // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
     tabTranslate: '字幕翻译',
     tabReview: '校对',
-    tabEngine: 'API 与模型选择',
-    tabAsrDict: 'ASR 与词典',
-    tabGlossary: '词库与模板',
-    tabAdvanced: '高级参数',
+    // d1102-件B2（D2026-1102-02）：设置组四页合并为顶层「设置」hub；
+    // 四域页签标签改用 settingsTab* 键（旧 tabEngine/tabAsrDict/
+    // tabGlossary/tabAdvanced 四键确认全仓零引用后退役）
+    tabSettings: '设置',
+    settingsTabEngine: 'API 与模型选择',
+    settingsTabAsrDict: 'ASR 与词典',
+    settingsTabGlossary: '词库与模板',
+    settingsTabAdvanced: '高级参数',
+    // 设置域卡摘要与 dirty 守卫（JS 态键，不落静态 data-i18n）
+    settingsSummaryCrosscheck: '媒体对照',
+    settingsSummaryDict: '词典',
+    settingsSummaryOn: '开',
+    settingsSummaryOff: '关',
+    settingsSummaryGlobalGlossary: '全局词库',
+    settingsSummaryLearnedGlossary: '学习词库',
+    settingsDirtyConfirm: '有未保存的修改',
+    settingsDirtyBody: '关闭设置将放弃当前未保存的修改，确认关闭？',
 
     // ---- v1.5 翻译服务快捷下拉（原小白模式顶栏迁入 translate TAB）----
     serviceQuickLabel: '翻译服务',

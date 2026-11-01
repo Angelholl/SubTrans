@@ -69,26 +69,12 @@
                         data-i18n-title="tabQualityCenter" title="质量中心"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-8"/></svg></span><span class="side-tab-text" data-i18n="tabQualityCenter">质量中心</span></button>
                 <div class="nav-section" data-i18n="nav_group_quality">设置</div>
 
-                <button type="button" class="side-tab-btn" id="tabBtnEngine"
-                        data-tab="tab-engine" role="tab" aria-selected="false"
-                        aria-controls="tab-engine"
-                        data-i18n-title="tabEngine" title="API 与模型选择"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabEngine">API 与模型选择</span></button>
-                <!-- ASR 与词典 TAB（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡
-                     与词典卡自引擎页整体迁出为独立页；唯一新 i18n 键 tabAsrDict
-                     （189→190，配记=D2026-1003-01 归档段④）；图标=Lucide mic
-                     （与引擎页齿轮语义区分，同款 stroke 视觉语言） -->
-                <button type="button" class="side-tab-btn" id="tabBtnAsrdict"
-                        data-tab="tab-asrdict" role="tab" aria-selected="false"
-                        aria-controls="tab-asrdict"
-                        data-i18n-title="tabAsrDict" title="ASR 与词典"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span><span class="side-tab-text" data-i18n="tabAsrDict">ASR 与词典</span></button>
-                <button type="button" class="side-tab-btn" id="tabBtnGlossary"
-                        data-tab="tab-glossary" role="tab" aria-selected="false"
-                        aria-controls="tab-glossary"
-                        data-i18n-title="tabGlossary" title="词库与模板"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="side-tab-text" data-i18n="tabGlossary">词库与模板</span></button>
-                <button type="button" class="side-tab-btn" id="tabBtnAdvanced"
-                        data-tab="tab-advanced" role="tab" aria-selected="false"
-                        aria-controls="tab-advanced"
-                        data-i18n-title="tabAdvanced" title="高级参数"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg></span><span class="side-tab-text" data-i18n="tabAdvanced">高级参数</span></button>
+                <!-- d1102-件B2（D2026-1102-02）：设置组四页合并为
+                     顶层「设置」hub；四域内容经独立 overlay 分页承载。 -->
+                <button type="button" class="side-tab-btn" id="tabBtnSettings"
+                        data-tab="tab-settings" role="tab" aria-selected="false"
+                        aria-controls="tab-settings"
+                        data-i18n-title="tabSettings" title="设置"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="side-tab-text" data-i18n="tabSettings">设置</span></button>
 
             </nav>
 
@@ -214,568 +200,39 @@
             </div>
 
 
-            <div class="tab-page" id="tab-engine" data-testid="tab-engine"
-                 role="tabpanel" aria-label="API 与模型选择">
-                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabEngine，
-                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
+            <!-- ============ 设置 hub（d1102-件B2，D2026-1102-02）============
+                 设置组四页（API 与模型选择 / ASR 与词典 / 词库与模板 / 高级参数）
+                 合并为顶层「设置」：本页=四张域卡大框架（各显当前关键值摘要），
+                 点开卡片弹出独立 overlay（#settingsOverlay）分页承载原整页内容。
+                 弹窗禁用 AppModal 单例（_busy 守卫会吞内部 prompt/confirm），
+                 四页面板 DOM 原地搬入 overlay，静态 data-i18n 节点原样保留。 -->
+            <div class="tab-page" id="tab-settings" data-testid="tab-settings"
+                 role="tabpanel" aria-label="设置">
                 <div class="page-head">
                     <div class="page-head-text">
-                        <h1 class="page-title" data-i18n="tabEngine">API 与模型选择</h1>
+                        <h1 class="page-title" data-i18n="tabSettings">设置</h1>
                     </div>
                 </div>
-
-                <div class="block-title" data-i18n="refine_panel_title">两阶段流水线</div>
-
-                <!-- 2.6.5 段2（D2026-1004-01 #3）：引擎页去 seg 外壳——原三段
-                     分段控件（D2026-1003-01 P4）改纵向堆叠组 stage-group
-                     （阶段A→阶段B→兜底），组头纯中文零 i18n 键（中文豁免
-                     名单 seg-btn→stage-group-title）；页首标题与段内结构/
-                     顺序零改动 -->
-                <section class="stage-group">
-                    <div class="stage-group-title">阶段A · 净语+翻译</div>
-                <!-- 阶段A 完整行 -->
-                <div class="form-card">
-                    <div class="stage-row">
-                        <label class="inline-field">
-                            <input type="checkbox" id="refineS1Enabled" checked> <span data-i18n="stage_a_label">阶段A 净语+翻译（日译中）</span>
-                        </label>
-                        <select id="refineS1Provider" class="form-select compact">
-                            <option value="deepseek">DeepSeek API</option>
-                            <option value="zen" data-i18n="provider_zen">Zen 免费</option>
-                            <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
-                            <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
-                            <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
-                            <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
-                        </select>
-                        <div class="stage-unit">
-                            <select id="refineS1Model" class="form-select compact grow">
-                                <!-- 批2（D2026-1002-12 拍板点2）：空态占位 option（文案走
-                                     JS 态键 model_list_empty_hint，bindDom 填充，不挂静态
-                                     data-i18n）；已存模型由 applySavedStageSettings 注入
-                                     标记 option 选中，无硬默认预选 -->
-                                <option value="" disabled selected></option>
-                            </select>
-                            <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
-                            <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
-                            <div class="stage-key">
-                                <label class="field-label">API Key</label>
-                                <input type="password" id="refineS1Key" class="form-input compact grow"
-                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥" autocomplete="off">
-                                <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
-                                        data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
-                            </div>
-                        </div>
-                        <span id="refineTestS1Status" class="muted stage-test-status"></span>
-                    </div>
-                </div>
-
-                <!-- 阶段A 地址（2.6.3 批C IA 重排：自接口地址卡迁入；
-                     #refineSaveEndpointsBtn 唯一保留在阶段A 段） -->
-                <div class="form-card">
-                    <div class="form-card-header" data-i18n="s1_endpoint_label">阶段A 地址</div>
-                    <div class="action-row">
-                        <input id="refineS1Endpoint" class="form-input compact grow"
-                               data-i18n-placeholder="s1_endpoint_placeholder" placeholder="阶段A 服务商的接口地址">
-                        <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口</span></button>
-                        <span id="refineEndpointStatus" class="muted"></span>
-                    </div>
-                </div>
-                </section>
-
-                <section class="stage-group">
-                    <div class="stage-group-title">阶段B · 审校+抛光</div>
-                <!-- 阶段B 完整行 -->
-                <div class="form-card">
-                    <div class="stage-row">
-                        <label class="inline-field">
-                            <input type="checkbox" id="refineS3Enabled" checked> <span data-i18n="stage_b_label">阶段B 审校+抛光（中文）</span>
-                        </label>
-                        <select id="refineS3Provider" class="form-select compact">
-                            <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
-                            <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
-                            <option value="deepseek">DeepSeek API</option>
-                            <option value="zen" data-i18n="provider_zen">Zen 免费</option>
-                            <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
-                            <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
-                        </select>
-                        <div class="stage-unit">
-                            <select id="refineS3Model" class="form-select compact grow">
-                                <!-- 同 refineS1Model：空态占位 + 已存值注入，无硬默认预选 -->
-                                <option value="" disabled selected></option>
-                            </select>
-                            <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
-                            <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
-                            <div class="stage-key">
-                                <label class="field-label">API Key</label>
-                                <input type="password" id="refineS3Key" class="form-input compact grow"
-                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥" autocomplete="off">
-                                <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
-                                        data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
-                            </div>
-                        </div>
-                        <span id="refineTestS3Status" class="muted stage-test-status"></span>
-                    </div>
-                </div>
-
-                <!-- 阶段B 地址（2.6.3 批C IA 重排：自接口地址卡迁入；保存键为
-                     class-only 孪生按钮（无 id），与主保存键绑同一 handler） -->
-                <div class="form-card">
-                    <div class="form-card-header" data-i18n="s3_endpoint_label">阶段B 地址</div>
-                    <div class="action-row">
-                        <input id="refineS3Endpoint" class="form-input compact grow"
-                               data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
-                        <button type="button" class="btn btn-primary btn-compact endpoint-save-twin" data-testid="endpoint-save-b"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口</span></button>
-                    </div>
-                </div>
-                </section>
-
-                <section class="stage-group">
-                    <div class="stage-group-title">兜底与容错</div>
-                <!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->
-                <div class="form-card fallback-card">
-                    <label class="inline-field field-label"
-                           data-i18n-title="profile_title" title="本地模型选 local 清理与拦截更严格，云端强模型选 cloud 宽松以免误伤正常译文。
-技术细节：local=strict（cleaner_rules+误译拦截）；cloud=lenient（仅零维护通用校验）">
-                        <span data-i18n="profile_label">兜底档位</span>
-                        <select id="refineProfile" class="form-select compact">
-                            <option value="local" selected data-i18n="profile_local">本地·严格</option>
-                            <option value="cloud" data-i18n="profile_cloud">云端·宽松</option>
-                        </select>
-                    </label>
-                    <label class="inline-field field-label"
-                           data-i18n-title="ctx_title" title="模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；只有当翻译报错提示文字被截断或超长时，才需要把它调大。">
-                        <span data-i18n="ctx_label">上下文窗口</span>
-                        <input type="number" id="refineV2Ctx" class="form-input compact"
-                               value="" min="4096" step="1024"
-                               data-i18n-placeholder="ctx_placeholder" placeholder="缺省 16384">
-                    </label>
-                    <label class="path-row grow">
-                        <span class="path-row-label" data-i18n="cleaner_dir_label">净语配置目录</span>
-                        <input type="hidden" id="refineCleanerConfig">
-                        <input id="refineCleanerConfigShow" class="form-input compact grow" readonly
-                               data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=自动查找（config/templates→包内默认）">
-                        <span class="field-btn-row"><button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
-                        <button type="button" id="refineOpenCleanerDir" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button></span>
-                    </label>
-                </div>
-
-                <!-- 兜底与并发（原高级设置第四组迁入） -->
-                <div class="stack form-card">
-                    <div class="group-title" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
-                    <div class="field-row">
-                        <div class="ctrl-group">
-                            <label class="inline-field"><span data-i18n="fallback_model_label">接管模型</span>
-                                <select id="refineFallbackModel" class="form-input compact" style="width:var(--w-fallback);">
-                                    <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
-                                </select>
-                                <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
-                                        data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
-                            </label>
-                        </div>
-                        <div class="ctrl-group">
-                            <label class="inline-field"
-                                   data-i18n-title="fallback_local_title" title="云端翻译失败时自动用本地模型补完失败的部分；只救云端，需先配好本地兜底模型。
-技术细节：失败行级接管重跑一次；仅对云端服务商阶段生效；未配置 --fallback-model 时启动即校验拒绝">
-                                <input type="checkbox" id="refineFallbackLocal"> <span data-i18n="fallback_local_label">云端故障时本地接管</span>
-                            </label>
-                        </div>
-                        <div class="ctrl-group">
-                            <label><span data-i18n="batch_local_label">批量·本地</span> <input id="refineBatchLocal" class="form-input compact" type="number"
-                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
-                            <label><span data-i18n="batch_cloud_label">批量·云端</span> <input id="refineBatchCloud" class="form-input compact" type="number"
-                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
-                            <label class="inline-field"
-                                   data-i18n-title="concurrency_title" title="批间并发数（1-5），默认 1"><span data-i18n="concurrency_label">并行</span>
-                                <select id="refineConcurrency" class="form-select compact" style="width:var(--w-concurrency);">
-                                    <option value="1" selected>1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                    <option value="4">4</option>
-                                    <option value="5">5</option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                </section>
-            </div>
-
-            <!-- ASR 与词典页（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡与
-                 词典卡自引擎页整体迁入（注释/卡内 id/结构/顺序原样保留），
-                 上下单列相邻，两卡自带 header 不加额外 block-title -->
-            <div class="tab-page" id="tab-asrdict" data-testid="tab-asrdict"
-                 role="tabpanel" aria-label="ASR 与词典">
-                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabAsrDict，
-                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
-                <div class="page-head">
-                    <div class="page-head-text">
-                        <h1 class="page-title" data-i18n="tabAsrDict">ASR 与词典</h1>
-                    </div>
-                </div>
-
-                <!-- CT2 转写引擎面板（3.2 退役批 D2026-1029-01 升主位：唯一引擎
-                     「首次使用需安装」定位；d1028-38 接线面 id/键不动）：
-                     api 桥三端点 refine_ct2_status/install/model_download 接线，
-                     按钮/状态全 JS 态文案（MSG 键零静态消耗，沿词典卡先例）；
-                     安装/下载=后台异步操作面 1s 轮询，终态自动翻转 -->
-                <div class="form-card" data-testid="ct2-panel">
-                    <div class="form-card-header" data-i18n="ct2_panel_title">CT2 转写引擎（唯一引擎，首次使用需安装）</div>
-                    <div class="section-content">
-                        <div class="action-row">
-                            <span id="refineCt2Status" class="muted"></span>
-                            <button type="button" id="refineCt2InstallBtn" class="btn btn-compact"><span></span></button>
-                        </div>
-                        <div class="field-row" style="margin-top:6px;">
-                            <span id="refineCt2ModelStatus" class="muted"></span>
-                            <button type="button" id="refineCt2ModelBtn" class="btn btn-compact"><span></span></button>
-                        </div>
-                        <!-- GPU 加速行（件B D2026-1029-02 拍板③）：opt-in 补丁
-                             包下载；有 GPU 且补丁未齐才启用按钮，无 GPU 零打扰 -->
-                        <div class="field-row" style="margin-top:6px;" data-testid="ct2-gpu-row">
-                            <span id="refineCt2GpuStatus" class="muted"></span>
-                            <button type="button" id="refineCt2GpuBtn" class="btn btn-compact"><span></span></button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 媒体重点对照卡（3.2 退役批 D2026-1029-01 收敛：whisper 半边
-                     删除——asrEnvStatus 红绿灯/asrModelSel/asrPythonInput/
-                     asrRefreshBtn/模型管理入口全部移除（解冻提案
-                     d1029-退役批GUI解冻提案.md 逐名列账）；保 crosscheck 开关
-                     与 asrStatus 状态行，文案全 JS 态填充（bindDom）） -->
-                <div class="form-card">
-                    <div class="action-row">
-                        <div class="form-card-header" data-i18n="asr_panel_title">媒体重点对照（本地转写验证）</div>
-                    </div>
-                    <div class="section-content">
-                        <div class="field-row">
-                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
-                        </div>
-                        <div class="field-row" style="margin-top:6px;">
-                            <span id="asrStatus" class="muted"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
-                     2.6.5 段2（D2026-1004-01 #4/#5）：空态引导条 #dictEmpty 显式删除
-                     （FROZEN_IDS 215→214 / FROZEN_I18N_KEYS 189→187 双重钉），空态
-                     语义由 JS 注入的四 kind 摘要行 + pill-warning「未安装」+ warn-soft
-                     hint 条承接；词典下拉 → 详情区，JS 只填充不建行；
-                     dict_redownload/dict_status_builtin 为 JS 态键，不落 data-i18n（R6）） -->
-                <div class="form-card" data-testid="dict-panel">
-                    <div class="form-card-header" data-i18n="dict_panel_title">词典管理（日/中/英）</div>
-                    <div id="dictRows" style="display:flex; flex-direction:column; gap:8px;">
-                        <label class="field-label" data-i18n="dict_select_label">选择词典查看详情</label>
-                        <select id="dictSelect" class="form-select compact" style="width:100%;"></select>
-                        <div id="dictDetail" style="display:none;" class="dict-detail">
-                            <div class="dict-detail-head">
-                                <span id="dictPill" class="pill"></span>
-                            </div>
-                            <div id="dictDesc" class="muted"></div>
-                            <div id="dictPathRow" class="path-row">
-                                <span id="dictPath" class="muted grow" style="min-width:0;"></span>
-                                <!-- 批1b 件1/件2（D2026-1002-12）：词典目录行扩容——
-                                     浏览/恢复默认/迁移三键均 JS 态标签（MSG 键零静态 i18n 消耗），
-                                     迁移键仅 needs_migration 时显示；id +3 走批清单预算程序 -->
-                                <button type="button" class="btn btn-ghost btn-compact" id="dictBrowseBtn"></button>
-                                <button type="button" class="btn btn-ghost btn-compact" id="dictRestoreBtn" style="display:none;"></button>
-                                <button type="button" class="btn btn-ghost btn-compact" id="dictOpenDir" data-i18n="dict_open_dir">打开文件夹</button>
-                                <button type="button" class="btn btn-primary btn-compact" id="dictMigrateBtn" style="display:none;"></button>
-                            </div>
-                            <!-- 下载进度（2.3.1 批1）：.progress-text 独立于 .progress-bar 之外
-                                 （bar 8px 高 overflow:hidden，文本内嵌必裁切）；复用既有进度类零新增 -->
-                            <div id="dictProgress" style="display:none;">
-                                <div class="progress-bar"><div class="progress-fill"></div></div>
-                                <span class="progress-text"></span>
-                            </div>
-                            <!-- 2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：
-                                 #dictActionBtn 静态入 .dict-action-row（官方│镜像
-                                 双源键 JS 注入，插入序=官方│镜像；「下载源」前缀
-                                 标签走 JS 态 MSG，禁 index.html 静态中文） -->
-                            <div class="dict-action-row">
-                                <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="dictStatus" class="muted" style="margin-top:6px; min-height:1em;"></div>
+                <div class="settings-domain-grid">
+                    <button type="button" class="settings-domain-card" data-settings-domain="engine" data-testid="settings-domain-engine">
+                        <span class="settings-domain-head"><span class="settings-domain-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="settings-domain-name" data-i18n="settingsTabEngine">API 与模型选择</span></span>
+                        <span class="settings-domain-summary" data-settings-summary="engine"></span>
+                    </button>
+                    <button type="button" class="settings-domain-card" data-settings-domain="asrdict" data-testid="settings-domain-asrdict">
+                        <span class="settings-domain-head"><span class="settings-domain-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span><span class="settings-domain-name" data-i18n="settingsTabAsrDict">ASR 与词典</span></span>
+                        <span class="settings-domain-summary" data-settings-summary="asrdict"></span>
+                    </button>
+                    <button type="button" class="settings-domain-card" data-settings-domain="glossary" data-testid="settings-domain-glossary">
+                        <span class="settings-domain-head"><span class="settings-domain-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="settings-domain-name" data-i18n="settingsTabGlossary">词库与模板</span></span>
+                        <span class="settings-domain-summary" data-settings-summary="glossary"></span>
+                    </button>
+                    <button type="button" class="settings-domain-card" data-settings-domain="advanced" data-testid="settings-domain-advanced">
+                        <span class="settings-domain-head"><span class="settings-domain-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg></span><span class="settings-domain-name" data-i18n="settingsTabAdvanced">高级参数</span></span>
+                        <span class="settings-domain-summary" data-settings-summary="advanced"></span>
+                    </button>
                 </div>
             </div>
 
-
-            <div class="tab-page" id="tab-glossary" data-testid="tab-glossary"
-                 role="tabpanel" aria-label="词库与模板">
-                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabGlossary，
-                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
-                <div class="page-head">
-                    <div class="page-head-text">
-                        <h1 class="page-title" data-i18n="tabGlossary">词库与模板</h1>
-                    </div>
-                </div>
-
-                <input type="hidden" id="refineTemplatesDir">
-                <input type="hidden" id="refineGlossary">
-
-                <!-- 角色卡目录 -->
-                <div class="path-row">
-                    <label class="path-row-label" style="min-width:var(--w-templates-label);" data-i18n="templates_dir_label">角色卡目录</label>
-                    <input id="refineTemplatesDirShow" class="form-input compact grow" readonly
-                           style="min-width:var(--w-templates);" data-i18n-placeholder="templates_dir_placeholder" placeholder="（未设置，使用默认）">
-                    <button type="button" id="refinePickDirBtn" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
-                    <button type="button" id="refineOpenDirBtn" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button>
-                </div>
-
-                <!-- 角色卡编辑器入口（2.6.3 批D D2026-1003-01 P5）：编辑区整体
-                     收缩为一行入口；按钮文案 JS 态填充（MSG.tplOpenEditor，零
-                     静态 i18n 消耗），全部新锚 class+data-testid 承载零 id
-                     （FROZEN_IDS 215 零变更） -->
-                <div class="action-row" data-testid="tpl-editor-entry-row">
-                    <button type="button" class="btn btn-primary btn-compact tpl-editor-entry-btn" data-testid="tpl-editor-entry"></button>
-                    <span class="muted" data-testid="tpl-entry-status"></span>
-                    <span class="muted" data-testid="tpl-entry-hint"></span>
-                </div>
-
-                <!-- 角色卡模板编辑 vault（2.6.3 批D：原编辑区 + 自高级参数页
-                     整体迁入的「翻译方向与角色卡」组置入隐藏容器；AppModal.editor
-                     打开时节点按原序搬入 modal-body，关闭按原序 append 搬回——
-                     幂等可逆。vault hidden 常驻与弹窗互斥；其内全部既有 id/
-                     data-i18n 属性原样保留（FROZEN 集合零变更的关键）） -->
-                <div class="tpl-editor-vault" hidden>
-                <div class="stack">
-                    <div class="block-title" data-i18n="tpl_editor_summary">角色卡模板编辑</div>
-                    <div class="muted" data-i18n="tpl_explicit_card_hint">若在高级参数页为当前方向指定了显式角色卡路径，以其为准；此处编辑的是角色卡目录下的同名文件。</div>
-                    <div class="action-row">
-                        <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);"></select>
-                        <button type="button" id="refineTemplateReload" class="btn btn-secondary btn-compact" data-i18n="tpl_reload">重新加载</button>
-                        <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="tpl_save">保存角色卡</span></button>
-                        <span id="refineTemplateStatus" class="muted"></span>
-                    </div>
-                    <div id="refineTplLoadedPath" class="muted" style="word-break:break-all;"></div>
-                    <textarea id="refineTemplateText" class="form-input" rows="9"
-                        style="width:var(--w-full); font-family:var(--font-mono);"
-                        data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
-                </div>
-
-                <!-- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐；批1 D2026-0930-07 统一叙述）
-                     ——2.6.3 批D：组整体自高级参数页迁入 vault（随角色卡编辑器
-                     模态编辑）；组元素与 id/data-i18n 原样保留，directionCardList
-                     datalist 随组迁入（list= 引用按 id 不因搬家失效） -->
-                <div class="group-title" data-i18n="direction_block_title">翻译方向与角色卡</div>
-                <div class="field-row">
-                    <label class="inline-field"
-                           data-i18n-title="direction_title" title="缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套角色卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝">
-                        <span data-i18n="direction_label">翻译方向</span>
-                        <select id="directionSource" class="form-select compact" style="width:var(--w-direction-sel);">
-                            <option value="ja" selected data-i18n="lang_ja">日文</option>
-                            <option value="zh" data-i18n="lang_zh">中文</option>
-                            <option value="en" data-i18n="lang_en">英文</option>
-                        </select>
-                        <span>→</span>
-                        <select id="directionTarget" class="form-select compact" style="width:var(--w-direction-sel);">
-                            <option value="ja" data-i18n="lang_ja">日文</option>
-                            <option value="zh" selected data-i18n="lang_zh">中文</option>
-                            <option value="en" data-i18n="lang_en">英文</option>
-                        </select>
-                    </label>
-                    <label class="field-col">
-                        <span data-i18n="direction_card_s1_label">阶段A 角色卡（可选，留空=自动查找）</span>
-                        <input id="directionCardS1" class="form-input compact grow" style="min-width:var(--w-model);"
-                               list="directionCardList"
-                               data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
-                        <!-- 2.5.0 修复D：去编辑跳转（class 承载零 id 预算；文字 JS 填 MSG.tpl_goto_edit；
-                             批D 弹窗内由 .modal-body .tpl-goto-btn{display:none} 隐藏） -->
-                        <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S1"></button>
-                    </label>
-                    <label class="field-col">
-                        <span data-i18n="direction_card_s3_label">阶段B 角色卡（可选，留空=自动查找）</span>
-                        <input id="directionCardS3" class="form-input compact grow" style="min-width:var(--w-model);"
-                               list="directionCardList"
-                               data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
-                        <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S3"></button>
-                    </label>
-                </div>
-                <datalist id="directionCardList"></datalist>
-                <div class="muted" data-i18n="direction_hint">缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错</div>
-                <div class="muted" data-i18n="direction_card_fallback_hint">角色卡查找：显式路径优先，其次角色卡目录下同名文件，最后使用内置默认。注意：净语配置目录是另一套独立查找规则，互不关联。</div>
-                </div>
-
-                <!-- 全局词库编辑（原 details 平铺；2.1.1 加折叠：默认展开，标题行常驻） -->
-                <div class="stack gl-collapsible">
-                    <div class="action-row gl-collapse-header">
-                        <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
-                        <!-- 行数计数（2.3.1 批2 悬空修复）：元素恢复即生效，glRender/glDel null-guarded 更新点沿用 -->
-                        <span id="refineGlCount" class="muted"></span>
-                        <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
-                                aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
-                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
-                        </button>
-                    </div>
-                    <div class="gl-tab-content gl-collapsible-content" style="padding:6px 0;">
-                        <!-- 翻译术语 Tab（legacy 性暗示替换 Tab 已随 legacy 管线删除） -->
-                        <div id="glTabGlossary">
-                            <table id="refineGlossTable" class="gl-table">
-                                <thead><tr>
-                                    <th data-i18n="th_source">原文词条</th>
-                                    <th data-i18n="th_target">期望译文</th>
-                                    <th></th>
-                                </tr></thead>
-                                <tbody></tbody>
-                            </table>
-                            <div class="action-row" style="margin-top:6px;">
-                                <button type="button" id="refineGlAdd" class="btn btn-secondary btn-compact" data-i18n="gl_add">＋添加</button>
-                                <button type="button" id="refineGlDel" class="btn btn-secondary btn-compact" data-i18n="gl_del">删除选中</button>
-                                <button type="button" id="refineGlImport" class="btn btn-secondary btn-compact" data-i18n="gl_import">导入CSV/TXT</button>
-                                <button type="button" id="refineGlExport" class="btn btn-secondary btn-compact" data-i18n="gl_export">导出CSV</button>
-                                <button type="button" id="refineGlSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="gl_save">保存词库</span></button>
-                                <span id="refineGlStatus" class="muted"></span>
-                            </div>
-                            <div class="empty-guide" id="glEmptyHint" data-i18n="gl_empty_hint">词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。</div>
-                            <div class="muted" style="margin-top:4px;">
-                                <span data-i18n="gl_scope_note">生效范围用下方"词库→阶段A/阶段B"勾选控制；绑定文件：</span><span id="refineGlPath" data-i18n="gl_path_empty">（未加载）</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 学习词库只读查看（自学习写入 config/glossary_learned.csv；2.1.1 加折叠：默认展开，标题行含刷新按钮与状态 span 常驻） -->
-                <div class="stack gl-collapsible" style="margin-top:10px;">
-                    <div class="action-row gl-collapse-header">
-                        <div class="block-title" data-i18n="gl_learned_title">学习词库</div>
-                        <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
-                                aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
-                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
-                        </button>
-                        <button type="button" id="glLearnedReloadBtn" class="btn btn-ghost btn-sm" data-i18n="gl_learned_reload">刷新</button>
-                        <span id="glLearnedStats" class="muted"></span>
-                        <span id="glLearnedStatus" class="muted status-err"></span>
-                    </div>
-                    <div class="muted gl-collapsible-content" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
-                    <table id="glLearnedTable" class="gl-collapsible-content gl-table">
-                        <thead><tr>
-                            <th data-i18n="th_source">原文词条</th>
-                            <th data-i18n="th_target">期望译文</th>
-                            <th data-i18n="gl_learned_col_aliases">别名</th>
-                        </tr></thead>
-                        <tbody></tbody>
-                    </table>
-                    <div class="empty-guide gl-collapsible-content" id="glLearnedEmpty" data-i18n="gl_learned_empty">尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。</div>
-                    <div id="glLearnedMore" class="muted gl-collapsible-content" style="display:none;"></div>
-                </div>
-            </div>
-
-
-
-
-            <div class="tab-page" id="tab-advanced" data-testid="tab-advanced"
-                 role="tabpanel" aria-label="高级参数">
-                <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabAdvanced，
-                     与导航按钮同键双元素，零新增键零新增 id；结构同 tab-translate 页头） -->
-                <div class="page-head">
-                    <div class="page-head-text">
-                        <h1 class="page-title" data-i18n="tabAdvanced">高级参数</h1>
-                    </div>
-                </div>
-
-                <div class="muted" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
-
-                <!-- 数据保存目录（owner 反馈②：用户可选数据根；写入 .data-root 指针，重启生效；
-                     浏览选择目录（与角色卡同款原生目录对话框），复用媒体源暗色 token 类） -->
-                <div class="path-row" id="dataRootBar">
-                    <span class="media-source-label" data-i18n="data_root_title">数据保存目录</span>
-                    <span class="media-source-path" id="dataRootCurrentPath">—</span>
-                    <span class="media-source-tag" id="dataRootSourceTag"></span>
-                    <button type="button" id="dataRootToggleBtn" class="btn btn-secondary btn-sm" data-i18n="data_root_change_btn">浏览…</button>
-                    <button type="button" id="dataRootRestoreBtn" class="btn btn-ghost btn-sm" data-i18n="data_root_restore_btn">恢复默认</button>
-                    <span id="dataRootStatus" class="muted"></span>
-                </div>
-
-                <div class="adv-grid">
-                    <div class="adv-group">
-                    <div class="group-title" data-i18n="adv_group_translation_glossary">翻译与词库</div>
-                    <div class="field-row">
-                        <label class="inline-field">
-                            <input type="checkbox" id="refineGl1" checked> <span data-i18n="gl1_label">词库→阶段A</span>
-                        </label>
-                        <label class="inline-field">
-                            <input type="checkbox" id="refineGl2" checked> <span data-i18n="gl2_label">词库→阶段B</span>
-                        </label>
-                        <label class="inline-field" data-i18n-title="sf_title" title="翻译前自动清理原文里的乱码、复读等可疑内容。严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。">
-                            <span data-i18n="source_filter_label">源侧检测</span>
-                            <select id="refineSourceFilter" class="form-select compact" style="width:var(--w-batch);">
-                                <option value="strict" data-i18n="sf_strict">严格</option>
-                                <option value="default" selected data-i18n="sf_default">标准</option>
-                                <option value="off" data-i18n="sf_off">关闭</option>
-                            </select>
-                        </label>
-                        <label class="inline-field" data-i18n-title="synopsis_title" title="剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容">
-                            <input type="checkbox" id="refineAutoSynopsis" checked> <span data-i18n="synopsis_label">剧情自摘要</span>
-                        </label>
-                        <label class="inline-field" data-i18n-title="synopsis_cast_title" title="人物提示（Beta）：勾选后剧情摘要将附人物表（仅人数/称呼/关系），辅助翻译人称与敬语；默认关闭">
-                            <input type="checkbox" id="refineSynopsisCast"> <span data-i18n="synopsis_cast_label">人物提示</span>
-                        </label>
-                        <label class="inline-field" data-i18n-title="adaptive_thresholds_title" title="按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。
-技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注">
-                            <input type="checkbox" id="refineAdaptiveThresholds"> <span data-i18n="adaptive_thresholds_label">阈值自适应</span>
-                        </label>
-                    </div>
-
-                    <!-- 翻译方向与角色卡（2.6.3 批D D2026-1003-01 P5）：组整体
-                         迁入词库与模板页 .tpl-editor-vault（随 AppModal.editor
-                         模态编辑），原位留指引行+编辑器入口；指引行为纯中文
-                         静态行（同 seg-btn 先例，拍板配记 D2026-1003-01 归档
-                         段④，静态 i18n 键冻结零消耗）；入口按钮文案 JS 态填
-                         MSG.tplOpenEditor（零静态键），class+data-testid 承载
-                         零 id（FROZEN_IDS 215 零变更） -->
-                    <div class="muted" data-testid="direction-moved-hint">翻译方向与角色卡设置已并入角色卡编辑器（词库与模板 → 打开编辑器）。</div>
-                    <button type="button" class="btn btn-ghost btn-compact tpl-editor-entry-btn tpl-editor-entry-adv" data-testid="tpl-editor-entry-adv"></button>
-
-                    </div>
-
-                    <!-- TM 与断点合并入口组（D2026-1024-01 批3 件B）：原「TM 与学习闸」
-                         「断点与日志」两区块撤除迁入 AppModal.tmBreak 合并弹窗；
-                         照批2 字幕清洗入口组结构，组内零 id/零静态 data-i18n
-                         （FROZEN_IDS/FROZEN_I18N_KEYS 冻结），全部文案由
-                         app-refine-core.js JS 态 MSG 承接；summary 行由
-                         renderTmBreakAdvSummary 渲染（弹窗保存成功后同步刷新；
-                         会话级无持久化，刷新复位） -->
-                    <div class="adv-group" data-testid="tm-break-adv-group">
-                    <div class="group-title tm-break-adv-title" data-testid="tm-break-adv-group-title"></div>
-                    <div class="muted tm-break-adv-desc" data-testid="tm-break-adv-desc"></div>
-                    <button type="button" class="btn btn-secondary btn-compact tm-break-params-open-btn" data-testid="tm-break-adv-open-btn"></button>
-                    <div class="muted tm-break-params-summary" data-testid="tm-break-adv-summary"></div>
-                    </div>
-
-                    <!-- 字幕清洗参数独立设置项（D2026-1024-01 批2 件A）：照「压制」
-                         入口组结构；组内零 id/零静态 data-i18n（FROZEN_IDS/
-                         FROZEN_I18N_KEYS 冻结），全部文案由 app-refine-core.js
-                         JS 态 MSG 承接；summary 行由 renderPolishAdvSummary 渲染
-                         （弹窗保存成功后同步刷新；会话级无持久化） -->
-                    <div class="adv-group" data-testid="polish-adv-group">
-                    <div class="group-title polish-adv-title" data-testid="polish-adv-group-title"></div>
-                    <div class="muted polish-adv-desc" data-testid="polish-adv-desc"></div>
-                    <button type="button" class="btn btn-secondary btn-compact polish-params-open-btn" data-testid="polish-adv-open-btn"></button>
-                    <div class="muted polish-params-summary" data-testid="polish-adv-summary"></div>
-                    </div>
-
-                    <!-- 压制参数独立设置项（D2026-1008-01 批2）：仿「断点与日志」组
-                         结构；组内零 id/零静态 data-i18n（FROZEN_IDS/FROZEN_I18N_KEYS
-                         冻结），全部文案由 EncodeDock.init JS 态 MSG 承接；摘要行由
-                         EncodeDock.renderParamsSummary 渲染（保存成功后同步刷新） -->
-                    <div class="adv-group" data-testid="encode-adv-group">
-                    <div class="group-title encode-adv-title" data-testid="encode-adv-group-title"></div>
-                    <div class="muted encode-adv-desc" data-testid="encode-adv-desc"></div>
-                    <button type="button" class="btn btn-secondary btn-compact encode-params-open-btn" data-testid="encode-params-open-btn"></button>
-                    <div class="muted encode-params-summary" data-testid="encode-params-summary"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============ TAB 5: 校对（2.6.1 批 2a D2026-1002-09 校对容器） ============
-                 页头 h1 复用导航既有 tabReview 键（卡10 B-10 D2026-1012-01：同键双
-                 元素，键集合零增减）；除页头外页内零 data-i18n（静态键 cap 零消耗
-                 硬约束，HTML 悬空钉保护）；
-                 全部文案由 review.js 的 REVIEW_MSG 注入 textContent；
-                 本页激活时 JS 强制右栏折叠态（右缘保留折叠/展开钮）。 -->
             <div class="tab-page" id="tab-review" data-testid="tab-review"
                  role="tabpanel" aria-label="校对">
                 <!-- 页头（卡10 B-10 D2026-1012-01：键复用导航既有 tabReview，
@@ -1291,6 +748,558 @@
     </div>
 
 
+    <!-- ============ 设置弹窗（d1102-件B2，D2026-1102-02）============
+         独立 overlay 容器（非 #appModal）：z=990 低于 AppModal 1000，
+         弹窗内嵌套 confirm/prompt 时 _busy 空闲可用。左竖列四域页签平权，
+         右侧内容区独立滚动；四页面板为 index.html 原节点整体搬家。 -->
+    <div id="settingsOverlay" class="modal-overlay settings-overlay"
+         role="dialog" aria-modal="true" aria-label="设置" aria-hidden="true"
+         data-testid="settings-overlay">
+        <div class="settings-card">
+            <div class="settings-head">
+                <div class="settings-title" data-i18n="tabSettings">设置</div>
+                <button type="button" id="settingsCloseBtn" class="settings-close"
+                        data-i18n-title="close_btn" data-testid="settings-close"
+                        title="关闭" aria-label="关闭"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+            </div>
+            <div class="settings-layout">
+                <nav class="settings-nav" role="tablist" aria-label="设置分区">
+                    <button type="button" class="settings-nav-btn active" data-settings-domain="engine" role="tab" aria-selected="true" aria-controls="tab-engine" data-testid="settings-nav-engine"><span data-i18n="settingsTabEngine">API 与模型选择</span></button>
+                    <button type="button" class="settings-nav-btn" data-settings-domain="asrdict" role="tab" aria-selected="false" aria-controls="tab-asrdict" data-testid="settings-nav-asrdict"><span data-i18n="settingsTabAsrDict">ASR 与词典</span></button>
+                    <button type="button" class="settings-nav-btn" data-settings-domain="glossary" role="tab" aria-selected="false" aria-controls="tab-glossary" data-testid="settings-nav-glossary"><span data-i18n="settingsTabGlossary">词库与模板</span></button>
+                    <button type="button" class="settings-nav-btn" data-settings-domain="advanced" role="tab" aria-selected="false" aria-controls="tab-advanced" data-testid="settings-nav-advanced"><span data-i18n="settingsTabAdvanced">高级参数</span></button>
+                </nav>
+                <div class="settings-content" data-testid="settings-content">
+            <div class="tab-page active" id="tab-engine" data-settings-panel="engine" data-testid="tab-engine"
+                 role="tabpanel" aria-label="API 与模型选择">
+
+
+                <div class="block-title" data-i18n="refine_panel_title">两阶段流水线</div>
+
+                <!-- 2.6.5 段2（D2026-1004-01 #3）：引擎页去 seg 外壳——原三段
+                     分段控件（D2026-1003-01 P4）改纵向堆叠组 stage-group
+                     （阶段A→阶段B→兜底），组头纯中文零 i18n 键（中文豁免
+                     名单 seg-btn→stage-group-title）；页首标题与段内结构/
+                     顺序零改动 -->
+                <section class="stage-group">
+                    <div class="stage-group-title">阶段A · 净语+翻译</div>
+                <!-- 阶段A 完整行 -->
+                <div class="form-card">
+                    <div class="stage-row">
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineS1Enabled" checked> <span data-i18n="stage_a_label">阶段A 净语+翻译（日译中）</span>
+                        </label>
+                        <select id="refineS1Provider" class="form-select compact">
+                            <option value="deepseek">DeepSeek API</option>
+                            <option value="zen" data-i18n="provider_zen">Zen 免费</option>
+                            <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
+                            <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
+                            <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
+                            <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
+                        </select>
+                        <div class="stage-unit">
+                            <select id="refineS1Model" class="form-select compact grow">
+                                <!-- 批2（D2026-1002-12 拍板点2）：空态占位 option（文案走
+                                     JS 态键 model_list_empty_hint，bindDom 填充，不挂静态
+                                     data-i18n）；已存模型由 applySavedStageSettings 注入
+                                     标记 option 选中，无硬默认预选 -->
+                                <option value="" disabled selected></option>
+                            </select>
+                            <button type="button" id="refineRefreshS1" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                            <button type="button" id="refineTestS1" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                            <div class="stage-key">
+                                <label class="field-label">API Key</label>
+                                <input type="password" id="refineS1Key" class="form-input compact grow"
+                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥" autocomplete="off">
+                                <button type="button" id="refineSaveS1KeyBtn" class="btn btn-secondary btn-compact"
+                                        data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
+                            </div>
+                        </div>
+                        <span id="refineTestS1Status" class="muted stage-test-status"></span>
+                    </div>
+                </div>
+
+                <!-- 阶段A 地址（2.6.3 批C IA 重排：自接口地址卡迁入；
+                     #refineSaveEndpointsBtn 唯一保留在阶段A 段） -->
+                <div class="form-card">
+                    <div class="form-card-header" data-i18n="s1_endpoint_label">阶段A 地址</div>
+                    <div class="action-row">
+                        <input id="refineS1Endpoint" class="form-input compact grow"
+                               data-i18n-placeholder="s1_endpoint_placeholder" placeholder="阶段A 服务商的接口地址">
+                        <button type="button" id="refineSaveEndpointsBtn" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口</span></button>
+                        <span id="refineEndpointStatus" class="muted"></span>
+                    </div>
+                </div>
+                </section>
+
+                <section class="stage-group">
+                    <div class="stage-group-title">阶段B · 审校+抛光</div>
+                <!-- 阶段B 完整行 -->
+                <div class="form-card">
+                    <div class="stage-row">
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineS3Enabled" checked> <span data-i18n="stage_b_label">阶段B 审校+抛光（中文）</span>
+                        </label>
+                        <select id="refineS3Provider" class="form-select compact">
+                            <option value="lmstudio" selected data-i18n="provider_lmstudio">本地 LM Studio</option>
+                            <option value="ollama" data-i18n="provider_ollama">本地 Ollama</option>
+                            <option value="deepseek">DeepSeek API</option>
+                            <option value="zen" data-i18n="provider_zen">Zen 免费</option>
+                            <option value="siliconflow" data-i18n="provider_siliconflow">硅基流动</option>
+                            <option value="custom" data-i18n="provider_custom">自定义兼容接口</option>
+                        </select>
+                        <div class="stage-unit">
+                            <select id="refineS3Model" class="form-select compact grow">
+                                <!-- 同 refineS1Model：空态占位 + 已存值注入，无硬默认预选 -->
+                                <option value="" disabled selected></option>
+                            </select>
+                            <button type="button" id="refineRefreshS3" class="btn btn-secondary btn-compact" data-i18n-title="refresh_model_title" title="在线拉取模型列表"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                            <button type="button" id="refineTestS3" class="btn btn-secondary btn-compact" data-i18n-title="test_stage_title" data-i18n="test_stage_btn" title="测试该阶段连通性">测试</button>
+                            <div class="stage-key">
+                                <label class="field-label">API Key</label>
+                                <input type="password" id="refineS3Key" class="form-input compact grow"
+                                       data-i18n-placeholder="key_placeholder" placeholder="留空用已保存密钥" autocomplete="off">
+                                <button type="button" id="refineSaveS3KeyBtn" class="btn btn-secondary btn-compact"
+                                        data-i18n-title="save_key_title" title="保存该阶段服务商的 API Key（DPAPI 加密存储）"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
+                            </div>
+                        </div>
+                        <span id="refineTestS3Status" class="muted stage-test-status"></span>
+                    </div>
+                </div>
+
+                <!-- 阶段B 地址（2.6.3 批C IA 重排：自接口地址卡迁入；保存键为
+                     class-only 孪生按钮（无 id），与主保存键绑同一 handler） -->
+                <div class="form-card">
+                    <div class="form-card-header" data-i18n="s3_endpoint_label">阶段B 地址</div>
+                    <div class="action-row">
+                        <input id="refineS3Endpoint" class="form-input compact grow"
+                               data-i18n-placeholder="s3_endpoint_placeholder" placeholder="阶段B 服务商的接口地址">
+                        <button type="button" class="btn btn-primary btn-compact endpoint-save-twin" data-testid="endpoint-save-b"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="save_endpoints_btn">保存接口</span></button>
+                    </div>
+                </div>
+                </section>
+
+                <section class="stage-group">
+                    <div class="stage-group-title">兜底与容错</div>
+                <!-- 兜底档位 / 上下文窗口 / 净语配置目录 -->
+                <div class="form-card fallback-card">
+                    <label class="inline-field field-label"
+                           data-i18n-title="profile_title" title="本地模型选 local 清理与拦截更严格，云端强模型选 cloud 宽松以免误伤正常译文。
+技术细节：local=strict（cleaner_rules+误译拦截）；cloud=lenient（仅零维护通用校验）">
+                        <span data-i18n="profile_label">兜底档位</span>
+                        <select id="refineProfile" class="form-select compact">
+                            <option value="local" selected data-i18n="profile_local">本地·严格</option>
+                            <option value="cloud" data-i18n="profile_cloud">云端·宽松</option>
+                        </select>
+                    </label>
+                    <label class="inline-field field-label"
+                           data-i18n-title="ctx_title" title="模型一次能读取的文字量上限。留空即可，默认值已适配绝大多数情况；只有当翻译报错提示文字被截断或超长时，才需要把它调大。">
+                        <span data-i18n="ctx_label">上下文窗口</span>
+                        <input type="number" id="refineV2Ctx" class="form-input compact"
+                               value="" min="4096" step="1024"
+                               data-i18n-placeholder="ctx_placeholder" placeholder="缺省 16384">
+                    </label>
+                    <label class="path-row grow">
+                        <span class="path-row-label" data-i18n="cleaner_dir_label">净语配置目录</span>
+                        <input type="hidden" id="refineCleanerConfig">
+                        <input id="refineCleanerConfigShow" class="form-input compact grow" readonly
+                               data-i18n-placeholder="cleaner_dir_placeholder" placeholder="留空=自动查找（config/templates→包内默认）">
+                        <span class="field-btn-row"><button type="button" id="refinePickCleanerDir" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
+                        <button type="button" id="refineOpenCleanerDir" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button></span>
+                    </label>
+                </div>
+
+                <!-- 兜底与并发（原高级设置第四组迁入） -->
+                <div class="stack form-card">
+                    <div class="group-title" data-i18n="adv_group_fallback_concurrency">兜底与并发</div>
+                    <div class="field-row">
+                        <div class="ctrl-group">
+                            <label class="inline-field"><span data-i18n="fallback_model_label">接管模型</span>
+                                <select id="refineFallbackModel" class="form-input compact" style="width:var(--w-fallback);">
+                                    <option value="" selected data-i18n="fallback_no_auto">不自动兜底</option>
+                                </select>
+                                <button type="button" id="refreshFallbackModels" class="btn btn-secondary btn-compact"
+                                        data-i18n-title="refresh_local_title" title="刷新本地模型列表" style="padding:2px 6px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button>
+                            </label>
+                        </div>
+                        <div class="ctrl-group">
+                            <label class="inline-field"
+                                   data-i18n-title="fallback_local_title" title="云端翻译失败时自动用本地模型补完失败的部分；只救云端，需先配好本地兜底模型。
+技术细节：失败行级接管重跑一次；仅对云端服务商阶段生效；未配置 --fallback-model 时启动即校验拒绝">
+                                <input type="checkbox" id="refineFallbackLocal"> <span data-i18n="fallback_local_label">云端故障时本地接管</span>
+                            </label>
+                        </div>
+                        <div class="ctrl-group">
+                            <label><span data-i18n="batch_local_label">批量·本地</span> <input id="refineBatchLocal" class="form-input compact" type="number"
+                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
+                            <label><span data-i18n="batch_cloud_label">批量·云端</span> <input id="refineBatchCloud" class="form-input compact" type="number"
+                                    min="1" max="50" value="30" style="width:var(--w-batch);"></label>
+                            <label class="inline-field"
+                                   data-i18n-title="concurrency_title" title="批间并发数（1-5），默认 1"><span data-i18n="concurrency_label">并行</span>
+                                <select id="refineConcurrency" class="form-select compact" style="width:var(--w-concurrency);">
+                                    <option value="1" selected>1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                </section>
+            </div>
+
+            <!-- ASR 与词典页（2.6.3 批C D2026-1003-01 P4 IA 重排）：ASR 卡与
+                 词典卡自引擎页整体迁入（注释/卡内 id/结构/顺序原样保留），
+                 上下单列相邻，两卡自带 header 不加额外 block-title -->
+            <div class="tab-page" id="tab-asrdict" data-settings-panel="asrdict" data-testid="tab-asrdict"
+                 role="tabpanel" aria-label="ASR 与词典">
+
+
+                <!-- CT2 转写引擎面板（3.2 退役批 D2026-1029-01 升主位：唯一引擎
+                     「首次使用需安装」定位；d1028-38 接线面 id/键不动）：
+                     api 桥三端点 refine_ct2_status/install/model_download 接线，
+                     按钮/状态全 JS 态文案（MSG 键零静态消耗，沿词典卡先例）；
+                     安装/下载=后台异步操作面 1s 轮询，终态自动翻转 -->
+                <div class="form-card" data-testid="ct2-panel">
+                    <div class="form-card-header" data-i18n="ct2_panel_title">CT2 转写引擎（唯一引擎，首次使用需安装）</div>
+                    <div class="section-content">
+                        <div class="action-row">
+                            <span id="refineCt2Status" class="muted"></span>
+                            <button type="button" id="refineCt2InstallBtn" class="btn btn-compact"><span></span></button>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <span id="refineCt2ModelStatus" class="muted"></span>
+                            <button type="button" id="refineCt2ModelBtn" class="btn btn-compact"><span></span></button>
+                        </div>
+                        <!-- GPU 加速行（件B D2026-1029-02 拍板③）：opt-in 补丁
+                             包下载；有 GPU 且补丁未齐才启用按钮，无 GPU 零打扰 -->
+                        <div class="field-row" style="margin-top:6px;" data-testid="ct2-gpu-row">
+                            <span id="refineCt2GpuStatus" class="muted"></span>
+                            <button type="button" id="refineCt2GpuBtn" class="btn btn-compact"><span></span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 媒体重点对照卡（3.2 退役批 D2026-1029-01 收敛：whisper 半边
+                     删除——asrEnvStatus 红绿灯/asrModelSel/asrPythonInput/
+                     asrRefreshBtn/模型管理入口全部移除（解冻提案
+                     d1029-退役批GUI解冻提案.md 逐名列账）；保 crosscheck 开关
+                     与 asrStatus 状态行，文案全 JS 态填充（bindDom）） -->
+                <div class="form-card">
+                    <div class="action-row">
+                        <div class="form-card-header" data-i18n="asr_panel_title">媒体重点对照（本地转写验证）</div>
+                    </div>
+                    <div class="section-content">
+                        <div class="field-row">
+                            <label class="inline-field"><input type="checkbox" id="asrCrosscheckToggle"> <span></span></label>
+                        </div>
+                        <div class="field-row" style="margin-top:6px;">
+                            <span id="asrStatus" class="muted"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 词典管理（B2 案，D2026-1001 批3 解冻：id +9 / 静态 data-i18n 键 +4；
+                     2.6.5 段2（D2026-1004-01 #4/#5）：空态引导条 #dictEmpty 显式删除
+                     （FROZEN_IDS 215→214 / FROZEN_I18N_KEYS 189→187 双重钉），空态
+                     语义由 JS 注入的四 kind 摘要行 + pill-warning「未安装」+ warn-soft
+                     hint 条承接；词典下拉 → 详情区，JS 只填充不建行；
+                     dict_redownload/dict_status_builtin 为 JS 态键，不落 data-i18n（R6）） -->
+                <div class="form-card" data-testid="dict-panel">
+                    <div class="form-card-header" data-i18n="dict_panel_title">词典管理（日/中/英）</div>
+                    <div id="dictRows" style="display:flex; flex-direction:column; gap:8px;">
+                        <label class="field-label" data-i18n="dict_select_label">选择词典查看详情</label>
+                        <select id="dictSelect" class="form-select compact" style="width:100%;"></select>
+                        <div id="dictDetail" style="display:none;" class="dict-detail">
+                            <div class="dict-detail-head">
+                                <span id="dictPill" class="pill"></span>
+                            </div>
+                            <div id="dictDesc" class="muted"></div>
+                            <div id="dictPathRow" class="path-row">
+                                <span id="dictPath" class="muted grow" style="min-width:0;"></span>
+                                <!-- 批1b 件1/件2（D2026-1002-12）：词典目录行扩容——
+                                     浏览/恢复默认/迁移三键均 JS 态标签（MSG 键零静态 i18n 消耗），
+                                     迁移键仅 needs_migration 时显示；id +3 走批清单预算程序 -->
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictBrowseBtn"></button>
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictRestoreBtn" style="display:none;"></button>
+                                <button type="button" class="btn btn-ghost btn-compact" id="dictOpenDir" data-i18n="dict_open_dir">打开文件夹</button>
+                                <button type="button" class="btn btn-primary btn-compact" id="dictMigrateBtn" style="display:none;"></button>
+                            </div>
+                            <!-- 下载进度（2.3.1 批1）：.progress-text 独立于 .progress-bar 之外
+                                 （bar 8px 高 overflow:hidden，文本内嵌必裁切）；复用既有进度类零新增 -->
+                            <div id="dictProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill"></div></div>
+                                <span class="progress-text"></span>
+                            </div>
+                            <!-- 2.6.5 段2（D2026-1004-01 #5 收单操作行 路线1）：
+                                 #dictActionBtn 静态入 .dict-action-row（官方│镜像
+                                 双源键 JS 注入，插入序=官方│镜像；「下载源」前缀
+                                 标签走 JS 态 MSG，禁 index.html 静态中文） -->
+                            <div class="dict-action-row">
+                                <button type="button" class="btn btn-primary btn-compact" id="dictActionBtn" style="display:none;"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="dictStatus" class="muted" style="margin-top:6px; min-height:1em;"></div>
+                </div>
+            </div>
+            <div class="tab-page" id="tab-glossary" data-settings-panel="glossary" data-testid="tab-glossary"
+                 role="tabpanel" aria-label="词库与模板">
+
+
+                <input type="hidden" id="refineTemplatesDir">
+                <input type="hidden" id="refineGlossary">
+
+                <!-- 角色卡目录 -->
+                <div class="path-row">
+                    <label class="path-row-label" style="min-width:var(--w-templates-label);" data-i18n="templates_dir_label">角色卡目录</label>
+                    <input id="refineTemplatesDirShow" class="form-input compact grow" readonly
+                           style="min-width:var(--w-templates);" data-i18n-placeholder="templates_dir_placeholder" placeholder="（未设置，使用默认）">
+                    <button type="button" id="refinePickDirBtn" class="btn btn-secondary btn-compact" data-i18n="browse_dots">浏览...</button>
+                    <button type="button" id="refineOpenDirBtn" class="btn btn-ghost btn-compact" data-i18n="open_btn">打开</button>
+                </div>
+
+                <!-- 角色卡编辑器入口（2.6.3 批D D2026-1003-01 P5）：编辑区整体
+                     收缩为一行入口；按钮文案 JS 态填充（MSG.tplOpenEditor，零
+                     静态 i18n 消耗），全部新锚 class+data-testid 承载零 id
+                     （FROZEN_IDS 215 零变更） -->
+                <div class="action-row" data-testid="tpl-editor-entry-row">
+                    <button type="button" class="btn btn-primary btn-compact tpl-editor-entry-btn" data-testid="tpl-editor-entry"></button>
+                    <span class="muted" data-testid="tpl-entry-status"></span>
+                    <span class="muted" data-testid="tpl-entry-hint"></span>
+                </div>
+
+                <!-- 角色卡模板编辑 vault（2.6.3 批D：原编辑区 + 自高级参数页
+                     整体迁入的「翻译方向与角色卡」组置入隐藏容器；AppModal.editor
+                     打开时节点按原序搬入 modal-body，关闭按原序 append 搬回——
+                     幂等可逆。vault hidden 常驻与弹窗互斥；其内全部既有 id/
+                     data-i18n 属性原样保留（FROZEN 集合零变更的关键）） -->
+                <div class="tpl-editor-vault" hidden>
+                <div class="stack">
+                    <div class="block-title" data-i18n="tpl_editor_summary">角色卡模板编辑</div>
+                    <div class="muted" data-i18n="tpl_explicit_card_hint">若在高级参数页为当前方向指定了显式角色卡路径，以其为准；此处编辑的是角色卡目录下的同名文件。</div>
+                    <div class="action-row">
+                        <select id="refineTemplateStage" class="form-select compact" style="min-width:var(--w-template-stage);"></select>
+                        <button type="button" id="refineTemplateReload" class="btn btn-secondary btn-compact" data-i18n="tpl_reload">重新加载</button>
+                        <button type="button" id="refineTemplateSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="tpl_save">保存角色卡</span></button>
+                        <span id="refineTemplateStatus" class="muted"></span>
+                    </div>
+                    <div id="refineTplLoadedPath" class="muted" style="word-break:break-all;"></div>
+                    <textarea id="refineTemplateText" class="form-input" rows="9"
+                        style="width:var(--w-full); font-family:var(--font-mono);"
+                        data-i18n-placeholder="tpl_placeholder" placeholder="选择阶段后自动加载角色卡内容，可直接编辑后保存"></textarea>
+                </div>
+
+                <!-- 翻译方向（2.1 D2026-0930-04 定案① GUI 补齐；批1 D2026-0930-07 统一叙述）
+                     ——2.6.3 批D：组整体自高级参数页迁入 vault（随角色卡编辑器
+                     模态编辑）；组元素与 id/data-i18n 原样保留，directionCardList
+                     datalist 随组迁入（list= 引用按 id 不因搬家失效） -->
+                <div class="group-title" data-i18n="direction_block_title">翻译方向与角色卡</div>
+                <div class="field-row">
+                    <label class="inline-field"
+                           data-i18n-title="direction_title" title="缺省 日文→中文 全链零感知；切换非缺省方向（如 中文→英文）须为全部启用阶段显式指定配套角色卡（阶段A/阶段B 角色卡路径），缺卡启动即被校验拒绝">
+                        <span data-i18n="direction_label">翻译方向</span>
+                        <select id="directionSource" class="form-select compact" style="width:var(--w-direction-sel);">
+                            <option value="ja" selected data-i18n="lang_ja">日文</option>
+                            <option value="zh" data-i18n="lang_zh">中文</option>
+                            <option value="en" data-i18n="lang_en">英文</option>
+                        </select>
+                        <span>→</span>
+                        <select id="directionTarget" class="form-select compact" style="width:var(--w-direction-sel);">
+                            <option value="ja" data-i18n="lang_ja">日文</option>
+                            <option value="zh" selected data-i18n="lang_zh">中文</option>
+                            <option value="en" data-i18n="lang_en">英文</option>
+                        </select>
+                    </label>
+                    <label class="field-col">
+                        <span data-i18n="direction_card_s1_label">阶段A 角色卡（可选，留空=自动查找）</span>
+                        <input id="directionCardS1" class="form-input compact grow" style="min-width:var(--w-model);"
+                               list="directionCardList"
+                               data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                        <!-- 2.5.0 修复D：去编辑跳转（class 承载零 id 预算；文字 JS 填 MSG.tpl_goto_edit；
+                             批D 弹窗内由 .modal-body .tpl-goto-btn{display:none} 隐藏） -->
+                        <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S1"></button>
+                    </label>
+                    <label class="field-col">
+                        <span data-i18n="direction_card_s3_label">阶段B 角色卡（可选，留空=自动查找）</span>
+                        <input id="directionCardS3" class="form-input compact grow" style="min-width:var(--w-model);"
+                               list="directionCardList"
+                               data-i18n-placeholder="direction_card_placeholder" placeholder="非缺省方向必填（.txt 路径）">
+                        <button type="button" class="btn btn-ghost btn-compact tpl-goto-btn" data-tpl-stage="S3"></button>
+                    </label>
+                </div>
+                <datalist id="directionCardList"></datalist>
+                <div class="muted" data-i18n="direction_hint">缺省日→中无需配置；切换非缺省方向须为全部启用阶段显式指定配套角色卡，缺卡启动即报错</div>
+                <div class="muted" data-i18n="direction_card_fallback_hint">角色卡查找：显式路径优先，其次角色卡目录下同名文件，最后使用内置默认。注意：净语配置目录是另一套独立查找规则，互不关联。</div>
+                </div>
+
+                <!-- 全局词库编辑（原 details 平铺；2.1.1 加折叠：默认展开，标题行常驻） -->
+                <div class="stack gl-collapsible">
+                    <div class="action-row gl-collapse-header">
+                        <div class="block-title" data-i18n="gl_summary">全局词库编辑</div>
+                        <!-- 行数计数（2.3.1 批2 悬空修复）：元素恢复即生效，glRender/glDel null-guarded 更新点沿用 -->
+                        <span id="refineGlCount" class="muted"></span>
+                        <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
+                                aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
+                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                        </button>
+                    </div>
+                    <div class="gl-tab-content gl-collapsible-content" style="padding:6px 0;">
+                        <!-- 翻译术语 Tab（legacy 性暗示替换 Tab 已随 legacy 管线删除） -->
+                        <div id="glTabGlossary">
+                            <table id="refineGlossTable" class="gl-table">
+                                <thead><tr>
+                                    <th data-i18n="th_source">原文词条</th>
+                                    <th data-i18n="th_target">期望译文</th>
+                                    <th></th>
+                                </tr></thead>
+                                <tbody></tbody>
+                            </table>
+                            <div class="action-row" style="margin-top:6px;">
+                                <button type="button" id="refineGlAdd" class="btn btn-secondary btn-compact" data-i18n="gl_add">＋添加</button>
+                                <button type="button" id="refineGlDel" class="btn btn-secondary btn-compact" data-i18n="gl_del">删除选中</button>
+                                <button type="button" id="refineGlImport" class="btn btn-secondary btn-compact" data-i18n="gl_import">导入CSV/TXT</button>
+                                <button type="button" id="refineGlExport" class="btn btn-secondary btn-compact" data-i18n="gl_export">导出CSV</button>
+                                <button type="button" id="refineGlSave" class="btn btn-primary btn-compact"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-i18n="gl_save">保存词库</span></button>
+                                <span id="refineGlStatus" class="muted"></span>
+                            </div>
+                            <div class="empty-guide" id="glEmptyHint" data-i18n="gl_empty_hint">词库为空：点击「＋添加」新增词条，或「导入CSV/TXT」批量导入；保存后翻译时自动生效。</div>
+                            <div class="muted" style="margin-top:4px;">
+                                <span data-i18n="gl_scope_note">生效范围用下方"词库→阶段A/阶段B"勾选控制；绑定文件：</span><span id="refineGlPath" data-i18n="gl_path_empty">（未加载）</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学习词库只读查看（自学习写入 config/glossary_learned.csv；2.1.1 加折叠：默认展开，标题行含刷新按钮与状态 span 常驻） -->
+                <div class="stack gl-collapsible" style="margin-top:10px;">
+                    <div class="action-row gl-collapse-header">
+                        <div class="block-title" data-i18n="gl_learned_title">学习词库</div>
+                        <button type="button" class="btn btn-ghost btn-sm console-collapse-btn gl-collapse-btn"
+                                aria-expanded="true" data-i18n-title="collapse_toggle" title="折叠/展开">
+                            <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                        </button>
+                        <button type="button" id="glLearnedReloadBtn" class="btn btn-ghost btn-sm" data-i18n="gl_learned_reload">刷新</button>
+                        <span id="glLearnedStats" class="muted"></span>
+                        <span id="glLearnedStatus" class="muted status-err"></span>
+                    </div>
+                    <div class="muted gl-collapsible-content" data-i18n="gl_learned_note">自学习写入，优先级低于全局词库。</div>
+                    <table id="glLearnedTable" class="gl-collapsible-content gl-table">
+                        <thead><tr>
+                            <th data-i18n="th_source">原文词条</th>
+                            <th data-i18n="th_target">期望译文</th>
+                            <th data-i18n="gl_learned_col_aliases">别名</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                    <div class="empty-guide gl-collapsible-content" id="glLearnedEmpty" data-i18n="gl_learned_empty">尚无学习词库：完成一次翻译后引擎自动学习写入，届时点击「刷新」查看。</div>
+                    <div id="glLearnedMore" class="muted gl-collapsible-content" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="tab-page" id="tab-advanced" data-settings-panel="advanced" data-testid="tab-advanced"
+                 role="tabpanel" aria-label="高级参数">
+
+
+                <div class="muted" data-i18n="advanced_settings_notice">以下为进阶选项，默认值已适配绝大多数使用场景，通常无需改动。</div>
+
+                <!-- 数据保存目录（owner 反馈②：用户可选数据根；写入 .data-root 指针，重启生效；
+                     浏览选择目录（与角色卡同款原生目录对话框），复用媒体源暗色 token 类） -->
+                <div class="path-row" id="dataRootBar">
+                    <span class="media-source-label" data-i18n="data_root_title">数据保存目录</span>
+                    <span class="media-source-path" id="dataRootCurrentPath">—</span>
+                    <span class="media-source-tag" id="dataRootSourceTag"></span>
+                    <button type="button" id="dataRootToggleBtn" class="btn btn-secondary btn-sm" data-i18n="data_root_change_btn">浏览…</button>
+                    <button type="button" id="dataRootRestoreBtn" class="btn btn-ghost btn-sm" data-i18n="data_root_restore_btn">恢复默认</button>
+                    <span id="dataRootStatus" class="muted"></span>
+                </div>
+
+                <div class="adv-grid">
+                    <div class="adv-group">
+                    <div class="group-title" data-i18n="adv_group_translation_glossary">翻译与词库</div>
+                    <div class="field-row">
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineGl1" checked> <span data-i18n="gl1_label">词库→阶段A</span>
+                        </label>
+                        <label class="inline-field">
+                            <input type="checkbox" id="refineGl2" checked> <span data-i18n="gl2_label">词库→阶段B</span>
+                        </label>
+                        <label class="inline-field" data-i18n-title="sf_title" title="翻译前自动清理原文里的乱码、复读等可疑内容。严格=清理得更多，标准=只清理明确的问题，关闭=不清理。一般保持标准即可。">
+                            <span data-i18n="source_filter_label">源侧检测</span>
+                            <select id="refineSourceFilter" class="form-select compact" style="width:var(--w-batch);">
+                                <option value="strict" data-i18n="sf_strict">严格</option>
+                                <option value="default" selected data-i18n="sf_default">标准</option>
+                                <option value="off" data-i18n="sf_off">关闭</option>
+                            </select>
+                        </label>
+                        <label class="inline-field" data-i18n-title="synopsis_title" title="剧情自摘要（Beta）：默认开启，摘要仅注入翻译提示词，不产生任何输出内容">
+                            <input type="checkbox" id="refineAutoSynopsis" checked> <span data-i18n="synopsis_label">剧情自摘要</span>
+                        </label>
+                        <label class="inline-field" data-i18n-title="synopsis_cast_title" title="人物提示（Beta）：勾选后剧情摘要将附人物表（仅人数/称呼/关系），辅助翻译人称与敬语；默认关闭">
+                            <input type="checkbox" id="refineSynopsisCast"> <span data-i18n="synopsis_cast_label">人物提示</span>
+                        </label>
+                        <label class="inline-field" data-i18n-title="adaptive_thresholds_title" title="按字幕配套的检测数据自动微调各项检查的松紧，缺少数据时自动按默认标准执行，一般无需勾选。
+技术细节：条目级阈值自适应：需上游 Balanced 模式的 asr_telemetry.jsonl，缺失时按默认阈值执行并在风险清单标注">
+                            <input type="checkbox" id="refineAdaptiveThresholds"> <span data-i18n="adaptive_thresholds_label">阈值自适应</span>
+                        </label>
+                    </div>
+
+                    <!-- 翻译方向与角色卡（2.6.3 批D D2026-1003-01 P5）：组整体
+                         迁入词库与模板页 .tpl-editor-vault（随 AppModal.editor
+                         模态编辑），原位留指引行+编辑器入口；指引行为纯中文
+                         静态行（同 seg-btn 先例，拍板配记 D2026-1003-01 归档
+                         段④，静态 i18n 键冻结零消耗）；入口按钮文案 JS 态填
+                         MSG.tplOpenEditor（零静态键），class+data-testid 承载
+                         零 id（FROZEN_IDS 215 零变更） -->
+                    <div class="muted" data-testid="direction-moved-hint">翻译方向与角色卡设置已并入角色卡编辑器（词库与模板 → 打开编辑器）。</div>
+                    <button type="button" class="btn btn-ghost btn-compact tpl-editor-entry-btn tpl-editor-entry-adv" data-testid="tpl-editor-entry-adv"></button>
+
+                    </div>
+
+                    <!-- TM 与断点合并入口组（D2026-1024-01 批3 件B）：原「TM 与学习闸」
+                         「断点与日志」两区块撤除迁入 AppModal.tmBreak 合并弹窗；
+                         照批2 字幕清洗入口组结构，组内零 id/零静态 data-i18n
+                         （FROZEN_IDS/FROZEN_I18N_KEYS 冻结），全部文案由
+                         app-refine-core.js JS 态 MSG 承接；summary 行由
+                         renderTmBreakAdvSummary 渲染（弹窗保存成功后同步刷新；
+                         会话级无持久化，刷新复位） -->
+                    <div class="adv-group" data-testid="tm-break-adv-group">
+                    <div class="group-title tm-break-adv-title" data-testid="tm-break-adv-group-title"></div>
+                    <div class="muted tm-break-adv-desc" data-testid="tm-break-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact tm-break-params-open-btn" data-testid="tm-break-adv-open-btn"></button>
+                    <div class="muted tm-break-params-summary" data-testid="tm-break-adv-summary"></div>
+                    </div>
+
+                    <!-- 字幕清洗参数独立设置项（D2026-1024-01 批2 件A）：照「压制」
+                         入口组结构；组内零 id/零静态 data-i18n（FROZEN_IDS/
+                         FROZEN_I18N_KEYS 冻结），全部文案由 app-refine-core.js
+                         JS 态 MSG 承接；summary 行由 renderPolishAdvSummary 渲染
+                         （弹窗保存成功后同步刷新；会话级无持久化） -->
+                    <div class="adv-group" data-testid="polish-adv-group">
+                    <div class="group-title polish-adv-title" data-testid="polish-adv-group-title"></div>
+                    <div class="muted polish-adv-desc" data-testid="polish-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact polish-params-open-btn" data-testid="polish-adv-open-btn"></button>
+                    <div class="muted polish-params-summary" data-testid="polish-adv-summary"></div>
+                    </div>
+
+                    <!-- 压制参数独立设置项（D2026-1008-01 批2）：仿「断点与日志」组
+                         结构；组内零 id/零静态 data-i18n（FROZEN_IDS/FROZEN_I18N_KEYS
+                         冻结），全部文案由 EncodeDock.init JS 态 MSG 承接；摘要行由
+                         EncodeDock.renderParamsSummary 渲染（保存成功后同步刷新） -->
+                    <div class="adv-group" data-testid="encode-adv-group">
+                    <div class="group-title encode-adv-title" data-testid="encode-adv-group-title"></div>
+                    <div class="muted encode-adv-desc" data-testid="encode-adv-desc"></div>
+                    <button type="button" class="btn btn-secondary btn-compact encode-params-open-btn" data-testid="encode-params-open-btn"></button>
+                    <div class="muted encode-params-summary" data-testid="encode-params-summary"></div>
+                    </div>
+                </div>
+            </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     <script src="app.js"></script>
     <script src="app-msg.js"></script>
@@ -1327,6 +1336,7 @@
     <script src="app-init.js"></script>
     <script src="app-encode-dock.js"></script>
     <script src="app-feature-status.js"></script>
+    <script src="app-settings.js"></script>
     <script src="review.js"></script>
 </body>
 </html>

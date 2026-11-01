@@ -2,6 +2,15 @@
 // v1.5 左侧 TAB 导航（SmartSub 式）：按 data-tab 切换主内容区页面，
 // 选中态同步到 TAB 按钮（accent 高亮）与对应页面（.tab-page.active）
 // ============================================================
+// d1102-件B2（D2026-1102-02）：设置组四页并入顶层「设置」hub 后，四个旧
+// tabId 经 switchTab 垫片映射到 overlay 域页签；全仓调用方零改动。
+const SETTINGS_DOMAIN_BY_TAB = {
+    'tab-engine': 'engine',
+    'tab-asrdict': 'asrdict',
+    'tab-glossary': 'glossary',
+    'tab-advanced': 'advanced',
+};
+
 // 切页钩子注册表（3.1 地基批 卡3，D2026-1012-01）：原 switchTab 体内六段
 // 同构内联 if 收编为声明式注册表——新增切页钩子只在对应 tab 分组追加一项，
 // 钩子清单单一视图。分组顺序与各组数组顺序=原内联执行序（①②词库页 →
@@ -61,9 +70,26 @@ const TAB_HOOKS = {
             }
         },
     ],
+    // d1102-件B2：切回设置顶层页时刷新四张域卡摘要（只读现值，失败不阻断）
+    'tab-settings': [
+        () => {
+            if (typeof SettingsHub !== 'undefined') {
+                try { SettingsHub.refreshSummaries(); } catch (e) { /* 摘要刷新失败不阻断切页 */ }
+            }
+        },
+    ],
 };
 
 function switchTab(tabId) {
+    // d1102-件B2（D2026-1102-02）：四个旧设置 tabId → 设置 hub 域页签垫片。
+    // 先切顶层「设置」页（承载四张域卡），再打开独立 overlay 对应域；
+    // 调用方（pipelineCard 跳转/角色卡编辑器跳转/ASR 引导跳转）零改动。
+    const settingsDomain = SETTINGS_DOMAIN_BY_TAB[tabId];
+    if (settingsDomain && typeof SettingsHub !== 'undefined') {
+        switchTab('tab-settings');
+        SettingsHub.open(settingsDomain);
+        return;
+    }
     document.querySelectorAll('.side-tab-btn').forEach(btn => {
         const on = btn.dataset.tab === tabId;
         btn.classList.toggle('active', on);

@@ -3145,3 +3145,157 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
 .eval-pairs-table td {
     overflow-wrap: anywhere;
 }
+
+/* ============================================================
+   设置 hub（d1102-件B2，D2026-1102-02）
+   ------------------------------------------------------------
+   顶层「设置」页=四张域卡大框架；独立 overlay（z=990，低于 AppModal
+   1000）以左竖列页签承载原四页内容。全部取色走既有 token，暗色主题
+   （style.dark.css 纯 token 覆盖）自动适配，禁写死色值。
+   ============================================================ */
+.settings-overlay {
+    z-index: 990;
+}
+/* 滚动锁：真实滚动容器是 .main/.aside（style.css 基础层），body 兜底。
+   overlay 打开时锁住页面滚动，内容滚动交给 .settings-content。 */
+.workbench.settings-open .main,
+.workbench.settings-open .aside { overflow: hidden; }
+body.settings-open { overflow: hidden; }
+.settings-card {
+    width: 94vw;
+    max-width: min(880px, 94vw);
+    height: 88vh;
+    max-height: 88vh;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: var(--space-4) 20px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    animation: modal-slide-in .2s ease;
+}
+.settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-shrink: 0;
+    margin-bottom: var(--space-3);
+}
+.settings-title { font-size: 16px; font-weight: 650; }
+.settings-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-3);
+    cursor: pointer;
+}
+.settings-close:hover { background: var(--surface-3); color: var(--text-1); }
+.settings-layout {
+    display: flex;
+    gap: var(--space-4);
+    flex: 1;
+    min-height: 0;
+}
+.settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    width: 180px;
+    flex-shrink: 0;
+    padding-right: var(--space-3);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+}
+.settings-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 8px 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-2);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.settings-nav-btn:hover { background: var(--surface-2); color: var(--text-1); }
+.settings-nav-btn.active {
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-weight: 600;
+}
+.settings-content {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+.settings-content > .tab-page.active {
+    flex: 0 0 auto;
+    min-height: 0;
+}
+.settings-domain-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.settings-domain-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    color: var(--text-1);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.settings-domain-card:hover {
+    border-color: var(--primary-border);
+    background: var(--surface-3);
+}
+.settings-domain-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 600;
+}
+.settings-domain-icon { display: flex; color: var(--primary); }
+.settings-domain-summary {
+    width: 100%;
+    font-size: var(--font-xs);
+    line-height: 1.55;
+    color: var(--text-2);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 780px) {
+    .settings-layout { flex-direction: column; }
+    .settings-nav {
+        width: auto;
+        flex-direction: row;
+        flex-shrink: 0;
+        overflow-x: auto;
+        padding-right: 0;
+        padding-bottom: var(--space-2);
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+    .settings-nav-btn { white-space: nowrap; }
+    .settings-domain-grid { grid-template-columns: 1fr; }
+}

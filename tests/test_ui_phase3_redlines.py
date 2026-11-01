@@ -142,11 +142,10 @@ def test_r2b_rhythm_tokens_extended():
 def test_nav_grouping_pinned():
     """导航三分结构钉（批 1 立钉、批 2a 随批更新）：组标题与按钮顺序显式冻结。
 
-    工作区组=字幕翻译/校对（批 2a D2026-1002-09 占位转正为
-    .side-tab-btn#tabBtnReview）/质量中心（d1102-件B1 D2026-1102-02：
+    工作区组=字幕翻译/校对/质量中心（d1102-件B1 D2026-1102-02：
     评测报告＋质量与建议合并，沿用 tab-eval-reports 页 id）；
-    设置组=API 与模型选择/ASR 与词典（2.6.3 批C D2026-1003-01 P4 插入）/
-    词库与模板/高级参数。
+    设置组=设置（d1102-件B2 D2026-1102-02：API 与模型选择/ASR 与词典/
+    词库与模板/高级参数四页合并为设置 hub）。
     """
     m = re.search(r'<nav class="rail-nav".*?</nav>', HTML, re.S)
     assert m, "未找到 rail-nav 导航块"
@@ -166,8 +165,7 @@ def test_nav_grouping_pinned():
     assert groups["nav_group_workspace"] == \
         ["tab-translate", "tab-review", "tab-eval-reports"], \
         f"工作区组 data-tab 顺序漂移：{groups['nav_group_workspace']}"
-    assert groups["nav_group_quality"] == \
-        ["tab-engine", "tab-asrdict", "tab-glossary", "tab-advanced"], \
+    assert groups["nav_group_quality"] == ["tab-settings"], \
         f"设置组 data-tab 顺序漂移：{groups['nav_group_quality']}"
     # 批 2a（D2026-1002-09）：占位项已转正——nav-item-placeholder 必须消失，
     # 校对项为 .side-tab-btn#tabBtnReview[data-tab=tab-review]（预算表程序落 id）

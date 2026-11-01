@@ -253,13 +253,13 @@ def test_user_mode_and_novice_panel_removed():
 # v1.5 左侧 TAB 栏（SmartSub 式）：五个功能页 + 默认选中 translate
 # ---------------------------------------------------------------------------
 
-_TAB_IDS = ["tab-translate", "tab-engine", "tab-asrdict", "tab-glossary",
-            "tab-review", "tab-advanced"]
+_TAB_IDS = ["tab-translate", "tab-review", "tab-eval-reports", "tab-settings"]
 
 
 def test_index_html_sidebar_tabs_structure():
-    """左侧竖排 TAB 栏结构钉：五个 TAB 按钮（data-tab ↔ 页面 id 一一对应，
-    translate 默认选中）+ 五个 .tab-page 页面容器。"""
+    """左侧竖排 TAB 栏结构钉：四个顶层 TAB 按钮（data-tab ↔ 页面 id 一一对应，
+    translate 默认选中）+ 四个顶层 .tab-page 页面容器。d1102-件B2（D2026-1102-02）
+    设置组四页合并为「设置」hub，四个旧设置页转为 overlay 内域页签（id 保留）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     for tid in _TAB_IDS:
         assert f'id="{tid}"' in html, f"缺少 TAB 页面容器: {tid}"
@@ -1547,8 +1547,12 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # tab-eval-reports/evalReportsSection/evalReportsToolbar/
     # evalReportsSelect/evalReportsRefreshBtn/evalReportsBody）→ 227；
     # d1102-件B1（D2026-1102-02，质量中心合并）：删 tabBtnGuide/tab-guide
-    # 两 id（评测报告页 id 沿用），显式解冻 227→225
-    assert len(ids) == 225, f"id 全集数漂移（d1102-件B1 质量中心合并后契约 225），实为 {len(ids)}"
+    # 两 id（评测报告页 id 沿用），显式解冻 227→225；
+    # d1102-件B2（D2026-1102-02，设置 hub）：删四个设置导航按钮 id
+    # （tabBtnEngine/tabBtnAsrdict/tabBtnGlossary/tabBtnAdvanced，-4）、
+    # 新增 tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn（+4），
+    # 四域面板 id 原地保留，净 0 仍 225
+    assert len(ids) == 225, f"id 全集数漂移（d1102-件B2 设置 hub 后契约 225），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -1840,12 +1844,11 @@ def test_review_asr_goto_programmatic_click():
     """批 3 条件 1：switchTab 在 app.js IIFE 内未挂全局（ReferenceError）——
     ASR 引导卡跳转必须走程序化 click（真实 handler 链）。
 
-    2.6.3 批C D2026-1003-01 P4 IA 重排随改（既有断言必要修订）：ASR 管理
-    自引擎页迁独立页 tab-asrdict，跳转锚 data-tab 同步改；80 字符
-    .click() 邻近断言保持不放宽。"""
+    d1102-件B2（D2026-1102-02）随改：设置组四页并入设置 hub，ASR 管理
+    位于 overlay 域页签；跳转锚改为常驻设置域卡。"""
     body = _extract_function(_review_js_source(), "_bindDetections")
-    assert 'data-tab="tab-asrdict"' in body, "须定位 ASR 与词典页按钮"
-    assert re.search(r'data-tab="tab-asrdict"[\s\S]{0,80}\.click\(\)', body), \
+    assert 'data-settings-domain="asrdict"' in body, "须定位设置 hub 的 ASR 域卡"
+    assert re.search(r'data-settings-domain="asrdict"[\s\S]{0,80}\.click\(\)', body), \
         "须程序化 click（禁止直调 switchTab）"
 
 
@@ -2323,26 +2326,30 @@ def test_batch_c_asrdict_tab_order_pinned():
 
 
 def test_batch_c_msg_tabengine_renamed_pinned():
-    """批C 新钉：MSG.tabEngine 改值「API 与模型选择」、pipeline_card_hint
-    随改、唯一静态新键 tabAsrDict=「ASR 与词典」。"""
+    """批C 新钉：设置域页签标签改值「API 与模型选择」、pipeline_card_hint
+    随改；d1102-件B2（D2026-1102-02）四页合并后旧 tabEngine/tabAsrDict
+    静态键退役，改钉 settingsTabEngine/settingsTabAsrDict。"""
     src = _app_js_source()
-    m = re.search(r"^\s*tabEngine: '([^']*)'", src, re.M)
+    m = re.search(r"^\s*settingsTabEngine: '([^']*)'", src, re.M)
     assert m and m.group(1) == 'API 与模型选择', \
-        f"MSG.tabEngine 值漂移: {m and m.group(1)}"
+        f"MSG.settingsTabEngine 值漂移: {m and m.group(1)}"
     m2 = re.search(r"^\s*pipeline_card_hint: '([^']*)'", src, re.M)
     assert m2 and m2.group(1) == '点击前往「API 与模型选择」页修改', \
         "MSG.pipeline_card_hint 未随改"
-    m3 = re.search(r"^\s*tabAsrDict: '([^']*)'", src, re.M)
-    assert m3 and m3.group(1) == 'ASR 与词典', "MSG 缺 tabAsrDict 静态新键"
+    m3 = re.search(r"^\s*settingsTabAsrDict: '([^']*)'", src, re.M)
+    assert m3 and m3.group(1) == 'ASR 与词典', "MSG 缺 settingsTabAsrDict 静态新键"
+    for gone in ("tabEngine:", "tabAsrDict:", "tabGlossary:", "tabAdvanced:"):
+        assert gone not in src, f"旧设置 tab 键未退役: {gone}"
 
 
 def test_batch_c_review_goto_asrdict_pinned():
-    """批C 新钉：review.js ASR 跳转锚定位 tab-asrdict，文案键随改。"""
+    """批C 新钉：review.js ASR 跳转锚定位 ASR 域；d1102-件B2 随改文案
+    指向「设置 → ASR 与词典」。"""
     src = _review_js_source()
-    assert 'data-tab="tab-asrdict"' in src, "review.js 跳转锚未改 tab-asrdict"
-    assert "review_asr_goto: '前往 ASR 与词典页'" in src, \
+    assert 'data-settings-domain="asrdict"' in src, "review.js 跳转锚未改设置 ASR 域卡"
+    assert "review_asr_goto: '前往设置 → ASR 与词典'" in src, \
         "review_asr_goto 文案未随改"
-    assert "「ASR 与词典」页" in src, "review_asr_card 缺「ASR 与词典」页表述"
+    assert "「设置 → ASR 与词典」" in src, "review_asr_card 缺「设置 → ASR 与词典」表述"
 
 
 def test_d1031_review_transcode_busy_renamed_pinned():
@@ -2425,7 +2432,10 @@ def test_batch_d_tpl_editor_vault_structure_pinned():
     for btn in re.findall(r'<button[^>]*tpl-editor-entry-btn[^>]*>', html):
         assert ' id="' not in btn, "入口按钮不得携带 id（FROZEN_IDS 冻结）"
     # 高级页切片：指引行在位、direction 组已迁出、入口按钮在位
-    adv = html[html.index('id="tab-advanced"'):html.index('id="tab-review"')]
+    # d1102-件B2：高级参数页 DOM 搬入设置 overlay 后为末个域面板，
+    # 切片终点改到脚本区前（其后再无 .tab-page）
+    adv_start = html.index('id="tab-advanced"')
+    adv = html[adv_start:html.index("    <!-- JavaScript -->", adv_start)]
     assert "翻译方向与角色卡设置已并入角色卡编辑器" in adv, "高级页缺指引行"
     assert 'data-testid="tpl-editor-entry-adv"' in adv, "高级页缺入口按钮"
     for dom_id in ("directionSource", "directionTarget", "directionCardS1",
@@ -2914,8 +2924,10 @@ def test_batch_fix_run_uses_structured_preview():
     # confirm 其余调用点零变化（原 7 处，2.7.4 件C 迁走批量修复一处→余 6；
     # 2.8.0 批1 EncodeDock 新增 4 处→10；批2 预设删除确认 +1→11；
     # P3（D2026-1008-02）tmEdit 脏态守卫 +1→12，editor 守卫先例同款；
-    # 3.0 批2（D2026-1009-02 批2）一键回滚确认框 +1→13）
-    assert src.count("AppModal.confirm(") == 13, \
+    # 3.0 批2（D2026-1009-02 批2）一键回滚确认框 +1→13；
+    # d1102-件B2（D2026-1102-02）设置 hub dirty 守卫 +1→14——AppModal 本体
+    # 不承载设置弹窗，_busy 空闲，嵌套 confirm 可用）
+    assert src.count("AppModal.confirm(") == 14, \
         "AppModal.confirm 调用点数量漂移（增删须显式改钉并回评议）"
 
 
@@ -3553,7 +3565,7 @@ def test_p2_fix_model_row_removed_analysis_single_source():
 
 def test_batch3_ai_config_row_pins_survive():
     """③既有钉不回归：.ai-config-row 恰 3 个 field-col + 三锚点 id 保留 +
-    无内联 width:auto；id 全集数 218 / data-i18n 键集 177 契约数零漂移
+    无内联 width:auto；id 全集数 225 / data-i18n 键集 178 契约数零漂移
     （d1028-38 后为 222/177，CT2 面板 +4 id +1 键；3.2 退役批 whisper
     半边 -4 id：asrEnvStatus/asrModelSel/asrPythonInput/asrRefreshBtn → 218）
     （d1024 批3 件B：TM/断点 8 id 撤除、17 个静态 data-i18n 锚随区块撤除，
@@ -3574,8 +3586,10 @@ def test_batch3_ai_config_row_pins_survive():
     # d1029 退役批（whisper 半边删除，解冻提案）：-4 → 218；
     # 3.1.1 件B（D2026-1030-02 B3，评测报告页）：+7 → 227；
     # d1102-件B1（D2026-1102-02，质量中心合并）：删 tabBtnGuide/tab-guide
-    # 两 id → 225
-    assert len(ids) == 225, f"id 全集数漂移（契约 225），实为 {len(ids)}"
+    # 两 id → 225；
+    # d1102-件B2（D2026-1102-02，设置 hub）：删四设置导航按钮 id、新增
+    # tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn，净 0
+    assert len(ids) == 225, f"id 全集数漂移（d1102-件B2 后契约 225），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -3588,8 +3602,12 @@ def test_batch3_ai_config_row_pins_survive():
     # 3.1.1 件B（D2026-1030-02 B3）+1 键（tabEvalReports，导航与页头
     # 同键双元素，页内零静态 data-i18n）→ 178；
     # d1102-件B1（D2026-1102-02）：tabGuide/tabEvalReports 两键退役，
-    # tabQualityCenter 单键承接导航与页头（同键双元素）→ 177
-    assert len(i18n) == 177, f"data-i18n 键集数漂移（d1102-件B1 后契约 177），实为 {len(i18n)}"
+    # tabQualityCenter 单键承接导航与页头（同键双元素）→ 177；
+    # d1102-件B2（D2026-1102-02，设置 hub）：tabEngine/tabAsrDict/
+    # tabGlossary/tabAdvanced 四旧键退役（-4），新增 tabSettings 与
+    # settingsTabEngine/settingsTabAsrDict/settingsTabGlossary/
+    # settingsTabAdvanced（+5）→ 178
+    assert len(i18n) == 178, f"data-i18n 键集数漂移（d1102-件B2 后契约 178），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -5145,29 +5163,35 @@ def test_b07_glsel_native_override_pinned():
 # （app_header_title + main_subtitle）原样不动。
 # ---------------------------------------------------------------------------
 
-# 新增页头的 6 页：tab-page id ->（页头 h1 data-i18n 键, 静态回退现值）
+# 新增页头的 3 页：tab-page id ->（页头 h1 data-i18n 键, 静态回退现值）
 # d1102-件B1（D2026-1102-02）：tab-guide 并入 tab-eval-reports（质量中心），
 # 页头键随合并换代 tabGuide→tabQualityCenter。
+# d1102-件B2（D2026-1102-02）：设置组四页合并为 tab-settings（页头键
+# tabSettings）；四域页签头部页头摘除（左竖列页签已承载域名）。
 _B10_NEW_HEADS = {
-    "tab-engine": ("tabEngine", "API 与模型选择"),
-    "tab-asrdict": ("tabAsrDict", "ASR 与词典"),
-    "tab-glossary": ("tabGlossary", "词库与模板"),
-    "tab-advanced": ("tabAdvanced", "高级参数"),
+    "tab-settings": ("tabSettings", "设置"),
     "tab-review": ("tabReview", "校对"),
     "tab-eval-reports": ("tabQualityCenter", "质量中心"),
 }
 
-# 七页 aria-label 静态文本（取对应 tabXxx 现值；含 tab-translate 共 7 页）
-_B10_PANEL_LABELS = {
+# 四个顶层 tab 的 aria-label 静态文本
+_B10_TOP_LABELS = {
     "tab-translate": "字幕翻译",
     "tab-review": "校对",
+    "tab-eval-reports": "质量中心",
+    "tab-settings": "设置",
+}
+
+# 设置 overlay 内四个域面板的 aria-label 静态文本（沿用原四页现值）
+_B10_DOMAIN_LABELS = {
     "tab-engine": "API 与模型选择",
     "tab-asrdict": "ASR 与词典",
     "tab-glossary": "词库与模板",
     "tab-advanced": "高级参数",
-    # d1102-件B1（D2026-1102-02）：评测报告＋质量与建议合并为质量中心
-    "tab-eval-reports": "质量中心",
 }
+
+# 全部 role=tabpanel（4 顶层 + 4 设置域面板）
+_B10_PANEL_LABELS = {**_B10_TOP_LABELS, **_B10_DOMAIN_LABELS}
 
 
 def _b10_tab_page_tag(html: str, tab_id: str) -> str:
@@ -5190,8 +5214,11 @@ def _b10_tab_page_body(html: str, tab_id: str) -> str:
 
 
 def test_b10_six_page_heads_pinned():
-    """①其余 6 页顶部各一页头，结构与 tab-translate :108-113 同构：
+    """①新增 3 页顶部各一页头，结构与 tab-translate :108-113 同构：
     .page-head > .page-head-text > h1.page-title（data-i18n=tabXxx + 静态回退现值）。
+
+    d1102-件B2：设置四域页搬入 overlay 后页头摘除（左竖列页签承载域名），
+    顶层设置页新增 tabSettings 页头；页头总数 4（含 tab-translate）。
 
     人工推演（先红场景）：临时删除任一新增页头 → 本钉红（页头缺失或页头
     不再是页内首个非注释元素）。"""
@@ -5224,8 +5251,9 @@ def test_b10_translate_page_head_untouched_pinned():
 
 
 def test_b10_tabpanels_role_and_label_pinned():
-    """③7 个 .tab-page 均带 role="tabpanel" + aria-label（静态文本=对应
-    tabXxx 现值；h1 无 id 故不走 aria-labelledby，避免为 labelledby 新增 id）。"""
+    """③8 个 role=tabpanel（4 顶层 + 4 设置域面板）均带 aria-label（静态
+    文本=对应 tabXxx 现值；h1 无 id 故不走 aria-labelledby，避免为
+    labelledby 新增 id）。d1102-件B2：设置四域面板为 overlay 内嵌套页签。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     for tab_id, label in _B10_PANEL_LABELS.items():
         tag = _b10_tab_page_tag(html, tab_id)
@@ -5235,15 +5263,16 @@ def test_b10_tabpanels_role_and_label_pinned():
         assert "aria-labelledby" not in tag, \
             f"#{tab_id} 走了 aria-labelledby（须 aria-label 静态文本，禁新增 id）"
     panel_count = html.count('role="tabpanel"')
-    assert panel_count == 7, f"role=tabpanel 应恰 7 处（实测 {panel_count}）"
+    assert panel_count == 8, f"role=tabpanel 应恰 8 处（实测 {panel_count}）"
 
 
 def test_b10_nav_aria_controls_pinned():
-    """④7 个导航 .side-tab-btn 的 aria-controls 与 .tab-page id 一一对应
-    （同一按钮 data-tab == aria-controls == 目标页既有 id；集合双向相等）。"""
+    """④4 个顶层导航 .side-tab-btn 的 aria-controls 与 .tab-page id 一一对应
+    （同一按钮 data-tab == aria-controls == 目标页既有 id；集合双向相等）。
+    d1102-件B2：设置域页签位于 overlay 内，不计入顶层导航集合。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     tags = re.findall(r'<button[^>]*data-tab="([^"]+)"[^>]*>', html, re.S)
-    assert len(tags) == 7, f"带 data-tab 的按钮应恰 7 个（实测 {len(tags)}）"
+    assert len(tags) == 4, f"带 data-tab 的按钮应恰 4 个（实测 {len(tags)}）"
     controls = []
     for m in re.finditer(
             r'<button[^>]*class="side-tab-btn[^"]*"[^>]*data-tab="([^"]+)"[^>]*>',
@@ -5254,25 +5283,25 @@ def test_b10_nav_aria_controls_pinned():
         assert cm.group(1) == tab_id, \
             f"aria-controls 与 data-tab 不一致: {cm.group(1)} != {tab_id}"
         controls.append(cm.group(1))
-    assert len(controls) == 7, \
-        f".side-tab-btn 应恰 7 个且均带 aria-controls（实测 {len(controls)}）"
-    assert set(controls) == set(_B10_PANEL_LABELS), \
-        f"aria-controls 与 .tab-page id 集合不一一对应: {sorted(set(controls) ^ set(_B10_PANEL_LABELS))}"
+    assert len(controls) == 4, \
+        f".side-tab-btn 应恰 4 个且均带 aria-controls（实测 {len(controls)}）"
+    assert set(controls) == set(_B10_TOP_LABELS), \
+        f"aria-controls 与 .tab-page id 集合不一一对应: {sorted(set(controls) ^ set(_B10_TOP_LABELS))}"
 
 
 def test_b10_zero_new_id_zero_new_key_pinned():
     """⑤零新增 id / 零新增键（钉⑤双集合自证的本卡局部前置）：页头块内零 id；
-    6 个新增页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=222 /
-    FROZEN_I18N_KEYS=186 全等冻结另由钉⑤a/⑤b 快照自证；187→186=artifact_note
-    退役，D2026-1013-01 真机反馈轮）；aria-controls 只
-    引用既有 .tab-page id，容器不新增 data-i18n。"""
+    3 个新增页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=225 /
+    FROZEN_I18N_KEYS=178 全等冻结另由钉⑤a/⑤b 快照自证；d1102-件B2 设置
+    四页合并：-4 旧设置 tab 键 +5 新键→178）；aria-controls 只引用既有
+    .tab-page id，容器不新增 data-i18n。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     nav = re.search(r'<nav class="rail-nav".*?</nav>', html, re.S)
     assert nav, "未找到 rail-nav 导航块"
     nav_html = nav.group(0)
     msg_keys = _js_msg_keys()
     head_count = html.count('<div class="page-head">')
-    assert head_count == 7, f"页头应恰 7 处（7 页各一，实测 {head_count}）"
+    assert head_count == 4, f"页头应恰 4 处（4 顶层页各一，实测 {head_count}）"
     for tab_id, (key, _text) in _B10_NEW_HEADS.items():
         frag = _b10_tab_page_body(html, tab_id)
         block = re.search(
@@ -7330,6 +7359,12 @@ def test_js_sources_layer_pinned():
        14,524B/26b18881…（错误槽容器改挂 #tab-eval-reports）、
        app-refine-ai.js 14,310B/4867ea69… 与 app-refine-batchfix.js
        25,983B/26d2e4ef…（注释内切页名随改）；JS_FILES 零增减；
+       d1102-件B2 设置 hub 换代（D2026-1102-02）：全库拼接
+       0b9ced11…/512,245B、app-msg.js 65,683B/7fcf8b75…（四旧设置 tab 键
+       退役＋设置域/摘要新键）、app-tabs.js 5,168B/e0ff6b25…（四旧 tabId
+       垫片＋tab-settings 摘要钩子）、app-init.js 9,330B/692730d2…（设置
+       overlay 初始化）、新增 app-settings.js 13,752B/c8c1b7f3…（JS_FILES
+       追加名单末尾）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7340,11 +7375,13 @@ def test_js_sources_layer_pinned():
         # 3.1.1 件B（D2026-1030-02）：评测报告页随批入列（app-tabs 后）
         "app-eval-reports.js",
         "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js", "app-encode-dock.js", "app-feature-status.js",
+        # d1102-件B2（D2026-1102-02）：设置 hub overlay 追加名单末尾
+        "app-settings.js",
     ], \
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "ad80a7ddd99e1f2ee6342f4b9755ac2f700bc9741c116473c081ad5122c216b2"), \
+        "0b9ced114d12213592faf93bcc0d378eaa7a9a3efa8def94161e14ebe50ec6b0"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7374,8 +7411,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (64918,
-                       "f1b15bce11acf7ad545854638ad96b6c92a0f0f4946526e8aa2d7d3ae415a2fd"),
+        "app-msg.js": (65683,
+                       "7fcf8b75a76fdfaa18f3fe223caca53d85409700d63cc2457af0165c8b0b695d"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7402,8 +7439,8 @@ def test_js_split_integrity_pinned():
                              "ac08c35f4837daf2871eddb17402179fc6ecfd9703be4a55810c2079a2995584"),
         "app-about.js": (705,
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
-        "app-tabs.js": (3976,
-                        "de7a1646ba04a781bb06adaf640b8ceba9827af440d8845da2485e6048193984"),
+        "app-tabs.js": (5168,
+                        "e0ff6b252c2290ae62339d0c33251e1a1b9c2763efb17108eabe1f8737db0545"),
         "app-refine-core.js": (16571,
                                "2788adf6dfa2c2c5a415e6cb4fb3044fb118ff8d2342d497eae79df386e24c60"),
         "app-refine-models.js": (13345,
@@ -7434,12 +7471,14 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (9118,
-                        "0042974b327c6b9f40bf93fd727812bc34ca96971699bd9f69c51cb40fe001ea"),
+        "app-init.js": (9330,
+                        "692730d2dc777b9e82a54c8203a79599281337566ee903bf4082a1bea3f8e964"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,
                                   "f0e6c9269a346cfc7e0343e10a0d3304f5c73e1b4cbe1e6184f6f2df85b51c6b"),
+        "app-settings.js": (13752,
+                            "c8c1b7f379e8c9cc99b4f1929727cca0a0d71b3b7474b3f03340a89a736a1d92"),
     }
     for name, (size, digest) in frozen.items():
         raw = (ASSETS / name).read_bytes()
@@ -7457,6 +7496,7 @@ def test_js_split_integrity_pinned():
                  "app-tabs.js", "app-eval-reports.js",
                  "app-refine-core.js", "app-refine-models.js", "app-refine-glossary.js", "app-refine-templates.js", "app-refine-settings.js", "app-refine-guide.js", "app-refine-preview.js", "app-refine-ai.js", "app-refine-batchfix.js", "app-refine-asr.js", "app-refine-ai-actions.js", "app-refine-bind.js", "app-refine-dataroot.js", "app-refine-dict.js", "app-refine-boot.js", "app-init.js",
                  "app-encode-dock.js", "app-feature-status.js",
+                 "app-settings.js",
              )]
     assert order == sorted(order), \
         "index.html 加载序必须与 JS_FILES 定义序一致（批3 全量钉）"

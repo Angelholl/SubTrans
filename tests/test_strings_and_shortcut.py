@@ -280,21 +280,23 @@ def test_advanced_settings_panel_keeps_all_control_ids():
 
 def test_sidebar_tabs_replace_details_shell():
     """v1.5 外壳重构钉：高级设置 details / 接口地址 details 平铺删除，
-    改为左侧 TAB 结构——五个 TAB 按钮 id 存在且默认选中 translate；
-    各 TAB 页面容器 id 存在。"""
+    改为左侧 TAB 结构——四个顶层 TAB 按钮 id 存在且默认选中 translate；
+    各 TAB 页面容器 id 存在。d1102-件B2（D2026-1102-02）设置组四页
+    合并为 tab-settings（四域面板 id 保留在 overlay 内）。"""
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
-    # 2.6.3 批C D2026-1003-01 P4：设置组插入 tabBtnAsrdict/tab-asrdict
-    for btn in ("tabBtnTranslate", "tabBtnEngine", "tabBtnAsrdict",
-                "tabBtnGlossary", "tabBtnAdvanced", "tabBtnReview"):
+    for btn in ("tabBtnTranslate", "tabBtnEvalReports", "tabBtnReview",
+                "tabBtnSettings"):
         assert f'id="{btn}"' in html, f"index.html 缺少左侧 TAB 按钮: {btn}"
     assert re.search(
         r'<button[^>]*id="tabBtnTranslate"[^>]*class="side-tab-btn active"',
         html) or re.search(
         r'<button[^>]*class="side-tab-btn active"[^>]*id="tabBtnTranslate"',
         html), "默认选中的 TAB 必须是 tabBtnTranslate"
-    for page in ("tab-translate", "tab-engine", "tab-asrdict", "tab-glossary",
-                 "tab-review", "tab-advanced"):
+    for page in ("tab-translate", "tab-review", "tab-eval-reports",
+                 "tab-settings"):
         assert f'id="{page}"' in html, f"index.html 缺少 TAB 页面: {page}"
+    for page in ("tab-engine", "tab-asrdict", "tab-glossary", "tab-advanced"):
+        assert f'id="{page}"' in html, f"index.html 缺少设置域面板: {page}"
     # details 折叠壳已平铺：高级设置 summary 锚不再引用
     assert 'data-i18n="advanced_settings_summary"' not in html, \
         "高级设置 details 已随 v1.5 平铺进 tab-advanced，summary 锚应删除"

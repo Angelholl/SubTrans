@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     KeyboardShortcuts.init();
     ThemeManager.init();
     TranslatorManager.init();
+    // d1102-件B2（D2026-1102-02）：设置 hub 独立 overlay 绑定（域卡/页签/
+    // dirty 守卫/滚动锁）。禁用 AppModal 单例承载，故不随 AppModal 初始化。
+    SettingsHub.init();
 
     // Update Start button state once at startup
     TranslatorManager.updateButtons();

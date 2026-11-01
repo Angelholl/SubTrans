@@ -54,9 +54,9 @@ const REVIEW_MSG = {
     review_det_no_srt: '先导入 .srt 字幕，方可转跳/试听',
     review_det_no_save: '判定标记仅本会话内生效，不落盘',
     review_asr_card: 'ASR 语音对照为可选能力（本机 CT2 转写引擎）：'
-        + '模型可在「ASR 与词典」页一键下载（自动校验完整性），'
-        + '配好后在该页启用 ASR 验证。',
-    review_asr_goto: '前往 ASR 与词典页',
+        + '模型可在「设置 → ASR 与词典」一键下载（自动校验完整性），'
+        + '配好后在该处启用 ASR 验证。',
+    review_asr_goto: '前往设置 → ASR 与词典',
     // ---- 批 4（D2026-1002-12）：审计④载入 dirty 守卫 ----
     review_load_dirty_confirm: '当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？',
 };
@@ -1156,9 +1156,10 @@ const ReviewUI = {
             // switchTab 在 app.js IIFE 内未挂全局（D2026-1002-11 裁定）——
             // 程序化 click 走真实 handler 链
             goto.addEventListener('click', () => {
-                // 2.6.3 批C（D2026-1003-01 P4 IA 重排）：ASR 管理迁独立页
-                // tab-asrdict，跳转锚随改
-                const b = document.querySelector('.side-tab-btn[data-tab="tab-asrdict"]');
+                // d1102-件B2（D2026-1102-02）：设置组四页并入设置 hub，
+                // ASR 管理迁入 overlay 域页签——程序化 click 域卡走真实
+                // handler 链（设置页四域卡常驻 DOM，overlay 关闭时也可点）
+                const b = document.querySelector('[data-settings-domain="asrdict"]');
                 if (b) { b.click(); }
             });
         }
