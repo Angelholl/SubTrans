@@ -182,6 +182,62 @@ def test_fresh_install_startup_seeds_gate(frozen_root):
     assert _read(gate)["enabled"] is True
 
 
+# ---------------------------------------------------------------------------
+# 升级路径端到端（D2026-1101-01 §三⑥：真实升级/多版本连跳/迁移失败防顶替）
+# ---------------------------------------------------------------------------
+def _make_upgrade_roots(monkeypatch, tmp_path):
+    """frozen + 显式旧根（含最小白名单源文件），返回 (旧根, 新根)。"""
+    legacy = tmp_path / "legacy"
+    lac = tmp_path / "localappdata"
+    (legacy / "config").mkdir(parents=True)
+    lac.mkdir()
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(lac))
+    monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
+    (legacy / "config" / "user_settings.json").write_text(
+        '{"v2_ctx_local": 16384}', encoding="utf-8")
+    return legacy, lac / "SubTrans"
+
+
+def test_upgrade_legacy_gate_row_reaches_new_root(monkeypatch, tmp_path):
+    """真实升级路径（3.1.1→3.1.2）：旧根显式 enabled:false 测量行随白名单
+    原样到达新根，seeding 零扰动、读取侧按 disabled 关门。"""
+    legacy, new_root = _make_upgrade_roots(monkeypatch, tmp_path)
+    (legacy / "config" / "fullchain_c22.json").write_text(
+        json.dumps({"enabled": False, "measured_at": "2026-10-30 09:00:00",
+                    "precision_lb": 0.9, "coverage": 0.5, "n": 40}),
+        encoding="utf-8")
+    assert dm.ensure_migrated(verbose=False) == "migrated"
+    arrived = _read(new_root / "config" / "fullchain_c22.json")
+    assert arrived["enabled"] is False and arrived["n"] == 40
+
+
+def test_upgrade_without_gate_row_seeds(monkeypatch, tmp_path):
+    """多版本连跳（3.0→3.1.2，旧根从未含门控行）：迁移成功后 seeding
+    照常补行（enabled=true＋现行指纹）。"""
+    legacy, new_root = _make_upgrade_roots(monkeypatch, tmp_path)
+    assert dm.ensure_migrated(verbose=False) == "migrated"
+    seeded = _read(new_root / "config" / "fullchain_c22.json")
+    rules_sha1, app_version = dm.c22_gate_fingerprint()
+    assert seeded == {"enabled": True, "rules_sha1": rules_sha1,
+                      "app_version": app_version}
+
+
+def test_migration_failure_skips_seeding(monkeypatch, tmp_path):
+    """迁移未完成（failed/skipped-locked/retry-wal）→ 本轮跳过 seeding，
+    新根不落 enabled=true 行（防缺省意志顶替旧根显式意志，fail-closed）。"""
+    _, new_root = _make_upgrade_roots(monkeypatch, tmp_path)
+    monkeypatch.setattr(dm, "_ensure_migrated_inner",
+                        lambda verbose: "skipped-locked")
+    assert dm.ensure_migrated(verbose=False) == "skipped-locked"
+    assert not _gate(new_root).exists()
+    monkeypatch.setattr(dm, "_ensure_migrated_inner",
+                        lambda verbose: "failed:validate")
+    assert dm.ensure_migrated(verbose=False) == "failed:validate"
+    assert not _gate(new_root).exists()
+
+
 def test_pip_form_never_seeds(monkeypatch, tmp_path):
     from subtransjav.refine import config as cfg_mod
 

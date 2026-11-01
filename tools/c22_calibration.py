@@ -510,16 +510,14 @@ def main(argv: list[str] | None = None) -> int:
                       file=sys.stderr)
                 return 2
             gate_path.parent.mkdir(parents=True, exist_ok=True)
-            gate_path.write_text(json.dumps(
-                {"enabled": True,
-                 "rules_sha1": rules_sha1,
-                 "app_version": app_version,
-                 "measured_at": datetime.now().strftime(
-                     "%Y-%m-%d %H:%M:%S"),
-                 "precision_lb": round(agg["precision_lb"], 4),
-                 "coverage": round(agg["coverage"], 4),
-                 "n": agg["n_high"]}, ensure_ascii=False, indent=1),
-                encoding="utf-8")
+            _dm._c22_atomic_write_json(gate_path, {
+                "enabled": True,
+                "rules_sha1": rules_sha1,
+                "app_version": app_version,
+                "measured_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "precision_lb": round(agg["precision_lb"], 4),
+                "coverage": round(agg["coverage"], 4),
+                "n": agg["n_high"]})
             enabled_written = True
             print(f"✅ C22 达标（下界 {agg['precision_lb']:.4f}，覆盖率 "
                   f"{agg['coverage']:.4f}），门控已写入: {gate_path}")

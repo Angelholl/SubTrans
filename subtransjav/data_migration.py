@@ -490,6 +490,15 @@ def ensure_migrated(verbose: bool = False) -> str:
         _log(verbose, f"⚠️ [迁移] 数据迁移异常（程序以新根继续，"
                       f"旧数据可从数据根 backups/ 寻回）: {type(e).__name__}: {e}")
         status = "failed:exception"
+    if status.split(":", 1)[0] in ("failed", "retry-wal") \
+            or status == "skipped-locked":
+        # 迁移未完成：旧根门控行尚未到达新根，此时补 enabled=true 缺省行，
+        # 下轮迁移到达旧显式行后会因「存量零扰动」永久驻留——等于用缺省
+        # 意志顶替用户显式意志（D2026-1101-01 §三①）。跳过本轮 seeding，
+        # 门保持关闭（fail-closed 安全方向），待下轮首启迁移成功后自然补行。
+        _log(verbose, f"ℹ️ [C22] 迁移未完成（{status}），本轮跳过门控补行"
+                      f"（防顶替旧根显式意志，下轮首启重试）")
+        return status
     try:
         _seed_c22_gate_on_startup(verbose)
     except Exception as e:  # noqa: BLE001 - seeding 失败不阻塞首启（门保持关闭）
