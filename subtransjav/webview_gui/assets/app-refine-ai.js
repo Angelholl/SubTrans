@@ -276,7 +276,7 @@
   }
   // 触发点①（TranslatorManager completed 分支）经全局别名调用
   window.__warmupMaybeStart = warmupMaybeStart;
-  // 触发点②（switchTab tab-guide）：姿势钩子（照 __asrTabHook；每次切入
+  // 触发点②（switchTab tab-eval-reports）：姿势钩子（照 __asrTabHook；每次切入
   // 都触发，去重靠上方守卫+5s 抑制+后端桥三层）
   window.__warmupTabHook = () => { warmupMaybeStart(); };
 

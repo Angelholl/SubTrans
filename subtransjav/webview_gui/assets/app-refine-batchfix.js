@@ -289,7 +289,7 @@
     det.appendChild(box);
     line.appendChild(det);
   }
-  // 切页钩子（switchTab tab-guide 分支消费；失败不阻断切页）
+  // 切页钩子（switchTab tab-eval-reports 分支消费；失败不阻断切页）
   window.__fullchainStatusHook = () => { fullchainStatusRefresh(true); };
 
   // 一键回滚（改写恢复）：确认框（applied 条数+auto_insert 条件化提示，

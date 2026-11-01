@@ -1,7 +1,7 @@
   // ============================================================
   // 试听错误槽（2.7.4 件1 owner 终版裁定）：错误展示从浮层条内迁出为
   // 独立动态槽——旧浮层内静态错误元素废弃（DOM 保留不删不写，零
-  // FROZEN 解冻）。槽注入 #tab-guide 页面级稳定容器（no_guide 态——导读
+  // FROZEN 解冻）。槽注入 #tab-eval-reports（质量中心）页面级稳定容器（no_guide 态——导读
   // 未加载/折叠收起——也可见，不依赖导读加载后才存在的容器）；
   // position:fixed + z-index 1001：高于浮层条 z-900 与模态遮罩 z-1000，
   // 错误态永不被遮。幂等：首帧注入后复用。
@@ -32,7 +32,7 @@
     slot.appendChild(txt);
     slot.appendChild(rematch);
     slot.appendChild(pick);
-    const page = document.getElementById('tab-guide');
+    const page = document.getElementById('tab-eval-reports');
     (page || document.body).appendChild(slot);
     return slot;
   }

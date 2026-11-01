@@ -459,7 +459,6 @@ const MSG = {
     tabEngine: 'API 与模型选择',
     tabAsrDict: 'ASR 与词典',
     tabGlossary: '词库与模板',
-    tabGuide: '质量与建议',
     tabAdvanced: '高级参数',
 
     // ---- v1.5 翻译服务快捷下拉（原小白模式顶栏迁入 translate TAB）----
@@ -947,9 +946,10 @@ const MSG = {
     tmSearchColTarget: '译文',
     tmSearchColStage: '阶段',
     tmSearchColHits: '命中',
-    // ---- 评测报告页（3.1.1 件B，D2026-1030-02 B3；页内全 JS 态键，
-    // 静态键仅导航/页头复用 tabEvalReports 一枚）----
-    tabEvalReports: '评测报告',
+    // ---- 质量中心页（d1102-件B1，D2026-1102-02：评测报告＋质量与建议
+    // 合并；评测报告主框架页内全 JS 态键，质量与建议静态键随块原样搬入；
+    // 导航/页头复用 tabQualityCenter 同键双元素）----
+    tabQualityCenter: '质量中心',
     evalRefreshBtn: '刷新',
     evalListFailed: '评测报告列表加载失败',
     evalEmptyHint: '暂无评测报告：在命令行运行 eval_baseline 生成报告后点「刷新」。',

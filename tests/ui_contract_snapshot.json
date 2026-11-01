@@ -212,7 +212,6 @@
     "tab-engine",
     "tab-eval-reports",
     "tab-glossary",
-    "tab-guide",
     "tab-review",
     "tab-translate",
     "tabBtnAdvanced",
@@ -220,7 +219,6 @@
     "tabBtnEngine",
     "tabBtnEvalReports",
     "tabBtnGlossary",
-    "tabBtnGuide",
     "tabBtnReview",
     "tabBtnTranslate",
     "themeBtn",
@@ -387,9 +385,8 @@
     "tabAdvanced",
     "tabAsrDict",
     "tabEngine",
-    "tabEvalReports",
     "tabGlossary",
-    "tabGuide",
+    "tabQualityCenter",
     "tabReview",
     "tabTranslate",
     "templates_dir_label",
@@ -435,7 +432,8 @@
       "字幕清洗参数弹窗（D2026-1024-01 批2 件A）：index.html 高级参数 TAB 压制组邻位新增「字幕清洗」入口组（照压制入口组模式，全 JS 态 MSG 零静态 data-i18n/零 id）+app-msg.js 41 键（polish_adv_*/polish_popup_* 前缀）+app-modal.js polish kind+app-refine-core.js 会话态与 buildRefineOptions 9 键接线，ids 225 不动；i18n_keys 191 不动（入口组零静态键）",
       "TM与断点合并弹窗（D2026-1024-01 批3 件B）：index.html 高级参数 TAB 原「TM 与学习闸」「断点与日志」两区块撤除、原位改「TM 与断点」入口组（照批2 字幕清洗入口组模式，全 JS 态 MSG 零静态 data-i18n/零 id），8 控件迁入 app-modal.js tmBreak kind 合并弹窗（标签/title/placeholder 复用既有键，弹窗 DOM 零新增 id）；app-refine-core.js 会话态 _tmBreakParams＋buildRefineOptions 8 键改走会话态；app-msg.js +13 键；ids 225→217（8 静态 id 撤除）；i18n_keys 191→174（17 锚随区块撤除，tm_enable_label 因右栏 sys-summary 行仍消费而保留）",
       "⑥a 人物提示子开关（D2026-1025-01 裁决⑥，2026-10-27 主模型直执）：index.html 剧情自摘要邻位新增 refineSynopsisCast 复选框（默认不勾）+app-msg.js 两 MSG 键（synopsis_cast_label/synopsis_cast_title）+app-refine-core.js buildRefineOptions +1 键接线+api.py 白名单转发 --synopsis-cast；ids 217→218；i18n_keys 174→176（解冻依据=裁决⑥ GUI 形态成文：整合进 auto_synopsis 区单 checkbox「人物提示」）",
-      "d1028-38 换代（CT2 面板接线，钉⑤解冻提案，D2026-1028-03 批准）：ids 218→222（+refineCt2Status/refineCt2InstallBtn/refineCt2ModelStatus/refineCt2ModelBtn）、i18n_keys 176→177（+ct2_panel_title）；同笔 js 字节钉/拼接 sha 换代（d1028-38）"
+      "d1028-38 换代（CT2 面板接线，钉⑤解冻提案，D2026-1028-03 批准）：ids 218→222（+refineCt2Status/refineCt2InstallBtn/refineCt2ModelStatus/refineCt2ModelBtn）、i18n_keys 176→177（+ct2_panel_title）；同笔 js 字节钉/拼接 sha 换代（d1028-38）",
+      "d1102-件B1 质量中心合并（D2026-1102-02）：评测报告（tab-eval-reports）＋质量与建议（tab-guide）合并为单页「质量中心」——删 tab-guide 导航按钮/面板节点（-tabBtnGuide/-tab-guide 两 id），质量与建议静态内容整块 DOM 原地搬家至评测报告面板尾部；tabGuide/tabEvalReports 两静态键退役、tabQualityCenter 单键承接导航与页头；ids 227→225；i18n_keys 178→177"
     ]
   }
 }

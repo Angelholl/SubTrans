@@ -5,7 +5,7 @@
 // 切页钩子注册表（3.1 地基批 卡3，D2026-1012-01）：原 switchTab 体内六段
 // 同构内联 if 收编为声明式注册表——新增切页钩子只在对应 tab 分组追加一项，
 // 钩子清单单一视图。分组顺序与各组数组顺序=原内联执行序（①②词库页 →
-// ③ASR 与词典页 →④⑤⑥质量与建议页）；每项保留原 typeof 守卫 + try/catch
+// ③ASR 与词典页 →④⑤⑥质量中心页）；每项保留原 typeof 守卫 + try/catch
 // 吞错（失败不阻断切页），钩子本体（注册方实现）与触发时机零改动。
 const TAB_HOOKS = {
     // 词库页初始化钩子（D2026-0930-07-追加1 必要⑧）：打开 tab-glossary 时
@@ -35,16 +35,16 @@ const TAB_HOOKS = {
             }
         },
     ],
-    // P1 分析模型预热触发点②（D2026-1008-02 批3）：切入质量与建议页且
+    // P1 分析模型预热触发点②（D2026-1008-02 批3）：切入质量中心页且
     // 页面有报告时预热（守卫/去重在 warmupMaybeStart 内，失败不阻断切页）
-    'tab-guide': [
+    'tab-eval-reports': [
         () => {
             const hook = window.__warmupTabHook;
             if (typeof hook === 'function') {
                 try { hook(); } catch (e) { /* 触发失败不阻断切页 */ }
             }
         },
-        // 3.0 批2（D2026-1009-02 批2）：切入质量与建议页刷新全链链级状态行
+        // 3.0 批2（D2026-1009-02 批2）：切入质量中心页刷新全链链级状态行
         // （fullchainStatusRefresh 静默态；失败不阻断切页）
         () => {
             const hook = window.__fullchainStatusHook;

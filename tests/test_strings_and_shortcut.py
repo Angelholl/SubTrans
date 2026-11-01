@@ -285,8 +285,7 @@ def test_sidebar_tabs_replace_details_shell():
     html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
     # 2.6.3 批C D2026-1003-01 P4：设置组插入 tabBtnAsrdict/tab-asrdict
     for btn in ("tabBtnTranslate", "tabBtnEngine", "tabBtnAsrdict",
-                "tabBtnGlossary", "tabBtnGuide", "tabBtnAdvanced",
-                "tabBtnReview"):
+                "tabBtnGlossary", "tabBtnAdvanced", "tabBtnReview"):
         assert f'id="{btn}"' in html, f"index.html 缺少左侧 TAB 按钮: {btn}"
     assert re.search(
         r'<button[^>]*id="tabBtnTranslate"[^>]*class="side-tab-btn active"',
@@ -294,7 +293,7 @@ def test_sidebar_tabs_replace_details_shell():
         r'<button[^>]*class="side-tab-btn active"[^>]*id="tabBtnTranslate"',
         html), "默认选中的 TAB 必须是 tabBtnTranslate"
     for page in ("tab-translate", "tab-engine", "tab-asrdict", "tab-glossary",
-                 "tab-guide", "tab-review", "tab-advanced"):
+                 "tab-review", "tab-advanced"):
         assert f'id="{page}"' in html, f"index.html 缺少 TAB 页面: {page}"
     # details 折叠壳已平铺：高级设置 summary 锚不再引用
     assert 'data-i18n="advanced_settings_summary"' not in html, \

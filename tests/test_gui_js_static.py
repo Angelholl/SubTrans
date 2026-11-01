@@ -254,7 +254,7 @@ def test_user_mode_and_novice_panel_removed():
 # ---------------------------------------------------------------------------
 
 _TAB_IDS = ["tab-translate", "tab-engine", "tab-asrdict", "tab-glossary",
-            "tab-guide", "tab-review", "tab-advanced"]
+            "tab-review", "tab-advanced"]
 
 
 def test_index_html_sidebar_tabs_structure():
@@ -772,11 +772,16 @@ def test_translate_tab_quick_start_dual_button_state_sync():
 # AI 质量分析（D2026-0929：--ai-analyze 前后端接入）静态钉
 # ---------------------------------------------------------------------------
 
-def test_tab_guide_label_is_quality_and_suggestions():
-    """TAB 名 i18n：tabGuide 键值改为「质量与建议」（键名不动）。"""
-    m = re.search(r"tabGuide:\s*'([^']+)'", _app_js_source())
-    assert m, "MSG 中未找到 tabGuide 键"
-    assert m.group(1) == "质量与建议"
+def test_tab_quality_center_label_merged():
+    """TAB 名 i18n（d1102-件B1，D2026-1102-02）：评测报告＋质量与建议合并
+    为「质量中心」单页；tabQualityCenter 新键在表，旧 tabGuide/tabEvalReports
+    键零引用退役。"""
+    src = _app_js_source()
+    m = re.search(r"tabQualityCenter:\s*'([^']+)'", src)
+    assert m, "MSG 中未找到 tabQualityCenter 键"
+    assert m.group(1) == "质量中心"
+    assert "tabGuide:" not in src, "tabGuide 键应随质量与建议页合并退役"
+    assert "tabEvalReports:" not in src, "tabEvalReports 键应随合并页头换代退役"
 
 
 def test_ai_analyze_button_bound_and_flow_pins():
@@ -1540,8 +1545,10 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # 件B GPU 补丁包换代（D2026-1029-02 拍板③，ct2-gpu-row 2 id）：+2 → 220；
     # 3.1.1 件B（D2026-1030-02 B3，评测报告页）：+7（tabBtnEvalReports/
     # tab-eval-reports/evalReportsSection/evalReportsToolbar/
-    # evalReportsSelect/evalReportsRefreshBtn/evalReportsBody）→ 227
-    assert len(ids) == 227, f"id 全集数漂移（3.1.1 件B 评测报告页后现契约 227），实为 {len(ids)}"
+    # evalReportsSelect/evalReportsRefreshBtn/evalReportsBody）→ 227；
+    # d1102-件B1（D2026-1102-02，质量中心合并）：删 tabBtnGuide/tab-guide
+    # 两 id（评测报告页 id 沿用），显式解冻 227→225
+    assert len(ids) == 225, f"id 全集数漂移（d1102-件B1 质量中心合并后契约 225），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -1668,9 +1675,12 @@ def test_review_page_structure_pinned():
     assert 'data-kind="video"' in html and 'data-kind="srt"' in html, \
         "导入按钮必须带 data-kind 双值（事件委托分流契约）"
     assert '<script src="review.js"></script>' in html, "review.js 未挂载"
-    # tab-review 区间（至 </main>）data-i18n 仅页头复用键 tabReview
+    # tab-review 区间（至下一个 .tab-page / </main>）data-i18n 仅页头复用键 tabReview
+    # d1102-件B1：质量中心（tab-eval-reports）并入 main 尾后，切片须止于
+    # 下一个 .tab-page，避免把后续页面的静态键误算进校对页。
     m = re.search(
-        r'<div class="tab-page" id="tab-review".*?</main>', html, re.S)
+        r'<div class="tab-page" id="tab-review".*?(?=<div class="tab-page"|</main>)',
+        html, re.S)
     assert m, "未找到 tab-review 页面区间"
     keys = re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"', m.group(0))
     assert keys == ["tabReview"], (
@@ -2399,7 +2409,7 @@ def test_batch_d_tpl_editor_vault_structure_pinned():
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'class="tpl-editor-vault" hidden' in html, "缺 .tpl-editor-vault 隐藏容器"
     start = html.index('class="tpl-editor-vault"')
-    end = html.index('id="tab-guide"', start)
+    end = html.index('id="tab-advanced"', start)
     vault = html[start:end]
     for dom_id in _BATCH_D_VAULT_IDS:
         assert f'id="{dom_id}"' in vault, f"vault 缺既有 frozen id: {dom_id}"
@@ -3007,7 +3017,7 @@ def test_batch_fix_preview_msg_and_css_pinned():
 def test_guide_page_readability_app_pinned():
     """件1 app.js 静态钉：新 MSG 键、#audioPreviewError 零写者（废弃静态
     保证）、player.src='' 停播保留、三分支入口清红字、错误槽动态注入
-    （tab-guide 页面级容器）、媒体三态类、状态行收敛（双写撤销）。"""
+    （tab-eval-reports 页面级容器）、媒体三态类、状态行收敛（双写撤销）。"""
     src = _app_js_source()
     keys = _js_msg_keys()
     for key in ("guide_custom_source", "guide_copy_path",
@@ -3024,8 +3034,8 @@ def test_guide_page_readability_app_pinned():
         "失败态=浮层条隐藏+独立错误槽红字"
     # 错误槽动态注入（页面级稳定容器，no_guide 态可见）
     eps = _extract_function(src, "ensurePreviewErrorSlot")
-    assert "createElement" in eps and "tab-guide" in eps, \
-        "错误槽须动态注入 #tab-guide 页面级容器"
+    assert "createElement" in eps and "tab-eval-reports" in eps, \
+        "错误槽须动态注入 #tab-eval-reports（质量中心）页面级容器"
     # 三分支入口先清旧红字（防残留）：clearPreviewError 位于 no_guide 判定前
     oap = _extract_function(src, "openAudioPreview")
     assert "clearPreviewError()" in oap, "分支入口清红字缺失"
@@ -3562,8 +3572,10 @@ def test_batch3_ai_config_row_pins_survive():
     # d1028-38（CT2 面板，钉⑤解冻提案）：+4（refineCt2Status/InstallBtn/
     # ModelStatus/ModelBtn）→ 222；
     # d1029 退役批（whisper 半边删除，解冻提案）：-4 → 218；
-    # 3.1.1 件B（D2026-1030-02 B3，评测报告页）：+7 → 227
-    assert len(ids) == 227, f"id 全集数漂移（契约 227），实为 {len(ids)}"
+    # 3.1.1 件B（D2026-1030-02 B3，评测报告页）：+7 → 227；
+    # d1102-件B1（D2026-1102-02，质量中心合并）：删 tabBtnGuide/tab-guide
+    # 两 id → 225
+    assert len(ids) == 225, f"id 全集数漂移（契约 225），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -3574,8 +3586,10 @@ def test_batch3_ai_config_row_pins_survive():
     # （synopsis_cast_label/synopsis_cast_title）→ 176；
     # d1028-38（CT2 面板）+1 键（ct2_panel_title）→ 177；
     # 3.1.1 件B（D2026-1030-02 B3）+1 键（tabEvalReports，导航与页头
-    # 同键双元素，页内零静态 data-i18n）→ 178
-    assert len(i18n) == 178, f"data-i18n 键集数漂移（契约 178），实为 {len(i18n)}"
+    # 同键双元素，页内零静态 data-i18n）→ 178；
+    # d1102-件B1（D2026-1102-02）：tabGuide/tabEvalReports 两键退役，
+    # tabQualityCenter 单键承接导航与页头（同键双元素）→ 177
+    assert len(i18n) == 177, f"data-i18n 键集数漂移（d1102-件B1 后契约 177），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -3844,12 +3858,12 @@ def test_warmup_maybe_start_guards_order_and_bridge_call():
 
 
 def test_warmup_trigger_points_wired():
-    """触发点①②接线：completed 分支 _finish 后触发；switchTab tab-guide
-    姿势钩子（照 __asrTabHook 先例）触发。"""
+    """触发点①②接线：completed 分支 _finish 后触发；switchTab
+    tab-eval-reports（质量中心）姿势钩子（照 __asrTabHook 先例）触发。"""
     src = _app_js_source()
     switch_body = _extract_function(src, "switchTab")
     assert "TAB_HOOKS[tabId]" in switch_body, "switchTab 须经注册表派发"
-    assert "__warmupTabHook" in _tab_hooks_group("tab-guide"), \
+    assert "__warmupTabHook" in _tab_hooks_group("tab-eval-reports"), \
         "switchTab 须经 __warmupTabHook 触发"
     assert "window.__warmupTabHook = " in src, "IIFE 须导出 __warmupTabHook"
     # 触发点①：completed 分支内 _finish 之后调 __warmupMaybeStart()，
@@ -4272,8 +4286,8 @@ def test_fullchain_status_line_and_rollback_pinned():
     assert "fcMissedSkipped" in fn
     tab = _extract_function(src, "switchTab")
     assert "TAB_HOOKS[tabId]" in tab, "switchTab 须经注册表派发"
-    assert "__fullchainStatusHook" in _tab_hooks_group("tab-guide"), \
-        "switchTab tab-guide 分支须挂链级状态行刷新"
+    assert "__fullchainStatusHook" in _tab_hooks_group("tab-eval-reports"), \
+        "switchTab tab-eval-reports（质量中心）分支须挂链级状态行刷新"
     run_fn = _extract_function(src, "batchFixRun")
     assert "fullchainStatusRefresh(true)" in run_fn, \
         "batchFixRun 完成后须刷新链级状态行"
@@ -4375,8 +4389,8 @@ def test_guide_staleness_reread_and_items_modal_pins():
     src = _app_js_source()
     tab = _extract_function(src, "switchTab")
     assert "TAB_HOOKS[tabId]" in tab, "switchTab 须经注册表派发"
-    assert "__guideStalenessHook" in _tab_hooks_group("tab-guide"), \
-        "switchTab tab-guide 分支须挂导读陈旧检测钩子"
+    assert "__guideStalenessHook" in _tab_hooks_group("tab-eval-reports"), \
+        "switchTab tab-eval-reports（质量中心）分支须挂导读陈旧检测钩子"
     fn = _extract_function(src, "guideStalenessCheck")
     assert "output_artifact_mtime" in fn, "陈旧检测须走轻量 mtime 探针"
     assert "guideLoad(true)" in fn, "检测到陈旧须静默重读"
@@ -5132,26 +5146,27 @@ def test_b07_glsel_native_override_pinned():
 # ---------------------------------------------------------------------------
 
 # 新增页头的 6 页：tab-page id ->（页头 h1 data-i18n 键, 静态回退现值）
+# d1102-件B1（D2026-1102-02）：tab-guide 并入 tab-eval-reports（质量中心），
+# 页头键随合并换代 tabGuide→tabQualityCenter。
 _B10_NEW_HEADS = {
     "tab-engine": ("tabEngine", "API 与模型选择"),
     "tab-asrdict": ("tabAsrDict", "ASR 与词典"),
     "tab-glossary": ("tabGlossary", "词库与模板"),
-    "tab-guide": ("tabGuide", "质量与建议"),
     "tab-advanced": ("tabAdvanced", "高级参数"),
     "tab-review": ("tabReview", "校对"),
+    "tab-eval-reports": ("tabQualityCenter", "质量中心"),
 }
 
 # 七页 aria-label 静态文本（取对应 tabXxx 现值；含 tab-translate 共 7 页）
 _B10_PANEL_LABELS = {
     "tab-translate": "字幕翻译",
     "tab-review": "校对",
-    "tab-guide": "质量与建议",
     "tab-engine": "API 与模型选择",
     "tab-asrdict": "ASR 与词典",
     "tab-glossary": "词库与模板",
     "tab-advanced": "高级参数",
-    # 3.1.1 件B（D2026-1030-02 B3）：评测报告页签解冻（7→8 页）
-    "tab-eval-reports": "评测报告",
+    # d1102-件B1（D2026-1102-02）：评测报告＋质量与建议合并为质量中心
+    "tab-eval-reports": "质量中心",
 }
 
 
@@ -5220,7 +5235,7 @@ def test_b10_tabpanels_role_and_label_pinned():
         assert "aria-labelledby" not in tag, \
             f"#{tab_id} 走了 aria-labelledby（须 aria-label 静态文本，禁新增 id）"
     panel_count = html.count('role="tabpanel"')
-    assert panel_count == 8, f"role=tabpanel 应恰 8 处（实测 {panel_count}）"
+    assert panel_count == 7, f"role=tabpanel 应恰 7 处（实测 {panel_count}）"
 
 
 def test_b10_nav_aria_controls_pinned():
@@ -5228,7 +5243,7 @@ def test_b10_nav_aria_controls_pinned():
     （同一按钮 data-tab == aria-controls == 目标页既有 id；集合双向相等）。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     tags = re.findall(r'<button[^>]*data-tab="([^"]+)"[^>]*>', html, re.S)
-    assert len(tags) == 8, f"带 data-tab 的按钮应恰 8 个（实测 {len(tags)}）"
+    assert len(tags) == 7, f"带 data-tab 的按钮应恰 7 个（实测 {len(tags)}）"
     controls = []
     for m in re.finditer(
             r'<button[^>]*class="side-tab-btn[^"]*"[^>]*data-tab="([^"]+)"[^>]*>',
@@ -5239,15 +5254,15 @@ def test_b10_nav_aria_controls_pinned():
         assert cm.group(1) == tab_id, \
             f"aria-controls 与 data-tab 不一致: {cm.group(1)} != {tab_id}"
         controls.append(cm.group(1))
-    assert len(controls) == 8, \
-        f".side-tab-btn 应恰 8 个且均带 aria-controls（实测 {len(controls)}）"
+    assert len(controls) == 7, \
+        f".side-tab-btn 应恰 7 个且均带 aria-controls（实测 {len(controls)}）"
     assert set(controls) == set(_B10_PANEL_LABELS), \
         f"aria-controls 与 .tab-page id 集合不一一对应: {sorted(set(controls) ^ set(_B10_PANEL_LABELS))}"
 
 
 def test_b10_zero_new_id_zero_new_key_pinned():
     """⑤零新增 id / 零新增键（钉⑤双集合自证的本卡局部前置）：页头块内零 id；
-    7 个页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=222 /
+    6 个新增页头键均为导航既有键（同键双元素，集合语义零增减——FROZEN_IDS=222 /
     FROZEN_I18N_KEYS=186 全等冻结另由钉⑤a/⑤b 快照自证；187→186=artifact_note
     退役，D2026-1013-01 真机反馈轮）；aria-controls 只
     引用既有 .tab-page id，容器不新增 data-i18n。"""
@@ -5257,7 +5272,7 @@ def test_b10_zero_new_id_zero_new_key_pinned():
     nav_html = nav.group(0)
     msg_keys = _js_msg_keys()
     head_count = html.count('<div class="page-head">')
-    assert head_count == 8, f"页头应恰 8 处（8 页各一，实测 {head_count}）"
+    assert head_count == 7, f"页头应恰 7 处（7 页各一，实测 {head_count}）"
     for tab_id, (key, _text) in _B10_NEW_HEADS.items():
         frag = _b10_tab_page_body(html, tab_id)
         block = re.search(
@@ -7307,6 +7322,14 @@ def test_js_sources_layer_pinned():
        ——压制高级面板占位／镜像待验证提示／翻译冲突提示，-311B；
        strings.py 侧同名镜像键其一随删；键数变化仅此三键，
        FROZEN_I18N_KEYS 与 index.html 零触碰）；
+       d1102-件B1 质量中心合并换代（D2026-1102-02）：全库拼接
+       ad80a7dd…/496,324B、app-msg.js 64,918B/f1b15bce…（tabGuide/
+       tabEvalReports 两静态键退役、tabQualityCenter 单键承接；页内
+       JS 态键零增减）；app-tabs.js 3,976B/de7a1646…（TAB_HOOKS 分组
+       键 tab-guide→tab-eval-reports）、app-refine-preview.js
+       14,524B/26b18881…（错误槽容器改挂 #tab-eval-reports）、
+       app-refine-ai.js 14,310B/4867ea69… 与 app-refine-batchfix.js
+       25,983B/26d2e4ef…（注释内切页名随改）；JS_FILES 零增减；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7321,7 +7344,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "447e84eeb80fc452fc857fc4984c1a391563b159fbb52c801a0209828fca636e"), \
+        "ad80a7ddd99e1f2ee6342f4b9755ac2f700bc9741c116473c081ad5122c216b2"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7331,7 +7354,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "8d61da5ae9637d17f3499db4350d76c7f3f9d26c687676619b7adb8f58f76429"), \
+        "44840d7cf84c7a63a71ea4bf230801e99db351adfc8b7ba88d13c5adb7539b18"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7351,8 +7374,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (64839,
-                       "2d37e2b85e1203d2068a3e77ce9264a1623494b9f6960038018928dbc21e8686"),
+        "app-msg.js": (64918,
+                       "f1b15bce11acf7ad545854638ad96b6c92a0f0f4946526e8aa2d7d3ae415a2fd"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7379,8 +7402,8 @@ def test_js_split_integrity_pinned():
                              "ac08c35f4837daf2871eddb17402179fc6ecfd9703be4a55810c2079a2995584"),
         "app-about.js": (705,
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
-        "app-tabs.js": (3978,
-                        "6b3dc4c6b92041c6548c503222545daff842ae628dc27539ee976a554ea81c3c"),
+        "app-tabs.js": (3976,
+                        "de7a1646ba04a781bb06adaf640b8ceba9827af440d8845da2485e6048193984"),
         "app-refine-core.js": (16571,
                                "2788adf6dfa2c2c5a415e6cb4fb3044fb118ff8d2342d497eae79df386e24c60"),
         "app-refine-models.js": (13345,
@@ -7393,12 +7416,12 @@ def test_js_split_integrity_pinned():
                                    "20907b96509e55835dcae5f1790519c880069d2f4f4dad0d705a2524941e1c55"),
         "app-refine-guide.js": (26042,
                                 "60debeb42e15fd1fc8f98f6707472597aca2f7fe45130dc62a5b7cf29f30d4c9"),
-        "app-refine-preview.js": (14493,
-                                  "2847f1ca77bfcc313d1383a47df86d14797f47b9b33f42c54c5131b52b20947b"),
-        "app-refine-ai.js": (14303,
-                             "ce941f6b1605d221321a52daaaf9e896b7ce64d570fd1125d8913a1219792de9"),
-        "app-refine-batchfix.js": (25976,
-                                   "fb802a9b43e509aad696be184fd8b16fd925da89ae6f577dab00665ccfd1ea4a"),
+        "app-refine-preview.js": (14524,
+                                  "26b188817d6c5a3ee6d088cabfdc8a41ed197c0ed0322925d51e7fce23eb6bec"),
+        "app-refine-ai.js": (14310,
+                             "4867ea696c5d41a8608ec31146fccb64c0bb7ff3ae8e08027a3b71a86e211fe1"),
+        "app-refine-batchfix.js": (25983,
+                                   "26d2e4ef4acbe187740419bb28157a31b46dcca56f8a297252fdd5dc13451407"),
         "app-refine-asr.js": (5568,
                              "6436749377821f256d93502b1973ca5ae794f4871f2e83af10f6e916dbf29a4c"),
         "app-refine-ai-actions.js": (5166,

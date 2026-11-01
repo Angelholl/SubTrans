@@ -232,7 +232,7 @@ MSG = {
     # 独立配置半配置（G5-补：仅 provider 无 model）→ 视为未配置忽略
     "fix_ai_indep_half_ignored": "分析独立配置不完整，已忽略",
     # 阶段A 链终点仍无线索（C9：分析未配置+阶段A 无模型）→ 如实拒绝（C8）
-    "fix_ai_model_unset": "分析模型与阶段A 均未配置，无法修复：请在「质量与建议」配置 AI 分析模型，或在「翻译设置 · 阶段A（净语+翻译）」填写模型名",
+    "fix_ai_model_unset": "分析模型与阶段A 均未配置，无法修复：请在「质量中心」配置 AI 分析模型，或在「翻译设置 · 阶段A（净语+翻译）」填写模型名",
     # 独立配置 custom 兜底拒绝（无默认端点；refine_ai_analyze 与共用
     # helper 同串单源消费）
     "ai_indep_custom_unsupported": "自定义接口暂不支持独立配置：请将阶段A 服务商设为 custom 后使用",

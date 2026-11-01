@@ -3465,7 +3465,7 @@ def test_fix_matrix_stage_a_empty_denied_verbatim(gui_api_obj, monkeypatch):
     r = gui_api_obj._resolve_ai_model_config(None, None)
     assert r["ok"] is False
     assert r["reason"] == ("分析模型与阶段A 均未配置，无法修复：请在"
-                           "「质量与建议」配置 AI 分析模型，或在"
+                           "「质量中心」配置 AI 分析模型，或在"
                            "「翻译设置 · 阶段A（净语+翻译）」填写模型名")
     assert not any((r["provider"], r["endpoint"], r["model"]))
     # provider=lmstudio 有名无默认模型、model 空 → 无线索同拒绝
