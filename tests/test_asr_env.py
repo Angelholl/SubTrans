@@ -30,6 +30,35 @@ def test_run_transcription_no_engine_guides_ct2_install():
     assert "唯一引擎" in r["error"] and "asr_runtime install" in r["error"]
 
 
+def test_run_transcription_no_engine_points_to_asrdict_page():
+    """D2026-1102-01 ⑧：安装导向页名＝「ASR 与词典」（独立页已更名，
+    错误文案不得再指「引擎页」）。"""
+    r = asr_env.run_transcription("c.wav", asr_python="")
+    assert r["ok"] is False
+    assert "ASR 与词典" in r["error"]
+    assert "引擎页" not in r["error"]
+
+
+def test_transcribe_media_no_engine_points_to_asrdict_page(tmp_path):
+    """同上：媒体整片入口的安装导向页名同口径。"""
+    r = asr_env.transcribe_media_to_srt(str(tmp_path / "m.mp4"))
+    assert r["ok"] is False
+    assert "ASR 与词典" in r["error"]
+    assert "引擎页" not in r["error"]
+
+
+def test_ct2_model_missing_points_to_asrdict_page(monkeypatch):
+    """同上：ct2 模型未落位导向（「模型未落位」串保留，只换页名）。"""
+    from subtransjav.refine import asr_runtime
+    monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
+    monkeypatch.setattr(asr_runtime, "resolve_ct2_model_dir",
+                        lambda *a, **k: "")
+    r = asr_env.run_transcription("c.wav")
+    assert r["ok"] is False and "模型未落位" in r["error"]
+    assert "ASR 与词典" in r["error"]
+    assert "引擎页" not in r["error"]
+
+
 # ---------------------------------------------------------------------------
 # build_crosscheck_block：C6 非真值声明/截断/detail 结构（D2026-1010-03 件A）
 # ---------------------------------------------------------------------------

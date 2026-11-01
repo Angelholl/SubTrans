@@ -404,6 +404,9 @@ class TestDecouple:
         r = asr_env.run_transcription("clip.wav")
         assert r["ok"] is False and "唯一引擎" in r["error"]
         assert "asr_runtime install" in r["error"]
+        # D2026-1102-01 ⑧：导向页名＝独立页「ASR 与词典」（原「引擎页」）
+        assert "ASR 与词典" in r["error"]
+        assert "引擎页" not in r["error"]
 
     def test_probe_includes_ct2_section(self, tmp_path, monkeypatch):
         monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
