@@ -7356,10 +7356,21 @@ def test_capture_session_stage_a_extracts_options(gui_api_obj):
         "endpoint": "http://127.0.0.1:1234/v1"}
 
 
+def _c22_gate_payload(**extra) -> dict:
+    """C22 门控文件夹具：带当前规则/版本指纹（D2026-1101-01 §三④：
+    读取侧要求 rules_sha1+app_version 与现行规则/版本一致，缺失即关门）。"""
+    from subtransjav.data_migration import c22_gate_fingerprint
+
+    rules_sha1, app_version = c22_gate_fingerprint()
+    return {"enabled": True, "rules_sha1": rules_sha1,
+            "app_version": app_version, **extra}
+
+
 def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
                                                tmp_path):
-    """_fullchain_c22_enabled fail-closed：缺失/损坏/enabled 非 True 均
-    False；enabled is True 才放行（CONFIG_DIR 打桩）。"""
+    """_fullchain_c22_enabled fail-closed：缺失/损坏/enabled 非 True/指纹
+    缺失或不匹配均 False；enabled is True 且指纹吻合才放行（CONFIG_DIR
+    打桩）。"""
     import subtransjav.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
@@ -7370,9 +7381,15 @@ def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
     p.write_text(json.dumps({"enabled": False, "precision_lb": 0.9}),
                  encoding="utf-8")
     assert gui._fullchain_c22_enabled() is False       # 非 True
+    p.write_text(json.dumps(_c22_gate_payload(precision_lb=0.96, n=60)),
+                 encoding="utf-8")
+    assert gui._fullchain_c22_enabled() is True
+    p.write_text(json.dumps(_c22_gate_payload(rules_sha1="stale")),
+                 encoding="utf-8")
+    assert gui._fullchain_c22_enabled() is False       # 指纹不匹配
     p.write_text(json.dumps({"enabled": True, "precision_lb": 0.96,
                              "n": 60}), encoding="utf-8")
-    assert gui._fullchain_c22_enabled() is True
+    assert gui._fullchain_c22_enabled() is False       # 指纹缺失（旧测量行）
 
 
 def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
@@ -7418,7 +7435,7 @@ def test_fullchain_missed_gate_on_inserts(gui_api_obj, monkeypatch,
     guide = _make_missed_env(tmp_path, extras={"对齐率": "98.0%"})
     _install_missed_stubs(monkeypatch)
     (tmp_path / "fullchain_c22.json").write_text(
-        json.dumps({"enabled": True, "precision_lb": 0.97, "n": 65}),
+        json.dumps(_c22_gate_payload(precision_lb=0.97, n=65)),
         encoding="utf-8")
     order: list = []
     real_append = art._append_ledger
@@ -7492,7 +7509,7 @@ def test_fullchain_missed_gate_on_invariant_failure_abandons(
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
     (tmp_path / "fullchain_c22.json").write_text(
-        json.dumps({"enabled": True}), encoding="utf-8")
+        json.dumps(_c22_gate_payload()), encoding="utf-8")
 
     def _boom(o, n, p):
         raise AssertionError("injected")
@@ -7696,7 +7713,7 @@ def test_fullchain_missed_final_missing_abandons(gui_api_obj, monkeypatch,
     guide = _make_missed_env(tmp_path, final=False)
     _install_missed_stubs(monkeypatch)
     (tmp_path / "fullchain_c22.json").write_text(
-        json.dumps({"enabled": True}), encoding="utf-8")
+        json.dumps(_c22_gate_payload()), encoding="utf-8")
     run = {"missed_skipped": 0}
     with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
         gui_api_obj._run_fullchain_missed_stage(
@@ -7717,7 +7734,7 @@ def test_fullchain_missed_write_failure_abandons(gui_api_obj, monkeypatch,
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
     (tmp_path / "fullchain_c22.json").write_text(
-        json.dumps({"enabled": True}), encoding="utf-8")
+        json.dumps(_c22_gate_payload()), encoding="utf-8")
 
     def _boom(*_a, **_k):
         raise RuntimeError("台账炸")
@@ -7748,7 +7765,7 @@ def test_fullchain_missed_extras_default_and_write_failure(gui_api_obj,
     guide = _make_missed_env(tmp_path)          # 无 extras 键
     _install_missed_stubs(monkeypatch)
     (tmp_path / "fullchain_c22.json").write_text(
-        json.dumps({"enabled": True}), encoding="utf-8")
+        json.dumps(_c22_gate_payload()), encoding="utf-8")
     real_atomic = fs_mod._atomic_write_text
 
     def _atomic(path, text, **kw):

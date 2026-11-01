@@ -32,7 +32,7 @@ DATA_MIGRATION = REPO_ROOT / "subtransjav" / "data_migration.py"
 
 APPID_LINE = "{{8F3A5C1E-6B2D-4E9A-9C47-1D0B5A7E2F31}"
 
-# 9 锚（与 subtransjav/data_migration.py 白名单 + 运行时落盘对齐；
+# 10 锚（与 subtransjav/data_migration.py 白名单 + 运行时落盘对齐；
 # glossary_conflict_watch.json 实际位于 Temp/translation_memory/）
 ANCHOR_FILENAMES = [
     "user_dirs.json",
@@ -41,6 +41,7 @@ ANCHOR_FILENAMES = [
     "api_keys.bin",
     "glossary.csv",
     "glossary_learned.csv",
+    "fullchain_c22.json",
     "glossary_conflict_watch.json",
     "tm.db",
     "templates",
@@ -163,8 +164,8 @@ def test_guard_reversal_comment_pinned(iss_text):
 def test_anchor_aligns_with_migration_whitelist():
     """data_migration.py 白名单中的用户数据文件名必须全部出现在 iss 锚点。
 
-    白名单（subtransjav/data_migration.py ``_BASE_FILES``，7 项）均含于
-    iss 9 锚集合；DelTree 整树删除下 tm.db 的 -wal/-shm 旁车与
+    白名单（subtransjav/data_migration.py ``_BASE_FILES``，8 项）均含于
+    iss 10 锚集合；DelTree 整树删除下 tm.db 的 -wal/-shm 旁车与
     glossary_conflict_watch.json.bak 随目录一并清除，无需单列锚点；
     config/templates 目录锚覆盖白名单未单列的角色卡/模板目录。
     """

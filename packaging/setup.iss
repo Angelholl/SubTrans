@@ -345,10 +345,11 @@ begin
   Result := Format('%.1f %s', [v, unitName]);
 end;
 
-// 锚点硬门槛：9 锚与 subtransjav/data_migration.py 旧根白名单 + 运行时落盘
+// 锚点硬门槛：10 锚与 subtransjav/data_migration.py 旧根白名单 + 运行时落盘
 // 对齐（glossary_conflict_watch.json 实际位于 Temp/translation_memory/，
 // 非 config\；config\templates 为角色卡/模板目录；user_dirs.json 为
-// webview_gui/user_dirs.py 持久登记文件）。任一命中即视为存在用户数据。
+// webview_gui/user_dirs.py 持久登记文件；fullchain_c22.json 为 C22 校准门
+// 产品态配置行，D2026-1101-01）。任一命中即视为存在用户数据。
 function HasAnyAnchor(const root: String): Boolean;
 begin
   Result :=
@@ -358,6 +359,7 @@ begin
     FileOrDirExists(root + '\config\api_keys.bin') or
     FileOrDirExists(root + '\config\glossary.csv') or
     FileOrDirExists(root + '\config\glossary_learned.csv') or
+    FileOrDirExists(root + '\config\fullchain_c22.json') or
     FileOrDirExists(root + '\config\templates') or
     FileOrDirExists(root + '\Temp\translation_memory\tm.db') or
     FileOrDirExists(root + '\Temp\translation_memory\glossary_conflict_watch.json');
