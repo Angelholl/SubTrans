@@ -137,7 +137,7 @@ def _run_transcription_ct2(clip_path: str, language: str,
     model_dir = asr_runtime.resolve_ct2_model_dir(_CT2_DEFAULT_MODEL)
     if not model_dir:
         return {"ok": False, "text": "",
-                "error": "ct2 模型未落位（先经「ASR 与词典」页/CLI 下载模型件）"}
+                "error": "ct2 模型未落位（先经「设置 → ASR 与词典」/CLI 下载模型件）"}
     fd, tmp_srt = tempfile.mkstemp(suffix=".srt", prefix="ct2clip_")
     os.close(fd)
     try:
@@ -203,7 +203,7 @@ def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
         return {"ok": False, "srt": "",
                 "error": "转写引擎未安装（CT2 唯一引擎，首次使用需安装）——"
                          "python -m subtransjav.refine.asr_runtime install，"
-                         "或在「ASR 与词典」页操作"}
+                         "或在「设置 → ASR 与词典」操作"}
     if not media_path or not os.path.isfile(media_path):
         return {"ok": False, "srt": "",
                 "error": "媒体文件不存在: " + str(media_path)}
@@ -258,7 +258,7 @@ def run_transcription(clip_path: str, asr_python: str = "",
     return {"ok": False, "text": "",
             "error": "转写引擎未安装（CT2 唯一引擎，首次使用需安装）——"
                      "python -m subtransjav.refine.asr_runtime install，"
-                     "或在「ASR 与词典」页操作"}
+                     "或在「设置 → ASR 与词典」操作"}
 
 
 def batch_transcribe_clips(media_path: str, timings: list[str], *,
