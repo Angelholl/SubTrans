@@ -7507,6 +7507,36 @@ _REFINE_TOP_NAMES = frozenset({
 })
 
 
+def test_eval_pairs_table_narrow_container_wrap_pinned():
+    """d1102-P3（D2026-1102-01 ⑥）：评测报告页「双引擎一致率」表窄容器折行钉。
+
+    根因：pairsTable() 动态建 `.eval-pairs-table`（app-eval-reports.js），
+    该类在 style.css/style.dark.css 零专属样式；rate_a/rate_b 列
+    「百分比 [lo%, hi%]」长串横向溢出右缘，被 `.section overflow:hidden`
+    裁切（1280/1600 视口均复现）。口径：折行优于横向滚动。
+    断言面 = style.css 点名选择器规则（dark 仅 @import 变量层，自动继承）。
+    """
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+
+    table = re.search(r"(?<![\w-])\.eval-pairs-table\s*\{([^}]*)\}", css)
+    assert table, "style.css 缺 .eval-pairs-table 规则（窄容器溢出无样式兜底）"
+    table_body = table.group(1)
+    assert "width: 100%" in table_body, \
+        ".eval-pairs-table 须吃满容器宽（width: 100%）"
+    assert "border-collapse: collapse" in table_body, \
+        ".eval-pairs-table 须 border-collapse: collapse（单元格边框贴合）"
+
+    cell = re.search(
+        r"\.eval-pairs-table\s+th\s*,\s*\.eval-pairs-table\s+td\s*\{([^}]*)\}",
+        css)
+    assert cell, "style.css 缺 .eval-pairs-table th/td 单元格折行规则"
+    cell_body = cell.group(1)
+    assert "overflow-wrap: anywhere" in cell_body, \
+        "单元格须 overflow-wrap: anywhere（长百分比区间串折行而非溢出被裁）"
+    assert "overflow-x: auto" not in (table_body + cell_body), \
+        "折行优先：不得以 overflow-x: auto 横向滚动替代折行"
+
+
 def test_refine_global_surface_pinned():
     """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 177 个名字，且与其余分文件零重名。"""
     pat_fn = re.compile(r"^  (?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(")

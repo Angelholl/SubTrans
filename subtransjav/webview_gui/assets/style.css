@@ -3127,3 +3127,21 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
    全站恰 1 处 = 本卡），避免连带改到 ASR 卡等其他 form-card 内的 .field-row */
 .ctrl-group { display: flex; align-items: center; gap: var(--space-2); }
 .stack.form-card > .field-row { gap: var(--space-3); }
+
+/* ============================================================
+   评测报告页（d1102-P3，D2026-1102-01 ⑥）：一致率表窄容器折行
+   ------------------------------------------------------------
+   `.eval-pairs-table` 由 app-eval-reports.js pairsTable() 动态建表，
+   此前零专属样式；右栏窄容器（~267px）下 rate_a/rate_b 列
+   「百分比 [lo%, hi%]」长串横向溢出右缘，被 .section overflow:hidden
+   裁切。折行优于横向滚动：表吃满容器宽 + 单元格 anywhere 折行
+   （长串按需在任意处断开），不引入 JS 改动。
+   ============================================================ */
+.eval-pairs-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.eval-pairs-table th,
+.eval-pairs-table td {
+    overflow-wrap: anywhere;
+}
