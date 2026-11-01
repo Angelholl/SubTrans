@@ -28,6 +28,14 @@ manifest 写，其信息量依赖 manifest 可信）→ 按未迁移处理并给
 本次跳过。幂等：有效哨兵存在即直接返回。任何异常不阻塞首启：返回失败
 并由调用方打印警告，程序以（可能为空的）新根继续，数据可从 backups
 zip 寻回。
+
+C22 校准门 seeding（D2026-1101-01）：与迁移共用同一首启插桩点，但**独立**
+于迁移三态——frozen 默认数据根下恒执行一次「缺行补行」：门控文件不存在
+才写缺省行（enabled=true + rules_sha1/app_version 指纹），存量行（含显式
+enabled:false、旧版五字段测量行）零扰动；写入走同目录临时文件 + os.replace
+原子替换，失败零残留并记日志。dev 实测字段（measured_at/precision_lb/
+coverage/n）只属于校准工具输出，绝不随 seeding 下发。指纹不匹配（含缺失）
+的存量行由读取侧关门并提示重新校准——旧测量依据不得静默复用。
 """
 
 from __future__ import annotations
@@ -35,6 +43,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sqlite3
@@ -46,7 +55,10 @@ from typing import Any
 
 from subtransjav import paths
 
-__all__ = ["ensure_migrated", "import_legacy"]
+__all__ = ["ensure_migrated", "import_legacy", "seed_c22_gate",
+           "evaluate_c22_gate", "c22_gate_fingerprint", "C22_GATE_RELPATH"]
+
+_logger = logging.getLogger(__name__)
 
 MIGRATION_VERSION = "2.0.0"
 BACKUP_PREFIX = "pre-2.0.0-"
@@ -63,6 +75,7 @@ _BASE_FILES: tuple[str, ...] = (
     "config/refine_stage_settings.json",
     "config/glossary.csv",
     "config/glossary_learned.csv",
+    "config/fullchain_c22.json",
 )
 # tm.db 的 WAL/SHM 旁车（仅在主库存在时一并迁）与观察 json 的 .bak
 _TM_SIDECARS: tuple[str, ...] = ("Temp/translation_memory/tm.db-wal",
@@ -467,13 +480,168 @@ def ensure_migrated(verbose: bool = False) -> str:
     返回状态串（供桩点日志/测试断言）：
     ``migrated`` / ``already-migrated`` / ``skipped-locked`` /
     ``retry-wal`` / ``failed:*`` / ``not-applicable:*``。
+
+    同一插桩点顺带执行 C22 门控 seeding（frozen 默认数据根才动作，
+    与迁移三态解耦；失败只记日志，返回串不变）。
     """
     try:
-        return _ensure_migrated_inner(verbose)
+        status = _ensure_migrated_inner(verbose)
     except Exception as e:  # noqa: BLE001 - 全容错：失败永不阻塞首启
         _log(verbose, f"⚠️ [迁移] 数据迁移异常（程序以新根继续，"
                       f"旧数据可从数据根 backups/ 寻回）: {type(e).__name__}: {e}")
-        return "failed:exception"
+        status = "failed:exception"
+    try:
+        _seed_c22_gate_on_startup(verbose)
+    except Exception as e:  # noqa: BLE001 - seeding 失败不阻塞首启（门保持关闭）
+        _log(verbose, f"⚠️ [C22] 门控 seeding 异常（忽略，门保持关闭）: "
+                      f"{type(e).__name__}: {e}")
+    return status
+
+
+# ---------------------------------------------------------------------------
+# C22 校准门 seeding（D2026-1101-01：把「配置行到达用户机」做幂等防呆）
+# ---------------------------------------------------------------------------
+C22_GATE_RELPATH = "config/fullchain_c22.json"
+C22_GATE_FILENAME = "fullchain_c22.json"
+# 仓库 dev 实测字段（校准工具输出专属），seeding 缺省行一律不带
+_C22_DEV_METRIC_KEYS: tuple[str, ...] = ("measured_at", "precision_lb",
+                                         "coverage", "n")
+
+
+def _c22_gate_dir(config_dir: str | Path | None) -> Path:
+    """门控落点目录：显式传入（测试/工具）优先，否则数据根 ``config/``。
+
+    用 ``paths.data_root()`` 现算而非 import 期常量 ``config.CONFIG_DIR``：
+    frozen 首启插桩点在 import 之后才确定数据根（测试亦需可重定向），
+    两者在正常启动路径等价。
+    """
+    if config_dir is not None:
+        return Path(config_dir)
+    return Path(paths.data_root()) / "config"
+
+
+def c22_gate_fingerprint(app_version: str | None = None) -> tuple[str | None, str]:
+    """返回当前生效的 ``(rules_sha1, app_version)`` 指纹。
+
+    rules_sha1＝source_hallucination 规则集语义哈希（用户覆盖优先，包内
+    回退；与 manifest 的 gate0_rules_sha1 同源），解析不可得时返回 None
+    （调用侧据此 fail-closed：无锁不补行、读取侧关门）。
+    """
+    rules_sha1: str | None = None
+    try:
+        from subtransjav.refine.source_hallucination import gate0_rules_sha1
+        rules_sha1 = gate0_rules_sha1()
+    except Exception:  # noqa: BLE001 - 规则解析不可得=无指纹（fail-closed）
+        rules_sha1 = None
+    if app_version is None:
+        try:
+            from subtransjav.__version__ import __version__
+            app_version = str(__version__)
+        except Exception:  # noqa: BLE001 - 版本不可得按空串（必然不匹配→关门）
+            app_version = ""
+    return rules_sha1, str(app_version)
+
+
+def seed_c22_gate(config_dir: str | Path | None = None, *,
+                  app_version: str | None = None,
+                  verbose: bool = False) -> str:
+    """C22 门控缺行补行（幂等反覆盖，D2026-1101-01 §三①）。
+
+    只做「缺行才补」：门控文件不存在时写缺省行
+    ``{"enabled": true, "rules_sha1", "app_version"}``（不带任何 dev 实测
+    字段）；存量文件一律零扰动——显式 ``enabled:false`` 是用户意志，
+    旧版五字段测量行交由读取侧指纹校验关门并要求重校准。
+
+    损坏/半态（JSON 不可解析或非对象）不覆写、不崩，记日志后返回
+    ``skipped-invalid``（读取侧同款 fail-closed）。写入走同目录临时文件
+    + ``os.replace`` 原子替换，失败零残留。
+
+    返回 ``seeded`` / ``kept-existing`` / ``skipped-invalid`` /
+    ``failed:*``。
+    """
+    try:
+        target = _c22_gate_dir(config_dir) / C22_GATE_FILENAME
+        if target.exists():
+            try:
+                data = json.loads(target.read_text(encoding="utf-8"))
+            except Exception as e:  # noqa: BLE001 - 损坏=保留原文件并关门
+                _logger.warning("C22 门控文件不可解析（%s），保留原文件并关门: %s",
+                                type(e).__name__, target)
+                _log(verbose, "⚠️ [C22] 门控文件损坏，保留原文件（需重新校准）")
+                return "skipped-invalid"
+            if not isinstance(data, dict):
+                _logger.warning("C22 门控文件非 JSON 对象（%s），保留原文件并关门: %s",
+                                type(data).__name__, target)
+                _log(verbose, "⚠️ [C22] 门控文件形态非法，保留原文件（需重新校准）")
+                return "skipped-invalid"
+            return "kept-existing"
+
+        rules_sha1, version = c22_gate_fingerprint(app_version)
+        if not rules_sha1:
+            _logger.warning("C22 门控 seeding 中止：规则集指纹不可得（无锁不补行）")
+            _log(verbose, "⚠️ [C22] 规则集指纹不可得，跳过补行（门保持关闭）")
+            return "failed:no-rules-fingerprint"
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"enabled": True, "rules_sha1": rules_sha1,
+                   "app_version": version}
+        _c22_atomic_write_json(target, payload)
+        _log(verbose, f"✅ [C22] 已补门控缺省行（enabled=true, "
+                      f"app_version={version}）")
+        return "seeded"
+    except Exception as e:  # noqa: BLE001 - 失败零残留，门保持关闭
+        _logger.warning("C22 门控 seeding 失败（fail-closed，不落半态）: %s: %s",
+                        type(e).__name__, e)
+        _log(verbose, f"⚠️ [C22] 门控 seeding 失败（忽略，门保持关闭）: {e}")
+        return f"failed:{type(e).__name__}"
+
+
+def _c22_atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """同目录临时文件 + fsync + os.replace（复用 fs_utils 既有原子写）。"""
+    from subtransjav.refine.fs_utils import _atomic_write_text
+    text = json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+    _atomic_write_text(path, text)
+
+
+def evaluate_c22_gate(gate_path: str | Path, *,
+                      rules_sha1: str | None = None,
+                      app_version: str | None = None) -> tuple[bool, str]:
+    """门控读取判定（纯读、零写）：返回 ``(是否开门, 原因码)``。
+
+    原因码：``ok`` / ``missing`` / ``invalid`` / ``disabled`` /
+    ``fingerprint-missing`` / ``fingerprint-mismatch``。
+    ``enabled is True`` 之外还要求 rules_sha1+app_version 与当前生效规则集/
+    版本一致——缺失也算不匹配（旧测量依据不得静默复用，D2026-1101-01 §三④）。
+    """
+    try:
+        data = json.loads(Path(gate_path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return False, "missing"
+    except Exception:  # noqa: BLE001 - 损坏一律关门
+        return False, "invalid"
+    if not isinstance(data, dict):
+        return False, "invalid"
+    if data.get("enabled") is not True:
+        return False, "disabled"
+    expect_rules, expect_version = c22_gate_fingerprint(app_version)
+    if rules_sha1 is not None:
+        expect_rules = rules_sha1
+    stored_rules = data.get("rules_sha1")
+    stored_version = data.get("app_version")
+    if not stored_rules or not stored_version:
+        return False, "fingerprint-missing"
+    if stored_rules != expect_rules or stored_version != expect_version:
+        return False, "fingerprint-mismatch"
+    return True, "ok"
+
+
+def _seed_c22_gate_on_startup(verbose: bool) -> str:
+    """首启插桩调用点：仅 frozen + 默认数据根动作（pip/源码形态零感知）。"""
+    if not paths.is_frozen():
+        return "not-applicable:not-frozen"
+    if paths.data_root_source() != "frozen-default":
+        return "not-applicable:custom-root"
+    return seed_c22_gate(verbose=verbose)
 
 
 # ---------------------------------------------------------------------------

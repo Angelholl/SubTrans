@@ -5926,14 +5926,20 @@ class TranslateAPI:
             os.path.join(CONFIG_DIR, "fullchain_c22.json")))
 
     def _fullchain_c22_enabled(self) -> bool:
-        """C22 校准门读取（fail-closed）：仅 enabled is True 才开自动补行；
-        文件缺失/损坏/字段缺失一律 False（宁可全放弃，不无证放行）。"""
+        """C22 校准门读取（fail-closed）：仅 enabled is True 且
+        ``rules_sha1``＋``app_version`` 指纹与当前生效规则集/版本一致才开；
+        文件缺失/损坏/enabled 非 True/指纹缺失或不匹配一律 False（宁可全
+        放弃，不无证放行），指纹问题另记 warning 提示重新校准
+        （D2026-1101-01 §三④：旧测量依据不得静默复用）。"""
         try:
-            with open(self._fullchain_c22_path(), encoding="utf-8") as f:
-                data = json.load(f)
-            return isinstance(data, dict) and data.get("enabled") is True
+            from subtransjav.data_migration import evaluate_c22_gate
+            ok, reason = evaluate_c22_gate(self._fullchain_c22_path())
         except Exception:
             return False
+        if not ok and reason in ("fingerprint-mismatch", "fingerprint-missing"):
+            _log.warning("C22 校准门指纹不匹配（%s）：按关门处理，请重新校准",
+                         reason)
+        return ok
 
     def _resolve_guide_for_done_key(self, done_key: str,
                                     session_paths: (dict[str, Any] |
