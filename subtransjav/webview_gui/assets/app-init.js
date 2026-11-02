@@ -257,14 +257,28 @@ const FlowOverview = {
     },
 
     jump(flow) {
-        if (flow === 'transcribe' || flow === 'review') {
+        // d1102-卡B：chip 可见反馈统一——滚动居中 + .flow-flash 高亮脉冲
+        // （animationend 移除，两 chip 共用本 flash 小函数）
+        const flash = (el) => {
+            if (!el) return;
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('flow-flash');
+            el.addEventListener('animationend',
+                () => el.classList.remove('flow-flash'), { once: true });
+        };
+        if (flow === 'review') {
             switchTab('tab-review');
+            return;
+        }
+        if (flow === 'transcribe') {
+            // d1102-卡B：首页新增转录卡后转录 chip 留首页定位，不再跳校对页
+            switchTab('tab-translate');
+            flash(document.getElementById('homeTranscribeCard'));
             return;
         }
         if (flow === 'translate') {
             switchTab('tab-translate');
-            const dz = document.getElementById('dropzone');
-            if (dz) dz.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            flash(document.getElementById('dropzone'));
             return;
         }
         if (flow === 'fullchain') {

@@ -168,6 +168,26 @@
                     </div>
                 </div>
 
+                <!-- 首页转录卡（d1102-卡B）：仿校对页 #reviewTranscribeCard 范式；
+                     文案全走 review.js REVIEW_MSG（window.REVIEW_MSG 单源暴露）
+                     与 MSG（app-msg.js），页内零 data-i18n（静态键 cap 零消耗）；
+                     选媒体/CT2 门控/启动/轮询实现见 app-home-transcribe.js -->
+                <div class="card review-transcribe-card" id="homeTranscribeCard">
+                    <div class="card-head"><span class="home-transcribe-title"></span></div>
+                    <div class="review-transcribe-media" id="homeTranscribeMedia"></div>
+                    <div class="review-transcribe-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="homeTranscribePickBtn"></button>
+                        <button type="button" class="btn btn-primary btn-sm" id="homeTranscribeStartBtn" disabled></button>
+                        <label class="review-transcribe-pass">
+                            <input type="checkbox" id="homeTranscribeDualPass">
+                            <span class="review-transcribe-pass-text"></span>
+                        </label>
+                    </div>
+                    <div class="review-transcribe-ct2" id="homeTranscribeCt2"></div>
+                    <div class="review-transcribe-status" id="homeTranscribeStatus"></div>
+                    <button type="button" class="btn btn-ghost btn-sm review-transcribe-install" id="homeTranscribeInstall" style="display:none;"></button>
+                </div>
+
                 <!-- 文件列表卡片（.file-item 由 app.js 动态生成，此处仅容器；
                      阶段2 批1：移除选中/清空两按钮自 dropzone 迁入 card-head 右侧） -->
                 <div class="card">
@@ -1402,6 +1422,8 @@
     <script src="app-feature-status.js"></script>
     <script src="app-settings.js"></script>
     <script src="review.js"></script>
+    <!-- d1102-卡B：首页转录卡（消费 window.REVIEW_MSG，须在 review.js 之后） -->
+    <script src="app-home-transcribe.js"></script>
 </body>
 </html>
 

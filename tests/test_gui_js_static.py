@@ -1548,7 +1548,8 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # d1102-件D（D2026-1102-02，转录桥＋转录区块）：删 reviewAsrBtn（-1，
     # ASR 卡吸收合并进转录引导卡）、新增 reviewTranscribeCard/StartBtn/
     # DualPass/Ct2/OtherBtn（+5），229→233
-    assert len(ids) == 233, f"id 全集数漂移（d1102-件D 后契约 233），实为 {len(ids)}"
+    # d1102-卡B（D2026-1102-03，首页转录卡）：+8 homeTranscribe* id，233→241
+    assert len(ids) == 241, f"id 全集数漂移（d1102-卡B 后契约 241），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -3742,7 +3743,8 @@ def test_batch3_ai_config_row_pins_survive():
     # tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn，净 0；
     # d1102-件D（D2026-1102-02，转录桥＋转录区块）：-reviewAsrBtn +5
     # 转录卡 id，229→233
-    assert len(ids) == 233, f"id 全集数漂移（d1102-件D 后契约 233），实为 {len(ids)}"
+    # d1102-卡B（D2026-1102-03，首页转录卡）：+8 homeTranscribe* id，233→241
+    assert len(ids) == 241, f"id 全集数漂移（d1102-卡B 后契约 241），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -5622,7 +5624,8 @@ def test_home_flow_overview_static_pinned():
 
     ① 四节点 chip（转录/翻译/校对/全链）带 data-flow 与静态 data-i18n，
       位于 L1 页头之后、L3 dropzone 之前；② chip 直达四路：转录/校对→
-      校对页、翻译→本页 dropzone、全链→本页开关行；③ C22 门状态行门关
+      校对页（d1102-卡B 改约：转录→本页 homeTranscribeCard）、
+      翻译→本页 dropzone（block:center+脉冲）、全链→本页开关行；③ C22 门状态行门关
       只用 muted 灰点（禁 danger 警报红）；④ 切回首页经 TAB_HOOKS 重刷；
     ⑤ tab-translate 标签换代「自动流程」、CTA「一键开始」（id 保留 FROZEN）。
     """
@@ -5644,8 +5647,10 @@ def test_home_flow_overview_static_pinned():
     assert html.index('id="flowOverview"') < html.index('id="dropzone"'),         "概览条须位于页头之后、dropzone 之前"
     assert html.index('class="page-head"') < html.index('id="flowOverview"'),         "概览条须在 L1 页头之后"
 
-    # chip 直达四路
-    for frag in ("flow === 'transcribe' || flow === 'review'",
+    # chip 直达四路（d1102-卡B 契约变更：转录 chip 留首页定位转录卡）
+    for frag in ("flow === 'transcribe'",
+                 "getElementById('homeTranscribeCard')",
+                 "flow === 'review'",
                  "switchTab('tab-review')",
                  "flow === 'translate'",
                  "getElementById('dropzone')",
@@ -7702,6 +7707,10 @@ def test_js_sources_layer_pinned():
         调高逻辑退役，改遮罩+居中面板）、app-msg.js 66,438B/9bda6492…
         （console_collapse 值改「关闭」；旧钉 11a00359… / e59c2323… /
         91806c71… / 66e4ee5f… 退役）；
+        d1102-卡B 首页转录卡/chip 跳转（2026-11-02）：全库拼接
+        d981545a…/524,955B、app-init.js 19,324B/157f9dda…（jump()
+        transcribe 留首页定位转录卡 + flow-flash 脉冲；旧钉 4f3ae14d… /
+        9e2a277a… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7718,7 +7727,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "4f3ae14dd1185357f4637ce37d04e5b9c5b7bd45c50313179dedaf70706655ab"), \
+        "d981545a5763c6c74538b7fbb5ffc46c323a14a564af409508981501c1a6b9b3"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7748,8 +7757,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (66438,
-                       "9bda6492e0197340394b0b70d102875445b31b486ff4de9de960aa513f78907e"),
+        "app-msg.js": (66661,
+                       "bcfc50d91dfedf439e5e4fde2004fcc4f109e6b68094958665b4ce5750831d2b"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7808,8 +7817,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (18669,
-                        "9e2a277a4bfb449b562c7f87a8ee2d01a017dbe78c4bcd12125614379e307a86"),
+        "app-init.js": (19324,
+                        "157f9ddae914e6ab0b088aae205e204a38025f33a6392b160338b1a8b488ff8e"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,
@@ -7982,3 +7991,95 @@ def test_eval_reports_select_style_pinned():
         "app-eval-reports.js 缺少空列表 sel.hidden = true 判定"
     assert js.count("sel.hidden = false;") >= 1, \
         "app-eval-reports.js 缺少非空列表 sel.hidden = false 判定"
+
+
+# ---------------------------------------------------------------------------
+# d1102-卡B（首页转录卡 + 概览条 chip 跳转可见反馈）静态钉
+# ---------------------------------------------------------------------------
+
+_HOME_TRANSCRIBE_IDS = (
+    "homeTranscribeCard", "homeTranscribeMedia", "homeTranscribePickBtn",
+    "homeTranscribeDualPass", "homeTranscribeStartBtn",
+    "homeTranscribeStatus", "homeTranscribeCt2", "homeTranscribeInstall",
+)
+
+
+def _review_msg_string_values():
+    """解析 review.js REVIEW_MSG 键表中字符串型值（负控：值字面量禁复制）。"""
+    src = REVIEW_JS.read_text(encoding="utf-8")
+    m = re.search(r"const REVIEW_MSG = \{(.*?)\n\};", src, re.S)
+    assert m, "review.js 缺 REVIEW_MSG 键表"
+    return [v for v in re.findall(r"^\s*review_\w+:\s*'([^']*)'", m.group(1),
+                                  re.M) if v]
+
+
+def test_home_transcribe_card_static_pinned():
+    """d1102-卡B：首页转录卡骨架钉——8 id、区位（dropzone 与文件列表卡
+    之间）、卡内零 data-i18n（静态键 cap 零消耗）、快照 ids 同步、
+    脚本挂载于 review.js 之后（依赖 window.REVIEW_MSG 单源暴露）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for i in _HOME_TRANSCRIBE_IDS:
+        assert f'id="{i}"' in html, f"index.html 缺首页转录卡 id: {i}"
+    assert (html.index('id="dropzone"') < html.index('id="homeTranscribeCard"')
+            < html.index('id="fileListContainer"')), \
+        "首页转录卡须位于 dropzone 与文件列表卡之间"
+    region = re.search(
+        r'id="homeTranscribeCard".*?(?=<div class="card">|id="fileListContainer")',
+        html, re.S)
+    assert region, "未找到首页转录卡区间"
+    assert 'data-i18n' not in region.group(0), \
+        "首页转录卡区间不得消耗静态 i18n 键（文案全 JS 态注入）"
+    snap = json.loads((Path(__file__).resolve().parent /
+                       "ui_contract_snapshot.json").read_text(encoding="utf-8"))
+    for i in _HOME_TRANSCRIBE_IDS:
+        assert i in snap["ids"], f"id 应加入 ui_contract_snapshot.json: {i}"
+    assert '<script src="app-home-transcribe.js"></script>' in html, \
+        "app-home-transcribe.js 未挂载"
+    assert html.index('src="review.js"') < \
+        html.index('src="app-home-transcribe.js"'), \
+        "app-home-transcribe.js 须在 review.js 之后加载（消费 window.REVIEW_MSG）"
+
+
+def test_review_msg_global_exposed_and_home_zero_literal_copy():
+    """d1102-卡B：文案单源钉——review.js 末尾暴露 window.REVIEW_MSG
+    （仅一行级改动）；app-home-transcribe.js 消费 window.REVIEW_MSG 且
+    零键值字面量复制（负控：复制任一 review_* 值即红）；四桥接线齐全。"""
+    src = REVIEW_JS.read_text(encoding="utf-8")
+    assert "window.REVIEW_MSG = REVIEW_MSG;" in src, \
+        "review.js 缺 window.REVIEW_MSG 全局暴露（文案单源硬约束）"
+    home = (ASSETS / "app-home-transcribe.js").read_text(encoding="utf-8")
+    assert "window.REVIEW_MSG" in home, "首页转录卡未消费 window.REVIEW_MSG"
+    for val in _review_msg_string_values():
+        assert val not in home, \
+            f"首页转录卡复制了 REVIEW_MSG 值字面量（文案单源破约）: {val}"
+    for bridge in ("refine_review_pick_media", "refine_review_start_transcribe",
+                   "refine_review_transcribe_status", "refine_asr_status"):
+        assert bridge in home, f"首页转录卡缺桥接线: {bridge}"
+    assert "setInterval" in home and "clearInterval" in home, \
+        "首页转录卡缺 800ms 轮询与终态停表"
+
+
+def test_overview_chip_jump_flash_pinned():
+    """d1102-卡B：chip 跳转可见反馈钉——transcribe 留首页滚到
+    homeTranscribeCard、translate 滚 dropzone 改 block:'center'，两者经
+    共用 flash() 接 .flow-flash 高亮脉冲（animationend 移除）；
+    review/fullchain 行为不变。"""
+    init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    m = re.search(r"jump\(flow\) \{.*?\n    \},", init, re.S)
+    assert m, "app-init.js 缺 jump(flow)"
+    seg = m.group(0)
+    for frag in ("flow === 'transcribe'",
+                 "getElementById('homeTranscribeCard')",
+                 "flow === 'translate'",
+                 "getElementById('dropzone')",
+                 "block: 'center'",
+                 "flow === 'review'",
+                 "switchTab('tab-review')",
+                 "flow === 'fullchain'",
+                 "classList.add('flow-flash')",
+                 "animationend"):
+        assert frag in seg, f"jump() 缺契约片段: {frag}"
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    blk = re.search(r"\.flow-flash\s*\{([^}]*)\}", css)
+    assert blk and "animation" in blk.group(1), \
+        "style.css 缺 .flow-flash 高亮脉冲规则"

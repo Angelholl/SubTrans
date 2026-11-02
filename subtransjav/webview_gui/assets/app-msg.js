@@ -463,6 +463,9 @@ const MSG = {
     flowNodeTranslate: '翻译',
     flowNodeReview: '校对',
     flowNodeFullchain: '全链',
+    // d1102-卡B：首页转录卡专属键（其余转录文案走 review.js REVIEW_MSG 单源）
+    homeTranscribePick: '选择媒体…',
+    homeTranscribeEmpty: '尚未选择媒体，点击「选择媒体」开始',
     // d1102-件B2（D2026-1102-02）：设置组四页合并为顶层「设置」hub；
     // 四域页签标签改用 settingsTab* 键（旧 tabEngine/tabAsrDict/
     // tabGlossary/tabAdvanced 四键确认全仓零引用后退役）

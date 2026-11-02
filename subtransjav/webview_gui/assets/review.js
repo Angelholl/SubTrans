@@ -1444,3 +1444,7 @@ const ReviewUI = {
 };
 
 document.addEventListener('DOMContentLoaded', () => ReviewUI.init());
+
+// d1102-卡B：REVIEW_MSG 全局暴露（仅此一行级改动）——首页转录卡
+// （app-home-transcribe.js）经 window.REVIEW_MSG 取键，文案单源零复制。
+window.REVIEW_MSG = REVIEW_MSG;

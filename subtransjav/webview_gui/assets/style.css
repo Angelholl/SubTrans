@@ -3447,3 +3447,21 @@ body.settings-open { overflow: hidden; }
     .settings-nav-btn { white-space: nowrap; }
     .settings-domain-grid { grid-template-columns: 1fr; }
 }
+
+/* d1102-卡B：概览条 chip 跳转可见反馈（滚动定位 + 1s 高亮脉冲淡出；
+   jump() 加类、animationend 移除，两 chip 共用 .flow-flash） */
+.flow-flash {
+    animation: flow-flash-pulse 1s ease-out;
+}
+@keyframes flow-flash-pulse {
+    0% {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+        background: var(--surface-3);
+    }
+    100% {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        background: transparent;
+    }
+}
