@@ -152,8 +152,7 @@ const ReviewUI = {
     _loadedCount: null,
     _probe: null,
     _pollTimer: null,
-    _transcribePollTimer: null,
-    _transcribePollMiss: 0,
+    _transcribePollStop: null,
     _ct2Status: null,
     _ct2Pending: false,
     _jumpQueue: [],
@@ -518,12 +517,8 @@ const ReviewUI = {
 
     _openAsrSettings() {
         // B2 垫片入口：设置组四页并入 hub 后统一经 openSettingsOverlay
-        if (typeof openSettingsOverlay === 'function') {
-            openSettingsOverlay('asrdict');
-            return;
-        }
-        const b = document.querySelector('[data-settings-domain="asrdict"]');
-        if (b) { b.click(); }
+        // （d1103：入口逻辑下沉共享核，本页仅适配器）
+        TranscribeCore.openAsrSettings();
     },
 
     _refreshTranscribeUi() {
@@ -558,14 +553,10 @@ const ReviewUI = {
         if (this._ct2Pending) { return; }
         this._ct2Status = null;   // 旧探测结果作废，防开始钮按陈旧态门控
         this._ct2Pending = true;
-        Promise.resolve(api.refine_asr_status()).then((r) => {
+        // d1103：探测归一化下沉共享核（渲染即重探口径不变）
+        TranscribeCore.probeCt2(api).then((s) => {
             this._ct2Pending = false;
-            this._ct2Status = (r && r.success && r.ct2)
-                ? r.ct2 : { probe_failed: true };
-            this._renderCt2Status();
-        }).catch(() => {
-            this._ct2Pending = false;
-            this._ct2Status = { probe_failed: true };
+            this._ct2Status = s;
             this._renderCt2Status();
         });
     },
@@ -624,7 +615,7 @@ const ReviewUI = {
             return;
         }
         const s = this._ct2Status || {};
-        if (s.installed === false && !s.probe_failed) {
+        if (TranscribeCore.ct2HardMissing(s)) {
             this._status.setState({ state: 'error',
                                     labelKey: 'review_transcribe_ct2_missing' });
             return;
@@ -634,9 +625,8 @@ const ReviewUI = {
         this._status.setState({ state: 'busy',
                                 labelKey: 'review_transcribe_busy',
                                 progress: null });
-        Promise.resolve(
-            api.refine_review_start_transcribe(this._videoPath, passes)
-        ).then((r) => {
+        // d1103：start 桥下沉共享核
+        TranscribeCore.startTranscribe(api, this._videoPath, passes).then((r) => {
             if (!r || !r.success) {
                 console.warn('[review] transcribe rejected:', r && r.error);
                 // d1102-件F：拒绝文案单源——后端 strings.py msg() 文案经桥
@@ -661,47 +651,24 @@ const ReviewUI = {
     },
 
     _stopTranscribePoll() {
-        if (this._transcribePollTimer) {
-            clearInterval(this._transcribePollTimer);
-        }
-        this._transcribePollTimer = null;
+        // d1103：清轮委托共享核 stopper（interval 骨架单源）
+        if (this._transcribePollStop) { this._transcribePollStop(); }
+        this._transcribePollStop = null;
     },
 
     _pollTranscribe() {
         const api = this._bridge();
         if (!api) { return; }
         this._stopTranscribePoll();
-        this._transcribePollMiss = 0;
-        // d1102-件F：异常 payload 计数兜底——连续 REVIEW_POLL_MAX_MISS 次
-        // 空/未知/非终态响应即停轮并落 error，防 busy 永挂
-        const _miss = () => {
-            this._transcribePollMiss = (this._transcribePollMiss || 0) + 1;
-            if (this._transcribePollMiss < REVIEW_POLL_MAX_MISS) { return; }
-            this._stopTranscribePoll();
-            console.warn('[review] transcribe status anomalous, stop polling');
-            this._status.setState({ state: 'error',
-                                    labelKey: 'review_transcribe_failed' });
-            if (window.__homeOverviewRefresh) {
-                window.__homeOverviewRefresh();
-            }
-        };
-        this._transcribePollTimer = setInterval(() => {
-            Promise.resolve(api.refine_review_transcribe_status()).then((s) => {
-                // 异常 payload：空响应 / running 非布尔 / 非 running 却
-                // 既无产出也无错误（后端零值快照误配 start 成功）
-                const bad = !s || typeof s.running !== 'boolean'
-                    || (!s.running && !s.error && !s.path);
-                if (bad) { _miss(); return; }
-                this._transcribePollMiss = 0;
-                if (s.running) {
-                    this._status.setState({ state: 'busy',
-                                            labelKey: 'review_transcribe_busy',
-                                            progress: s.percent });
-                    return;
-                }
-                // 非 running：无条件清（transcode 先例）——worker 在 running
-                // 落 False 之前已写定 error/path，非终态窗口不存在
-                this._stopTranscribePoll();
+        // d1103：轮询骨架下沉共享核（800ms/异常计数/payload 校验单源），
+        // 本页仅保留渲染面与终态动作（setSrtPath 先例链路 + 概览条绑定）
+        this._transcribePollStop = TranscribeCore.startPolling(api, {
+            onTick: (s) => {
+                this._status.setState({ state: 'busy',
+                                        labelKey: 'review_transcribe_busy',
+                                        progress: s.percent });
+            },
+            onSettled: (s) => {
                 if (s.error) {
                     console.warn('[review] transcribe failed:', s.error);
                     this._status.setState({ state: 'error',
@@ -712,7 +679,7 @@ const ReviewUI = {
                     return;
                 }
                 if (s.path) {
-                    const name = String(s.path).split(/[\\/]/).pop();
+                    const name = TranscribeCore.doneName(s.path);
                     this._status.setState({ state: 'ready',
                                             labelKey: 'review_transcribe_done',
                                             labelArgs: [name] });
@@ -727,8 +694,16 @@ const ReviewUI = {
                         window.__homeOverviewRefresh();
                     }
                 }
-            }).catch(() => { _miss(); });
-        }, 800);
+            },
+            onMiss: () => {
+                console.warn('[review] transcribe status anomalous, stop polling');
+                this._status.setState({ state: 'error',
+                                        labelKey: 'review_transcribe_failed' });
+                if (window.__homeOverviewRefresh) {
+                    window.__homeOverviewRefresh();
+                }
+            },
+        }, REVIEW_POLL_MAX_MISS);
     },
 
     async setSrtPath(path) {

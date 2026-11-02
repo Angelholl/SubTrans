@@ -1846,10 +1846,13 @@ def test_review_transcribe_install_opens_settings_asrdict():
     body = _extract_function(_review_js_source(), "_bindTranscribe")
     assert "_openAsrSettings" in body, "转录卡安装钮须接 _openAsrSettings"
     helper = _extract_function(_review_js_source(), "_openAsrSettings")
-    assert "openSettingsOverlay('asrdict')" in helper, \
-        "安装引导须经 openSettingsOverlay('asrdict')（B2 垫片入口）"
-    assert re.search(r'data-settings-domain="asrdict"[\s\S]{0,80}\.click\(\)', helper), \
-        "须保留设置 ASR 域卡程序化 click 兜底（禁止直调 switchTab）"
+    core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
+    assert "TranscribeCore.openAsrSettings()" in helper, \
+        "安装引导经共享核垫片入口（d1103 单源）"
+    assert "openSettingsOverlay('asrdict')" in core, \
+        "共享核须经 openSettingsOverlay('asrdict')（B2 垫片入口）"
+    assert re.search(r'data-settings-domain="asrdict"[\s\S]{0,80}\.click\(\)', core), \
+        "共享核保留设置 ASR 域卡程序化 click 兜底（禁止直调 switchTab）"
 
 
 def test_review_transcribe_block_pinned():
@@ -1870,14 +1873,16 @@ def test_review_transcribe_block_pinned():
     assert 'data-kind="transcribe"' in html, \
         "导入区动作行缺转录生成字幕入口（data-kind 委托）"
     js = _review_js_source()
+    core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
     begin = _extract_function(js, "_beginTranscribe")
     assert "(dual && dual.checked) ? 2 : 1" in begin, \
         "双 pass 默认关＝passes=1，勾选＝2"
-    assert "refine_review_start_transcribe(" in begin, \
-        "开始转录须走异步桥 start（不得同步直调 transcribe_media_to_srt）"
+    assert "TranscribeCore.startTranscribe(" in begin, \
+        "开始转录须经共享核异步桥 start（不得同步直调 transcribe_media_to_srt）"
     assert "transcribe_media_to_srt" not in js, \
         "前端禁止直调同步 transcribe_media_to_srt（只经异步桥）"
-    assert "refine_review_transcribe_status()" in js, "缺转录桥 status 轮询"
+    assert "refine_review_start_transcribe(" in core, "共享核缺 start 桥"
+    assert "refine_review_transcribe_status()" in core, "共享核缺 status 轮询"
     poll = _extract_function(js, "_pollTranscribe")
     assert "this.setSrtPath(s.path)" in poll, \
         "转录完成须自动走 setSrtPath（refine_review_load_srt 先例链路）"
@@ -1885,8 +1890,9 @@ def test_review_transcribe_block_pinned():
     assert "showCard" in ui and "reviewTranscribeOtherBtn" in ui, \
         "有 SRT 后须隐藏卡并显示列表 ghost 钮"
     ct2 = _extract_function(js, "_refreshCt2Status")
-    assert "refine_asr_status" in ct2, \
-        "CT2 状态行须消费 refine_asr_status（件C 桥同源）"
+    assert "TranscribeCore.probeCt2" in ct2, \
+        "CT2 探测须经共享核归一化（渲染即重探口径不变）"
+    assert "refine_asr_status" in core, "共享核缺 CT2 探测桥"
 
 
 def test_review_transcribe_reject_consumes_bridge_error():
@@ -1930,18 +1936,21 @@ def test_review_transcribe_poll_stops_on_anomalous_payload():
     （空对象/无 running 布尔/非 running 却无产出无错误的窗口）。"""
     js = _review_js_source()
     body = _extract_function(js, "_pollTranscribe")
+    core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
     assert "REVIEW_POLL_MAX_MISS" in js, "缺连续异常上限常量"
-    assert "_transcribePollMiss" in body, \
-        "轮询缺连续异常计数（空/未知 payload 会永挂）"
-    assert "_stopTranscribePoll" in body, \
-        "异常达上限须停轮（复用统一清轮 helper）"
-    assert "typeof s.running !== 'boolean'" in body, \
-        "未判别未知 payload 形态"
+    assert "TranscribeCore.startPolling" in body, \
+        "轮询骨架须下沉共享核（800ms/异常计数单源）"
+    assert "this._stopTranscribePoll()" in body, \
+        "起轮前须清旧轮（复用统一清轮 helper）"
+    assert "missTick" in core and "POLL_MAX_MISS" in core, \
+        "共享核缺连续异常计数（空/未知 payload 会永挂）"
+    assert "typeof st.running !== 'boolean'" in core, \
+        "共享核未判别未知 payload 形态"
     assert "review_transcribe_failed" in body, \
         "异常达上限须落 error 态"
     helper = _extract_function(js, "_stopTranscribePoll")
-    assert "clearInterval" in helper and "_transcribePollTimer = null" in helper, \
-        "清轮 helper 须清 interval 并置空 timer"
+    assert "_transcribePollStop" in helper and "null" in helper, \
+        "清轮 helper 须委托共享核 stopper 并置空"
 
 
 def test_review_ct2_status_reprobes_each_render():
@@ -1952,7 +1961,8 @@ def test_review_ct2_status_reprobes_each_render():
     并在切回校对页时触发重渲染。"""
     js = _review_js_source()
     body = _extract_function(js, "_refreshCt2Status")
-    assert "refine_asr_status" in body, "CT2 状态行缺 refine_asr_status 探测"
+    assert "TranscribeCore.probeCt2" in body, \
+        "CT2 状态行探测未走共享核（渲染即重探口径须保持）"
     assert not re.search(r"if\s*\(\s*this\._ct2Status\s*\)", body), \
         "CT2 状态仍命中永久缓存（装完引擎回页仍显未安装）"
     sync = _extract_function(js, "_syncWorkbench")
@@ -2495,8 +2505,11 @@ def test_batch_c_review_goto_asrdict_pinned():
     """批C 新钉：review.js ASR 跳转锚定位设置 overlay ASR 域；
     d1102-件D 吸收合并后安装引导文案随译，ASR 对照说明降为卡内一行。"""
     src = _review_js_source()
-    assert "openSettingsOverlay('asrdict')" in src, \
-        "review.js 安装引导未经设置 overlay ASR 域（B2 垫片入口）"
+    core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
+    assert "TranscribeCore.openAsrSettings()" in src, \
+        "review.js 安装引导未走共享核垫片入口"
+    assert "openSettingsOverlay('asrdict')" in core, \
+        "共享核缺设置 overlay ASR 域入口（B2 垫片单源）"
     assert "review_transcribe_install: '前往设置 → ASR 与词典'" in src, \
         "转录卡安装引导文案未指向「设置 → ASR 与词典」"
     assert "review_asr_note:" in src, "ASR 对照说明须降为转录卡内一行次要文案"
@@ -7715,6 +7728,13 @@ def test_js_sources_layer_pinned():
         9a093b75…/524,281B、app-init.js 19,432B/
         269ecd8f…（概览条头注释与 jump() 实际行为对齐，纯注释零逻辑）；
         旧钉 157f9dda… / d981545a… 退役；
+        d1103 全链灯当前态+转录共享核（2026-11-03 主审亲执）：全库拼接
+        e51721ba…/524,288B、app-init.js 19,022B/50052e61…（全链 chip 改
+        当前态 running?warn:idle，灯行分离）；app-transcribe-core.js
+        3,898B 新立（转录桥/CT2 探测/轮询骨架单源，独立脚本不入
+        JS_FILES 拼接面）；review.js/app-home-transcribe.js 换核消费
+        （独立脚本无冻结字节钉，契约面走内容钉）；旧钉 269ecd8f… /
+        9a093b75… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7731,7 +7751,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "9a093b75c4129b317e12c94e1542811932b9e5a4bb51d3c715464d208306111f"), \
+        "e51721bacfc3f86870504647f0b3d9e0764e0e0e9aba4f7737ec6769c0935b2f"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7821,8 +7841,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (19432,
-                        "269ecd8f9ce7214b64bbc914f145bf00a55ef4d7e0035cc58c02ff16dc550bda"),
+        "app-init.js": (19022,
+                        "50052e61dd60aca2a4b6a314ae82e6fdac702c7e76efe261eacd06b5b3b41602"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,
@@ -8056,11 +8076,13 @@ def test_review_msg_global_exposed_and_home_zero_literal_copy():
     for val in _review_msg_string_values():
         assert val not in home, \
             f"首页转录卡复制了 REVIEW_MSG 值字面量（文案单源破约）: {val}"
+    core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
     for bridge in ("refine_review_pick_media", "refine_review_start_transcribe",
                    "refine_review_transcribe_status", "refine_asr_status"):
-        assert bridge in home, f"首页转录卡缺桥接线: {bridge}"
-    assert "setInterval" in home and "clearInterval" in home, \
-        "首页转录卡缺 800ms 轮询与终态停表"
+        assert bridge in core, f"共享核缺桥接线: {bridge}"
+    assert "TranscribeCore" in home, "首页转录卡未消费共享核"
+    assert "setInterval" in core and "clearInterval" in core, \
+        "共享核缺 800ms 轮询与终态停表"
 
 
 def test_overview_chip_jump_flash_pinned():
@@ -8087,3 +8109,47 @@ def test_overview_chip_jump_flash_pinned():
     blk = re.search(r"\.flow-flash\s*\{([^}]*)\}", css)
     assert blk and "animation" in blk.group(1), \
         "style.css 缺 .flow-flash 高亮脉冲规则"
+
+
+def test_overview_fullchain_chip_current_state_pinned():
+    """d1103：全链 chip 改当前态（owner 11-03 拍板）——在跑黄/否则灰。
+
+    原语义=上次运行结果灯（last_run failed→红/有记录→绿），与前三颗
+    「当前会话态」灯语义不一致；改后灯行分离：上次运行结果由全链状态行
+    （fullchain-status-line）承载，refreshNodes 不再消费 last_run。"""
+    src = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    body = _extract_function(src, "refreshNodes")
+    assert "this.setChip('fullchain', running ? 'warn' : 'idle')" in body, \
+        "全链 chip 未改当前态（在跑黄/否则灰）"
+    assert "run.phase" not in body and "'danger'" not in body, \
+        "refreshNodes 仍消费 last_run 结果态（灯行未分离）"
+
+
+def test_transcribe_core_module_pinned():
+    """d1103：转录三段共享核钉——校对页/首页桥调用单源，双份复发即红。
+
+    app-transcribe-core.js 承载 CT2 探测归一化、start/status 桥、800ms
+    轮询骨架与 payload 校验；review.js/app-home-transcribe.js 只经
+    TranscribeCore 消费，转录两桥在资产层仅共享核 1 处直调（app-init.js
+    概览条快照为独立既有消费面，不在合并范围）。"""
+    core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
+    for frag in ("POLL_INTERVAL_MS: 800", "POLL_MAX_MISS", "startPolling",
+                 "probeCt2", "ct2Ready", "ct2HardMissing", "isBadPayload",
+                 "refine_review_start_transcribe",
+                 "refine_review_transcribe_status"):
+        assert frag in core, f"共享核缺契约片段: {frag}"
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert '<script src="app-transcribe-core.js"></script>' in html, \
+        "app-transcribe-core.js 未挂载"
+    assert html.index('src="app-transcribe-core.js"') < \
+        html.index('src="review.js"'), "共享核须先于 review.js 加载"
+    for name in ("review.js", "app-home-transcribe.js"):
+        src = (ASSETS / name).read_text(encoding="utf-8")
+        assert "TranscribeCore" in src, f"{name} 未消费共享核"
+    consumers = [f for f in js_sources.JS_FILES] + [
+        "app-transcribe-core.js", "review.js", "app-home-transcribe.js"]
+    for bridge in ("refine_review_start_transcribe",
+                   "refine_review_transcribe_status"):
+        n = sum((ASSETS / f).read_text(encoding="utf-8").count(bridge + "(")
+                for f in consumers if f != "app-init.js")
+        assert n == 1, f"{bridge} 直调出现 {n} 次（应仅共享核 1 处）"

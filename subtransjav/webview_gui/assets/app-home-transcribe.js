@@ -7,15 +7,14 @@
 // ============================================================
 
 const HomeTranscribe = {
-    _pollTimer: null,       // 仅本卡发起的转录自建轮询；句柄挂管理器防泄漏
-    _pollMiss: 0,
+    _pollStop: null,        // 仅本卡发起的转录自建轮询；句柄挂管理器防泄漏
     _ct2Status: null,
     _ct2Pending: false,
     _videoPath: null,
 
     _bridge() {
-        return (window.pywebview && window.pywebview.api)
-            ? window.pywebview.api : null;
+        // d1103：桥访问单源共享核
+        return TranscribeCore.bridge();
     },
 
     init() {
@@ -72,13 +71,8 @@ const HomeTranscribe = {
     },
 
     _openAsrSettings() {
-        // B2 垫片入口（同 review.js _openAsrSettings 范式）
-        if (typeof openSettingsOverlay === 'function') {
-            openSettingsOverlay('asrdict');
-            return;
-        }
-        const b = document.querySelector('[data-settings-domain="asrdict"]');
-        if (b) { b.click(); }
+        // B2 垫片入口（d1103：下沉共享核，本卡仅适配器）
+        TranscribeCore.openAsrSettings();
     },
 
     pickMedia() {
@@ -91,8 +85,8 @@ const HomeTranscribe = {
             }
             return;
         }
-        // cancelled 静默（同 review.js _startTranscribe 对话框范式）
-        Promise.resolve(api.refine_review_pick_media()).then((r) => {
+        // cancelled 静默；选媒体桥经共享核（d1103）
+        TranscribeCore.pickMedia(api).then((r) => {
             if (!r || r.cancelled || !r.success || !r.path) { return; }
             this.setMediaPath(r.path);
             this.refreshCt2Status();
@@ -111,7 +105,7 @@ const HomeTranscribe = {
         this._gateStart();
     },
 
-    // CT2 门控（照抄 review.js _refreshCt2Status/_renderCt2Status 三分逻辑）
+    // CT2 门控（探测归一化经共享核；渲染即重探、结果不作缓存短路）
     refreshCt2Status() {
         const line = document.getElementById('homeTranscribeCt2');
         if (!line) { return; }
@@ -125,14 +119,9 @@ const HomeTranscribe = {
         if (this._ct2Pending) { return; }
         this._ct2Status = null;   // 旧探测结果作废，防开始钮按陈旧态门控
         this._ct2Pending = true;
-        Promise.resolve(api.refine_asr_status()).then((r) => {
+        TranscribeCore.probeCt2(api).then((s) => {
             this._ct2Pending = false;
-            this._ct2Status = (r && r.success && r.ct2)
-                ? r.ct2 : { probe_failed: true };
-            this._renderCt2Status();
-        }).catch(() => {
-            this._ct2Pending = false;
-            this._ct2Status = { probe_failed: true };
+            this._ct2Status = s;
             this._renderCt2Status();
         });
     },
@@ -163,9 +152,8 @@ const HomeTranscribe = {
     _gateStart() {
         const start = document.getElementById('homeTranscribeStartBtn');
         if (!start) { return; }
-        const s = this._ct2Status || {};
-        const ready = !!(s.installed && s.model_present) || !!s.probe_failed;
-        start.disabled = !(this._videoPath && ready);
+        start.disabled = !(this._videoPath
+            && TranscribeCore.ct2Ready(this._ct2Status || {}));
     },
 
     beginTranscribe() {
@@ -178,7 +166,7 @@ const HomeTranscribe = {
         }
         if (!this._videoPath) { return; }
         const s = this._ct2Status || {};
-        if (s.installed === false && !s.probe_failed) {
+        if (TranscribeCore.ct2HardMissing(s)) {
             if (status) { status.textContent = m.review_transcribe_ct2_missing; }
             return;
         }
@@ -187,9 +175,8 @@ const HomeTranscribe = {
         if (status) {
             status.textContent = m.review_transcribe_busy;
         }
-        Promise.resolve(
-            api.refine_review_start_transcribe(this._videoPath, passes)
-        ).then((r) => {
+        // d1103：start 桥下沉共享核
+        TranscribeCore.startTranscribe(api, this._videoPath, passes).then((r) => {
             if (!r || !r.success) {
                 console.warn('[home-transcribe] rejected:', r && r.error);
                 // 拒绝文案单源——后端 strings.py msg() 文案经桥回传直出
@@ -207,73 +194,67 @@ const HomeTranscribe = {
     },
 
     _stopPoll() {
-        if (this._pollTimer) { clearInterval(this._pollTimer); }
-        this._pollTimer = null;
+        // d1103：清轮委托共享核 stopper
+        if (this._pollStop) { this._pollStop(); }
+        this._pollStop = null;
     },
 
-    // 800ms 轮询（同构 review.js _pollTranscribe：payload 校验、
-    // 连续 miss 上限 5、终态停表；离开首页 tab 不停表，句柄挂管理器，
-    // 重复 start 前先清）
+    // 800ms 轮询（骨架经共享核：payload 校验、连续 miss 上限 5、终态
+    // 停表；离开首页 tab 不停表，句柄挂管理器，重复 start 前先清）
     _pollTranscribe() {
         const api = this._bridge();
         if (!api) { return; }
         this._stopPoll();
-        this._pollMiss = 0;
         const m = window.REVIEW_MSG || {};
         const status = document.getElementById('homeTranscribeStatus');
-        const _miss = () => {
-            this._pollMiss += 1;
-            if (this._pollMiss < 5) { return; }
-            this._stopPoll();
-            console.warn('[home-transcribe] status anomalous, stop polling');
-            if (status) { status.textContent = m.review_transcribe_failed; }
+        const refresh = () => {
             if (window.__homeOverviewRefresh) {
                 window.__homeOverviewRefresh();
             }
         };
-        this._pollTimer = setInterval(() => {
-            Promise.resolve(api.refine_review_transcribe_status()).then((st) => {
-                const bad = !st || typeof st.running !== 'boolean'
-                    || (!st.running && !st.error && !st.path);
-                if (bad) { _miss(); return; }
-                this._pollMiss = 0;
-                if (st.running) {
-                    if (status) {
-                        status.textContent = m.review_transcribe_busy
-                            + (typeof st.percent === 'number'
-                                ? ` ${st.percent}%` : '');
-                    }
-                    return;
+        this._pollStop = TranscribeCore.startPolling(api, {
+            onTick: (st) => {
+                if (status) {
+                    status.textContent = m.review_transcribe_busy
+                        + (typeof st.percent === 'number'
+                            ? ` ${st.percent}%` : '');
                 }
-                this._stopPoll();
+            },
+            onSettled: (st) => {
                 if (st.error) {
                     console.warn('[home-transcribe] failed:', st.error);
                     if (status) {
                         status.textContent = m.review_transcribe_failed;
                     }
-                } else if (st.path) {
-                    const name = String(st.path).split(/[\\/]/).pop();
+                    refresh();
+                    return;
+                }
+                if (st.path) {
+                    const name = TranscribeCore.doneName(st.path);
                     if (status) {
                         status.textContent =
                             (m.review_transcribe_done || ((n) => n))(name);
                     }
+                    refresh();
                 }
-                if (window.__homeOverviewRefresh) {
-                    window.__homeOverviewRefresh();
-                }
-            }).catch(() => { _miss(); });
-        }, 800);
+            },
+            onMiss: () => {
+                console.warn('[home-transcribe] status anomalous, stop polling');
+                if (status) { status.textContent = m.review_transcribe_failed; }
+                refresh();
+            },
+        });
     },
 
     // 他页发起的转录在首页的呈现：只读快照三分渲染（照抄 app-init.js
     // refreshTranscribeNode 的 idle/running/done 三态；不建第二个轮询）
     snapshotRender() {
-        if (this._pollTimer) { return; }   // 本卡轮询进行中：轮询面为准
+        if (this._pollStop) { return; }   // 本卡轮询进行中：轮询面为准
         const api = this._bridge();
         const status = document.getElementById('homeTranscribeStatus');
         if (!api || !status) { return; }
         const m = window.REVIEW_MSG || {};
-        Promise.resolve(api.refine_review_transcribe_status()).then((st) => {
+        Promise.resolve(TranscribeCore.statusOnce(api)).then((st) => {
             if (!st || (typeof st.running !== 'boolean'
                         && !st.error && !st.path)) { return; }
             if (st.running) {

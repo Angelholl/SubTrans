@@ -302,13 +302,10 @@ const FlowOverview = {
         this.setChip('transcribe', this._transcribeChipState());
         this.setChip('review', 'idle');
         this.refreshTranscribeNode();
-        const run = this._lastRun || {};
-        const hasRun = Object.keys(run).length > 0;
-        let fc = 'idle';
-        if (running) fc = 'warn';
-        else if (hasRun && String(run.phase || '') === 'failed') fc = 'danger';
-        else if (hasRun) fc = 'ok';
-        this.setChip('fullchain', fc);
+        // d1103：全链 chip 改当前态（owner 11-03 拍板）——在跑黄/否则灰，
+        // 与前三颗当前会话态灯同语义；上次运行结果由全链状态行
+        // （fullchain-status-line）承载，灯行语义分离
+        this.setChip('fullchain', running ? 'warn' : 'idle');
     },
 
     _transcribeChipState() {
