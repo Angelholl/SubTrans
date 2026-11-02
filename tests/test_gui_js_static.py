@@ -1887,6 +1887,104 @@ def test_review_transcribe_block_pinned():
         "CT2 状态行须消费 refine_asr_status（件C 桥同源）"
 
 
+def test_review_transcribe_reject_consumes_bridge_error():
+    """d1102-件F：在飞拒绝文案单源——前端消费桥返回 error，不保留副本。
+
+    strings.py 已登记 review_transcribe_running（api.py 经 msg() 取文案）；
+    review.js 须删除同名 REVIEW_MSG 键与本地位面文案，拒绝对话直接取
+    ``r.error`` 桥回传值（状态条未知键回退原文先例）。"""
+    js = _review_js_source()
+    begin = _extract_function(js, "_beginTranscribe")
+    assert "r.error" in begin, \
+        "转录拒绝须消费桥返回 error（不得再查前端本地文案）"
+    assert "review_transcribe_running" not in begin, \
+        "转录拒绝仍引用前端本地 review_transcribe_running 键"
+    assert "review_transcribe_running" not in _review_msg_keys(), \
+        "前端重复文案键 review_transcribe_running 未退役"
+
+
+def test_review_pick_transcribe_route_pinned():
+    """d1102-件F：导入区第三动作 data-kind=transcribe 分流钉。
+
+    删分支即回落 pick_srt（静默弹错对话框）＝无防；本钉锁死 transcribe
+    分支须先于 pick_srt 判定、带 return，并直达 ``_startTranscribe(true)``
+    （先选媒体再启动异步桥）。"""
+    body = _extract_function(_review_js_source(), "_pick")
+    branch = re.search(
+        r"if \(kind === 'transcribe'\) \{[^}]*_startTranscribe\(true\);"
+        r"[^}]*return; \}", body)
+    assert branch, \
+        "data-kind=transcribe 分流分支缺失（会回落 pick_srt）"
+    assert body.index("_startTranscribe(true)") \
+        < body.index("refine_review_pick_srt"), \
+        "transcribe 分流须先于 pick_srt 分支（先选媒体再启动）"
+
+
+def test_review_transcribe_poll_stops_on_anomalous_payload():
+    """d1102-件F：轮询永挂防护——异常 payload 连续 N 次即停轮＋error 态。
+
+    件D 轮询在 status 返回空/未知 payload 时无期限轮且 busy 永挂；
+    照 transcode 先例「非 running 无条件清」收口，另加连续异常计数兜底
+    （空对象/无 running 布尔/非 running 却无产出无错误的窗口）。"""
+    js = _review_js_source()
+    body = _extract_function(js, "_pollTranscribe")
+    assert "REVIEW_POLL_MAX_MISS" in js, "缺连续异常上限常量"
+    assert "_transcribePollMiss" in body, \
+        "轮询缺连续异常计数（空/未知 payload 会永挂）"
+    assert "_stopTranscribePoll" in body, \
+        "异常达上限须停轮（复用统一清轮 helper）"
+    assert "typeof s.running !== 'boolean'" in body, \
+        "未判别未知 payload 形态"
+    assert "review_transcribe_failed" in body, \
+        "异常达上限须落 error 态"
+    helper = _extract_function(js, "_stopTranscribePoll")
+    assert "clearInterval" in helper and "_transcribePollTimer = null" in helper, \
+        "清轮 helper 须清 interval 并置空 timer"
+
+
+def test_review_ct2_status_reprobes_each_render():
+    """d1102-件F：CT2 状态缓存失效面——空态转录卡每次渲染重探。
+
+    件D 首探后永缓存，用户经安装引导去设置装完引擎回校对页仍显「未安装」
+    且开始钮禁用（§二.1/§二.5 闭环断）。修法＝渲染即重探（只读探测成本低），
+    并在切回校对页时触发重渲染。"""
+    js = _review_js_source()
+    body = _extract_function(js, "_refreshCt2Status")
+    assert "refine_asr_status" in body, "CT2 状态行缺 refine_asr_status 探测"
+    assert not re.search(r"if\s*\(\s*this\._ct2Status\s*\)", body), \
+        "CT2 状态仍命中永久缓存（装完引擎回页仍显未安装）"
+    sync = _extract_function(js, "_syncWorkbench")
+    assert "_refreshTranscribeUi" in sync, \
+        "切回校对页未重渲染转录卡（重探未挂回页 hook）"
+
+
+def test_flow_overview_transcribe_done_not_sticky():
+    """d1102-件F：概览条转录节点 done 不粘滞。
+
+    件D 只要 status.path 存在即常亮 ok（一次转录后永亮）；done 仅对
+    「本次会话最近一次转录的媒体」成立——媒体切换/离开校对页即清回 idle。"""
+    src = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    assert "_transcribeDoneMedia" in src, \
+        "done 态未绑定最近一次转录媒体（一次转录后常亮）"
+    assert "window.__homeOverviewTranscribeReset" in src, \
+        "缺 done 清除入口（媒体切换/离页回 idle）"
+    assert "window.__homeOverviewTranscribeDone" in src, \
+        "缺完成标记入口（最近转录媒体）"
+    refresh = _extract_function(src, "refreshTranscribeNode")
+    assert "_transcribeDoneMedia" in refresh and "_sameMedia" in refresh, \
+        "status 刷新未按最近转录媒体收敛 done"
+    review = _review_js_source()
+    setv = _extract_function(review, "setVideoPath")
+    assert "__homeOverviewTranscribeReset" in setv, \
+        "媒体切换未清概览条转录 done"
+    sync = _extract_function(review, "_syncWorkbench")
+    assert "__homeOverviewTranscribeReset" in sync, \
+        "离开校对页未清概览条转录 done"
+    poll = _extract_function(review, "_pollTranscribe")
+    assert "__homeOverviewTranscribeDone" in poll, \
+        "转录完成未标记最近转录媒体"
+
+
 def test_flow_overview_transcribe_node_wired():
     """d1102-件D：概览条转录节点接转录桥 status（idle/running/done 三态）。"""
     src = (ASSETS / "app-init.js").read_text(encoding="utf-8")
@@ -7598,6 +7696,10 @@ def test_js_sources_layer_pinned():
         d1102-件D 转录桥换代（D2026-1102-02）：全库拼接
         a3990762…/524,258B、app-init.js 17,202B/2804c902…（概览条转录
         节点接转录桥 status idle/running/done 三态）；
+        d1102-件F 评审修复换代（D2026-1102-02）：全库拼接
+        11a00359…/525,692B、app-init.js 18,669B/9e2a277a…（转录 done
+        绑定最近转录媒体、媒体切换/离页清回 idle；旧钉 a3990762… /
+        2804c902… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7614,7 +7716,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "a3990762e9eebefa84c714820150aed284505c84c5bfa37ef78c88be22686f1d"), \
+        "11a0035913f897b4f5efc3e5802510e4dbb8cb892c57015c48294e89c686c374"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7704,8 +7806,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (17202,
-                        "2804c902b8409eedc603cc901abb73df8341b20075c6d1bd526ab7f5886d0885"),
+        "app-init.js": (18669,
+                        "9e2a277a4bfb449b562c7f87a8ee2d01a017dbe78c4bcd12125614379e307a86"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,

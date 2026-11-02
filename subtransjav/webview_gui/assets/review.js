@@ -65,13 +65,16 @@ const REVIEW_MSG = {
     review_transcribe_install: '前往设置 → ASR 与词典',
     review_transcribe_busy: '转录中…',
     review_transcribe_failed: '转录失败，请检查引擎与媒体后重试',
-    review_transcribe_running: '已有转录任务进行中，请等待完成',
     review_transcribe_done: (name) => `转录完成：${name}`,
     review_transcribe_other_btn: '转录其他媒体…',
     review_asr_note: 'ASR 语音对照为可选能力：转录完成后可在疑点段面板逐段对照确认。',
     // ---- 批 4（D2026-1002-12）：审计④载入 dirty 守卫 ----
     review_load_dirty_confirm: '当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？',
 };
+
+// d1102-件F：转录 status 轮询连续异常上限——空/未知 payload 连续到此次数
+// 即停轮并落 error 态（防 busy 永挂）；800ms 一拍约 4s 容忍窗口。
+const REVIEW_POLL_MAX_MISS = 5;
 
 // 状态条管理器（D2026-1002-08 定案：四态 + 确定百分比 + 不定进度动画）。
 // 四态枚举外的 state 一律 console.error 且不渲染（契约护栏）。
@@ -150,6 +153,7 @@ const ReviewUI = {
     _probe: null,
     _pollTimer: null,
     _transcribePollTimer: null,
+    _transcribePollMiss: 0,
     _ct2Status: null,
     _ct2Pending: false,
     _jumpQueue: [],
@@ -316,12 +320,19 @@ const ReviewUI = {
             }
             wb.classList.add('aside-collapsed');
             this._syncAsideAria(true);
+            // d1102-件F：回校对页重渲染转录卡 → 渲染即重探 CT2（装完引擎
+            // 从设置 hub 回来不再显陈旧「未安装」）
+            this._refreshTranscribeUi();
         } else if (this._asidePreReview != null) {
             // 离开校对页：恢复进页前状态（快照制，不读 localStorage，避免
             // private 模式默认分歧与卡G2 持久化串扰）
             wb.classList.toggle('aside-collapsed', this._asidePreReview);
             this._syncAsideAria(this._asidePreReview);
             this._asidePreReview = null;
+            // d1102-件F：离开即清转录 done（idle 回位，不跨页常亮）
+            if (window.__homeOverviewTranscribeReset) {
+                window.__homeOverviewTranscribeReset();
+            }
         }
         // 首次进入校对页即亮状态条（idle 态提示未导入）
         if (tab === 'tab-review' && !this._barShown && this._status) {
@@ -375,6 +386,11 @@ const ReviewUI = {
     },
 
     setVideoPath(path) {
+        // d1102-件F：媒体切换即清概览条转录 done（仅本次最近转录媒体成立）
+        if (String(path || '') !== String(this._videoPath || '')
+                && window.__homeOverviewTranscribeReset) {
+            window.__homeOverviewTranscribeReset();
+        }
         this._videoPath = path || null;
         this._hasVideo = false;
         this._refreshTranscribeUi();
@@ -534,9 +550,13 @@ const ReviewUI = {
             line.textContent = REVIEW_MSG.review_transcribe_ct2_unknown;
             return;
         }
-        if (this._ct2Status) { this._renderCt2Status(); return; }
+        // d1102-件F：渲染即重探——件D 首探结果永缓存，用户去设置装完
+        // 引擎回校对页仍显「未安装」且开始钮禁用；只读探测成本低，
+        // 每次渲染重查 refine_asr_status（_ct2Status 仅存本次探测结果，
+        // 供 _beginTranscribe 门控消费，不作缓存短路）。
         line.textContent = REVIEW_MSG.review_transcribe_ct2_checking;
         if (this._ct2Pending) { return; }
+        this._ct2Status = null;   // 旧探测结果作废，防开始钮按陈旧态门控
         this._ct2Pending = true;
         Promise.resolve(api.refine_asr_status()).then((r) => {
             this._ct2Pending = false;
@@ -619,14 +639,17 @@ const ReviewUI = {
         ).then((r) => {
             if (!r || !r.success) {
                 console.warn('[review] transcribe rejected:', r && r.error);
-                if (r && r.error_key === 'review_transcribe_running') {
-                    this._status.setState({ state: 'error',
-                                            labelKey: 'review_transcribe_running' });
-                } else {
-                    this._status.setState({ state: 'error',
-                                            labelKey: 'review_transcribe_failed' });
-                }
+                // d1102-件F：拒绝文案单源——后端 strings.py msg() 文案经桥
+                // 回传直出（状态条未知键回退原文），前端不再自留副本
+                this._status.setState({
+                    state: 'error',
+                    labelKey: (r && r.error) || 'review_transcribe_failed' });
                 return;
+            }
+            // d1102-件F：新一轮开始即清旧 done（概览条转录节点回 idle，
+            // 随后 status 轮询自然转 running）
+            if (window.__homeOverviewTranscribeReset) {
+                window.__homeOverviewTranscribeReset();
             }
             if (window.__homeOverviewRefresh) { window.__homeOverviewRefresh(); }
             this._pollTranscribe();
@@ -637,24 +660,49 @@ const ReviewUI = {
         });
     },
 
-    _pollTranscribe() {
-        const api = this._bridge();
-        if (!api) { return; }
+    _stopTranscribePoll() {
         if (this._transcribePollTimer) {
             clearInterval(this._transcribePollTimer);
         }
+        this._transcribePollTimer = null;
+    },
+
+    _pollTranscribe() {
+        const api = this._bridge();
+        if (!api) { return; }
+        this._stopTranscribePoll();
+        this._transcribePollMiss = 0;
+        // d1102-件F：异常 payload 计数兜底——连续 REVIEW_POLL_MAX_MISS 次
+        // 空/未知/非终态响应即停轮并落 error，防 busy 永挂
+        const _miss = () => {
+            this._transcribePollMiss = (this._transcribePollMiss || 0) + 1;
+            if (this._transcribePollMiss < REVIEW_POLL_MAX_MISS) { return; }
+            this._stopTranscribePoll();
+            console.warn('[review] transcribe status anomalous, stop polling');
+            this._status.setState({ state: 'error',
+                                    labelKey: 'review_transcribe_failed' });
+            if (window.__homeOverviewRefresh) {
+                window.__homeOverviewRefresh();
+            }
+        };
         this._transcribePollTimer = setInterval(() => {
             Promise.resolve(api.refine_review_transcribe_status()).then((s) => {
-                if (!s) { return; }
+                // 异常 payload：空响应 / running 非布尔 / 非 running 却
+                // 既无产出也无错误（后端零值快照误配 start 成功）
+                const bad = !s || typeof s.running !== 'boolean'
+                    || (!s.running && !s.error && !s.path);
+                if (bad) { _miss(); return; }
+                this._transcribePollMiss = 0;
                 if (s.running) {
                     this._status.setState({ state: 'busy',
                                             labelKey: 'review_transcribe_busy',
                                             progress: s.percent });
                     return;
                 }
+                // 非 running：无条件清（transcode 先例）——worker 在 running
+                // 落 False 之前已写定 error/path，非终态窗口不存在
+                this._stopTranscribePoll();
                 if (s.error) {
-                    clearInterval(this._transcribePollTimer);
-                    this._transcribePollTimer = null;
                     console.warn('[review] transcribe failed:', s.error);
                     this._status.setState({ state: 'error',
                                             labelKey: 'review_transcribe_failed' });
@@ -664,20 +712,22 @@ const ReviewUI = {
                     return;
                 }
                 if (s.path) {
-                    clearInterval(this._transcribePollTimer);
-                    this._transcribePollTimer = null;
                     const name = String(s.path).split(/[\\/]/).pop();
                     this._status.setState({ state: 'ready',
                                             labelKey: 'review_transcribe_done',
                                             labelArgs: [name] });
                     // 先例链路：自动载入列表（dirty 守卫在 setSrtPath 内单点）
                     this.setSrtPath(s.path);
+                    // d1102-件F：done 绑定本次转录媒体（切换/离页即清）
+                    if (window.__homeOverviewTranscribeDone) {
+                        window.__homeOverviewTranscribeDone(
+                            s.media_path || this._videoPath);
+                    }
                     if (window.__homeOverviewRefresh) {
                         window.__homeOverviewRefresh();
                     }
                 }
-                // 非终态（running 刚落 False、产出尚未写入的窗口）继续轮询
-            }).catch(() => {});
+            }).catch(() => { _miss(); });
         }, 800);
     },
 

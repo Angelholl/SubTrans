@@ -210,6 +210,10 @@ MSG = {
     "review_transcode_failed": "转码失败，请重试或手动转换格式",
     "review_no_ffmpeg": "未检测到 ffmpeg，无法转码",
     "review_media_missing": "媒体文件不存在或未导入",
+    # d1102-件F（D2026-1102-02）：异步转录桥在飞拒绝文案单源（api.py
+    # refine_review_start_transcribe 经 msg() 取；review.js 不再自留副本，
+    # 前端消费桥回传 error——两源漂移实证后收口）
+    "review_transcribe_running": "已有转录任务进行中，请等待当前任务完成",
     "review_srt_missing": "字幕文件不存在或未导入",
     "review_probe_failed": "无法识别该媒体的编码信息",
     "review_srt_bad_encoding": "字幕文件编码无法识别（仅支持 UTF-8 / GBK / CP932），请另存为 UTF-8 后重试",

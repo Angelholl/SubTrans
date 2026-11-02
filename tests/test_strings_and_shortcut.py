@@ -83,6 +83,25 @@ def test_review_bad_encoding_text_parity_py_js():
     assert "CP932" in py_value, "文案未随判定梯补 CP932"
 
 
+def test_review_transcribe_running_single_source_parity():
+    """d1102-件F（D2026-1102-02）：转录在飞拒绝文案单源钉。
+
+    strings.py 登记 canonical 文案（人话含「已有转录任务进行中」语义）；
+    review.js 不得再自留副本（两源漂移已实证：前端「请等待完成」vs 后端
+    「请等待当前任务完成」）；前端只消费桥回传 error。
+    """
+    py_value = MSG["review_transcribe_running"]
+    assert "已有转录任务进行中" in py_value, \
+        f"转录在飞文案缺「已有转录任务进行中」语义: {py_value!r}"
+    review_js = (WEBVIEW_GUI_DIR / "assets" / "review.js").read_text(
+        encoding="utf-8")
+    assert "已有转录任务进行中" not in review_js, \
+        "review.js 仍保留转录在飞文案副本（须退役，改消费桥返回 error）"
+    api_src = (WEBVIEW_GUI_DIR / "api.py").read_text(encoding="utf-8")
+    assert "已有转录任务进行中" not in api_src, \
+        "api.py 仍硬编码转录在飞文案（须走 strings.py msg()）"
+
+
 # ---------------------------------------------------------------------------
 # 英文残留防回归（与验收 grep 同口径）
 # ---------------------------------------------------------------------------

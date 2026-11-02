@@ -4723,6 +4723,9 @@ class TranslateAPI:
     #   review_backup_failed        -> review_save_failed
     #   review_save_blocks_invalid  -> review_save_failed
     #   review_srt_bad_encoding     -> review_bad_encoding
+    #   review_transcribe_running   -> 桥回传 error 直出（strings.py 单源，
+    #                                  前端无重复键；件F D2026-1102-02）
+    #   review_transcribe_failed    -> review_transcribe_failed
     # ================================================================
 
     _REVIEW_DIRECT_EXTS = {".mp4", ".webm", ".mov"}
@@ -4967,7 +4970,8 @@ class TranslateAPI:
         - 媒体缺失 fast-fail（review_media_missing）；
         - passes 仅接受 1/2（缺省 1＝单 pass 零行为变化）；
         - 全局 running 或 per-media 在飞 → 幂等拒绝
-          （error_key=review_transcribe_running，前端 REVIEW_MSG 查表）；
+          （error_key=review_transcribe_running，文案走 strings.py msg()；
+          前端直接消费桥回传 error，不自留副本）；
         - worker 内调 asr_env.transcribe_media_to_srt（同步体），
           失败 error 原样透传，进度经 refine_review_transcribe_status 轮询；
         - 线程 spawn 失败解除在飞标记，防媒体被永久锁死。
@@ -4987,7 +4991,7 @@ class TranslateAPI:
             with lock:
                 if state.get("running") or key in _REVIEW_TRANSCRIBE_INFLIGHT:
                     return {"success": False,
-                            "error": "已有转录任务进行中，请等待当前任务完成",
+                            "error": msg("review_transcribe_running"),
                             "error_key": "review_transcribe_running"}
                 _REVIEW_TRANSCRIBE_INFLIGHT.add(key)
                 state.update({"running": True, "percent": None, "error": None,

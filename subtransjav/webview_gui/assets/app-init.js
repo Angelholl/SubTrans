@@ -218,6 +218,9 @@ const FlowOverview = {
     _running: false,
     // d1102-件D（D2026-1102-02）：转录桥状态（idle/running/done 三态）
     _transcribeState: 'idle',
+    // d1102-件F：done 仅对本次会话最近一次转录的媒体成立——媒体切换/
+    // 离开校对页即清回 idle（防一次转录后节点常亮）
+    _transcribeDoneMedia: null,
 
     init() {
         const box = document.getElementById('flowOverview');
@@ -228,6 +231,10 @@ const FlowOverview = {
             this.jump(chip.dataset.flow);
         });
         window.__homeOverviewRefresh = () => this.refresh();
+        // d1102-件F：转录 done 清/标记入口（review.js 媒体切换/离页/完成时调用）
+        window.__homeOverviewTranscribeReset = () => this.resetTranscribeNode();
+        window.__homeOverviewTranscribeDone =
+            (mediaPath) => this.markTranscribeDone(mediaPath);
         this.refresh();
     },
 
@@ -295,19 +302,45 @@ const FlowOverview = {
         return 'idle';
     },
 
+    _sameMedia(a, b) {
+        const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
+        return !!a && !!b && norm(a) === norm(b);
+    },
+
+    resetTranscribeNode() {
+        this._transcribeDoneMedia = null;
+        this._transcribeState = 'idle';
+        this.setChip('transcribe', 'idle');
+    },
+
+    markTranscribeDone(mediaPath) {
+        this._transcribeDoneMedia = mediaPath || null;
+        this._transcribeState = 'done';
+        this.setChip('transcribe', this._transcribeChipState());
+    },
+
     async refreshTranscribeNode() {
         // 转录桥 status 轮询面（无任务/未就绪时保持 idle 灰点）
         if (!window.pywebview || !window.pywebview.api) {
-            this._transcribeState = 'idle';
-            this.setChip('transcribe', 'idle');
+            this.resetTranscribeNode();
             return;
         }
         try {
             const api = window.pywebview.api;
             const s = await api.refine_review_transcribe_status();
-            this._transcribeState = (s && s.running) ? 'running'
-                : ((s && s.path) ? 'done' : 'idle');
+            if (s && s.running) {
+                // 新一轮进行中：旧 done 作废（避免上一条媒体常亮）
+                this._transcribeDoneMedia = null;
+                this._transcribeState = 'running';
+            } else if (this._transcribeDoneMedia
+                       && this._sameMedia(s && s.media_path,
+                                          this._transcribeDoneMedia)) {
+                this._transcribeState = 'done';
+            } else {
+                this._transcribeState = 'idle';
+            }
         } catch (e) {
+            this._transcribeDoneMedia = null;
             this._transcribeState = 'idle';
         }
         this.setChip('transcribe', this._transcribeChipState());

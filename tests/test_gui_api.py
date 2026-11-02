@@ -4537,6 +4537,60 @@ def test_review_transcribe_error_passthrough(gui_api_obj, monkeypatch, tmp_path)
     assert r["error"] == api_mod.msg("review_media_missing")
 
 
+def test_review_transcribe_worker_exception_no_hang(
+        gui_api_obj, monkeypatch, tmp_path):
+    """d1102-件F：worker 抛异常回归钉——status 落 error 且 running 不永挂。
+
+    先例曾出现异常逃出 worker 导致 running 永挂；后端已收口（except 兜底），
+    本钉锁死：running=False + error_key=review_transcribe_failed + 在飞集合
+    清理，防后续重构把异常兜底删掉。"""
+    import subtransjav.refine.asr_env as asr_env
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep03.mp4"
+    media.write_bytes(b"fake-mp4")
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("ct2 worker boom")
+
+    monkeypatch.setattr(asr_env, "transcribe_media_to_srt", _boom)
+
+    class SyncThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(api_mod.threading, "Thread", SyncThread)
+    r = gui_api_obj.refine_review_start_transcribe(str(media))
+    assert r["success"] is True
+
+    s = gui_api_obj.refine_review_transcribe_status()
+    assert s["running"] is False, "worker 异常后 running 永挂（未收口）"
+    assert s["error"] == "ct2 worker boom"
+    assert s["error_key"] == "review_transcribe_failed"
+    key = os.path.normcase(os.path.abspath(str(media)))
+    assert key not in api_mod._REVIEW_TRANSCRIBE_INFLIGHT, \
+        "异常后 in-flight 集合未清理（媒体被永久锁死）"
+
+
+def test_review_transcribe_error_keys_registered_in_mapping_table():
+    """d1102-件F：转录两 error_key 须登记进校对页显式映射表。
+
+    该表自称「后端错误点 → 前端 REVIEW_MSG 键名，显式映射防暗合」；
+    新增 error_key 不入表＝暗合回归（件D 评审硬违规项）。
+    """
+    import subtransjav.webview_gui.api as api_mod
+
+    src = Path(api_mod.__file__).read_text(encoding="utf-8")
+    start = src.index("error_key 映射表")
+    end = src.index("_REVIEW_DIRECT_EXTS")
+    table = src[start:end]
+    for key in ("review_transcribe_running", "review_transcribe_failed"):
+        assert key in table, f"error_key 映射表缺转录键: {key}"
+
+
 # ---------------------------------------------------------------------------
 # 3.2 退役批（D2026-1029-01）：refine_asr_download/download_progress 端点随
 # legacy whisper 模型下载链（asr_downloader）删除（相关测试一并移除）；
