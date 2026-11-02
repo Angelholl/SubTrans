@@ -164,11 +164,13 @@
                 (res && res.error) || MSG.evalListFailed));
             return;
         }
-        renderList(res);
         if ((res.reports || []).length > 0) {
+            sel.hidden = false;
+            renderList(res);
             sel.value = res.reports[0].name;
             await load(res.reports[0].name);
         } else {
+            sel.hidden = true;
             renderEmpty(res);
         }
     }

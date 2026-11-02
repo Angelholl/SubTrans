@@ -7716,7 +7716,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "11a0035913f897b4f5efc3e5802510e4dbb8cb892c57015c48294e89c686c374"), \
+        "e59c232360b44f4342134b80b4ca3e24771689f790e44c5670776bbd174d046b"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7962,3 +7962,21 @@ def test_refine_global_surface_pinned():
                 others.append(m.group(1))
     assert not (set(refine_names) & set(others)), \
         f"顶层声明跨文件重名（经典脚本会 SyntaxError）: {sorted(set(refine_names) & set(others))}"
+
+
+def test_eval_reports_select_style_pinned():
+    """质量中心报告下拉框统一 form-select compact + 空态隐藏钉（D1102 小卡）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    # 负控：类名回退成 eval-reports-select 即红（全文件计数必须为 0）
+    assert html.count("eval-reports-select") == 0, \
+        "index.html 不得再出现零规则自造类 eval-reports-select"
+    m = re.search(r'<select id="evalReportsSelect"[^>]*>', html)
+    assert m, "index.html 缺少 evalReportsSelect 开标签"
+    assert "form-select compact" in m.group(0), \
+        "evalReportsSelect 必须挂统一范式类 form-select compact"
+    js = (ASSETS / "app-eval-reports.js").read_text(encoding="utf-8")
+    # 负控：删掉任一 hidden 判定（true/false 各一次）即红
+    assert js.count("sel.hidden = true;") >= 1, \
+        "app-eval-reports.js 缺少空列表 sel.hidden = true 判定"
+    assert js.count("sel.hidden = false;") >= 1, \
+        "app-eval-reports.js 缺少非空列表 sel.hidden = false 判定"
