@@ -203,6 +203,16 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
 //   与质量中心 fullchain-status-line 同 API 双渲染（复用 fcStatus* 键）；
 // - 门关态 muted 灰点＋原因码，不用警报红（校准未达标系常态）。
 // ============================================================
+// 门原因码→人话（d1102-E 件3）：后端 evaluate_c22_gate 的裸码不得直出
+// 用户界面；未知码统一兜底「原因未知」，不暴露内部码。
+const GATE_REASON_TEXT = {
+    'missing': '门控文件缺失',
+    'invalid': '门控文件损坏或无法读取',
+    'disabled': '校准尚未启用',
+    'fingerprint-missing': '校准指纹缺失，需重新校准',
+    'fingerprint-mismatch': '规则集已变更，需重新校准',
+};
+
 const FlowOverview = {
     _lastRun: {},
     _running: false,
@@ -222,6 +232,11 @@ const FlowOverview = {
     fmt(tpl, kw) {
         return String(tpl).replace(/\{(\w+)\}/g,
             (m, k) => (kw[k] === undefined || kw[k] === null ? m : kw[k]));
+    },
+
+    gateReason(code) {
+        const key = String(code || '').trim();
+        return GATE_REASON_TEXT[key] || '原因未知';
     },
 
     setChip(flow, state) {
@@ -294,8 +309,9 @@ const FlowOverview = {
         const cg = r.c22_gate || {};
         gate.classList.toggle('is-on', !!cg.enabled);
         gateText.textContent = cg.enabled ? MSG.flowGateOn
-            : this.fmt(MSG.flowGateOff, { reason: cg.reason || 'unknown' });
+            : this.fmt(MSG.flowGateOff, { reason: this.gateReason(cg.reason) });
         const run = r.last_run || {};
+        const k = Number(run.missed_skipped) || 0;
         this._lastRun = run;
         this._running = !!r.running;
         if (r.running) {
@@ -316,6 +332,9 @@ const FlowOverview = {
                 f: run.entries_fixed || 0, m: run.entries_failed || 0,
                 p: run.entries_pending || 0,
                 phase: String(run.phase || '') });
+            if (k > 0) {
+                last.textContent += ' · ' + this.fmt(MSG.fcMissedSkipped, { k });
+            }
         }
         this.refreshNodes();
     }

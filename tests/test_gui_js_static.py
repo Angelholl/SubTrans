@@ -5541,6 +5541,113 @@ def test_esc_four_layer_chain_pinned():
 
 
 # ---------------------------------------------------------------------------
+# d1102-件E（D2026-1102-02 注记七 / code-review 双轴消化）：五件静态钉
+# ---------------------------------------------------------------------------
+
+def test_console_capsule_drawer_open_avoids_log_overlap_pinned():
+    """件E#1：抽屉展开态胶囊落位关系钉。
+
+    修法取「抽屉内容区预留胶囊位 padding」：抽屉体右侧留 62px 通道
+    （> 胶囊 42px），展开时胶囊进入抽屉右下角该通道内，日志区右缘
+    不含通道，胶囊不遮日志尾行。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m_body = re.search(r"\.console-drawer-body\s*\{([^}]*)\}", css)
+    assert m_body, "style.css 缺 .console-drawer-body 规则"
+    assert "padding-right: 62px;" in m_body.group(1), \
+        "抽屉体须预留 62px 胶囊通道（> 42px 胶囊宽）"
+    m_open = re.search(
+        r"\.workbench\.console-drawer-open \.console-capsule\s*\{([^}]*)\}",
+        css)
+    assert m_open, "缺抽屉展开态胶囊落位规则"
+    blk = m_open.group(1)
+    assert "bottom: var(--space-4);" in blk, \
+        "展开态胶囊须落在抽屉右下角预留通道内"
+    assert "right: calc(var(--aside-w, 316px) + var(--space-3));" in blk, \
+        "展开态胶囊右缘须与通道对齐"
+    assert "--console-drawer-offset" not in blk, \
+        "展开态胶囊不得再按抽屉高度外推（否则回到抽屉顶缘外）"
+    m_cap = re.search(r"\.console-capsule\s*\{([^}]*)\}", css)
+    assert m_cap and "z-index: 960;" in m_cap.group(1), \
+        "胶囊 z-960 须保留（高于抽屉 950）"
+
+
+def test_home_flow_overview_lastrun_missed_skipped_pinned():
+    """件E#2：概览条 last_run 摘要补「漏听放弃」段。
+
+    口径对照 app-refine-batchfix.js 同 payload 分支链：k>0 才追加，
+    模板复用 MSG.fcMissedSkipped。"""
+    init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    body = _extract_function(init, "refresh")
+    assert "const k = Number(run.missed_skipped) || 0;" in body, \
+        "概览条缺 missed_skipped 取值"
+    assert "if (k > 0)" in body and "MSG.fcMissedSkipped" in body, \
+        "概览条缺 k>0 时漏听放弃段追加"
+    bf = (ASSETS / "app-refine-batchfix.js").read_text(encoding="utf-8")
+    assert "Number(run.missed_skipped) || 0" in bf and \
+        "MSG.fcMissedSkipped" in bf, \
+        "对照口径源 app-refine-batchfix.js 的 missed_skipped 链路缺失"
+
+
+def test_home_flow_overview_gate_reason_humanized_pinned():
+    """件E#3：门 reason 码→人话映射钉。
+
+    六个后端原因码（ok 外的 missing/invalid/disabled/fingerprint-missing/
+    fingerprint-mismatch）一律经 GATE_REASON_TEXT 映射，禁止裸码直出。"""
+    init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    m = re.search(r"const GATE_REASON_TEXT = \{(.*?)\n\};", init, re.S)
+    assert m, "app-init.js 缺门原因映射表 GATE_REASON_TEXT"
+    table = m.group(1)
+    for code, text in (("missing", "门控文件缺失"),
+                       ("invalid", "门控文件损坏或无法读取"),
+                       ("disabled", "校准尚未启用"),
+                       ("fingerprint-missing", "校准指纹缺失，需重新校准"),
+                       ("fingerprint-mismatch", "规则集已变更，需重新校准")):
+        assert f"'{code}': '{text}'" in table, \
+            f"门原因映射缺码或中文口径: {code}"
+    body = _extract_function(init, "refresh")
+    assert "this.gateReason(cg.reason)" in body, \
+        "门状态行须经 gateReason 映射后输出"
+    assert "cg.reason || 'unknown'" not in body, \
+        "门状态行仍直出后端裸码"
+    helper = _extract_function(init, "gateReason")
+    assert "GATE_REASON_TEXT" in helper and "原因未知" in helper, \
+        "gateReason 缺映射表消费与未知码中文兜底"
+
+
+def test_home_flow_overview_aria_labels_chinese_pinned():
+    """件E#4：新组件两处英文 aria-label 改中文（仓内静态中文惯例）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'aria-label="流程概览"' in html, "概览条 aria-label 须为中文"
+    assert 'aria-label="调整控制台高度"' in html, \
+        "抽屉把手 aria-label 须为中文"
+    assert "Flow overview" not in html and "Resize console" not in html, \
+        "新组件残留英文 aria-label"
+
+
+def test_console_appendraw_backend_lines_route_error_badge_pinned():
+    """件E#5：appendRaw 后端行按内容分流，error 行置 _rawLogError。
+
+    后端队列行不带 type；按 [ERROR]/[CRITICAL]/[FATAL] 标签与
+    Traceback 特征识别 error，复用 _bumpRawLogUnread(type) 点亮胶囊
+    error 徽标。"""
+    cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
+    append = _extract_function(cm, "appendRaw")
+    assert "this._rawLineType(content)" in append, \
+        "appendRaw 未按行分流类型"
+    assert "if (type === 'error') hasError = true;" in append, \
+        "appendRaw 未聚合 error 行标记"
+    assert "this._bumpRawLogUnread(hasError ? 'error' : '')" in append, \
+        "appendRaw 未把 error 分流结果传给未读/错误徽标消费点"
+    helper = _extract_function(cm, "_rawLineType")
+    for marker in ("ERROR", "CRITICAL", "FATAL", "Traceback"):
+        assert marker in helper, f"行类型识别缺特征: {marker}"
+    assert "return 'error'" in helper, "命中特征须返回 error 类型"
+    bump = _extract_function(cm, "_bumpRawLogUnread")
+    assert "type === 'error'" in bump and "_rawLogError = true" in bump, \
+        "_bumpRawLogUnread 未按 error 类型置 _rawLogError"
+
+
+# ---------------------------------------------------------------------------
 # d1013-卡E（回链 D2026-1013-01，三钉口径③）：W1 内联宽度趋势钉——
 # index.html 表单控件 style= 内 width/min-width 声明只允许
 # var(--w-*) 引用 + 布局性豁免白名单；白名单外 px/em 字面即红。
@@ -7463,6 +7570,10 @@ def test_js_sources_layer_pinned():
        垫片＋tab-settings 摘要钩子）、app-init.js 9,330B/692730d2…（设置
        overlay 初始化）、新增 app-settings.js 13,752B/c8c1b7f3…（JS_FILES
        追加名单末尾）；
+        d1102-件E 评审消化换代（D2026-1102-02 注记七）：全库拼接
+        f40ee79a…/523,144B、app-console.js 15,973B/91806c71…（appendRaw
+        后端行类型分流）、app-init.js 16,060B/cb9385ff…（漏听放弃段＋门
+        reason 中文映射；旧钉 386abd8a… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7479,7 +7590,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "386abd8a4ee330988de0ef6b3dcee0bb1737e9b5c2aef06b3671d3d0d4733ef6"), \
+        "f40ee79a19b31a4f946859bb7ebd9ebbec28794d3f8afeb93331f49b290740d0"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7517,8 +7628,8 @@ def test_js_split_integrity_pinned():
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (16669,
                              "7817577825ce59c6c452029fd901d0fb89f7b46d6ea44b6437067f37fc4efc07"),
-        "app-console.js": (15025,
-                           "0682627beee50c28feb72bbd3475544393296e865c6c46f26bbb50629b718494"),
+        "app-console.js": (15973,
+                           "91806c71c5833a35701b7a16026a40bba9e9d3ea0bf13e643eacd563a151cc62"),
         "app-activity.js": (6167,
                             "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
         "app-progress.js": (3070,
@@ -7569,8 +7680,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (15263,
-                        "cc5ba1969b1111468c4060febb0b0e0de8bcdcb251457d01c8671596a321e100"),
+        "app-init.js": (16060,
+                        "cb9385ff2b0284fa9ff50759349f5ad0fca8ab28e76d66dc5274fe8453b3a731"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,

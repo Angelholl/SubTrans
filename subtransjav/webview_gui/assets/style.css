@@ -937,7 +937,15 @@ button:focus:not(:focus-visible) { outline: none; }
 }
 .console-drawer-handle:hover::before,
 .console-drawer-handle.is-dragging::before { background: var(--primary); }
-.console-drawer-body { flex: 1 1 auto; min-height: 0; display: flex; }
+/* d1102-E 件1（胶囊落位遮日志）：抽屉体右侧预留 62px 胶囊通道
+   （> 42px 胶囊宽 + 间距），展开态胶囊进入该通道落抽屉右下角，
+   日志区右缘止于通道之前，尾行不被遮挡。 */
+.console-drawer-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    padding-right: 62px;
+}
 .console-drawer-body > .console-section { flex: 1 1 auto; min-height: 0; }
 .console-drawer .section-content { min-height: 0; }
 
@@ -974,6 +982,11 @@ button:focus:not(:focus-visible) { outline: none; }
     animation: queue-dock-pulse 1.2s infinite;
 }
 .console-capsule.is-open { color: var(--text-1); border-color: var(--primary); }
+/* 展开态：胶囊落抽屉右下角预留通道（件1）；不再按抽屉高度外推到顶缘外 */
+.workbench.console-drawer-open .console-capsule {
+    right: calc(var(--aside-w, 316px) + var(--space-3));
+    bottom: var(--space-4);
+}
 .console-capsule.is-error { border-color: var(--danger); color: var(--danger); }
 .console-capsule-badge {
     position: absolute;

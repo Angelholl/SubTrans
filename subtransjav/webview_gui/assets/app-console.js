@@ -65,12 +65,12 @@ const ConsoleManager = {
     },
 
     // 弹窗打开期间新行实时追加（等宽列表尾随+滚底，500 行显示层同款裁剪）
-    _liveRawLogLine(text) {
+    _liveRawLogLine(text, type = '') {
         if (AppModal._kind !== 'rawlog') return;
         const list = document.querySelector('#appModal .rawlog-view');
         if (!list) return;
         const line = document.createElement('div');
-        line.className = 'console-line';
+        line.className = 'console-line' + (type ? ' ' + type : '');
         line.textContent = text;
         list.appendChild(line);
         while (list.children.length > this._MAX_DOM_LINES) {
@@ -134,24 +134,42 @@ const ConsoleManager = {
         this._lines = [];
     },
 
+    // 后端日志行类型分流（d1102-E 件5）：appendRaw 收的行不带 type，
+    // 按行首括号标签与 Python 崩溃栈特征识别，供行着色与胶囊 error 徽标
+    // 消费（后端 [ERROR]/[CRITICAL]/[FATAL] 也点亮 _rawLogError）。
+    _rawLineType(line) {
+        const text = String(line || '');
+        if (/^\s*\[(?:ERROR|CRITICAL|FATAL)\]/i.test(text)) return 'error';
+        if (/^\s*Traceback \(most recent call last\):/.test(text)) {
+            return 'error';
+        }
+        if (/^\s*\[(?:WARN|WARNING)\]/i.test(text)) return 'warning';
+        if (/^\s*\[SUCCESS\]/i.test(text)) return 'success';
+        return '';
+    },
+
     appendRaw(text) {
         const output = document.getElementById('consoleOutput');
 
         const lines = text.split('\n');
+        let hasError = false;
 
         lines.forEach((line, index) => {
             if (index === lines.length - 1 && line === '') return;
 
-            this._lines.push(line || ' ');
+            const content = line || ' ';
+            const type = this._rawLineType(content);
+            if (type === 'error') hasError = true;
+            this._lines.push(content);
             const lineEl = document.createElement('div');
-            lineEl.className = 'console-line';
-            lineEl.textContent = line || ' ';
+            lineEl.className = 'console-line' + (type ? ' ' + type : '');
+            lineEl.textContent = content;
             output.appendChild(lineEl);
-            this._liveRawLogLine(line || ' ');
+            this._liveRawLogLine(content, type);
         });
         this._trimDom(output);
         this._scrollBottom(output);
-        this._bumpRawLogUnread();
+        this._bumpRawLogUnread(hasError ? 'error' : '');
     },
 
     // ---- 导出 / 复制（空内容静默忽略）----
