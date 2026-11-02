@@ -18,8 +18,12 @@ const KeyboardShortcuts = {
                 }
             }
 
-            // Escape: Close modal
+            // Escape: Close modal（四层链：AppModal > 设置 overlay > console
+            // 抽屉 > about；上层活跃即 early-return，防一次 ESC 关多层）
             if (e.key === 'Escape') {
+                if (typeof AppModal !== 'undefined' && AppModal._busy) return;
+                if (typeof SettingsHub !== 'undefined' && SettingsHub._isOpen) return;
+                if (typeof ConsoleDrawer !== 'undefined' && ConsoleDrawer.isOpen()) return;
                 const modal = document.getElementById('aboutModal');
                 if (modal && modal.classList.contains('active')) {
                     closeAbout();

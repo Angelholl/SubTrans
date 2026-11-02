@@ -155,47 +155,13 @@
                     </div>
                 </div>
 
-                <!-- P1-6 件B（d1021-卡2）：文件卡/Console 可拖拽分隔条（纯前端 mouse，
-                     逻辑在 app-file-list.js 尾部 TranslateSplit 小节）；比例单点写
-                     CSS 变量 --translate-split（默认 60%，卡F D2026-1013-01 基准）。
-                     零 id / 零 data-i18n：id 冻结预算与 i18n 键全集不动，JS 走类选择器定位；
-                     aria-label 为静态中文（与 7 页 tabpanel 同形态，不走 i18n 键）。
-                     折叠互斥取「禁用」而非隐藏（.console-collapsible.collapsed 时 JS 加
-                     .is-disabled + 拖拽 guard，见 app-file-list.js 注释）。 -->
-                <div class="translate-splitter" role="separator" aria-orientation="vertical"
-                     aria-label="调整文件列表与 Console 高度比例"></div>
+                <!-- P1-6 件B 文件卡/Console 拖拽分隔条已随 d1102-件C（D2026-1102-02）
+                     整器退役：Console 搬入底部抽屉后不再与文件卡共享页内高度，
+                     原 --translate-split / TranslateSplit 逻辑零残留。 -->
 
-                <!-- Console Section -->
-
-                <section class="section console-section console-collapsible">
-                    <div class="section-header">
-                        <h2 data-i18n="console_header">Console</h2>
-                        <div class="action-row">
-                            <button type="button" class="btn btn-ghost btn-sm console-collapse-btn" id="consoleCollapseBtn"
-                                    aria-expanded="true" data-i18n-title="console_collapse" title="折叠控制台">
-                                <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
-                            </button>
-                            <button type="button" class="btn btn-ghost btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
-                                Clear
-                            </button>
-                            <!-- 2.7.3 件⑧批 8b：导出/复制按钮（i18n 冻结，零 data-i18n，文案 JS 填） -->
-                            <button type="button" class="btn btn-ghost btn-sm" id="exportConsoleBtn"></button>
-                            <button type="button" class="btn btn-ghost btn-sm" id="copyConsoleBtn"></button>
-                        </div>
-                    </div>
-                    <div class="section-content">
-                        <!-- 2.7.3 件⑧批 8b：结构化活动流（原始日志上方，行全由 JS 渲染）；
-                             头部=活动流标题+「原始日志」折叠开关，均零 data-i18n -->
-                        <div class="console-activity-header">
-                            <span class="console-activity-title"></span>
-                            <button type="button" class="btn btn-ghost btn-sm" id="rawLogToggleBtn" aria-expanded="false"></button>
-                        </div>
-                        <div class="console-activity" id="consoleActivity"></div>
-                        <div class="console-output" id="consoleOutput" data-testid="console">
-                            <div class="console-line" data-i18n="ready">Ready.</div>
-                        </div>
-                    </div>
-                </section>
+                <!-- Console Section 已 DOM 原地搬入底部抽屉（#consoleDrawer，
+                     见 </main> 之后），.console-section 类名与全部既有 id /
+                     data-i18n 节点原样保留（app-console.js closest 依赖）。 -->
 
             </div>
 
@@ -649,6 +615,61 @@
             </div>
 
         </aside>
+
+        <!-- ============ 任务黑框底部抽屉（d1102-件C，D2026-1102-02）============
+             console-section 整块 DOM 原地搬入（既有 id / data-i18n 零增减）；
+             fixed 定位只占主栏宽（left/right 走 --rail-w/--aside-w，不盖 rail
+             与右栏）；z-950 高于 queue-dock/audio 900、低于 modal 1000 与
+             错误槽 1001。默认收起，右下角胶囊触发；顶部 6px 把手调高
+             （localStorage subtransjav.console.h）。 -->
+        <div class="console-drawer" id="consoleDrawer" role="region"
+             aria-label="Console" aria-hidden="true">
+            <div class="console-drawer-handle" id="consoleDrawerHandle"
+                 role="separator" aria-orientation="horizontal"
+                 aria-label="Resize console"></div>
+            <div class="console-drawer-body">
+                <section class="section console-section console-collapsible">
+                    <div class="section-header">
+                        <h2 data-i18n="console_header">Console</h2>
+                        <div class="action-row">
+                            <button type="button" class="btn btn-ghost btn-sm console-collapse-btn" id="consoleCollapseBtn"
+                                    aria-expanded="true" data-i18n-title="console_collapse" title="收起抽屉">
+                                <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                            </button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
+                                Clear
+                            </button>
+                            <!-- 2.7.3 件⑧批 8b：导出/复制按钮（i18n 冻结，零 data-i18n，文案 JS 填） -->
+                            <button type="button" class="btn btn-ghost btn-sm" id="exportConsoleBtn"></button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="copyConsoleBtn"></button>
+                        </div>
+                    </div>
+                    <div class="section-content">
+                        <!-- 2.7.3 件⑧批 8b：结构化活动流（原始日志上方，行全由 JS 渲染）；
+                             头部=活动流标题+「原始日志」折叠开关，均零 data-i18n -->
+                        <div class="console-activity-header">
+                            <span class="console-activity-title"></span>
+                            <button type="button" class="btn btn-ghost btn-sm" id="rawLogToggleBtn" aria-expanded="false"></button>
+                        </div>
+                        <div class="console-activity" id="consoleActivity"></div>
+                        <div class="console-output" id="consoleOutput" data-testid="console">
+                            <div class="console-line" data-i18n="ready">Ready.</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- 右下角触发胶囊（内联 Lucide square-terminal，stroke-width 2；
+             四态：空闲 muted 描边 / is-running 主色脉冲 / has-unread 未读
+             计数 / is-error 徽标转 --danger；展开时 is-open 变收起态）。 -->
+        <button type="button" class="console-capsule" id="consoleCapsule"
+                aria-expanded="false" aria-label="" title="">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
+            <span class="console-capsule-badge" hidden></span>
+        </button>
     </div>
 
     <!-- 快速试听浮层（D2026-0929-09：底部固定条，关闭/错误提示内联） -->

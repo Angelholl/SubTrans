@@ -1404,24 +1404,16 @@ def test_batch3_console_ratio_and_section_overflow_pinned():
     assert "min-height: 180px" not in m.group(0) \
         and "max-height: 420px" not in m.group(0), \
         ".console-output 定高未删净"
-    # 文件卡比例基准（d1021-卡2 P1-6 件B）：60% 由 CSS 变量 --translate-split
-    # 单点承接（拖拽分隔条改写该变量；Console 侧仍为下方 40% 定值）
-    assert "#tab-translate { --translate-split: 60%; }" in css, \
-        "文件卡比例变量 --translate-split 默认 60% 缺失"
+    # 文件卡弹性基准（d1102-件C）：Console 出页入抽屉后，文件卡独占
+    # translate 页剩余高度；--translate-split / 分隔条随整器退役。
+    assert "--translate-split" not in css, \
+        "文件卡比例变量 --translate-split 应随 TranslateSplit 退役"
     m_card = re.search(r"#tab-translate > \.card \{[^}]*\}", css)
-    assert m_card and "flex: 1 1 var(--translate-split);" in m_card.group(0), \
-        "文件卡 flex-basis 未改读 --translate-split（60% 基准）"
-    # 40% 比例制 + 保底 180px 保留；380px 上限随卡F（D2026-1013-01）废除
-    # （150/300 → D2026-1010-01 卡3 改 180/380 → 卡F 废上限，决策已归档
-    # docs/decision-log.md D2026-1013-01）
-    assert re.search(
-        r"#tab-translate \.console-collapsible:not\(\.collapsed\) \{"
-        r"[^}]*flex: 1 1 40%;[^}]*min-height: 180px;",
-        css), "Console 40%/180 数值漂移"
+    assert m_card and "flex: 1 1 auto;" in m_card.group(0), \
+        "文件卡应 flex:1 1 auto 独占剩余高度（Console 已入抽屉）"
     assert not re.search(
-        r"#tab-translate \.console-collapsible:not\(\.collapsed\) \{"
-        r"[^}]*max-height:", css), \
-        "Console 整区上限未删净（380px 硬顶已于卡F D2026-1013-01 废除）"
+        r"#tab-translate \.console-collapsible", css), \
+        "Console 已搬入底部抽屉，#tab-translate 页内弹性规则应退役"
     assert "#tab-translate:not(.has-files) > .card { flex: 0 0 auto; }" in css, \
         "缺空态文件卡收敛规则"
     assert re.search(
@@ -1552,7 +1544,7 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # （tabBtnEngine/tabBtnAsrdict/tabBtnGlossary/tabBtnAdvanced，-4）、
     # 新增 tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn（+4），
     # 四域面板 id 原地保留，净 0 仍 225
-    assert len(ids) == 225, f"id 全集数漂移（d1102-件B2 设置 hub 后契约 225），实为 {len(ids)}"
+    assert len(ids) == 228, f"id 全集数漂移（d1102-件C 抽屉/胶囊后契约 228），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -3589,7 +3581,7 @@ def test_batch3_ai_config_row_pins_survive():
     # 两 id → 225；
     # d1102-件B2（D2026-1102-02，设置 hub）：删四设置导航按钮 id、新增
     # tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn，净 0
-    assert len(ids) == 225, f"id 全集数漂移（d1102-件B2 后契约 225），实为 {len(ids)}"
+    assert len(ids) == 228, f"id 全集数漂移（d1102-件C 后契约 228），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -4386,15 +4378,16 @@ def test_console_section_layout_column_and_height_pins():
     ma = re.search(r"\.console-activity\s*\{([^}]*)\}", css)
     assert ma and "max-height: 200px" in ma.group(1), \
         "活动流盒上限 200px（owner：高度加一点）"
+    # d1102-件C：Console 搬入底部抽屉后，抽屉体内 console-section 吃满高度；
+    # 页内 40% 弹性规则退役（抽屉高度由 --console-drawer-h 单点承接）。
     mc = re.search(
-        r"#tab-translate \.console-collapsible:not\(\.collapsed\)"
-        r"\s*\{([^}]*)\}", css)
-    assert mc, "style.css 缺 Console 整区高度规则"
-    assert "max-height" not in mc.group(1), \
-        "Console 整区不得回潮 max-height 硬顶（卡F D2026-1013-01 已废）"
-    assert "flex: 1 1 40%;" in mc.group(1), \
-        "Console 整区比例 40%（与文件卡 60% 配套，grow 必须为 1）"
-    assert "min-height: 180px" in mc.group(1), "Console 整区保底 180px"
+        r"\.console-drawer \.console-section\s*\{([^}]*)\}", css)
+    assert mc, "style.css 缺抽屉内 Console 高度规则"
+    assert "flex: 1 1 auto;" in mc.group(1), \
+        "抽屉内 Console 须 flex:1 1 auto 吃满抽屉体"
+    assert not re.search(
+        r"#tab-translate \.console-collapsible", css), \
+        "页内 Console 弹性规则应随抽屉化退役"
 
 
 def test_guide_staleness_reread_and_items_modal_pins():
@@ -5336,110 +5329,155 @@ def test_b10_zero_new_id_zero_new_key_pinned():
 # ---------------------------------------------------------------------------
 
 def test_console_flex_layout():
-    """卡F 布局钉（D2026-1013-01）：translate 文件卡 60% / Console 40% 比例制，
-    max-height:380px 硬顶废除，.console-section 回归 flex:0 0 auto 自然高
-    （余量沉 .main 页尾，translate 的弹性由 #tab-translate 前缀规则显式承接）。
-
-    先红后绿自证（落本钉不改 style.css 时前三条断言必红：380 硬顶仍在 /
-    Console 仍 30% 且 grow=0 / .console-section 仍 flex:1；完成四处改值后转绿）。
+    """d1102-件C 布局换代（D2026-1102-02）：Console 搬入底部抽屉后，
+    translate 页内 60/40 比例制与 --translate-split 整器退役；
+    文件卡独占剩余高度（flex:1 1 auto），.console-section 维持自然高
+    （抽屉体内由 .console-drawer .console-section 显式吃满）。
     """
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    # ① 380px 硬顶废除（超量交既有内滚承接：.console-output overflow-y:auto
-    #    + min-height:0，.file-list-container overflow-y:auto，均不动）
+    # ① 380px 硬顶仍不得回潮
     assert "max-height: 380px" not in css, \
-        "style.css 仍残留 Console max-height:380px 硬顶（大窗日志截断根因）"
-    # ② translate Console 吃 40%（grow=1 才能吃掉余量，消底部 228px 空白）
-    m_console = re.search(
-        r"#tab-translate \.console-collapsible:not\(\.collapsed\)"
-        r"\s*\{([^}]*)\}", css)
-    assert m_console, "style.css 缺 #tab-translate .console-collapsible 高度规则"
-    assert "flex: 1 1 40%;" in m_console.group(1), \
-        "translate Console 须 flex:1 1 40%（禁回退 grow=0 比例制）"
-    # ③ .console-section 回归自然高：guide 两卡与 AI 分析卡不再被撑高
-    #    （空态支路 #tab-translate:not(.has-files) 两规则零改动）
+        "style.css 残留 Console max-height:380px 硬顶"
+    # ② 页内 40% 弹性规则退役（Console 已出页）
+    assert not re.search(
+        r"#tab-translate \.console-collapsible[^\{]*\{", css), \
+        "translate 页内 Console 弹性规则应退役（抽屉化）"
+    # ③ .console-section 回归自然高（质量中心/AI 分析卡不被撑高）
     m_section = re.search(r"\.console-section\s*\{([^}]*)\}", css)
     assert m_section, "style.css 缺 .console-section 规则"
     assert "flex: 0 0 auto;" in m_section.group(1), \
         ".console-section 须 flex:0 0 auto（禁回退 flex:1 撑高 guide/AI 卡）"
-    # ④ 文件卡基准 60%（与 Console 40% 合成比例制，min-height:0 不动）；
-    #    d1021-卡2 P1-6 件B：60% 改由 --translate-split 变量承接
+    # ④ 文件卡独占剩余高度（无 Console 同屏分配）
     m_card = re.search(r"#tab-translate > \.card\s*\{([^}]*)\}", css)
     assert m_card, "style.css 缺 #tab-translate > .card 规则"
-    assert "flex: 1 1 var(--translate-split);" in m_card.group(1), \
-        "文件卡须 flex:1 1 var(--translate-split)（变量默认 60%，与 Console 40% 配套）"
+    assert "flex: 1 1 auto;" in m_card.group(1), \
+        "文件卡须 flex:1 1 auto（Console 已入抽屉）"
 
 
 # ---------------------------------------------------------------------------
 # d1021-卡2（P1-6 件B）：translate 页文件卡/Console 可拖拽分隔＋比例记忆
 # ---------------------------------------------------------------------------
 
-def test_translate_splitter_static_pinned():
-    """P1-6 件B 静态钉：分隔条元素 + 样式 + 拖拽/记忆逻辑 + clamp 边界。
+def test_translate_splitter_retired_pinned():
+    """d1102-件C（D2026-1102-02）：.translate-splitter ＋ TranslateSplit 整器
+    退役——Console 出页入抽屉后比例逻辑无载体，HTML/CSS/JS 三面零残留。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    js = (ASSETS / "app-file-list.js").read_text(encoding="utf-8")
+    assert "translate-splitter" not in html, "index.html 仍残留分隔条元素"
+    assert "translate-splitter" not in css, "style.css 仍残留分隔条样式"
+    assert "--translate-split" not in css, "style.css 仍残留比例变量"
+    assert "TranslateSplit" not in js, "app-file-list.js 仍残留 TranslateSplit"
+    assert "subtransjav.translate.split" not in js,         "比例记忆键应随整器退役（不得残留 localStorage 读写）"
+    # 抽屉高度记忆键接管（subtransjav.<域>.<项> 惯例）
+    cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
+    assert "subtransjav.console.h" in cm, "抽屉高度记忆键缺失"
 
-    ①index.html #tab-translate 内恰一个 .translate-splitter（role=separator
-      + aria-orientation=vertical + aria-label），且零 id / 零 data-i18n
-      （id 冻结预算与 i18n 键全集不动，JS 走类选择器定位），位置在文件卡与
-      Console 之间（DOM 顺序＝上/下关系）；
-    ②style.css 有 --translate-split 变量（默认 60%=卡F 基准 D2026-1013-01）
-      与分隔条规则（6px 命中热区 + row-resize 光标 + hover/拖拽中高亮 +
-      折叠禁用态 .is-disabled）；
-    ③app-file-list.js 尾部 TranslateSplit 小节：clamp [25,75]、localStorage
-      键 subtransjav.translate.split、preventDefault 且禁 stopPropagation
-      （d1021-卡1 缺陷B 同源教训：document 级 pywebview 桥靠冒泡）；
-    ④恢复路径：read() 非法/越界回退 DEFAULT(60)；FileListManager.init 接线。
+
+def test_console_drawer_capsule_static_pinned():
+    """d1102-件C（D2026-1102-02）：底部抽屉＋触发胶囊静态钉。
+
+    ① console-section 整块 DOM 原地搬入 #consoleDrawer，既有 console 族
+      id 零增减；② 抽屉 fixed/z-950/主栏宽（rail/aside 变量）/36vh 默认/
+      min 180px/max 70vh（JS clamp）＋ 6px 把手 ＋ 高度记忆键；
+    ③ queue-dock/audio 底缘经 --console-drawer-offset 抬升；
+    ④ 胶囊四态类名（is-running/has-unread/is-error/is-open）与脉冲复用；
+    ⑤ 展开压缩主区高度（布局让位非覆盖）。
     """
     html = INDEX_HTML.read_text(encoding="utf-8")
-    assert html.count('class="translate-splitter"') == 1, \
-        "index.html 应有恰一个 .translate-splitter（#tab-translate 内）"
-    tag = re.search(r'<div class="translate-splitter"[^>]*>', html).group(0)
-    for frag in ('role="separator"', 'aria-orientation="vertical"', 'aria-label="'):
-        assert frag in tag, f"分隔条缺可访问属性: {frag}"
-    assert 'id="' not in tag, "分隔条不得携带 id（FROZEN_IDS 冻结预算）"
-    assert "data-i18n" not in tag, "分隔条不得携带 data-i18n（键全集冻结）"
-    i_split = html.index('class="translate-splitter"')
-    assert html.index('id="fileListContainer"') < i_split \
-        < html.index('class="section console-section console-collapsible"'), \
-        "分隔条须位于文件卡（fileListContainer）与 Console 之间"
-
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    assert "#tab-translate { --translate-split: 60%; }" in css, \
-        "缺 --translate-split 默认 60% 变量定义"
-    m = re.search(r"#tab-translate \.translate-splitter \{([^}]*)\}", css)
-    assert m, "缺 .translate-splitter 样式规则"
-    assert "flex: 0 0 auto;" in m.group(1) and "height: 6px;" in m.group(1), \
-        "分隔条须 flex:0 0 auto + 6px 命中热区"
-    assert "cursor: row-resize;" in m.group(1), "分隔条缺拖拽光标"
-    for frag in (".translate-splitter:hover::before",
-                 ".translate-splitter.is-dragging::before",
-                 ".translate-splitter.is-dragging {",
-                 ".translate-splitter.is-disabled {"):
-        assert frag in css, f"style.css 缺分隔条态样式: {frag}"
+    cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
 
-    js = (ASSETS / "app-file-list.js").read_text(encoding="utf-8")
-    split_js = js[js.index("const TranslateSplit = {"):]
-    for frag in ("KEY: 'subtransjav.translate.split'",
-                 "MIN: 25,", "MAX: 75,", "DEFAULT: 60,"):
-        assert frag in split_js, f"TranslateSplit 缺常量: {frag}"
-    assert "Math.min(this.MAX, Math.max(this.MIN, pct))" in split_js, \
-        "clamp 逻辑缺失（须夹入 [25,75]）"
-    assert "setProperty('--translate-split'" in split_js, \
-        "未写 CSS 变量 --translate-split"
-    assert "localStorage.setItem(this.KEY" in split_js \
-        and "localStorage.getItem(this.KEY)" in split_js, \
-        "比例记忆读写未落（单写 + 读回）"
-    assert "e.preventDefault()" in split_js, "拖拽缺 preventDefault"
-    # 代码行过滤（剥行内/整行注释）后禁 stopPropagation——注释里点名禁令不算违规
-    split_code = "\n".join(re.sub(r"//.*$", "", line)
-                           for line in split_js.splitlines())
-    assert "stopPropagation" not in split_code, \
-        "分隔层不得 stopPropagation（document 级 pywebview 桥靠冒泡）"
-    assert "pct < this.MIN || pct > this.MAX" in split_js, \
-        "读记忆未做越界回退（非法值须回退 60）"
-    assert "classList.contains('collapsed')" in split_js \
-        and "is-disabled" in split_js, \
-        "折叠互斥缺失（Console 折叠态须禁用/兜底 guard）"
-    assert "TranslateSplit.init();" in js[:js.index("const TranslateSplit = {")], \
-        "FileListManager.init 未接线 TranslateSplit.init（初始化恢复不落）"
+    # ① 抽屉容器/胶囊/把手 + console 族 id 原样
+    for dom_id in ("consoleDrawer", "consoleDrawerHandle", "consoleCapsule"):
+        assert f'id="{dom_id}"' in html, f"index.html 缺抽屉锚点: {dom_id}"
+    drawer_at = html.index('id="consoleDrawer"')
+    section_at = html.index('class="section console-section console-collapsible"')
+    capsule_at = html.index('id="consoleCapsule"')
+    assert drawer_at < section_at < capsule_at,         "console-section 须整块位于抽屉容器内，胶囊独立于抽屉"
+    for dom_id in ("consoleCollapseBtn", "clearConsoleBtn", "exportConsoleBtn",
+                   "copyConsoleBtn", "rawLogToggleBtn", "consoleActivity",
+                   "consoleOutput"):
+        assert f'id="{dom_id}"' in html, f"console 族 id 丢失: {dom_id}"
+    assert html.count('class="section console-section console-collapsible"') == 1
+
+    # ② 抽屉规格
+    m = re.search(r"\.console-drawer\s*\{([^}]*)\}", css)
+    assert m, "style.css 缺 .console-drawer 规则"
+    blk = m.group(1)
+    for frag in ("position: fixed;", "z-index: 950;",
+                 "height: var(--console-drawer-h, 36vh);",
+                 "left: var(--rail-w", "right: var(--aside-w"):
+        assert frag in blk, f"抽屉规格缺: {frag}"
+    assert "--console-drawer-h: 36vh;" in css, "缺抽屉默认高 36vh token"
+    m_handle = re.search(r"\.console-drawer-handle\s*\{([^}]*)\}", css)
+    assert m_handle and "flex: 0 0 6px;" in m_handle.group(1),         "抽屉把手须 6px 命中热区"
+    for frag in ("KEY: 'subtransjav.console.h'", "MIN_PX: 180",
+                 "MAX_RATIO: 0.7", "DEFAULT_RATIO: 0.36"):
+        assert frag in cm, f"抽屉高度逻辑缺: {frag}"
+
+    # ③ 底缘避让
+    qd = re.search(r"\.queue-dock \{[^}]*\}", css)
+    assert qd and "var(--console-drawer-offset" in qd.group(0),         "queue-dock 未按抽屉高度上移"
+    ab = re.search(r"\.audio-preview-bar \{[^}]*\}", css)
+    assert ab and "var(--console-drawer-offset" in ab.group(0),         "audio-preview-bar 未按抽屉高度上移"
+
+    # ④ 胶囊四态类名 + 脉冲复用
+    for sel in (".console-capsule.is-running {",
+                ".console-capsule.has-unread .console-capsule-badge {",
+                ".console-capsule.is-error .console-capsule-badge {",
+                ".console-capsule.is-open {"):
+        assert sel in css, f"胶囊四态样式缺: {sel}"
+    running_blk = re.search(
+        r"\.console-capsule\.is-running\s*\{([^}]*)\}", css)
+    assert running_blk and "queue-dock-pulse" in running_blk.group(1),         "运行中胶囊须复用 queue-dock-pulse 脉冲"
+    assert "animation: queue-dock-pulse" in css
+
+    # ⑤ 展开压缩主区（布局让位非覆盖）
+    m_open = re.search(
+        r"\.workbench\.console-drawer-open \.main\s*\{([^}]*)\}", css)
+    assert m_open and "max-height: calc(100vh - var(--console-drawer-offset"         in m_open.group(1), "抽屉展开须压缩主区高度（非覆盖）"
+    # 拖拽铁律：把手 mouse 会话禁 stopPropagation（注释点名不算违规；
+    # ESC 链的 stopPropagation 属另一层语义，不在本钉面）
+    drag = cm[cm.index("onDown(e) {"):cm.index("_syncRunning()")]
+    code = "\n".join(re.sub(r"//.*$", "", line) for line in drag.splitlines())
+    assert "stopPropagation" not in code, \
+        "抽屉拖拽不得 stopPropagation（document 级 pywebview 桥靠冒泡）"
+
+
+def test_console_drawer_capsule_token_only_pinned():
+    """d1102-件C（R10）：抽屉/胶囊新组件禁写死色值，全用既有 token
+    （surface/border/text/primary/on-primary/ok/warn/danger/console-*），
+    深色主题经 style.dark.css 变量覆盖自动适配。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    selectors = (
+        ".console-drawer {",
+        ".console-drawer-handle {",
+        ".console-drawer-handle::before {",
+        ".console-capsule {",
+        ".console-capsule:hover {",
+        ".console-capsule.is-running {",
+        ".console-capsule.is-open {",
+        ".console-capsule.is-error {",
+        ".console-capsule-badge {",
+    )
+    color_literal = re.compile(
+        r"#[0-9A-Fa-f]{3,8}|rgba?\(|hsla?\(")
+    for sel in selectors:
+        m = re.search(re.escape(sel) + r"([^}]*)\}", css)
+        assert m, f"style.css 缺新组件规则: {sel}"
+        assert not color_literal.search(m.group(1)),             f"{sel} 含写死色值（新组件须全 token 引用）"
+
+
+def test_esc_four_layer_chain_pinned():
+    """d1102-件C（C-6/R8）：ESC 四层链 AppModal > 设置 overlay > 抽屉 >
+    about。新增层各自 early-return 上层活跃态，防一次 ESC 关多层。"""
+    cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
+    sc = (ASSETS / "app-shortcuts.js").read_text(encoding="utf-8")
+    drawer = cm[cm.index("const ConsoleDrawer = {"):]
+    assert "AppModal._busy" in drawer and "SettingsHub._isOpen" in drawer,         "抽屉 ESC 须对 AppModal/设置 overlay 上层 early-return"
+    assert "ConsoleDrawer.isOpen()" in sc,         "about 层 ESC 须对抽屉活跃态 early-return（抽屉优先）"
+    assert "AppModal._busy" in sc and "SettingsHub._isOpen" in sc,         "about 层 ESC 须对 AppModal/设置 overlay 上层 early-return"
 
 
 # ---------------------------------------------------------------------------
@@ -7381,7 +7419,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "0b9ced114d12213592faf93bcc0d378eaa7a9a3efa8def94161e14ebe50ec6b0"), \
+        "79b96c902678c13b266403c1659db52e794949c0e70cd82529f96da4e21af165"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7417,10 +7455,10 @@ def test_js_split_integrity_pinned():
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
-        "app-file-list.js": (21361,
-                             "114f68b7ea49fb42f935916690d1701a7e1e59f47191ac09fcd24ed11d77f432"),
-        "app-console.js": (7818,
-                           "2f877e37da26830a28808bb1df4b3ea8b025e942f460f0c095487c4f5e45f534"),
+        "app-file-list.js": (16501,
+                             "cdb3c992d0e25b6f659fe5c817c7993e1765bf8db703ba0b48a1a8179046b753"),
+        "app-console.js": (14888,
+                           "9f9482aa06b7d4d1eb324a70a82a5c2e395072ff75eeba5f11b056cc1dee089e"),
         "app-activity.js": (6167,
                             "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
         "app-progress.js": (3070,
@@ -7435,8 +7473,8 @@ def test_js_split_integrity_pinned():
                               "a745d62347ff7734b6971aeccfc181e0c799144aa31b066f384c86957a22adf0"),
         "app-theme.js": (4234,
                          "943902377f465a30975c4e77d443ec784b0f44855203139c1055a5c6185f8d34"),
-        "app-shortcuts.js": (1638,
-                             "ac08c35f4837daf2871eddb17402179fc6ecfd9703be4a55810c2079a2995584"),
+        "app-shortcuts.js": (2036,
+                             "4b14fc63bcfbaf2efe41e0b3271f8861bceaefa0c2790b044f24e71d16a9119d"),
         "app-about.js": (705,
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (5168,

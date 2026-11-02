@@ -93,6 +93,9 @@
     --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
     /* 控件高度（D2026-1002-07 批1 token 化，等值引用） */
     --h-ctl: 36px; --h-ctl-sm: 30px;
+    /* 底部抽屉高度/底缘避让（d1102-件C）：JS 运行时改写 px，缺省 36vh */
+    --console-drawer-h: 36vh;
+    --console-drawer-offset: 0px;
     /* 过渡时长（等值引用） */
     --dur-fast: .12s; --dur: .15s;
 
@@ -198,6 +201,8 @@ button:focus:not(:focus-visible) { outline: none; }
    3. 三栏骨架：rail | main | aside
    ============================================================ */
 .workbench {
+    --rail-w: 220px;
+    --aside-w: 316px;
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr) 316px;
     /* D2026-1010-02 件1（无法下翻总根因）：此前只定义列、行靠隐式
@@ -213,6 +218,7 @@ button:focus:not(:focus-visible) { outline: none; }
    与 .no-aside 并存时 no-aside 规则源序在后 + aside 本体 display:none，
    校对页不渲染折叠交互（本卡不触碰 no-aside）。窄窗支路见文末 @media1180。 */
 .workbench.aside-collapsed {
+    --aside-w: 44px;
     grid-template-columns: 220px minmax(0, 1fr) 44px;
 }
 
@@ -414,7 +420,7 @@ button:focus:not(:focus-visible) { outline: none; }
    .page-narrow = 窄幅居中（表单/编辑类页）；
    .workbench.no-aside = 隐藏右栏（校对页用） */
 .tab-page.page-narrow { width: 100%; max-width: 920px; margin: 0 auto; }
-.workbench.no-aside { grid-template-columns: 220px minmax(0, 1fr); }
+.workbench.no-aside { --aside-w: 0px; grid-template-columns: 220px minmax(0, 1fr); }
 .workbench.no-aside .aside { display: none; }
 @media (max-width: 1180px) {
     .workbench.no-aside { grid-template-columns: 64px minmax(0, 1fr); }
@@ -656,59 +662,15 @@ button:focus:not(:focus-visible) { outline: none; }
 .card-head-actions { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
 .card-head-count { font-size: var(--font-xs); color: var(--text-2); }
 
-/* 文件卡弹性内滚（A案 批1）：卡片区填充分区剩余高度，列表容器内滚——
-   弹性链路 #tab-translate > .card → .file-list-container → .file-list
-   批3（D2026-1002-12）：高度分配改比例制——文件卡吃 70%，Console 吃 30%
-   卡F（D2026-1013-01）：基准下调至文件卡 60% / Console 40%（与
-   .console-collapsible 规则配套）
-   P1-6 件B（d1021-卡2）：比例基准改由 CSS 变量 --translate-split 单点承接
-   （默认 60% = 卡F 基准），拖拽分隔条时 app-file-list.js 尾部 TranslateSplit
-   小节改写页面内联变量；Console 侧仍走下方 40% 定值（实现最简：两值不互算，
-   拖动区间 clamp [25,75] 下两卡片合计仍 >100% 但 flex-shrink 自动配平） */
-#tab-translate { --translate-split: 60%; }
+/* 文件卡弹性内滚（A案 批1）：Console 搬入底部抽屉后（d1102-件C），
+   文件卡独占 translate 页剩余高度，弹性链路
+   #tab-translate > .card → .file-list-container → .file-list 不变。 */
 #tab-translate > .card {
-    flex: 1 1 var(--translate-split);
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;          /* 允许收缩，容器内滚生效前提 */
 }
-
-/* --- P1-6 件B（d1021-卡2）：文件卡/Console 可拖拽分隔条 -------------------
-   命中热区 6px（含上下 1px 外边距=8px 触控裕量），中缝 1px 边框色指示线；
-   hover / 拖拽中（.is-dragging）指示线升 2px 主色 + 主色浅底，光标 row-resize。
-   折叠互斥取「禁用」而非隐藏：.is-disabled 由 JS 在 Console 折叠时挂上
-   （pointer-events:none + 降透明度），保布局不跳变。 */
-#tab-translate .translate-splitter {
-    flex: 0 0 auto;
-    height: 6px;
-    margin: 1px 0;
-    position: relative;
-    cursor: row-resize;
-    transition: background-color var(--dur) ease;
-}
-#tab-translate .translate-splitter::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 1px;
-    transform: translateY(-50%);
-    background: var(--border);
-    transition: height var(--dur) ease, background var(--dur) ease;
-}
-#tab-translate .translate-splitter:hover::before,
-#tab-translate .translate-splitter.is-dragging::before {
-    height: 2px;
-    background: var(--primary);
-}
-#tab-translate .translate-splitter.is-dragging { background-color: var(--primary-soft); }
-#tab-translate .translate-splitter.is-disabled {
-    cursor: default;
-    pointer-events: none;   /* 折叠态禁用（本卡取禁用而非隐藏，见 HTML 注释） */
-    opacity: 0.35;
-}
-#tab-translate .translate-splitter.is-disabled::before { background: var(--border); height: 1px; }
 #tab-translate .file-list-container {
     flex: 1 1 auto;
     min-width: 0;
@@ -857,8 +819,7 @@ button:focus:not(:focus-visible) { outline: none; }
    （index.html:175 translate Console / :648 guide viewer / :698 AI 分析卡）
    此前被撑高分配余量：guide 首卡内容全在闭合 details 内 → 380px 纯白空盒。
    改自然高后 guide 两卡与 AI 分析卡回归内容高、余量沉 .main 页尾；
-   translate 的弹性由 #tab-translate .console-collapsible 前缀规则显式承接
-   （特异性 1-3-0 覆盖本条 0-1-0），空态支路两规则零改动。 */
+   translate 的弹性由底部抽屉规则显式承接（d1102-件C） */
 .console-section {
     flex: 0 0 auto;
     display: flex;
@@ -926,20 +887,111 @@ button:focus:not(:focus-visible) { outline: none; }
 .console-activity .console-line { margin-bottom: 1px; }
 .console-activity:empty { display: none; }
 
-/* 折叠行为（.console-section 族，app.js toggle .collapsed）
-   A案 批1（R1）：Console 保底高度；类仅 tab-translate 使用（grep 实证），
-   作用域收敛为 #tab-translate 前缀。批3（D2026-1002-12）：高度分配改
-   比例制。卡F（D2026-1013-01）：比例制调为 文件卡 60% / Console 40%
-   且 grow=1（余量吃得进→消底部 228px 空白）；max-height 硬顶废除
-   （380px 是 D2026-1010-01 卡3 上调残值，大窗日志被截断），超量交既有
-   内滚承接（.console-output overflow-y:auto + min-height:0）；
-   .console-output 本体高度全交此处（min-height:0 防双滚动） */
-#tab-translate .console-collapsible:not(.collapsed) {
-    flex: 1 1 40%;
-    min-height: 180px;   /* 卡3（D2026-1010-01）：150→180 */
+/* 折叠行为（.console-section 族）：d1102-件C 起 Console 常驻底部抽屉，
+   抽屉开合由 .console-drawer.is-open 单点接管；页内比例/折叠规则随
+   TranslateSplit 整器退役。抽屉内 console-section 吃满抽屉体高度。 */
+.console-drawer .console-section {
+    flex: 1 1 auto;
+    min-height: 0;
 }
-.console-collapsible.collapsed { flex: 0 0 auto; }
-.console-collapsible.collapsed .console-output { display: none; }
+
+/* ============================================================
+   7b. 任务黑框底部抽屉 + 触发胶囊（d1102-件C，D2026-1102-02）
+   全 token 引用（surface/border/text/primary/ok/warn/danger/console-*），
+   暗色主题经 style.dark.css 变量覆盖自动适配；新组件禁写死色值。
+   ============================================================ */
+.console-drawer {
+    position: fixed;
+    left: var(--rail-w, 220px);
+    right: var(--aside-w, 316px);
+    bottom: 0;
+    height: var(--console-drawer-h, 36vh);
+    z-index: 950;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-top: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-md);
+    transform: translateY(100%);
+    visibility: hidden;
+    transition: transform var(--dur) ease, visibility var(--dur) ease;
+}
+.console-drawer.is-open { transform: none; visibility: visible; }
+.console-drawer-handle {
+    flex: 0 0 6px;
+    position: relative;
+    cursor: row-resize;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+}
+.console-drawer-handle::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 2px;
+    transform: translate(-50%, -50%);
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+}
+.console-drawer-handle:hover::before,
+.console-drawer-handle.is-dragging::before { background: var(--primary); }
+.console-drawer-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.console-drawer-body > .console-section { flex: 1 1 auto; min-height: 0; }
+.console-drawer .section-content { min-height: 0; }
+
+/* 展开时压缩主区高度（布局让位非覆盖；queue-dock/audio 同 var 抬升） */
+.workbench.console-drawer-open .main {
+    max-height: calc(100vh - var(--console-drawer-offset, 0px));
+}
+
+/* 触发胶囊：右下角常驻（不盖右栏，right 跟随 --aside-w） */
+.console-capsule {
+    position: fixed;
+    right: calc(var(--aside-w, 316px) + 16px);
+    bottom: calc(16px + var(--console-drawer-offset, 0px));
+    z-index: 960;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-2);
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+    transition: background-color var(--dur) ease, color var(--dur) ease,
+        border-color var(--dur) ease;
+}
+.console-capsule:hover { background: var(--surface-2); color: var(--text-1); }
+.console-capsule.is-running {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--on-primary);
+    animation: queue-dock-pulse 1.2s infinite;
+}
+.console-capsule.is-open { color: var(--text-1); border-color: var(--primary); }
+.console-capsule.is-error { border-color: var(--danger); color: var(--danger); }
+.console-capsule-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-pill);
+    background: var(--primary);
+    color: var(--on-primary);
+    font-size: var(--font-xs);
+    line-height: 1;
+    text-align: center;
+}
+.console-capsule.has-unread .console-capsule-badge { display: block; }
+.console-capsule.is-error .console-capsule-badge { background: var(--danger); }
+.console-capsule-badge[hidden] { display: none; }
 .console-collapse-btn .console-collapse-icon {
     display: inline-flex;
     align-items: center;
@@ -2037,7 +2089,7 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: var(--console-drawer-offset, 0px);
     z-index: 900;
     padding: var(--space-2) 14px;
     background: var(--surface);
@@ -2601,7 +2653,8 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
 .review-det-row.review-det-skipped .review-det-cat { opacity: .7; }
 
 @media (max-width: 1180px) {
-    .workbench { grid-template-columns: 64px minmax(0, 1fr) 300px; }
+    .workbench { --rail-w: 64px; --aside-w: 300px;
+        grid-template-columns: 64px minmax(0, 1fr) 300px; }
 
     /* 卡G1 折叠态窄栏支路（D2026-1013-01 §2.2c）：rail 64 + 把手 44。
        卡面钉死：本 @media 块内展态沿用上方既有 300px 规则，
@@ -2931,7 +2984,8 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
 
 /* ===== 硬字幕压制队列底条（2.8.0 批1 件5）：.queue-dock 组件族 =====
    全 token 化（surface/border/text/primary/ok/danger），暗色主题随变量自适应 */
-.queue-dock { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px;
+.queue-dock { position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(16px + var(--console-drawer-offset, 0px));
     width: min(720px, 94vw); background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow-md); z-index: 900; overflow: hidden; }
 .queue-dock-main { display: flex; align-items: center; gap: var(--space-3); padding: 8px 14px; }
