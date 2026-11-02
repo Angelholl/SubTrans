@@ -4441,6 +4441,102 @@ def test_review_transcode_inflight_lock(gui_api_obj, monkeypatch, tmp_path):
     assert key not in api_mod._REVIEW_TRANSCODE_INFLIGHT
 
 
+def test_review_transcribe_start_running_done(gui_api_obj, monkeypatch, tmp_path):
+    """d1102-件D：异步转录桥 start→running→done（后台线程＋status 轮询）。
+
+    fake 引擎替身（test_c22_calibration 的 batch 打桩先例）：阻塞在
+    Event 上模拟长转录，验证 running 快照、per-media 在飞锁拒绝、
+    完成后产出 SRT 路径如实返回。"""
+    import subtransjav.refine.asr_env as asr_env
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep01.mp4"
+    media.write_bytes(b"fake-mp4")
+    out = tmp_path / "ep01.srt"
+    release = threading.Event()
+    entered = threading.Event()
+    rec: dict = {}
+
+    def _fake(path, srt_out="", *, passes=1, **_kw):
+        rec["passes"] = passes
+        entered.set()
+        release.wait(5)
+        Path(srt_out).write_text(
+            "1\n00:00:00,000 --> 00:00:01,000\nテスト\n", encoding="utf-8")
+        return {"ok": True, "srt": srt_out, "segments": []}
+
+    monkeypatch.setattr(asr_env, "transcribe_media_to_srt", _fake)
+    key = os.path.normcase(os.path.abspath(str(media)))
+    try:
+        r = gui_api_obj.refine_review_start_transcribe(str(media), 2)
+        assert r["success"] is True and r["started"] is True
+        assert r["passes"] == 2
+        assert entered.wait(2), "后台 worker 未进入引擎替身"
+
+        s = gui_api_obj.refine_review_transcribe_status()
+        assert s["running"] is True
+        assert s["percent"] is None      # 同步 runner 不回流进度 → indeterminate
+        assert s["passes"] == 2
+
+        # 在飞锁：同一媒体重复调用幂等拒绝（error_key 供前端查表）
+        r2 = gui_api_obj.refine_review_start_transcribe(str(media))
+        assert r2["success"] is False
+        assert r2["error_key"] == "review_transcribe_running"
+
+        release.set()
+        end = time.time() + 5
+        while time.time() < end:
+            s = gui_api_obj.refine_review_transcribe_status()
+            if not s["running"]:
+                break
+            time.sleep(0.01)
+        assert s["running"] is False
+        assert s["error"] is None
+        assert s["path"] == str(out)
+        assert s["percent"] == 100.0
+        assert rec["passes"] == 2
+        assert key not in api_mod._REVIEW_TRANSCRIBE_INFLIGHT
+    finally:
+        release.set()
+        api_mod._REVIEW_TRANSCRIBE_INFLIGHT.discard(key)
+
+
+def test_review_transcribe_error_passthrough(gui_api_obj, monkeypatch, tmp_path):
+    """d1102-件D：失败面 error 原样透传（不抛），在飞集合清理。"""
+    import subtransjav.refine.asr_env as asr_env
+    import subtransjav.webview_gui.api as api_mod
+
+    media = tmp_path / "ep02.mp4"
+    media.write_bytes(b"fake-mp4")
+
+    monkeypatch.setattr(
+        asr_env, "transcribe_media_to_srt",
+        lambda *a, **k: {"ok": False, "srt": "", "error": "ct2 引擎异常"})
+
+    class SyncThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(api_mod.threading, "Thread", SyncThread)
+    r = gui_api_obj.refine_review_start_transcribe(str(media))
+    assert r["success"] is True
+
+    s = gui_api_obj.refine_review_transcribe_status()
+    assert s["running"] is False
+    assert s["error"] == "ct2 引擎异常"
+    assert s["error_key"] == "review_transcribe_failed"
+    key = os.path.normcase(os.path.abspath(str(media)))
+    assert key not in api_mod._REVIEW_TRANSCRIBE_INFLIGHT
+
+    # 媒体缺失 fast-fail
+    r = gui_api_obj.refine_review_start_transcribe(str(tmp_path / "none.mp4"))
+    assert r["success"] is False
+    assert r["error"] == api_mod.msg("review_media_missing")
+
+
 # ---------------------------------------------------------------------------
 # 3.2 退役批（D2026-1029-01）：refine_asr_download/download_progress 端点随
 # legacy whisper 模型下载链（asr_downloader）删除（相关测试一并移除）；

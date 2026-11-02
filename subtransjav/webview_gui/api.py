@@ -536,6 +536,11 @@ def _build_refine_args(options: dict[str, Any]) -> list[str]:
 # 判定，第二次进入幂等返回"转码中"，worker finally 完成后移除。
 _REVIEW_TRANSCODE_INFLIGHT: set[str] = set()
 
+# d1102-件D（D2026-1102-02）：per-media 转录在飞集合（normcase 绝对路径为键）。
+# 与转码在飞集合同构：check-and-add 在 _review_transcribe_lock 内原子，
+# worker finally 移除；同一媒体（或全局已有转录）重复调用幂等拒绝。
+_REVIEW_TRANSCRIBE_INFLIGHT: set[str] = set()
+
 
 def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
                     timeout_s: float, progress_cb=None) -> tuple[bool, str]:
@@ -4923,6 +4928,135 @@ class TranslateAPI:
                 "error": state.get("error"),
                 "path": state.get("path"),
                 "cached": bool(state.get("cached"))}
+
+    # ------------------------------------------------------------------
+    # d1102-件D（D2026-1102-02）：异步转录桥（D-2 HANDOFF_TO_CODING）
+    #
+    # transcribe_media_to_srt 是同步 subprocess（asr_env.py），桥面禁止同步
+    # 直调：照 refine_review_start_transcode 先例——后台线程＋per-media 在飞
+    # 锁＋status 轮询三方法形态；start 只 fast-fail 校验，worker 内调同步体。
+    # 产出 SRT 落媒体同目录（<stem>.srt；已存在则 <stem>.transcribed.srt，
+    # 不静默覆盖用户字幕），实际路径经 status.path 如实返回。
+    # ------------------------------------------------------------------
+
+    def _transcribe_state(self) -> dict:
+        """转录状态 dict + 锁的惰性初始化（object.__new__ 测试实例兼容）。"""
+        state = getattr(self, "_review_transcribe_state", None)
+        if state is None:
+            state = {"running": False, "percent": None, "error": None,
+                     "error_key": None, "path": None, "media_path": None,
+                     "passes": 1, "started_at": 0.0, "ended_at": 0.0}
+            self._review_transcribe_state = state
+        if getattr(self, "_review_transcribe_lock", None) is None:
+            self._review_transcribe_lock = threading.Lock()
+        return state
+
+    @staticmethod
+    def _review_transcribe_out_path(media_path: str) -> str:
+        """转录产出路径：媒体同目录，二次产出不覆盖既有 .srt。"""
+        stem = os.path.splitext(media_path)[0]
+        first = stem + ".srt"
+        if not os.path.exists(first):
+            return first
+        return stem + ".transcribed.srt"
+
+    def refine_review_start_transcribe(self, path: str,
+                                       passes: int = 1) -> dict[str, Any]:
+        """后台线程启动媒体→源文 SRT 转录（异步桥 start 面）。
+
+        - 媒体缺失 fast-fail（review_media_missing）；
+        - passes 仅接受 1/2（缺省 1＝单 pass 零行为变化）；
+        - 全局 running 或 per-media 在飞 → 幂等拒绝
+          （error_key=review_transcribe_running，前端 REVIEW_MSG 查表）；
+        - worker 内调 asr_env.transcribe_media_to_srt（同步体），
+          失败 error 原样透传，进度经 refine_review_transcribe_status 轮询；
+        - 线程 spawn 失败解除在飞标记，防媒体被永久锁死。
+        """
+        try:
+            p = str(path or "")
+            if not p or not os.path.isfile(p):
+                return {"success": False, "error": msg("review_media_missing")}
+            try:
+                npasses = 2 if int(passes) == 2 else 1
+            except (TypeError, ValueError):
+                npasses = 1
+            state = self._transcribe_state()
+            lock = self._review_transcribe_lock
+            out_path = self._review_transcribe_out_path(p)
+            key = os.path.normcase(os.path.abspath(p))
+            with lock:
+                if state.get("running") or key in _REVIEW_TRANSCRIBE_INFLIGHT:
+                    return {"success": False,
+                            "error": "已有转录任务进行中，请等待当前任务完成",
+                            "error_key": "review_transcribe_running"}
+                _REVIEW_TRANSCRIBE_INFLIGHT.add(key)
+                state.update({"running": True, "percent": None, "error": None,
+                              "error_key": None, "path": None,
+                              "media_path": p, "passes": npasses,
+                              "started_at": time.time(), "ended_at": 0.0})
+
+            def _worker() -> None:
+                try:
+                    from subtransjav.refine import asr_env
+                    r = asr_env.transcribe_media_to_srt(
+                        p, out_path, passes=npasses) or {}
+                    with lock:
+                        if r.get("ok"):
+                            srt = str(r.get("srt") or out_path)
+                            state["path"] = srt
+                            state["percent"] = 100.0
+                        else:
+                            state["error"] = str(r.get("error") or "")
+                            state["error_key"] = "review_transcribe_failed"
+                        state["ended_at"] = time.time()
+                        # running 最后落 False：防 status 读到 running=False
+                        # 但 path/error 尚未写入的中间态（轮询早停丢产出）
+                        state["running"] = False
+                except Exception as e:      # noqa: BLE001 桥面不抛
+                    with lock:
+                        state["error"] = str(e)
+                        state["error_key"] = "review_transcribe_failed"
+                        state["ended_at"] = time.time()
+                        state["running"] = False
+                finally:
+                    _REVIEW_TRANSCRIBE_INFLIGHT.discard(key)
+
+            try:
+                threading.Thread(target=_worker, daemon=True,
+                                 name="review-transcribe").start()
+            except Exception:
+                _REVIEW_TRANSCRIBE_INFLIGHT.discard(key)
+                with lock:
+                    state["running"] = False
+                raise
+            return {"success": True, "started": True, "path": out_path,
+                    "passes": npasses}
+        except Exception as e:
+            _log_exc("refine_review_start_transcribe")
+            return {"success": False, "error": str(e)}
+
+    def refine_review_transcribe_status(self) -> dict[str, Any]:
+        """转录状态快照（前端 800ms 轮询；无任务时零值字典）。
+
+        percent 恒为 None（同步 runner 不回流进度，前端走 indeterminate
+        流光），完成置 100；elapsed_s 供状态面参考。
+        """
+        state = getattr(self, "_review_transcribe_state", None) or {}
+        started = float(state.get("started_at") or 0.0)
+        ended = float(state.get("ended_at") or 0.0)
+        if started:
+            stop = time.time() if state.get("running") else (ended or started)
+            elapsed = round(max(0.0, stop - started), 1)
+        else:
+            elapsed = 0.0
+        return {"running": bool(state.get("running")),
+                "percent": state.get("percent"),
+                "error": state.get("error"),
+                "error_key": state.get("error_key"),
+                "path": state.get("path"),
+                "media_path": state.get("media_path"),
+                "passes": int(state.get("passes") or 1),
+                "elapsed_s": elapsed}
 
     def refine_review_load_srt(self, path: str,
                                include_raw: bool = False) -> dict[str, Any]:
