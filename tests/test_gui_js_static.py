@@ -11,6 +11,7 @@ app.js 依赖浏览器 DOM/pywebview，项目内无 JS 自动化测试基建，
 配套 ``node --check app.js`` 语法校验（node 不可用时该用例跳过）。
 """
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -4544,13 +4545,13 @@ def test_console_section_layout_column_and_height_pins():
     ma = re.search(r"\.console-activity\s*\{([^}]*)\}", css)
     assert ma and "max-height: 200px" in ma.group(1), \
         "活动流盒上限 200px（owner：高度加一点）"
-    # d1102-件C：Console 搬入底部抽屉后，抽屉体内 console-section 吃满高度；
-    # 页内 40% 弹性规则退役（抽屉高度由 --console-drawer-h 单点承接）。
+    # d1102-卡A：Console 改覆盖层后，面板内 console-section 吃满面板高度；
+    # 页内 40% 弹性规则退役（面板高度 72vh 单点承接）。
     mc = re.search(
-        r"\.console-drawer \.console-section\s*\{([^}]*)\}", css)
-    assert mc, "style.css 缺抽屉内 Console 高度规则"
+        r"\.console-overlay \.console-section\s*\{([^}]*)\}", css)
+    assert mc, "style.css 缺覆盖层面板内 Console 高度规则"
     assert "flex: 1 1 auto;" in mc.group(1), \
-        "抽屉内 Console 须 flex:1 1 auto 吃满抽屉体"
+        "覆盖层面板内 Console 须 flex:1 1 auto 吃满面板"
     assert not re.search(
         r"#tab-translate \.console-collapsible", css), \
         "页内 Console 弹性规则应随抽屉化退役"
@@ -5535,58 +5536,58 @@ def test_translate_splitter_retired_pinned():
     assert "--translate-split" not in css, "style.css 仍残留比例变量"
     assert "TranslateSplit" not in js, "app-file-list.js 仍残留 TranslateSplit"
     assert "subtransjav.translate.split" not in js,         "比例记忆键应随整器退役（不得残留 localStorage 读写）"
-    # 抽屉高度记忆键接管（subtransjav.<域>.<项> 惯例）
+    # d1102-卡A 覆盖层化：抽屉高度记忆键随把手/调高逻辑一并退役
     cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
-    assert "subtransjav.console.h" in cm, "抽屉高度记忆键缺失"
+    assert "subtransjav.console.h" not in cm, \
+        "抽屉高度记忆键应随覆盖层化退役（覆盖层定高 72vh 无记忆）"
 
 
-def test_console_drawer_capsule_static_pinned():
-    """d1102-件C（D2026-1102-02）：底部抽屉＋触发胶囊静态钉。
+def test_console_overlay_static_pinned():
+    """d1102-卡A（Console 覆盖层化）：设置式覆盖层静态钉。
 
-    ① console-section 整块 DOM 原地搬入 #consoleDrawer，既有 console 族
-      id 零增减；② 抽屉 fixed/z-950/主栏宽（rail/aside 变量）/36vh 默认/
-      min 180px/max 70vh（JS clamp）＋ 6px 把手 ＋ 高度记忆键；
-    ③ queue-dock/audio 底缘经 --console-drawer-offset 抬升；
+    ① console-section 整块 DOM 原地保留于 #consoleDrawer（id 不变类改
+      .console-overlay），既有 console 族 id 零增减；
+    ② 面板 fixed 居中 / 宽 min(1100px, 80vw) / 高 72vh / z-950；
+    ③ 遮罩 #consoleOverlayBackdrop 点击关闭（JS 接线锚）；
     ④ 胶囊四态类名（is-running/has-unread/is-error/is-open）与脉冲复用；
-    ⑤ 展开压缩主区高度（布局让位非覆盖）。
+    ⑤ 抽屉残留负控：console-drawer-open 类与 --console-drawer-offset 变量
+      在 style.css 与 app-console.js 零出现；consoleDrawerHandle 三面零出现
+      且已从快照移除。
     """
     html = INDEX_HTML.read_text(encoding="utf-8")
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
 
-    # ① 抽屉容器/胶囊/把手 + console 族 id 原样
-    for dom_id in ("consoleDrawer", "consoleDrawerHandle", "consoleCapsule"):
-        assert f'id="{dom_id}"' in html, f"index.html 缺抽屉锚点: {dom_id}"
+    # ① 面板/遮罩/胶囊 + console 族 id 原样
+    for dom_id in ("consoleDrawer", "consoleOverlayBackdrop", "consoleCapsule"):
+        assert f'id="{dom_id}"' in html, f"index.html 缺覆盖层锚点: {dom_id}"
     drawer_at = html.index('id="consoleDrawer"')
     section_at = html.index('class="section console-section console-collapsible"')
     capsule_at = html.index('id="consoleCapsule"')
-    assert drawer_at < section_at < capsule_at,         "console-section 须整块位于抽屉容器内，胶囊独立于抽屉"
+    assert drawer_at < section_at < capsule_at,         "console-section 须整块位于面板容器内，胶囊独立于面板"
     for dom_id in ("consoleCollapseBtn", "clearConsoleBtn", "exportConsoleBtn",
                    "copyConsoleBtn", "rawLogToggleBtn", "consoleActivity",
                    "consoleOutput"):
         assert f'id="{dom_id}"' in html, f"console 族 id 丢失: {dom_id}"
     assert html.count('class="section console-section console-collapsible"') == 1
 
-    # ② 抽屉规格
-    m = re.search(r"\.console-drawer\s*\{([^}]*)\}", css)
-    assert m, "style.css 缺 .console-drawer 规则"
+    # ② 面板规格（居中覆盖层，不触碰主区布局）
+    m = re.search(r"\.console-overlay\s*\{([^}]*)\}", css)
+    assert m, "style.css 缺 .console-overlay 规则"
     blk = m.group(1)
     for frag in ("position: fixed;", "z-index: 950;",
-                 "height: var(--console-drawer-h, 36vh);",
-                 "left: var(--rail-w", "right: var(--aside-w"):
-        assert frag in blk, f"抽屉规格缺: {frag}"
-    assert "--console-drawer-h: 36vh;" in css, "缺抽屉默认高 36vh token"
-    m_handle = re.search(r"\.console-drawer-handle\s*\{([^}]*)\}", css)
-    assert m_handle and "flex: 0 0 6px;" in m_handle.group(1),         "抽屉把手须 6px 命中热区"
-    for frag in ("KEY: 'subtransjav.console.h'", "MIN_PX: 180",
-                 "MAX_RATIO: 0.7", "DEFAULT_RATIO: 0.36"):
-        assert frag in cm, f"抽屉高度逻辑缺: {frag}"
+                 "width: min(1100px, 80vw);", "height: 72vh;"):
+        assert frag in blk, f"覆盖层面板规格缺: {frag}"
+    # 遮罩规格
+    mb = re.search(r"\.console-overlay-backdrop\s*\{([^}]*)\}", css)
+    assert mb, "style.css 缺 .console-overlay-backdrop 规则"
+    assert "position: fixed;" in mb.group(1), "遮罩须全屏 fixed"
 
-    # ③ 底缘避让
-    qd = re.search(r"\.queue-dock \{[^}]*\}", css)
-    assert qd and "var(--console-drawer-offset" in qd.group(0),         "queue-dock 未按抽屉高度上移"
-    ab = re.search(r"\.audio-preview-bar \{[^}]*\}", css)
-    assert ab and "var(--console-drawer-offset" in ab.group(0),         "audio-preview-bar 未按抽屉高度上移"
+    # ③ 遮罩点击关闭接线（JS 锚）
+    assert "consoleOverlayBackdrop" in cm, "app-console.js 缺遮罩接线"
+    assert re.search(
+        r"consoleOverlayBackdrop[\s\S]{0,200}addEventListener\('click'",
+        cm), "遮罩须 click→close 接线"
 
     # ④ 胶囊四态类名 + 脉冲复用
     for sel in (".console-capsule.is-running {",
@@ -5599,16 +5600,21 @@ def test_console_drawer_capsule_static_pinned():
     assert running_blk and "queue-dock-pulse" in running_blk.group(1),         "运行中胶囊须复用 queue-dock-pulse 脉冲"
     assert "animation: queue-dock-pulse" in css
 
-    # ⑤ 展开压缩主区（布局让位非覆盖）
-    m_open = re.search(
-        r"\.workbench\.console-drawer-open \.main\s*\{([^}]*)\}", css)
-    assert m_open and "max-height: calc(100vh - var(--console-drawer-offset"         in m_open.group(1), "抽屉展开须压缩主区高度（非覆盖）"
-    # 拖拽铁律：把手 mouse 会话禁 stopPropagation（注释点名不算违规；
-    # ESC 链的 stopPropagation 属另一层语义，不在本钉面）
-    drag = cm[cm.index("onDown(e) {"):cm.index("_syncRunning()")]
-    code = "\n".join(re.sub(r"//.*$", "", line) for line in drag.splitlines())
-    assert "stopPropagation" not in code, \
-        "抽屉拖拽不得 stopPropagation（document 级 pywebview 桥靠冒泡）"
+    # ⑤ 抽屉残留负控（写回即红）
+    for text, where in (("console-drawer-open", (css, cm)),
+                        ("--console-drawer-offset", (css, cm)),
+                        ("--console-drawer-h", (css,))):
+        for src in where:
+            assert text not in src, f"{text} 应随覆盖层化退役，仍见于源文件"
+    assert "consoleDrawerHandle" not in html, "把手 id 应从 index.html 移除"
+    assert "consoleDrawerHandle" not in cm, "把手 id 应从 app-console.js 移除"
+    assert "consoleDrawerHandle" not in css, "把手 id 应从 style.css 移除"
+    snap = json.loads((Path(__file__).resolve().parent /
+                       "ui_contract_snapshot.json").read_text(encoding="utf-8"))
+    assert "consoleDrawerHandle" not in snap["ids"], \
+        "把手 id 应从 ui_contract_snapshot.json ids 移除"
+    assert "consoleOverlayBackdrop" in snap["ids"], \
+        "遮罩 id 应加入 ui_contract_snapshot.json ids"
 
 
 def test_home_flow_overview_static_pinned():
@@ -5662,9 +5668,7 @@ def test_console_drawer_capsule_token_only_pinned():
     深色主题经 style.dark.css 变量覆盖自动适配。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     selectors = (
-        ".console-drawer {",
-        ".console-drawer-handle {",
-        ".console-drawer-handle::before {",
+        ".console-overlay {",
         ".console-capsule {",
         ".console-capsule:hover {",
         ".console-capsule.is-running {",
@@ -5704,31 +5708,25 @@ def test_esc_four_layer_chain_pinned():
 # d1102-件E（D2026-1102-02 注记七 / code-review 双轴消化）：五件静态钉
 # ---------------------------------------------------------------------------
 
-def test_console_capsule_drawer_open_avoids_log_overlap_pinned():
-    """件E#1：抽屉展开态胶囊落位关系钉。
+def test_console_capsule_overlay_no_layout_shift_pinned():
+    """件E#1（d1102-卡A 换代）：覆盖层化后胶囊落位与主区零侵入钉。
 
-    修法取「抽屉内容区预留胶囊位 padding」：抽屉体右侧留 62px 通道
-    （> 胶囊 42px），展开时胶囊进入抽屉右下角该通道内，日志区右缘
-    不含通道，胶囊不遮日志尾行。"""
+    覆盖层不触碰主区布局（无 .workbench.console-drawer-open 让位规则、
+    无 --console-drawer-offset 避让变量）；胶囊右下角常驻 z-960
+    （高于面板 950，打开态可再点关闭）。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
-    m_body = re.search(r"\.console-drawer-body\s*\{([^}]*)\}", css)
-    assert m_body, "style.css 缺 .console-drawer-body 规则"
-    assert "padding-right: 62px;" in m_body.group(1), \
-        "抽屉体须预留 62px 胶囊通道（> 42px 胶囊宽）"
-    m_open = re.search(
-        r"\.workbench\.console-drawer-open \.console-capsule\s*\{([^}]*)\}",
-        css)
-    assert m_open, "缺抽屉展开态胶囊落位规则"
-    blk = m_open.group(1)
-    assert "bottom: var(--space-4);" in blk, \
-        "展开态胶囊须落在抽屉右下角预留通道内"
-    assert "right: calc(var(--aside-w, 316px) + var(--space-3));" in blk, \
-        "展开态胶囊右缘须与通道对齐"
-    assert "--console-drawer-offset" not in blk, \
-        "展开态胶囊不得再按抽屉高度外推（否则回到抽屉顶缘外）"
+    assert "console-drawer-open" not in css, \
+        "主区让位规则应随覆盖层化退役（覆盖不压缩主区）"
+    assert "--console-drawer-offset" not in css, \
+        "底缘避让变量应随覆盖层化退役（queue-dock/audio 不再让位）"
+    assert "console-drawer-body" not in css, \
+        "抽屉体规则应随覆盖层化退役"
     m_cap = re.search(r"\.console-capsule\s*\{([^}]*)\}", css)
     assert m_cap and "z-index: 960;" in m_cap.group(1), \
-        "胶囊 z-960 须保留（高于抽屉 950）"
+        "胶囊 z-960 须保留（高于面板 950）"
+    m_ov = re.search(r"\.console-overlay\s*\{([^}]*)\}", css)
+    assert m_ov and "z-index: 950;" in m_ov.group(1), \
+        "面板 z-950 须保留（低于设置 overlay 990 / AppModal 1000）"
 
 
 def test_home_flow_overview_lastrun_missed_skipped_pinned():
@@ -5775,11 +5773,10 @@ def test_home_flow_overview_gate_reason_humanized_pinned():
 
 
 def test_home_flow_overview_aria_labels_chinese_pinned():
-    """件E#4：新组件两处英文 aria-label 改中文（仓内静态中文惯例）。"""
+    """件E#4：新组件两处英文 aria-label 改中文（仓内静态中文惯例）。
+    d1102-卡A：抽屉把手退役，其「调整控制台高度」aria 钉随删。"""
     html = INDEX_HTML.read_text(encoding="utf-8")
     assert 'aria-label="流程概览"' in html, "概览条 aria-label 须为中文"
-    assert 'aria-label="调整控制台高度"' in html, \
-        "抽屉把手 aria-label 须为中文"
     assert "Flow overview" not in html and "Resize console" not in html, \
         "新组件残留英文 aria-label"
 
@@ -7700,6 +7697,11 @@ def test_js_sources_layer_pinned():
         11a00359…/525,692B、app-init.js 18,669B/9e2a277a…（转录 done
         绑定最近转录媒体、媒体切换/离页清回 idle；旧钉 a3990762… /
         2804c902… 退役）；
+        d1102-卡A Console 覆盖层化（2026-11-02）：全库拼接
+        4f3ae14d…/523,310B、app-console.js 13,464B/1061ebe5…（抽屉把手/
+        调高逻辑退役，改遮罩+居中面板）、app-msg.js 66,438B/9bda6492…
+        （console_collapse 值改「关闭」；旧钉 11a00359… / e59c2323… /
+        91806c71… / 66e4ee5f… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7716,7 +7718,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "e59c232360b44f4342134b80b4ca3e24771689f790e44c5670776bbd174d046b"), \
+        "4f3ae14dd1185357f4637ce37d04e5b9c5b7bd45c50313179dedaf70706655ab"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7746,16 +7748,16 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (66445,
-                       "66e4ee5f2387958b2bf373e4705cf7d11ddacbaecdfd223d90d9526508d83620"),
+        "app-msg.js": (66438,
+                       "9bda6492e0197340394b0b70d102875445b31b486ff4de9de960aa513f78907e"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (16669,
                              "7817577825ce59c6c452029fd901d0fb89f7b46d6ea44b6437067f37fc4efc07"),
-        "app-console.js": (15973,
-                           "91806c71c5833a35701b7a16026a40bba9e9d3ea0bf13e643eacd563a151cc62"),
+        "app-console.js": (13464,
+                           "1061ebe550f721dcf383d3b21421c4f45b4d8f2eb952686808f00178bd2c6d13"),
         "app-activity.js": (6167,
                             "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
         "app-progress.js": (3070,

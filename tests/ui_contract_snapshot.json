@@ -23,7 +23,7 @@
     "consoleCapsule",
     "consoleCollapseBtn",
     "consoleDrawer",
-    "consoleDrawerHandle",
+    "consoleOverlayBackdrop",
     "consoleOutput",
     "copyConsoleBtn",
     "dataRootBar",
@@ -450,7 +450,8 @@
       "d1102-件B2 设置 hub 换代（D2026-1102-02）：设置组四页合并为 tab-settings（域卡大框架＋独立 overlay 分页）。ids 净 0 仍 225——删 tabBtnEngine/tabBtnAsrdict/tabBtnGlossary/tabBtnAdvanced（-4），增 tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn（+4），四域面板 id 原地保留；i18n 177→178——tabEngine/tabAsrDict/tabGlossary/tabAdvanced 四旧静态键退役（-4），增 tabSettings＋settingsTabEngine/AsrDict/Glossary/Advanced（+5），四域页内容静态 data-i18n 节点原样搬入 overlay。",
       "d1102-件C 抽屉（D2026-1102-02）：+3 id=consoleDrawer/consoleDrawerHandle/consoleCapsule（225→228，console 族既有 id 零增减）；i18n 键集不动",
       "d1102-件C 首页整合（D2026-1102-02）：+1 id=flowOverview（228→229）；+4 i18n 键=flowNodeTranscribe/Translate/Review/Fullchain（178→182），tabTranslate/start_btn_tab 改值不改键",
-      "d1102-件D 转录桥＋转录区块（D2026-1102-02）：-1 id=reviewAsrBtn（ASR 对照卡吸收合并进转录引导卡），+5 id=reviewTranscribeCard/reviewTranscribeStartBtn/reviewTranscribeDualPass/reviewTranscribeCt2/reviewTranscribeOtherBtn，ids 229→233；i18n_keys 182 不动（校对页零静态 data-i18n，转录区块文案全走 review.js REVIEW_MSG JS 态键）"
+      "d1102-件D 转录桥＋转录区块（D2026-1102-02）：-1 id=reviewAsrBtn（ASR 对照卡吸收合并进转录引导卡），+5 id=reviewTranscribeCard/reviewTranscribeStartBtn/reviewTranscribeDualPass/reviewTranscribeCt2/reviewTranscribeOtherBtn，ids 229→233；i18n_keys 182 不动（校对页零静态 data-i18n，转录区块文案全走 review.js REVIEW_MSG JS 态键）",
+      "d1102-卡A Console 覆盖层化（2026-11-02）：id 等量换血净 0 仍 233——删 consoleDrawerHandle（把手随调高逻辑退役），增 consoleOverlayBackdrop（半透明遮罩）；#consoleDrawer id 不变类改 .console-overlay；i18n 键集不动"
     ]
   }
 }

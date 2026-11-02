@@ -798,8 +798,8 @@ const MSG = {
     data_guide_pick: '选择其他目录...',
     data_guide_keep: '使用当前目录',
 
-    // 控制台抽屉开合（d1102-件C：语义=收起/展开底部抽屉）
-    console_collapse: '收起抽屉',
+    // 控制台覆盖层开合（d1102-卡A：卡头钮语义=关闭面板）
+    console_collapse: '关闭',
     console_expand: '展开抽屉',
     // d1102-件C：首页 L2 C22 门状态行（门关为常态，muted 呈现；reason 为
     // evaluate_c22_gate 原因码，如实透出）

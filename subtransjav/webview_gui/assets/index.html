@@ -662,25 +662,23 @@
 
         </aside>
 
-        <!-- ============ 任务黑框底部抽屉（d1102-件C，D2026-1102-02）============
-             console-section 整块 DOM 原地搬入（既有 id / data-i18n 零增减）；
-             fixed 定位只占主栏宽（left/right 走 --rail-w/--aside-w，不盖 rail
-             与右栏）；z-950 高于 queue-dock/audio 900、低于 modal 1000 与
-             错误槽 1001。默认收起，右下角胶囊触发；顶部 6px 把手调高
-             （localStorage subtransjav.console.h）。 -->
-        <div class="console-drawer" id="consoleDrawer" role="region"
-             aria-label="Console" aria-hidden="true">
-            <div class="console-drawer-handle" id="consoleDrawerHandle"
-                 role="separator" aria-orientation="horizontal"
-                 aria-label="调整控制台高度"></div>
-            <div class="console-drawer-body">
+        <!-- ============ 任务黑框覆盖层（d1102-卡A，Console 覆盖层化）============
+             console-section 整块 DOM 原地保留（既有 id / data-i18n 零增减）；
+             面板 .console-overlay fixed 居中（宽 min(1100px, 80vw)、高 72vh，
+             z-950 低于设置 overlay 990 与 modal 1000），不触碰主区布局；
+             半透明遮罩 #consoleOverlayBackdrop 点击关闭；默认隐藏，右下角
+             胶囊触发，ESC / 卡头关闭钮均可关。 -->
+        <div class="console-overlay-backdrop" id="consoleOverlayBackdrop"
+             aria-hidden="true"></div>
+        <div class="console-overlay" id="consoleDrawer" role="dialog"
+             aria-modal="true" aria-label="Console" aria-hidden="true">
                 <section class="section console-section console-collapsible">
                     <div class="section-header">
                         <h2 data-i18n="console_header">Console</h2>
                         <div class="action-row">
                             <button type="button" class="btn btn-ghost btn-sm console-collapse-btn" id="consoleCollapseBtn"
-                                    aria-expanded="true" data-i18n-title="console_collapse" title="收起抽屉">
-                                <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+                                    aria-expanded="true" data-i18n-title="console_collapse" title="关闭">
+                                <span class="console-collapse-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
                             </button>
                             <button type="button" class="btn btn-ghost btn-sm" id="clearConsoleBtn" data-i18n="clear_console">
                                 Clear
@@ -703,12 +701,11 @@
                         </div>
                     </div>
                 </section>
-            </div>
         </div>
 
         <!-- 右下角触发胶囊（内联 Lucide square-terminal，stroke-width 2；
              四态：空闲 muted 描边 / is-running 主色脉冲 / has-unread 未读
-             计数 / is-error 徽标转 --danger；展开时 is-open 变收起态）。 -->
+             计数 / is-error 徽标转 --danger；打开时 is-open 变关闭态）。 -->
         <button type="button" class="console-capsule" id="consoleCapsule"
                 aria-expanded="false" aria-label="" title="">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none"

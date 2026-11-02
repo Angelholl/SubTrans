@@ -93,9 +93,6 @@
     --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
     /* 控件高度（D2026-1002-07 批1 token 化，等值引用） */
     --h-ctl: 36px; --h-ctl-sm: 30px;
-    /* 底部抽屉高度/底缘避让（d1102-件C）：JS 运行时改写 px，缺省 36vh */
-    --console-drawer-h: 36vh;
-    --console-drawer-offset: 0px;
     /* 过渡时长（等值引用） */
     --dur-fast: .12s; --dur: .15s;
 
@@ -887,78 +884,62 @@ button:focus:not(:focus-visible) { outline: none; }
 .console-activity .console-line { margin-bottom: 1px; }
 .console-activity:empty { display: none; }
 
-/* 折叠行为（.console-section 族）：d1102-件C 起 Console 常驻底部抽屉，
-   抽屉开合由 .console-drawer.is-open 单点接管；页内比例/折叠规则随
-   TranslateSplit 整器退役。抽屉内 console-section 吃满抽屉体高度。 */
-.console-drawer .console-section {
+/* 折叠行为（.console-section 族）：d1102-卡A 起 Console 为设置式覆盖层，
+   面板开合由 .console-overlay.is-open 单点接管。面板内 console-section
+   吃满面板高度，日志区在面板内部滚动。 */
+.console-overlay .console-section {
     flex: 1 1 auto;
     min-height: 0;
 }
 
 /* ============================================================
-   7b. 任务黑框底部抽屉 + 触发胶囊（d1102-件C，D2026-1102-02）
+   7b. 任务黑框覆盖层（遮罩+居中面板） + 触发胶囊（d1102-卡A）
    全 token 引用（surface/border/text/primary/ok/warn/danger/console-*），
-   暗色主题经 style.dark.css 变量覆盖自动适配；新组件禁写死色值。
+   暗色主题经 style.dark.css 变量覆盖自动适配；新组件禁写死色值
+   （遮罩半透明底与 .modal-overlay 同口径 rgba 例外）。
    ============================================================ */
-.console-drawer {
+.console-overlay-backdrop {
     position: fixed;
-    left: var(--rail-w, 220px);
-    right: var(--aside-w, 316px);
-    bottom: 0;
-    height: var(--console-drawer-h, 36vh);
+    inset: 0;
+    z-index: 945;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--dur) ease, visibility var(--dur) ease;
+}
+.console-overlay-backdrop.is-open { opacity: 1; visibility: visible; }
+.console-overlay {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -46%) scale(.98);
+    width: min(1100px, 80vw);
+    height: 72vh;
     z-index: 950;
     display: flex;
     flex-direction: column;
+    padding: var(--space-4);
     background: var(--surface);
-    border-top: 1px solid var(--border-strong);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    transform: translateY(100%);
+    opacity: 0;
     visibility: hidden;
-    transition: transform var(--dur) ease, visibility var(--dur) ease;
+    transition: opacity var(--dur) ease, transform var(--dur) ease,
+        visibility var(--dur) ease;
 }
-.console-drawer.is-open { transform: none; visibility: visible; }
-.console-drawer-handle {
-    flex: 0 0 6px;
-    position: relative;
-    cursor: row-resize;
-    background: var(--surface-2);
-    border-bottom: 1px solid var(--border);
+.console-overlay.is-open {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    visibility: visible;
 }
-.console-drawer-handle::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 44px;
-    height: 2px;
-    transform: translate(-50%, -50%);
-    border-radius: var(--radius-pill);
-    background: var(--border-strong);
-}
-.console-drawer-handle:hover::before,
-.console-drawer-handle.is-dragging::before { background: var(--primary); }
-/* d1102-E 件1（胶囊落位遮日志）：抽屉体右侧预留 62px 胶囊通道
-   （> 42px 胶囊宽 + 间距），展开态胶囊进入该通道落抽屉右下角，
-   日志区右缘止于通道之前，尾行不被遮挡。 */
-.console-drawer-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    padding-right: 62px;
-}
-.console-drawer-body > .console-section { flex: 1 1 auto; min-height: 0; }
-.console-drawer .section-content { min-height: 0; }
-
-/* 展开时压缩主区高度（布局让位非覆盖；queue-dock/audio 同 var 抬升） */
-.workbench.console-drawer-open .main {
-    max-height: calc(100vh - var(--console-drawer-offset, 0px));
-}
+.console-overlay .section-content { min-height: 0; }
 
 /* 触发胶囊：右下角常驻（不盖右栏，right 跟随 --aside-w） */
 .console-capsule {
     position: fixed;
     right: calc(var(--aside-w, 316px) + 16px);
-    bottom: calc(16px + var(--console-drawer-offset, 0px));
+    bottom: 16px;
     z-index: 960;
     width: 42px;
     height: 42px;
@@ -982,11 +963,6 @@ button:focus:not(:focus-visible) { outline: none; }
     animation: queue-dock-pulse 1.2s infinite;
 }
 .console-capsule.is-open { color: var(--text-1); border-color: var(--primary); }
-/* 展开态：胶囊落抽屉右下角预留通道（件1）；不再按抽屉高度外推到顶缘外 */
-.workbench.console-drawer-open .console-capsule {
-    right: calc(var(--aside-w, 316px) + var(--space-3));
-    bottom: var(--space-4);
-}
 .console-capsule.is-error { border-color: var(--danger); color: var(--danger); }
 .console-capsule-badge {
     position: absolute;
@@ -2191,7 +2167,7 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
     position: fixed;
     left: 0;
     right: 0;
-    bottom: var(--console-drawer-offset, 0px);
+    bottom: 0;
     z-index: 900;
     padding: var(--space-2) 14px;
     background: var(--surface);
@@ -3103,7 +3079,7 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
 /* ===== 硬字幕压制队列底条（2.8.0 批1 件5）：.queue-dock 组件族 =====
    全 token 化（surface/border/text/primary/ok/danger），暗色主题随变量自适应 */
 .queue-dock { position: fixed; left: 50%; transform: translateX(-50%);
-    bottom: calc(16px + var(--console-drawer-offset, 0px));
+    bottom: 16px;
     width: min(720px, 94vw); background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow-md); z-index: 900; overflow: hidden; }
 .queue-dock-main { display: flex; align-items: center; gap: var(--space-3); padding: 8px 14px; }

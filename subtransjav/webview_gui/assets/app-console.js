@@ -221,37 +221,27 @@ const ConsoleManager = {
 };
 
 // ============================================================
-// 任务黑框底部抽屉 / 右下角触发胶囊（d1102-件C，D2026-1102-02）
-// - fixed 只占主栏宽（left/right 走 --rail-w/--aside-w），z-950：高于
-//   queue-dock/audio 900，低于 modal 1000 与错误槽 1001；
-// - 默认收起；顶部 6px 把手调高（mouse 会话，铁律：只 preventDefault，
-//   禁 stopPropagation——document 级 pywebview 桥靠冒泡）；
-// - 高度记忆 localStorage subtransjav.console.h；min 180px / max 70vh；
-// - 展开时 .workbench.console-drawer-open 压缩主区高度，并以
-//   --console-drawer-offset 抬升 queue-dock/audio 底缘（布局让位非覆盖）。
+// 任务黑框覆盖层 / 右下角触发胶囊（d1102-卡A：Console 覆盖层化）
+// - 面板 .console-overlay fixed 居中（宽 min(1100px, 80vw)、高 72vh），
+//   z-950：低于设置 overlay 990 与 AppModal 1000，高于 queue-dock/audio 900；
+// - 半透明遮罩 #consoleOverlayBackdrop 点击关闭；ESC / 卡头关闭钮均可关；
+// - 不触碰主区布局（无抽屉时代的让位类与底缘避让变量），日志区在
+//   面板内部滚动。
 // ============================================================
 const ConsoleDrawer = {
-    KEY: 'subtransjav.console.h',
-    DEFAULT_RATIO: 0.36,
-    MIN_PX: 180,
-    MAX_RATIO: 0.7,
     _open: false,
-    _height: 0,
     _running: false,
 
     init() {
         this.drawer = document.getElementById('consoleDrawer');
         this.capsule = document.getElementById('consoleCapsule');
-        this.handle = document.getElementById('consoleDrawerHandle');
-        this.workbench = document.querySelector('.workbench');
+        this.backdrop = document.getElementById('consoleOverlayBackdrop');
         if (!this.drawer || !this.capsule) return;
-        this.restoreHeight();
         this.capsule.addEventListener('click', () => this.toggle());
-        if (this.handle) {
-            this.handle.addEventListener('mousedown', (e) => this.onDown(e));
+        if (this.backdrop) {
+            this.backdrop.addEventListener('click', () => this.close());
         }
-        window.addEventListener('resize', () => this.setHeight(this._height, false));
-        // ESC 第三层（AppModal > 设置 overlay > 抽屉 > about）：上层活跃即
+        // ESC 第三层（AppModal > 设置 overlay > 面板 > about）：上层活跃即
         // early-return，防一次 ESC 关多层；捕获阶段先于 AppModal 冒泡监听。
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape' || !this._open) return;
@@ -279,12 +269,11 @@ const ConsoleDrawer = {
         if (!this.drawer || this._open) return;
         this._open = true;
         this.drawer.classList.add('is-open');
-        if (this.workbench) this.workbench.classList.add('console-drawer-open');
+        if (this.backdrop) this.backdrop.classList.add('is-open');
         if (typeof ConsoleManager !== 'undefined') {
             ConsoleManager._rawLogUnread = 0;
             ConsoleManager._rawLogError = false;
         }
-        this._syncOffset();
         this.renderCapsule();
     },
 
@@ -292,64 +281,8 @@ const ConsoleDrawer = {
         if (!this.drawer || !this._open) return;
         this._open = false;
         this.drawer.classList.remove('is-open');
-        if (this.workbench) this.workbench.classList.remove('console-drawer-open');
-        this._syncOffset();
+        if (this.backdrop) this.backdrop.classList.remove('is-open');
         this.renderCapsule();
-    },
-
-    restoreHeight() {
-        let saved = NaN;
-        try {
-            saved = parseFloat(localStorage.getItem(this.KEY));
-        } catch (e) {
-            // private/无痕读不到 → 默认 36vh
-        }
-        this.setHeight(saved, false);
-    },
-
-    clampHeight(h) {
-        const min = this.MIN_PX;
-        const max = Math.max(min, Math.round(window.innerHeight * this.MAX_RATIO));
-        if (typeof h !== 'number' || !isFinite(h)) {
-            h = Math.round(window.innerHeight * this.DEFAULT_RATIO);
-        }
-        return Math.min(Math.max(h, min), max);
-    },
-
-    setHeight(h, persist) {
-        const v = this.clampHeight(h);
-        this._height = v;
-        document.documentElement.style.setProperty('--console-drawer-h', v + 'px');
-        if (persist) {
-            try {
-                localStorage.setItem(this.KEY, String(v));
-            } catch (e) {
-                // 写入失败静默（private 模式降级为会话级高度）
-            }
-        }
-        if (this._open) this._syncOffset();
-    },
-
-    _syncOffset() {
-        document.documentElement.style.setProperty(
-            '--console-drawer-offset', this._open ? this._height + 'px' : '0px');
-    },
-
-    onDown(e) {
-        if (!this.drawer || e.button !== 0) return;
-        e.preventDefault();   // 只 preventDefault：禁 stopPropagation（桥靠冒泡）
-        const startY = e.clientY;
-        const startH = this._height;
-        const onMove = (ev) => {
-            this.setHeight(startH + (startY - ev.clientY), false);
-        };
-        const onUp = () => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-            this.setHeight(this._height, true);   // 会话末尾单写记忆
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
     },
 
     _syncRunning() {
