@@ -7711,6 +7711,10 @@ def test_js_sources_layer_pinned():
         d981545a…/524,955B、app-init.js 19,324B/157f9dda…（jump()
         transcribe 留首页定位转录卡 + flow-flash 脉冲；旧钉 4f3ae14d… /
         9e2a277a… 退役）；
+        验收期注释换代（2026-11-03 主审亲执）：全库拼接
+        9a093b75…/524,281B、app-init.js 19,432B/
+        269ecd8f…（概览条头注释与 jump() 实际行为对齐，纯注释零逻辑）；
+        旧钉 157f9dda… / d981545a… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7727,7 +7731,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "d981545a5763c6c74538b7fbb5ffc46c323a14a564af409508981501c1a6b9b3"), \
+        "9a093b75c4129b317e12c94e1542811932b9e5a4bb51d3c715464d208306111f"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7817,8 +7821,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (19324,
-                        "157f9ddae914e6ab0b088aae205e204a38025f33a6392b160338b1a8b488ff8e"),
+        "app-init.js": (19432,
+                        "269ecd8f9ce7214b64bbc914f145bf00a55ef4d7e0035cc58c02ff16dc550bda"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,

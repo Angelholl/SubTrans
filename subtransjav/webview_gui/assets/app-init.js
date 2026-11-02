@@ -196,9 +196,10 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
 });
 
 // ============================================================
-// 首页 L2 流程概览条（d1102-件C，D2026-1102-02）
-// - 转录→翻译→校对→全链四节点 chip 直达：转录/校对→校对页，翻译→本页
-//   dropzone，全链→本页开关行（件D 未落，转录暂跳校对页）；
+// 首页 L2 流程概览条（d1102-件C，D2026-1102-02；卡B 换代跳转）
+// - 转录→翻译→校对→全链四节点 chip 直达：转录→本页转录卡、校对→校对页、
+//   翻译→本页 dropzone、全链→本页开关行；滚动定位一律 block:center＋
+//   .flow-flash 高亮脉冲（jump() 内 flash() 两 chip 共用）；
 // - C22 门状态行＋last_run 一行摘要消费 fullchain_automation_status，
 //   与质量中心 fullchain-status-line 同 API 双渲染（复用 fcStatus* 键）；
 // - 门关态 muted 灰点＋原因码，不用警报红（校准未达标系常态）。
