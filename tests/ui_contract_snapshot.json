@@ -68,6 +68,7 @@
     "fileList",
     "fileListContainer",
     "firstRunBanner",
+    "flowOverview",
     "glEmptyHint",
     "glLearnedEmpty",
     "glLearnedMore",
@@ -290,6 +291,10 @@
     "feat_report",
     "feat_tm",
     "feature_status_title",
+    "flowNodeFullchain",
+    "flowNodeReview",
+    "flowNodeTranscribe",
+    "flowNodeTranslate",
     "footer_brand",
     "gl1_label",
     "gl2_label",
@@ -439,7 +444,8 @@
       "d1028-38 换代（CT2 面板接线，钉⑤解冻提案，D2026-1028-03 批准）：ids 218→222（+refineCt2Status/refineCt2InstallBtn/refineCt2ModelStatus/refineCt2ModelBtn）、i18n_keys 176→177（+ct2_panel_title）；同笔 js 字节钉/拼接 sha 换代（d1028-38）",
       "d1102-件B1 质量中心合并（D2026-1102-02）：评测报告（tab-eval-reports）＋质量与建议（tab-guide）合并为单页「质量中心」——删 tab-guide 导航按钮/面板节点（-tabBtnGuide/-tab-guide 两 id），质量与建议静态内容整块 DOM 原地搬家至评测报告面板尾部；tabGuide/tabEvalReports 两静态键退役、tabQualityCenter 单键承接导航与页头；ids 227→225；i18n_keys 178→177",
       "d1102-件B2 设置 hub 换代（D2026-1102-02）：设置组四页合并为 tab-settings（域卡大框架＋独立 overlay 分页）。ids 净 0 仍 225——删 tabBtnEngine/tabBtnAsrdict/tabBtnGlossary/tabBtnAdvanced（-4），增 tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn（+4），四域面板 id 原地保留；i18n 177→178——tabEngine/tabAsrDict/tabGlossary/tabAdvanced 四旧静态键退役（-4），增 tabSettings＋settingsTabEngine/AsrDict/Glossary/Advanced（+5），四域页内容静态 data-i18n 节点原样搬入 overlay。",
-      "d1102-件C 抽屉（D2026-1102-02）：+3 id=consoleDrawer/consoleDrawerHandle/consoleCapsule（225→228，console 族既有 id 零增减）；i18n 键集不动"
+      "d1102-件C 抽屉（D2026-1102-02）：+3 id=consoleDrawer/consoleDrawerHandle/consoleCapsule（225→228，console 族既有 id 零增减）；i18n 键集不动",
+      "d1102-件C 首页整合（D2026-1102-02）：+1 id=flowOverview（228→229）；+4 i18n 键=flowNodeTranscribe/Translate/Review/Fullchain（178→182），tabTranslate/start_btn_tab 改值不改键"
     ]
   }
 }

@@ -92,7 +92,9 @@ const ConsoleManager = {
         const output = document.getElementById('consoleOutput');
         if (!toggle || !output) return;
         toggle.textContent = MSG.raw_log_toggle;
-        output.style.display = 'none';   // 内联展开退场，永久隐藏承载
+        // d1102-件C：Console 已入底部抽屉，原始日志承载恢复可见（抽屉内
+        // 显示最近行；全量仍走 rawLogToggle 的 AppModal.rawLog 弹窗）。
+        output.style.display = '';
         toggle.addEventListener('click', () => this.openRawLogModal());
     },
 

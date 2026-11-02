@@ -114,6 +114,8 @@ const FileListManager = {
         // 空态提前 return 之前——六条 selectedFiles 变更路径全汇 render()，
         // 单点双出口（空态 return / 正常渲染）全覆盖，清空路径可回归空态
         document.getElementById('tab-translate').classList.toggle('has-files', AppState.selectedFiles.length > 0);
+        // d1102-件C：文件态变化同步首页概览条「翻译」节点状态点
+        if (typeof FlowOverview !== 'undefined') FlowOverview.refreshNodes();
         const fileList = document.getElementById('fileList');
         const emptyState = document.getElementById('emptyState');
 

@@ -22,7 +22,12 @@ const KeyboardShortcuts = {
             // 抽屉 > about；上层活跃即 early-return，防一次 ESC 关多层）
             if (e.key === 'Escape') {
                 if (typeof AppModal !== 'undefined' && AppModal._busy) return;
-                if (typeof SettingsHub !== 'undefined' && SettingsHub._isOpen) return;
+                if (typeof SettingsHub !== 'undefined' && SettingsHub._isOpen) {
+                    // 设置 overlay 优先于抽屉/about：settings 自身 capture 在
+                    // about 活跃时让位，故由其下的本层补仲裁（同走 dirty 守卫）
+                    SettingsHub._requestClose();
+                    return;
+                }
                 if (typeof ConsoleDrawer !== 'undefined' && ConsoleDrawer.isOpen()) return;
                 const modal = document.getElementById('aboutModal');
                 if (modal && modal.classList.contains('active')) {

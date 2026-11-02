@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize components (pure DOM parts)
     ConsoleManager.init();
+    // d1102-件C（D2026-1102-02）：首页 L2 流程概览条绑定与首刷
+    FlowOverview.init();
     ProgressManager.init();
     ProgressManager.reset();
     FileListManager.init();
@@ -165,6 +167,10 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
     // 右栏系统状态摘要卡（D2026-1001 批3）：只读四接口，逐项降级
     SystemSummary.load();
 
+    // d1102-件C：首页概览条消费 fullchain_automation_status（C22 门＋last_run），
+    // 与质量中心 fullchain-status-line 同 API 双渲染（digest 模式复用）
+    FlowOverview.refresh();
+
     // Load saved stage settings, glossary, templates and model lists
     if (window.__refineLoadRemote) {
         await window.__refineLoadRemote();
@@ -189,3 +195,128 @@ window.addEventListener('pywebviewready', async () => {    console.log('PyWebVie
     }, 3000);
 });
 
+// ============================================================
+// 首页 L2 流程概览条（d1102-件C，D2026-1102-02）
+// - 转录→翻译→校对→全链四节点 chip 直达：转录/校对→校对页，翻译→本页
+//   dropzone，全链→本页开关行（件D 未落，转录暂跳校对页）；
+// - C22 门状态行＋last_run 一行摘要消费 fullchain_automation_status，
+//   与质量中心 fullchain-status-line 同 API 双渲染（复用 fcStatus* 键）；
+// - 门关态 muted 灰点＋原因码，不用警报红（校准未达标系常态）。
+// ============================================================
+const FlowOverview = {
+    _lastRun: {},
+    _running: false,
+
+    init() {
+        const box = document.getElementById('flowOverview');
+        if (!box) return;
+        box.addEventListener('click', (e) => {
+            const chip = e.target.closest('.flow-chip');
+            if (!chip) return;
+            this.jump(chip.dataset.flow);
+        });
+        window.__homeOverviewRefresh = () => this.refresh();
+        this.refresh();
+    },
+
+    fmt(tpl, kw) {
+        return String(tpl).replace(/\{(\w+)\}/g,
+            (m, k) => (kw[k] === undefined || kw[k] === null ? m : kw[k]));
+    },
+
+    setChip(flow, state) {
+        const chip = document.querySelector(
+            `.flow-chip[data-flow="${flow}"]`);
+        if (!chip) return;
+        chip.classList.remove('is-ok', 'is-warn', 'is-danger');
+        if (state && state !== 'idle') chip.classList.add('is-' + state);
+    },
+
+    jump(flow) {
+        if (flow === 'transcribe' || flow === 'review') {
+            switchTab('tab-review');
+            return;
+        }
+        if (flow === 'translate') {
+            switchTab('tab-translate');
+            const dz = document.getElementById('dropzone');
+            if (dz) dz.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
+        if (flow === 'fullchain') {
+            switchTab('tab-translate');
+            const row = document.querySelector('.fullchain-auto-row');
+            if (!row) return;
+            row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            const box = row.querySelector('input');
+            if (box) box.focus();
+        }
+    },
+
+    refreshNodes() {
+        const files = (typeof AppState !== 'undefined'
+            && Array.isArray(AppState.selectedFiles))
+            ? AppState.selectedFiles.length : 0;
+        const running = typeof AppState !== 'undefined' && !!AppState.isRunning;
+        this.setChip('translate', running ? 'warn' : (files ? 'ok' : 'idle'));
+        this.setChip('transcribe', 'idle');   // 转录入口待件D 落地
+        this.setChip('review', 'idle');
+        const run = this._lastRun || {};
+        const hasRun = Object.keys(run).length > 0;
+        let fc = 'idle';
+        if (running) fc = 'warn';
+        else if (hasRun && String(run.phase || '') === 'failed') fc = 'danger';
+        else if (hasRun) fc = 'ok';
+        this.setChip('fullchain', fc);
+    },
+
+    async refresh() {
+        const gate = document.querySelector('.flow-gate');
+        const gateText = document.querySelector('.flow-gate-text');
+        const last = document.querySelector('.flow-lastrun');
+        if (!gate || !gateText || !last) return;
+        if (!window.pywebview || !window.pywebview.api) {
+            gate.classList.remove('is-on');
+            gateText.textContent = MSG.flowGateUnavailable;
+            last.textContent = MSG.fcStatusFail;
+            return;
+        }
+        let r = null;
+        try {
+            r = await window.pywebview.api.fullchain_automation_status();
+        } catch (e) { /* 桥异常按读取失败处理 */ }
+        if (!r || !r.success) {
+            gate.classList.remove('is-on');
+            gateText.textContent = MSG.flowGateUnavailable;
+            last.textContent = MSG.fcStatusFail;
+            return;
+        }
+        const cg = r.c22_gate || {};
+        gate.classList.toggle('is-on', !!cg.enabled);
+        gateText.textContent = cg.enabled ? MSG.flowGateOn
+            : this.fmt(MSG.flowGateOff, { reason: cg.reason || 'unknown' });
+        const run = r.last_run || {};
+        this._lastRun = run;
+        this._running = !!r.running;
+        if (r.running) {
+            last.textContent = this.fmt(MSG.fcStatusRunning, {
+                d: run.files_done || 0, t: run.files_total || 0,
+                f: run.entries_fixed || 0 });
+        } else if (!Object.keys(run).length) {
+            last.textContent = MSG.fcStatusNever;
+        } else if (String(run.phase || '') === 'skipped') {
+            const why = String(run.skip_reason || '').trim();
+            last.textContent = why ? `未启动全链：${why}` : MSG.fcStatusSkipped;
+        } else if (!String(run.ended_at || '').trim()) {
+            last.textContent = this.fmt(MSG.fcStatusUnfinished,
+                { p: run.entries_pending || 0 });
+        } else {
+            last.textContent = this.fmt(MSG.fcStatusLast, {
+                time: String(run.ended_at).slice(11, 16),
+                f: run.entries_fixed || 0, m: run.entries_failed || 0,
+                p: run.entries_pending || 0,
+                phase: String(run.phase || '') });
+        }
+        this.refreshNodes();
+    }
+};

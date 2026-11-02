@@ -449,13 +449,20 @@ const MSG = {
     save_endpoints_btn: '保存接口',
     start_btn: '开始净语翻译',
     // 翻译 TAB 快捷开始钮独立键（d1023 owner 指定四字文案；右栏主钮 start_btn 不动）
-    start_btn_tab: '开始翻译',
+    // d1102-件C（D2026-1102-02）：首页 CTA 文案换代「一键开始」
+    start_btn_tab: '一键开始',
     stop_btn: '停止',
     status_idle: 'Idle',
 
     // ---- v1.5 左侧 TAB 栏（SmartSub 式功能选择）----
-    tabTranslate: '字幕翻译',
+    // d1102-件C（D2026-1102-02）：tab-translate 升格首页「自动流程」
+    tabTranslate: '自动流程',
     tabReview: '校对',
+    // d1102-件C：首页 L2 流程概览条四节点（静态 data-i18n 键）
+    flowNodeTranscribe: '转录',
+    flowNodeTranslate: '翻译',
+    flowNodeReview: '校对',
+    flowNodeFullchain: '全链',
     // d1102-件B2（D2026-1102-02）：设置组四页合并为顶层「设置」hub；
     // 四域页签标签改用 settingsTab* 键（旧 tabEngine/tabAsrDict/
     // tabGlossary/tabAdvanced 四键确认全仓零引用后退役）
@@ -791,9 +798,14 @@ const MSG = {
     data_guide_pick: '选择其他目录...',
     data_guide_keep: '使用当前目录',
 
-    // 控制台折叠
-    console_collapse: '折叠控制台',
-    console_expand: '展开控制台',
+    // 控制台抽屉开合（d1102-件C：语义=收起/展开底部抽屉）
+    console_collapse: '收起抽屉',
+    console_expand: '展开抽屉',
+    // d1102-件C：首页 L2 C22 门状态行（门关为常态，muted 呈现；reason 为
+    // evaluate_c22_gate 原因码，如实透出）
+    flowGateOn: 'C22 校准门已开',
+    flowGateOff: 'C22 校准门未开（{reason}）· 校准未达标属常态',
+    flowGateUnavailable: 'C22 校准门状态不可用',
     // 2.7.3 件⑧批 8b（D2026-1006-01）：Console 结构化活动流 + 显示层裁剪
     // （全部 JS 态键，不入 data-i18n 快照——index.html 零新增 data-i18n）
     activity_title: '活动流',
@@ -820,7 +832,7 @@ const MSG = {
     // 2.6.3 批B：AppModal.download 复制轻提示（clipboard 不可用时降级 title 提示）
     ui_copied: '已复制',
     ui_copy_manual: '无法自动复制，请长按/手动选择复制',
-    first_run_guide: '首次使用：点击「添加文件」导入字幕（支持 .srt/.ass/.ssa/.vtt），或直接拖入文件开始翻译。',
+    first_run_guide: '首次使用：点击「添加文件」导入字幕（支持 .srt/.ass/.ssa/.vtt），或直接拖入文件后点「一键开始」。',
     // 2.5.0 修复批（JS 态键）：词典 full 变体/云分析确认/角色卡跳转与回落提示
     dict_sudachi_full_label: '日语完整版（sudachi full）',
     dict_sudachi_full_desc: '完整版词典数据（语法提示分词用，与 core 版二选一即可；官方 CDN 单源直链，点下方按钮下载）',

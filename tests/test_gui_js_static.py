@@ -733,9 +733,9 @@ def test_translate_tab_has_quick_start_button():
                      _app_js_source(), re.M), \
         "MSG.start_btn 缺失或文案漂移"
     # 快捷钮独立键：四字文案钉死
-    assert re.search(r"^\s*start_btn_tab:\s*'开始翻译'",
+    assert re.search(r"^\s*start_btn_tab:\s*'一键开始'",
                      _app_js_source(), re.M), \
-        "MSG.start_btn_tab 缺失或文案漂移"
+        "MSG.start_btn_tab 缺失或文案漂移（一键开始）"
 
 
 def test_translate_tab_quick_start_binds_start_translation():
@@ -1544,7 +1544,7 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # （tabBtnEngine/tabBtnAsrdict/tabBtnGlossary/tabBtnAdvanced，-4）、
     # 新增 tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn（+4），
     # 四域面板 id 原地保留，净 0 仍 225
-    assert len(ids) == 228, f"id 全集数漂移（d1102-件C 抽屉/胶囊后契约 228），实为 {len(ids)}"
+    assert len(ids) == 229, f"id 全集数漂移（d1102-件C 首页/抽屉后契约 229），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -2776,8 +2776,8 @@ def test_batch_8b_activity_stream_and_console_trim_pinned():
       只裁 DOM 不动会话内全量 `_lines`（导出/复制仍取全量）；
     - 风险增量打点自 TranslatorManager 迁入 ActivityStream（旧
       _reportedRiskCount 段删除，Console 区不再重复打风险行）；
-    - 原始日志默认收起（定版 D4）并经 localStorage 键持久化，无记录时
-      init 写入默认值。
+    - 原始日志承载随底部抽屉恢复可见（最近行直读）；全量仍走
+      AppModal.rawLog 弹窗，折叠持久化机制随内联展开退场。
     """
     source = _app_js_source()
 
@@ -3581,7 +3581,7 @@ def test_batch3_ai_config_row_pins_survive():
     # 两 id → 225；
     # d1102-件B2（D2026-1102-02，设置 hub）：删四设置导航按钮 id、新增
     # tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn，净 0
-    assert len(ids) == 228, f"id 全集数漂移（d1102-件C 后契约 228），实为 {len(ids)}"
+    assert len(ids) == 229, f"id 全集数漂移（d1102-件C 后契约 229），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -3599,7 +3599,7 @@ def test_batch3_ai_config_row_pins_survive():
     # tabGlossary/tabAdvanced 四旧键退役（-4），新增 tabSettings 与
     # settingsTabEngine/settingsTabAsrDict/settingsTabGlossary/
     # settingsTabAdvanced（+5）→ 178
-    assert len(i18n) == 178, f"data-i18n 键集数漂移（d1102-件B2 后契约 178），实为 {len(i18n)}"
+    assert len(i18n) == 182, f"data-i18n 键集数漂移（d1102-件C 后契约 182），实为 {len(i18n)}"
     trio = html[html.index('class="model-trio"'):html.index("</div>",
                html.index('class="model-trio"'))]
     assert "data-i18n" not in trio, "model-trio 新增静态 data-i18n"
@@ -3973,9 +3973,15 @@ def test_fullchain_switch_wiring_pinned():
     row = html[m.start():html.index("</label>", m.start())]
     assert 'class="fullchain-auto-switch"' in row
     assert 'class="fullchain-auto-label"' in row
-    # 位置：紧随 encode-auto-row 之后（压制开关旁）
-    assert html.index('data-testid="fullchain-auto-row"') \
-        > html.index('data-testid="encode-auto-row"')
+    # 位置（d1102-件C C-5/R6 换代）：全链开关已迁首页 L2 概览条开关位，
+    # 与右栏压制开关不再同卡；断言面改为「两行各自存在且全链行在首页
+    # 概览条内」，不再锁二者相对 DOM 顺序。
+    assert html.count('data-testid="fullchain-auto-row"') == 1
+    assert html.count('data-testid="encode-auto-row"') == 1
+    flow_at = html.index('id="flowOverview"')
+    assert flow_at < html.index('data-testid="fullchain-auto-row"') \
+        < html.index('id="dropzone"'), \
+        "全链开关行须位于首页 #flowOverview 开关位（概览条与 dropzone 之间）"
     # EncodeDock.init 接线：文案 + 保存 KV + 回填 + AppState 镜像维护
     init = _extract_function(_encode_dock_source(src), "init")
     assert "fullchain-auto-row" in init
@@ -5169,7 +5175,7 @@ _B10_NEW_HEADS = {
 
 # 四个顶层 tab 的 aria-label 静态文本
 _B10_TOP_LABELS = {
-    "tab-translate": "字幕翻译",
+    "tab-translate": "自动流程",
     "tab-review": "校对",
     "tab-eval-reports": "质量中心",
     "tab-settings": "设置",
@@ -5445,6 +5451,51 @@ def test_console_drawer_capsule_static_pinned():
         "抽屉拖拽不得 stopPropagation（document 级 pywebview 桥靠冒泡）"
 
 
+def test_home_flow_overview_static_pinned():
+    """d1102-件C（C-1/C-2/C-7）：首页 L2 流程概览条静态钉。
+
+    ① 四节点 chip（转录/翻译/校对/全链）带 data-flow 与静态 data-i18n，
+      位于 L1 页头之后、L3 dropzone 之前；② chip 直达四路：转录/校对→
+      校对页、翻译→本页 dropzone、全链→本页开关行；③ C22 门状态行门关
+      只用 muted 灰点（禁 danger 警报红）；④ 切回首页经 TAB_HOOKS 重刷；
+    ⑤ tab-translate 标签换代「自动流程」、CTA「一键开始」（id 保留 FROZEN）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    tabs = (ASSETS / "app-tabs.js").read_text(encoding="utf-8")
+    msg = (ASSETS / "app-msg.js").read_text(encoding="utf-8")
+
+    for flow in ("transcribe", "translate", "review", "fullchain"):
+        m = re.search(
+            r'<button[^>]*class="flow-chip"[^>]*data-flow="' + flow + r'"',
+            html)
+        assert m, f"概览条缺 chip: {flow}"
+    for key in ("flowNodeTranscribe", "flowNodeTranslate",
+                "flowNodeReview", "flowNodeFullchain"):
+        assert f'data-i18n="{key}"' in html, f"概览条 chip 缺静态键: {key}"
+        assert re.search(rf"^\s*{key}:\s*'", msg, re.M),             f"MSG 缺概览条键: {key}"
+    assert html.index('id="flowOverview"') < html.index('id="dropzone"'),         "概览条须位于页头之后、dropzone 之前"
+    assert html.index('class="page-head"') < html.index('id="flowOverview"'),         "概览条须在 L1 页头之后"
+
+    # chip 直达四路
+    for frag in ("flow === 'transcribe' || flow === 'review'",
+                 "switchTab('tab-review')",
+                 "flow === 'translate'",
+                 "getElementById('dropzone')",
+                 "flow === 'fullchain'",
+                 "querySelector('.fullchain-auto-row')"):
+        assert frag in init, f"概览条 chip 直达缺失: {frag}"
+    assert "'tab-translate': [" in tabs and "__homeOverviewRefresh" in tabs,         "切回首页须经 TAB_HOOKS 重刷概览条"
+
+    # 门关 muted：flow-gate 不得出现 danger 选择器；门开才用 ok
+    assert ".flow-gate.is-on .flow-dot { background: var(--ok); }" in css
+    assert "flow-gate.is-danger" not in css,         "门关态不得用 danger 警报红（校准未达标系常态）"
+    # 文案三源核对（JS 态值；strings.py 无同名键，其后端消费面为零）
+    assert re.search(r"^\s*tabTranslate:\s*'自动流程'", msg, re.M),         "MSG.tabTranslate 未换代为「自动流程」"
+    assert re.search(r"^\s*start_btn_tab:\s*'一键开始'", msg, re.M),         "MSG.start_btn_tab 未换代为「一键开始」"
+
+
 def test_console_drawer_capsule_token_only_pinned():
     """d1102-件C（R10）：抽屉/胶囊新组件禁写死色值，全用既有 token
     （surface/border/text/primary/on-primary/ok/warn/danger/console-*），
@@ -5460,6 +5511,13 @@ def test_console_drawer_capsule_token_only_pinned():
         ".console-capsule.is-open {",
         ".console-capsule.is-error {",
         ".console-capsule-badge {",
+        ".flow-overview {",
+        ".flow-chip {",
+        ".flow-chip:hover {",
+        ".flow-chip + .flow-chip::before {",
+        ".flow-dot {",
+        ".flow-gate {",
+        ".flow-lastrun {",
     )
     color_literal = re.compile(
         r"#[0-9A-Fa-f]{3,8}|rgba?\(|hsla?\(")
@@ -5477,6 +5535,8 @@ def test_esc_four_layer_chain_pinned():
     drawer = cm[cm.index("const ConsoleDrawer = {"):]
     assert "AppModal._busy" in drawer and "SettingsHub._isOpen" in drawer,         "抽屉 ESC 须对 AppModal/设置 overlay 上层 early-return"
     assert "ConsoleDrawer.isOpen()" in sc,         "about 层 ESC 须对抽屉活跃态 early-return（抽屉优先）"
+    assert "SettingsHub._requestClose()" in sc, \
+        "about 层须补设置 overlay 优先仲裁（settings capture 遇 about 让位）"
     assert "AppModal._busy" in sc and "SettingsHub._isOpen" in sc,         "about 层 ESC 须对 AppModal/设置 overlay 上层 early-return"
 
 
@@ -7419,7 +7479,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "79b96c902678c13b266403c1659db52e794949c0e70cd82529f96da4e21af165"), \
+        "386abd8a4ee330988de0ef6b3dcee0bb1737e9b5c2aef06b3671d3d0d4733ef6"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7449,16 +7509,16 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (65683,
-                       "7fcf8b75a76fdfaa18f3fe223caca53d85409700d63cc2457af0165c8b0b695d"),
+        "app-msg.js": (66445,
+                       "66e4ee5f2387958b2bf373e4705cf7d11ddacbaecdfd223d90d9526508d83620"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
-        "app-file-list.js": (16501,
-                             "cdb3c992d0e25b6f659fe5c817c7993e1765bf8db703ba0b48a1a8179046b753"),
-        "app-console.js": (14888,
-                           "9f9482aa06b7d4d1eb324a70a82a5c2e395072ff75eeba5f11b056cc1dee089e"),
+        "app-file-list.js": (16669,
+                             "7817577825ce59c6c452029fd901d0fb89f7b46d6ea44b6437067f37fc4efc07"),
+        "app-console.js": (15025,
+                           "0682627beee50c28feb72bbd3475544393296e865c6c46f26bbb50629b718494"),
         "app-activity.js": (6167,
                             "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
         "app-progress.js": (3070,
@@ -7473,12 +7533,12 @@ def test_js_split_integrity_pinned():
                               "a745d62347ff7734b6971aeccfc181e0c799144aa31b066f384c86957a22adf0"),
         "app-theme.js": (4234,
                          "943902377f465a30975c4e77d443ec784b0f44855203139c1055a5c6185f8d34"),
-        "app-shortcuts.js": (2036,
-                             "4b14fc63bcfbaf2efe41e0b3271f8861bceaefa0c2790b044f24e71d16a9119d"),
+        "app-shortcuts.js": (2318,
+                             "bcc53514cad5ed6d41103a52463b6cc19bd11981676e676e9ab5a608ca4f90f4"),
         "app-about.js": (705,
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
-        "app-tabs.js": (5168,
-                        "e0ff6b252c2290ae62339d0c33251e1a1b9c2763efb17108eabe1f8737db0545"),
+        "app-tabs.js": (5600,
+                        "bc92de327c7effff8b9f73ece7b5f9edaaaed20629472c60bd7d3c1b719a44f4"),
         "app-refine-core.js": (16571,
                                "2788adf6dfa2c2c5a415e6cb4fb3044fb118ff8d2342d497eae79df386e24c60"),
         "app-refine-models.js": (13345,
@@ -7509,8 +7569,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (9330,
-                        "692730d2dc777b9e82a54c8203a79599281337566ee903bf4082a1bea3f8e964"),
+        "app-init.js": (15263,
+                        "cc5ba1969b1111468c4060febb0b0e0de8bcdcb251457d01c8671596a321e100"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,

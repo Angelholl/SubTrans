@@ -992,6 +992,95 @@ button:focus:not(:focus-visible) { outline: none; }
 .console-capsule.has-unread .console-capsule-badge { display: block; }
 .console-capsule.is-error .console-capsule-badge { background: var(--danger); }
 .console-capsule-badge[hidden] { display: none; }
+
+/* ============================================================
+   L2 流程概览条（d1102-件C，D2026-1102-02）
+   --surface-2 底 + hairline 边 + --font-xs；状态点 --ok/--warn/--danger/
+   --text-3；门关 muted 灰点（常态，禁警报红）；flex-wrap 允许折两行。
+   ============================================================ */
+.flow-overview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: var(--font-xs);
+    color: var(--text-2);
+}
+.flow-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+}
+.flow-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+.flow-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-2);
+    font-size: var(--font-xs);
+    cursor: pointer;
+}
+.flow-chip:hover {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--text-1);
+}
+.flow-chip + .flow-chip::before {
+    content: "→";
+    color: var(--text-3);
+    margin-right: var(--space-1);
+}
+.flow-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: var(--radius-round);
+    background: var(--text-3);
+}
+.flow-chip.is-ok .flow-dot { background: var(--ok); }
+.flow-chip.is-warn .flow-dot { background: var(--warn); }
+.flow-chip.is-danger .flow-dot { background: var(--danger); }
+.flow-gate {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+    color: var(--text-2);
+}
+.flow-gate.is-on .flow-dot { background: var(--ok); }
+.flow-gate-text { min-width: 0; }
+.flow-lastrun {
+    flex: 1 1 220px;
+    min-width: 0;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+}
+.flow-overview .fullchain-auto-row {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex: 0 0 auto;
+}
+.flow-overview .fullchain-auto-text {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--space-hair);
+}
+.flow-overview .fullchain-auto-label { color: var(--text-1); }
+.flow-overview .fullchain-auto-desc { color: var(--text-2); }
 .console-collapse-btn .console-collapse-icon {
     display: inline-flex;
     align-items: center;

@@ -17,6 +17,16 @@ const SETTINGS_DOMAIN_BY_TAB = {
 // ③ASR 与词典页 →④⑤⑥质量中心页）；每项保留原 typeof 守卫 + try/catch
 // 吞错（失败不阻断切页），钩子本体（注册方实现）与触发时机零改动。
 const TAB_HOOKS = {
+    // 首页（自动流程）概览条刷新（d1102-件C）：切回首页时重读 C22 门与
+    // last_run，并同步四节点状态（失败不阻断切页）。
+    'tab-translate': [
+        () => {
+            const hook = window.__homeOverviewRefresh;
+            if (typeof hook === 'function') {
+                try { hook(); } catch (e) { /* 概览条刷新失败不阻断切页 */ }
+            }
+        },
+    ],
     // 词库页初始化钩子（D2026-0930-07-追加1 必要⑧）：打开 tab-glossary 时
     // 动态填充角色卡下拉并加载当前选中项（refine IIFE 未加载时静默跳过）
     'tab-glossary': [

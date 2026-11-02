@@ -52,7 +52,7 @@
                 <button type="button" class="side-tab-btn active" id="tabBtnTranslate"
                         data-tab="tab-translate" role="tab" aria-selected="true"
                         aria-controls="tab-translate"
-                        data-i18n-title="tabTranslate" title="字幕翻译"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="side-tab-text" data-i18n="tabTranslate">字幕翻译</span></button>
+                        data-i18n-title="tabTranslate" title="自动流程"><span class="side-tab-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span><span class="side-tab-text" data-i18n="tabTranslate">自动流程</span></button>
                 <!-- 校对 TAB（2.6.1 批 2a D2026-1002-09）：批 1 占位项按预算表程序
                      转正为 .side-tab-btn（tabReview 键沿用批 1，零新增键） -->
                 <button type="button" class="side-tab-btn" id="tabBtnReview"
@@ -98,15 +98,53 @@
         <!-- ============ 中栏：主工作区 ============ -->
         <main class="main">
 
-            <!-- TAB 1: 字幕翻译（默认选中；骨架重做为 页头+拖拽区+文件列表卡+控制台） -->
+            <!-- TAB 1: 自动流程（原字幕翻译；d1102-件C 首页整合，id 保留 FROZEN） -->
             <div class="tab-page active" id="tab-translate" data-testid="tab-translate"
-                 role="tabpanel" aria-label="字幕翻译">
+                 role="tabpanel" aria-label="自动流程">
 
                 <!-- 页头（标题复用既有键 app_header_title；阶段2 批1 加副标题） -->
                 <div class="page-head">
                     <div class="page-head-text">
                         <h1 class="page-title" data-i18n="app_header_title">净语翻译 · SRT</h1>
                         <div class="page-subtitle" data-i18n="main_subtitle">一站式 AI 字幕翻译与校对</div>
+                    </div>
+                </div>
+
+                <!-- L2 流程概览条（d1102-件C，C-1/C-2）：转录→翻译→校对→
+                     全链四节点 chip＋C22 门状态行＋last_run 一行摘要；chip
+                     直达四路，全链 chip 滚到本页开关行。门关态 muted 灰点
+                     （校准未达标系常态，禁警报红）。 -->
+                <div class="flow-overview" id="flowOverview"
+                     aria-label="Flow overview">
+                    <div class="flow-row flow-row-main">
+                        <div class="flow-chips">
+                            <button type="button" class="flow-chip" data-flow="transcribe">
+                                <span class="flow-dot"></span><span data-i18n="flowNodeTranscribe">转录</span>
+                            </button>
+                            <button type="button" class="flow-chip" data-flow="translate">
+                                <span class="flow-dot"></span><span data-i18n="flowNodeTranslate">翻译</span>
+                            </button>
+                            <button type="button" class="flow-chip" data-flow="review">
+                                <span class="flow-dot"></span><span data-i18n="flowNodeReview">校对</span>
+                            </button>
+                            <button type="button" class="flow-chip" data-flow="fullchain">
+                                <span class="flow-dot"></span><span data-i18n="flowNodeFullchain">全链</span>
+                            </button>
+                        </div>
+                        <div class="flow-gate">
+                            <span class="flow-dot"></span>
+                            <span class="flow-gate-text"></span>
+                        </div>
+                    </div>
+                    <div class="flow-row flow-row-sub">
+                        <div class="flow-lastrun"></div>
+                        <!-- 全链自动化开关（C-5/R6）：自右栏流水线镜像卡迁入
+                             首页开关位；类选择器 EncodeDock 天然兼容，零 id /
+                             零 data-i18n，文案 JS 态填充。 -->
+                        <label class="fullchain-auto-row" data-testid="fullchain-auto-row">
+                            <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
+                            <span class="fullchain-auto-text"><span class="fullchain-auto-label"></span><span class="fullchain-auto-desc"></span></span>
+                        </label>
                     </div>
                 </div>
 
@@ -126,7 +164,7 @@
                     <div class="dz-actions">
                         <button type="button" class="btn btn-primary" id="addFilesBtn"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg><span data-i18n="add_files">添加文件</span></button>
                         <button type="button" class="btn btn-primary" id="addFolderBtn"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span data-i18n="add_folder">添加文件夹</span></button>
-                        <button type="button" class="btn btn-primary" data-testid="btn-start-translate"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg><span data-i18n="start_btn_tab">开始翻译</span></button>
+                        <button type="button" class="btn btn-primary" data-testid="btn-start-translate"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg><span data-i18n="start_btn_tab">一键开始</span></button>
                     </div>
                 </div>
 
@@ -160,7 +198,7 @@
                      原 --translate-split / TranslateSplit 逻辑零残留。 -->
 
                 <!-- Console Section 已 DOM 原地搬入底部抽屉（#consoleDrawer，
-                     见 </main> 之后），.console-section 类名与全部既有 id /
+                     见 .workbench 末尾），.console-section 类名与全部既有 id /
                      data-i18n 节点原样保留（app-console.js closest 依赖）。 -->
 
             </div>
@@ -519,16 +557,8 @@
                         <input type="checkbox" class="encode-auto-switch" style="margin:0;">
                         <span class="encode-auto-text"><span class="encode-auto-label"></span><span class="encode-auto-desc"></span></span>
                     </label>
-                    <!-- 全链自动化开关（3.0 批1 a 段，D2026-1009-02：状态存管线
-                         设置 fullchain_auto_enabled，缺省关；开启时翻译完成钩子
-                         整体改道全链状态机——分析→批量修复→复验→链尾压制，前端
-                         预热同门控短路。零 id 零静态 i18n，文案 EncodeDock.init
-                         JS 态填充；样式与压制开关同走 #pipelineCard CSS 规则，
-                         不再复制内联样式族。desc 副行为空壳，文案卡M JS 态填充） -->
-                    <label class="fullchain-auto-row" data-testid="fullchain-auto-row">
-                        <input type="checkbox" class="fullchain-auto-switch" style="margin:0;">
-                        <span class="fullchain-auto-text"><span class="fullchain-auto-label"></span><span class="fullchain-auto-desc"></span></span>
-                    </label>
+                    <!-- 全链自动化开关已迁首页 L2 概览条开关位（d1102-件C，
+                         C-5/R6）：类选择器 EncodeDock 天然兼容，右栏不再承载。 -->
                 </div>
 
                 <!-- 输出目录已并入本卡（真机反馈第二轮，D2026-1013-01 追记 / 卡I：
