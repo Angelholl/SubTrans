@@ -2655,21 +2655,8 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
     margin-top: var(--space-3);
     flex-wrap: wrap;
 }
-/* d1016 卡A（D2026-1016-01）：ASR 对照钮补折叠语言——mask 自绘 Lucide
-   chevron-right（颜色由 background-color var(--text-2) 承担，随主题；
-   data-uri 走 select 箭头先例，-webkit-mask/mask 双写），展开态
-   [aria-expanded="true"] 转向。index.html 零改动，初值无属性=收起态。 */
-#reviewAsrBtn::after {
-    content: "";
-    flex: none;
-    width: 14px;
-    height: 14px;
-    background-color: var(--text-2);
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / contain no-repeat;
-    transition: transform var(--dur) ease;
-}
-#reviewAsrBtn[aria-expanded="true"]::after { transform: rotate(90deg); }
+/* D2026-1016-01 卡A 的 ASR 对照折叠钮 chevron 随件D 吸收合并退役：
+   折叠钮与 ASR 说明卡已并入转录引导卡（D2026-1102-02）。 */
 .review-det-summary { font-size: var(--font-xs); }
 .review-detections {
     margin-top: var(--space-2);
@@ -2677,20 +2664,49 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
     border-radius: var(--radius-sm);
     background: var(--surface);
 }
-.review-asr-card {
+
+/* ---- d1102-件D（D2026-1102-02）：转录引导卡（视觉复用 .empty-guide） ----
+   无 SRT、有媒体时列表空态区浮现；内容＝媒体回显＋开始转录＋双 pass 开关
+   ＋CT2 引擎状态行＋ASR 对照说明次要行。全 token，禁写死色值。 */
+.review-transcribe-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    color: var(--text-2);
+}
+.review-transcribe-media {
+    font-size: var(--font-sm);
+    color: var(--text-1);
+    overflow-wrap: anywhere;
+}
+.review-transcribe-actions {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-3);
-    border-bottom: 1px solid var(--border);
-    background: var(--primary-soft);
+    flex-wrap: wrap;
 }
-.review-asr-card-text {
-    flex: 1;
-    min-width: 0;
+.review-transcribe-pass {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--font-xs);
     color: var(--text-2);
+    cursor: pointer;
 }
+.review-transcribe-pass input { margin: 0; }
+.review-transcribe-ct2 {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+}
+.review-transcribe-asr-note {
+    font-size: var(--font-xs);
+    color: var(--text-3);
+    border-top: 1px dashed var(--border);
+    padding-top: var(--space-2);
+}
+.review-transcribe-install { align-self: flex-start; }
 .review-det-list {
     max-height: 36vh;
     overflow-y: auto;

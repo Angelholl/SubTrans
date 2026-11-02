@@ -10,6 +10,7 @@ const REVIEW_MSG = {
     review_drop_hint: '拖入视频（mp4 / mkv / webm / mov / avi）与字幕（.srt），或点击下方按钮选择',
     review_import_video: '导入视频',
     review_import_srt: '导入字幕',
+    review_import_transcribe: '转录生成字幕',
     review_status_idle: '未导入',
     review_status_ready: '已就绪',
     review_status_busy: '处理中…',
@@ -44,7 +45,6 @@ const REVIEW_MSG = {
     review_save_failed: (m) => `保存失败：${m}`,
     // ---- 批 3（D2026-1002-11）：疑点段联动 / ASR 入口 ----
     review_det_load_btn: '载入疑点段',
-    review_asr_btn: 'ASR 对照',
     review_det_summary: (total, stale) => (stale > 0
         ? `已载入 ${total} 条疑点，${stale} 处位置失效` : `已载入 ${total} 条疑点`),
     review_det_seek_btn: '转跳',
@@ -53,10 +53,22 @@ const REVIEW_MSG = {
     review_det_skip_btn: '跳过',
     review_det_no_srt: '先导入 .srt 字幕，方可转跳/试听',
     review_det_no_save: '判定标记仅本会话内生效，不落盘',
-    review_asr_card: 'ASR 语音对照为可选能力（本机 CT2 转写引擎）：'
-        + '模型可在「设置 → ASR 与词典」一键下载（自动校验完整性），'
-        + '配好后在该处启用 ASR 验证。',
-    review_asr_goto: '前往设置 → ASR 与词典',
+    // ---- d1102-件D（D2026-1102-02）：转录引导卡 / 引擎状态 / ASR 说明 ----
+    review_transcribe_media: (p) => `待转媒体：${p}`,
+    review_transcribe_start_btn: '开始转录',
+    review_transcribe_dualpass: '双 pass（更慢，质量更高）',
+    review_transcribe_ct2_checking: '正在检测转录引擎…',
+    review_transcribe_ct2_ready: (m) => `CT2 转录引擎就绪（模型 ${m}）`,
+    review_transcribe_ct2_missing: 'CT2 转录引擎未安装：安装后才能生成字幕。',
+    review_transcribe_ct2_model: 'CT2 引擎已安装，但模型尚未就位，请先下载模型。',
+    review_transcribe_ct2_unknown: '转录引擎状态未知：可继续尝试，失败时会提示。',
+    review_transcribe_install: '前往设置 → ASR 与词典',
+    review_transcribe_busy: '转录中…',
+    review_transcribe_failed: '转录失败，请检查引擎与媒体后重试',
+    review_transcribe_running: '已有转录任务进行中，请等待完成',
+    review_transcribe_done: (name) => `转录完成：${name}`,
+    review_transcribe_other_btn: '转录其他媒体…',
+    review_asr_note: 'ASR 语音对照为可选能力：转录完成后可在疑点段面板逐段对照确认。',
     // ---- 批 4（D2026-1002-12）：审计④载入 dirty 守卫 ----
     review_load_dirty_confirm: '当前有未保存的编辑，载入新字幕将丢弃这些修改。确认继续？',
 };
@@ -137,6 +149,9 @@ const ReviewUI = {
     _loadedCount: null,
     _probe: null,
     _pollTimer: null,
+    _transcribePollTimer: null,
+    _ct2Status: null,
+    _ct2Pending: false,
     _jumpQueue: [],
     _barShown: false,
     // d1016-卡B：进校对页前的右栏折叠态快照（离页恢复，快照制不读 localStorage）
@@ -202,6 +217,7 @@ const ReviewUI = {
         this._injectTexts();
         this._bindDropzone();
         this._bindTranscode();
+        this._bindTranscribe();
         this._bindTabWatcher();
         this._bindPlayer();
         this._bindList();
@@ -210,6 +226,7 @@ const ReviewUI = {
         this._bindSave();
         this._bindTabGuard();
         this._bindDetections();
+        this._refreshTranscribeUi();
     },
 
     _injectTexts() {
@@ -225,8 +242,12 @@ const ReviewUI = {
         document.querySelectorAll('.review-import-btn').forEach((btn) => {
             // textContent 覆写会清空全部子节点：先存图标引用，写入文案后回插
             const svg = btn.querySelector('svg');
-            btn.textContent = (btn.dataset.kind === 'video')
-                ? REVIEW_MSG.review_import_video : REVIEW_MSG.review_import_srt;
+            const labels = {
+                video: REVIEW_MSG.review_import_video,
+                srt: REVIEW_MSG.review_import_srt,
+                transcribe: REVIEW_MSG.review_import_transcribe,
+            };
+            btn.textContent = labels[btn.dataset.kind] || '';
             if (svg) { btn.prepend(svg); }
         });
         const tcBtn = document.getElementById('reviewTranscodeBtn');
@@ -240,15 +261,22 @@ const ReviewUI = {
         if (save) { save.textContent = REVIEW_MSG.review_save_btn; }
         const saveas = document.getElementById('reviewSaveAsBtn');
         if (saveas) { saveas.textContent = REVIEW_MSG.review_saveas_btn; }
-        // 批 3：疑点面板/ASR 卡文案注入
+        // 批 3：疑点面板文案注入
         const detLoad = document.getElementById('reviewDetLoadBtn');
         if (detLoad) { detLoad.textContent = REVIEW_MSG.review_det_load_btn; }
-        const asrBtn = document.getElementById('reviewAsrBtn');
-        if (asrBtn) { asrBtn.textContent = REVIEW_MSG.review_asr_btn; }
-        const asrText = document.querySelector('.review-asr-card-text');
-        if (asrText) { asrText.textContent = REVIEW_MSG.review_asr_card; }
-        const asrGoto = document.querySelector('.review-asr-goto');
-        if (asrGoto) { asrGoto.textContent = REVIEW_MSG.review_asr_goto; }
+        // d1102-件D：转录引导卡（全部文案走 REVIEW_MSG JS 态键）
+        const trStart = document.getElementById('reviewTranscribeStartBtn');
+        if (trStart) { trStart.textContent = REVIEW_MSG.review_transcribe_start_btn; }
+        const trPass = document.querySelector('.review-transcribe-pass-text');
+        if (trPass) { trPass.textContent = REVIEW_MSG.review_transcribe_dualpass; }
+        const trOther = document.getElementById('reviewTranscribeOtherBtn');
+        if (trOther) { trOther.textContent = REVIEW_MSG.review_transcribe_other_btn; }
+        const trInstall = document.querySelector('.review-transcribe-install');
+        if (trInstall) { trInstall.textContent = REVIEW_MSG.review_transcribe_install; }
+        const trNote = document.querySelector('.review-transcribe-asr-note');
+        if (trNote) { trNote.textContent = REVIEW_MSG.review_asr_note; }
+        const trCt2 = document.getElementById('reviewTranscribeCt2');
+        if (trCt2) { trCt2.textContent = REVIEW_MSG.review_transcribe_ct2_checking; }
     },
 
     _bindDropzone() {
@@ -310,6 +338,8 @@ const ReviewUI = {
     },
 
     _pick(kind) {
+        // d1102-件D：导入区第三动作＝转录生成字幕（先选媒体再启动异步桥）
+        if (kind === 'transcribe') { this._startTranscribe(true); return; }
         this._call(() => (kind === 'video')
             ? this._bridge().refine_review_pick_media()
             : this._bridge().refine_review_pick_srt(),
@@ -347,6 +377,7 @@ const ReviewUI = {
     setVideoPath(path) {
         this._videoPath = path || null;
         this._hasVideo = false;
+        this._refreshTranscribeUi();
         const api = this._bridge();
         if (!api) {
             this._status.setState({ state: 'error', labelKey: 'review_api_not_ready' });
@@ -448,6 +479,208 @@ const ReviewUI = {
         }, 800);
     },
 
+    // ================================================================
+    // d1102-件D（D2026-1102-02）：异步转录桥接线（空态引导卡 / 导入区第三
+    // 动作 / 列表工具条 ghost 入口）。同步转写体只在后端 worker 内跑，前端
+    // 一律 start→status 轮询；busy 态复用状态条四态机。
+    // ================================================================
+
+    _bindTranscribe() {
+        const start = document.getElementById('reviewTranscribeStartBtn');
+        if (start) {
+            start.addEventListener('click', () => this._startTranscribe(false));
+        }
+        const other = document.getElementById('reviewTranscribeOtherBtn');
+        if (other) {
+            other.addEventListener('click', () => this._startTranscribe(true));
+        }
+        const install = document.querySelector('.review-transcribe-install');
+        if (install) {
+            install.addEventListener('click', () => this._openAsrSettings());
+        }
+    },
+
+    _openAsrSettings() {
+        // B2 垫片入口：设置组四页并入 hub 后统一经 openSettingsOverlay
+        if (typeof openSettingsOverlay === 'function') {
+            openSettingsOverlay('asrdict');
+            return;
+        }
+        const b = document.querySelector('[data-settings-domain="asrdict"]');
+        if (b) { b.click(); }
+    },
+
+    _refreshTranscribeUi() {
+        const card = document.getElementById('reviewTranscribeCard');
+        const other = document.getElementById('reviewTranscribeOtherBtn');
+        const media = document.querySelector('.review-transcribe-media');
+        const showCard = !!this._videoPath && !this._hasSrt;
+        if (card) { card.style.display = showCard ? '' : 'none'; }
+        if (other) {
+            other.style.display = (!showCard && this._hasSrt) ? '' : 'none';
+        }
+        if (showCard && media) {
+            media.textContent = REVIEW_MSG.review_transcribe_media(this._videoPath);
+            media.title = this._videoPath;
+        }
+        if (showCard) { this._refreshCt2Status(); }
+    },
+
+    _refreshCt2Status() {
+        const line = document.getElementById('reviewTranscribeCt2');
+        if (!line) { return; }
+        const api = this._bridge();
+        if (!api) {
+            line.textContent = REVIEW_MSG.review_transcribe_ct2_unknown;
+            return;
+        }
+        if (this._ct2Status) { this._renderCt2Status(); return; }
+        line.textContent = REVIEW_MSG.review_transcribe_ct2_checking;
+        if (this._ct2Pending) { return; }
+        this._ct2Pending = true;
+        Promise.resolve(api.refine_asr_status()).then((r) => {
+            this._ct2Pending = false;
+            this._ct2Status = (r && r.success && r.ct2)
+                ? r.ct2 : { probe_failed: true };
+            this._renderCt2Status();
+        }).catch(() => {
+            this._ct2Pending = false;
+            this._ct2Status = { probe_failed: true };
+            this._renderCt2Status();
+        });
+    },
+
+    _renderCt2Status() {
+        const line = document.getElementById('reviewTranscribeCt2');
+        const install = document.querySelector('.review-transcribe-install');
+        const start = document.getElementById('reviewTranscribeStartBtn');
+        if (!line) { return; }
+        const s = this._ct2Status || {};
+        if (s.installed && s.model_present) {
+            line.textContent = REVIEW_MSG.review_transcribe_ct2_ready(
+                s.model || '');
+            if (install) { install.style.display = 'none'; }
+            if (start) { start.disabled = false; }
+            return;
+        }
+        if (s.probe_failed) {
+            // 探测失败不阻断（后端转录失败面会如实回报）
+            line.textContent = REVIEW_MSG.review_transcribe_ct2_unknown;
+            if (install) { install.style.display = 'none'; }
+            if (start) { start.disabled = false; }
+            return;
+        }
+        line.textContent = s.installed
+            ? REVIEW_MSG.review_transcribe_ct2_model
+            : REVIEW_MSG.review_transcribe_ct2_missing;
+        if (install) { install.style.display = ''; }
+        if (start) { start.disabled = true; }
+    },
+
+    _startTranscribe(forcePick) {
+        const api = this._bridge();
+        if (!api) {
+            this._status.setState({ state: 'error',
+                                    labelKey: 'review_api_not_ready' });
+            return;
+        }
+        if (forcePick || !this._videoPath) {
+            this._call(() => api.refine_review_pick_media(),
+                       'review_status_error').then((r) => {
+                if (!r || !r.success || !r.path) { return; }
+                this.setVideoPath(r.path);
+                this._beginTranscribe();
+            });
+            return;
+        }
+        this._beginTranscribe();
+    },
+
+    _beginTranscribe() {
+        const api = this._bridge();
+        if (!api) {
+            this._status.setState({ state: 'error',
+                                    labelKey: 'review_api_not_ready' });
+            return;
+        }
+        const s = this._ct2Status || {};
+        if (s.installed === false && !s.probe_failed) {
+            this._status.setState({ state: 'error',
+                                    labelKey: 'review_transcribe_ct2_missing' });
+            return;
+        }
+        const dual = document.getElementById('reviewTranscribeDualPass');
+        const passes = (dual && dual.checked) ? 2 : 1;
+        this._status.setState({ state: 'busy',
+                                labelKey: 'review_transcribe_busy',
+                                progress: null });
+        Promise.resolve(
+            api.refine_review_start_transcribe(this._videoPath, passes)
+        ).then((r) => {
+            if (!r || !r.success) {
+                console.warn('[review] transcribe rejected:', r && r.error);
+                if (r && r.error_key === 'review_transcribe_running') {
+                    this._status.setState({ state: 'error',
+                                            labelKey: 'review_transcribe_running' });
+                } else {
+                    this._status.setState({ state: 'error',
+                                            labelKey: 'review_transcribe_failed' });
+                }
+                return;
+            }
+            if (window.__homeOverviewRefresh) { window.__homeOverviewRefresh(); }
+            this._pollTranscribe();
+        }).catch((err) => {
+            console.error('[review] transcribe error:', err);
+            this._status.setState({ state: 'error',
+                                    labelKey: 'review_transcribe_failed' });
+        });
+    },
+
+    _pollTranscribe() {
+        const api = this._bridge();
+        if (!api) { return; }
+        if (this._transcribePollTimer) {
+            clearInterval(this._transcribePollTimer);
+        }
+        this._transcribePollTimer = setInterval(() => {
+            Promise.resolve(api.refine_review_transcribe_status()).then((s) => {
+                if (!s) { return; }
+                if (s.running) {
+                    this._status.setState({ state: 'busy',
+                                            labelKey: 'review_transcribe_busy',
+                                            progress: s.percent });
+                    return;
+                }
+                if (s.error) {
+                    clearInterval(this._transcribePollTimer);
+                    this._transcribePollTimer = null;
+                    console.warn('[review] transcribe failed:', s.error);
+                    this._status.setState({ state: 'error',
+                                            labelKey: 'review_transcribe_failed' });
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                    return;
+                }
+                if (s.path) {
+                    clearInterval(this._transcribePollTimer);
+                    this._transcribePollTimer = null;
+                    const name = String(s.path).split(/[\\/]/).pop();
+                    this._status.setState({ state: 'ready',
+                                            labelKey: 'review_transcribe_done',
+                                            labelArgs: [name] });
+                    // 先例链路：自动载入列表（dirty 守卫在 setSrtPath 内单点）
+                    this.setSrtPath(s.path);
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                }
+                // 非终态（running 刚落 False、产出尚未写入的窗口）继续轮询
+            }).catch(() => {});
+        }, 800);
+    },
+
     async setSrtPath(path) {
         // 批 4 审计④：载入新字幕前 dirty 守卫——未保存修改/行内编辑中
         // 时直接覆盖 _blocks 会丢用户编辑；确认才继续，取消即中止。
@@ -468,6 +701,7 @@ const ReviewUI = {
                 console.log('[review]', REVIEW_MSG.review_srt_loaded(r.count, r.encoding));
                 this._setupList();
                 this._refreshReadiness();
+                this._refreshTranscribeUi();
             } else {
                 // 批 3 技术债 i：error_key 优先查 REVIEW_MSG，回退 error 文本
                 console.warn('[review] srt load failed:', r.error);
@@ -1139,28 +1373,6 @@ const ReviewUI = {
                     console.log('[review] detection', mark, JSON.stringify({
                         idx: row.dataset.idx, timing: det.timing, category: det.category }));
                 }
-            });
-        }
-        const asrBtn = document.getElementById('reviewAsrBtn');
-        if (asrBtn) {
-            asrBtn.addEventListener('click', () => {
-                const card = document.querySelector('.review-asr-card');
-                if (!card) { return; }
-                const open = getComputedStyle(card).display === 'none';
-                card.style.display = open ? '' : 'none';
-                asrBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            });
-        }
-        const goto = document.querySelector('.review-asr-goto');
-        if (goto) {
-            // switchTab 在 app.js IIFE 内未挂全局（D2026-1002-11 裁定）——
-            // 程序化 click 走真实 handler 链
-            goto.addEventListener('click', () => {
-                // d1102-件B2（D2026-1102-02）：设置组四页并入设置 hub，
-                // ASR 管理迁入 overlay 域页签——程序化 click 域卡走真实
-                // handler 链（设置页四域卡常驻 DOM，overlay 关闭时也可点）
-                const b = document.querySelector('[data-settings-domain="asrdict"]');
-                if (b) { b.click(); }
             });
         }
     },

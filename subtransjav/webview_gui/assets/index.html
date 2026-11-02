@@ -264,6 +264,7 @@
                     <div class="dz-actions">
                         <button type="button" class="btn btn-secondary btn-sm review-import-btn" data-kind="video"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></button>
                         <button type="button" class="btn btn-secondary btn-sm review-import-btn" data-kind="srt"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></button>
+                        <button type="button" class="btn btn-ghost btn-sm review-import-btn" data-kind="transcribe"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg></button>
                     </div>
                 </div>
 
@@ -287,18 +288,32 @@
                 </div>
 
                 <!-- 疑点段面板（批 3 D2026-1002-11）：折叠容器+行 class 委托零 id；
-                     引导卡=ASR 可选能力说明；文案全 JS 注入 -->
+                     引导卡=ASR 可选能力说明（d1102-件D 吸收进转录引导卡，
+                     ASR 对照说明降为卡内一行次要文案）；文案全 JS 注入 -->
                 <div class="review-det-tools">
                     <button type="button" id="reviewDetLoadBtn" class="btn btn-ghost btn-sm"></button>
-                    <button type="button" id="reviewAsrBtn" class="btn btn-ghost btn-sm"></button>
                     <span class="review-det-summary muted" style="display:none;"></span>
                 </div>
                 <div class="review-detections" id="reviewDetectionsWrap" style="display:none;">
-                    <div class="review-asr-card" style="display:none;">
-                        <div class="review-asr-card-text"></div>
-                        <button type="button" class="btn btn-secondary btn-sm review-asr-goto"></button>
-                    </div>
                     <div id="reviewDetList" class="review-det-list"></div>
+                </div>
+
+                <!-- 转录引导卡（d1102-件D，D2026-1102-02）：无 SRT、有媒体时
+                     列表空态区浮现；视觉复用 .empty-guide，文案全走 review.js
+                     REVIEW_MSG（页内零静态 data-i18n）；引擎状态行消费
+                     refine_asr_status 的 ct2 同源状态 -->
+                <div class="empty-guide review-transcribe-card" id="reviewTranscribeCard" style="display:none;">
+                    <div class="review-transcribe-media"></div>
+                    <div class="review-transcribe-actions">
+                        <button type="button" class="btn btn-primary btn-sm" id="reviewTranscribeStartBtn"></button>
+                        <label class="review-transcribe-pass">
+                            <input type="checkbox" id="reviewTranscribeDualPass">
+                            <span class="review-transcribe-pass-text"></span>
+                        </label>
+                    </div>
+                    <div class="review-transcribe-ct2" id="reviewTranscribeCt2"></div>
+                    <button type="button" class="btn btn-ghost btn-sm review-transcribe-install" style="display:none;"></button>
+                    <div class="review-transcribe-asr-note"></div>
                 </div>
 
                 <!-- 字幕列表（批 2b D2026-1002-10）：工具条+列表容器；
@@ -308,6 +323,7 @@
                     <button type="button" id="reviewLocateBtn" class="btn btn-ghost btn-sm"></button>
                     <div id="reviewPager" class="review-pager"></div>
                     <span class="review-list-actions">
+                        <button type="button" id="reviewTranscribeOtherBtn" class="btn btn-ghost btn-sm" style="display:none;"></button>
                         <button type="button" id="reviewSaveBtn" class="btn btn-primary btn-sm"></button>
                         <button type="button" id="reviewSaveAsBtn" class="btn btn-ghost btn-sm"></button>
                     </span>

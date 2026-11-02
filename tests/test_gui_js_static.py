@@ -1543,8 +1543,11 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # d1102-件B2（D2026-1102-02，设置 hub）：删四个设置导航按钮 id
     # （tabBtnEngine/tabBtnAsrdict/tabBtnGlossary/tabBtnAdvanced，-4）、
     # 新增 tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn（+4），
-    # 四域面板 id 原地保留，净 0 仍 225
-    assert len(ids) == 229, f"id 全集数漂移（d1102-件C 首页/抽屉后契约 229），实为 {len(ids)}"
+    # 四域面板 id 原地保留，净 0 仍 225；
+    # d1102-件D（D2026-1102-02，转录桥＋转录区块）：删 reviewAsrBtn（-1，
+    # ASR 卡吸收合并进转录引导卡）、新增 reviewTranscribeCard/StartBtn/
+    # DualPass/Ct2/OtherBtn（+5），229→233
+    assert len(ids) == 233, f"id 全集数漂移（d1102-件D 后契约 233），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -1832,16 +1835,70 @@ def test_review_detections_session_only_pinned():
     assert "review-det-stale" in src, "位置失效态 class 必须存在"
 
 
-def test_review_asr_goto_programmatic_click():
-    """批 3 条件 1：switchTab 在 app.js IIFE 内未挂全局（ReferenceError）——
-    ASR 引导卡跳转必须走程序化 click（真实 handler 链）。
+def test_review_transcribe_install_opens_settings_asrdict():
+    """d1102-件D：转录卡安装引导跳设置 overlay ASR 域卡（B2 垫片入口）。
 
-    d1102-件B2（D2026-1102-02）随改：设置组四页并入设置 hub，ASR 管理
-    位于 overlay 域页签；跳转锚改为常驻设置域卡。"""
-    body = _extract_function(_review_js_source(), "_bindDetections")
-    assert 'data-settings-domain="asrdict"' in body, "须定位设置 hub 的 ASR 域卡"
-    assert re.search(r'data-settings-domain="asrdict"[\s\S]{0,80}\.click\(\)', body), \
-        "须程序化 click（禁止直调 switchTab）"
+    B2 后设置组四页并入设置 hub，旧 ``.side-tab-btn[data-tab="tab-asrdict"]``
+    选择器必失效；统一经 ``openSettingsOverlay('asrdict')``，并保留常驻域卡
+    programmatic click 兜底（真实 handler 链，禁直调 switchTab）。"""
+    body = _extract_function(_review_js_source(), "_bindTranscribe")
+    assert "_openAsrSettings" in body, "转录卡安装钮须接 _openAsrSettings"
+    helper = _extract_function(_review_js_source(), "_openAsrSettings")
+    assert "openSettingsOverlay('asrdict')" in helper, \
+        "安装引导须经 openSettingsOverlay('asrdict')（B2 垫片入口）"
+    assert re.search(r'data-settings-domain="asrdict"[\s\S]{0,80}\.click\(\)', helper), \
+        "须保留设置 ASR 域卡程序化 click 兜底（禁止直调 switchTab）"
+
+
+def test_review_transcribe_block_pinned():
+    """d1102-件D 转录区块静态钉：空态卡骨架＋异步桥接线＋完成自动载入。
+
+    - 五锚点 id：引导卡/开始钮/双 pass 开关/CT2 状态行/列表工具条 ghost 钮；
+    - 卡视觉复用 empty-guide；页内仍零静态 data-i18n（另一钉全等守）；
+    - start→status 异步形态：同步 transcribe_media_to_srt 不得在前端直调；
+    - 双 pass 默认关＝passes=1，勾选＝2；完成自动走 setSrtPath 先例链路；
+    - CT2 状态行消费 refine_asr_status（与件C 桥同源）。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for i in ("reviewTranscribeCard", "reviewTranscribeStartBtn",
+              "reviewTranscribeDualPass", "reviewTranscribeCt2",
+              "reviewTranscribeOtherBtn"):
+        assert f'id="{i}"' in html, f"index.html 缺少转录区块 id: {i}"
+    assert 'class="empty-guide review-transcribe-card"' in html, \
+        "转录引导卡须复用 empty-guide 视觉先例"
+    assert 'data-kind="transcribe"' in html, \
+        "导入区动作行缺转录生成字幕入口（data-kind 委托）"
+    js = _review_js_source()
+    begin = _extract_function(js, "_beginTranscribe")
+    assert "(dual && dual.checked) ? 2 : 1" in begin, \
+        "双 pass 默认关＝passes=1，勾选＝2"
+    assert "refine_review_start_transcribe(" in begin, \
+        "开始转录须走异步桥 start（不得同步直调 transcribe_media_to_srt）"
+    assert "transcribe_media_to_srt" not in js, \
+        "前端禁止直调同步 transcribe_media_to_srt（只经异步桥）"
+    assert "refine_review_transcribe_status()" in js, "缺转录桥 status 轮询"
+    poll = _extract_function(js, "_pollTranscribe")
+    assert "this.setSrtPath(s.path)" in poll, \
+        "转录完成须自动走 setSrtPath（refine_review_load_srt 先例链路）"
+    ui = _extract_function(js, "_refreshTranscribeUi")
+    assert "showCard" in ui and "reviewTranscribeOtherBtn" in ui, \
+        "有 SRT 后须隐藏卡并显示列表 ghost 钮"
+    ct2 = _extract_function(js, "_refreshCt2Status")
+    assert "refine_asr_status" in ct2, \
+        "CT2 状态行须消费 refine_asr_status（件C 桥同源）"
+
+
+def test_flow_overview_transcribe_node_wired():
+    """d1102-件D：概览条转录节点接转录桥 status（idle/running/done 三态）。"""
+    src = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    assert "refine_review_transcribe_status" in src, \
+        "概览条转录节点未接转录桥 status"
+    assert "_transcribeChipState" in src and "_transcribeState" in src, \
+        "转录节点缺 idle/running/done 三态映射"
+    body = src[src.index("_transcribeChipState()"):]
+    assert "'running'" in body and "'done'" in body, \
+        "转录节点缺 running/done 态"
+    assert "setChip('transcribe', this._transcribeChipState())" in src, \
+        "转录节点未按桥状态点亮"
 
 
 def test_review_saveas_bridge_arg_order_pinned():
@@ -2335,13 +2392,16 @@ def test_batch_c_msg_tabengine_renamed_pinned():
 
 
 def test_batch_c_review_goto_asrdict_pinned():
-    """批C 新钉：review.js ASR 跳转锚定位 ASR 域；d1102-件B2 随改文案
-    指向「设置 → ASR 与词典」。"""
+    """批C 新钉：review.js ASR 跳转锚定位设置 overlay ASR 域；
+    d1102-件D 吸收合并后安装引导文案随译，ASR 对照说明降为卡内一行。"""
     src = _review_js_source()
-    assert 'data-settings-domain="asrdict"' in src, "review.js 跳转锚未改设置 ASR 域卡"
-    assert "review_asr_goto: '前往设置 → ASR 与词典'" in src, \
-        "review_asr_goto 文案未随改"
-    assert "「设置 → ASR 与词典」" in src, "review_asr_card 缺「设置 → ASR 与词典」表述"
+    assert "openSettingsOverlay('asrdict')" in src, \
+        "review.js 安装引导未经设置 overlay ASR 域（B2 垫片入口）"
+    assert "review_transcribe_install: '前往设置 → ASR 与词典'" in src, \
+        "转录卡安装引导文案未指向「设置 → ASR 与词典」"
+    assert "review_asr_note:" in src, "ASR 对照说明须降为转录卡内一行次要文案"
+    assert "review_asr_card" not in src and "review_asr_goto" not in src, \
+        "旧 review-asr-card 文案键未退役"
 
 
 def test_d1031_review_transcode_busy_renamed_pinned():
@@ -3580,8 +3640,10 @@ def test_batch3_ai_config_row_pins_survive():
     # d1102-件B1（D2026-1102-02，质量中心合并）：删 tabBtnGuide/tab-guide
     # 两 id → 225；
     # d1102-件B2（D2026-1102-02，设置 hub）：删四设置导航按钮 id、新增
-    # tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn，净 0
-    assert len(ids) == 229, f"id 全集数漂移（d1102-件C 后契约 229），实为 {len(ids)}"
+    # tabBtnSettings/tab-settings/settingsOverlay/settingsCloseBtn，净 0；
+    # d1102-件D（D2026-1102-02，转录桥＋转录区块）：-reviewAsrBtn +5
+    # 转录卡 id，229→233
+    assert len(ids) == 233, f"id 全集数漂移（d1102-件D 后契约 233），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -7052,12 +7114,12 @@ def test_p14_dropzone_restored_pinned():
     assert set(texts) == {msg_empty}, \
         f"empty_hint 双表失步：MSG={msg_empty!r}，index 挂点={texts!r}"
 
-    # ⑤ 校对页两枚导入钮图标化且粗细统一 2
+    # ⑤ 校对页三枚导入钮（视频/字幕/转录生成字幕）图标化且粗细统一 2
     review = re.findall(
         r'<button[^>]*class="[^"]*review-import-btn[^"]*"[^>]*>.*?</button>',
         html, re.S)
-    assert len(review) == 2, \
-        f"review-import-btn 应恰 2 枚（校对页），实测 {len(review)}"
+    assert len(review) == 3, \
+        f"review-import-btn 应恰 3 枚（校对页，件D 加转录入口），实测 {len(review)}"
     for frag in review:
         assert "<svg" in frag, "review-import-btn 缺内联 svg 图标"
         assert 'stroke-width="2"' in frag, \
@@ -7304,66 +7366,25 @@ def test_p24_guide_details_chevron_pinned():
 # 静态钉（防回潮）：CSS chevron 常显 + [aria-expanded="true"] rotate(90deg)
 # + review.js handler 同步 aria-expanded。
 # ============================================================================
-def test_review_asr_chevron_pinned():
-    """D2026-1016-01 / 卡A：校对页 ASR 对照钮 chevron + aria 状态静态钉。
+def test_review_asr_card_absorbed_pinned():
+    """D2026-1016-01 / 卡A 二代钉（d1102-件D 吸收合并，D2026-1102-02）。
 
-    背景（卡面根因）：`.review-det-tools` 工具行「ASR 对照」钮是
-    `.review-asr-card` 显隐唯一切换钮，但无 chevron、无 aria 状态、切换无
-    视觉反馈，与全站「Lucide chevron + rotate」折叠语言（P2-4 卡K / 词库页
-    B2）不一致。收口路线=`#reviewAsrBtn::after` 自绘 Lucide chevron-right
-    （mask 取 alpha，颜色由 background-color var(--text-2) 承担随主题），
-    `[aria-expanded="true"]` 时 rotate(90deg)；review.js click handler 同步
-    写 aria-expanded。
-
-    断言面：
-    - style.css：#reviewAsrBtn::after 自绘规则（含 var(--text-2) 与
-      -webkit-mask/mask 双写）+ [aria-expanded="true"]::after rotate 规则；
-    - review.js：reviewAsrBtn click handler 体含 setAttribute('aria-expanded');
-    - index.html：`reviewAsrBtn` 出现次数恒为 1（防误改 HTML）。
-    """
+    背景：旧「ASR 对照」折叠钮 + .review-asr-card 说明卡是 el 显隐唯一切换
+    钮；件D 将其吸收进转录引导卡（引擎状态由转录卡承载，ASR 对照说明降为
+    卡内一行次要文案）。本钉守旧节点/样式/handler 退役，防回潮。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     html = INDEX_HTML.read_text(encoding="utf-8")
     js = REVIEW_JS.read_text(encoding="utf-8")
 
-    # ① 自绘 chevron 规则体：mask 取 alpha + 颜色 var(--text-2) + 双写 mask
-    drawn = _p01_rule_blocks(css, "#reviewAsrBtn::after")
-    assert drawn, "① 缺 #reviewAsrBtn::after 自绘 chevron 规则"
-    for blk in drawn:
-        assert "var(--text-2)" in blk, \
-            "① 自绘 chevron 未由 background-color var(--text-2) 承担颜色"
-        assert "-webkit-mask:" in blk and re.search(r"(?<!-)\bmask:", blk), \
-            "① 自绘 chevron 未 -webkit-mask / mask 双写"
-
-    # ② [aria-expanded="true"] 旋转规则在位（chevron 展开时转向）
-    opened = _p01_rule_blocks(css, '#reviewAsrBtn[aria-expanded="true"]::after')
-    assert opened and all("rotate(90deg)" in blk for blk in opened), \
-        '② 缺 #reviewAsrBtn[aria-expanded="true"]::after{transform:rotate(90deg)}'
-
-    # ③ review.js reviewAsrBtn click handler 体同步 aria-expanded
-    m = re.search(
-        r"const asrBtn = document\.getElementById\('reviewAsrBtn'\);", js)
-    assert m, "③ review.js 未找到 reviewAsrBtn 绑定段"
-    seg = js[m.end():]
-    mm = re.search(r"asrBtn\.addEventListener\('click',\s*\(\)\s*=>\s*\{", seg)
-    assert mm, "③ review.js reviewAsrBtn 缺 click handler"
-    depth = 0
-    handler = ""
-    for i in range(mm.end() - 1, len(seg)):
-        ch = seg[i]
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                handler = seg[mm.end() - 1:i + 1]
-                break
-    assert handler, "③ review.js reviewAsrBtn handler 花括号未配平"
-    assert "setAttribute('aria-expanded'" in handler, \
-        "③ reviewAsrBtn handler 未同步 setAttribute('aria-expanded')"
-
-    # ④ index.html 零改动（防误改 HTML；现值 grep 记数 ==1）
-    assert html.count("reviewAsrBtn") == 1, \
-        "④ index.html reviewAsrBtn 出现次数漂移（应恒为 1，proof HTML 未动）"
+    assert "reviewAsrBtn" not in html and "review-asr-card" not in html, \
+        "旧 ASR 对照卡/折叠钮 HTML 未退役（已并入转录引导卡）"
+    assert "reviewAsrBtn" not in css and "review-asr-card" not in css, \
+        "旧 ASR 对照卡样式/chevron 规则未退役"
+    assert "reviewAsrBtn" not in js and "review-asr-card" not in js, \
+        "旧 ASR 对照卡 handler 未退役"
+    assert 'class="review-transcribe-asr-note"' in html, \
+        "ASR 对照说明须降为转录卡内一行次要文案"
+    assert "review_asr_note:" in js, "ASR 对照说明文案键缺失"
 
 
 # ============================================================================
@@ -7574,6 +7595,9 @@ def test_js_sources_layer_pinned():
         f40ee79a…/523,144B、app-console.js 15,973B/91806c71…（appendRaw
         后端行类型分流）、app-init.js 16,060B/cb9385ff…（漏听放弃段＋门
         reason 中文映射；旧钉 386abd8a… 退役）；
+        d1102-件D 转录桥换代（D2026-1102-02）：全库拼接
+        a3990762…/524,258B、app-init.js 17,202B/2804c902…（概览条转录
+        节点接转录桥 status idle/running/done 三态）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7590,7 +7614,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "f40ee79a19b31a4f946859bb7ebd9ebbec28794d3f8afeb93331f49b290740d0"), \
+        "a3990762e9eebefa84c714820150aed284505c84c5bfa37ef78c88be22686f1d"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7680,8 +7704,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (16060,
-                        "cb9385ff2b0284fa9ff50759349f5ad0fca8ab28e76d66dc5274fe8453b3a731"),
+        "app-init.js": (17202,
+                        "2804c902b8409eedc603cc901abb73df8341b20075c6d1bd526ab7f5886d0885"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,

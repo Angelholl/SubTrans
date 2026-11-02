@@ -216,6 +216,8 @@ const GATE_REASON_TEXT = {
 const FlowOverview = {
     _lastRun: {},
     _running: false,
+    // d1102-件D（D2026-1102-02）：转录桥状态（idle/running/done 三态）
+    _transcribeState: 'idle',
 
     init() {
         const box = document.getElementById('flowOverview');
@@ -274,8 +276,10 @@ const FlowOverview = {
             ? AppState.selectedFiles.length : 0;
         const running = typeof AppState !== 'undefined' && !!AppState.isRunning;
         this.setChip('translate', running ? 'warn' : (files ? 'ok' : 'idle'));
-        this.setChip('transcribe', 'idle');   // 转录入口待件D 落地
+        // 件D：转录节点接转录桥 status（running=warn / done=ok / idle 原灰点）
+        this.setChip('transcribe', this._transcribeChipState());
         this.setChip('review', 'idle');
+        this.refreshTranscribeNode();
         const run = this._lastRun || {};
         const hasRun = Object.keys(run).length > 0;
         let fc = 'idle';
@@ -283,6 +287,30 @@ const FlowOverview = {
         else if (hasRun && String(run.phase || '') === 'failed') fc = 'danger';
         else if (hasRun) fc = 'ok';
         this.setChip('fullchain', fc);
+    },
+
+    _transcribeChipState() {
+        if (this._transcribeState === 'running') return 'warn';
+        if (this._transcribeState === 'done') return 'ok';
+        return 'idle';
+    },
+
+    async refreshTranscribeNode() {
+        // 转录桥 status 轮询面（无任务/未就绪时保持 idle 灰点）
+        if (!window.pywebview || !window.pywebview.api) {
+            this._transcribeState = 'idle';
+            this.setChip('transcribe', 'idle');
+            return;
+        }
+        try {
+            const api = window.pywebview.api;
+            const s = await api.refine_review_transcribe_status();
+            this._transcribeState = (s && s.running) ? 'running'
+                : ((s && s.path) ? 'done' : 'idle');
+        } catch (e) {
+            this._transcribeState = 'idle';
+        }
+        this.setChip('transcribe', this._transcribeChipState());
     },
 
     async refresh() {
