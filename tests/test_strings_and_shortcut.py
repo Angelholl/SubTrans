@@ -8,7 +8,9 @@
   （用户配置文件 / 环境变量 SUBTRANSJAV_HEARTBEAT_STALE_S）；
 - ``首次安装.bat``（GBK 编码）调用 create_shortcut.py 的失败兜底与引号包裹；
 - ``create_shortcut.py`` 不再使用 os.execv（Windows 空格路径缺陷）且
-  WorkingDirectory 指向仓库根。
+  WorkingDirectory 指向仓库根；
+- 桌面快捷方式清理名单两侧（create_shortcut.py / uninstall.bat）不得单侧漏名
+  （d1102 旧名快捷方式图标空白事故机制钉）。
 """
 
 import re
@@ -629,12 +631,16 @@ def test_create_shortcut_avoids_execv_and_sets_workdir():
 # ---------------------------------------------------------------------------
 
 # create_shortcut.py 中清理的历史遗留快捷方式名（照抄源码精确字符串，
-# 第二项中的分隔符为 U+00B7 中点，与源码一致）
+# 第二项中的分隔符为 U+00B7 中点，与源码一致）。
+# SubTransJAV.lnk：品牌统一（D2026-1004-02）前的旧名快捷方式，本机曾长期作为
+# 唯一入口；旧品牌词在此为清理锚（与 uninstall.bat LNK6 同源），
+# 已入 test_brand_allowlist 白名单。
 LEGACY_LNK_NAMES = [
     "净语翻译.lnk",
     "净语翻译 · WhisperJAV Translate.lnk",
     "WhisperJAV Translate.lnk",
     "wjtranslate-gui.lnk",
+    "SubTransJAV.lnk",
 ]
 
 
@@ -657,6 +663,40 @@ def test_uninstall_bat_covers_all_desktop_shortcuts(uninstall_bat_text):
     assert "SubTrans.lnk" in uninstall_bat_text
     for name in LEGACY_LNK_NAMES:
         assert name in uninstall_bat_text, f"缺少历史遗留快捷方式名: {name}"
+
+
+@pytest.mark.skipif(
+    not (REPO_ROOT / "create_shortcut.py").exists(),
+    reason="create_shortcut.py 为内部仓安装辅助，不随公开仓发布",
+)
+def test_shortcut_cleanup_names_single_source_no_one_sided_drift(uninstall_bat_text):
+    """d1102 桌面图标事故的机制钉：两侧清理名单不得单侧漏名。
+
+    事故面：旧名快捷方式的 IconLocation 钉在改名前的旧仓库根 → 图标空白；
+    uninstall.bat 早有该旧名清理锚（LNK6），create_shortcut.py 的清理元组却缺它，
+    于是旧名（空白图标）与新建 SubTrans.lnk 长期并存、无人清理。
+    本钉从 create_shortcut.py 源码 AST 取清理元组（不复制字面量，避免三处漂移），
+    断言其全部 ∈ uninstall.bat 删除名单；任一侧漏名即红。
+    """
+    import ast
+
+    src = (REPO_ROOT / "create_shortcut.py").read_text(encoding="utf-8")
+    cleaned = []
+    for node in ast.walk(ast.parse(src)):
+        if (isinstance(node, ast.For)
+                and isinstance(node.iter, ast.Tuple)
+                and node.iter.elts
+                and all(isinstance(e, ast.Constant) and isinstance(e.value, str)
+                        and e.value.endswith(".lnk") for e in node.iter.elts)):
+            cleaned.extend(e.value for e in node.iter.elts)
+    assert cleaned, "create_shortcut.py 未找到 .lnk 清理元组（结构漂移）"
+    missing = [n for n in cleaned if n not in uninstall_bat_text]
+    assert not missing, (
+        "create_shortcut.py 清理的旧快捷方式名未在 uninstall.bat 覆盖"
+        f"（单侧清理=残留）: {missing}")
+    # 新建名同样须在卸载名单内（否则卸载后桌面留死链）
+    assert 'desktop / "SubTrans.lnk"' in src
+    assert "SubTrans.lnk" in uninstall_bat_text
 
 
 def test_uninstall_bat_mentions_cleanup_and_backup_targets(uninstall_bat_text):

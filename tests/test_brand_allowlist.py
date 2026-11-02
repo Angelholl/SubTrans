@@ -58,6 +58,7 @@ ALLOWLIST = frozenset({
     "subtransjav/webview_gui/assets/style.dark.css",  # 文件头注释（注释级）
     # ---- 测试（本机路径，allowlist 明文保护）----
     "tests/test_media_path.py",            # 本机仓库绝对路径 D:/SubTransJAV 夹具（禁区）
+    "tests/test_strings_and_shortcut.py",  # LEGACY_LNK_NAMES 旧桌面快捷方式名 SubTransJAV.lnk 清理锚（与 uninstall.bat LNK6 同源；d1102 桌面图标空白事故后补，防单侧清理漂移）
     # ---- 工具脚本（历史输出文案，非产品代码）----
     "tools/bench_refine.py",               # 基准脚本 print 历史口径
     # D2026-1028-01 公开仓收窄：spike/fts5_spike.py 与 tools/model_matrix_run.py 随
