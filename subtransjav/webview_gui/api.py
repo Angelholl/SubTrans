@@ -5925,21 +5925,31 @@ class TranslateAPI:
         return str(_resolve_safe_path(
             os.path.join(CONFIG_DIR, "fullchain_c22.json")))
 
+    def _fullchain_c22_gate_state(self) -> dict[str, Any]:
+        """C22 校准门只读状态（链内消费与门状态桥共用单一读取面）。
+
+        返回 ``{"enabled": bool, "reason": str}``；reason 如实透出
+        ``evaluate_c22_gate`` 原因码（ok / missing / invalid / disabled /
+        fingerprint-missing / fingerprint-mismatch）。读取异常按 invalid
+        fail-closed（宁可全放弃，不无证放行）；指纹问题另记 warning 提示
+        重新校准（D2026-1101-01 §三④：旧测量依据不得静默复用）。"""
+        try:
+            from subtransjav.data_migration import evaluate_c22_gate
+            ok, reason = evaluate_c22_gate(self._fullchain_c22_path())
+        except Exception:
+            return {"enabled": False, "reason": "invalid"}
+        if not ok and reason in ("fingerprint-mismatch", "fingerprint-missing"):
+            _log.warning("C22 校准门指纹不匹配（%s）：按关门处理，请重新校准",
+                         reason)
+        return {"enabled": bool(ok), "reason": reason}
+
     def _fullchain_c22_enabled(self) -> bool:
         """C22 校准门读取（fail-closed）：仅 enabled is True 且
         ``rules_sha1``＋``app_version`` 指纹与当前生效规则集/版本一致才开；
         文件缺失/损坏/enabled 非 True/指纹缺失或不匹配一律 False（宁可全
         放弃，不无证放行），指纹问题另记 warning 提示重新校准
         （D2026-1101-01 §三④：旧测量依据不得静默复用）。"""
-        try:
-            from subtransjav.data_migration import evaluate_c22_gate
-            ok, reason = evaluate_c22_gate(self._fullchain_c22_path())
-        except Exception:
-            return False
-        if not ok and reason in ("fingerprint-mismatch", "fingerprint-missing"):
-            _log.warning("C22 校准门指纹不匹配（%s）：按关门处理，请重新校准",
-                         reason)
-        return ok
+        return self._fullchain_c22_gate_state()["enabled"]
 
     def _resolve_guide_for_done_key(self, done_key: str,
                                     session_paths: (dict[str, Any] |
@@ -6524,12 +6534,15 @@ class TranslateAPI:
     def fullchain_automation_status(self) -> dict[str, Any]:
         """全链运行态查询桥（批1 a 段；公开桥方法）：running=状态机在飞
         （_fullchain_running 标志，_ai_lock 下读取）；last_run=上次运行
-        快照（与 fullchain_last_run_status 同源读取）。批2 消费。"""
+        快照（与 fullchain_last_run_status 同源读取）；c22_gate=校准门
+        只读状态 {enabled, reason}（d1102-件C 前置，reason 为
+        evaluate_c22_gate 原因码，fail-closed 语义与链内消费同源）。"""
         self._init_ai_state()
         with self._ai_lock:
             running = bool(self._fullchain_running)
         return {"success": True, "running": running,
-                "last_run": self._fullchain_read_last_run()}
+                "last_run": self._fullchain_read_last_run(),
+                "c22_gate": self._fullchain_c22_gate_state()}
 
     # ------------------------------------------------------------------
     # 一键回滚（3.0 批2 改写恢复 + 批3 3B 删行接线，D2026-1009-02）：把

@@ -7392,6 +7392,31 @@ def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
     assert gui._fullchain_c22_enabled() is False       # 指纹缺失（旧测量行）
 
 
+def test_fullchain_automation_status_c22_gate_reason(gui_api_obj, monkeypatch,
+                                                     tmp_path):
+    """d1102-件C 桥前置：fullchain_automation_status 只读透出
+    ``c22_gate:{enabled,reason}``。门开=ok、门关（缺失）=missing、
+    指纹失效=fingerprint-mismatch 均如实回传，零行为改动。"""
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    gui = gui_api_obj
+
+    r = gui.fullchain_automation_status()
+    assert r["success"] is True and r["running"] is False
+    assert r["c22_gate"] == {"enabled": False, "reason": "missing"}
+
+    p = tmp_path / "fullchain_c22.json"
+    p.write_text(json.dumps(_c22_gate_payload(precision_lb=0.96, n=60)),
+                 encoding="utf-8")
+    assert gui.fullchain_automation_status()["c22_gate"] == \
+        {"enabled": True, "reason": "ok"}
+
+    p.write_text(json.dumps(_c22_gate_payload(rules_sha1="stale")),
+                 encoding="utf-8")
+    assert gui.fullchain_automation_status()["c22_gate"] == \
+        {"enabled": False, "reason": "fingerprint-mismatch"}
+
+
 def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
                                                 tmp_path, caplog):
     """门控缺省关：high 也全放弃——零终稿写入/零台账 auto_insert，
