@@ -217,6 +217,7 @@ const GATE_REASON_TEXT = {
 const FlowOverview = {
     _lastRun: {},
     _running: false,
+    _fcSeq: 0,
     // d1102-件D（D2026-1102-02）：转录桥状态（idle/running/done 三态）
     _transcribeState: 'idle',
     // d1102-件F：done 仅对本次会话最近一次转录的媒体成立——媒体切换/
@@ -303,9 +304,37 @@ const FlowOverview = {
         this.setChip('review', 'idle');
         this.refreshTranscribeNode();
         // d1103：全链 chip 改当前态（owner 11-03 拍板）——在跑黄/否则灰，
-        // 与前三颗当前会话态灯同语义；上次运行结果由全链状态行
-        // （fullchain-status-line）承载，灯行语义分离
-        this.setChip('fullchain', running ? 'warn' : 'idle');
+        // 与前三颗当前会话态灯同语义；上次运行结果由全链状态行承载，
+        // 灯行语义分离。d1103-fix：当前态取全链桥 running（this._running）
+        // 而非 AppState.isRunning——全链自动化由翻译会话结束钩子 daemon
+        // 启动，彼时 isRunning 已假，误用则翻译期亮灯/链在飞反灭；与转录
+        // 节点同构，每次 refreshNodes 重读状态桥保持链在飞期灯鲜活
+        this.setChip('fullchain', this._running ? 'warn' : 'idle');
+        this.refreshFullchainNode();
+    },
+
+    async refreshFullchainNode() {
+        // 全链节点状态桥重读面（与 refreshTranscribeNode 同构）：任务期
+        // 主轮询随 _finish 停摆，本面由日志排水/控制台事件/切页驱动，
+        // 链在飞期灯与状态行经 _applyFullchainStatus 同源刷新
+        if (!window.pywebview || !window.pywebview.api) {
+            this._running = false;
+            this.setChip('fullchain', 'idle');
+            return;
+        }
+        const seq = ++this._fcSeq;   // 并发重读防闪回：晚到的旧响应丢弃
+        try {
+            const r = await window.pywebview.api.fullchain_automation_status();
+            if (seq !== this._fcSeq) return;
+            if (r && r.success) {
+                this._applyFullchainStatus(r);
+            } else {
+                this._running = false;   // 桥语义失败按非运行处置（fail-open 灰）
+            }
+        } catch (e) {
+            if (seq === this._fcSeq) this._running = false;
+        }
+        this.setChip('fullchain', this._running ? 'warn' : 'idle');
     },
 
     _transcribeChipState() {
@@ -379,14 +408,27 @@ const FlowOverview = {
             last.textContent = MSG.fcStatusFail;
             return;
         }
+        this._applyFullchainStatus(r);
+        this.refreshNodes();
+    },
+
+    _applyFullchainStatus(r) {
+        // 全链桥返回值单源渲染（refresh() 首载与 refreshFullchainNode
+        // 重读共用）：门闸开关＋状态行＋_running，灯行同源不漂移
+        const gate = document.querySelector('.flow-gate');
+        const gateText = document.querySelector('.flow-gate-text');
+        const last = document.querySelector('.flow-lastrun');
         const cg = r.c22_gate || {};
-        gate.classList.toggle('is-on', !!cg.enabled);
-        gateText.textContent = cg.enabled ? MSG.flowGateOn
-            : this.fmt(MSG.flowGateOff, { reason: this.gateReason(cg.reason) });
+        if (gate && gateText) {
+            gate.classList.toggle('is-on', !!cg.enabled);
+            gateText.textContent = cg.enabled ? MSG.flowGateOn
+                : this.fmt(MSG.flowGateOff, { reason: this.gateReason(cg.reason) });
+        }
         const run = r.last_run || {};
         const k = Number(run.missed_skipped) || 0;
         this._lastRun = run;
         this._running = !!r.running;
+        if (!last) return;
         if (r.running) {
             last.textContent = this.fmt(MSG.fcStatusRunning, {
                 d: run.files_done || 0, t: run.files_total || 0,
@@ -409,6 +451,5 @@ const FlowOverview = {
                 last.textContent += ' · ' + this.fmt(MSG.fcMissedSkipped, { k });
             }
         }
-        this.refreshNodes();
     }
 };

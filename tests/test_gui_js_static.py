@@ -5753,7 +5753,7 @@ def test_home_flow_overview_lastrun_missed_skipped_pinned():
     口径对照 app-refine-batchfix.js 同 payload 分支链：k>0 才追加，
     模板复用 MSG.fcMissedSkipped。"""
     init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
-    body = _extract_function(init, "refresh")
+    body = _extract_function(init, "_applyFullchainStatus")
     assert "const k = Number(run.missed_skipped) || 0;" in body, \
         "概览条缺 missed_skipped 取值"
     assert "if (k > 0)" in body and "MSG.fcMissedSkipped" in body, \
@@ -5780,7 +5780,7 @@ def test_home_flow_overview_gate_reason_humanized_pinned():
                        ("fingerprint-mismatch", "规则集已变更，需重新校准")):
         assert f"'{code}': '{text}'" in table, \
             f"门原因映射缺码或中文口径: {code}"
-    body = _extract_function(init, "refresh")
+    body = _extract_function(init, "_applyFullchainStatus")
     assert "this.gateReason(cg.reason)" in body, \
         "门状态行须经 gateReason 映射后输出"
     assert "cg.reason || 'unknown'" not in body, \
@@ -7735,6 +7735,13 @@ def test_js_sources_layer_pinned():
         JS_FILES 拼接面）；review.js/app-home-transcribe.js 换核消费
         （独立脚本无冻结字节钉，契约面走内容钉）；旧钉 269ecd8f… /
         9a093b75… 退役；
+        d1103 全链灯数据源修正（2026-11-03 主审验收直修）：全库拼接
+        8a799f60…/527,022B、app-init.js 20,996B/84991c01…（全链 chip
+        当前态改消费全链桥 running（this._running），新增
+        refreshFullchainNode 重读面（_fcSeq 防闪回）＋
+        _applyFullchainStatus 单源渲染，修正 7b4db82 误用
+        AppState.isRunning 致翻译期亮灯/链在飞反灭的灯行倒置；
+        旧钉 e51721ba… / 50052e61… / 0986291f… / 31b85800… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7751,7 +7758,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "e51721bacfc3f86870504647f0b3d9e0764e0e0e9aba4f7737ec6769c0935b2f"), \
+        "8a799f602844909b78cfe75ab001f2543f3a1b09cbf2fa7bd9f536241bd20bb4"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7841,8 +7848,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (19022,
-                        "50052e61dd60aca2a4b6a314ae82e6fdac702c7e76efe261eacd06b5b3b41602"),
+        "app-init.js": (20996,
+                        "84991c01b71a21b5fd2f5cc5b7ae156f973bba50b886d6c2573957eb21b07717"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,
@@ -8116,13 +8123,31 @@ def test_overview_fullchain_chip_current_state_pinned():
 
     原语义=上次运行结果灯（last_run failed→红/有记录→绿），与前三颗
     「当前会话态」灯语义不一致；改后灯行分离：上次运行结果由全链状态行
-    （fullchain-status-line）承载，refreshNodes 不再消费 last_run。"""
+    （fullchain-status-line）承载，refreshNodes 不再消费 last_run。
+    d1103-fix：当前态数据源=全链桥 running（this._running）而非
+    AppState.isRunning——全链自动化由翻译会话结束钩子 daemon 启动，彼时
+    isRunning 已假，误用则翻译期亮灯/链在飞反灭，灯行倒置；状态桥重读
+    （refreshFullchainNode）与转录节点同构，链在飞期灯保持鲜活，渲染
+    经 _applyFullchainStatus 与 refresh() 单源。"""
     src = (ASSETS / "app-init.js").read_text(encoding="utf-8")
     body = _extract_function(src, "refreshNodes")
-    assert "this.setChip('fullchain', running ? 'warn' : 'idle')" in body, \
-        "全链 chip 未改当前态（在跑黄/否则灰）"
+    assert "this.setChip('fullchain', this._running ? 'warn' : 'idle')" in body, \
+        "全链 chip 未消费全链桥当前态（this._running）"
+    assert "this.refreshFullchainNode()" in body, \
+        "refreshNodes 未重读全链状态桥（链在飞期灯不鲜活）"
+    assert "this.setChip('fullchain', running" not in body, \
+        "全链 chip 回潮消费 AppState.isRunning（数据源错位）"
     assert "run.phase" not in body and "'danger'" not in body, \
         "refreshNodes 仍消费 last_run 结果态（灯行未分离）"
+    fn = _extract_function(src, "refreshFullchainNode")
+    assert "fullchain_automation_status" in fn and "this._running" in fn, \
+        "refreshFullchainNode 缺桥读取/当前态回写"
+    assert "_fcSeq" in fn, \
+        "refreshFullchainNode 缺并发重读防闪回（晚到旧响应须丢弃）"
+    assert "this._applyFullchainStatus(r)" in fn, \
+        "refreshFullchainNode 未经共享渲染源（灯行不同源）"
+    assert "this._applyFullchainStatus(r)" in _extract_function(src, "refresh"), \
+        "refresh() 未换用共享渲染源"
 
 
 def test_transcribe_core_module_pinned():
