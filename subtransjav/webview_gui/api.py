@@ -1625,6 +1625,7 @@ class TranslateAPI:
             return {"success": True,
                     **asr_runtime.provider_status(),
                     "gpu_patch": asr_runtime.gpu_patch_status(),
+                    "runtime": asr_runtime.runtime_dir_info(),
                     "operation": asr_runtime.operation_progress()}
         except Exception as e:
             _log_exc("refine_ct2_status")
@@ -1640,6 +1641,62 @@ class TranslateAPI:
                     **result}
         except Exception as e:
             _log_exc("refine_ct2_gpu_install")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_runtime_dir(self) -> dict[str, Any]:
+        """当前 ct2 运行时落位与来源（source ∈ env/settings/default/
+        legacy，D2026-1103-03；只读零副作用）。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            info = asr_runtime.runtime_dir_info()
+            return {"success": True, "runtime_dir": info["dir"],
+                    "source": info["source"],
+                    "has_runtime": bool(
+                        asr_runtime.read_runtime_manifest(info["dir"]))}
+        except Exception as e:
+            _log_exc("refine_ct2_runtime_dir")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_runtime_dir_set(self, path: str = "") -> dict[str, Any]:
+        """自定义 ct2 运行时落位（D2026-1103-03，owner 走查「补丁包不要
+        装在 C 盘」；即时生效无需重启）。
+
+        path 空串＝清除自定义恢复默认落位；否则必须绝对路径（与
+        refine_set_data_root 同口径：用户自选本机目录，不作白名单）。
+        源码形态拒绝仓库树内目标——脱钩裁定（site-packages 内第三方自带
+        测试文件污染全树安全扫描面）不因可自定义而松动。在飞安装/下载
+        禁切换（否则线程按旧根写入而 UI 按新根显示）。落盘复用
+        refine_save_stage_settings 既有 settings KV 通道，本方法零自有
+        open 写点（Mimosa path-traversal 消模式，甄别表 #29 先例）。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            if asr_runtime.operation_progress().get("phase") == "running":
+                return {"success": False, "error": msg("ct2_runtime_dir_busy")}
+            target = str(path or "").strip()
+            if target and not os.path.isabs(target):
+                return {"success": False, "error": msg("data_root_need_abs")}
+            if target:
+                norm = os.path.normcase(os.path.realpath(target))
+                repo = os.path.normcase(
+                    os.path.realpath(str(paths.app_root())))
+                data_root = os.path.normcase(
+                    os.path.realpath(str(paths.data_root())))
+                if data_root == repo and (
+                        norm == repo or norm.startswith(repo + os.sep)):
+                    return {"success": False,
+                            "error": msg("ct2_runtime_dir_in_repo")}
+            saved = self.refine_save_stage_settings(
+                None, None, {asr_runtime.CT2_RUNTIME_DIR_KEY: target})
+            if not saved.get("success"):
+                return {"success": False,
+                        "error": str(saved.get("error") or "")}
+            info = asr_runtime.runtime_dir_info()
+            return {"success": True, "runtime_dir": info["dir"],
+                    "source": info["source"],
+                    "has_runtime": bool(
+                        asr_runtime.read_runtime_manifest(info["dir"]))}
+        except Exception as e:
+            _log_exc("refine_ct2_runtime_dir_set")
             return {"success": False, "error": str(e)}
 
     def refine_ct2_install(self, provider: str = "auto") -> dict[str, Any]:

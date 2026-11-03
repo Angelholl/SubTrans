@@ -138,6 +138,9 @@
     "refineCt2InstallBtn",
     "refineCt2ModelBtn",
     "refineCt2ModelStatus",
+    "refineCt2RuntimePickBtn",
+    "refineCt2RuntimeResetBtn",
+    "refineCt2RuntimeStatus",
     "refineCt2Status",
     "refineEndpointStatus",
     "refineFallbackLocal",
@@ -461,7 +464,8 @@
       "d1102-件D 转录桥＋转录区块（D2026-1102-02）：-1 id=reviewAsrBtn（ASR 对照卡吸收合并进转录引导卡），+5 id=reviewTranscribeCard/reviewTranscribeStartBtn/reviewTranscribeDualPass/reviewTranscribeCt2/reviewTranscribeOtherBtn，ids 229→233；i18n_keys 182 不动（校对页零静态 data-i18n，转录区块文案全走 review.js REVIEW_MSG JS 态键）",
       "d1102-卡A Console 覆盖层化（2026-11-02）：id 等量换血净 0 仍 233——删 consoleDrawerHandle（把手随调高逻辑退役），增 consoleOverlayBackdrop（半透明遮罩）；#consoleDrawer id 不变类改 .console-overlay；i18n 键集不动",
       "d1102-卡B（D2026-1102-03）：id 233→241，+8=首页转录卡 homeTranscribeCard/homeTranscribeMedia/homeTranscribePickBtn/homeTranscribeDualPass/homeTranscribeStartBtn/homeTranscribeStatus/homeTranscribeCt2/homeTranscribeInstall；i18n 键零增减（卡内文案全 JS 态注入）",
-      "d1103-卡1 Console 更名换代（2026-11-03）：id 等量换血净 0 仍 241——consoleDrawer→consoleOverlay（ConsoleDrawer→ConsoleOverlay/this.overlay 纯更名零行为变更，命名对齐既有 .console-overlay/consoleOverlayBackdrop 家族）；i18n 键集不动（console_expand 仅换值「展开面板」）"
+      "d1103-卡1 Console 更名换代（2026-11-03）：id 等量换血净 0 仍 241——consoleDrawer→consoleOverlay（ConsoleDrawer→ConsoleOverlay/this.overlay 纯更名零行为变更，命名对齐既有 .console-overlay/consoleOverlayBackdrop 家族）；i18n 键集不动（console_expand 仅换值「展开面板」）",
+      "d1103（D2026-1103-03）：id 241→244，+3=CT2 面板「转写引擎落位」行 refineCt2RuntimeStatus/refineCt2RuntimePickBtn/refineCt2RuntimeResetBtn（owner 走查「补丁包默认不要装在 C 盘＋可自定义安装位置」；源码形态运行时默认改仓库同级旁路＋settings 键 ct2_runtime_dir 可自定义）；i18n 键零增减（落位行文案全 JS 态注入，沿本面板先例）"
     ]
   }
 }

@@ -1063,6 +1063,15 @@
                             <span id="refineCt2GpuStatus" class="muted"></span>
                             <button type="button" id="refineCt2GpuBtn" class="btn btn-compact"><span></span></button>
                         </div>
+                        <!-- 运行时落位行（d1103 D2026-1103-03，owner 走查「补丁包
+                             默认不要装在 C 盘＋可自定义安装位置」）：当前落位＋
+                             来源标签＋更改位置/恢复默认；文案全 JS 态填充
+                             （零静态 data-i18n 消耗，沿本面板既有先例） -->
+                        <div class="field-row" style="margin-top:6px;" data-testid="ct2-runtime-row">
+                            <span id="refineCt2RuntimeStatus" class="muted"></span>
+                            <button type="button" id="refineCt2RuntimePickBtn" class="btn btn-compact"><span></span></button>
+                            <button type="button" id="refineCt2RuntimeResetBtn" class="btn btn-ghost btn-compact"><span></span></button>
+                        </div>
                     </div>
                 </div>
 

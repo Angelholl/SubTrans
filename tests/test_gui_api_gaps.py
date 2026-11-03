@@ -584,6 +584,55 @@ def test_refine_ct2_gpu_install_internal_error(gui_api_obj, monkeypatch):
     assert "补丁安装入口炸" in r["error"]
 
 
+def test_refine_ct2_runtime_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
+    """d1103（D2026-1103-03）：转写引擎落位自定义桥面——绝对路径门／源码
+    形态仓库树内目标拒绝（脱钩裁定不因可自定义而松动）／在飞操作禁切换／
+    合法自定义写入后来源翻 settings／空串恢复默认。写侧复用
+    refine_save_stage_settings settings KV 通道（桥面零自有 open 写点）。"""
+    from subtransjav import paths
+    from subtransjav.refine import asr_runtime
+    from subtransjav.refine import config as refine_config
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(cfg / "refine_stage_settings.json"))
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+
+    r = gui_api_obj.refine_ct2_runtime_dir_set("relative/dir")
+    assert r["success"] is False, "非绝对路径未被拒"
+
+    monkeypatch.setattr(asr_runtime, "operation_progress",
+                        lambda: {"phase": "running", "kind": "install"})
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(tmp_path / "busy-rt"))
+    assert r["success"] is False, "在飞操作未禁切换落位"
+    monkeypatch.setattr(asr_runtime, "operation_progress",
+                        lambda: {"phase": "idle"})
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setattr(paths, "app_root", lambda: repo)
+    monkeypatch.setattr(paths, "data_root", lambda: repo)
+    inside = repo / "runtime" / "ct2"
+    inside.mkdir(parents=True)
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(inside))
+    assert r["success"] is False, "仓库树内目标未被拒（脱钩裁定破口）"
+
+    outside = tmp_path / "rt-ext"
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(outside))
+    assert r["success"] is True and r["source"] == "settings", r
+    assert r["runtime_dir"] == str(outside)
+    got = gui_api_obj.refine_ct2_runtime_dir()
+    assert got["success"] and got["runtime_dir"] == str(outside)
+    assert got["has_runtime"] is False
+
+    r = gui_api_obj.refine_ct2_runtime_dir_set("")
+    assert r["success"] is True and r["source"] != "settings", \
+        "空串未恢复默认落位"
+    assert gui_api_obj.refine_ct2_status()["runtime"]["source"] != "settings"
+
+
 def test_ffmpeg_supply_download_starts_worker(gui_api_obj, monkeypatch):
     """api.py:5736 ffmpeg_supply_download：置 busy + downloading，daemon 线程发起。"""
     captured = []

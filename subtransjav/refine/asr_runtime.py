@@ -115,24 +115,70 @@ _RUNTIME_FALLBACK_PYTHONS = (
 _INSTALL_TOP_MEMBERS = ("runtime.json", "selfcheck.py", "python", "site-packages")
 
 
-def runtime_root() -> str:
-    """运行时落位：数据根 runtime/ct2（随数据根迁移）。
+# GUI 可自定义运行时落位的设置键（写侧＝api.refine_save_stage_settings 的
+# settings KV 通道；读侧＝config.read_ui_settings——refine 层不 import
+# webview_gui，分层方向单向）
+CT2_RUNTIME_DIR_KEY = "ct2_runtime_dir"
 
-    例外（脱钩轮）：数据根=仓库根（pip/源码开发形态）时不落仓库树——
-    site-packages 内第三方自带测试文件会污染全树安全扫描面，改落
-    %LOCALAPPDATA%/SubTrans/runtime/ct2（与 frozen 缺省数据根同域）；
-    可经 SUBTRANSJAV_CT2_RUNTIME_DIR 显式覆盖。"""
-    override = os.environ.get("SUBTRANSJAV_CT2_RUNTIME_DIR", "").strip()
-    if override:
-        return override
+
+def _has_runtime(root: pathlib.Path) -> bool:
+    """该根是否已有认证布局运行时（只读探测，不建目录）。"""
+    return bool(read_runtime_manifest(str(root)))
+
+
+def _default_runtime_root() -> tuple[str, str]:
+    """现形默认落位，返回 (路径, 来源标签 default/legacy)。
+
+    脱钩口径更新（D2026-1103-03，owner 走查「补丁包不要装在 C 盘」）：
+    数据根=仓库根（pip/源码开发形态）时默认改落**仓库同级旁路目录**
+    ``<仓库父目录>/<仓库名>-runtime/ct2``——仍不在仓库树内（site-packages
+    内第三方自带测试文件污染全树安全扫描面，原裁定理由不变），但随仓库
+    所在盘走，不再固定 C 盘。旧口径 ``%LOCALAPPDATA%/SubTrans/runtime/ct2``
+    降为 legacy 兜底：新默认位无运行时而旧位有认证运行时时沿用旧位
+    （来源标 legacy），防存量用户升级后静默重下 106MB 运行时＋1.21GB
+    GPU 补丁。frozen 形态不变＝数据根/runtime/ct2。"""
     try:
-        if paths.data_root().resolve() == paths.app_root().resolve():
+        repo = paths.app_root().resolve()
+        if paths.data_root().resolve() == repo:
+            sibling = repo.parent / f"{repo.name}-runtime" / "ct2"
+            if _has_runtime(sibling):
+                return str(sibling), "default"
             local = pathlib.Path(os.environ.get("LOCALAPPDATA",
                                                 str(pathlib.Path.home())))
-            return str(local / "SubTrans" / "runtime" / "ct2")
+            legacy = local / "SubTrans" / "runtime" / "ct2"
+            if _has_runtime(legacy):
+                return str(legacy), "legacy"
+            return str(sibling), "default"
     except OSError:
         pass
-    return paths.data_subdir("runtime", "ct2")
+    return paths.data_subdir("runtime", "ct2"), "default"
+
+
+def runtime_dir_info() -> dict:
+    """运行时落位与来源（source ∈ env/settings/default/legacy）。
+
+    解析序：环境变量 ``SUBTRANSJAV_CT2_RUNTIME_DIR``（测试隔离/CI 用，
+    优先级最高）> settings 键 ``ct2_runtime_dir``（GUI 可自定义）>
+    现形默认（见 _default_runtime_root）。"""
+    override = os.environ.get("SUBTRANSJAV_CT2_RUNTIME_DIR", "").strip()
+    if override:
+        return {"dir": override, "source": "env"}
+    cfg = ""
+    try:
+        from . import config
+        cfg = str(config.read_ui_settings()
+                  .get(CT2_RUNTIME_DIR_KEY) or "").strip()
+    except Exception:                       # noqa: BLE001 设置面永不阻断
+        cfg = ""
+    if cfg:
+        return {"dir": cfg, "source": "settings"}
+    path, source = _default_runtime_root()
+    return {"dir": path, "source": source}
+
+
+def runtime_root() -> str:
+    """运行时落位单一读取面（语义与来源见 runtime_dir_info）。"""
+    return runtime_dir_info()["dir"]
 
 
 def read_runtime_manifest(root: str = "") -> dict | None:
@@ -680,14 +726,18 @@ _CUDA_PROBE_SNIPPET = ("import ctranslate2;"
                        "print(ctranslate2.get_cuda_device_count())")
 _CUDA_PROBE_TTL_OK = 300.0
 _CUDA_PROBE_TTL_FAIL = 30.0
-_cuda_probe_cache: tuple[float, int] | None = None    # (monotonic 到期, 计数)
+# 缓存随运行时根分键（D2026-1103-03）：GUI 自定义落位/切回默认后，旧根的
+# 探测结果不得在 TTL 内继续生效（否则最长 300s 仍按旧根显示 GPU 态）
+_cuda_probe_cache: tuple[float, int, str] | None = None   # (到期, 计数, 根)
 
 
 def cuda_device_count() -> int:
     """CUDA 设备数（运行时子进程探测＋TTL 缓存；未装/探测失败一律 0）。"""
     global _cuda_probe_cache
     now = time.monotonic()
-    if _cuda_probe_cache is not None and now < _cuda_probe_cache[0]:
+    root = runtime_root()
+    if (_cuda_probe_cache is not None and now < _cuda_probe_cache[0]
+            and _cuda_probe_cache[2] == root):
         return _cuda_probe_cache[1]
     py = runtime_python()
     if not py:
@@ -704,7 +754,7 @@ def cuda_device_count() -> int:
     except (OSError, ValueError, IndexError,
             subprocess.TimeoutExpired):   # noqa: BLE001 探测面永不抛
         count = 0
-    _cuda_probe_cache = (now + ttl, count)
+    _cuda_probe_cache = (now + ttl, count, root)
     return count
 
 

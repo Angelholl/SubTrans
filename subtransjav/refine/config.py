@@ -151,6 +151,27 @@ LOGS_DIR = paths.data_subdir("Logs")
 TEMP_DIR = paths.data_subdir("Temp")
 
 
+def read_ui_settings() -> dict:
+    """读 GUI 持久化设置 KV（config/refine_stage_settings.json 顶层
+    ``settings`` 字典）。
+
+    写侧唯一通道＝``api.refine_save_stage_settings``（前端
+    ``refine_save_stage_settings(null, null, {...})``），本函数只读零副作用、
+    零自有写点；文件缺失/非法/非字典一律空字典＝缺省语义（不抛）。refine 层
+    需要用户级设置键（如 ct2 运行时落位）时经此读取——分层方向：GUI 依赖
+    refine，反向 import 禁止。"""
+    path = os.path.join(CONFIG_DIR, "refine_stage_settings.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    settings = data.get("settings")
+    return settings if isinstance(settings, dict) else {}
+
+
 def default_templates_dir() -> str:
     tpl = os.path.join(CONFIG_DIR, "templates")
     return tpl if os.path.isdir(tpl) else LEGACY_WORKDIR

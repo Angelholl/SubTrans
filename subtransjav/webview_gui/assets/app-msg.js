@@ -936,6 +936,19 @@ const MSG = {
     ct2GpuUnpublished: 'GPU 加速：本机有 CUDA 设备，GPU 补丁包在线通道当前不可用（可经 CLI 用本地 zip 安装）',
     ct2GpuOfferFmt: 'GPU 加速：本机有 CUDA 设备，下载补丁包即可启用 GPU 转写',
     ct2GpuUnknown: 'GPU 加速：状态未知',
+    // 转写引擎落位行（d1103 D2026-1103-03，owner 走查「补丁包默认不要装在
+    // C 盘＋可自定义安装位置」；全 JS 态键零静态 i18n 消耗，沿本面板先例）
+    ct2RuntimeFmt: (dir, src) => `转写引擎落位：${dir}（${src}）`,
+    ct2RuntimeSourceDefault: '默认',
+    ct2RuntimeSourceSettings: '自定义',
+    ct2RuntimeSourceEnv: '环境变量',
+    ct2RuntimeSourceLegacy: '旧位置·建议迁移',
+    ct2RuntimeNoRuntime: '该位置尚未安装运行时',
+    ct2RuntimePickBtn: '更改位置',
+    ct2RuntimeResetBtn: '恢复默认',
+    ct2RuntimeSavedFmt: dir => `落位已改为 ${dir}（即时生效，无需重启）`,
+    ct2RuntimeResetDone: '已恢复默认落位',
+    ct2RuntimeUnknown: '转写引擎落位：状态未知',
     // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：词典源选择
     // （全 JS 态键，零静态 i18n 消耗；asrDl* 为 AppModal.download 方法体
     // 引用+定向钉保留；asrDownloadBtn/mp* 面板键随 AppModal.models 删除）

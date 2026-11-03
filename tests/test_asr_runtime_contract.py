@@ -485,3 +485,115 @@ class TestGpuPatchContract:
                             lambda cmd, **kw: _Proc())
         assert asr_runtime.cuda_device_count() == 0
         assert asr_runtime._cuda_probe_cache is not None
+
+
+# ---------------------------------------------------------------------------
+# d1103（D2026-1103-03）：运行时落位可自定义＋源码形态默认离 C 盘
+# ---------------------------------------------------------------------------
+
+def _settings_kv(dir_value: str) -> str:
+    """构造含 ct2_runtime_dir 键的 settings KV JSON 文本。"""
+    return json.dumps({"stages": [], "settings": {
+        asr_runtime.CT2_RUNTIME_DIR_KEY: dir_value}})
+
+
+def test_ct2_runtime_dir_resolution_order(tmp_path, monkeypatch):
+    """解析序 env > settings 键 > 现形默认，来源标签随源切换（GUI 落位行＋
+    CLI 诊断消费；负控：settings 键不被读取即红）。"""
+    from subtransjav.refine import config as refine_config
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "refine_stage_settings.json").write_text(
+        _settings_kv(str(tmp_path / "custom")), encoding="utf-8")
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
+    info = asr_runtime.runtime_dir_info()
+    assert info["dir"] == str(tmp_path / "custom"), "settings 键未生效"
+    assert info["source"] == "settings"
+    assert asr_runtime.runtime_root() == str(tmp_path / "custom")
+    # env 优先级最高（测试隔离/CI 通道不得被设置键遮蔽）
+    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(tmp_path / "envrt"))
+    assert asr_runtime.runtime_dir_info()["source"] == "env"
+    # 空串＝清除自定义回落默认（GUI「恢复默认」语义）
+    (cfg / "refine_stage_settings.json").write_text(
+        _settings_kv(""), encoding="utf-8")
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    assert asr_runtime.runtime_dir_info()["source"] != "settings"
+    # 设置文件缺失/非法一律缺省语义不抛
+    monkeypatch.setattr(refine_config, "CONFIG_DIR",
+                        str(tmp_path / "no-such-dir"))
+    assert asr_runtime.runtime_dir_info()["source"] != "settings"
+
+
+def test_ct2_runtime_default_sibling_off_repo(tmp_path, monkeypatch):
+    """源码形态（数据根=仓库根）默认落位＝**仓库同级旁路**
+    ``<仓库父目录>/<仓库名>-runtime/ct2``：不在仓库树内（脱钩裁定原意＝
+    site-packages 第三方自带测试文件污染全树扫描面，不因离 C 盘而松动），
+    且随仓库所在盘走不再固定 C 盘（owner 走查 D2026-1103-03）。
+    旧 LOCALAPPDATA 位降为 legacy 兜底：新位无运行时而旧位有认证运行时时
+    沿用旧位（防存量用户升级后静默重下 106MB 运行时＋1.21GB GPU 补丁）。"""
+    from subtransjav.refine import config as refine_config
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.setattr(refine_config, "CONFIG_DIR",
+                        str(tmp_path / "no-conf"))
+    repo = tmp_path / "repo"
+    (repo / "subtransjav").mkdir(parents=True)
+    monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: repo)
+    monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: repo)
+    local = tmp_path / "localappdata"
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+
+    sibling = repo.parent / "repo-runtime" / "ct2"
+    info = asr_runtime.runtime_dir_info()
+    assert _norm(info["dir"]) == _norm(str(sibling)), \
+        "默认落位须为仓库同级旁路"
+    assert info["source"] == "default"
+    assert not _norm(info["dir"]).startswith(
+        _norm(str(repo)) + os.sep), "旁路默认不得落仓库树内"
+    assert _norm(info["dir"]) != _norm(
+        str(local / "SubTrans" / "runtime" / "ct2")), \
+        "默认不得再固定 C 盘 LOCALAPPDATA"
+
+    # 旧位有认证运行时 → legacy 兜底（不静默重下）
+    legacy = local / "SubTrans" / "runtime" / "ct2"
+    _runtime_skeleton(legacy)
+    info = asr_runtime.runtime_dir_info()
+    assert info["source"] == "legacy" and _norm(info["dir"]) == _norm(
+        str(legacy))
+
+    # 新位也有运行时 → 新默认优先，不再回旧位
+    _runtime_skeleton(sibling)
+    info = asr_runtime.runtime_dir_info()
+    assert info["source"] == "default" and _norm(info["dir"]) == _norm(
+        str(sibling))
+    assert asr_runtime.gpu_patch_dir().startswith(_norm(str(sibling)))
+
+
+def test_cuda_probe_cache_keyed_by_runtime_root(tmp_path, monkeypatch):
+    """切落位后旧根探测值不得在 TTL 内继续生效（缓存按运行时根分键）。"""
+    monkeypatch.setattr(asr_runtime, "_cuda_probe_cache", None)
+    root_a = tmp_path / "rtA"
+    _runtime_skeleton(root_a)
+    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(root_a))
+    calls: list[str] = []
+
+    class _Proc:
+        returncode = 0
+        stdout = "1\n"
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        calls.append(str(cmd[0]))
+        return _Proc()
+
+    monkeypatch.setattr(asr_runtime.subprocess, "run", fake_run)
+    assert asr_runtime.cuda_device_count() == 1
+    assert asr_runtime.cuda_device_count() == 1      # 同根 TTL 内不重探
+    assert len(calls) == 1, "同根缓存未命中（反复起进程）"
+
+    root_b = tmp_path / "rtB"
+    _runtime_skeleton(root_b)
+    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(root_b))
+    assert asr_runtime.cuda_device_count() == 1
+    assert len(calls) == 2, "切根未重探（缓存未按运行时根分键）"
+    assert _norm(calls[1]) == _norm(str(root_b / "python" / "python.exe"))

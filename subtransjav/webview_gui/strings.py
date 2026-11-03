@@ -197,6 +197,12 @@ MSG = {
     # ---- 数据保存目录（api.py refine_set_data_root 校验文案）----
     "data_root_need_abs": "请输入绝对路径",
 
+    # ---- CT2 运行时落位自定义（d1103 D2026-1103-03
+    #      api.py refine_ct2_runtime_dir_set 校验文案）----
+    "ct2_runtime_dir_busy": "有转写引擎任务正在执行，完成后再切换落位目录",
+    "ct2_runtime_dir_in_repo": ("该目录位于项目文件夹内，转写引擎运行时"
+                                "不能装在项目文件夹里（请选项目外的目录）"),
+
     # ---- 校对页（2.6.1 批 2a D2026-1002-09；api.py refine_review_* 镜像，
     #      后端侧键不入前端静态快照口径）----
     "file_type_video": "视频文件 (*.mp4;*.mkv;*.webm;*.mov;*.avi)",

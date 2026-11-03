@@ -1549,7 +1549,7 @@ def test_batch3_system_summary_dynamic_rows_pinned():
     # ASR 卡吸收合并进转录引导卡）、新增 reviewTranscribeCard/StartBtn/
     # DualPass/Ct2/OtherBtn（+5），229→233
     # d1102-卡B（D2026-1102-03，首页转录卡）：+8 homeTranscribe* id，233→241
-    assert len(ids) == 241, f"id 全集数漂移（d1102-卡B 后契约 241），实为 {len(ids)}"
+    assert len(ids) == 244, f"id 全集数漂移（d1103 落位行后契约 244），实为 {len(ids)}"
     assert "refine_list_templates" in src and "pkg_fallback" in src, \
         "角色卡行必须复用 refine_list_templates（pkg_fallback 标注内置回落）"
     # 合并值：TM 行补 db_path、词典行补 effective_dir（复用现 API 字段）；
@@ -3757,7 +3757,7 @@ def test_batch3_ai_config_row_pins_survive():
     # d1102-件D（D2026-1102-02，转录桥＋转录区块）：-reviewAsrBtn +5
     # 转录卡 id，229→233
     # d1102-卡B（D2026-1102-03，首页转录卡）：+8 homeTranscribe* id，233→241
-    assert len(ids) == 241, f"id 全集数漂移（d1102-卡B 后契约 241），实为 {len(ids)}"
+    assert len(ids) == 244, f"id 全集数漂移（d1103 落位行后契约 244），实为 {len(ids)}"
     i18n = set(re.findall(r'data-i18n(?:-title|-placeholder)?="([^"]+)"',
                           html))
     # 191=多格式输出三键（output_format_header/output_fmt_ass/output_fmt_vtt）
@@ -7747,6 +7747,11 @@ def test_js_sources_layer_pinned():
         app-shortcuts.js 2,326B/e355cf1d…、app-msg.js 66,661B/c3db5276…
         （ConsoleDrawer→ConsoleOverlay 等纯更名；旧钉 8a799f60… /
         1061ebe5… / bcc53514… / bcfc50d9… 退役）；
+        d1103 转写引擎落位自定义行（2026-11-03 主审亲执 D2026-1103-03）：
+        全库拼接 e5cb0c8d…/529,816B、app-refine-asr.js 8,296B/71919512…
+        （CT2 面板新增「转写引擎落位」行渲染＋更改位置/恢复默认接线）、
+        app-msg.js 67,453B/de3d571c…（落位行 11 个 JS 态键）；
+        旧钉 d953f1a7… / 64367493… / c3db5276… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7763,17 +7768,17 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "d953f1a73e4d640d0f956afa0bf3e6806263262e7d2fc3c35443a718e4e183b2"), \
+        "e5cb0c8ddfc2bf1da1c07202a040fc44206bfbade6347b4f92908984c02927a6"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
-    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
-    # 15 次切块恒真；切点外任何字节改动必红。
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 213,752B，d1103 落位行换代；
+    # 前值 204,408B/d1023-批3），15 次切块恒真；切点外任何字节改动必红。
     refine_family = [n for n in js_sources.JS_FILES
                      if n.startswith("app-refine-") or n == "app-main.js"]
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "44840d7cf84c7a63a71ea4bf230801e99db351adfc8b7ba88d13c5adb7539b18"), \
+        "19189085c68f3ea709c534b55fab698c7611e1aae08ac0ba84520ab0ed568099"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7793,8 +7798,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (66661,
-                       "c3db5276c56a930c8525d9c01c31fa5ebe8d97276c7b6122afc57acdb073bd6b"),
+        "app-msg.js": (67453,
+                       "de3d571cde3f16df1889bc78135817c6a3236588a470829f22bc9340664c760b"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7841,8 +7846,8 @@ def test_js_split_integrity_pinned():
                              "4867ea696c5d41a8608ec31146fccb64c0bb7ff3ae8e08027a3b71a86e211fe1"),
         "app-refine-batchfix.js": (25983,
                                    "26d2e4ef4acbe187740419bb28157a31b46dcca56f8a297252fdd5dc13451407"),
-        "app-refine-asr.js": (5568,
-                             "6436749377821f256d93502b1973ca5ae794f4871f2e83af10f6e916dbf29a4c"),
+        "app-refine-asr.js": (8296,
+                             "71919512848849756b1e3391b61e6a14a46512167b3e33f748962b642a56a049"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
         "app-refine-bind.js": (14663,
@@ -7907,6 +7912,8 @@ _REFINE_TOP_NAMES = frozenset({
     # d1028-38（CT2 面板接线）：+7 顶层函数（钉⑤解冻提案）
     "ct2Install", "ct2ModelDownload", "ct2ModelLine", "ct2Poll",
     "ct2Refresh", "ct2Render", "ct2Set",
+    # d1103（D2026-1103-03 落位自定义行）：+3 顶层函数
+    "ct2RuntimeLine", "ct2RuntimePick", "ct2RuntimeReset",
     "__warmupInflight", "_appliedPolishParams", "_dictBusyKind", "_dictCustomDir",
     "_tmBreakParams",
     "_dictDirCache", "_dictEnsureHint",
@@ -7983,7 +7990,7 @@ def test_eval_pairs_table_narrow_container_wrap_pinned():
 
 
 def test_refine_global_surface_pinned():
-    """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 177 个名字，且与其余分文件零重名。"""
+    """批4 全局面钉（D2026-1019-01）：Refine 15 文件顶层声明集合 == 冻结的 180 个名字，且与其余分文件零重名。"""
     pat_fn = re.compile(r"^  (?:async )?function\s+([A-Za-z_$][\w$]*)\s*\(")
     pat_var = re.compile(r"^  (?:const|let|var)\s+([A-Za-z_$][\w$]*)")
     refine_names = []
@@ -8243,3 +8250,54 @@ def test_eval_reports_section_inset_pinned():
     cs = re.search(r"\n\.console-section\s*\{([^}]*)\}", css)
     assert cs and "padding" not in cs.group(1), \
         "禁给全局 .console-section 加内衬（全站复用面）"
+
+
+def test_ct2_runtime_dir_ui_pinned():
+    """d1103（D2026-1103-03）：CT2 面板「转写引擎落位」行静态钉——三 id＋
+    该行零静态 data-i18n（文案全 JS 态，沿本面板先例）；JS 接线经既有
+    refine_pick_folder 选目录＋refine_ct2_runtime_dir_set 写入（空串=恢复
+    默认），在飞操作禁切换、「恢复默认」仅自定义态可点；后端两桥与设置键名
+    单源（前端禁自造键名），校验文案走 strings.py msg() 唯一中文来源。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    for i in ("refineCt2RuntimeStatus", "refineCt2RuntimePickBtn",
+              "refineCt2RuntimeResetBtn"):
+        assert f'id="{i}"' in html, f"index.html 缺落位行 id: {i}"
+    row = re.search(r'data-testid="ct2-runtime-row".*?</div>', html, re.S)
+    assert row, "未找到落位行区间"
+    assert "data-i18n" not in row.group(0), \
+        "落位行不得消耗静态 i18n 键（文案全 JS 态注入）"
+    js = (ASSETS / "app-refine-asr.js").read_text(encoding="utf-8")
+    for frag in ("function ct2RuntimeLine", "refineCt2RuntimePickBtn",
+                 "refineCt2RuntimeResetBtn", "refine_ct2_runtime_dir_set",
+                 "refine_pick_folder", "rt.source !== 'settings'"):
+        assert frag in js, f"app-refine-asr.js 缺落位接线: {frag}"
+    msg = (ASSETS / "app-msg.js").read_text(encoding="utf-8")
+    for key in ("ct2RuntimeFmt", "ct2RuntimePickBtn", "ct2RuntimeResetBtn",
+                "ct2RuntimeSourceSettings", "ct2RuntimeSourceLegacy",
+                "ct2RuntimeSourceEnv", "ct2RuntimeSourceDefault"):
+        assert re.search(rf"^\s*{key}:", msg, re.M), f"MSG 缺落位键: {key}"
+    api = (ASSETS.parent / "api.py").read_text(encoding="utf-8")
+    for frag in ("def refine_ct2_runtime_dir(self)",
+                 "def refine_ct2_runtime_dir_set(self",
+                 "asr_runtime.CT2_RUNTIME_DIR_KEY",
+                 "asr_runtime.operation_progress().get(\"phase\") "
+                 "== \"running\"",
+                 "msg(\"ct2_runtime_dir_in_repo\")",
+                 "msg(\"data_root_need_abs\")",
+                 '"runtime": asr_runtime.runtime_dir_info()'):
+        assert frag in api, f"api.py 缺落位桥面: {frag}"
+    strings = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
+    for key in ("ct2_runtime_dir_busy", "ct2_runtime_dir_in_repo"):
+        assert re.search(rf'^\s*"{key}":\s*[("]', strings, re.M), \
+            f"strings.py 缺落位校验文案键: {key}"
+    runtime = (ASSETS.parent.parent / "refine" / "asr_runtime.py"
+               ).read_text(encoding="utf-8")
+    assert 'CT2_RUNTIME_DIR_KEY = "ct2_runtime_dir"' in runtime, \
+        "设置键名须为 refine 层单源常量（前端/桥禁各自字面）"
+    cfg = (ASSETS.parent.parent / "refine" / "config.py").read_text(
+        encoding="utf-8")
+    assert "def read_ui_settings()" in cfg, \
+        "refine 层缺设置 KV 读取面（禁 asr_runtime 反向 import webview_gui）"
+    assert "from subtransjav.webview_gui" not in (
+        ASSETS.parent.parent / "refine" / "asr_runtime.py"
+    ).read_text(encoding="utf-8"), "refine 层禁 import webview_gui（分层方向）"

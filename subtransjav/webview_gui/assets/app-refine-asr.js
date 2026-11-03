@@ -53,6 +53,21 @@
     return MSG.ct2GpuOfferFmt;
   }
 
+  // 转写引擎落位行（d1103 D2026-1103-03）：落位路径＋来源标签（默认/自定义/
+  // 环境变量/旧位置）＋该位是否已有运行时；来源标签经映射防暗合
+  function ct2RuntimeLine(rt) {
+    if (!rt || !rt.dir) return MSG.ct2RuntimeUnknown;
+    const labels = {
+      default: MSG.ct2RuntimeSourceDefault,
+      settings: MSG.ct2RuntimeSourceSettings,
+      env: MSG.ct2RuntimeSourceEnv,
+      legacy: MSG.ct2RuntimeSourceLegacy,
+    };
+    const src = labels[rt.source] || rt.source || '';
+    const tail = rt.has_runtime ? '' : '｜' + MSG.ct2RuntimeNoRuntime;
+    return MSG.ct2RuntimeFmt(rt.dir, src) + tail;
+  }
+
   function ct2Render(r) {
     if (!r || !r.success) {
       ct2Set('refineCt2Status', MSG.ct2FailFmt((r && r.error) || ''));
@@ -84,6 +99,20 @@
       gb.disabled = busy || !offer || !gp.online_pin_ready;
       gb.querySelector('span').textContent =
         busy && op.kind === 'gpu' ? MSG.ct2GpuInstalling : MSG.ct2GpuBtn;
+    }
+    // 落位行：在飞操作禁切换（线程按旧根写入而 UI 按新根显示）；
+    // 「恢复默认」仅在有自定义值时可点
+    const rt = r.runtime || {};
+    ct2Set('refineCt2RuntimeStatus', ct2RuntimeLine(rt));
+    const rpb = $('refineCt2RuntimePickBtn');
+    if (rpb) {
+      rpb.disabled = busy;
+      rpb.querySelector('span').textContent = MSG.ct2RuntimePickBtn;
+    }
+    const rrb = $('refineCt2RuntimeResetBtn');
+    if (rrb) {
+      rrb.disabled = busy || rt.source !== 'settings';
+      rrb.querySelector('span').textContent = MSG.ct2RuntimeResetBtn;
     }
     if (busy) {
       setTimeout(ct2Poll, 1000);          // 后台操作面 1s 轮询至终态
@@ -131,6 +160,35 @@
     }).catch((e) => ct2Set('refineCt2GpuStatus', MSG.ct2FailFmt(String(e))));
   }
 
+  // 落位自定义（d1103 D2026-1103-03）：目录选择复用既有 refine_pick_folder
+  // （取消/失败静默），写侧走 refine_ct2_runtime_dir_set（空串=恢复默认）。
+  // 落位即时生效不需重启，故不套数据根面板的 AppModal 重启提示。
+  async function ct2RuntimePick() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    try {
+      const p = await window.pywebview.api.refine_pick_folder();
+      if (!p || !p.success || !p.path) return;
+      const r = await window.pywebview.api.refine_ct2_runtime_dir_set(p.path);
+      ct2Set('refineCt2RuntimeStatus', r && r.success
+        ? MSG.ct2RuntimeSavedFmt(r.runtime_dir) : ((r && r.error) || ''));
+      setTimeout(ct2Poll, 300);
+    } catch (e) {
+      ct2Set('refineCt2RuntimeStatus', MSG.ct2FailFmt(String(e)));
+    }
+  }
+
+  async function ct2RuntimeReset() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    try {
+      const r = await window.pywebview.api.refine_ct2_runtime_dir_set('');
+      ct2Set('refineCt2RuntimeStatus', r && r.success
+        ? MSG.ct2RuntimeResetDone : ((r && r.error) || ''));
+      setTimeout(ct2Poll, 300);
+    } catch (e) {
+      ct2Set('refineCt2RuntimeStatus', MSG.ct2FailFmt(String(e)));
+    }
+  }
+
   (() => {
     const ib = $('refineCt2InstallBtn');
     if (ib) ib.addEventListener('click', ct2Install);
@@ -138,4 +196,8 @@
     if (db) db.addEventListener('click', ct2ModelDownload);
     const gb = $('refineCt2GpuBtn');
     if (gb) gb.addEventListener('click', ct2GpuInstall);
+    const rpb = $('refineCt2RuntimePickBtn');
+    if (rpb) rpb.addEventListener('click', ct2RuntimePick);
+    const rrb = $('refineCt2RuntimeResetBtn');
+    if (rrb) rrb.addEventListener('click', ct2RuntimeReset);
   })();
