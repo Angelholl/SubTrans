@@ -107,6 +107,15 @@ def test_r2_one_question_default_keep(iss_text):
     assert "usPostUninstall" in iss_text
 
 
+def test_uninstall_size_list_ct2_pinned(iss_text):
+    """卸载一问制量级清单须含 CT2 模型与运行时两大头（D2026-1103 owner 回执项3）。"""
+    m = re.search(r"将删除的内容与量级：(.{0,700})", iss_text, re.S)
+    assert m, "未找到卸载量级清单块"
+    body = m.group(1)
+    assert "models\\ct2" in body, "量级清单缺 CT2 模型行（models\\ct2，约 2.9GB）"
+    assert "runtime\\ct2" in body, "量级清单缺 CT2 运行时行（runtime\\ct2，约 2.2GB）"
+
+
 def test_data_root_resolution_pinned(iss_text):
     """数据根四级解析与 paths.py data_root() 对齐。"""
     assert "SUBTRANSJAV_DATA_ROOT" in iss_text

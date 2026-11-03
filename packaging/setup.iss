@@ -528,6 +528,8 @@ begin
           '  翻译记忆库：' + HumanSize(DirSizeBytes(root + '\Temp\translation_memory')) + #13#10 +
           '  词典：' + HumanSize(DirSizeBytes(root + '\dict')) + #13#10 +
           '  ASR 模型：' + HumanSize(DirSizeBytes(root + '\models\asr')) + #13#10 +
+          '  CT2 模型：' + HumanSize(DirSizeBytes(root + '\models\ct2')) + #13#10 +
+          '  CT2 运行时：' + HumanSize(DirSizeBytes(root + '\runtime\ct2')) + #13#10 +
           '  配置与角色卡：' + HumanSize(DirSizeBytes(root + '\config')) + #13#10;
   if FileExists(root + '\config\api_keys.bin') then
     body := body + '  API 密钥文件将被删除，卸载后须重新录入。' + #13#10;
