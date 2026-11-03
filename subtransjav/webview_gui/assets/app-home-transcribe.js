@@ -234,6 +234,14 @@ const HomeTranscribe = {
                         status.textContent =
                             (m.review_transcribe_done || ((n) => n))(name);
                     }
+                    // d1103-卡3（D2026-1103-05 项⑧，owner 选 A）：转录终态直写
+                    // 概览条转录 chip done（done 绑最近转录媒体的语义在
+                    // FlowOverview.markTranscribeDone 内，d1102-件F 钉不动）；
+                    // 包装链时序异常时不再单靠状态桥重读转态。状态桥刷新链
+                    // （refresh）保留，防回退。
+                    if (window.__homeOverviewTranscribeDone) {
+                        window.__homeOverviewTranscribeDone(st.path);
+                    }
                     refresh();
                 }
             },

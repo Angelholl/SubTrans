@@ -5751,6 +5751,27 @@ def test_console_capsule_overlay_no_layout_shift_pinned():
         "面板 z-950 须保留（低于设置 overlay 990 / AppModal 1000）"
 
 
+def test_home_transcribe_done_writes_overview_pinned():
+    """d1103-卡3（D2026-1103-05 项⑧，owner 选 A）：首页转录终态直写概览条。
+
+    先红：改前终态分支只调状态桥刷新，包装链时序异常时概览条滞留 running。
+    负控：既有状态桥刷新调用（__homeOverviewRefresh）不得删除，防回退。"""
+    js = (ASSETS / "app-home-transcribe.js").read_text(encoding="utf-8")
+    body = _extract_function(js, "_pollTranscribe")
+    assert body, "app-home-transcribe.js 缺 _pollTranscribe"
+    assert "window.__homeOverviewTranscribeDone(st.path)" in body, \
+        "终态分支缺概览条 done 直写"
+    settled = body.split("onSettled:")[1]
+    seg = settled.split("doneName(st.path)")[1]
+    assert "window.__homeOverviewTranscribeDone(st.path)" in seg.split("refresh();")[0], \
+        "done 直写须在终态成功分支内（状态桥 refresh 之前）"
+    assert "window.__homeOverviewRefresh" in body, \
+        "状态桥刷新链不得删除（防回退负控）"
+    init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
+    assert "window.__homeOverviewTranscribeDone =" in init, \
+        "FlowOverview 直写面须保持在位（d1102-件F 钉）"
+
+
 def test_home_flow_overview_lastrun_missed_skipped_pinned():
     """件E#2：概览条 last_run 摘要补「漏听放弃」段。
 
