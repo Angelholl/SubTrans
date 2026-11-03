@@ -949,6 +949,18 @@ const MSG = {
     ct2RuntimeSavedFmt: dir => `落位已改为 ${dir}（即时生效，无需重启）`,
     ct2RuntimeResetDone: '已恢复默认落位',
     ct2RuntimeUnknown: '转写引擎落位：状态未知',
+    // 模型落位行（d1103 D2026-1103-04，owner 令「模型安装位置设置和 GPU
+    // 补丁包一样」）；来源标签复用上方 ct2RuntimeSource* 一套（同一语义不
+    // 重复登记，经 app-refine-asr.js 的 ct2SourceLabel 共用）。体量必须摆
+    // 出：误切到空位＝重下约 2.9 GB，光看路径用户判不出来
+    ct2ModelDirFmt: (dir, src) => `模型落位：${dir}（${src}）`,
+    ct2ModelDirHasFmt: size => `该位置已有模型 ${size}`,
+    ct2ModelDirNoModel: '该位置暂无模型（下载将占约 2.9 GB）',
+    ct2ModelDirPickBtn: '更改位置',
+    ct2ModelDirResetBtn: '恢复默认',
+    ct2ModelDirSavedFmt: dir => `模型落位已改为 ${dir}（即时生效，无需重启）`,
+    ct2ModelDirResetDone: '已恢复默认模型落位',
+    ct2ModelDirUnknown: '模型落位：状态未知',
     // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：词典源选择
     // （全 JS 态键，零静态 i18n 消耗；asrDl* 为 AppModal.download 方法体
     // 引用+定向钉保留；asrDownloadBtn/mp* 面板键随 AppModal.models 删除）

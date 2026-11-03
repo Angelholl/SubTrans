@@ -27,6 +27,7 @@ import contextlib
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -51,6 +52,8 @@ __all__ = [
     "install",
     "selfcheck",
     "download_model",
+    "runtime_dir_info",
+    "ct2_model_dir_info",
     "ct2_model_dir",
     "resolve_ct2_model_dir",
     "ct2_runner_command",
@@ -120,6 +123,10 @@ _INSTALL_TOP_MEMBERS = ("runtime.json", "selfcheck.py", "python", "site-packages
 # settings KV 通道；读侧＝config.read_ui_settings——refine 层不 import
 # webview_gui，分层方向单向）
 CT2_RUNTIME_DIR_KEY = "ct2_runtime_dir"
+# 模型落位设置键（D2026-1103-04，owner 令「模型安装位置设置和 GPU 补丁包
+# 一样」）：与运行时同构但**独立一键**——运行时约 109MB、模型约 2.9GB，
+# 改引擎位置不应强制搬 2.9GB（用户也可能想分盘放）
+CT2_MODEL_DIR_KEY = "ct2_model_dir"
 
 
 def _has_runtime(root: pathlib.Path) -> bool:
@@ -152,7 +159,10 @@ def _default_runtime_root() -> tuple[str, str]:
     GPU 补丁。frozen 形态不变＝数据根/runtime/ct2。"""
     try:
         repo = paths.app_root().resolve()
-        if paths.data_root().resolve() == repo:
+        # 门控＝源码形态专属：frozen 下 app_root() 依 D2026-0929-08 返回
+        # 数据根，两值天然相等，不加 is_frozen() 会把 frozen 实例的运行时
+        # 指向仓库/数据根同级旁路或另一实例旧位（D2026-1103-04 自查修正）
+        if not paths.is_frozen() and paths.data_root().resolve() == repo:
             sibling = repo.parent / f"{repo.name}-runtime" / "ct2"
             if _has_runtime(sibling):
                 return str(sibling), "default"
@@ -197,15 +207,18 @@ def runtime_root() -> str:
 _DOWNLOAD_TMP_DIRNAME = ".ct2-downloads"
 
 
-def _download_tmp_path(name: str) -> str:
-    """下载中间件（运行时 zip / GPU 补丁 zip）落位＝运行时根**同级**旁路目录。
+def _download_tmp_path(name: str, base: str = "") -> str:
+    """下载中间件（运行时 zip／GPU 补丁 zip／模型 zip）落位＝解包目标父目录
+    下的旁路目录。
 
-    评审补漏（D2026-1103-03）：旧口径 ``paths.data_subdir("runtime", …)`` 在
-    源码形态下＝仓库根 ``/runtime``，106MB/1.21GB 中间件仍落仓库所在盘（失败
-    时还残留在树旁）；改随运行时落位走——默认可离 C 盘，用户自定义到哪就跟到
-    哪。落在运行时根的父目录而非根内，免得解包目标目录里躺半成品 zip；自定义
-    位恰为盘根时退回系统临时目录（不在盘根建目录）。"""
-    parent = pathlib.Path(runtime_root()).parent
+    评审补漏（D2026-1103-03，模型件由 D2026-1103-04 补齐）：旧口径
+    ``paths.data_subdir("runtime"/"models", …)`` 在源码形态下＝仓库树内，
+    106MB/1.21GB/2.9GB 中间件仍落仓库所在盘（失败时还残留在树内）；改随
+    落位走——默认可离 C 盘，用户自定义到哪就跟到哪。``base``＝解包目标根
+    （缺省运行时根；模型件传 ``ct2_model_dir()``），中间件落 base 的父目录
+    而非 base 内，免得解包目标目录里躺半成品 zip；base 恰在盘根时退回系统
+    临时目录（不在盘根建目录）。"""
+    parent = pathlib.Path(base or runtime_root()).parent
     if parent.parent == parent:
         parent = pathlib.Path(tempfile.gettempdir()) / "SubTrans"
     tmp_dir = parent / _DOWNLOAD_TMP_DIRNAME
@@ -270,12 +283,97 @@ def is_installed() -> bool:
     return read_runtime_manifest() is not None
 
 
+def _has_model(root: pathlib.Path) -> bool:
+    """该模型根下是否已有落位模型件（任一型号 ``model.bin`` 在位即算，与
+    resolve_ct2_model_dir 同谓词）。
+
+    有货判定**不重算 sha256**（D2026-1103-04 评议 Q3）：2.9 GB 件放在状态
+    读取路径上逐字节校验不可接受；完整性由下载侧 sha pin＋原子解包保证，
+    真完整性走 selfcheck/转写实跑。"""
+    base = str(root)
+    try:
+        return any(os.path.isfile(os.path.join(base, name, "model.bin"))
+                   for name in os.listdir(base))
+    except OSError:
+        return False
+
+
+def has_model_at(root: str = "") -> bool:
+    """该模型根是否已有落位模型件（GUI 落位行「该位置有无模型」消费；
+    缺省查现形落位）。"""
+    return _has_model(pathlib.Path(root or ct2_model_dir()))
+
+
+def _default_model_root() -> tuple[str, str]:
+    """现形默认模型落位，返回 (路径, 来源标签 default/legacy)。
+
+    与运行时同构（D2026-1103-04，owner 令「模型安装位置设置和 GPU 补丁包
+    一样」），但**外置理由不同**，不得混写先例：运行时出仓库树是脱钩裁定
+    （site-packages 内第三方自带测试文件污染全树安全扫描面）；模型件只有
+    model.bin/config/tokenizer/vocabulary 四件纯数据，扫描面论不成立。这里
+    把默认位改到仓库同级旁路的理由＝约 2.9 GB 大模型件不应躺在 git
+    checkout 内（``git clean -xdf``、删/改名仓库、备份与索引面都会波及），
+    且与运行时同根便于整体备份迁移。``models/`` 的「本地模型产物沙箱」产品
+    定位不变（README 仍随仓库，旧位仍自动识别）。
+
+    门控（critic HRO-1）：仅源码形态（非 frozen 且数据根=仓库根）默认改
+    旁路；数据根自定义与 frozen 一律随数据根——否则存量用户旧件失联、
+    静默重下 2.9 GB。legacy 候选去重后按序取首个有货者并标 legacy：仓库
+    models/ct2 → 数据根 models/ct2 → %LOCALAPPDATA%/SubTrans/models/ct2。"""
+    try:
+        repo = paths.app_root().resolve()
+        data = paths.data_root().resolve()
+        if not paths.is_frozen() and data == repo:
+            sibling = repo.parent / f"{repo.name}-runtime" / "models" / "ct2"
+            if _has_model(sibling):
+                return str(sibling), "default"
+            local = pathlib.Path(os.environ.get("LOCALAPPDATA",
+                                                str(pathlib.Path.home())))
+            seen: set[str] = set()
+            for cand in (repo / "models" / "ct2", data / "models" / "ct2",
+                         local / "SubTrans" / "models" / "ct2"):
+                key = os.path.normcase(os.path.realpath(str(cand)))
+                if key in seen:
+                    continue
+                seen.add(key)
+                if _has_model(cand):
+                    return str(cand), "legacy"
+            return str(sibling), "default"
+    except OSError:
+        pass
+    return paths.data_subdir("models", "ct2"), "default"
+
+
+def ct2_model_dir_info() -> dict:
+    """模型落位与来源（source ∈ env/settings/default/legacy）。
+
+    解析序与运行时同构：环境变量 ``SUBTRANSJAV_CT2_MODEL_DIR``（测试隔离/
+    CI 用，优先级最高）> settings 键 ``ct2_model_dir``（GUI 可自定义）>
+    现形默认（见 _default_model_root）。只读探测，不建目录。"""
+    override = os.environ.get("SUBTRANSJAV_CT2_MODEL_DIR", "").strip()
+    if override:
+        return {"dir": override, "source": "env"}
+    cfg = ""
+    try:
+        from . import config
+        cfg = str(config.read_ui_settings()
+                  .get(CT2_MODEL_DIR_KEY) or "").strip()
+    except Exception:                       # noqa: BLE001 设置面永不阻断
+        cfg = ""
+    if cfg:
+        return {"dir": cfg, "source": "settings"}
+    path, source = _default_model_root()
+    return {"dir": path, "source": source}
+
+
 def ct2_model_dir() -> str:
-    return paths.data_subdir("models", "ct2")
+    """模型落位单一读取面（语义与来源见 ct2_model_dir_info）。"""
+    return ct2_model_dir_info()["dir"]
 
 
 def resolve_ct2_model_dir(model: str, model_dir: str = "") -> str:
-    """ct2 模型目录解析：显式 --model-dir 优先，否则数据根 models/ct2/<model>。
+    """ct2 模型目录解析：显式 --model-dir 优先，否则现形模型落位/<model>
+    （落位解析序见 ct2_model_dir_info）。
 
     与 whisper 链"探测与加载同序"口径一致：解析失败返回空串由调用方人话
     报错，绝不静默回退缓存。"""
@@ -355,6 +453,16 @@ def provider_status() -> dict:
                                        str(manifest["python_exe"]))) \
         if manifest else probe
     ok, detail = selfcheck() if py else (False, "未安装")
+    # 模型落位读数（D2026-1103-04）：GUI 落位行要显「该位置有无模型＋体量」，
+    # 否则用户自定义到空目录只会看到静默待重下；models 列表本身仍＝pin 常量
+    model_info = ct2_model_dir_info()
+    model_path = resolve_ct2_model_dir(
+        CT2_MODELS[0]["model"]) if CT2_MODELS else ""
+    try:
+        model_bytes = os.path.getsize(os.path.join(model_path, "model.bin")) \
+            if model_path else 0
+    except OSError:
+        model_bytes = 0
     return {
         "installed": manifest is not None,
         "python": py,
@@ -365,6 +473,10 @@ def provider_status() -> dict:
         "zip_published": bool(RUNTIME_ZIP_URL and RUNTIME_ZIP_SHA256),
         "pinned_deps": list(PINNED_DEPS),
         "models": CT2_MODELS,
+        "model_dir": model_info["dir"],
+        "model_source": model_info["source"],
+        "model_present": bool(model_path),
+        "model_bytes": model_bytes,
     }
 
 
@@ -625,7 +737,11 @@ def _normalize_model_layout(dest_model_dir: str) -> None:
 
 
 def download_model(model: str = "large-v2", progress=None) -> int:
-    """CT2 模型 zip 守卫下载+核验+解包到 models/ct2/<model>（verified 门）。"""
+    """CT2 模型 zip 守卫下载+核验+解包到现形模型落位/<model>（verified 门）。
+
+    rc 语义：0＝新装成功；1＝已落位（幂等）或解包结构异常（打印区分）；
+    2＝未知型号；3＝verified 门未开。解包只进 ``<model>.partial`` 暂存位，
+    核验通过才原子换名进最终位（D2026-1103-04）。"""
     entry = next((m for m in CT2_MODELS if m["model"] == model), None)
     if entry is None:
         print("未知 ct2 模型: " + model)
@@ -639,20 +755,31 @@ def download_model(model: str = "large-v2", progress=None) -> int:
             os.path.join(dest_model_dir, "model.bin")):
         print("模型已落位: " + dest_model_dir)
         return 1
-    zip_path = paths.data_subdir("models", "ct2", model + "-ct2.zip.tmp")
+    zip_path = _download_tmp_path(model + "-ct2.zip.tmp", ct2_model_dir())
+    staging = dest_model_dir + ".partial"
     print("[1/3] 守卫下载模型件（" + format(int(entry["bytes"]) / 1048576, ".0f")
           + "MB）")
     _guarded_download(str(entry["url"]), zip_path, str(entry["sha256"]),
                       int(entry["bytes"]), progress=progress)
-    print("[2/3] sha256 核验通过，解包到 " + dest_model_dir)
-    _safe_extract_zip(zip_path, dest_model_dir)
+    print("[2/3] sha256 核验通过，解包到暂存位 " + staging)
+    with contextlib.suppress(OSError):
+        shutil.rmtree(staging)              # 上次中断残骸
+    _safe_extract_zip(zip_path, staging)
     with contextlib.suppress(OSError):
         os.remove(zip_path)
     print("[3/3] 落位核验")
-    _normalize_model_layout(dest_model_dir)
-    if not os.path.isfile(os.path.join(dest_model_dir, "model.bin")):
+    _normalize_model_layout(staging)
+    if not os.path.isfile(os.path.join(staging, "model.bin")):
+        with contextlib.suppress(OSError):
+            shutil.rmtree(staging)
         print("解包后缺 model.bin——镜像件结构异常")
         return 1
+    # 原子换名（D2026-1103-04 评议 HRO-2/Q3）：解包只进 .partial，核验通过
+    # 才改名进最终位——下载中断不再留半截 model.bin 被「已落位」谓词当真，
+    # 也不会让 legacy 兜底选中坏目录
+    if os.path.isdir(dest_model_dir):
+        shutil.rmtree(dest_model_dir)       # 上面已判过：无 model.bin 的残骸
+    os.replace(staging, dest_model_dir)
     print("模型就绪: " + dest_model_dir)
     return 0
 
@@ -716,7 +843,13 @@ def start_model_download(model: str = "large-v2") -> dict:
     def _run() -> None:
         try:
             rc = download_model(model)
-            _set_op("done" if rc == 0 else "failed", "model", rc=rc)
+            # rc=1＝「模型已落位」不是失败（D2026-1103-04 评审补漏：旧口径
+            # 把已落位记 failed，GUI 点下载即显「模型下载失败 rc=1」误导）
+            if rc == 1:
+                _set_op("done", "model", detail="模型已落位，无需重复下载",
+                        rc=rc)
+            else:
+                _set_op("done" if rc == 0 else "failed", "model", rc=rc)
         except Exception as e:      # noqa: BLE001 线程兜底
             _set_op("failed", "model", detail=str(e), rc=1)
 

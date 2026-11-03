@@ -279,6 +279,47 @@ def _ct2_runtime_payload() -> dict[str, Any]:
                 asr_runtime.read_runtime_manifest(info["dir"]))}
 
 
+def _ct2_model_payload() -> dict[str, Any]:
+    """ct2 模型落位回包组装（读侧/写侧同形，D2026-1103-04）。"""
+    from subtransjav.refine import asr_runtime
+    info = asr_runtime.ct2_model_dir_info()
+    return {"success": True, "model_dir": info["dir"],
+            "source": info["source"],
+            "has_model": bool(asr_runtime.has_model_at(info["dir"]))}
+
+
+def _ct2_guard_tree_root() -> str:
+    """ct2 落位守卫的「项目文件夹」真值（D2026-1103-04 自查修正）。
+
+    旧实现取 ``paths.app_root()``，但 frozen 形态按 D2026-0929-08 它返回
+    **数据根**——于是 frozen 下被拒的是数据根（连默认落位自己都被拒），真
+    正的安装目录反而没护住。源码形态＝仓库根；frozen＝exe 同目录。"""
+    if paths.is_frozen():
+        return str(Path(sys.executable).parent)
+    return str(paths.app_root())
+
+
+def _ct2_dir_switch_guard(target: str, in_repo_msg_key: str) -> str:
+    """ct2 落位切换共用守卫（运行时/模型两键同口径，D2026-1103-04）。
+
+    返回中文错误文案，空串＝放行。在飞安装/下载禁切换（线程按旧根写入而
+    UI 按新根显示）；非空目标必须绝对路径（与 refine_set_data_root 同口径：
+    用户自选本机目录不作白名单）；拒绝项目文件夹内目标——运行时依脱钩裁定
+    （site-packages 第三方测试文件污染全树扫描面），模型件的理由是 2.9 GB
+    大件不应躺在 git checkout 内，两条文案各写各的不得混用理由。"""
+    from subtransjav.refine import asr_runtime
+    if asr_runtime.operation_progress().get("phase") == "running":
+        return msg("ct2_runtime_dir_busy")
+    if target and not os.path.isabs(target):
+        return msg("data_root_need_abs")
+    if target:
+        norm = os.path.normcase(os.path.realpath(target))
+        app = os.path.normcase(os.path.realpath(_ct2_guard_tree_root()))
+        if norm == app or norm.startswith(app + os.sep):
+            return msg(in_repo_msg_key)
+    return ""
+
+
 def _build_refine_args(options: dict[str, Any]) -> list[str]:
     """构建净语翻译 CLI 参数（v2 两阶段管线）。
 
@@ -1638,6 +1679,7 @@ class TranslateAPI:
                     **asr_runtime.provider_status(),
                     "gpu_patch": asr_runtime.gpu_patch_status(),
                     "runtime": asr_runtime.runtime_dir_info(),
+                    "model_runtime": asr_runtime.ct2_model_dir_info(),
                     "operation": asr_runtime.operation_progress()}
         except Exception as e:
             _log_exc("refine_ct2_status")
@@ -1671,25 +1713,17 @@ class TranslateAPI:
         path 空串＝清除自定义恢复默认落位；否则必须绝对路径（与
         refine_set_data_root 同口径：用户自选本机目录，不作白名单）。
         拒绝项目文件夹内目标——脱钩裁定（site-packages 内第三方自带测试
-        文件污染全树安全扫描面）不因可自定义而松动，两形态同口径（源码形
-        态＝仓库树；frozen 形态＝安装目录，运行时落此则升级/卸载面失守）。
-        在飞安装/下载禁切换（否则线程按旧根写入而 UI 按新根显示）。落盘复用
+        文件污染全树安全扫描面）不因可自定义而松动；「项目文件夹」真值见
+        _ct2_guard_tree_root（源码形态＝仓库根，frozen＝安装目录）。在飞
+        安装/下载禁切换（否则线程按旧根写入而 UI 按新根显示）。落盘复用
         refine_save_stage_settings 既有 settings KV 通道，本方法零自有
         open 写点（Mimosa path-traversal 消模式，甄别表 #29 先例）。"""
         try:
             from subtransjav.refine import asr_runtime
-            if asr_runtime.operation_progress().get("phase") == "running":
-                return {"success": False, "error": msg("ct2_runtime_dir_busy")}
             target = str(path or "").strip()
-            if target and not os.path.isabs(target):
-                return {"success": False, "error": msg("data_root_need_abs")}
-            if target:
-                norm = os.path.normcase(os.path.realpath(target))
-                app = os.path.normcase(os.path.realpath(
-                    str(paths.app_root())))
-                if norm == app or norm.startswith(app + os.sep):
-                    return {"success": False,
-                            "error": msg("ct2_runtime_dir_in_repo")}
+            err = _ct2_dir_switch_guard(target, "ct2_runtime_dir_in_repo")
+            if err:
+                return {"success": False, "error": err}
             saved = self.refine_save_stage_settings(
                 None, None, {asr_runtime.CT2_RUNTIME_DIR_KEY: target})
             if not saved.get("success"):
@@ -1698,6 +1732,41 @@ class TranslateAPI:
             return _ct2_runtime_payload()
         except Exception as e:
             _log_exc("refine_ct2_runtime_dir_set")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_model_dir(self) -> dict[str, Any]:
+        """当前 ct2 模型落位与来源（source ∈ env/settings/default/legacy，
+        D2026-1103-04；只读零副作用）。"""
+        try:
+            return _ct2_model_payload()
+        except Exception as e:
+            _log_exc("refine_ct2_model_dir")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_model_dir_set(self, path: str = "") -> dict[str, Any]:
+        """自定义 ct2 模型落位（D2026-1103-04，owner 令「模型安装位置设置
+        和 GPU 补丁包一样」；即时生效无需重启）。
+
+        与运行时落位同构但**独立一键**：运行时约 109 MB、模型约 2.9 GB，
+        改引擎位置不应强制搬模型，用户也可能想分盘放。守卫共用
+        _ct2_dir_switch_guard；模型件拒绝项目内的理由不是扫描面（模型只有
+        四件纯数据），而是大件不应躺在 git checkout 内，文案见
+        ct2_model_dir_in_repo。写侧同样只走 settings KV 通道，零自有 open
+        写点。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            target = str(path or "").strip()
+            err = _ct2_dir_switch_guard(target, "ct2_model_dir_in_repo")
+            if err:
+                return {"success": False, "error": err}
+            saved = self.refine_save_stage_settings(
+                None, None, {asr_runtime.CT2_MODEL_DIR_KEY: target})
+            if not saved.get("success"):
+                return {"success": False,
+                        "error": str(saved.get("error") or "")}
+            return _ct2_model_payload()
+        except Exception as e:
+            _log_exc("refine_ct2_model_dir_set")
             return {"success": False, "error": str(e)}
 
     def refine_ct2_install(self, provider: str = "auto") -> dict[str, Any]:

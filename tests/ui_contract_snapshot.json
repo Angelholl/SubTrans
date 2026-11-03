@@ -137,6 +137,9 @@
     "refineCt2GpuStatus",
     "refineCt2InstallBtn",
     "refineCt2ModelBtn",
+    "refineCt2ModelDirPickBtn",
+    "refineCt2ModelDirResetBtn",
+    "refineCt2ModelDirStatus",
     "refineCt2ModelStatus",
     "refineCt2RuntimePickBtn",
     "refineCt2RuntimeResetBtn",
@@ -465,7 +468,8 @@
       "d1102-卡A Console 覆盖层化（2026-11-02）：id 等量换血净 0 仍 233——删 consoleDrawerHandle（把手随调高逻辑退役），增 consoleOverlayBackdrop（半透明遮罩）；#consoleDrawer id 不变类改 .console-overlay；i18n 键集不动",
       "d1102-卡B（D2026-1102-03）：id 233→241，+8=首页转录卡 homeTranscribeCard/homeTranscribeMedia/homeTranscribePickBtn/homeTranscribeDualPass/homeTranscribeStartBtn/homeTranscribeStatus/homeTranscribeCt2/homeTranscribeInstall；i18n 键零增减（卡内文案全 JS 态注入）",
       "d1103-卡1 Console 更名换代（2026-11-03）：id 等量换血净 0 仍 241——consoleDrawer→consoleOverlay（ConsoleDrawer→ConsoleOverlay/this.overlay 纯更名零行为变更，命名对齐既有 .console-overlay/consoleOverlayBackdrop 家族）；i18n 键集不动（console_expand 仅换值「展开面板」）",
-      "d1103（D2026-1103-03）：id 241→244，+3=CT2 面板「转写引擎落位」行 refineCt2RuntimeStatus/refineCt2RuntimePickBtn/refineCt2RuntimeResetBtn（owner 走查「补丁包默认不要装在 C 盘＋可自定义安装位置」；源码形态运行时默认改仓库同级旁路＋settings 键 ct2_runtime_dir 可自定义）；i18n 键零增减（落位行文案全 JS 态注入，沿本面板先例）"
+      "d1103（D2026-1103-03）：id 241→244，+3=CT2 面板「转写引擎落位」行 refineCt2RuntimeStatus/refineCt2RuntimePickBtn/refineCt2RuntimeResetBtn（owner 走查「补丁包默认不要装在 C 盘＋可自定义安装位置」；源码形态运行时默认改仓库同级旁路＋settings 键 ct2_runtime_dir 可自定义）；i18n 键零增减（落位行文案全 JS 态注入，沿本面板先例）",
+      "d1103（D2026-1103-04）：id 244→247，+3=CT2 面板「模型落位」行 refineCt2ModelDirStatus/refineCt2ModelDirPickBtn/refineCt2ModelDirResetBtn（owner 令「模型安装位置设置和 GPU 加速补丁包一样」；源码形态模型默认改仓库同级旁路 models/ct2＋settings 键 ct2_model_dir 独立一键，与引擎落位分两键＝模型约 2.9 GB 不应随引擎位置被强制搬）；i18n 键零增减（同先行例全 JS 态注入）"
     ]
   }
 }

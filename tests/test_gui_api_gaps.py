@@ -4,6 +4,7 @@
 不启动真窗口、不跑子进程/下载；CT2 运行时与 ffmpeg 供给一律打桩。
 现状薄弱点只钉契约，不修产品代码。
 """
+import json
 from pathlib import Path
 
 import pytest
@@ -619,13 +620,26 @@ def test_refine_ct2_runtime_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     r = gui_api_obj.refine_ct2_runtime_dir_set(str(inside))
     assert r["success"] is False, "仓库树内目标未被拒（脱钩裁定破口）"
 
-    # 两形态同口径（评审补漏 D2026-1103-03）：数据根≠应用根（frozen 形态
-    # 应用根＝安装目录）时应用目录内目标同样拒绝——旧实现只在数据根=仓库根
-    # 分支判定，frozen 用户可把运行时装进安装目录，升级/卸载面失守
-    monkeypatch.setattr(paths, "data_root", lambda: tmp_path / "data-ext")
-    r = gui_api_obj.refine_ct2_runtime_dir_set(str(inside))
-    assert r["success"] is False, "frozen 形态应用目录内目标未被拒"
+    # frozen 形态守卫真值修正（D2026-1103-04 自查）：paths.app_root() 在
+    # frozen 下按 D2026-0929-08 返回**数据根**，旧守卫据此拒的是数据根——连
+    # frozen 自己的默认落位（数据根/runtime/ct2）都被误拒，而真正的安装目录
+    # 反而没护住。守卫真值＝exe 同目录（api._ct2_guard_tree_root）
+    install = tmp_path / "install-dir"
+    inside_install = install / "runtime" / "ct2"
+    inside_install.mkdir(parents=True)
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(api_mod.sys, "executable",
+                        str(install / "SubTrans.exe"))
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(inside_install))
+    assert r["success"] is False, "frozen 形态安装目录内目标未被拒"
+    data_ext = tmp_path / "data-ext"
+    monkeypatch.setattr(paths, "data_root", lambda: data_ext)
+    monkeypatch.setattr(paths, "app_root", lambda: data_ext)
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(data_ext / "runtime" / "ct2"))
+    assert r["success"] is True, "frozen 数据根内默认落位被误拒"
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
     monkeypatch.setattr(paths, "data_root", lambda: repo)
+    monkeypatch.setattr(paths, "app_root", lambda: repo)
 
     outside = tmp_path / "rt-ext"
     r = gui_api_obj.refine_ct2_runtime_dir_set(str(outside))
@@ -639,6 +653,79 @@ def test_refine_ct2_runtime_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     assert r["success"] is True and r["source"] != "settings", \
         "空串未恢复默认落位"
     assert gui_api_obj.refine_ct2_status()["runtime"]["source"] != "settings"
+
+
+def test_refine_ct2_model_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
+    """d1103（D2026-1103-04，owner 令「模型安装位置设置和 GPU 加速补丁包
+    一样」）：模型落位桥面——共用守卫（绝对路径门／在飞禁切／项目内目标拒，
+    模型件文案给模型专属理由不得套运行时扫描面口径）＋独立 settings 键
+    （与运行时键互不覆盖）＋回包带 has_model，状态面带体量。"""
+    from subtransjav import paths
+    from subtransjav.refine import asr_runtime
+    from subtransjav.refine import config as refine_config
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(cfg / "refine_stage_settings.json"))
+    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.setattr(asr_runtime, "operation_progress",
+                        lambda: {"phase": "idle"})
+
+    repo = tmp_path / "repo"
+    (repo / "models" / "ct2").mkdir(parents=True)
+    monkeypatch.setattr(paths, "app_root", lambda: repo)
+    monkeypatch.setattr(paths, "data_root", lambda: repo)
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+
+    r = gui_api_obj.refine_ct2_model_dir_set("relative/dir")
+    assert r["success"] is False, "非绝对路径未被拒"
+    r = gui_api_obj.refine_ct2_model_dir_set(str(repo / "models" / "ct2"))
+    assert r["success"] is False, "项目文件夹内模型目标未被拒"
+    assert "2.9 GB" in (r["error"] or ""), \
+        "模型件拒绝文案须写模型专属理由（体量/仓库清理），不得套运行时口径"
+
+    monkeypatch.setattr(asr_runtime, "operation_progress",
+                        lambda: {"phase": "running", "kind": "model"})
+    r = gui_api_obj.refine_ct2_model_dir_set(str(tmp_path / "m2"))
+    assert r["success"] is False, "在飞下载未禁切模型落位"
+    monkeypatch.setattr(asr_runtime, "operation_progress",
+                        lambda: {"phase": "idle"})
+
+    outside = tmp_path / "engine-models"
+    r = gui_api_obj.refine_ct2_model_dir_set(str(outside))
+    assert r["success"] is True and r["source"] == "settings", r
+    assert r["model_dir"] == str(outside) and r["has_model"] is False
+    got = gui_api_obj.refine_ct2_model_dir()
+    assert got["model_dir"] == str(outside) and got["source"] == "settings"
+
+    # 两键独立：写模型键不得顺带改写运行时键（同一 KV 文件两键并存）
+    assert gui_api_obj.refine_ct2_runtime_dir_set(
+        str(tmp_path / "rt-x"))["success"] is True
+    gui_api_obj.refine_ct2_model_dir_set(str(outside))
+    data = json.loads((cfg / "refine_stage_settings.json")
+                      .read_text(encoding="utf-8"))
+    assert data["settings"].get(asr_runtime.CT2_RUNTIME_DIR_KEY) == str(
+        tmp_path / "rt-x")
+    assert data["settings"].get(asr_runtime.CT2_MODEL_DIR_KEY) == str(outside)
+
+    st = gui_api_obj.refine_ct2_status()
+    assert st["model_runtime"]["dir"] == str(outside)
+    assert st["model_present"] is False and st["model_bytes"] == 0
+
+    (outside / "large-v2").mkdir(parents=True)
+    (outside / "large-v2" / "model.bin").write_bytes(b"y" * 4096)
+    assert gui_api_obj.refine_ct2_model_dir()["has_model"] is True
+    st = gui_api_obj.refine_ct2_status()
+    assert st["model_present"] is True and st["model_bytes"] == 4096
+
+    r = gui_api_obj.refine_ct2_model_dir_set("")
+    assert r["success"] is True and r["source"] != "settings", \
+        "空串未恢复默认模型落位"
+    assert not Path(r["model_dir"]).is_relative_to(repo), \
+        "源码形态默认模型落位不得落仓库树内"
 
 
 def test_ffmpeg_supply_download_starts_worker(gui_api_obj, monkeypatch):

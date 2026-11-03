@@ -53,19 +53,38 @@
     return MSG.ct2GpuOfferFmt;
   }
 
-  // 转写引擎落位行（d1103 D2026-1103-03）：落位路径＋来源标签（默认/自定义/
-  // 环境变量/旧位置）＋该位是否已有运行时；来源标签经映射防暗合
-  function ct2RuntimeLine(rt) {
-    if (!rt || !rt.dir) return MSG.ct2RuntimeUnknown;
+  // 落位来源标签映射（d1103 D2026-1103-04 起运行时/模型两行共用；经映射
+  // 防暗合，未知值原样透出便于诊断）
+  function ct2SourceLabel(source) {
     const labels = {
       default: MSG.ct2RuntimeSourceDefault,
       settings: MSG.ct2RuntimeSourceSettings,
       env: MSG.ct2RuntimeSourceEnv,
       legacy: MSG.ct2RuntimeSourceLegacy,
     };
-    const src = labels[rt.source] || rt.source || '';
+    return labels[source] || source || '';
+  }
+
+  function ct2SizeGiB(bytes) {
+    if (!bytes) return '—';
+    return (bytes / 1073741824).toFixed(1) + ' GB';
+  }
+
+  // 转写引擎落位行（d1103 D2026-1103-03）：落位路径＋来源标签（默认/自定义/
+  // 环境变量/旧位置）＋该位是否已有运行时
+  function ct2RuntimeLine(rt) {
+    if (!rt || !rt.dir) return MSG.ct2RuntimeUnknown;
     const tail = rt.has_runtime ? '' : '｜' + MSG.ct2RuntimeNoRuntime;
-    return MSG.ct2RuntimeFmt(rt.dir, src) + tail;
+    return MSG.ct2RuntimeFmt(rt.dir, ct2SourceLabel(rt.source)) + tail;
+  }
+
+  // 模型落位行（d1103 D2026-1103-04）：路径＋来源＋该位有无模型与体量。
+  // 体量必须显——模型约 2.9 GB，误切到空目录只看到路径判不出会重下大件
+  function ct2ModelDirLine(mr, present, bytes) {
+    if (!mr || !mr.dir) return MSG.ct2ModelDirUnknown;
+    const tail = present ? '｜' + MSG.ct2ModelDirHasFmt(ct2SizeGiB(bytes))
+      : '｜' + MSG.ct2ModelDirNoModel;
+    return MSG.ct2ModelDirFmt(mr.dir, ct2SourceLabel(mr.source)) + tail;
   }
 
   function ct2Render(r) {
@@ -113,6 +132,20 @@
     if (rrb) {
       rrb.disabled = busy || rt.source !== 'settings';
       rrb.querySelector('span').textContent = MSG.ct2RuntimeResetBtn;
+    }
+    // 模型落位行（D2026-1103-04）：同守卫——在飞禁切、仅自定义态可恢复默认
+    const mr = r.model_runtime || {};
+    ct2Set('refineCt2ModelDirStatus',
+      ct2ModelDirLine(mr, !!r.model_present, r.model_bytes || 0));
+    const mpb = $('refineCt2ModelDirPickBtn');
+    if (mpb) {
+      mpb.disabled = busy;
+      mpb.querySelector('span').textContent = MSG.ct2ModelDirPickBtn;
+    }
+    const mrb = $('refineCt2ModelDirResetBtn');
+    if (mrb) {
+      mrb.disabled = busy || mr.source !== 'settings';
+      mrb.querySelector('span').textContent = MSG.ct2ModelDirResetBtn;
     }
     if (busy) {
       setTimeout(ct2Poll, 1000);          // 后台操作面 1s 轮询至终态
@@ -169,9 +202,14 @@
       const p = await window.pywebview.api.refine_pick_folder();
       if (!p || !p.success || !p.path) return;
       const r = await window.pywebview.api.refine_ct2_runtime_dir_set(p.path);
-      ct2Set('refineCt2RuntimeStatus', r && r.success
-        ? MSG.ct2RuntimeSavedFmt(r.runtime_dir) : ((r && r.error) || ''));
-      setTimeout(ct2Poll, 300);
+      // 成功才回轮询刷新；被拒时不得轮询——否则拒绝文案 300ms 即被状态行
+      // 重绘冲掉，用户看不见（黑盒 pick-rejected 态实证，D2026-1103-04）
+      if (r && r.success) {
+        ct2Set('refineCt2RuntimeStatus', MSG.ct2RuntimeSavedFmt(r.runtime_dir));
+        setTimeout(ct2Poll, 300);
+      } else {
+        ct2Set('refineCt2RuntimeStatus', (r && r.error) || '');
+      }
     } catch (e) {
       ct2Set('refineCt2RuntimeStatus', MSG.ct2FailFmt(String(e)));
     }
@@ -181,11 +219,48 @@
     if (!window.pywebview || !window.pywebview.api) return;
     try {
       const r = await window.pywebview.api.refine_ct2_runtime_dir_set('');
-      ct2Set('refineCt2RuntimeStatus', r && r.success
-        ? MSG.ct2RuntimeResetDone : ((r && r.error) || ''));
-      setTimeout(ct2Poll, 300);
+      if (r && r.success) {
+        ct2Set('refineCt2RuntimeStatus', MSG.ct2RuntimeResetDone);
+        setTimeout(ct2Poll, 300);
+      } else {
+        ct2Set('refineCt2RuntimeStatus', (r && r.error) || '');
+      }
     } catch (e) {
       ct2Set('refineCt2RuntimeStatus', MSG.ct2FailFmt(String(e)));
+    }
+  }
+
+  // 模型落位自定义（d1103 D2026-1103-04）：与引擎落位同形态但独立一键，
+  // 桥面 refine_ct2_model_dir_set（空串=恢复默认），守卫在后端共用面
+  async function ct2ModelDirPick() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    try {
+      const p = await window.pywebview.api.refine_pick_folder();
+      if (!p || !p.success || !p.path) return;
+      const r = await window.pywebview.api.refine_ct2_model_dir_set(p.path);
+      if (r && r.success) {
+        ct2Set('refineCt2ModelDirStatus', MSG.ct2ModelDirSavedFmt(r.model_dir));
+        setTimeout(ct2Poll, 300);
+      } else {
+        ct2Set('refineCt2ModelDirStatus', (r && r.error) || '');
+      }
+    } catch (e) {
+      ct2Set('refineCt2ModelDirStatus', MSG.ct2FailFmt(String(e)));
+    }
+  }
+
+  async function ct2ModelDirReset() {
+    if (!window.pywebview || !window.pywebview.api) return;
+    try {
+      const r = await window.pywebview.api.refine_ct2_model_dir_set('');
+      if (r && r.success) {
+        ct2Set('refineCt2ModelDirStatus', MSG.ct2ModelDirResetDone);
+        setTimeout(ct2Poll, 300);
+      } else {
+        ct2Set('refineCt2ModelDirStatus', (r && r.error) || '');
+      }
+    } catch (e) {
+      ct2Set('refineCt2ModelDirStatus', MSG.ct2FailFmt(String(e)));
     }
   }
 
@@ -200,4 +275,8 @@
     if (rpb) rpb.addEventListener('click', ct2RuntimePick);
     const rrb = $('refineCt2RuntimeResetBtn');
     if (rrb) rrb.addEventListener('click', ct2RuntimeReset);
+    const mpb = $('refineCt2ModelDirPickBtn');
+    if (mpb) mpb.addEventListener('click', ct2ModelDirPick);
+    const mrb = $('refineCt2ModelDirResetBtn');
+    if (mrb) mrb.addEventListener('click', ct2ModelDirReset);
   })();

@@ -108,8 +108,8 @@ tests/test_ruling_b6_web.py
 # C22 门控运行态（D2026-1031-04 ① 终裁后 --enable 本地写；语义翻案=roadmap:193 独立拍板项仍挂 owner，不随门控写入顺带）
 config/fullchain_c22.json
 
-# CT2 运行时临时件（asr_runtime._install_via_zip / download_gpu_patch 把下载
-# 中间 zip 写 paths.data_subdir("runtime", …)＝源码形态下仓库根 /runtime，
-# 106MB/1.21GB 量级；运行时本体默认已落仓库同级旁路 <仓库父>/<仓库名>-runtime
-# （D2026-1103-03），此处只兜失败残留与显式改根到仓库内的场景，禁入库）
+# CT2 引擎/模型下载残留兜底：下载中间件已改随落位走＝解包目标父目录下的
+# .ct2-downloads（源码形态默认即仓库同级旁路 <仓库父>/<仓库名>-runtime，
+# D2026-1103-03/04），不再写仓库根；本条只兜旧版本遗留与用户显式把落位自
+# 定义到仓库内的场景（106MB/1.21GB/2.9GB 量级），禁入库
 /runtime/

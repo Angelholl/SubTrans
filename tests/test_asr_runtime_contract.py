@@ -16,6 +16,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -651,3 +652,180 @@ def test_default_root_legacy_fallback_accepts_venv_form(tmp_path, monkeypatch):
     shutil.rmtree(legacy / "site-packages")
     assert asr_runtime.runtime_dir_info()["source"] == "default", \
         "半套骨架不应被当作可复用运行时"
+
+
+# ---------------------------------------------------------------------------
+# d1103（D2026-1103-04）：模型落位可自定义（owner 令「模型安装位置设置和
+# GPU 加速补丁包一样」）
+# ---------------------------------------------------------------------------
+
+def _model_skeleton(root: Path, model: str = "large-v2") -> Path:
+    """模型落位件最小骨架（``model.bin`` 在位＝「已落位」谓词）。"""
+    d = root / model
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "model.bin").write_bytes(b"stub-model")
+    return d
+
+
+def test_ct2_model_dir_resolution_order(tmp_path, monkeypatch):
+    """解析序 env > settings 键 > 现形默认；与运行时键互不干扰（两键两
+    来源各读各的，混读即红）。"""
+    from subtransjav.refine import config as refine_config
+    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "refine_stage_settings.json").write_text(json.dumps({
+        "settings": {asr_runtime.CT2_MODEL_DIR_KEY: str(tmp_path / "custom")}},
+    ), encoding="utf-8")
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
+    info = asr_runtime.ct2_model_dir_info()
+    assert info["dir"] == str(tmp_path / "custom"), "settings 键未生效"
+    assert info["source"] == "settings"
+    assert asr_runtime.ct2_model_dir() == str(tmp_path / "custom")
+    monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(tmp_path / "envm"))
+    assert asr_runtime.ct2_model_dir_info()["source"] == "env"
+    # 两键互不干扰：运行时 env 值不得被模型面读走
+    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(tmp_path / "rt"))
+    assert asr_runtime.ct2_model_dir_info()["source"] == "settings"
+    assert asr_runtime.runtime_dir_info()["dir"] == str(tmp_path / "rt")
+    # 空串＝清除自定义（GUI「恢复默认」语义）
+    (cfg / "refine_stage_settings.json").write_text(json.dumps(
+        {"settings": {asr_runtime.CT2_MODEL_DIR_KEY: ""}}), encoding="utf-8")
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    assert asr_runtime.ct2_model_dir_info()["source"] != "settings"
+
+
+def test_ct2_model_default_gate_and_legacy_candidates(tmp_path, monkeypatch):
+    """默认落位门控（critic HRO-1）：仅源码形态（非 frozen 且数据根=仓库根）
+    默认改仓库同级旁路；数据根自定义与 frozen 一律随数据根——否则存量用户
+    旧件失联静默重下 2.9 GB。legacy 候选按序取首个有货者（旧仓库位有货即
+    标 legacy），旁路有货则新默认优先。"""
+    from subtransjav.refine import config as refine_config
+    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
+    repo = tmp_path / "repo"
+    (repo / "subtransjav").mkdir(parents=True)
+    monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: repo)
+    monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: repo)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    sibling = repo.parent / "repo-runtime" / "models" / "ct2"
+
+    info = asr_runtime.ct2_model_dir_info()
+    assert _norm(info["dir"]) == _norm(str(sibling)), "默认须为仓库同级旁路"
+    assert info["source"] == "default"
+    assert not _norm(info["dir"]).startswith(
+        _norm(str(repo)) + os.sep), "旁路默认不得落仓库树内"
+
+    _model_skeleton(repo / "models" / "ct2")
+    info = asr_runtime.ct2_model_dir_info()
+    assert info["source"] == "legacy" and _norm(info["dir"]) == _norm(
+        str(repo / "models" / "ct2")), "旧仓库位有货未被识别（会重下 2.9GB）"
+
+    _model_skeleton(sibling)
+    info = asr_runtime.ct2_model_dir_info()
+    assert info["source"] == "default" and _norm(info["dir"]) == _norm(
+        str(sibling))
+
+    ext = tmp_path / "data-ext"
+    monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: ext)
+    info = asr_runtime.ct2_model_dir_info()
+    assert _norm(info["dir"]) == _norm(str(ext / "models" / "ct2")), \
+        "数据根自定义时默认不得改旁路（HRO-1）"
+    assert info["source"] == "default"
+
+    # frozen 形态：app_root() 返回数据根致两值天然相等，不得触发旁路分支
+    monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: ext)
+    monkeypatch.setattr(asr_runtime.paths, "is_frozen", lambda: True)
+    info = asr_runtime.ct2_model_dir_info()
+    assert _norm(info["dir"]) == _norm(str(ext / "models" / "ct2"))
+    assert info["source"] == "default", "frozen 不得走旁路/legacy 分支"
+
+
+def test_runtime_default_gate_excludes_frozen(tmp_path, monkeypatch):
+    """运行时侧同一门控自查修正（D2026-1103-04）：frozen 下 app_root() 依
+    D2026-0929-08 返回数据根，旧实现以「数据根=仓库根」为条件即误命中，会把
+    frozen 实例运行时指向数据根同级旁路或另一实例旧位。"""
+    from subtransjav.refine import config as refine_config
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
+    data = tmp_path / "frozen-data"
+    monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: data)
+    monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: data)
+    monkeypatch.setattr(asr_runtime.paths, "is_frozen", lambda: True)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    info = asr_runtime.runtime_dir_info()
+    assert _norm(info["dir"]) == _norm(str(data / "runtime" / "ct2"))
+    assert info["source"] == "default", "frozen 不得被标 legacy 或改旁路"
+
+
+def test_model_download_tmp_path_and_atomic_install(tmp_path, monkeypatch):
+    """模型 2.9 GB 中间件随模型落位走（补齐 D2026-1103-03 只覆盖运行时件的
+    缺口，评议 DEPENDENCY-IMPACT）；解包只进 ``<model>.partial``，核验失败
+    不留半截最终位也不留暂存残骸（评议 HRO-2/Q3：半截 model.bin 会被「已
+    落位」谓词当真，还会让 legacy 兜底选中坏目录）。"""
+    model_root = tmp_path / "engine" / "models" / "ct2"
+    model_root.mkdir(parents=True)
+    monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(model_root))
+    p = asr_runtime._download_tmp_path("large-v2-ct2.zip.tmp",
+                                       asr_runtime.ct2_model_dir())
+    assert _norm(p) == _norm(str(tmp_path / "engine" / "models"
+                                 / ".ct2-downloads" / "large-v2-ct2.zip.tmp"))
+    assert not _norm(p).startswith(_norm(str(model_root))), \
+        "半成品 zip 不得躺在模型落位根内"
+
+    entry = dict(asr_runtime.CT2_MODELS[0])
+    monkeypatch.setattr(asr_runtime, "CT2_MODELS", [dict(entry, verified=True)])
+
+    junk = tmp_path / "junk.zip"
+    _build_zip(junk, {"junk/config.json": b"{}"})
+    monkeypatch.setattr(asr_runtime, "_guarded_download",
+                        lambda url, dest, sha, size=0, progress=None:
+                        shutil.copyfile(str(junk), dest))
+    assert asr_runtime.download_model("large-v2") == 1
+    assert not (model_root / "large-v2").exists(), "结构异常件不得留最终位"
+    assert not (model_root / "large-v2.partial").exists(), "暂存残骸须清走"
+
+    good = tmp_path / "good.zip"
+    _build_zip(good, {"model.bin": b"MODEL", "config.json": b"{}"})
+    monkeypatch.setattr(asr_runtime, "_guarded_download",
+                        lambda url, dest, sha, size=0, progress=None:
+                        shutil.copyfile(str(good), dest))
+    assert asr_runtime.download_model("large-v2") == 0
+    assert (model_root / "large-v2" / "model.bin").is_file()
+    assert not (model_root / "large-v2.partial").exists(), "换名后暂存位不得留"
+
+
+def test_provider_status_exposes_model_dir_fields(tmp_path, monkeypatch):
+    """GUI 模型落位行要显「该位置有无模型＋体量」，provider_status 须透出
+    model_dir/model_source/model_present/model_bytes 四键（D2026-1103-04）；
+    models 列表仍＝pin 常量，不得被就地加键污染。"""
+    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    model_root = tmp_path / "models" / "ct2"
+    monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(model_root))
+    st = asr_runtime.provider_status()
+    assert st["model_dir"] == str(model_root)
+    assert st["model_source"] == "env"
+    assert st["model_present"] is False and st["model_bytes"] == 0
+    _model_skeleton(model_root)
+    (model_root / "large-v2" / "model.bin").write_bytes(b"x" * 1234)
+    st2 = asr_runtime.provider_status()
+    assert st2["model_present"] is True and st2["model_bytes"] == 1234
+    assert st["models"] == asr_runtime.CT2_MODELS
+
+
+def test_start_model_download_already_installed_maps_done(monkeypatch):
+    """rc=1＝「模型已落位」不是失败：旧口径把 rc!=0 一律记 failed，GUI 点
+    下载即显「模型下载失败 rc=1」误导（D2026-1103-04 评审补漏）。"""
+    monkeypatch.setattr(asr_runtime, "download_model",
+                        lambda model="large-v2": 1)
+    monkeypatch.setattr(asr_runtime, "_OP_STATE",
+                        {"phase": "idle", "kind": "", "detail": "", "rc": None})
+    assert asr_runtime.start_model_download("large-v2")["started"] is True
+    for _ in range(100):
+        if asr_runtime.operation_progress()["phase"] != "running":
+            break
+        time.sleep(0.02)
+    op = asr_runtime.operation_progress()
+    assert op["phase"] == "done" and op["rc"] == 1, "已落位仍被记 failed"
+    assert "已落位" in (op["detail"] or "")

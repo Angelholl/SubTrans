@@ -1057,6 +1057,15 @@
                             <span id="refineCt2ModelStatus" class="muted"></span>
                             <button type="button" id="refineCt2ModelBtn" class="btn btn-compact"><span></span></button>
                         </div>
+                        <!-- 模型落位行（d1103 D2026-1103-04，owner 令「模型安装位置
+                             设置和 GPU 补丁包一样」）：路径＋来源标签＋该位有无模型
+                             与体量＋更改位置/恢复默认。与引擎落位分两键：模型约
+                             2.9 GB，改引擎位置不应强制搬模型 -->
+                        <div class="field-row" style="margin-top:6px;" data-testid="ct2-model-dir-row">
+                            <span id="refineCt2ModelDirStatus" class="muted"></span>
+                            <button type="button" id="refineCt2ModelDirPickBtn" class="btn btn-compact"><span></span></button>
+                            <button type="button" id="refineCt2ModelDirResetBtn" class="btn btn-ghost btn-compact"><span></span></button>
+                        </div>
                         <!-- GPU 加速行（件B D2026-1029-02 拍板③）：opt-in 补丁
                              包下载；有 GPU 且补丁未齐才启用按钮，无 GPU 零打扰 -->
                         <div class="field-row" style="margin-top:6px;" data-testid="ct2-gpu-row">
