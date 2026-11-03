@@ -64,6 +64,11 @@ config/asr_probe_cache.json
 config/child_procs.json
 config/fullchain_last_run.json
 
+# 角色卡 seed 运行时产物（template_seed.py frozen 形态补拷的说明副本＋
+# .seed-<版本> 哨兵，本地生成不入库；包内源在 defaults/templates/ 已跟踪）
+config/templates/.seed-*
+config/templates/README-模板说明.txt
+
 # 词典下载数据（pip/源码形态数据根=旧仓库根，引擎页下载的 sudachi 词典落 dict/，本地数据不入库）
 dict/
 
