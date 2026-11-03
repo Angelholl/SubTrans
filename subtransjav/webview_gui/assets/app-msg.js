@@ -964,6 +964,24 @@ const MSG = {
     ct2ModelDirSavedFmt: dir => `模型落位已改为 ${dir}（即时生效，无需重启）`,
     ct2ModelDirResetDone: '已恢复默认模型落位',
     ct2ModelDirUnknown: '模型落位：状态未知',
+    // 联动迁移弹窗（B1，D2026-1104-01「一并迁移」双向询问）：改运行时或
+    // 模型任一落位时问另一处是否连带；不强制、两键两行语义不变。取消键
+    // 语义＝「只迁当前」而非放弃整个操作
+    ct2MigrateKindRuntime: '转写引擎',
+    ct2MigrateKindModel: '模型',
+    ct2MigrateTitleFmt: kind => `迁移${kind}落位？`,
+    ct2MigrateCurLineFmt: (kind, size, dst) =>
+        `将把${kind}现有文件（约 ${size} GB）搬迁到：\n${dst}`,
+    ct2MigrateCurLineNoFilesFmt: (kind, dst) =>
+        `${kind}当前位置无文件，仅切换落位到：\n${dst}`,
+    ct2MigrateCrossNote: '跨盘搬迁＝先复制并核验，成功后删除原文件',
+    ct2MigrateLinkLineFmt: (kind, size, dst) =>
+        `\n\n一并把${kind}现有文件（约 ${size} GB）搬迁到：\n${dst}`,
+    ct2MigrateLinkLineNoFilesFmt: (kind, dst) =>
+        `\n\n一并把${kind}落位切换到：\n${dst}`,
+    ct2MigrateOkBoth: '一并迁移',
+    ct2MigrateOkCur: '只迁当前',
+    ct2MigrateLinkFailedFmt: err => `落位变更已生效；连带迁移未完成：${err}`,
     // 2.6.3 批B（D2026-1003-01 ②/D2026-1003-06 五条件）：词典源选择
     // （全 JS 态键，零静态 i18n 消耗；asrDl* 为 AppModal.download 方法体
     // 引用+定向钉保留；asrDownloadBtn/mp* 面板键随 AppModal.models 删除）

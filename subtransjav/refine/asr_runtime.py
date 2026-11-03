@@ -213,6 +213,12 @@ def runtime_root() -> str:
     return runtime_dir_info()["dir"]
 
 
+def default_runtime_dir() -> str:
+    """现形默认运行时落位（不含 settings/env 覆写；「恢复默认」搬迁目标，
+    B1 D2026-1104-01）。"""
+    return _default_runtime_root()[0]
+
+
 _DOWNLOAD_TMP_DIRNAME = ".ct2-downloads"
 
 
@@ -385,6 +391,12 @@ def ct2_model_dir() -> str:
     return ct2_model_dir_info()["dir"]
 
 
+def default_model_dir() -> str:
+    """现形默认模型落位（不含 settings/env 覆写；「恢复默认」搬迁目标，
+    B1 D2026-1104-01）。"""
+    return _default_model_root()[0]
+
+
 def resolve_ct2_model_dir(model: str, model_dir: str = "") -> str:
     """ct2 模型目录解析：显式 --model-dir 优先，否则现形模型落位/<model>
     （落位解析序见 ct2_model_dir_info）。
@@ -397,6 +409,130 @@ def resolve_ct2_model_dir(model: str, model_dir: str = "") -> str:
     if os.path.isdir(cand) and os.path.isfile(os.path.join(cand, "model.bin")):
         return cand
     return ""
+
+
+def _same_volume(a: str, b: str) -> bool:
+    """两路径是否同卷（os.rename 可原子搬迁的判定面；盘符大小写归一）。"""
+    da = os.path.splitdrive(os.path.abspath(a))[0].upper()
+    db = os.path.splitdrive(os.path.abspath(b))[0].upper()
+    return bool(da) and da == db
+
+
+def _tree_bytes(root: pathlib.Path) -> int:
+    """目录体量（递归文件字节数和；目录缺失/IO 错误返回 0）。"""
+    total = 0
+    try:
+        for p in root.rglob("*"):
+            if p.is_file():
+                total += p.stat().st_size
+    except OSError:
+        return 0
+    return total
+
+
+def link_target(target: str, which: str) -> str:
+    """连带落位目标计算（B1「一并迁移」，D2026-1104-01）。
+
+    改运行时到 target 时连带模型 → ``<target 父目录>/models/ct2``；改模型
+    到 target 时连带运行时 → ``<target 祖目录>/ct2``——与默认同构结构对齐
+    （默认态运行时 ``<repo>-runtime/ct2`` 与模型 ``<repo>-runtime/models/
+    ct2`` 恰好互为该公式），非标自选结构时目标随公式走、由前端弹窗明示。
+    target 为盘根（父目录即自身）时返回空串＝无法计算，调用方不弹连带。"""
+    p = pathlib.Path(target)
+    if which == "model":
+        parent = p.parent
+        if parent == p:
+            return ""
+        return str(parent / "models" / "ct2")
+    parent = p.parent
+    if parent == p:
+        return ""
+    grand = parent.parent
+    if grand == parent:
+        return ""
+    return str(grand / "ct2")
+
+
+def migrate_ct2_tree(kind: str, dst: str) -> dict:
+    """落位搬迁（B1，D2026-1104-01）：现形落位 → dst 的文件搬迁。
+
+    kind="runtime"：runtime_root() 整树迁；kind="model"：ct2_model_dir()
+    迁。同卷＝目录级 os.rename（原子秒迁）；跨卷＝copy→核验→删源——
+    模型侧逐型号只进 ``<model>.partial`` 暂存、核验通过才换正式名（中断
+    半成品不会被「已落位」谓词当真，_first_model_dir 跳 partial 同源）；
+    核验口径＝源/目标文件名集合一致且逐文件字节数对拍（轻核验：2.9GB 件
+    放 sha256 逐字节在迁移路径上不可接受，「有货判定不重算 sha256」评议
+    Q3 同口径，真完整性由下载侧 sha pin＋selfcheck 承担）。现位无货＝
+    no-op（改落位即配置切换场景，返回 moved=False）；dst 已存在且非空＝
+    拒绝；失败一律保留源原样（跨卷副本清掉）。"""
+    src = runtime_root() if kind == "runtime" else ct2_model_dir()
+    out: dict = {"moved": False, "same_volume": False, "warning": "",
+                 "error": ""}
+    if not src or not os.path.isdir(src):
+        return out                                    # 现位无货＝no-op
+    dst_n = str(pathlib.Path(dst))
+    if os.path.normcase(os.path.realpath(src)) == os.path.normcase(
+            os.path.realpath(dst_n)):
+        out["error"] = f"目标与当前落位相同：{dst_n}"
+        return out
+    if os.path.exists(dst_n):
+        try:
+            if any(os.scandir(dst_n)):
+                out["error"] = f"目标目录已存在且非空：{dst_n}"
+                return out
+            os.rmdir(dst_n)                           # 空目录让位后迁入
+        except OSError as e:
+            out["error"] = f"目标目录不可用：{dst_n}（{e}）"
+            return out
+    same_vol = _same_volume(src, dst_n)
+    out["same_volume"] = same_vol
+    try:
+        pathlib.Path(dst_n).parent.mkdir(parents=True, exist_ok=True)
+        if same_vol:
+            os.rename(src, dst_n)                     # 原子整树迁
+            out["moved"] = True
+            return out
+        src_p = pathlib.Path(src)
+        dst_p = pathlib.Path(dst_n)
+        if kind == "runtime":
+            shutil.copytree(src_p, dst_p)
+            if read_runtime_manifest(dst_n) is None:
+                raise OSError("迁移后 manifest 认证未通过")
+        else:
+            for model_dir in sorted(src_p.iterdir()):
+                if not model_dir.is_dir():
+                    continue
+                name = model_dir.name
+                if name.endswith(_MODEL_STAGING_SUFFIX):
+                    continue
+                staging = dst_p / f"{name}{_MODEL_STAGING_SUFFIX}"
+                shutil.copytree(model_dir, staging)
+                try:
+                    _verify_tree_copy(model_dir, staging)
+                except Exception:
+                    shutil.rmtree(staging, ignore_errors=True)
+                    raise
+                os.rename(staging, dst_p / name)      # 核验过才换正式名
+        shutil.rmtree(src_p, ignore_errors=False)
+        out["moved"] = True
+    except OSError as e:
+        if not same_vol:
+            shutil.rmtree(dst_n, ignore_errors=True)  # 副本清掉、源原样
+        out["error"] = f"迁移失败（源保留原样）：{e}"
+    return out
+
+
+def _verify_tree_copy(src: pathlib.Path, dst: pathlib.Path) -> None:
+    """跨卷搬迁轻核验：文件名集合一致＋逐文件字节数对拍，不符即抛。"""
+    src_files = {str(p.relative_to(src)): p.stat().st_size
+                 for p in src.rglob("*") if p.is_file()}
+    dst_files = {str(p.relative_to(dst)): p.stat().st_size
+                 for p in dst.rglob("*") if p.is_file()}
+    if set(src_files) != set(dst_files):
+        raise OSError(f"副本文件清单不一致：缺 {sorted(set(src_files) - set(dst_files))[:3]}")
+    for rel, size in src_files.items():
+        if dst_files[rel] != size:
+            raise OSError(f"副本字节数不符：{rel}")
 
 
 # 1s 正弦波音频链自检体（d1028-32 selfcheck 契约：import 全链+版本钉+

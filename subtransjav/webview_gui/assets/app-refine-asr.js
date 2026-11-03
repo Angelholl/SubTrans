@@ -196,16 +196,67 @@
   // 落位自定义（d1103 D2026-1103-03）：目录选择复用既有 refine_pick_folder
   // （取消/失败静默），写侧走 refine_ct2_runtime_dir_set（空串=恢复默认）。
   // 落位即时生效不需重启，故不套数据根面板的 AppModal 重启提示。
+  // B1（D2026-1104-01）：写侧带文件搬迁；弹「一并迁移/只迁当前」双向询问
+  // （preview 失败降级直调，弹窗是增强不阻断基础功能）。
+  async function ct2MigrateAsk(kind, path) {
+    // kind="runtime"/"model"；返回 also 连带布尔。preview 不可得→false（降级）
+    try {
+      const pv = await window.pywebview.api.refine_ct2_migrate_preview(
+        path, kind);
+      if (!pv || !pv.success) { return false; }
+      const kName = kind === 'runtime' ? MSG.ct2MigrateKindRuntime
+        : MSG.ct2MigrateKindModel;
+      const lines = [];
+      if (pv.cur && pv.cur.has_files) {
+        lines.push(MSG.ct2MigrateCurLineFmt(
+          kName, pv.cur.size_gb, pv.cur.dst));
+        if (!pv.cur.same_volume) {
+          lines.push(MSG.ct2MigrateCrossNote);
+        }
+      } else {
+        lines.push(MSG.ct2MigrateCurLineNoFilesFmt(kName, pv.cur.dst));
+      }
+      let link = false;
+      if (pv.link) {
+        const lName = pv.link.link_kind === 'runtime'
+          ? MSG.ct2MigrateKindRuntime : MSG.ct2MigrateKindModel;
+        if (pv.link.has_files) {
+          lines.push(MSG.ct2MigrateLinkLineFmt(
+            lName, pv.link.size_gb, pv.link.target));
+          if (!pv.link.same_volume) {
+            lines.push(MSG.ct2MigrateCrossNote);
+          }
+        } else {
+          lines.push(MSG.ct2MigrateLinkLineNoFilesFmt(
+            lName, pv.link.target));
+        }
+        link = await AppModal.confirm(
+          MSG.ct2MigrateTitleFmt(kName), lines.join('\n'),
+          { okText: MSG.ct2MigrateOkBoth, cancelText: MSG.ct2MigrateOkCur });
+      }
+      return link;
+    } catch (e) {
+      return false;   // 预览失败降级：不弹窗、只迁当前（基础功能不阻断）
+    }
+  }
+
   async function ct2RuntimePick() {
     if (!window.pywebview || !window.pywebview.api) return;
     try {
       const p = await window.pywebview.api.refine_pick_folder();
       if (!p || !p.success || !p.path) return;
-      const r = await window.pywebview.api.refine_ct2_runtime_dir_set(p.path);
+      const also = await ct2MigrateAsk('runtime', p.path);
+      const r = await window.pywebview.api.refine_ct2_runtime_dir_set(
+        p.path, also);
       // 成功才回轮询刷新；被拒时不得轮询——否则拒绝文案 300ms 即被状态行
       // 重绘冲掉，用户看不见（黑盒 pick-rejected 态实证，D2026-1103-04）
       if (r && r.success) {
         ct2Set('refineCt2RuntimeStatus', MSG.ct2RuntimeSavedFmt(r.runtime_dir));
+        if (r.link_error) {
+          ct2Set('refineCt2RuntimeStatus',
+                 MSG.ct2RuntimeSavedFmt(r.runtime_dir)
+                 + ' ' + MSG.ct2MigrateLinkFailedFmt(r.link_error));
+        }
         setTimeout(ct2Poll, 300);
       } else {
         ct2Set('refineCt2RuntimeStatus', (r && r.error) || '');
@@ -218,9 +269,12 @@
   async function ct2RuntimeReset() {
     if (!window.pywebview || !window.pywebview.api) return;
     try {
-      const r = await window.pywebview.api.refine_ct2_runtime_dir_set('');
+      const also = await ct2MigrateAsk('runtime', '');
+      const r = await window.pywebview.api.refine_ct2_runtime_dir_set('', also);
       if (r && r.success) {
-        ct2Set('refineCt2RuntimeStatus', MSG.ct2RuntimeResetDone);
+        let text = MSG.ct2RuntimeResetDone;
+        if (r.link_error) { text += ' ' + MSG.ct2MigrateLinkFailedFmt(r.link_error); }
+        ct2Set('refineCt2RuntimeStatus', text);
         setTimeout(ct2Poll, 300);
       } else {
         ct2Set('refineCt2RuntimeStatus', (r && r.error) || '');
@@ -231,15 +285,22 @@
   }
 
   // 模型落位自定义（d1103 D2026-1103-04）：与引擎落位同形态但独立一键，
-  // 桥面 refine_ct2_model_dir_set（空串=恢复默认），守卫在后端共用面
+  // 桥面 refine_ct2_model_dir_set（空串=恢复默认），守卫在后端共用面；
+  // B1：同带文件搬迁＋「一并迁移/只迁当前」双向询问（对称 which="model"）
   async function ct2ModelDirPick() {
     if (!window.pywebview || !window.pywebview.api) return;
     try {
       const p = await window.pywebview.api.refine_pick_folder();
       if (!p || !p.success || !p.path) return;
-      const r = await window.pywebview.api.refine_ct2_model_dir_set(p.path);
+      const also = await ct2MigrateAsk('model', p.path);
+      const r = await window.pywebview.api.refine_ct2_model_dir_set(
+        p.path, also);
       if (r && r.success) {
-        ct2Set('refineCt2ModelDirStatus', MSG.ct2ModelDirSavedFmt(r.model_dir));
+        let text = MSG.ct2ModelDirSavedFmt(r.model_dir);
+        if (r.link_error) {
+          text += ' ' + MSG.ct2MigrateLinkFailedFmt(r.link_error);
+        }
+        ct2Set('refineCt2ModelDirStatus', text);
         setTimeout(ct2Poll, 300);
       } else {
         ct2Set('refineCt2ModelDirStatus', (r && r.error) || '');
@@ -252,9 +313,12 @@
   async function ct2ModelDirReset() {
     if (!window.pywebview || !window.pywebview.api) return;
     try {
-      const r = await window.pywebview.api.refine_ct2_model_dir_set('');
+      const also = await ct2MigrateAsk('model', '');
+      const r = await window.pywebview.api.refine_ct2_model_dir_set('', also);
       if (r && r.success) {
-        ct2Set('refineCt2ModelDirStatus', MSG.ct2ModelDirResetDone);
+        let text = MSG.ct2ModelDirResetDone;
+        if (r.link_error) { text += ' ' + MSG.ct2MigrateLinkFailedFmt(r.link_error); }
+        ct2Set('refineCt2ModelDirStatus', text);
         setTimeout(ct2Poll, 300);
       } else {
         ct2Set('refineCt2ModelDirStatus', (r && r.error) || '');

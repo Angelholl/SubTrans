@@ -807,3 +807,103 @@ def test_ffmpeg_supply_stop_sets_active_event(gui_api_obj):
     gui_api_obj._supply_stop = event
     assert gui_api_obj.ffmpeg_supply_stop() == {"success": True}
     assert event.is_set()
+
+
+def test_refine_ct2_link_migrate_also_bridge(gui_api_obj, tmp_path,
+                                             monkeypatch):
+    """d1104-B1（D2026-1104-01）：落位切换带文件搬迁＋also_* 连带迁移。
+
+    also_model=True：运行时与模型先后搬迁，两 settings 键一并写入，回包
+    带 model 子 payload；连带行搬迁失败不影响当前行成功、link_error 如实
+    带出（行内自洽：迁移成功才写配置）；preview 只读面返回 cur/link 事实。"""
+    import os as _os
+
+    from subtransjav.refine import asr_runtime
+    from subtransjav.refine import config as refine_config
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
+    monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
+                        lambda: str(cfg / "refine_stage_settings.json"))
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+
+    # 默认解析位隔离（事故修复钉：无 settings 态的 src 解析曾指向本机
+    # 真实默认落位——迁移面把 owner 真实运行时/模型 5.2GB 当迁移源搬进
+    # tmp 并删源，靠 pytest tmp 副本抢救；两默认根函数必须指 tmp 空目录，
+    # 使「settings 空」态的迁移恒为 no-op）
+    def _fake_def_rt():
+        return (str(tmp_path / "def-rt" / "ct2"), "default")
+
+    def _fake_def_md():
+        return (str(tmp_path / "def-md" / "models" / "ct2"), "default")
+
+    monkeypatch.setattr(asr_runtime, "_default_runtime_root", _fake_def_rt)
+    monkeypatch.setattr(asr_runtime, "_default_model_root", _fake_def_md)
+
+    def _rt_skeleton(root):
+        (root / "python").mkdir(parents=True)
+        (root / "python" / "python.exe").write_bytes(b"stub")
+        (root / "site-packages").mkdir()
+        (root / "runtime.json").write_bytes(json.dumps({
+            "layout_version": 1, "python_exe": "python/python.exe",
+            "site_packages": "site-packages"}).encode("utf-8"))
+
+    # 伪造现位有货：走 settings（真实用户态；env 优先级会遮蔽 settings
+    # 回包，故全程不设 env）。先落配置（现位无货 no-op）再补文件。
+    rt_src = tmp_path / "old-rt" / "ct2"
+    md_src = tmp_path / "old-md" / "models" / "ct2"
+    r0 = gui_api_obj.refine_ct2_runtime_dir_set(str(rt_src))
+    assert r0["success"] is True
+    r0m = gui_api_obj.refine_ct2_model_dir_set(str(md_src))
+    assert r0m["success"] is True
+    _rt_skeleton(rt_src)
+    (md_src / "large-v2").mkdir(parents=True)
+    (md_src / "large-v2" / "model.bin").write_bytes(b"x" * 512)
+    (md_src / "large-v2" / "config.json").write_bytes(b"{}")
+
+    rt_dst = tmp_path / "new-rt" / "ct2"
+    md_dst = tmp_path / "new-rt" / "models" / "ct2"
+    # 预览（只读）：连带目标公式与有货事实
+    pv = gui_api_obj.refine_ct2_migrate_preview(str(rt_dst), "runtime")
+    assert pv["success"] is True and pv["cur"]["has_files"] is True
+    assert pv["cur"]["dst"] == str(rt_dst)
+    assert pv["link"] is not None
+    assert _os.path.normcase(pv["link"]["target"]) == \
+        _os.path.normcase(str(md_dst)), pv["link"]
+    assert pv["link"]["has_files"] is True
+
+    # 连带迁移全链：also_model=True → 两处搬迁＋两键写入＋model 子回包
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(rt_dst), also_model=True)
+    assert r["success"] is True, r
+    assert r["runtime_dir"] == str(rt_dst)
+    assert r["model"]["success"] is True, r
+    assert _os.path.normcase(r["model"]["model_dir"]) == \
+        _os.path.normcase(str(md_dst))
+    assert not rt_src.exists() and not md_src.exists(), "两处源须消失"
+    assert asr_runtime.read_runtime_manifest(str(rt_dst)) is not None
+    assert (md_dst / "large-v2" / "model.bin").stat().st_size == 512
+    got = gui_api_obj.refine_ct2_runtime_dir()
+    assert got["source"] == "settings", "迁移成功后运行时键须写入 settings"
+    got_m = gui_api_obj.refine_ct2_model_dir()
+    assert got_m["source"] == "settings" and got_m["has_model"] is True
+
+    # 连带失败路径：连带目标已存在非空 → 迁移被拒，当前行成功+link_error
+    # （settings 直写现位不经 set 桥——set 桥此时会把上一段 new-rt 真迁移）
+    rt_src2 = tmp_path / "old-rt2" / "ct2"
+    (cfg / "refine_stage_settings.json").write_text(json.dumps({
+        "stages": [],
+        "settings": {"ct2_runtime_dir": str(rt_src2),
+                     "ct2_model_dir": str(md_dst)},
+    }), encoding="utf-8")
+    _rt_skeleton(rt_src2)
+    rt_dst2 = tmp_path / "new-rt2" / "ct2"
+    link_calc = asr_runtime.link_target(str(rt_dst2), "model")
+    (Path(link_calc) / "large-v2").mkdir(parents=True, exist_ok=True)
+    (Path(link_calc) / "large-v2" / "model.bin").write_bytes(b"occupied")
+    r2 = gui_api_obj.refine_ct2_runtime_dir_set(str(rt_dst2), also_model=True)
+    assert r2["success"] is True, "当前行成功不得被连带失败拖垮"
+    assert r2.get("link_error"), "连带失败 link_error 必须如实带出"
+    assert asr_runtime.read_runtime_manifest(str(rt_dst2)) is not None, \
+        "当前行迁移与配置不受连带失败影响"

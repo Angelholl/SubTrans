@@ -827,7 +827,8 @@ def test_start_model_download_already_installed_maps_done(monkeypatch):
     monkeypatch.setattr(asr_runtime, "download_model",
                         lambda model="large-v2": 1)
     monkeypatch.setattr(asr_runtime, "_OP_STATE",
-                        {"phase": "idle", "kind": "", "detail": "", "rc": None})
+                        {"phase": "idle", "kind": "", "rc": None,
+                         "detail": ""})
     assert asr_runtime.start_model_download("large-v2")["started"] is True
     for _ in range(100):
         if asr_runtime.operation_progress()["phase"] != "running":
@@ -836,3 +837,135 @@ def test_start_model_download_already_installed_maps_done(monkeypatch):
     op = asr_runtime.operation_progress()
     assert op["phase"] == "done" and op["rc"] == 1, "已落位仍被记 failed"
     assert "已落位" in (op["detail"] or "")
+
+
+# ---------------------------------------------------------------- B1 联动迁移（D2026-1104-01）
+
+def _model_skeleton(root: Path, model: str = "large-v2") -> None:
+    """已落位模型最小骨架（model.bin 判定件＋伴随件）。"""
+    d = root / model
+    d.mkdir(parents=True)
+    (d / "model.bin").write_bytes(b"x" * 1024)
+    (d / "config.json").write_bytes(b"{}")
+
+
+def _model_ok_src(src: Path) -> bool:
+    return (src / "large-v2" / "model.bin").stat().st_size == 1024
+
+
+class TestCt2MigrateContract:
+    def test_runtime_same_volume_atomic_rename(self, tmp_path, monkeypatch):
+        """同卷＝目录级 os.rename 原子迁：源消失、目标 manifest 认证通过。"""
+        src = tmp_path / "old" / "ct2"
+        _runtime_skeleton(src)
+        dst = tmp_path / "new" / "ct2"
+        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src))
+        out = asr_runtime.migrate_ct2_tree("runtime", dst=str(dst))
+        assert out["moved"] is True and out["error"] == ""
+        assert out["same_volume"] is True
+        assert not src.exists(), "同卷原子迁后源必须消失"
+        assert asr_runtime.read_runtime_manifest(str(dst)) is not None, \
+            "迁移后 manifest 认证须通过"
+
+    def test_runtime_cross_volume_copy_verify_remove_src(
+            self, tmp_path, monkeypatch):
+        """跨卷＝copy→manifest 认证核验→删源；核验失败副本清掉源保留。"""
+        src = tmp_path / "old" / "ct2"
+        _runtime_skeleton(src)
+        dst = tmp_path / "new" / "ct2"
+        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src))
+        monkeypatch.setattr(asr_runtime, "_same_volume", lambda a, b: False)
+        out = asr_runtime.migrate_ct2_tree("runtime", dst=str(dst))
+        assert out["moved"] is True and out["same_volume"] is False
+        assert not src.exists()
+        assert asr_runtime.read_runtime_manifest(str(dst)) is not None
+
+        # 核验失败路径：manifest 在 copy 后损坏 → 副本清掉、源原样
+        src2 = tmp_path / "old2" / "ct2"
+        _runtime_skeleton(src2)
+        dst2 = tmp_path / "new2" / "ct2"
+        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src2))
+        real_copy = asr_runtime.shutil.copytree
+
+        def corrupt_copy(src_, dst_, *a, **kw):
+            real_copy(src_, dst_, *a, **kw)
+            (Path(dst_) / "runtime.json").write_bytes(b"corrupt")
+
+        monkeypatch.setattr(asr_runtime.shutil, "copytree", corrupt_copy)
+        out2 = asr_runtime.migrate_ct2_tree("runtime", dst=str(dst2))
+        assert out2["moved"] is False and "迁移失败" in out2["error"]
+        assert not dst2.exists(), "核验失败副本必须清掉"
+        assert asr_runtime.read_runtime_manifest(str(src2)) is not None, \
+            "源必须保留原样"
+
+    def test_model_cross_volume_partial_staging(self, tmp_path, monkeypatch):
+        """模型跨卷逐型号只进 <model>.partial 暂存、核验通过才换正式名；
+        全成后删源；半成品不被有货谓词当真（与 _first_model_dir 跳 partial
+        同源）。"""
+        src = tmp_path / "old" / "models" / "ct2"
+        _model_skeleton(src)
+        dst = tmp_path / "new" / "models" / "ct2"
+        monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(src))
+        monkeypatch.setattr(asr_runtime, "_same_volume", lambda a, b: False)
+        out = asr_runtime.migrate_ct2_tree("model", dst=str(dst))
+        assert out["moved"] is True and out["error"] == ""
+        assert not src.exists()
+        assert (dst / "large-v2" / "model.bin").stat().st_size == 1024
+        assert not list(dst.glob("*.partial")), "暂存位必须全部换名"
+        assert asr_runtime._has_model(dst), "迁移后新位判定有货"
+
+        # 核验失败路径：copy 后字节数被篡改 → partial 清掉、源原样
+        src2 = tmp_path / "old2" / "models" / "ct2"
+        _model_skeleton(src2)
+        dst2 = tmp_path / "new2" / "models" / "ct2"
+        monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(src2))
+        real_copy = asr_runtime.shutil.copytree
+
+        def corrupt_copy(src_, dst_, **kw):
+            real_copy(src_, dst_, **kw)
+            for p in Path(dst_).rglob("model.bin"):
+                p.write_bytes(b"truncated")
+
+        monkeypatch.setattr(asr_runtime.shutil, "copytree", corrupt_copy)
+        out2 = asr_runtime.migrate_ct2_tree("model", dst=str(dst2))
+        assert out2["moved"] is False and "迁移失败" in out2["error"]
+        assert not dst2.exists()
+        assert _model_ok_src(src2), "源必须保留原样"
+
+    def test_migrate_noop_guards(self, tmp_path, monkeypatch):
+        """现位无货＝no-op（只改配置场景）；dst 非空拒绝且不动目标；
+        同位拒绝。"""
+        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR",
+                           str(tmp_path / "empty-src"))
+        out = asr_runtime.migrate_ct2_tree("runtime", dst=str(tmp_path / "d1"))
+        assert out["moved"] is False and out["error"] == ""
+
+        src = tmp_path / "src"
+        _runtime_skeleton(src)
+        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src))
+        busy = tmp_path / "busy"
+        busy.mkdir()
+        (busy / "occupant").write_bytes(b"occupied")
+        out2 = asr_runtime.migrate_ct2_tree("runtime", dst=str(busy))
+        assert out2["moved"] is False and "非空" in out2["error"]
+        assert (busy / "occupant").exists(), "拒迁不得动目标"
+
+        out3 = asr_runtime.migrate_ct2_tree("runtime", dst=str(src))
+        assert out3["moved"] is False and "相同" in out3["error"]
+
+    def test_link_target_formula(self):
+        """连带目标公式：运行时→父目录/models/ct2；模型→祖目录/ct2；
+        盘根（父即自身）返回空串。"""
+        base = Path(tempfile.mkdtemp(prefix="ct2link"))
+        try:
+            rt = base / "rt" / "ct2"
+            assert _norm(asr_runtime.link_target(str(rt), "model")) \
+                == _norm(str(base / "rt" / "models" / "ct2"))
+            md = base / "rt" / "models" / "ct2"
+            assert _norm(asr_runtime.link_target(str(md), "runtime")) \
+                == _norm(str(base / "rt" / "ct2"))
+            drive_root = os.path.splitdrive(str(base))[0] + os.sep
+            assert asr_runtime.link_target(drive_root, "model") == ""
+            assert asr_runtime.link_target(drive_root, "runtime") == ""
+        finally:
+            shutil.rmtree(base, ignore_errors=True)

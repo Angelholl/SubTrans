@@ -3093,8 +3093,9 @@ def test_batch_fix_run_uses_structured_preview():
     # P3（D2026-1008-02）tmEdit 脏态守卫 +1→12，editor 守卫先例同款；
     # 3.0 批2（D2026-1009-02 批2）一键回滚确认框 +1→13；
     # d1102-件B2（D2026-1102-02）设置 hub dirty 守卫 +1→14——AppModal 本体
-    # 不承载设置弹窗，_busy 空闲，嵌套 confirm 可用）
-    assert src.count("AppModal.confirm(") == 14, \
+    # 不承载设置弹窗，_busy 空闲，嵌套 confirm 可用；
+    # d1104-B1（D2026-1104-01）落位联动迁移双向询问 +1→15）
+    assert src.count("AppModal.confirm(") == 15, \
         "AppModal.confirm 调用点数量漂移（增删须显式改钉并回评议）"
 
 
@@ -7844,6 +7845,12 @@ def test_js_sources_layer_pinned():
         data_root_source_frozen_legacy_default 一键——frozen 新默认改安装
         目录旁路后，旧默认位被收养时来源标签须可分辨；键数 +1，i18n 计数
         钉不动，strings.py 零触碰；旧钉 cbd62bc9… / edc89084… 退役）；
+        d1104-B1 联动迁移（D2026-1104-01，2026-11-04 主模型亲执）：
+        全库拼接 a2c7cecf…/537,982B、app-msg.js 69,700B/b46c45f0…
+        （ct2Migrate* 弹窗文案 11 键）、app-refine-asr.js 14,242B/
+        e950e6eb…（ct2MigrateAsk 预览+双向询问，四 pick/reset 函数接线
+        also_* 连带参数）；refine 家族 344bf9c5…/219,698B；
+        旧钉 1e9f5640… / 5f2212a7… / bd360fac… / 3c4887ec… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7860,7 +7867,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "1e9f564079fe4879bf8bbea4d0e928a2ac7e6d368736e6aad07e5803f9c96ab8"), \
+        "a2c7cecf0ca6a96ed8acfb01b15a8a8b1c52b8154a20f6fb8c9445b009d833ee"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
@@ -7871,7 +7878,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "3c4887ecda8420b30f95c1798e0d5006a338750752e10d8ff41029428224c0ff"), \
+        "344bf9c569c20b5225c58dbdbff0fa9ff9882f6508c066b8d2f0840cb0a2b8a7"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7891,8 +7898,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (68562,
-                       "5f2212a73d6e56f5c23bbf4406287500e79b3cad15e3872b6981eb984f92f483"),
+        "app-msg.js": (69700,
+                       "b46c45f0cc9ee8332fcc56fc952637b419248f5e633d392827e6b0ffd195bb10"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7939,8 +7946,8 @@ def test_js_split_integrity_pinned():
                              "4867ea696c5d41a8608ec31146fccb64c0bb7ff3ae8e08027a3b71a86e211fe1"),
         "app-refine-batchfix.js": (25983,
                                    "26d2e4ef4acbe187740419bb28157a31b46dcca56f8a297252fdd5dc13451407"),
-        "app-refine-asr.js": (11548,
-                             "bd360facdbdb1e836fa710378270c872d085d0deaf49c5d3765ada56c8d3c383"),
+        "app-refine-asr.js": (14242,
+                             "e950e6eb7688489f2314d3a6595256207604f16f9602d1a3d5e3c16d51351b98"),
         "app-refine-ai-actions.js": (5166,
                                      "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
         "app-refine-bind.js": (14663,
@@ -8010,6 +8017,8 @@ _REFINE_TOP_NAMES = frozenset({
     # d1103（D2026-1103-04 模型落位行＋两行共用标签/体量 helper）：+5
     "ct2ModelDirLine", "ct2ModelDirPick", "ct2ModelDirReset",
     "ct2SourceLabel", "ct2SizeGiB",
+    # d1104（B1 D2026-1104-01 联动迁移双向询问）：+1
+    "ct2MigrateAsk",
     "__warmupInflight", "_appliedPolishParams", "_dictBusyKind", "_dictCustomDir",
     "_tmBreakParams",
     "_dictDirCache", "_dictEnsureHint",

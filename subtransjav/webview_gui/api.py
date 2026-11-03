@@ -1707,7 +1707,38 @@ class TranslateAPI:
             _log_exc("refine_ct2_runtime_dir")
             return {"success": False, "error": str(e)}
 
-    def refine_ct2_runtime_dir_set(self, path: str = "") -> dict[str, Any]:
+    def _ct2_migrate_face(self, kind: str, target: str) -> dict[str, Any]:
+        """单行落位迁移面（B1，D2026-1104-01）：文件搬迁成功才写配置——
+        行内自洽（迁移失败不落配置，UI 与磁盘状态一致，无「配置指新位、
+        文件留旧位」的失联态）。恢复默认（target 空串）＝迁往默认解析位。"""
+        from subtransjav.refine import asr_runtime
+        dst = target or (asr_runtime.default_runtime_dir() if kind == "runtime"
+                         else asr_runtime.default_model_dir())
+        return asr_runtime.migrate_ct2_tree(kind, dst)
+
+    def _ct2_link_face(self, cur_kind: str, target: str) -> dict[str, Any]:
+        """连带行落位迁移面（B1）：计算连带目标→guard→迁移。失败返回
+        error 文案（当前行已迁不回滚——行内各自自洽，如实报错不静默）。"""
+        from subtransjav.refine import asr_runtime
+        link_kind = "model" if cur_kind == "runtime" else "runtime"
+        link = asr_runtime.link_target(
+            target, link_kind) if target else (
+            asr_runtime.default_model_dir() if link_kind == "model"
+            else asr_runtime.default_runtime_dir())
+        if not link:
+            return {"error": "连带目标无法计算（目标为盘根）"}
+        err = _ct2_dir_switch_guard(
+            link, "ct2_model_dir_in_repo" if cur_kind == "runtime"
+            else "ct2_runtime_dir_in_repo")
+        if err:
+            return {"error": err}
+        mig = asr_runtime.migrate_ct2_tree(link_kind, link)
+        if mig.get("error"):
+            return {"error": mig["error"]}
+        return {"link": link, "link_kind": link_kind}
+
+    def refine_ct2_runtime_dir_set(self, path: str = "",
+                                   also_model: bool = False) -> dict[str, Any]:
         """自定义 ct2 运行时落位（D2026-1103-03，owner 走查「补丁包不要
         装在 C 盘」；即时生效无需重启）。
 
@@ -1718,18 +1749,42 @@ class TranslateAPI:
         _ct2_guard_tree_root（源码形态＝仓库根，frozen＝安装目录）。在飞
         安装/下载禁切换（否则线程按旧根写入而 UI 按新根显示）。落盘复用
         refine_save_stage_settings 既有 settings KV 通道，本方法零自有
-        open 写点（Mimosa path-traversal 消模式，甄别表 #29 先例）。"""
+        open 写点（Mimosa path-traversal 消模式，甄别表 #29 先例）。
+
+        B1（D2026-1104-01）：切换落位时现位有货则文件一并搬迁（同卷
+        os.rename 原子迁／跨卷 copy→核验→删源，机制见 migrate_ct2_tree）；
+        also_model＝弹窗确认后的连带迁移（模型落位改往同区标准结构并搬迁）。
+        行内原子（迁移成功才写配置），连带行失败不影响已完成的当前行、
+        报错文案如实区分（link_error 随 success 回包带出）。"""
         try:
             from subtransjav.refine import asr_runtime
             target = str(path or "").strip()
             err = _ct2_dir_switch_guard(target, "ct2_runtime_dir_in_repo")
             if err:
                 return {"success": False, "error": err}
+            mig = self._ct2_migrate_face("runtime", target)
+            if mig.get("error"):
+                return {"success": False, "error": mig["error"]}
             saved = self.refine_save_stage_settings(
                 None, None, {asr_runtime.CT2_RUNTIME_DIR_KEY: target})
             if not saved.get("success"):
                 return {"success": False,
                         "error": str(saved.get("error") or "")}
+            if also_model:
+                link_out = self._ct2_link_face("runtime", target)
+                if link_out.get("error"):
+                    payload = _ct2_runtime_payload()
+                    payload["link_error"] = link_out["error"]
+                    return payload
+                saved2 = self.refine_save_stage_settings(
+                    None, None, {asr_runtime.CT2_MODEL_DIR_KEY:
+                                 link_out["link"]})
+                payload = _ct2_runtime_payload()
+                if not saved2.get("success"):
+                    payload["link_error"] = str(saved2.get("error") or "")
+                    return payload
+                payload["model"] = _ct2_model_payload()
+                return payload
             return _ct2_runtime_payload()
         except Exception as e:
             _log_exc("refine_ct2_runtime_dir_set")
@@ -1744,7 +1799,8 @@ class TranslateAPI:
             _log_exc("refine_ct2_model_dir")
             return {"success": False, "error": str(e)}
 
-    def refine_ct2_model_dir_set(self, path: str = "") -> dict[str, Any]:
+    def refine_ct2_model_dir_set(self, path: str = "",
+                                 also_runtime: bool = False) -> dict[str, Any]:
         """自定义 ct2 模型落位（D2026-1103-04，owner 令「模型安装位置设置
         和 GPU 补丁包一样」；即时生效无需重启）。
 
@@ -1753,21 +1809,96 @@ class TranslateAPI:
         _ct2_dir_switch_guard；模型件拒绝项目内的理由不是扫描面（模型只有
         四件纯数据），而是大件不应躺在 git checkout 内，文案见
         ct2_model_dir_in_repo。写侧同样只走 settings KV 通道，零自有 open
-        写点。"""
+        写点。
+
+        B1（D2026-1104-01）：同 refine_ct2_runtime_dir_set——落位切换带
+        文件搬迁（模型跨卷逐型号 <model>.partial 核验后原子换名）；
+        also_runtime＝弹窗确认后的运行时连带迁移。行内原子、连带行失败
+        如实回报（link_error）。"""
         try:
             from subtransjav.refine import asr_runtime
             target = str(path or "").strip()
             err = _ct2_dir_switch_guard(target, "ct2_model_dir_in_repo")
             if err:
                 return {"success": False, "error": err}
+            mig = self._ct2_migrate_face("model", target)
+            if mig.get("error"):
+                return {"success": False, "error": mig["error"]}
             saved = self.refine_save_stage_settings(
                 None, None, {asr_runtime.CT2_MODEL_DIR_KEY: target})
             if not saved.get("success"):
                 return {"success": False,
                         "error": str(saved.get("error") or "")}
+            if also_runtime:
+                link_out = self._ct2_link_face("model", target)
+                if link_out.get("error"):
+                    payload = _ct2_model_payload()
+                    payload["link_error"] = link_out["error"]
+                    return payload
+                saved2 = self.refine_save_stage_settings(
+                    None, None, {asr_runtime.CT2_RUNTIME_DIR_KEY:
+                                 link_out["link"]})
+                payload = _ct2_model_payload()
+                if not saved2.get("success"):
+                    payload["link_error"] = str(saved2.get("error") or "")
+                    return payload
+                payload["runtime"] = _ct2_runtime_payload()
+                return payload
             return _ct2_model_payload()
         except Exception as e:
             _log_exc("refine_ct2_model_dir_set")
+            return {"success": False, "error": str(e)}
+
+    def refine_ct2_migrate_preview(self, path: str, which: str) -> dict[str, Any]:
+        """连带迁移预览（B1，D2026-1104-01；只读零副作用）。
+
+        path＝当前行新落位（空串＝恢复默认）；which＝当前行 kind
+        （"runtime"/"model"）。返回当前行与连带行的搬迁事实（现位/有无
+        货/体量/同卷与否/连带目标），供前端组装弹窗文案；不执行任何
+        迁移与配置写入。"""
+        try:
+            from subtransjav.refine import asr_runtime
+            which_n = str(which or "").strip()
+            if which_n not in ("runtime", "model"):
+                return {"success": False, "error": f"非法 which: {which_n}"}
+            target = str(path or "").strip()
+            is_rt = which_n == "runtime"
+            cur_dir = asr_runtime.runtime_root() if is_rt \
+                else asr_runtime.ct2_model_dir()
+            dst = target or (asr_runtime.default_runtime_dir() if is_rt
+                             else asr_runtime.default_model_dir())
+            link_kind = "model" if is_rt else "runtime"
+            link_dir_now = asr_runtime.ct2_model_dir() if not is_rt \
+                else asr_runtime.runtime_root()
+            link_dst = (target and asr_runtime.link_target(target, link_kind)) \
+                or ("" if target else (
+                    asr_runtime.default_model_dir() if not is_rt
+                    else asr_runtime.default_runtime_dir()))
+
+            def _face(d: str) -> dict[str, Any]:
+                if not d or not os.path.isdir(d):
+                    return {"dir": d, "has_files": False, "size_gb": 0.0}
+                return {"dir": d,
+                        "has_files": bool(any(os.scandir(d))),
+                        "size_gb": round(asr_runtime._tree_bytes(
+                            Path(d)) / 1073741824, 2)}
+
+            out: dict[str, Any] = {
+                "success": True,
+                "cur": {**_face(cur_dir), "dst": dst,
+                        "same_volume": bool(cur_dir)
+                        and asr_runtime._same_volume(cur_dir, dst)},
+                "link": None,
+            }
+            if link_dst:
+                out["link"] = {**_face(link_dir_now), "target": link_dst,
+                               "link_kind": link_kind,
+                               "same_volume": bool(link_dir_now)
+                               and asr_runtime._same_volume(link_dir_now,
+                                                            link_dst)}
+            return out
+        except Exception as e:
+            _log_exc("refine_ct2_migrate_preview")
             return {"success": False, "error": str(e)}
 
     def refine_ct2_install(self, provider: str = "auto") -> dict[str, Any]:
