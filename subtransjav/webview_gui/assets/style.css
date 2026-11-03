@@ -3300,6 +3300,16 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
    裁切。折行优于横向滚动：表吃满容器宽 + 单元格 anywhere 折行
    （长串按需在任意处断开），不引入 JS 改动。
    ============================================================ */
+/* d1103（D2026-1103-02，owner 走查）：质量中心第一框内文左右内缩——
+   `#evalReportsSection` 挂无内衬的 `.section` 壳（style.css:528），其
+   `.eval-toolbar`（下拉＋刷新按钮行）与 `#evalReportsBody`（报告正文/
+   引擎卡/一致率表）全站零规则，内文贴在框自身 1px 左边框上；同页第二/
+   三框经 `.console-section .section-content`（style.css:575）已有 12px
+   内衬，首页概览条首字亦落 --space-3 基线。补 --space-3 横向内衬后三框
+   与概览条同一条 12px 基线。仅 id 作用域，禁动全局 .section/.console-section。 */
+#evalReportsSection {
+    padding: 0 var(--space-3);
+}
 .eval-pairs-table {
     width: 100%;
     border-collapse: collapse;

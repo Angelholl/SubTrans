@@ -8215,3 +8215,31 @@ def test_home_transcribe_card_inset_pinned():
         "禁给全局 .card 加内衬（全站复用面）"
     assert not re.search(r"#reviewTranscribeCard\s*\{", css), \
         "校对页转录卡不得被本卡波及（走 .empty-guide 内衬）"
+
+
+def test_eval_reports_section_inset_pinned():
+    """d1103（D2026-1103-02）：质量中心第一框左右内缩钉——#evalReportsSection
+    （下拉＋刷新按钮行 .eval-toolbar 与报告正文 #evalReportsBody）挂无内衬的
+    .section 壳，内文贴框自身 1px 左边框，与同页第二/三框 .section-content 的
+    12px 内衬（＝首页概览条首字 --space-3 基线）参差（owner 走查）。
+    负控：删/改内衬声明即红；禁给全局 .section／.console-section 加内衬
+    （全站复用面）；对齐基准侧两处不得被单边改动。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"#evalReportsSection\s*\{([^}]*)\}", css)
+    assert m, "style.css 缺 #evalReportsSection 内衬规则"
+    assert re.search(r"padding:\s*0\s+var\(--space-3\)\s*;", m.group(1)), \
+        "#evalReportsSection 须为仅横向的 var(--space-3) 内衬"
+    # 对齐基准侧不得被单边改动（同页第二/三框＋首页概览条）
+    sc = re.search(r"\.console-section \.section-content\s*\{([^}]*)\}", css)
+    assert sc and "10px 12px 12px" in sc.group(1), \
+        "同页第二/三框 12px 内衬基准被改动（对齐基准须稳定）"
+    ov = re.search(r"\.flow-overview\s*\{([^}]*)\}", css)
+    assert ov and "padding: var(--space-2) var(--space-3);" in ov.group(1), \
+        "首页概览条 --space-3 内衬基准被改动"
+    # 全局复用面不得顺手加内衬（第一框独有缺口，禁扩大改动面）
+    sec = re.search(r"\n\.section\s*\{([^}]*)\}", css)
+    assert sec and "padding" not in sec.group(1), \
+        "禁给全局 .section 加内衬（全站复用面）"
+    cs = re.search(r"\n\.console-section\s*\{([^}]*)\}", css)
+    assert cs and "padding" not in cs.group(1), \
+        "禁给全局 .console-section 加内衬（全站复用面）"
