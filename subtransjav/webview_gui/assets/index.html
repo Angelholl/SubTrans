@@ -214,10 +214,10 @@
                 </div>
 
                 <!-- P1-6 件B 文件卡/Console 拖拽分隔条已随 d1102-件C（D2026-1102-02）
-                     整器退役：Console 搬入底部抽屉后不再与文件卡共享页内高度，
+                     整器退役：Console 搬入覆盖层后不再与文件卡共享页内高度，
                      原 --translate-split / TranslateSplit 逻辑零残留。 -->
 
-                <!-- Console Section 已 DOM 原地搬入底部抽屉（#consoleDrawer，
+                <!-- Console Section 已 DOM 原地搬入覆盖层（#consoleOverlay，
                      见 .workbench 末尾），.console-section 类名与全部既有 id /
                      data-i18n 节点原样保留（app-console.js closest 依赖）。 -->
 
@@ -690,7 +690,7 @@
              胶囊触发，ESC / 卡头关闭钮均可关。 -->
         <div class="console-overlay-backdrop" id="consoleOverlayBackdrop"
              aria-hidden="true"></div>
-        <div class="console-overlay" id="consoleDrawer" role="dialog"
+        <div class="console-overlay" id="consoleOverlay" role="dialog"
              aria-modal="true" aria-label="Console" aria-hidden="true">
                 <section class="section console-section console-collapsible">
                     <div class="section-header">

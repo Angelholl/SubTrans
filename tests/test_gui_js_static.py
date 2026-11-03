@@ -5514,7 +5514,7 @@ def test_console_flex_layout():
     """d1102-件C 布局换代（D2026-1102-02）：Console 搬入底部抽屉后，
     translate 页内 60/40 比例制与 --translate-split 整器退役；
     文件卡独占剩余高度（flex:1 1 auto），.console-section 维持自然高
-    （抽屉体内由 .console-drawer .console-section 显式吃满）。
+    （覆盖层体内由 .console-overlay .console-section 显式吃满）。
     """
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     # ① 380px 硬顶仍不得回潮
@@ -5560,12 +5560,12 @@ def test_translate_splitter_retired_pinned():
 def test_console_overlay_static_pinned():
     """d1102-卡A（Console 覆盖层化）：设置式覆盖层静态钉。
 
-    ① console-section 整块 DOM 原地保留于 #consoleDrawer（id 不变类改
+    ① console-section 整块 DOM 原地保留于 #consoleOverlay（id 换代类改
       .console-overlay），既有 console 族 id 零增减；
     ② 面板 fixed 居中 / 宽 min(1100px, 80vw) / 高 72vh / z-950；
     ③ 遮罩 #consoleOverlayBackdrop 点击关闭（JS 接线锚）；
     ④ 胶囊四态类名（is-running/has-unread/is-error/is-open）与脉冲复用；
-    ⑤ 抽屉残留负控：console-drawer-open 类与 --console-drawer-offset 变量
+    ⑤ 覆盖层残留负控：console-drawer-open 类与 --console-drawer-offset 变量
       在 style.css 与 app-console.js 零出现；consoleDrawerHandle 三面零出现
       且已从快照移除。
     """
@@ -5574,12 +5574,12 @@ def test_console_overlay_static_pinned():
     cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
 
     # ① 面板/遮罩/胶囊 + console 族 id 原样
-    for dom_id in ("consoleDrawer", "consoleOverlayBackdrop", "consoleCapsule"):
+    for dom_id in ("consoleOverlay", "consoleOverlayBackdrop", "consoleCapsule"):
         assert f'id="{dom_id}"' in html, f"index.html 缺覆盖层锚点: {dom_id}"
-    drawer_at = html.index('id="consoleDrawer"')
+    overlay_at = html.index('id="consoleOverlay"')
     section_at = html.index('class="section console-section console-collapsible"')
     capsule_at = html.index('id="consoleCapsule"')
-    assert drawer_at < section_at < capsule_at,         "console-section 须整块位于面板容器内，胶囊独立于面板"
+    assert overlay_at < section_at < capsule_at,         "console-section 须整块位于面板容器内，胶囊独立于面板"
     for dom_id in ("consoleCollapseBtn", "clearConsoleBtn", "exportConsoleBtn",
                    "copyConsoleBtn", "rawLogToggleBtn", "consoleActivity",
                    "consoleOutput"):
@@ -5680,8 +5680,8 @@ def test_home_flow_overview_static_pinned():
     assert re.search(r"^\s*start_btn_tab:\s*'一键开始'", msg, re.M),         "MSG.start_btn_tab 未换代为「一键开始」"
 
 
-def test_console_drawer_capsule_token_only_pinned():
-    """d1102-件C（R10）：抽屉/胶囊新组件禁写死色值，全用既有 token
+def test_console_overlay_capsule_token_only_pinned():
+    """d1102-件C（R10）：覆盖层/胶囊新组件禁写死色值，全用既有 token
     （surface/border/text/primary/on-primary/ok/warn/danger/console-*），
     深色主题经 style.dark.css 变量覆盖自动适配。"""
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
@@ -5710,13 +5710,13 @@ def test_console_drawer_capsule_token_only_pinned():
 
 
 def test_esc_four_layer_chain_pinned():
-    """d1102-件C（C-6/R8）：ESC 四层链 AppModal > 设置 overlay > 抽屉 >
+    """d1102-件C（C-6/R8）：ESC 四层链 AppModal > 设置 overlay > 覆盖层 >
     about。新增层各自 early-return 上层活跃态，防一次 ESC 关多层。"""
     cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
     sc = (ASSETS / "app-shortcuts.js").read_text(encoding="utf-8")
-    drawer = cm[cm.index("const ConsoleDrawer = {"):]
-    assert "AppModal._busy" in drawer and "SettingsHub._isOpen" in drawer,         "抽屉 ESC 须对 AppModal/设置 overlay 上层 early-return"
-    assert "ConsoleDrawer.isOpen()" in sc,         "about 层 ESC 须对抽屉活跃态 early-return（抽屉优先）"
+    overlay = cm[cm.index("const ConsoleOverlay = {"):]
+    assert "AppModal._busy" in overlay and "SettingsHub._isOpen" in overlay,         "覆盖层 ESC 须对 AppModal/设置 overlay 上层 early-return"
+    assert "ConsoleOverlay.isOpen()" in sc,         "about 层 ESC 须对覆盖层活跃态 early-return（覆盖层优先）"
     assert "SettingsHub._requestClose()" in sc, \
         "about 层须补设置 overlay 优先仲裁（settings capture 遇 about 让位）"
     assert "AppModal._busy" in sc and "SettingsHub._isOpen" in sc,         "about 层 ESC 须对 AppModal/设置 overlay 上层 early-return"
@@ -7742,6 +7742,11 @@ def test_js_sources_layer_pinned():
         _applyFullchainStatus 单源渲染，修正 7b4db82 误用
         AppState.isRunning 致翻译期亮灯/链在飞反灭的灯行倒置；
         旧钉 e51721ba… / 50052e61… / 0986291f… / 31b85800… 退役）；
+        d1103-卡1 Console 更名换代（2026-11-03 主审/free 模型）：全库拼接
+        d953f1a7…/527,056B、app-console.js 13,490B/e6486ee9…、
+        app-shortcuts.js 2,326B/e355cf1d…、app-msg.js 66,661B/c3db5276…
+        （ConsoleDrawer→ConsoleOverlay 等纯更名；旧钉 8a799f60… /
+        1061ebe5… / bcc53514… / bcfc50d9… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7758,7 +7763,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "8a799f602844909b78cfe75ab001f2543f3a1b09cbf2fa7bd9f536241bd20bb4"), \
+        "d953f1a73e4d640d0f956afa0bf3e6806263262e7d2fc3c35443a718e4e183b2"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 204,408B，d1023-批3 换代），
@@ -7789,15 +7794,15 @@ def test_js_split_integrity_pinned():
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
         "app-msg.js": (66661,
-                       "bcfc50d91dfedf439e5e4fde2004fcc4f109e6b68094958665b4ce5750831d2b"),
+                       "c3db5276c56a930c8525d9c01c31fa5ebe8d97276c7b6122afc57acdb073bd6b"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
                                  "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
         "app-file-list.js": (16669,
                              "7817577825ce59c6c452029fd901d0fb89f7b46d6ea44b6437067f37fc4efc07"),
-        "app-console.js": (13464,
-                           "1061ebe550f721dcf383d3b21421c4f45b4d8f2eb952686808f00178bd2c6d13"),
+        "app-console.js": (13490,
+                           "e6486ee9dc74ff0b87f3f44bb7f20554d4ed16da8375f328648845641ee4db13"),
         "app-activity.js": (6167,
                             "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
         "app-progress.js": (3070,
@@ -7812,8 +7817,8 @@ def test_js_split_integrity_pinned():
                               "a745d62347ff7734b6971aeccfc181e0c799144aa31b066f384c86957a22adf0"),
         "app-theme.js": (4234,
                          "943902377f465a30975c4e77d443ec784b0f44855203139c1055a5c6185f8d34"),
-        "app-shortcuts.js": (2318,
-                             "bcc53514cad5ed6d41103a52463b6cc19bd11981676e676e9ab5a608ca4f90f4"),
+        "app-shortcuts.js": (2326,
+                             "e355cf1d8dd6036a58dbd5f61110cc51031307d715ea7ddb3d682821bac42e0a"),
         "app-about.js": (705,
                          "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
         "app-tabs.js": (5600,

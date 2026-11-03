@@ -13,12 +13,12 @@ const ConsoleManager = {
     init() {
         document.getElementById('clearConsoleBtn').addEventListener('click', () => this.clear());
 
-        // Console 折叠开关（语义=收起/展开底部抽屉，d1102-件C）
+        // Console 折叠开关（语义=收起/展开覆盖层，d1102-件C）
         const collapseBtn = document.getElementById('consoleCollapseBtn');
         if (collapseBtn) {
             collapseBtn.setAttribute('aria-label', MSG.console_collapse);
             collapseBtn.addEventListener('click', () => {
-                if (typeof ConsoleDrawer !== 'undefined') ConsoleDrawer.close();
+                if (typeof ConsoleOverlay !== 'undefined') ConsoleOverlay.close();
             });
         }
 
@@ -35,7 +35,7 @@ const ConsoleManager = {
         }
 
         this._initRawLogToggle();
-        if (typeof ConsoleDrawer !== 'undefined') ConsoleDrawer.init();
+        if (typeof ConsoleOverlay !== 'undefined') ConsoleOverlay.init();
     },
 
     // ---- 原始日志（五轮 D2026-1010-01：弹窗化，内联展开退场）----
@@ -43,25 +43,25 @@ const ConsoleManager = {
     // 开关改为打开 AppModal 大卡承载 _lines 全量缓冲；#consoleOutput 保留
     // 为隐藏 DOM 承载（log/appendRaw 仍写 DOM + 显示层裁剪，契约零破坏）
 
-    // 卡2（D2026-1010-01 三轮）：折叠期新行未读计数（弹窗/抽屉打开态豁免）
+    // 卡2（D2026-1010-01 三轮）：折叠期新行未读计数（弹窗/覆盖层打开态豁免）
     _rawLogUnread: 0,
     _rawLogError: false,
 
     _bumpRawLogUnread(type) {
         if (AppModal._kind === 'rawlog') return;   // 弹窗打开期不计数
-        if (typeof ConsoleDrawer !== 'undefined' && ConsoleDrawer.isOpen()) {
-            return;                                // 抽屉展开期日志可见，不计数
+        if (typeof ConsoleOverlay !== 'undefined' && ConsoleOverlay.isOpen()) {
+            return;                                // 覆盖层展开期日志可见，不计数
         }
         this._rawLogUnread += 1;
         if (type === 'error') this._rawLogError = true;
-        if (typeof ConsoleDrawer !== 'undefined') ConsoleDrawer.renderCapsule();
+        if (typeof ConsoleOverlay !== 'undefined') ConsoleOverlay.renderCapsule();
     },
 
-    // 打开抽屉/弹窗即视为已读（未读计数与 error 徽标清零）
+    // 打开覆盖层/弹窗即视为已读（未读计数与 error 徽标清零）
     clearUnread() {
         this._rawLogUnread = 0;
         this._rawLogError = false;
-        if (typeof ConsoleDrawer !== 'undefined') ConsoleDrawer.renderCapsule();
+        if (typeof ConsoleOverlay !== 'undefined') ConsoleOverlay.renderCapsule();
     },
 
     // 弹窗打开期间新行实时追加（等宽列表尾随+滚底，500 行显示层同款裁剪）
@@ -92,7 +92,7 @@ const ConsoleManager = {
         const output = document.getElementById('consoleOutput');
         if (!toggle || !output) return;
         toggle.textContent = MSG.raw_log_toggle;
-        // d1102-件C：Console 已入底部抽屉，原始日志承载恢复可见（抽屉内
+        // d1102-件C：Console 已入覆盖层，原始日志承载恢复可见（覆盖层内
         // 显示最近行；全量仍走 rawLogToggle 的 AppModal.rawLog 弹窗）。
         output.style.display = '';
         toggle.addEventListener('click', () => this.openRawLogModal());
@@ -228,15 +228,15 @@ const ConsoleManager = {
 // - 不触碰主区布局（无抽屉时代的让位类与底缘避让变量），日志区在
 //   面板内部滚动。
 // ============================================================
-const ConsoleDrawer = {
+const ConsoleOverlay = {
     _open: false,
     _running: false,
 
     init() {
-        this.drawer = document.getElementById('consoleDrawer');
+        this.overlay = document.getElementById('consoleOverlay');
         this.capsule = document.getElementById('consoleCapsule');
         this.backdrop = document.getElementById('consoleOverlayBackdrop');
-        if (!this.drawer || !this.capsule) return;
+        if (!this.overlay || !this.capsule) return;
         this.capsule.addEventListener('click', () => this.toggle());
         if (this.backdrop) {
             this.backdrop.addEventListener('click', () => this.close());
@@ -266,9 +266,9 @@ const ConsoleDrawer = {
     },
 
     open() {
-        if (!this.drawer || this._open) return;
+        if (!this.overlay || this._open) return;
         this._open = true;
-        this.drawer.classList.add('is-open');
+        this.overlay.classList.add('is-open');
         if (this.backdrop) this.backdrop.classList.add('is-open');
         if (typeof ConsoleManager !== 'undefined') {
             ConsoleManager._rawLogUnread = 0;
@@ -278,9 +278,9 @@ const ConsoleDrawer = {
     },
 
     close() {
-        if (!this.drawer || !this._open) return;
+        if (!this.overlay || !this._open) return;
         this._open = false;
-        this.drawer.classList.remove('is-open');
+        this.overlay.classList.remove('is-open');
         if (this.backdrop) this.backdrop.classList.remove('is-open');
         this.renderCapsule();
     },
@@ -314,8 +314,8 @@ const ConsoleDrawer = {
         cap.setAttribute('aria-label', MSG[key]);
         cap.setAttribute('title', MSG[key]);
         cap.setAttribute('aria-expanded', this._open ? 'true' : 'false');
-        if (this.drawer) {
-            this.drawer.setAttribute('aria-hidden', this._open ? 'false' : 'true');
+        if (this.overlay) {
+            this.overlay.setAttribute('aria-hidden', this._open ? 'false' : 'true');
         }
         const collapseBtn = document.getElementById('consoleCollapseBtn');
         if (collapseBtn) {

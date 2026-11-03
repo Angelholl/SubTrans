@@ -803,7 +803,7 @@ const MSG = {
 
     // 控制台覆盖层开合（d1102-卡A：卡头钮语义=关闭面板）
     console_collapse: '关闭',
-    console_expand: '展开抽屉',
+    console_expand: '展开面板',
     // d1102-件C：首页 L2 C22 门状态行（门关为常态，muted 呈现；reason 为
     // evaluate_c22_gate 原因码，如实透出）
     flowGateOn: 'C22 校准门已开',

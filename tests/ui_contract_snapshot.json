@@ -22,7 +22,7 @@
     "consoleActivity",
     "consoleCapsule",
     "consoleCollapseBtn",
-    "consoleDrawer",
+    "consoleOverlay",
     "consoleOutput",
     "consoleOverlayBackdrop",
     "copyConsoleBtn",
