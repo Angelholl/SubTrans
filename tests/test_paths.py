@@ -1,5 +1,6 @@
 """subtransjav.paths 数据路径单一来源测试（打包地基批）"""
 import datetime
+import re
 import sys
 from pathlib import Path
 
@@ -32,27 +33,86 @@ def test_data_root_env_priority(monkeypatch, tmp_path):
     assert paths.data_root_source() == "env"
 
 
-def test_data_root_env_blank_ignored(monkeypatch, tmp_path):
+def _patch_frozen_install(monkeypatch, tmp_path, install_name="install"):
+    """frozen 形态夹具：把「安装目录」钉到 tmp/<install_name>。
+
+    落点 A（D2026-1103-05 项②）下新默认＝安装目录旁路，即
+    tmp/<install_name>-data。
+    """
+    install = tmp_path / install_name
+    install.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    return install
+
+
+def _write_anchor(root: Path) -> Path:
+    """在 root 内落一个最小数据锚点（config/user_settings.json）。"""
+    cfg = root / "config"
+    cfg.mkdir(parents=True, exist_ok=True)
+    (cfg / "user_settings.json").write_text('{"v2_ctx_local": 16384}',
+                                            encoding="utf-8")
+    return root
+
+
+def test_data_root_env_blank_ignored(monkeypatch, tmp_path):
+    _patch_frozen_install(monkeypatch, tmp_path)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", "   ")
-    assert paths.data_root() == Path(tmp_path) / "SubTrans"
+    assert paths.data_root() == tmp_path / "install-data"
 
 
-def test_data_root_frozen_uses_localappdata(monkeypatch, tmp_path):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert paths.data_root() == Path(tmp_path) / "SubTrans"
+def test_data_root_frozen_default_is_install_dir_sibling(monkeypatch, tmp_path):
+    """frozen 无 env 无 pointer → 落点 A 安装目录旁路，不再 %LOCALAPPDATA%
+    （D2026-1103-05 项②，显式取代 D2026-1002-12 点 4）。"""
+    _patch_frozen_install(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    assert paths.data_root() == tmp_path / "install-data"
     assert paths.data_root_source() == "frozen-default"
 
 
-def test_data_root_frozen_localappdata_missing_falls_back_home(monkeypatch):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+def test_data_root_frozen_adopts_legacy_default(monkeypatch, tmp_path):
+    """护栏 6 收养：新默认无锚点＋旧 %LOCALAPPDATA%\\SubTrans 有锚点 →
+    仍用旧根，来源标签独立，不静默迁移。"""
+    _patch_frozen_install(monkeypatch, tmp_path)
+    lac = tmp_path / "localappdata"
+    monkeypatch.setenv("LOCALAPPDATA", str(lac))
+    _write_anchor(lac / "SubTrans")
+    assert paths.data_root() == lac / "SubTrans"
+    assert paths.data_root_source() == "frozen-legacy-default"
+
+
+def test_data_root_frozen_prefers_new_root_when_it_has_anchors(monkeypatch, tmp_path):
+    """新默认已有数据 → 即便旧默认位也有数据，仍用新默认（不回头收养）。"""
+    _patch_frozen_install(monkeypatch, tmp_path)
+    lac = tmp_path / "localappdata"
+    monkeypatch.setenv("LOCALAPPDATA", str(lac))
+    _write_anchor(tmp_path / "install-data")
+    _write_anchor(lac / "SubTrans")
+    assert paths.data_root() == tmp_path / "install-data"
+    assert paths.data_root_source() == "frozen-default"
+
+
+def test_data_root_frozen_no_anchors_anywhere_uses_new_default(monkeypatch, tmp_path):
+    """全新安装（两根皆空/不存在）→ 用新默认，不抛异常。"""
+    _patch_frozen_install(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    assert paths.data_root() == tmp_path / "install-data"
+    assert paths.data_root_source() == "frozen-default"
+
+
+def test_data_root_frozen_localappdata_missing_no_home_fallback(monkeypatch, tmp_path):
+    """LOCALAPPDATA 缺失不再决定数据根（新默认由安装目录推导），不抛异常。"""
+    _patch_frozen_install(monkeypatch, tmp_path)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
-    # LOCALAPPDATA 缺失回退家目录，不抛异常
-    assert paths.data_root() == Path.home() / "SubTrans"
+    assert paths.data_root() == tmp_path / "install-data"
+    # 旧默认位回退家目录（legacy_default_data_root 语义），供收养判定使用
+    monkeypatch.setattr(paths.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    _write_anchor(tmp_path / "home" / "SubTrans")
+    assert paths.legacy_default_data_root() == tmp_path / "home" / "SubTrans"
+    assert paths.data_root() == tmp_path / "home" / "SubTrans"
+    assert paths.data_root_source() == "frozen-legacy-default"
 
 
 def test_data_root_source_form_is_repo_root(monkeypatch):
@@ -63,16 +123,79 @@ def test_data_root_source_form_is_repo_root(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# data_root_source 三值
+# 落点 A 推导规格对照表（与 packaging/setup.iss _DefaultDataRootFor 同规格）
 # ---------------------------------------------------------------------------
-def test_data_root_source_three_values(monkeypatch, tmp_path):
+@pytest.mark.parametrize("install_dir,expected", [
+    (r"D:\SubTrans", r"D:\SubTrans-data"),
+    (r"C:\Program Files\SubTrans", r"C:\Program Files\SubTrans-data"),
+    ("D:\\SubTrans\\", r"D:\SubTrans-data"),        # 尾斜杠
+    (r"D:\SubTrans-data", r"D:\SubTrans-data-data"),  # 名字已带 -data
+    (r"D:\a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z\SubTrans",
+     r"D:\a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z\SubTrans-data"),  # 长路径
+    (r"\\server\share\SubTrans", r"\\server\share\SubTrans-data"),  # UNC
+    ("D:\\", r"D:\SubTrans-data"),                  # 盘根
+    (r"D:", r"D:\SubTrans-data"),                   # 盘根无斜杠
+    (r"\\server", r"\\server\SubTrans-data"),        # UNC 服务根
+    (r"\\server\share", r"\\server\share\SubTrans-data"),  # UNC 分享根（视作根）
+    ("\\", r"\SubTrans-data"),                      # 单根（无盘符无 UNC）
+    ("D:/SubTrans", r"D:\SubTrans-data"),            # 正斜杠形态
+])
+def test_default_data_root_for_forms(install_dir, expected):
+    """形态对照表钉死推导规格：普通/Program Files/尾斜杠/-data 结尾/长路径/
+    UNC 三形态/盘根/单根/正斜杠（iss 侧同形态钉见 test_installer_lifecycle）。"""
+    assert paths.default_data_root_for(Path(install_dir)) == Path(expected)
+
+
+@pytest.mark.parametrize("install_dir", [
+    r"D:\SubTrans", r"D:\SubTrans-data", r"D:\SubTrans-DATA", "D:\\",
+    r"C:\Program Files\SubTrans", r"\\server\share\SubTrans",
+])
+def test_default_data_root_never_equals_install_dir(install_dir):
+    """硬不变量：推导结果恒不等于安装目录本身（数据根落安装目录内＝10-30 事故前提）。"""
+    got = paths.default_data_root_for(Path(install_dir))
+    assert paths.normalize_path_case(str(got)) != paths.normalize_path_case(
+        str(Path(install_dir)))
+
+
+def test_paths_anchors_align_with_iss_gate():
+    """paths.DATA_ANCHORS 与 setup.iss HasAnyAnchor 十锚逐条对齐（护栏 7 同口径）。"""
+    iss = (REPO_ROOT / "packaging" / "setup.iss").read_text(encoding="utf-8")
+    m = re.search(r"function HasAnyAnchor\(const root: String\): Boolean;\n"
+                  r"begin(.*?)end;", iss, re.S)
+    assert m, "setup.iss 未找到 HasAnyAnchor"
+    iss_anchors = {
+        mm.group(1).lstrip("\\").replace("\\", "/")
+        for mm in re.finditer(r"FileOrDirExists\(root \+ '([^']+)'", m.group(1))
+    }
+    assert iss_anchors == set(paths.DATA_ANCHORS), (
+        f"iss 锚点与 paths.DATA_ANCHORS 漂移: {iss_anchors ^ set(paths.DATA_ANCHORS)}")
+
+
+# ---------------------------------------------------------------------------
+# data_root_source 标签面（env/pointer/frozen-default/frozen-legacy-default/legacy）
+# ---------------------------------------------------------------------------
+def test_data_root_source_five_values(monkeypatch, tmp_path):
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     assert paths.data_root_source() == "env"
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT")
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    _patch_frozen_install(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     assert paths.data_root_source() == "frozen-default"
+    _write_anchor(tmp_path / "localappdata" / "SubTrans")
+    assert paths.data_root_source() == "frozen-legacy-default"
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     assert paths.data_root_source() == "legacy"
+
+
+def test_cli_where_source_map_covers_all_labels():
+    """护栏 10：cli --where 的中文映射须覆盖 data_root_source 全部标签。"""
+    import inspect
+
+    from subtransjav.refine import cli as cli_mod
+    src = inspect.getsource(cli_mod._print_where)
+    for label in ("env", "pointer", "frozen-default",
+                  "frozen-legacy-default", "legacy"):
+        assert f'"{label}"' in src, f"--where source_map 缺标签 {label}"
 
 
 # ---------------------------------------------------------------------------
@@ -91,18 +214,17 @@ def test_data_subdir_source_form_relative_structure(monkeypatch):
 # 迁移状态存根
 # ---------------------------------------------------------------------------
 def test_migration_state_not_migrated_by_default(monkeypatch, tmp_path):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    _patch_frozen_install(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     assert paths.migration_state() == "not-migrated"
 
 
 def test_migration_state_migrated_with_sentinel(monkeypatch, tmp_path):
-    monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
-    (tmp_path / "SubTrans").mkdir()
-    (tmp_path / "SubTrans" / paths.MIGRATION_SENTINEL).write_text("", encoding="utf-8")
+    _patch_frozen_install(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
+    new_root = tmp_path / "install-data"
+    new_root.mkdir()
+    (new_root / paths.MIGRATION_SENTINEL).write_text("", encoding="utf-8")
     assert paths.migration_state() == "migrated"
 
 

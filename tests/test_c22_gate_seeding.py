@@ -167,13 +167,21 @@ def test_seeding_twice_is_idempotent(tmp_path):
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def frozen_root(monkeypatch, tmp_path):
+    """frozen 首启新根＝安装目录旁路（D2026-1103-05 项②落点 A）。
+
+    把安装目录钉到 tmp/install，新根即 tmp/install-data；LOCALAPPDATA 只作
+    旧默认位存在（无锚点时不参与收养）。
+    """
     lac = tmp_path / "localappdata"
+    install = tmp_path / "install"
     lac.mkdir()
+    install.mkdir()
     monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     monkeypatch.delenv(dm.LEGACY_ROOT_ENV, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
-    return lac / "SubTrans"
+    return tmp_path / "install-data"
 
 
 def test_fresh_install_startup_seeds_gate(frozen_root):
@@ -186,18 +194,24 @@ def test_fresh_install_startup_seeds_gate(frozen_root):
 # 升级路径端到端（D2026-1101-01 §三⑥：真实升级/多版本连跳/迁移失败防顶替）
 # ---------------------------------------------------------------------------
 def _make_upgrade_roots(monkeypatch, tmp_path):
-    """frozen + 显式旧根（含最小白名单源文件），返回 (旧根, 新根)。"""
+    """frozen + 显式旧根（含最小白名单源文件），返回 (旧根, 新根)。
+
+    新根按落点 A 由安装目录推导（D2026-1103-05 项②）＝tmp/install-data。
+    """
     legacy = tmp_path / "legacy"
     lac = tmp_path / "localappdata"
+    install = tmp_path / "install"
     (legacy / "config").mkdir(parents=True)
     lac.mkdir()
+    install.mkdir()
     monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
     (legacy / "config" / "user_settings.json").write_text(
         '{"v2_ctx_local": 16384}', encoding="utf-8")
-    return legacy, lac / "SubTrans"
+    return legacy, tmp_path / "install-data"
 
 
 def test_upgrade_legacy_gate_row_reaches_new_root(monkeypatch, tmp_path):

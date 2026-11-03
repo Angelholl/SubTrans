@@ -3,8 +3,9 @@
 夹具：
 - "pip 旧根"  tmp/legacy：tm.db（数行）+ conflict watch json(.bak) +
   api_keys.bin（secrets 真实加密一笔测试密钥）+ user_settings.json；
-- "frozen 新根" tmp/localappdata/SubTrans：monkeypatch LOCALAPPDATA +
-  sys.frozen（沿 tests/test_paths.py 口径）。
+- "frozen 新根" tmp/install-data：monkeypatch sys.frozen + sys.executable
+  （D2026-1103-05 项②：新默认＝安装目录旁路，非 %LOCALAPPDATA%；LOCALAPPDATA
+  在夹具里退居「旧默认位」角色，沿 tests/test_paths.py 口径）。
 
 旧根发现经 SUBTRANSJAV_LEGACY_ROOT 显式指定（data_migration._discover_legacy_root
 的 env 优先级即诊断/测试通道）。
@@ -27,16 +28,23 @@ from subtransjav.refine import secrets as sec
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def roots(monkeypatch, tmp_path):
-    """双源夹具：返回 (legacy_root, new_root)。"""
+    """双源夹具：返回 (legacy_root, new_root)。
+
+    新根按 D2026-1103-05 项② 落点 A 推导：把「安装目录」钉到 tmp/install
+    （sys.executable = tmp/install/SubTrans.exe），新根即 tmp/install-data。
+    """
     legacy = tmp_path / "legacy"
     lac = tmp_path / "localappdata"
+    install = tmp_path / "install"
     legacy.mkdir()
     lac.mkdir()
+    install.mkdir()
     monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
-    return legacy, lac / "SubTrans"
+    return legacy, tmp_path / "install-data"
 
 
 def _make_legacy(legacy: Path) -> None:
@@ -252,6 +260,72 @@ def test_no_legacy_data_skips(roots):
     legacy, new_root = roots          # 空旧根
     assert dm.ensure_migrated(verbose=False) == "not-applicable:no-legacy-data"
     assert not new_root.exists() or not (new_root / paths.MIGRATION_SENTINEL).exists()
+
+
+# ---------------------------------------------------------------------------
+# 旧根发现对齐（D2026-1103-05 项②：新默认改安装目录旁路后旧默认位须被认作旧根）
+# ---------------------------------------------------------------------------
+def _frozen_install_and_lac(monkeypatch, tmp_path, seed_old_default: bool,
+                            seed_new_default: bool = False):
+    """frozen 夹具：安装目录 tmp/install（新根＝tmp/install-data），
+    旧默认位 tmp/localappdata/SubTrans（seed_old_default 控制有无数据）。
+
+    seed_new_default 在新根落一个与旧根不冲突的锚点（user_dirs.json），
+    用于「新根已被启用、旧默认位仍有存量」的合并场景。
+    """
+    install = tmp_path / "install"
+    lac = tmp_path / "localappdata"
+    install.mkdir(parents=True, exist_ok=True)
+    (lac / "SubTrans").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv(dm.LEGACY_ROOT_ENV, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(lac))
+    if seed_old_default:
+        cfg = lac / "SubTrans" / "config"
+        cfg.mkdir(parents=True, exist_ok=True)
+        (cfg / "user_settings.json").write_text('{"v2_ctx_local": 16384}',
+                                                encoding="utf-8")
+    if seed_new_default:
+        ncfg = tmp_path / "install-data" / "config"
+        ncfg.mkdir(parents=True, exist_ok=True)
+        (ncfg / "user_dirs.json").write_text("[]", encoding="utf-8")
+    return lac / "SubTrans"
+
+
+def test_legacy_discovery_finds_old_default_location(monkeypatch, tmp_path):
+    """无 LEGACY_ROOT_ENV 时，旧 %LOCALAPPDATA%\\SubTrans 有锚点须被认作旧根，
+    迁移照常把它搬进安装目录旁路新根（新根已启用：收养判定不回头）。"""
+    old_root = _frozen_install_and_lac(monkeypatch, tmp_path,
+                                       seed_old_default=True,
+                                       seed_new_default=True)
+    assert paths.data_root_source() == "frozen-default"
+    assert dm._discover_legacy_root() == old_root
+    assert dm.ensure_migrated(verbose=False) == "migrated"
+    new_root = tmp_path / "install-data"
+    assert (new_root / "config" / "user_settings.json").is_file()
+    assert (new_root / "config" / "user_dirs.json").is_file()
+    assert (new_root / paths.MIGRATION_SENTINEL).exists()
+
+
+def test_migration_skips_when_legacy_is_the_root(monkeypatch, tmp_path):
+    """护栏 6 收养态：旧默认位即当前数据根（frozen-legacy-default）时，
+    不得把旧根往自己身上迁——直返 not-applicable:legacy-is-root。"""
+    old_root = _frozen_install_and_lac(monkeypatch, tmp_path, seed_old_default=True)
+    assert paths.data_root() == old_root
+    assert paths.data_root_source() == "frozen-legacy-default"
+    assert dm.ensure_migrated(verbose=False) == "not-applicable:legacy-is-root"
+    assert not (old_root / paths.MIGRATION_SENTINEL).exists()
+
+
+def test_c22_seeding_still_runs_on_adopted_root(monkeypatch, tmp_path):
+    """收养旧根时首启插桩门仍须放行（3.1.1 前既得行为不得回退）。"""
+    old_root = _frozen_install_and_lac(monkeypatch, tmp_path, seed_old_default=True)
+    assert dm._seed_c22_gate_on_startup(verbose=False) == "seeded"
+    gate = old_root / "config" / "fullchain_c22.json"
+    assert gate.is_file()
+    assert json.loads(gate.read_text(encoding="utf-8"))["enabled"] is True
 
 
 # ---------------------------------------------------------------------------

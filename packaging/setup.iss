@@ -239,16 +239,146 @@ begin
   end;
 end;
 
+// '/' → '\' 归一（env/pointer 两来源可能带正斜杠；paths.py 侧 pathlib 天然
+// 归一，iss 侧同径/祖先比较与落点 A 推导须先归一才同解）。
+function _NormSlashes(const s: String): String;
+var
+  i: Integer;
+begin
+  Result := '';
+  for i := 1 to Length(s) do
+    if s[i] = '/' then
+      Result := Result + '\'
+    else
+      Result := Result + s[i];
+end;
+
+// 计数字符（UNC 分享根判据用：反斜杠恰两处＝\\server\share 形态）
+function _CountChar(const s: String; const c: Char): Integer;
+var
+  i: Integer;
+begin
+  Result := 0;
+  for i := 1 to Length(s) do
+    if s[i] = c then
+      Result := Result + 1;
+end;
+
+// 锚点硬门槛：10 锚与 subtransjav/data_migration.py 旧根白名单 +
+// subtransjav/paths.py DATA_ANCHORS + 运行时落盘对齐（glossary_conflict_watch.json
+// 实际位于 Temp/translation_memory/，非 config\；config\templates 为角色卡/模板
+// 目录；user_dirs.json 为 webview_gui/user_dirs.py 持久登记文件；
+// fullchain_c22.json 为 C22 校准门产品态配置行，D2026-1101-01）。任一命中即
+// 视为存在用户数据。
+// 位置说明：本函数原位于 IsUnsafeRoot 前；D2026-1103-05 项②起 ResolveDataRoot
+// 的旧根收养判定亦须调用它，Inno Pascal Script 无前置声明（定义必须先于使用），
+// 故整体上移至 ResolveDataRoot 之前。三处锚点清单由 tests 对照钉住。
+function HasAnyAnchor(const root: String): Boolean;
+begin
+  Result :=
+    FileOrDirExists(root + '\config\user_dirs.json') or
+    FileOrDirExists(root + '\config\user_settings.json') or
+    FileOrDirExists(root + '\config\refine_stage_settings.json') or
+    FileOrDirExists(root + '\config\api_keys.bin') or
+    FileOrDirExists(root + '\config\glossary.csv') or
+    FileOrDirExists(root + '\config\glossary_learned.csv') or
+    FileOrDirExists(root + '\config\fullchain_c22.json') or
+    FileOrDirExists(root + '\config\templates') or
+    FileOrDirExists(root + '\Temp\translation_memory\tm.db') or
+    FileOrDirExists(root + '\Temp\translation_memory\glossary_conflict_watch.json');
+end;
+
+// 旧 frozen 默认位（3.1.1 及以前）：%LOCALAPPDATA%\SubTrans，缺失回退 %USERPROFILE%
+// （paths.py legacy_default_data_root 同级写法，Path.home() 对应 %USERPROFILE%）。
+function _LegacyDefaultRoot(): String;
+var
+  env: String;
+begin
+  Result := '';
+  env := GetEnv('LOCALAPPDATA');
+  if env = '' then
+    env := GetEnv('USERPROFILE');
+  if env <> '' then
+    Result := env + '\SubTrans';
+end;
+
+// 落点 A 默认推导（D2026-1103-05 项②：默认离 C）——与 paths.py
+// default_data_root_for 同一规格各实现一次，形态对照表由测试钉住：
+//   <安装目录父>\<安装目录名>-data；安装目录为盘符根/UNC 服务根时回退
+//   <盘符|服务根>\SubTrans-data；名字已以 -data 结尾得双后缀（规则单一，
+//   换取「推导结果恒不等于安装目录」硬不变量）。
+// 注：appLoc 来自 {app}/注册表，恒为反斜杠形态，故此处不做 '/' 归一
+//     （paths.py 侧 pathlib 天然容两形态）。
+function _DefaultDataRootFor(const appLoc: String): String;
+var
+  d, parent, name: String;
+  p: Integer;
+begin
+  Result := '';
+  d := _NormSlashes(Trim(appLoc));
+  if d = '' then
+    Exit;
+  while (Length(d) > 1) and (d[Length(d)] = '\') do
+    d := Copy(d, 1, Length(d) - 1);
+  // 盘符根（C: / C:\）→ <盘符>:\SubTrans-data
+  if (Length(d) = 2) and (d[2] = ':') then
+  begin
+    Result := d + '\SubTrans-data';
+    Exit;
+  end;
+  p := Length(d);
+  while (p > 0) and (d[p] <> '\') do
+    p := p - 1;
+  if p = 0 then
+    Exit;  // 非绝对路径（无分隔符）→ 不推导
+  // 根形态（paths.py 侧 pathlib 判 parent==self 即此三类）：UNC 服务根
+  // （\\server）、UNC 分享根（\\server\share，反斜杠恰两处）、单根（\）
+  if (Length(d) >= 2) and (d[1] = '\') and (d[2] = '\') and
+     ((p <= 2) or (_CountChar(d, '\') = 2)) then
+  begin
+    Result := d + '\SubTrans-data';
+    Exit;
+  end;
+  name := Copy(d, p + 1, Length(d) - p);
+  if name = '' then
+  begin
+    // 尾段为空（d = '\' 一类）→ 视作根
+    Result := d + '\SubTrans-data';
+    Exit;
+  end;
+  parent := Copy(d, 1, p - 1);
+  Result := parent + '\' + name + '-data';
+end;
+
+// .data-root 指针读取（单行 trim 后须为绝对路径；不存在/非法返回空串）。
+// 与 ResolveDataRoot 第 2 级、安装期写指针前的「已有有效指针不覆盖」判定共用。
+function _ReadDataRootPointer(const appLoc: String): String;
+var
+  content: String;
+  raw: AnsiString;
+begin
+  Result := '';
+  if appLoc = '' then
+    Exit;
+  if LoadStringFromFile(appLoc + '\.data-root', raw) then
+  begin
+    content := Trim(Utf8BytesToStr(raw));
+    if (content <> '') and
+       (((Length(content) >= 2) and (content[2] = ':')) or
+        (content[1] = '\') or (content[1] = '/')) then
+      Result := content;
+  end;
+end;
+
 // R2 数据根四级解析（与 subtransjav/paths.py data_root() 对齐，仅安装器口径）：
 // 1) 环境变量 SUBTRANSJAV_DATA_ROOT（非空才生效）；
 // 2) 指针文件 .data-root（frozen 下固定在 exe 同目录 = {app}，单行绝对路径）；
-// 3) frozen 默认 %LOCALAPPDATA%\SubTrans；LOCALAPPDATA 缺失回退家目录
-//    （paths.py 同级写法 = os.environ.get('LOCALAPPDATA') or Path.home()，
-//    此处 Path.home() 对应 %USERPROFILE%）。
+// 3) frozen 默认＝落点 A（安装目录旁路），新默认无锚点而旧 %LOCALAPPDATA%\SubTrans
+//    有锚点时收养旧根（护栏 6，不静默迁移）；
+// 4) 安装目录不可得时回退旧默认位（保持既有「不抛异常」语义）。
 function ResolveDataRoot(const appLoc: String; var srcLabel: String): String;
 var
-  env, content: String;
-  raw: AnsiString;
+  env, newRoot, oldRoot: String;
 begin
   Result := '';
   srcLabel := '';
@@ -260,30 +390,41 @@ begin
     srcLabel := '环境变量';
     Exit;
   end;
-  // 2) 数据目录指针 .data-root（exe 同目录；单行 trim 后须为绝对路径）
-  if appLoc <> '' then
-  begin
-    if LoadStringFromFile(appLoc + '\.data-root', raw) then
-    begin
-      content := Trim(Utf8BytesToStr(raw));
-      if (content <> '') and
-         (((Length(content) >= 2) and (content[2] = ':')) or
-          (content[1] = '\') or (content[1] = '/')) then
-      begin
-        Result := content;
-        srcLabel := '数据目录指针';
-        Exit;
-      end;
-    end;
-  end;
-  // 3) 默认位置（LOCALAPPDATA 空则家目录回退，对齐 paths.py 第 3 级）
-  env := GetEnv('LOCALAPPDATA');
-  if env = '' then
-    env := GetEnv('USERPROFILE');
+  // 2) 数据目录指针（exe 同目录）
+  env := _ReadDataRootPointer(appLoc);
   if env <> '' then
   begin
-    Result := env + '\SubTrans';
-    srcLabel := '默认位置';
+    Result := env;
+    srcLabel := '数据目录指针';
+    Exit;
+  end;
+  // 3) 落点 A 默认（含旧默认收养）
+  newRoot := _DefaultDataRootFor(appLoc);
+  if newRoot <> '' then
+  begin
+    if HasAnyAnchor(newRoot) then
+    begin
+      Result := newRoot;
+      srcLabel := '默认位置（安装目录旁路）';
+      Exit;
+    end;
+    oldRoot := _LegacyDefaultRoot();
+    if (oldRoot <> '') and (oldRoot <> newRoot) and HasAnyAnchor(oldRoot) then
+    begin
+      Result := oldRoot;
+      srcLabel := '旧默认位置沿用';
+      Exit;
+    end;
+    Result := newRoot;
+    srcLabel := '默认位置（安装目录旁路）';
+    Exit;
+  end;
+  // 4) 安装目录不可得（注册表陈旧且 {app} 亦空）→ 旧默认位兜底
+  newRoot := _LegacyDefaultRoot();
+  if newRoot <> '' then
+  begin
+    Result := newRoot;
+    srcLabel := '默认位置（无安装目录兜底）';
   end;
 end;
 
@@ -345,29 +486,22 @@ begin
   Result := Format('%.1f %s', [v, unitName]);
 end;
 
-// 锚点硬门槛：10 锚与 subtransjav/data_migration.py 旧根白名单 + 运行时落盘
-// 对齐（glossary_conflict_watch.json 实际位于 Temp/translation_memory/，
-// 非 config\；config\templates 为角色卡/模板目录；user_dirs.json 为
-// webview_gui/user_dirs.py 持久登记文件；fullchain_c22.json 为 C22 校准门
-// 产品态配置行，D2026-1101-01）。任一命中即视为存在用户数据。
-function HasAnyAnchor(const root: String): Boolean;
+// （HasAnyAnchor 已上移至 ResolveDataRoot 之前，见该处注释）
+
+// 剥尾反斜杠＋斜杠归一（大小写不敏感比较前的归一；盘符根 C:\ 剥成 C: 以便
+// 同径比较；env/pointer 来源可能带正斜杠，不归一则祖先前缀判定漏报）。
+function _StripTrailingBackslash(const s: String): String;
 begin
-  Result :=
-    FileOrDirExists(root + '\config\user_dirs.json') or
-    FileOrDirExists(root + '\config\user_settings.json') or
-    FileOrDirExists(root + '\config\refine_stage_settings.json') or
-    FileOrDirExists(root + '\config\api_keys.bin') or
-    FileOrDirExists(root + '\config\glossary.csv') or
-    FileOrDirExists(root + '\config\glossary_learned.csv') or
-    FileOrDirExists(root + '\config\fullchain_c22.json') or
-    FileOrDirExists(root + '\config\templates') or
-    FileOrDirExists(root + '\Temp\translation_memory\tm.db') or
-    FileOrDirExists(root + '\Temp\translation_memory\glossary_conflict_watch.json');
+  Result := _NormSlashes(s);
+  while (Length(Result) > 2) and (Result[Length(Result)] = '\') do
+    Result := Copy(Result, 1, Length(Result) - 1);
 end;
 
 // 深度门槛：解析结果明显不该被 DelTree 的路径一律拒删。
-// 覆盖：空串 / 盘符根（C: 与 C:\）/ %WINDIR% / %ProgramFiles%（大小写不敏感）/
-// 与安装目录 {app} 同径（大小写不敏感）。
+// 覆盖：空串 / 盘符根（C: 与 C:\ 与 C:/）/ %WINDIR% / %ProgramFiles%（大小写
+// 不敏感）/ 与安装目录 {app} 同径（大小写不敏感）/ root 为 {app} 的祖先目录
+// （D2026-1103-05 项②护栏 7 新增：新默认落点 A 的安装目录父级旁路一旦与
+//  安装目录构成祖先关系，删 root 即连安装目录一起删，复刻 10-30 事故形态）。
 function IsUnsafeRoot(const root, appLoc: String): Boolean;
 var
   lowRoot, lowLoc: String;
@@ -377,17 +511,22 @@ begin
     Exit;
   if (Length(root) <= 3) and (Length(root) >= 2) and (root[2] = ':') then
     Exit;
-  lowRoot := Lowercase(root);
-  if (lowRoot = Lowercase(GetEnv('WINDIR'))) or
-     (lowRoot = Lowercase(GetEnv('ProgramFiles'))) then
+  lowRoot := Lowercase(_StripTrailingBackslash(root));
+  // 剥斜杠后仍是盘符根（C: / D:）→ 拒
+  if (Length(lowRoot) = 2) and (lowRoot[2] = ':') then
+    Exit;
+  if (lowRoot = Lowercase(_StripTrailingBackslash(GetEnv('WINDIR')))) or
+     (lowRoot = Lowercase(_StripTrailingBackslash(GetEnv('ProgramFiles')))) then
     Exit;
   // 与 {app} 同径比较（大小写不敏感；双方剥尾反斜杠后比）
-  lowLoc := Lowercase(appLoc);
-  while (Length(lowRoot) > 0) and (lowRoot[Length(lowRoot)] = '\') do
-    lowRoot := Copy(lowRoot, 1, Length(lowRoot) - 1);
-  while (Length(lowLoc) > 0) and (lowLoc[Length(lowLoc)] = '\') do
-    lowLoc := Copy(lowLoc, 1, Length(lowLoc) - 1);
+  lowLoc := Lowercase(_StripTrailingBackslash(appLoc));
   if (lowLoc <> '') and (lowRoot = lowLoc) then
+    Exit;
+  // root 为 {app} 祖先：root + '\' 是 lowLoc 的前缀
+  if (lowLoc <> '') and (lowRoot <> '') and
+     (Length(lowRoot) < Length(lowLoc)) and
+     (Copy(lowLoc, 1, Length(lowRoot)) = lowRoot) and
+     (lowLoc[Length(lowRoot) + 1] = '\') then
     Exit;
   Result := False;
 end;
@@ -395,6 +534,7 @@ end;
 var
   DataDelete: Boolean;       // InitializeUninstall 定，usPostUninstall 执行
   DataRoot, DataSrc: String; // 解析结果与来源标签
+  SystemDriveWarned: Boolean; // 离 C 告警只拦一次（D2026-1103-05 项②护栏 4）
 
 // ---------------------------------------------------------------------------
 // 目录防误装加固（D2026-1030-04）：3.1.0 实测事故——用户把既往安装目录改名
@@ -421,6 +561,30 @@ begin
      DirExists(trimmed + '\subtransjav'));
 end;
 
+// 安装目录是否落在系统盘 / %ProgramFiles%（D2026-1103-05 项②护栏 4 判据；
+// 「父目录不可写」在现实形态上即 Program Files 一类受保护目录，故并入同一
+// 判据，不另做写探测）。定义须先于使用（Inno Pascal Script 无前置声明）。
+function InstallDirOnSystemDrive(const dir: String): Boolean;
+var
+  low, sysDrive, pf: String;
+begin
+  Result := False;
+  low := Lowercase(Trim(dir));
+  if low = '' then
+    Exit;
+  sysDrive := Lowercase(GetEnv('SystemDrive'));
+  if sysDrive = '' then
+    sysDrive := 'c:';
+  if Copy(low, 1, Length(sysDrive)) = sysDrive then
+  begin
+    Result := True;
+    Exit;
+  end;
+  pf := Lowercase(GetEnv('ProgramFiles'));
+  if (pf <> '') and (Copy(low, 1, Length(pf)) = pf) then
+    Result := True;
+end;
+
 procedure CurPageChanged(CurPageID: Integer);
 var
   ver, loc: String;
@@ -445,6 +609,18 @@ begin
       MsgBox('所选目录疑似开发仓库（含 .git，或 pyproject.toml + subtransjav 源码结构），' + #13#10 +
              '不能作为 SubTrans 安装目录，否则会污染开发工作树。' + #13#10 +
              '请另选实际安装目录。', mbError, MB_OK);
+      Exit;
+    end;
+    // 离 C 口径告警＋改选入口（D2026-1103-05 项②护栏 4）：不得静默接受。
+    // 只拦一次（SystemDriveWarned），避免「改选→再告警」死循环。
+    if (not SystemDriveWarned) and InstallDirOnSystemDrive(WizardForm.DirEdit.Text) then
+    begin
+      SystemDriveWarned := True;
+      if MsgBox('所选安装目录位于系统盘或 Program Files：' + WizardForm.DirEdit.Text + #13#10 +
+                '数据目录按默认会落在它的旁路位，同样在系统盘上，与「数据尽量不放系统盘」的默认口径冲突。' + #13#10 +
+                '是否返回改选安装目录？（选「否」按当前目录继续，数据目录亦可日后在「设置 → 高级参数 → 数据保存目录」另行指定）',
+                mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        Result := False;
     end;
   end;
 end;
@@ -453,8 +629,87 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   if IsDevRepoDir(WizardDirValue) then
+  begin
     Result := '安装目录是开发仓库（含 .git 或 pyproject.toml + subtransjav 源码结构），已阻止安装；' +
               '静默安装请用 /DIR= 指定实际安装目录。';
+    Exit;
+  end;
+  // 离 C 口径告警（D2026-1103-05 项②护栏 4）：静默面无 UI 可交互，只记日志
+  // 不阻断（已在卡面与执行记录披露）；交互向导侧的告警＋改选见 NextButtonClick。
+  if WizardSilent and InstallDirOnSystemDrive(WizardDirValue) then
+    Log('[data-root] 静默安装目录位于系统盘/Program Files：' + WizardDirValue +
+        '，数据根随之路径旁路落系统盘，未弹告警（无交互界面）');
+end;
+
+// 安装期写 .data-root 指针（护栏 5）：提权期写 {app}\.data-root；原地升级
+// 已有有效指针一律不覆盖；env 生效时按「优先级不动」不写；写入结果记安装日志，
+// 失败显式告警（不得静默回落）。
+procedure WriteDataRootPointerAtInstall;
+var
+  appLoc, existing, root, src: String;
+  i: Integer;
+  asciiOnly: Boolean;
+begin
+  appLoc := ExpandConstant('{app}');
+  if Trim(appLoc) = '' then
+  begin
+    Log('[data-root] {app} 为空，跳过指针写入');
+    Exit;
+  end;
+  if Trim(GetEnv('SUBTRANSJAV_DATA_ROOT')) <> '' then
+  begin
+    Log('[data-root] 环境变量 SUBTRANSJAV_DATA_ROOT 已生效（优先级高于指针），不写指针');
+    Exit;
+  end;
+  existing := _ReadDataRootPointer(appLoc);
+  if existing <> '' then
+  begin
+    Log('[data-root] 既有有效指针，原地升级不覆盖: ' + existing);
+    Exit;
+  end;
+  root := ResolveDataRoot(appLoc, src);
+  if root = '' then
+  begin
+    Log('[data-root] 数据根解析为空，跳过写入');
+    Exit;
+  end;
+  // 收养旧默认位时不写指针：写下去来源就变成「数据目录指针」，GUI 与 --where
+  // 双双误显「自定义目录」，且首启插桩门（只对默认来源放行）在收养机器上永不
+  // 触发——恰是 data_migration 侧要保的既得行为。应用侧同规则推导即得同解。
+  if src = '旧默认位置沿用' then
+  begin
+    Log('[data-root] 收养旧默认位（' + root + '），不写指针：来源标签须保持「默认」，' +
+        '否则首启插桩门与来源读数双双失真');
+    Exit;
+  end;
+  // 本机 Inno 6 的 SaveStringToFile 无编码重载（实测 4/5 参形态编译报
+  // 「Invalid number of parameters」），落盘按 ANSI 码页；非 ASCII 路径写出去
+  // 会被 paths.py 的 UTF-8 读取面读坏，故仅 ASCII 路径写指针——非 ASCII 时
+  // 不写，由应用侧按同一规格推导（两侧同算法，无指针亦不歧义）。
+  asciiOnly := True;
+  for i := 1 to Length(root) do
+    if (Ord(root[i]) < 32) or (Ord(root[i]) > 126) then
+    begin
+      asciiOnly := False;
+      Break;
+    end;
+  if not asciiOnly then
+  begin
+    Log('[data-root] 数据根含非 ASCII 字符，安装器不写指针（ANSI 落盘会被读坏）: ' + root);
+    Exit;
+  end;
+  if SaveStringToFile(appLoc + '\.data-root', root + #13#10, False) then
+    Log('[data-root] 已写 ' + appLoc + '\.data-root → ' + root + '（来源：' + src + '）')
+  else
+    MsgBox('数据目录指针写入失败：' + appLoc + '\.data-root' + #13#10 +
+           '应用将按默认推导定位数据目录；若该位置不可写，请在「设置 → 高级参数 → 数据保存目录」手动指定。',
+           mbError, MB_OK);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    WriteDataRootPointerAtInstall;
 end;
 
 function InitializeSetup(): Boolean;
@@ -495,7 +750,7 @@ end;
 // R2 卸载一问制（D2026-1003-01 批A）：默认保留 + 锚点硬门槛 + 量级清单
 function InitializeUninstall(): Boolean;
 var
-  ver, loc, root, body: String;
+  ver, loc, root, body, newRoot, oldRoot: String;
 begin
   Result := True;
   ReadInstalledInfo(ver, loc);
@@ -503,12 +758,26 @@ begin
     loc := ExpandConstant('{app}');
   root := ResolveDataRoot(loc, DataSrc);
   DataRoot := root;
-  // ① 深度门槛：解析结果异常（盘符根/系统目录/安装目录等）一律不删
+  // ① 深度门槛：解析结果异常（盘符根/系统目录/安装目录/安装目录祖先等）一律不删
   if IsUnsafeRoot(root, loc) then
   begin
     DataDelete := False;
     MsgBox('数据目录解析结果异常（' + root + '），为安全起见不执行任何删除；' +
            '如需清理请手动核查。', mbInformation, MB_OK);
+    Exit;
+  end;
+  // ①b 新旧两根同时有数据（D2026-1103-05 项②护栏 8）：不得静默二选一删，
+  //     默认保留并明示两路径，由用户自行确认保留哪一个。
+  newRoot := _DefaultDataRootFor(loc);
+  oldRoot := _LegacyDefaultRoot();
+  if (newRoot <> '') and (oldRoot <> '') and (newRoot <> oldRoot) and
+     HasAnyAnchor(newRoot) and HasAnyAnchor(oldRoot) then
+  begin
+    DataDelete := False;
+    MsgBox('检测到两个数据目录均存在本地数据，为防误删本次卸载不删除任何数据：' + #13#10 +
+           '  安装目录旁路：' + newRoot + #13#10 +
+           '  旧默认位置：%LOCALAPPDATA%\SubTrans → ' + oldRoot + #13#10 +
+           '请自行确认保留哪一个后再手动清理另一个。', mbInformation, MB_OK);
     Exit;
   end;
   // ② 锚点预检：无任何用户数据锚点 → 按保留处理（防误删可重下载资源目录）
@@ -533,6 +802,12 @@ begin
           '  配置与角色卡：' + HumanSize(DirSizeBytes(root + '\config')) + #13#10;
   if FileExists(root + '\config\api_keys.bin') then
     body := body + '  API 密钥文件将被删除，卸载后须重新录入。' + #13#10;
+  // 两根并存时（①b 已在双锚点命中时拦下）此处把另一根的位置也明示，
+  // 避免用户以为「删了就干净了」（D2026-1103-05 项②护栏 8）
+  if (newRoot <> '') and (newRoot <> root) then
+    body := body + '  注：安装目录旁路位 ' + newRoot + ' 不在本次删除范围。' + #13#10;
+  if (oldRoot <> '') and (oldRoot <> root) then
+    body := body + '  注：旧默认位 ' + oldRoot + ' 不在本次删除范围。' + #13#10;
   body := body + '~\.cache\whisper 原生缓存与数据根外的自定义词典目录不在删除范围。';
   DataDelete := (MsgBox(body, mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES);
 end;

@@ -593,9 +593,13 @@ def _print_where() -> str:
     from .config import CONFIG_DIR
 
     run_mode = "frozen 打包" if paths.is_frozen() else "pip 源码"
+    # 标签面与 paths.data_root_source() 逐值同步（D2026-1103-05 项②护栏 10）；
+    # pointer 键系补漏——3.1.1 及以前缺此键，自定义目录会让本函数 KeyError
     source_map = {
         "env": "环境变量显式指定",
-        "frozen-default": "frozen 默认（%LOCALAPPDATA%）",
+        "pointer": "自定义目录（.data-root 指针）",
+        "frozen-default": "frozen 默认（安装目录旁路）",
+        "frozen-legacy-default": "frozen 旧默认沿用（%LOCALAPPDATA%）",
         "legacy": "仓库根（传统）",
     }
     state_map = {"migrated": "已迁移", "not-migrated": "未迁移"}
@@ -622,6 +626,13 @@ def _print_where() -> str:
         f"程序版本: {__version_display__}",
         f"运行形态: {run_mode}",
         f"数据根: {data_root}（来源: {source_map[source]}）",
+        # 落点 A 默认推导读数（D2026-1103-05 项②：排障/验收直读新默认位，
+        # 纯拼接零副作用，不落盘不建目录）
+        *(
+            [f"默认推导: {paths.default_data_root_for(paths.install_dir())}"
+             f"（安装目录 {paths.install_dir()} 旁路）"]
+            if paths.is_frozen() else []
+        ),
         f"配置目录: {CONFIG_DIR}",
         f"翻译记忆库路径: {_os.path.join(tm._DEFAULT_TM_DIR, 'tm.db')}",
         f"FTS5 全文搜索: {'可用' if _fts5_probe() else '不可用'}",

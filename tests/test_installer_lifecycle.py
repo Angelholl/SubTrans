@@ -12,7 +12,10 @@
 - uninstall.bat：仅清快捷方式与缓存，不清理数据根内容（递归删除行
   仅允许出现在 numba_cache 缓存清理处）；
 - 目录防误装加固（D2026-1030-04）：F1 陈旧记录回落 + F2 开发仓库拒装
-  双闸（交互 NextButtonClick + 静默 PrepareToInstall）。
+  双闸（交互 NextButtonClick + 静默 PrepareToInstall）；
+- 数据根默认离 C（D2026-1103-05 项②）：落点 A 推导 + 旧默认收养 + 安装期
+  写 .data-root 指针 + 系统盘告警 + 深度门槛补判据（祖先/盘符根）+
+  新旧两根并存时默认不删并明示两路径。
 
 配套 ISCC 编译冒烟（未安装 Inno Setup 6 时跳过）。
 """
@@ -117,11 +120,64 @@ def test_uninstall_size_list_ct2_pinned(iss_text):
 
 
 def test_data_root_resolution_pinned(iss_text):
-    """数据根四级解析与 paths.py data_root() 对齐。"""
+    """数据根四级解析与 paths.py data_root() 对齐（含落点 A 新默认，
+    D2026-1103-05 项②）。"""
     assert "SUBTRANSJAV_DATA_ROOT" in iss_text
     assert ".data-root" in iss_text
     assert "LOCALAPPDATA" in iss_text
     assert "function ResolveDataRoot(" in iss_text
+    # 落点 A 推导与旧默认收养两面均须在 iss 侧存在（与 paths.py 同规格）
+    assert "function _DefaultDataRootFor(" in iss_text
+    assert "name + '-data'" in iss_text, "iss 侧 -data 后缀推导缺失"
+    assert "SubTrans-data" in iss_text, "iss 侧盘根回退名缺失"
+    assert "旧默认位置沿用" in iss_text, "iss 侧缺旧默认收养分支标签"
+    assert "function _LegacyDefaultRoot(" in iss_text
+    assert "function _ReadDataRootPointer(" in iss_text
+
+
+def test_installer_writes_data_root_pointer_pinned(iss_text):
+    """护栏 5：安装期写 {app}\\.data-root／已有有效指针不覆盖／env 生效不写／
+    写入结果记日志／失败显式告警（不得静默回落）。"""
+    assert "procedure WriteDataRootPointerAtInstall" in iss_text
+    assert "CurStepChanged" in iss_text and "ssPostInstall" in iss_text
+    assert "root + #13#10" in iss_text, "未写指针内容行"
+    assert "_ReadDataRootPointer(appLoc)" in iss_text, "写前未查既有指针"
+    assert "原地升级不覆盖" in iss_text
+    assert "优先级高于指针" in iss_text, "env 生效时未跳过写指针"
+    assert "[data-root]" in iss_text, "写入结果未记安装日志"
+    assert "数据目录指针写入失败" in iss_text, "写失败未显式告警"
+    # 收养旧默认位时不得写指针：写下去来源即变「数据目录指针」，GUI/--where
+    # 双双误显自定义，且只对默认来源放行的首启插桩门在收养机器上永不触发
+    m_adopt = re.search(r"if src = '旧默认位置沿用' then(.{0,300})", iss_text, re.S)
+    assert m_adopt and "不写指针" in m_adopt.group(1), "收养态未跳过写指针"
+
+
+def test_default_data_root_root_forms_pinned(iss_text):
+    """iss 侧根形态推导须与 paths.py（pathlib parent==self）同解：
+    盘根／UNC 服务根／UNC 分享根（反斜杠恰两处）／单根（尾段为空）。"""
+    assert "_CountChar(d, '\\') = 2" in iss_text, "缺 UNC 分享根判据"
+    assert "尾段为空" in iss_text, "缺单根（尾段为空）回退"
+    assert "d + '\\SubTrans-data'" in iss_text, "根形态回退名缺失"
+    assert "function _NormSlashes(" in iss_text, "缺斜杠归一（正斜杠来源会漏判）"
+
+
+def test_system_drive_warning_pinned(iss_text):
+    """护栏 4：安装目录在系统盘/Program Files 不得静默接受——交互告警＋
+    改选入口，静默面记日志（披露项）。"""
+    assert "function InstallDirOnSystemDrive(" in iss_text
+    assert "SystemDriveWarned" in iss_text, "告警未做一次性防循环"
+    assert "的默认口径冲突" in iss_text
+    assert "MB_YESNO or MB_DEFBUTTON2" in iss_text
+    assert "静默安装目录位于系统盘" in iss_text, "静默面未记日志"
+
+
+def test_two_roots_both_have_data_pinned(iss_text):
+    """护栏 8：新旧两根同时有数据 → 不静默二选一删，默认保留并明示两路径。"""
+    assert "两个数据目录均存在本地数据" in iss_text
+    assert "安装目录旁路：" in iss_text and "旧默认位置：" in iss_text
+    m = re.search(r"两个数据目录均存在本地数据(.{0,400})", iss_text, re.S)
+    assert m and "不删除任何数据" in m.group(1), "双根并存分支必须默认不删"
+    assert "不在本次删除范围" in iss_text, "一问制清单未明示另一根位置"
 
 
 def test_anchor_gate_pinned(iss_text):
@@ -143,6 +199,11 @@ def test_depth_gate_pinned(iss_text):
     assert "root[2] = ':'" in iss_text
     # 与 {app} 同径比较（实现注释注明）
     assert "{app} 同径" in iss_text
+    # 护栏 7 新增两判据：root 为 {app} 祖先 / 剥斜杠后仍是盘符根
+    assert "祖先" in iss_text, "缺「root 为安装目录祖先」判据（D2026-1103-05 项②）"
+    assert "Copy(lowLoc, 1, Length(lowRoot)) = lowRoot" in iss_text, "祖先前缀判定缺失"
+    assert "(Length(lowRoot) = 2) and (lowRoot[2] = ':')" in iss_text, \
+        "缺剥尾斜杠后的盘符根判定（C:/ 与 C: 两形态）"
 
 
 def test_delete_keeps_empty_dir_and_failure_branch(iss_text):

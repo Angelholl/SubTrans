@@ -722,6 +722,9 @@ const MSG = {
     data_root_source_env: '环境变量指定',
     data_root_source_pointer: '自定义目录',
     data_root_source_frozen_default: '打包默认',
+    // 旧打包默认位（%LOCALAPPDATA%\SubTrans）被沿用（D2026-1103-05 项②：
+    // 新默认改安装目录旁路，旧根有数据且不静默迁移，故来源须可分辨）
+    data_root_source_frozen_legacy_default: '旧打包默认沿用',
     data_root_source_legacy: '仓库根传统',
     data_root_change_btn: '浏览…',
     data_root_restore_btn: '恢复默认',

@@ -1,9 +1,10 @@
 """EXE 首发数据迁移机制（D2026-0929-05 P2 + D2026-0929-07 点 2 + 08 点 3 定案）
 ================================================================================
 
-仅 frozen（EXE）形态、数据根为 frozen 默认（%LOCALAPPDATA%，env 显式指定
-不迁移）、且旧根存在可迁数据时执行一次性迁移；pip/源码形态零感知（永不
-触发、不写任何文件）。
+仅 frozen（EXE）形态、数据根为 frozen 默认（安装目录旁路新默认，或旧
+%LOCALAPPDATA% 默认位被收养；env/pointer 显式指定不迁移）、且旧根存在
+可迁数据时执行一次性迁移；pip/源码形态零感知（永不触发、不写任何文件）。
+收养旧根时旧根即数据根本身，迁移以 ``not-applicable:legacy-is-root`` 直返。
 
 三段式（硬约束，顺序不可反）：
   1) 备份：磁盘空间预检（需 ≥ 源体积×2，不足即中止）→ 旧位数据 zip 备份到
@@ -66,6 +67,16 @@ BACKUP_KEEP = 5                       # 备份 zip 保留最近份数
 MANIFEST_NAME = "migration_manifest.json"
 LEGACY_ROOT_ENV = "SUBTRANSJAV_LEGACY_ROOT"
 
+# 属「frozen 默认」的来源标签集合（D2026-1103-05 项②）：新默认（安装目录
+# 旁路）与旧默认收养两标签都要放行迁移与首启插桩门，env/pointer 自定义根
+# 保持零感知。改此集合须同步 tests/test_c22_gate_seeding.py 与 paths.py 标签面。
+_FROZEN_DEFAULT_SOURCES = ("frozen-default", "frozen-legacy-default")
+
+
+def _same_path(a: Path, b: Path) -> bool:
+    """大小写/斜杠归一后的同径判定（Windows 语义，复用 paths 口径）。"""
+    return paths.normalize_path_case(str(a)) == paths.normalize_path_case(str(b))
+
 # 旧根内相对路径白名单（存在才迁；全部缺失不算失败）
 _BASE_FILES: tuple[str, ...] = (
     "Temp/translation_memory/tm.db",
@@ -114,14 +125,22 @@ def _discover_legacy_root() -> Path | None:
     优先级：
     1. 环境变量 ``SUBTRANSJAV_LEGACY_ROOT``（诊断/测试显式指定）；
     2. frozen 形态下 EXE 所在目录（EXE 首发放/升到旧仓库根目录的场景，
-       旧 pip/源码数据即在安装目录 = 旧仓库根）。
+       旧 pip/源码数据即在安装目录 = 旧仓库根）；
+    3. 旧 frozen 默认位 ``%LOCALAPPDATA%\\SubTrans``（D2026-1103-05 项②：
+       新默认改安装目录旁路后，3.1.1 及以前的存量数据落在此位，
+       须被认作旧根；有锚点才认，无锚点维持 2 的既有回退语义）。
     """
     env = os.environ.get(LEGACY_ROOT_ENV, "").strip()
     if env:
         return Path(env)
     import sys as _sys
     if getattr(_sys, "frozen", False):
-        return Path(_sys.executable).resolve().parent
+        exe_dir = Path(_sys.executable).resolve().parent
+        if not paths.has_data_anchors(exe_dir):
+            old_default = paths.legacy_default_data_root()
+            if old_default != exe_dir and paths.has_data_anchors(old_default):
+                return old_default
+        return exe_dir
     return None
 
 
@@ -438,13 +457,17 @@ def _ensure_migrated_inner(verbose: bool) -> str:
     # 触发条件硬闸：pip/源码形态永不迁移（零感知）
     if not paths.is_frozen():
         return "not-applicable:pip"
-    if paths.data_root_source() != "frozen-default":
+    if paths.data_root_source() not in _FROZEN_DEFAULT_SOURCES:
         return "not-applicable:env-root"
 
     root = paths.data_root()
     legacy_root = _discover_legacy_root()
     if legacy_root is None:
         return "not-applicable:no-legacy-root"
+    if _same_path(legacy_root, root):
+        # 收养旧默认位当数据根本身（frozen-legacy-default）：数据已在位，
+        # 不得把旧根往自己身上迁（D2026-1103-05 项②护栏 6）
+        return "not-applicable:legacy-is-root"
     srcs = _collect_sources(legacy_root)
     if not srcs:
         return "not-applicable:no-legacy-data"
@@ -645,10 +668,14 @@ def evaluate_c22_gate(gate_path: str | Path, *,
 
 
 def _seed_c22_gate_on_startup(verbose: bool) -> str:
-    """首启插桩调用点：仅 frozen + 默认数据根动作（pip/源码形态零感知）。"""
+    """首启插桩调用点：仅 frozen + 默认数据根动作（pip/源码形态零感知）。
+
+    默认标签含新默认与旧默认收养两态（D2026-1103-05 项②），否则升级用户
+    收养旧根后 C22 门永不插桩（3.1.1 前既得行为不得回退）。
+    """
     if not paths.is_frozen():
         return "not-applicable:not-frozen"
-    if paths.data_root_source() != "frozen-default":
+    if paths.data_root_source() not in _FROZEN_DEFAULT_SOURCES:
         return "not-applicable:custom-root"
     return seed_c22_gate(verbose=verbose)
 

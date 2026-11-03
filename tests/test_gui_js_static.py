@@ -7817,6 +7817,11 @@ def test_js_sources_layer_pinned():
         新增 #homeTranscribeCard .review-transcribe-media 14px 作用域规则
         （CSS/独立脚本不入字节钉，契约走内容钉）；
         旧钉 b0f14c13… / 875018c1… 退役；
+        d1103 数据根默认离 C（D2026-1103-05 项②，2026-11-03 主审亲执）：
+        全库拼接 1e9f5640…/534,150B、app-msg.js 68,562B/5f2212a7…（新增
+        data_root_source_frozen_legacy_default 一键——frozen 新默认改安装
+        目录旁路后，旧默认位被收养时来源标签须可分辨；键数 +1，i18n 计数
+        钉不动，strings.py 零触碰；旧钉 cbd62bc9… / edc89084… 退役）；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7833,7 +7838,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "cbd62bc97db33cb852c45cef4558b5f9393b542442a83ebe5c1158bc39cbd4e8"), \
+        "1e9f564079fe4879bf8bbea4d0e928a2ac7e6d368736e6aad07e5803f9c96ab8"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
@@ -7864,8 +7869,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (68302,
-                       "edc890846e50a06f9ecef0a167396412fed6671d4bd0e5897ccb477d0744c5d3"),
+        "app-msg.js": (68562,
+                       "5f2212a73d6e56f5c23bbf4406287500e79b3cad15e3872b6981eb984f92f483"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
