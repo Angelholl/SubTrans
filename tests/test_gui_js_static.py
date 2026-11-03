@@ -8183,3 +8183,35 @@ def test_transcribe_core_module_pinned():
         n = sum((ASSETS / f).read_text(encoding="utf-8").count(bridge + "(")
                 for f in consumers if f != "app-init.js")
         assert n == 1, f"{bridge} 直调出现 {n} 次（应仅共享核 1 处）"
+
+
+def test_home_transcribe_card_inset_pinned():
+    """d1103-卡2：首页转录卡内文左右内缩钉——#homeTranscribeCard 须有
+    var(--space-3) 横向内衬（.card 无内衬致内文贴卡左边框），卡头以负
+    外边距回拉满宽保持分隔线满宽且自身左右内衬同为 --space-3，使卡内文
+    首字与概览条 .flow-overview 的 --space-3 左内衬同基线（owner 走查）。
+    负控：删/改任一内衬声明、或只动卡头不动卡体（参差复发）即红。
+    作用域钉：校对页 #reviewTranscribeCard 走 .empty-guide 内衬，不得被
+    本规则波及（首页独有缺口）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(r"#homeTranscribeCard\s*\{([^}]*)\}", css)
+    assert m, "style.css 缺 #homeTranscribeCard 内衬规则"
+    assert re.search(r"padding:\s*0\s+var\(--space-3\)\s*;", m.group(1)), \
+        "#homeTranscribeCard 须为仅横向的 var(--space-3) 内衬"
+    m2 = re.search(r"#homeTranscribeCard\s*>\s*\.card-head\s*\{([^}]*)\}", css)
+    assert m2, "style.css 缺 #homeTranscribeCard > .card-head 规则"
+    head = m2.group(1)
+    assert "calc(-1 * var(--space-3))" in head, \
+        "卡头未以负外边距回拉满宽（分隔线将内缩，与文件列表卡不一致）"
+    for decl in ("padding-left: var(--space-3);", "padding-right: var(--space-3);"):
+        assert decl in head, f"卡头文字内衬缺声明: {decl}"
+    # 对齐基准侧不得被单边改动
+    ov = re.search(r"\.flow-overview\s*\{([^}]*)\}", css)
+    assert ov and "padding: var(--space-2) var(--space-3);" in ov.group(1), \
+        "概览条 --space-3 内衬基准被改动（对齐基准须稳定）"
+    # 全局复用面不得顺手加内衬（首页独有缺口，禁扩大改动面）
+    card_blk = re.search(r"\n\.card\s*\{([^}]*)\}", css)
+    assert card_blk and "padding" not in card_blk.group(1), \
+        "禁给全局 .card 加内衬（全站复用面）"
+    assert not re.search(r"#reviewTranscribeCard\s*\{", css), \
+        "校对页转录卡不得被本卡波及（走 .empty-guide 内衬）"
