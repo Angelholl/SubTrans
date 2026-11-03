@@ -2659,10 +2659,12 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
    「上次未完成」行首字（--space-3 内衬基线）不齐。补 --space-3 横向内衬后
    卡内文首字与概览条首字同基线；卡头以负外边距回拉到满宽保持分隔线满宽
    （与文件列表卡一致），其文字内衬由自身 padding 承担。
+   d1104-B2（D2026-1104-01 owner 拍板）：纵向补上下 var(--space-2) 内衬
+   （末行状态行/安装钮贴卡底缘），四向规格与概览条 .flow-overview 同款。
    仅作用于 #homeTranscribeCard：校对页 #reviewTranscribeCard 走 .empty-guide
    内衬，不得连带改动。 */
 #homeTranscribeCard {
-    padding: 0 var(--space-3);
+    padding: var(--space-2) var(--space-3);
 }
 #homeTranscribeCard > .card-head {
     margin: 0 calc(-1 * var(--space-3));
@@ -3313,9 +3315,12 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
    引擎卡/一致率表）全站零规则，内文贴在框自身 1px 左边框上；同页第二/
    三框经 `.console-section .section-content`（style.css:575）已有 12px
    内衬，首页概览条首字亦落 --space-3 基线。补 --space-3 横向内衬后三框
-   与概览条同一条 12px 基线。仅 id 作用域，禁动全局 .section/.console-section。 */
+   与概览条同一条 12px 基线。
+   d1104-B2（D2026-1104-01 owner 拍板）：纵向补上下 var(--space-2)，
+   四向规格与概览条 .flow-overview 同款。仅 id 作用域，
+   禁动全局 .section/.console-section。 */
 #evalReportsSection {
-    padding: 0 var(--space-3);
+    padding: var(--space-2) var(--space-3);
 }
 .eval-pairs-table {
     width: 100%;

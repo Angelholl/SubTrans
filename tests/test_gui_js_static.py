@@ -8308,8 +8308,11 @@ def test_home_transcribe_card_inset_pinned():
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     m = re.search(r"#homeTranscribeCard\s*\{([^}]*)\}", css)
     assert m, "style.css 缺 #homeTranscribeCard 内衬规则"
-    assert re.search(r"padding:\s*0\s+var\(--space-3\)\s*;", m.group(1)), \
-        "#homeTranscribeCard 须为仅横向的 var(--space-3) 内衬"
+    # d1104-B2（D2026-1104-01 owner 拍板「补上下内衬」）：纵向补
+    # var(--space-2)，四向规格与首页概览条 .flow-overview 同款
+    assert re.search(r"padding:\s*var\(--space-2\)\s+var\(--space-3\)\s*;",
+                     m.group(1)), \
+        "#homeTranscribeCard 须为四向 var(--space-2) var(--space-3) 内衬"
     m2 = re.search(r"#homeTranscribeCard\s*>\s*\.card-head\s*\{([^}]*)\}", css)
     assert m2, "style.css 缺 #homeTranscribeCard > .card-head 规则"
     head = m2.group(1)
@@ -8371,8 +8374,11 @@ def test_eval_reports_section_inset_pinned():
     css = (ASSETS / "style.css").read_text(encoding="utf-8")
     m = re.search(r"#evalReportsSection\s*\{([^}]*)\}", css)
     assert m, "style.css 缺 #evalReportsSection 内衬规则"
-    assert re.search(r"padding:\s*0\s+var\(--space-3\)\s*;", m.group(1)), \
-        "#evalReportsSection 须为仅横向的 var(--space-3) 内衬"
+    # d1104-B2（D2026-1104-01 owner 拍板「补上下内衬」）：纵向补
+    # var(--space-2)，四向规格与首页概览条 .flow-overview 同款
+    assert re.search(r"padding:\s*var\(--space-2\)\s+var\(--space-3\)\s*;",
+                     m.group(1)), \
+        "#evalReportsSection 须为四向 var(--space-2) var(--space-3) 内衬"
     # 对齐基准侧不得被单边改动（同页第二/三框＋首页概览条）
     sc = re.search(r"\.console-section \.section-content\s*\{([^}]*)\}", css)
     assert sc and "10px 12px 12px" in sc.group(1), \
