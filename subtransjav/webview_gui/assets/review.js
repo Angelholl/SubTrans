@@ -541,22 +541,10 @@ const ReviewUI = {
         const line = document.getElementById('reviewTranscribeCt2');
         if (!line) { return; }
         const api = this._bridge();
-        if (!api) {
-            line.textContent = REVIEW_MSG.review_transcribe_ct2_unknown;
-            return;
-        }
-        // d1102-件F：渲染即重探——件D 首探结果永缓存，用户去设置装完
-        // 引擎回校对页仍显「未安装」且开始钮禁用；只读探测成本低，
-        // 每次渲染重查 refine_asr_status（_ct2Status 仅存本次探测结果，
-        // 供 _beginTranscribe 门控消费，不作缓存短路）。
-        line.textContent = REVIEW_MSG.review_transcribe_ct2_checking;
-        if (this._ct2Pending) { return; }
-        this._ct2Status = null;   // 旧探测结果作废，防开始钮按陈旧态门控
-        this._ct2Pending = true;
         // d1103：探测归一化下沉共享核（渲染即重探口径不变）
-        TranscribeCore.probeCt2(api).then((s) => {
-            this._ct2Pending = false;
-            this._ct2Status = s;
+        // B3：探测编排收编共享核 refreshCt2Flow（渲染即重探＋pending 防
+        // 重入＋旧结果作废单源），本页仅保留 id 与渲染面
+        TranscribeCore.refreshCt2Flow(this, api, line, () => {
             this._renderCt2Status();
         });
     },
@@ -622,31 +610,72 @@ const ReviewUI = {
         }
         const dual = document.getElementById('reviewTranscribeDualPass');
         const passes = (dual && dual.checked) ? 2 : 1;
-        this._status.setState({ state: 'busy',
-                                labelKey: 'review_transcribe_busy',
-                                progress: null });
-        // d1103：start 桥下沉共享核
-        TranscribeCore.startTranscribe(api, this._videoPath, passes).then((r) => {
-            if (!r || !r.success) {
-                console.warn('[review] transcribe rejected:', r && r.error);
-                // d1102-件F：拒绝文案单源——后端 strings.py msg() 文案经桥
-                // 回传直出（状态条未知键回退原文），前端不再自留副本
-                this._status.setState({
-                    state: 'error',
-                    labelKey: (r && r.error) || 'review_transcribe_failed' });
-                return;
-            }
-            // d1102-件F：新一轮开始即清旧 done（概览条转录节点回 idle，
-            // 随后 status 轮询自然转 running）
-            if (window.__homeOverviewTranscribeReset) {
-                window.__homeOverviewTranscribeReset();
-            }
-            if (window.__homeOverviewRefresh) { window.__homeOverviewRefresh(); }
-            this._pollTranscribe();
-        }).catch((err) => {
-            console.error('[review] transcribe error:', err);
-            this._status.setState({ state: 'error',
-                                    labelKey: 'review_transcribe_failed' });
+        // 重复 start 前先清旧轮询（句柄挂管理器防泄漏）
+        this._stopTranscribePoll();
+        // B3：启动+轮询编排骨架收编共享核 startAndPollFlow（busy→start→
+        // 拒绝/异常→reset→poll 控制流单源），渲染面 hooks 注入
+        this._transcribePollStop = TranscribeCore.startAndPollFlow(api, {
+            path: this._videoPath,
+            passes,
+            maxMiss: REVIEW_POLL_MAX_MISS,
+            hooks: {
+                onBusy: () => {
+                    this._status.setState({ state: 'busy',
+                                            labelKey: 'review_transcribe_busy',
+                                            progress: null });
+                },
+                onRejected: (err) => {
+                    // d1102-件F：拒绝文案单源——后端 strings.py msg() 文案
+                    // 经桥回传直出（状态条未知键回退原文），前端不自留副本
+                    this._status.setState({
+                        state: 'error',
+                        labelKey: err || 'review_transcribe_failed' });
+                },
+                onStartError: () => {
+                    this._status.setState({ state: 'error',
+                                            labelKey: 'review_transcribe_failed' });
+                },
+                onTick: (st) => {
+                    this._status.setState({ state: 'busy',
+                                            labelKey: 'review_transcribe_busy',
+                                            progress: st.percent });
+                },
+                onFailed: () => {
+                    this._status.setState({ state: 'error',
+                                            labelKey: 'review_transcribe_failed' });
+                },
+                onRefresh: () => {
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                },
+                onStarted: () => {
+                    // d1102-件F：新一轮开始即清旧 done（概览条转录节点回
+                    // idle，随后 status 轮询自然转 running）
+                    if (window.__homeOverviewTranscribeReset) {
+                        window.__homeOverviewTranscribeReset();
+                    }
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                },
+                onDone: (st) => {
+                    const name = TranscribeCore.doneName(st.path);
+                    this._status.setState({ state: 'ready',
+                                            labelKey: 'review_transcribe_done',
+                                            labelArgs: [name] });
+                    // 先例链路：自动载入列表（dirty 守卫在 setSrtPath 内单点）
+                    this.setSrtPath(st.path);
+                    // d1102-件F：done 绑定本次转录媒体（切换/离页即清）
+                    if (window.__homeOverviewTranscribeDone) {
+                        window.__homeOverviewTranscribeDone(
+                            st.media_path || this._videoPath);
+                    }
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                },
+            },
         });
     },
 
@@ -654,56 +683,6 @@ const ReviewUI = {
         // d1103：清轮委托共享核 stopper（interval 骨架单源）
         if (this._transcribePollStop) { this._transcribePollStop(); }
         this._transcribePollStop = null;
-    },
-
-    _pollTranscribe() {
-        const api = this._bridge();
-        if (!api) { return; }
-        this._stopTranscribePoll();
-        // d1103：轮询骨架下沉共享核（800ms/异常计数/payload 校验单源），
-        // 本页仅保留渲染面与终态动作（setSrtPath 先例链路 + 概览条绑定）
-        this._transcribePollStop = TranscribeCore.startPolling(api, {
-            onTick: (s) => {
-                this._status.setState({ state: 'busy',
-                                        labelKey: 'review_transcribe_busy',
-                                        progress: s.percent });
-            },
-            onSettled: (s) => {
-                if (s.error) {
-                    console.warn('[review] transcribe failed:', s.error);
-                    this._status.setState({ state: 'error',
-                                            labelKey: 'review_transcribe_failed' });
-                    if (window.__homeOverviewRefresh) {
-                        window.__homeOverviewRefresh();
-                    }
-                    return;
-                }
-                if (s.path) {
-                    const name = TranscribeCore.doneName(s.path);
-                    this._status.setState({ state: 'ready',
-                                            labelKey: 'review_transcribe_done',
-                                            labelArgs: [name] });
-                    // 先例链路：自动载入列表（dirty 守卫在 setSrtPath 内单点）
-                    this.setSrtPath(s.path);
-                    // d1102-件F：done 绑定本次转录媒体（切换/离页即清）
-                    if (window.__homeOverviewTranscribeDone) {
-                        window.__homeOverviewTranscribeDone(
-                            s.media_path || this._videoPath);
-                    }
-                    if (window.__homeOverviewRefresh) {
-                        window.__homeOverviewRefresh();
-                    }
-                }
-            },
-            onMiss: () => {
-                console.warn('[review] transcribe status anomalous, stop polling');
-                this._status.setState({ state: 'error',
-                                        labelKey: 'review_transcribe_failed' });
-                if (window.__homeOverviewRefresh) {
-                    window.__homeOverviewRefresh();
-                }
-            },
-        }, REVIEW_POLL_MAX_MISS);
     },
 
     async setSrtPath(path) {

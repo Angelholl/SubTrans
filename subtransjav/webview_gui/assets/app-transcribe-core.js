@@ -37,6 +37,66 @@ const TranscribeCore = {
             .catch(() => ({ probe_failed: true }));
     },
 
+    // CT2 探测编排单源（B3 抽共享，D2026-1104-01）：渲染即重探＋pending
+    // 防重入＋旧结果作废，两页逐字同构段收编。host＝{_ct2Pending,
+    // _ct2Status} 容器（各页实例态原位复用）；line＝状态行元素（可 null）；
+    // render＝探测完成后的各页渲染回调（install/start 钮面差异留在页内）。
+    refreshCt2Flow(host, api, line, render) {
+        if (!line) { return; }
+        const m = window.REVIEW_MSG || {};
+        if (!api) {
+            line.textContent = m.review_transcribe_ct2_unknown;
+            return;
+        }
+        line.textContent = m.review_transcribe_ct2_checking;
+        if (host._ct2Pending) { return; }
+        host._ct2Status = null;   // 旧探测结果作废，防开始钮按陈旧态门控
+        host._ct2Pending = true;
+        this.probeCt2(api).then((s) => {
+            host._ct2Pending = false;
+            host._ct2Status = s;
+            render();
+        });
+    },
+
+    // 启动+轮询编排单源（B3 抽共享，D2026-1104-01）：busy→start→拒绝/异常
+    // →reset→poll 控制流收编；渲染面经 hooks 注入（两页 setState 与
+    // textContent 差异留在页内）。返回 stopper（轮询句柄）。
+    startAndPollFlow(api, { path, passes, maxMiss, hooks }) {
+        const m = window.REVIEW_MSG || {};
+        const h = hooks || {};
+        if (h.onBusy) { h.onBusy(); }
+        return this.startTranscribe(api, path, passes).then((r) => {
+            if (!r || !r.success) {
+                console.warn('[transcribe-core] rejected:', r && r.error);
+                if (h.onRejected) { h.onRejected((r && r.error) || ''); }
+                return null;
+            }
+            if (h.onStarted) { h.onStarted(); }
+            return this.startPolling(api, {
+                onTick: (st) => { if (h.onTick) { h.onTick(st); } },
+                onSettled: (st) => {
+                    if (st.error) {
+                        console.warn('[transcribe-core] failed:', st.error);
+                        if (h.onFailed) { h.onFailed(st.error); }
+                        if (h.onRefresh) { h.onRefresh(); }
+                        return;
+                    }
+                    if (st.path) { if (h.onDone) { h.onDone(st); } }
+                },
+                onMiss: () => {
+                    console.warn('[transcribe-core] status anomalous, stop polling');
+                    if (h.onFailed) { h.onFailed(''); }
+                    if (h.onRefresh) { h.onRefresh(); }
+                },
+            }, maxMiss);
+        }).catch((err) => {
+            console.error('[transcribe-core] error:', err);
+            if (h.onStartError) { h.onStartError(err); }
+            return null;
+        });
+    },
+
     // 门控口径：引擎就绪或探测失败放行
     ct2Ready(s) {
         return !!(s && s.installed && s.model_present)

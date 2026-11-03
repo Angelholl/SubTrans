@@ -115,22 +115,13 @@ const HomeTranscribe = {
     },
 
     // CT2 门控（探测归一化经共享核；渲染即重探、结果不作缓存短路）
+    // B3：探测编排收编共享核 refreshCt2Flow（渲染即重探＋pending 防重入
+    // ＋旧结果作废单源），本卡仅保留 id 与渲染面
     refreshCt2Status() {
         const line = document.getElementById('homeTranscribeCt2');
         if (!line) { return; }
         const api = this._bridge();
-        const m = window.REVIEW_MSG || {};
-        if (!api) {
-            line.textContent = m.review_transcribe_ct2_unknown;
-            return;
-        }
-        line.textContent = m.review_transcribe_ct2_checking;
-        if (this._ct2Pending) { return; }
-        this._ct2Status = null;   // 旧探测结果作废，防开始钮按陈旧态门控
-        this._ct2Pending = true;
-        TranscribeCore.probeCt2(api).then((s) => {
-            this._ct2Pending = false;
-            this._ct2Status = s;
+        TranscribeCore.refreshCt2Flow(this, api, line, () => {
             this._renderCt2Status();
         });
     },
@@ -181,68 +172,53 @@ const HomeTranscribe = {
         }
         const dual = document.getElementById('homeTranscribeDualPass');
         const passes = (dual && dual.checked) ? 2 : 1;
-        if (status) {
-            status.textContent = m.review_transcribe_busy;
-        }
-        // d1103：start 桥下沉共享核
-        TranscribeCore.startTranscribe(api, this._videoPath, passes).then((r) => {
-            if (!r || !r.success) {
-                console.warn('[home-transcribe] rejected:', r && r.error);
-                // 拒绝文案单源——后端 strings.py msg() 文案经桥回传直出
-                if (status) {
-                    status.textContent = (r && r.error)
-                        || m.review_transcribe_failed;
-                }
-                return;
-            }
-            this._pollTranscribe();
-        }).catch((err) => {
-            console.error('[home-transcribe] error:', err);
-            if (status) { status.textContent = m.review_transcribe_failed; }
-        });
-    },
-
-    _stopPoll() {
-        // d1103：清轮委托共享核 stopper
+        // 重复 start 前先清旧轮询（句柄挂管理器防泄漏，原 _stopPoll 语义）
         if (this._pollStop) { this._pollStop(); }
         this._pollStop = null;
-    },
-
-    // 800ms 轮询（骨架经共享核：payload 校验、连续 miss 上限 5、终态
-    // 停表；离开首页 tab 不停表，句柄挂管理器，重复 start 前先清）
-    _pollTranscribe() {
-        const api = this._bridge();
-        if (!api) { return; }
-        this._stopPoll();
-        const m = window.REVIEW_MSG || {};
-        const status = document.getElementById('homeTranscribeStatus');
-        const refresh = () => {
-            if (window.__homeOverviewRefresh) {
-                window.__homeOverviewRefresh();
-            }
-        };
-        this._pollStop = TranscribeCore.startPolling(api, {
-            onTick: (st) => {
-                if (status) {
-                    status.textContent = m.review_transcribe_busy
-                        + (typeof st.percent === 'number'
-                            ? ` ${st.percent}%` : '');
-                }
-            },
-            onSettled: (st) => {
-                if (st.error) {
-                    console.warn('[home-transcribe] failed:', st.error);
+        // B3：启动+轮询编排骨架收编共享核 startAndPollFlow（busy→start→
+        // 拒绝/异常→reset→poll 控制流单源），渲染面 hooks 注入
+        this._pollStop = TranscribeCore.startAndPollFlow(api, {
+            path: this._videoPath,
+            passes,
+            hooks: {
+                onBusy: () => {
+                    if (status) {
+                        status.textContent = m.review_transcribe_busy;
+                    }
+                },
+                onRejected: (err) => {
+                    // 拒绝文案单源——后端 strings.py msg() 文案经桥回传直出
+                    if (status) {
+                        status.textContent = err || m.review_transcribe_failed;
+                    }
+                },
+                onStartError: () => {
                     if (status) {
                         status.textContent = m.review_transcribe_failed;
                     }
-                    refresh();
-                    return;
-                }
-                if (st.path) {
-                    const name = TranscribeCore.doneName(st.path);
+                },
+                onStarted: () => { /* 概览条 reset 见轮询终态直写面 */ },
+                onTick: (st) => {
+                    if (status) {
+                        status.textContent = m.review_transcribe_busy
+                            + (typeof st.percent === 'number'
+                                ? ` ${st.percent}%` : '');
+                    }
+                },
+                onFailed: () => {
+                    if (status) {
+                        status.textContent = m.review_transcribe_failed;
+                    }
+                },
+                onRefresh: () => {
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                },
+                onDone: (st) => {
                     if (status) {
                         status.textContent =
-                            (m.review_transcribe_done || ((n) => n))(name);
+                            m.review_transcribe_done(TranscribeCore.doneName(st.path));
                     }
                     // d1103-卡3（D2026-1103-05 项⑧，owner 选 A）：转录终态直写
                     // 概览条转录 chip done（done 绑最近转录媒体的语义在
@@ -252,13 +228,10 @@ const HomeTranscribe = {
                     if (window.__homeOverviewTranscribeDone) {
                         window.__homeOverviewTranscribeDone(st.path);
                     }
-                    refresh();
-                }
-            },
-            onMiss: () => {
-                console.warn('[home-transcribe] status anomalous, stop polling');
-                if (status) { status.textContent = m.review_transcribe_failed; }
-                refresh();
+                    if (window.__homeOverviewRefresh) {
+                        window.__homeOverviewRefresh();
+                    }
+                },
             },
         });
     },
@@ -280,8 +253,7 @@ const HomeTranscribe = {
                 status.textContent = m.review_transcribe_failed;
             } else if (st.path) {
                 const name = String(st.path).split(/[\\/]/).pop();
-                status.textContent =
-                    (m.review_transcribe_done || ((n) => n))(name);
+                status.textContent = m.review_transcribe_done(name);
             }
         }).catch(() => { /* 快照失败静默（首页常态为无任务 idle） */ });
     },

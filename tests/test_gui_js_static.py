@@ -1879,21 +1879,22 @@ def test_review_transcribe_block_pinned():
     begin = _extract_function(js, "_beginTranscribe")
     assert "(dual && dual.checked) ? 2 : 1" in begin, \
         "双 pass 默认关＝passes=1，勾选＝2"
-    assert "TranscribeCore.startTranscribe(" in begin, \
-        "开始转录须经共享核异步桥 start（不得同步直调 transcribe_media_to_srt）"
+    assert "TranscribeCore.startAndPollFlow(" in begin, \
+        "开始转录须经共享核编排骨架（异步 start 桥在核内，不得同步直调 transcribe_media_to_srt）"
     assert "transcribe_media_to_srt" not in js, \
         "前端禁止直调同步 transcribe_media_to_srt（只经异步桥）"
     assert "refine_review_start_transcribe(" in core, "共享核缺 start 桥"
     assert "refine_review_transcribe_status()" in core, "共享核缺 status 轮询"
-    poll = _extract_function(js, "_pollTranscribe")
-    assert "this.setSrtPath(s.path)" in poll, \
+    # B3（D2026-1104-01）：_pollTranscribe 收编共享核 startAndPollFlow，
+    # 完成自动载入面随 hooks.onDone 迁入 _beginTranscribe（意图不变）
+    assert "this.setSrtPath(st.path)" in begin, \
         "转录完成须自动走 setSrtPath（refine_review_load_srt 先例链路）"
     ui = _extract_function(js, "_refreshTranscribeUi")
     assert "showCard" in ui and "reviewTranscribeOtherBtn" in ui, \
         "有 SRT 后须隐藏卡并显示列表 ghost 钮"
     ct2 = _extract_function(js, "_refreshCt2Status")
-    assert "TranscribeCore.probeCt2" in ct2, \
-        "CT2 探测须经共享核归一化（渲染即重探口径不变）"
+    assert "TranscribeCore.refreshCt2Flow(" in ct2, \
+        "CT2 探测编排须经共享核 refreshCt2Flow（渲染即重探口径不变）"
     assert "refine_asr_status" in core, "共享核缺 CT2 探测桥"
 
 
@@ -1905,7 +1906,9 @@ def test_review_transcribe_reject_consumes_bridge_error():
     ``r.error`` 桥回传值（状态条未知键回退原文先例）。"""
     js = _review_js_source()
     begin = _extract_function(js, "_beginTranscribe")
-    assert "r.error" in begin, \
+    # B3：编排收编共享核后，桥 error 经 hooks.onRejected(err) 注入页内，
+    # 消费语义（err 直落状态条、无本地 running 副本）不变
+    assert "onRejected" in begin and "err || 'review_transcribe_failed'" in begin, \
         "转录拒绝须消费桥返回 error（不得再查前端本地文案）"
     assert "review_transcribe_running" not in begin, \
         "转录拒绝仍引用前端本地 review_transcribe_running 键"
@@ -1937,10 +1940,15 @@ def test_review_transcribe_poll_stops_on_anomalous_payload():
     照 transcode 先例「非 running 无条件清」收口，另加连续异常计数兜底
     （空对象/无 running 布尔/非 running 却无产出无错误的窗口）。"""
     js = _review_js_source()
-    body = _extract_function(js, "_pollTranscribe")
+    # B3：_pollTranscribe 收编共享核 startAndPollFlow，轮询面随编排迁入
+    # _beginTranscribe（起轮前清旧轮＋maxMiss 传参＋异常达上限落 error 态，
+    # 意图不变）；骨架侧 missTick/payload 形态判别仍在共享核
+    body = _extract_function(js, "_beginTranscribe")
     core = (ASSETS / "app-transcribe-core.js").read_text(encoding="utf-8")
     assert "REVIEW_POLL_MAX_MISS" in js, "缺连续异常上限常量"
-    assert "TranscribeCore.startPolling" in body, \
+    assert "maxMiss: REVIEW_POLL_MAX_MISS" in body, \
+        "编排骨架须显式传页内上限常量（钉面保持）"
+    assert "TranscribeCore.startAndPollFlow(" in body, \
         "轮询骨架须下沉共享核（800ms/异常计数单源）"
     assert "this._stopTranscribePoll()" in body, \
         "起轮前须清旧轮（复用统一清轮 helper）"
@@ -1963,7 +1971,8 @@ def test_review_ct2_status_reprobes_each_render():
     并在切回校对页时触发重渲染。"""
     js = _review_js_source()
     body = _extract_function(js, "_refreshCt2Status")
-    assert "TranscribeCore.probeCt2" in body, \
+    # B3：探测编排收编共享核 refreshCt2Flow（渲染即重探口径在核内保持）
+    assert "TranscribeCore.refreshCt2Flow(" in body, \
         "CT2 状态行探测未走共享核（渲染即重探口径须保持）"
     assert not re.search(r"if\s*\(\s*this\._ct2Status\s*\)", body), \
         "CT2 状态仍命中永久缓存（装完引擎回页仍显未安装）"
@@ -1994,8 +2003,10 @@ def test_flow_overview_transcribe_done_not_sticky():
     sync = _extract_function(review, "_syncWorkbench")
     assert "__homeOverviewTranscribeReset" in sync, \
         "离开校对页未清概览条转录 done"
-    poll = _extract_function(review, "_pollTranscribe")
-    assert "__homeOverviewTranscribeDone" in poll, \
+    # B3：_pollTranscribe 收编共享核编排，完成标记面随 hooks.onDone 迁入
+    # _beginTranscribe（意图不变）
+    begin = _extract_function(review, "_beginTranscribe")
+    assert "__homeOverviewTranscribeDone" in begin, \
         "转录完成未标记最近转录媒体"
 
 
@@ -5781,16 +5792,19 @@ def test_home_transcribe_done_writes_overview_pinned():
     """d1103-卡3（D2026-1103-05 项⑧，owner 选 A）：首页转录终态直写概览条。
 
     先红：改前终态分支只调状态桥刷新，包装链时序异常时概览条滞留 running。
-    负控：既有状态桥刷新调用（__homeOverviewRefresh）不得删除，防回退。"""
+    负控：既有状态桥刷新调用（__homeOverviewRefresh）不得删除，防回退。
+    B3（D2026-1104-01）：_pollTranscribe 收编共享核 startAndPollFlow，
+    终态直写面随 hooks.onDone 迁入 beginTranscribe（意图与顺序不变）。"""
     js = (ASSETS / "app-home-transcribe.js").read_text(encoding="utf-8")
-    body = _extract_function(js, "_pollTranscribe")
-    assert body, "app-home-transcribe.js 缺 _pollTranscribe"
+    body = _extract_function(js, "beginTranscribe")
+    assert body, "app-home-transcribe.js 缺 beginTranscribe"
     assert "window.__homeOverviewTranscribeDone(st.path)" in body, \
         "终态分支缺概览条 done 直写"
-    settled = body.split("onSettled:")[1]
-    seg = settled.split("doneName(st.path)")[1]
-    assert "window.__homeOverviewTranscribeDone(st.path)" in seg.split("refresh();")[0], \
-        "done 直写须在终态成功分支内（状态桥 refresh 之前）"
+    done_seg = body.split("onDone:")[1] if "onDone:" in body else ""
+    assert done_seg, "编排缺 onDone 终态 hook"
+    seg = done_seg.split("__homeOverviewTranscribeDone(st.path)")[0]
+    assert "m.review_transcribe_done(" in seg, \
+        "终态 done 文案须先于直写（用户可见反馈在前）"
     assert "window.__homeOverviewRefresh" in body, \
         "状态桥刷新链不得删除（防回退负控）"
     init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
