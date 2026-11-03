@@ -54,6 +54,7 @@ __all__ = [
     "download_model",
     "runtime_dir_info",
     "ct2_model_dir_info",
+    "has_model_at",
     "ct2_model_dir",
     "resolve_ct2_model_dir",
     "ct2_runner_command",
@@ -177,26 +178,34 @@ def _default_runtime_root() -> tuple[str, str]:
     return paths.data_subdir("runtime", "ct2"), "default"
 
 
+def _resolve_dir_setting(env_name: str, key: str, default_fn) -> dict:
+    """落位解析序共用面（D2026-1103-04 评审补漏：运行时/模型两键的解析体
+    逐字同构，抽此一处）：环境变量 > settings 键 > 现形默认。
+
+    ``default_fn()`` 返回 ``(路径, 来源标签)``；全程只读探测，不建目录。"""
+    override = os.environ.get(env_name, "").strip()
+    if override:
+        return {"dir": override, "source": "env"}
+    cfg = ""
+    try:
+        from . import config
+        cfg = str(config.read_ui_settings().get(key) or "").strip()
+    except Exception:                       # noqa: BLE001 设置面永不阻断
+        cfg = ""
+    if cfg:
+        return {"dir": cfg, "source": "settings"}
+    path, source = default_fn()
+    return {"dir": path, "source": source}
+
+
 def runtime_dir_info() -> dict:
     """运行时落位与来源（source ∈ env/settings/default/legacy）。
 
     解析序：环境变量 ``SUBTRANSJAV_CT2_RUNTIME_DIR``（测试隔离/CI 用，
     优先级最高）> settings 键 ``ct2_runtime_dir``（GUI 可自定义）>
     现形默认（见 _default_runtime_root）。"""
-    override = os.environ.get("SUBTRANSJAV_CT2_RUNTIME_DIR", "").strip()
-    if override:
-        return {"dir": override, "source": "env"}
-    cfg = ""
-    try:
-        from . import config
-        cfg = str(config.read_ui_settings()
-                  .get(CT2_RUNTIME_DIR_KEY) or "").strip()
-    except Exception:                       # noqa: BLE001 设置面永不阻断
-        cfg = ""
-    if cfg:
-        return {"dir": cfg, "source": "settings"}
-    path, source = _default_runtime_root()
-    return {"dir": path, "source": source}
+    return _resolve_dir_setting("SUBTRANSJAV_CT2_RUNTIME_DIR",
+                                CT2_RUNTIME_DIR_KEY, _default_runtime_root)
 
 
 def runtime_root() -> str:
@@ -283,19 +292,35 @@ def is_installed() -> bool:
     return read_runtime_manifest() is not None
 
 
-def _has_model(root: pathlib.Path) -> bool:
-    """该模型根下是否已有落位模型件（任一型号 ``model.bin`` 在位即算，与
-    resolve_ct2_model_dir 同谓词）。
+_MODEL_STAGING_SUFFIX = ".partial"
 
-    有货判定**不重算 sha256**（D2026-1103-04 评议 Q3）：2.9 GB 件放在状态
-    读取路径上逐字节校验不可接受；完整性由下载侧 sha pin＋原子解包保证，
-    真完整性走 selfcheck/转写实跑。"""
+
+def _first_model_dir(root: pathlib.Path) -> str:
+    """该模型根下首个已落位型号目录（排序稳定；无则空串）。
+
+    跳过 ``.partial`` 解包暂存位（评审补漏 D2026-1103-04：暂存位里也可能
+    有 model.bin，若计入则中断解包的半成品会被「已落位」谓词当真，legacy
+    兜底还会选中坏目录——恰与该条本意相反）。
+
+    有货判定不重算 sha256（评议 Q3）：2.9 GB 件放在状态读取路径上逐字节
+    校验不可接受；完整性由下载侧 sha pin＋原子换名解包保证，真完整性走
+    selfcheck/转写实跑。谓词面与 resolve_ct2_model_dir 有意不同：本面＝
+    任一型号（落位行「该位置有无模型」），后者＝指定型号（加载路径解析）。"""
     base = str(root)
     try:
-        return any(os.path.isfile(os.path.join(base, name, "model.bin"))
-                   for name in os.listdir(base))
+        for name in sorted(os.listdir(base)):
+            if name.endswith(_MODEL_STAGING_SUFFIX):
+                continue
+            if os.path.isfile(os.path.join(base, name, "model.bin")):
+                return os.path.join(base, name)
     except OSError:
-        return False
+        return ""
+    return ""
+
+
+def _has_model(root: pathlib.Path) -> bool:
+    """该模型根下是否已有落位模型件（任一型号）。"""
+    return bool(_first_model_dir(root))
 
 
 def has_model_at(root: str = "") -> bool:
@@ -347,23 +372,12 @@ def _default_model_root() -> tuple[str, str]:
 def ct2_model_dir_info() -> dict:
     """模型落位与来源（source ∈ env/settings/default/legacy）。
 
-    解析序与运行时同构：环境变量 ``SUBTRANSJAV_CT2_MODEL_DIR``（测试隔离/
-    CI 用，优先级最高）> settings 键 ``ct2_model_dir``（GUI 可自定义）>
-    现形默认（见 _default_model_root）。只读探测，不建目录。"""
-    override = os.environ.get("SUBTRANSJAV_CT2_MODEL_DIR", "").strip()
-    if override:
-        return {"dir": override, "source": "env"}
-    cfg = ""
-    try:
-        from . import config
-        cfg = str(config.read_ui_settings()
-                  .get(CT2_MODEL_DIR_KEY) or "").strip()
-    except Exception:                       # noqa: BLE001 设置面永不阻断
-        cfg = ""
-    if cfg:
-        return {"dir": cfg, "source": "settings"}
-    path, source = _default_model_root()
-    return {"dir": path, "source": source}
+    解析序与运行时同构（共用 _resolve_dir_setting）：环境变量
+    ``SUBTRANSJAV_CT2_MODEL_DIR``（测试隔离/CI 用，优先级最高）> settings
+    键 ``ct2_model_dir``（GUI 可自定义）> 现形默认（见 _default_model_root）。
+    只读探测，不建目录。"""
+    return _resolve_dir_setting("SUBTRANSJAV_CT2_MODEL_DIR",
+                                CT2_MODEL_DIR_KEY, _default_model_root)
 
 
 def ct2_model_dir() -> str:
@@ -454,13 +468,13 @@ def provider_status() -> dict:
         if manifest else probe
     ok, detail = selfcheck() if py else (False, "未安装")
     # 模型落位读数（D2026-1103-04）：GUI 落位行要显「该位置有无模型＋体量」，
-    # 否则用户自定义到空目录只会看到静默待重下；models 列表本身仍＝pin 常量
-    model_info = ct2_model_dir_info()
-    model_path = resolve_ct2_model_dir(
-        CT2_MODELS[0]["model"]) if CT2_MODELS else ""
+    # 否则用户自定义到空目录只会看到静默待重下；models 列表本身仍＝pin 常量。
+    # 有货/体量与 has_model_at 同一谓词面（评审补漏：曾一侧取 pin 首型号、
+    # 一侧取任一型号，装非缺省型号时 UI 会误报「暂无模型」）
+    model_found = _first_model_dir(pathlib.Path(ct2_model_dir()))
     try:
-        model_bytes = os.path.getsize(os.path.join(model_path, "model.bin")) \
-            if model_path else 0
+        model_bytes = os.path.getsize(os.path.join(model_found, "model.bin")) \
+            if model_found else 0
     except OSError:
         model_bytes = 0
     return {
@@ -473,9 +487,9 @@ def provider_status() -> dict:
         "zip_published": bool(RUNTIME_ZIP_URL and RUNTIME_ZIP_SHA256),
         "pinned_deps": list(PINNED_DEPS),
         "models": CT2_MODELS,
-        "model_dir": model_info["dir"],
-        "model_source": model_info["source"],
-        "model_present": bool(model_path),
+        # 单一形状（评审补漏：曾桥面与状态面各摆一份模型落位键）
+        "model_runtime": ct2_model_dir_info(),
+        "model_present": bool(model_found),
         "model_bytes": model_bytes,
     }
 
@@ -739,9 +753,10 @@ def _normalize_model_layout(dest_model_dir: str) -> None:
 def download_model(model: str = "large-v2", progress=None) -> int:
     """CT2 模型 zip 守卫下载+核验+解包到现形模型落位/<model>（verified 门）。
 
-    rc 语义：0＝新装成功；1＝已落位（幂等）或解包结构异常（打印区分）；
-    2＝未知型号；3＝verified 门未开。解包只进 ``<model>.partial`` 暂存位，
-    核验通过才原子换名进最终位（D2026-1103-04）。"""
+    rc 语义：0＝新装成功；1＝已落位（幂等）；2＝未知型号；3＝verified 门
+    未开；**4＝解包后结构异常**（D2026-1103-04 评审补漏拆分：旧版 rc=1 兼指
+    「已落位」与「结构异常」，异步面据 rc 判成败时把真失败洗成成功）。解包只
+    进 ``<model>.partial`` 暂存位，核验通过才原子换名进最终位。"""
     entry = next((m for m in CT2_MODELS if m["model"] == model), None)
     if entry is None:
         print("未知 ct2 模型: " + model)
@@ -756,7 +771,7 @@ def download_model(model: str = "large-v2", progress=None) -> int:
         print("模型已落位: " + dest_model_dir)
         return 1
     zip_path = _download_tmp_path(model + "-ct2.zip.tmp", ct2_model_dir())
-    staging = dest_model_dir + ".partial"
+    staging = dest_model_dir + _MODEL_STAGING_SUFFIX
     print("[1/3] 守卫下载模型件（" + format(int(entry["bytes"]) / 1048576, ".0f")
           + "MB）")
     _guarded_download(str(entry["url"]), zip_path, str(entry["sha256"]),
@@ -773,7 +788,7 @@ def download_model(model: str = "large-v2", progress=None) -> int:
         with contextlib.suppress(OSError):
             shutil.rmtree(staging)
         print("解包后缺 model.bin——镜像件结构异常")
-        return 1
+        return 4
     # 原子换名（D2026-1103-04 评议 HRO-2/Q3）：解包只进 .partial，核验通过
     # 才改名进最终位——下载中断不再留半截 model.bin 被「已落位」谓词当真，
     # 也不会让 legacy 兜底选中坏目录

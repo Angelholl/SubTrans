@@ -1679,7 +1679,8 @@ class TranslateAPI:
                     **asr_runtime.provider_status(),
                     "gpu_patch": asr_runtime.gpu_patch_status(),
                     "runtime": asr_runtime.runtime_dir_info(),
-                    "model_runtime": asr_runtime.ct2_model_dir_info(),
+                    # 模型落位/有无/体量随 provider_status() 展开单源带出
+                    # （D2026-1103-04 评审补漏：曾两处各摆一份模型落位键）
                     "operation": asr_runtime.operation_progress()}
         except Exception as e:
             _log_exc("refine_ct2_status")

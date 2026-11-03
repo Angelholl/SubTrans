@@ -782,7 +782,9 @@ def test_model_download_tmp_path_and_atomic_install(tmp_path, monkeypatch):
     monkeypatch.setattr(asr_runtime, "_guarded_download",
                         lambda url, dest, sha, size=0, progress=None:
                         shutil.copyfile(str(junk), dest))
-    assert asr_runtime.download_model("large-v2") == 1
+    # rc=4＝解包结构异常（D2026-1103-04 拆分：旧版兼指「已落位」的 rc=1
+    # 会让异步面把真失败洗成成功）
+    assert asr_runtime.download_model("large-v2") == 4
     assert not (model_root / "large-v2").exists(), "结构异常件不得留最终位"
     assert not (model_root / "large-v2.partial").exists(), "暂存残骸须清走"
 
@@ -804,14 +806,19 @@ def test_provider_status_exposes_model_dir_fields(tmp_path, monkeypatch):
     model_root = tmp_path / "models" / "ct2"
     monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(model_root))
     st = asr_runtime.provider_status()
-    assert st["model_dir"] == str(model_root)
-    assert st["model_source"] == "env"
+    assert st["model_runtime"] == {"dir": str(model_root), "source": "env"}
     assert st["model_present"] is False and st["model_bytes"] == 0
     _model_skeleton(model_root)
     (model_root / "large-v2" / "model.bin").write_bytes(b"x" * 1234)
     st2 = asr_runtime.provider_status()
     assert st2["model_present"] is True and st2["model_bytes"] == 1234
     assert st["models"] == asr_runtime.CT2_MODELS
+    # 暂存位不得算「有货」（评审补漏：半成品遮蔽会让 legacy 选中坏目录）
+    shutil.rmtree(model_root / "large-v2")
+    (model_root / "large-v2.partial").mkdir()
+    (model_root / "large-v2.partial" / "model.bin").write_bytes(b"half")
+    assert asr_runtime.has_model_at(str(model_root)) is False
+    assert asr_runtime.provider_status()["model_present"] is False
 
 
 def test_start_model_download_already_installed_maps_done(monkeypatch):

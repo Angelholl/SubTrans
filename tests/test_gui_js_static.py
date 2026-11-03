@@ -8358,9 +8358,12 @@ def test_ct2_model_dir_ui_pinned():
                  "def refine_ct2_model_dir_set(self",
                  "asr_runtime.CT2_MODEL_DIR_KEY",
                  "_ct2_dir_switch_guard(target, \"ct2_model_dir_in_repo\")",
-                 "_ct2_guard_tree_root()",
-                 '"model_runtime": asr_runtime.ct2_model_dir_info()'):
+                 "_ct2_guard_tree_root()"):
         assert frag in api, f"api.py 缺模型落位桥面: {frag}"
+    assert '"model_runtime": ct2_model_dir_info()' in (
+        ASSETS.parent.parent / "refine" / "asr_runtime.py"
+    ).read_text(encoding="utf-8"), \
+        "模型落位读数须由 provider_status 单源带出（桥面禁再摆一份）"
     strings = (ASSETS.parent / "strings.py").read_text(encoding="utf-8")
     assert re.search(r'^\s*"ct2_model_dir_in_repo":\s*[("]', strings, re.M), \
         "strings.py 缺模型落位校验文案键"
