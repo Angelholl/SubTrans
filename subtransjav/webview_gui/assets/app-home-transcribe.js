@@ -77,19 +77,29 @@ const HomeTranscribe = {
     pickMedia() {
         const api = this._bridge();
         const status = document.getElementById('homeTranscribeStatus');
+        const m = window.REVIEW_MSG || {};
         if (!api) {
-            if (status) {
-                status.textContent = (window.REVIEW_MSG || {})
-                    .review_api_not_ready;
-            }
+            if (status) { status.textContent = m.review_api_not_ready; }
             return;
         }
-        // cancelled 静默；选媒体桥经共享核（d1103）
+        // 用户主动取消（cancelled 显式标记）静默；其余失败面直写状态行
+        // （A1 排查 2026-11-04：桥异常/后端拒绝此前零 UI 反馈＝「点了没
+        // 反应」复现路径；文案口径与 beginTranscribe 同源 r.error 直出）
         TranscribeCore.pickMedia(api).then((r) => {
-            if (!r || r.cancelled || !r.success || !r.path) { return; }
+            if (r && r.cancelled) { return; }
+            if (!r || !r.success || !r.path) {
+                if (status) {
+                    status.textContent = (r && r.error)
+                        || m.review_transcribe_failed;
+                }
+                return;
+            }
             this.setMediaPath(r.path);
             this.refreshCt2Status();
-        }).catch((err) => { console.error('[home-transcribe] pick:', err); });
+        }).catch((err) => {
+            console.error('[home-transcribe] pick:', err);
+            if (status) { status.textContent = m.review_transcribe_failed; }
+        });
     },
 
     setMediaPath(path) {

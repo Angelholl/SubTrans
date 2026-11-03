@@ -5797,6 +5797,28 @@ def test_home_transcribe_done_writes_overview_pinned():
         "FlowOverview 直写面须保持在位（d1102-件F 钉）"
 
 
+def test_home_transcribe_pick_failure_feedback_pinned():
+    """A1「点了没反应」修复钉（2026-11-04，黑盒复现 B2/B3）。
+
+    首页转录卡选媒体失败面直写状态行：桥异常（catch）与后端拒绝
+    （success:false 且非 cancelled）两路均不得静默；用户主动取消
+    （cancelled 显式标记，后端 api.refine_review_pick_media 契约）
+    保持静默。改前 pickMedia 对全部失败路径零 UI 反馈＝「点了没反应」
+    真凶（easy_drag/z 序/防抖三嫌疑均排除）。"""
+    js = (ASSETS / "app-home-transcribe.js").read_text(encoding="utf-8")
+    body = _extract_function(js, "pickMedia")
+    assert body, "app-home-transcribe.js 缺 pickMedia"
+    assert "if (r && r.cancelled) { return; }" in body, \
+        "用户主动取消静默语义被改动（cancelled 显式标记契约）"
+    assert "status.textContent = (r && r.error)" in body, \
+        "后端拒绝分支缺 r.error 直出状态行"
+    assert "m.review_transcribe_failed" in body, \
+        "失败兜底文案（review_transcribe_failed）缺失"
+    catch = body.split(".catch(")[1] if ".catch(" in body else ""
+    assert "status.textContent = m.review_transcribe_failed" in catch, \
+        "catch 分支（桥异常）缺失败文案——静默回潮即「点了没反应」复发"
+
+
 def test_home_flow_overview_lastrun_missed_skipped_pinned():
     """件E#2：概览条 last_run 摘要补「漏听放弃」段。
 
