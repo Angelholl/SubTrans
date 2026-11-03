@@ -267,6 +267,18 @@ def _refine_error_tip(e: Exception) -> str:
     return msg("tip_check_key_network")
 
 
+def _ct2_runtime_payload() -> dict[str, Any]:
+    """ct2 运行时落位回包组装（读侧 refine_ct2_runtime_dir 与写侧
+    refine_ct2_runtime_dir_set 同形，D2026-1103-03；两处形状必须一致，否则
+    前端落位行在保存后要按不同键读数）。"""
+    from subtransjav.refine import asr_runtime
+    info = asr_runtime.runtime_dir_info()
+    return {"success": True, "runtime_dir": info["dir"],
+            "source": info["source"],
+            "has_runtime": bool(
+                asr_runtime.read_runtime_manifest(info["dir"]))}
+
+
 def _build_refine_args(options: dict[str, Any]) -> list[str]:
     """构建净语翻译 CLI 参数（v2 两阶段管线）。
 
@@ -1647,12 +1659,7 @@ class TranslateAPI:
         """当前 ct2 运行时落位与来源（source ∈ env/settings/default/
         legacy，D2026-1103-03；只读零副作用）。"""
         try:
-            from subtransjav.refine import asr_runtime
-            info = asr_runtime.runtime_dir_info()
-            return {"success": True, "runtime_dir": info["dir"],
-                    "source": info["source"],
-                    "has_runtime": bool(
-                        asr_runtime.read_runtime_manifest(info["dir"]))}
+            return _ct2_runtime_payload()
         except Exception as e:
             _log_exc("refine_ct2_runtime_dir")
             return {"success": False, "error": str(e)}
@@ -1663,9 +1670,10 @@ class TranslateAPI:
 
         path 空串＝清除自定义恢复默认落位；否则必须绝对路径（与
         refine_set_data_root 同口径：用户自选本机目录，不作白名单）。
-        源码形态拒绝仓库树内目标——脱钩裁定（site-packages 内第三方自带
-        测试文件污染全树安全扫描面）不因可自定义而松动。在飞安装/下载
-        禁切换（否则线程按旧根写入而 UI 按新根显示）。落盘复用
+        拒绝项目文件夹内目标——脱钩裁定（site-packages 内第三方自带测试
+        文件污染全树安全扫描面）不因可自定义而松动，两形态同口径（源码形
+        态＝仓库树；frozen 形态＝安装目录，运行时落此则升级/卸载面失守）。
+        在飞安装/下载禁切换（否则线程按旧根写入而 UI 按新根显示）。落盘复用
         refine_save_stage_settings 既有 settings KV 通道，本方法零自有
         open 写点（Mimosa path-traversal 消模式，甄别表 #29 先例）。"""
         try:
@@ -1677,12 +1685,9 @@ class TranslateAPI:
                 return {"success": False, "error": msg("data_root_need_abs")}
             if target:
                 norm = os.path.normcase(os.path.realpath(target))
-                repo = os.path.normcase(
-                    os.path.realpath(str(paths.app_root())))
-                data_root = os.path.normcase(
-                    os.path.realpath(str(paths.data_root())))
-                if data_root == repo and (
-                        norm == repo or norm.startswith(repo + os.sep)):
+                app = os.path.normcase(os.path.realpath(
+                    str(paths.app_root())))
+                if norm == app or norm.startswith(app + os.sep):
                     return {"success": False,
                             "error": msg("ct2_runtime_dir_in_repo")}
             saved = self.refine_save_stage_settings(
@@ -1690,11 +1695,7 @@ class TranslateAPI:
             if not saved.get("success"):
                 return {"success": False,
                         "error": str(saved.get("error") or "")}
-            info = asr_runtime.runtime_dir_info()
-            return {"success": True, "runtime_dir": info["dir"],
-                    "source": info["source"],
-                    "has_runtime": bool(
-                        asr_runtime.read_runtime_manifest(info["dir"]))}
+            return _ct2_runtime_payload()
         except Exception as e:
             _log_exc("refine_ct2_runtime_dir_set")
             return {"success": False, "error": str(e)}

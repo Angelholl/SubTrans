@@ -29,6 +29,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -122,8 +123,20 @@ CT2_RUNTIME_DIR_KEY = "ct2_runtime_dir"
 
 
 def _has_runtime(root: pathlib.Path) -> bool:
-    """该根是否已有认证布局运行时（只读探测，不建目录）。"""
-    return bool(read_runtime_manifest(str(root)))
+    """该根是否已有可复用的运行时（只读探测，不建目录）。
+
+    落位选择面放宽（D2026-1103-03 评审补漏）：manifest 认证布局之外也认案 C
+    venv 形态（fallback python + site-packages/，无 manifest）——否则旧位装
+    venv 运行时的存量用户升级后会静默重下 106MB 运行时。放宽**只用于落位选
+    择**，认证判定仍绑 manifest 单一布局（is_installed，D2026-1028-04 不松
+    动）：选中的位若其实残缺，状态面照旧报未安装并可正常安装。"""
+    base = str(root)
+    if read_runtime_manifest(base):
+        return True
+    if not os.path.isdir(os.path.join(base, "site-packages")):
+        return False
+    return any(os.path.isfile(os.path.join(base, rel))
+               for rel in _RUNTIME_FALLBACK_PYTHONS[:2])
 
 
 def _default_runtime_root() -> tuple[str, str]:
@@ -179,6 +192,28 @@ def runtime_dir_info() -> dict:
 def runtime_root() -> str:
     """运行时落位单一读取面（语义与来源见 runtime_dir_info）。"""
     return runtime_dir_info()["dir"]
+
+
+_DOWNLOAD_TMP_DIRNAME = ".ct2-downloads"
+
+
+def _download_tmp_path(name: str) -> str:
+    """下载中间件（运行时 zip / GPU 补丁 zip）落位＝运行时根**同级**旁路目录。
+
+    评审补漏（D2026-1103-03）：旧口径 ``paths.data_subdir("runtime", …)`` 在
+    源码形态下＝仓库根 ``/runtime``，106MB/1.21GB 中间件仍落仓库所在盘（失败
+    时还残留在树旁）；改随运行时落位走——默认可离 C 盘，用户自定义到哪就跟到
+    哪。落在运行时根的父目录而非根内，免得解包目标目录里躺半成品 zip；自定义
+    位恰为盘根时退回系统临时目录（不在盘根建目录）。"""
+    parent = pathlib.Path(runtime_root()).parent
+    if parent.parent == parent:
+        parent = pathlib.Path(tempfile.gettempdir()) / "SubTrans"
+    tmp_dir = parent / _DOWNLOAD_TMP_DIRNAME
+    try:
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        return str(tmp_dir / name)
+    except OSError:
+        return paths.data_subdir("runtime", name)
 
 
 def read_runtime_manifest(root: str = "") -> dict | None:
@@ -542,7 +577,7 @@ def _install_via_zip() -> int:
         print("案 A 预打包运行时件尚未发布（缺 URL/sha256 pin）；"
               "pip/源码形态可用降级路径：install --provider venv")
         return 3
-    tmp_zip = paths.data_subdir("runtime", "ct2-runtime.zip.part.tmp")
+    tmp_zip = _download_tmp_path("ct2-runtime.zip.part.tmp")
     try:
         print("[1/4] 守卫下载运行时件（" + format(RUNTIME_ZIP_BYTES / 1048576, ".0f")
               + "MB）")
@@ -848,7 +883,7 @@ def download_gpu_patch(progress=None) -> int:
     if not is_installed():
         print("CT2 运行时未安装——GPU 补丁包依赖运行时，先 install")
         return 3
-    zip_path = paths.data_subdir("runtime", "ct2-gpu-patch.zip.tmp")
+    zip_path = _download_tmp_path("ct2-gpu-patch.zip.tmp")
     print("[1/4] 守卫下载 GPU 补丁包（"
           + format(GPU_PATCH_ZIP_BYTES / 1048576, ".0f") + "MB）")
     _guarded_download(GPU_PATCH_ZIP_URL, zip_path, GPU_PATCH_ZIP_SHA256,

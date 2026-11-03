@@ -619,6 +619,14 @@ def test_refine_ct2_runtime_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     r = gui_api_obj.refine_ct2_runtime_dir_set(str(inside))
     assert r["success"] is False, "仓库树内目标未被拒（脱钩裁定破口）"
 
+    # 两形态同口径（评审补漏 D2026-1103-03）：数据根≠应用根（frozen 形态
+    # 应用根＝安装目录）时应用目录内目标同样拒绝——旧实现只在数据根=仓库根
+    # 分支判定，frozen 用户可把运行时装进安装目录，升级/卸载面失守
+    monkeypatch.setattr(paths, "data_root", lambda: tmp_path / "data-ext")
+    r = gui_api_obj.refine_ct2_runtime_dir_set(str(inside))
+    assert r["success"] is False, "frozen 形态应用目录内目标未被拒"
+    monkeypatch.setattr(paths, "data_root", lambda: repo)
+
     outside = tmp_path / "rt-ext"
     r = gui_api_obj.refine_ct2_runtime_dir_set(str(outside))
     assert r["success"] is True and r["source"] == "settings", r

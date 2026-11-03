@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import shutil
+import tempfile
 import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -597,3 +598,56 @@ def test_cuda_probe_cache_keyed_by_runtime_root(tmp_path, monkeypatch):
     assert asr_runtime.cuda_device_count() == 1
     assert len(calls) == 2, "切根未重探（缓存未按运行时根分键）"
     assert _norm(calls[1]) == _norm(str(root_b / "python" / "python.exe"))
+
+
+def test_download_tmp_path_follows_runtime_root(tmp_path, monkeypatch):
+    """下载中间件（106MB 运行时 zip／1.21GB GPU 补丁 zip）落位跟运行时根走，
+    不再落数据根＝源码形态下的仓库根（评审补漏 D2026-1103-03：owner 要「不装
+    在 C 盘」，旧口径 paths.data_subdir("runtime") 在源码形态即仓库根 /runtime，
+    中间件仍落仓库所在盘）；且落运行时根的**同级**旁路，不落解包目标根内。
+    自定义位恰为盘根时退回系统临时目录（不在盘根建目录）。"""
+    root = tmp_path / "outer" / "ct2"
+    root.mkdir(parents=True)
+    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(root))
+    p = asr_runtime._download_tmp_path("ct2-gpu-patch.zip.tmp")
+    assert _norm(p) == _norm(str(tmp_path / "outer" / ".ct2-downloads"
+                                 / "ct2-gpu-patch.zip.tmp"))
+    assert os.path.isdir(os.path.dirname(p)), "中间件目录须已创建"
+    assert not _norm(p).startswith(_norm(str(root))), \
+        "半成品 zip 不得躺在解包目标运行时根内"
+
+    drive = Path(str(tmp_path)).drive + os.sep
+    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", drive)
+    p2 = asr_runtime._download_tmp_path("ct2-runtime.zip.part.tmp")
+    assert not _norm(p2).startswith(_norm(drive + ".ct2-downloads")), \
+        "自定义位为盘根时不得在盘根建目录"
+    assert _norm(p2).startswith(_norm(tempfile.gettempdir())), p2
+
+
+def test_default_root_legacy_fallback_accepts_venv_form(tmp_path, monkeypatch):
+    """旧 LOCALAPPDATA 位为案 C venv 形态（无 manifest）时仍算可复用运行时→
+    回落 legacy，不让存量用户升级后静默重下（评审补漏 D2026-1103-03）。
+    放宽只在**落位选择面**：认证判定仍绑 manifest 单一布局（is_installed 不
+    松动，D2026-1028-04）；半套骨架（有 python 无 site-packages）不算可复用。"""
+    from subtransjav.refine import config as refine_config
+    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
+    repo = tmp_path / "repo"
+    (repo / "subtransjav").mkdir(parents=True)
+    monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: repo)
+    monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: repo)
+    local = tmp_path / "localappdata"
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    legacy = local / "SubTrans" / "runtime" / "ct2"
+
+    (legacy / "Scripts").mkdir(parents=True)
+    (legacy / "Scripts" / "python.exe").write_bytes(b"stub")
+    (legacy / "site-packages").mkdir()
+    info = asr_runtime.runtime_dir_info()
+    assert info["source"] == "legacy" and _norm(info["dir"]) == _norm(
+        str(legacy)), "venv 形态旧位未被识别（会静默重下）"
+    assert asr_runtime.is_installed() is False, "认证判定不得随落位放宽而松动"
+
+    shutil.rmtree(legacy / "site-packages")
+    assert asr_runtime.runtime_dir_info()["source"] == "default", \
+        "半套骨架不应被当作可复用运行时"
