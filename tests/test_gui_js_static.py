@@ -5751,6 +5751,31 @@ def test_console_capsule_overlay_no_layout_shift_pinned():
         "面板 z-950 须保留（低于设置 overlay 990 / AppModal 1000）"
 
 
+def test_console_capsule_right_decoupled_from_aside_pinned():
+    """d1103-卡4（D2026-1103-05 项⑨，owner 拍板）：胶囊钉死视口右下角。
+
+    先红：改前 right = calc(var(--aside-w, 316px) + 16px)，右栏折叠/展开时
+    胶囊横跳 272px。负控：bottom/z-index/尺寸等其余定位属性不得顺手改动；
+    JS 侧不得再运行时写胶囊 right（改签名全调用点纪律）。"""
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m_cap = re.search(r"\.console-capsule\s*\{([^}]*)\}", css)
+    assert m_cap, "缺 .console-capsule 规则"
+    body = m_cap.group(1)
+    m_right = re.search(r"right:\s*([^;]+);", body)
+    assert m_right, "胶囊缺 right 声明"
+    value = m_right.group(1).strip()
+    assert "--aside-w" not in value and "calc(" not in value, \
+        f"胶囊 right 仍随右栏宽度联动（应改固定视口值）: {value}"
+    assert value == "16px", f"胶囊 right 应为固定 16px: {value}"
+    for decl in ("position: fixed;", "bottom: 16px;", "z-index: 960;",
+                 "width: 42px;", "height: 42px;"):
+        assert decl in body, f"胶囊其余定位/尺寸属性被顺手改动: {decl}"
+    for name in ("app-console.js", "app-init.js", "app-tabs.js",
+                 "app-home-transcribe.js"):
+        src = (ASSETS / name).read_text(encoding="utf-8")
+        assert "capsule.style.right" not in src, f"{name} 仍在运行时写胶囊 right"
+
+
 def test_home_transcribe_done_writes_overview_pinned():
     """d1103-卡3（D2026-1103-05 项⑧，owner 选 A）：首页转录终态直写概览条。
 

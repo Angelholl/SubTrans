@@ -935,10 +935,12 @@ button:focus:not(:focus-visible) { outline: none; }
 }
 .console-overlay .section-content { min-height: 0; }
 
-/* 触发胶囊：右下角常驻（不盖右栏，right 跟随 --aside-w） */
+/* 触发胶囊：钉死视口右下角（d1103-卡4，D2026-1103-05 项⑨，owner 拍板）。
+   right 与右栏宽度解耦——旧口径 right 跟随 --aside-w，右栏折叠/展开时胶囊
+   横跳 272px；现固定 16px，右栏展开时胶囊压在其上（z-960 > 右栏）即可。 */
 .console-capsule {
     position: fixed;
-    right: calc(var(--aside-w, 316px) + 16px);
+    right: 16px;
     bottom: 16px;
     z-index: 960;
     width: 42px;
