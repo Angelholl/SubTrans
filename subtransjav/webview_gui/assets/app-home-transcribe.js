@@ -30,7 +30,6 @@ const HomeTranscribe = {
         if (title) { title.textContent = MSG.flowNodeTranscribe; }
         if (media) {
             media.textContent = MSG.homeTranscribeEmpty;
-            media.classList.add('muted');
         }
         if (pick) {
             pick.textContent = MSG.homeTranscribePick;

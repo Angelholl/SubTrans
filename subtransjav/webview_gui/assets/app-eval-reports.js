@@ -34,11 +34,11 @@
         const host = el('evalReportsBody');
         if (!host) return;
         host.textContent = '';
-        const hint = div('gl-muted', res && res.empty_reason
+        const hint = div('muted', res && res.empty_reason
             ? MSG.evalEmptyDir : MSG.evalEmptyHint);
         host.appendChild(hint);
         if (res && res.dir) {
-            host.appendChild(div('gl-muted', MSG.evalDataRoot + res.dir));
+            host.appendChild(div('muted', MSG.evalDataRoot + res.dir));
         }
     }
 
@@ -61,7 +61,7 @@
         card.appendChild(div(null, MSG.evalLinesLabel + ': ' + (r.lines ?? '—')));
         const hp = r.hallucination_proxy;
         if (hp == null) {
-            card.appendChild(div('gl-muted', MSG.evalHallucination + ': null'));
+            card.appendChild(div('muted', MSG.evalHallucination + ': null'));
         } else {
             card.appendChild(div(null, MSG.evalHallucination + ': '
                 + fmtPct(hp.ratio) + ' ' + fmtCI(hp.wilson)
@@ -69,7 +69,7 @@
         }
         const om = r.omission_proxy;
         if (om == null) {
-            card.appendChild(div('gl-muted', MSG.evalOmission + ': null'));
+            card.appendChild(div('muted', MSG.evalOmission + ': null'));
         } else {
             // 秒比非二项，不给区间（区间位显「—」）
             card.appendChild(div(null, MSG.evalOmission + ': '
@@ -87,7 +87,7 @@
         const wrap = div(null);
         const keys = Object.keys(pairs || {});
         if (keys.length === 0) {
-            wrap.appendChild(div('gl-muted', MSG.evalNoPairs));
+            wrap.appendChild(div('muted', MSG.evalNoPairs));
             return wrap;
         }
         const table = document.createElement('table');
@@ -155,12 +155,12 @@
             res = await window.pywebview.api.eval_reports_list();
         } catch (e) {
             host.textContent = '';
-            host.appendChild(div('gl-muted', MSG.evalListFailed + ': ' + e));
+            host.appendChild(div('muted', MSG.evalListFailed + ': ' + e));
             return;
         }
         if (!res || res.success !== true) {
             host.textContent = '';
-            host.appendChild(div('gl-muted',
+            host.appendChild(div('muted',
                 (res && res.error) || MSG.evalListFailed));
             return;
         }
@@ -184,12 +184,12 @@
             res = await window.pywebview.api.eval_reports_get(name);
         } catch (e) {
             host.textContent = '';
-            host.appendChild(div('gl-muted', MSG.evalLoadFailed + ': ' + e));
+            host.appendChild(div('muted', MSG.evalLoadFailed + ': ' + e));
             return;
         }
         if (!res || res.success !== true) {
             host.textContent = '';
-            host.appendChild(div('gl-muted',
+            host.appendChild(div('muted',
                 (res && res.error) || MSG.evalLoadFailed));
             return;
         }

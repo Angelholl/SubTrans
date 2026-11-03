@@ -7763,6 +7763,14 @@ def test_js_sources_layer_pinned():
         「被拒文案 300ms 即被轮询冲掉」缺陷）、app-msg.js 68,317B/875018c1…
         （模型落位 8 键，来源标签复用运行时一套）；
         旧钉 e5cb0c8d… / 71919512… / de3d571c… 退役；
+        d1103 占位字体归一＋报告目录重复修复（2026-11-03 主审亲执，owner
+        回执项5）：全库拼接 cbd62bc9…/533,890B、app-msg.js 68,302B/
+        edc89084…（evalEmptyDir 去尾「报告目录：」，单源＝拼接点
+        MSG.evalDataRoot + res.dir）；app-eval-reports.js 九处 gl-muted
+        死类→.muted、app-home-transcribe.js 去占位挂 .muted、style.css
+        新增 #homeTranscribeCard .review-transcribe-media 14px 作用域规则
+        （CSS/独立脚本不入字节钉，契约走内容钉）；
+        旧钉 b0f14c13… / 875018c1… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7779,7 +7787,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "b0f14c13788261f95b6c1118d323bb09387123245519a18b6b4a44fe399d3524"), \
+        "cbd62bc97db33cb852c45cef4558b5f9393b542442a83ebe5c1158bc39cbd4e8"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
@@ -7810,8 +7818,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (68317,
-                       "875018c1673f9df1857303d3fb241ca81fe98ace5f9900fa9800d1d4576a30ef"),
+        "app-msg.js": (68302,
+                       "edc890846e50a06f9ecef0a167396412fed6671d4bd0e5897ccb477d0744c5d3"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -8237,6 +8245,38 @@ def test_home_transcribe_card_inset_pinned():
         "禁给全局 .card 加内衬（全站复用面）"
     assert not re.search(r"#reviewTranscribeCard\s*\{", css), \
         "校对页转录卡不得被本卡波及（走 .empty-guide 内衬）"
+
+
+def test_placeholder_font_and_report_dir_dup_pinned():
+    """d1103（owner 11-03 真机走查项5）：两处占位文案字体归一＋「报告目录：」
+    重复拼接修复钉。负控：
+    ① 首页转录卡占位不得再挂 .muted（13px 灰与同卡 14px 正文不一致），
+       首页作用域规则 #homeTranscribeCard .review-transcribe-media 须
+       font-size: var(--font)；基础规则 .review-transcribe-media 不得改动
+       （校对页共用，D2026-1103-01 边界）；
+    ② app-eval-reports.js 不得再出现死类 gl-muted（全 CSS 零定义，
+       渲染 14px 黑字与页内 .muted 13px 灰不一致；归一复用 .muted 单源）；
+    ③ evalEmptyDir 字面量不得以「报告目录：」结尾（双源重复实锤，
+       单源保留在拼接点 MSG.evalDataRoot + res.dir）。"""
+    home = (ASSETS / "app-home-transcribe.js").read_text(encoding="utf-8")
+    assert "media.classList.add('muted')" not in home, \
+        "首页转录占位不得挂 .muted（字号归一）"
+    css = (ASSETS / "style.css").read_text(encoding="utf-8")
+    m = re.search(
+        r"#homeTranscribeCard\s+\.review-transcribe-media\s*\{([^}]*)\}", css)
+    assert m and "font-size: var(--font);" in m.group(1), \
+        "首页占位缺 14px 作用域规则（只钉首页卡）"
+    base = re.search(r"\n\.review-transcribe-media\s*\{([^}]*)\}", css)
+    assert base and "font-size: var(--font-sm);" in base.group(1), \
+        ".review-transcribe-media 基础规则被改动（校对页共用面）"
+    ev = (ASSETS / "app-eval-reports.js").read_text(encoding="utf-8")
+    assert "gl-muted" not in ev, "质量中心 gl-muted 死类残留（应归一 .muted）"
+    assert "MSG.evalDataRoot + res.dir" in ev, \
+        "报告目录拼接点被误删（单源应在拼接处）"
+    msg = (ASSETS / "app-msg.js").read_text(encoding="utf-8")
+    m2 = re.search(r"evalEmptyDir:\s*'([^']*)'", msg)
+    assert m2 and not m2.group(1).endswith("报告目录："), \
+        "evalEmptyDir 尾部「报告目录：」未去（与拼接点双源重复）"
 
 
 def test_eval_reports_section_inset_pinned():

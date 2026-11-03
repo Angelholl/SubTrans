@@ -2672,6 +2672,11 @@ input[type="checkbox"].gl-sel { appearance: auto; width: 14px; height: 14px; cur
     color: var(--text-1);
     overflow-wrap: anywhere;
 }
+/* d1103（owner 走查项5）：首页转录占位与同卡正文 14px 归一——只钉首页
+   作用域，校对页 #reviewTranscribeCard 共用面（13px）不动。 */
+#homeTranscribeCard .review-transcribe-media {
+    font-size: var(--font);
+}
 .review-transcribe-actions {
     display: flex;
     align-items: center;

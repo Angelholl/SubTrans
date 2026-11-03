@@ -1006,7 +1006,7 @@ const MSG = {
     evalRefreshBtn: '刷新',
     evalListFailed: '评测报告列表加载失败',
     evalEmptyHint: '暂无评测报告：在命令行运行 eval_baseline 生成报告后点「刷新」。',
-    evalEmptyDir: '评测报告目录尚未生成（先用 eval_baseline 出报告）。报告目录：',
+    evalEmptyDir: '评测报告目录尚未生成（先用 eval_baseline 出报告）。',
     evalDataRoot: '报告目录：',
     evalSelectHint: '选择一份报告查看详情',
     evalWindowsDegraded: '语音窗口检测退化：窗口类指标本轮为 null（不代表全静音）',
