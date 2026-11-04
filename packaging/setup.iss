@@ -20,7 +20,7 @@
 AppId={{8F3A5C1E-6B2D-4E9A-9C47-1D0B5A7E2F31}
 AppName={#MyAppName}
 AppVersion={#version}
-DefaultDirName={autopf}\SubTrans
+DefaultDirName={code:PickInstallDir|{autopf}\SubTrans}
 DefaultGroupName={#MyAppName}
 ; 安装器自身图标（D2026-1004-01）：相对本 .iss 所在目录解析
 SetupIconFile=..\subtransjav\webview_gui\assets\icon.ico
@@ -542,7 +542,8 @@ var
 // 新版被默认装进改名后腾出名字的开发仓库工作树根。
 // 两层加固（UsePreviousAppDir 保持默认，正常升级原位语义不动）：
 //   F1 陈旧记录回落（交互向导）：目录页显示时，已装记录路径不存在或疑似
-//      开发仓库 → 预填回落编译默认 {autopf}\SubTrans；
+//      开发仓库 → 预填回落 PickInstallDir（与默认同源；无合格候选才用
+//      编译默认 {autopf}\SubTrans）；
 //   F2 开发仓库拒装（交互+静默双闸）：所选目录含 .git，或含 pyproject.toml
 //      且有 subtransjav/ 源码包目录 → 目录页 Next 与 PrepareToInstall 拒绝。
 // ---------------------------------------------------------------------------
@@ -559,6 +560,124 @@ begin
     DirExists(trimmed + '\.git') or
     (FileExists(trimmed + '\pyproject.toml') and
      DirExists(trimmed + '\subtransjav'));
+end;
+
+// 默认安装目录离 C（D2026-1104-01 项 B4）：默认落「可用空间最大的非系统
+// 固定盘根下 \SubTrans」，用户仍可在目录页改选。{autopf} 弃为默认，仅作
+// 无合格候选时的回落（Param）。定义须先于使用（Pascal Script 无前置声明），
+// 且 BestInstallDrive 依赖上方 IsDevRepoDir。
+//
+// 取固定盘盘符串（如 C:D:）。输出受系统显示语言影响，故不用本地化文本
+// 匹配；此处以 CIM 的 DriveType=3（本地固定盘）为准。失败返回空串＝固定盘
+// 集合未知，调用方走回落，不得凭猜选盘。
+function FixedDriveLetters(): String;
+var
+  i, rc: Integer;
+  probe: String;
+  s: AnsiString;
+begin
+  Result := '';
+  probe := GetTempDir + 'subtrans-drivetypes.txt';
+  if FileExists(probe) then
+    DeleteFile(probe);
+  if not Exec(ExpandConstant('{cmd}'),
+    '/c powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | Select-Object -ExpandProperty DeviceID" > "' + probe + '" 2>nul',
+    '', SW_HIDE, ewWaitUntilTerminated, rc) then
+  begin
+    Log('默认安装盘：无法启动固定盘探测，固定盘集合未知');
+    Exit;
+  end;
+  if rc <> 0 then
+  begin
+    Log('默认安装盘：固定盘探测退出码 ' + IntToStr(rc) + '，集合未知');
+    Exit;
+  end;
+  if not LoadStringFromFile(probe, s) then
+  begin
+    Log('默认安装盘：固定盘探测结果读取失败，集合未知');
+    Exit;
+  end;
+  DeleteFile(probe);
+  // 逐盘比对 Pos（AnyString 形参可直接吃 AnsiString），只保留字母序形态
+  for i := 1 to 26 do
+    if Pos(Chr(64 + i) + ':', s) > 0 then
+      Result := Result + Chr(64 + i) + ':';
+  if Result = '' then
+    Log('默认安装盘：固定盘探测结果为空，集合未知');
+end;
+
+// 选可用空间最大的非系统固定盘（返回形如 'D:\'，无合格候选返回空串）。
+// 排除：系统盘（GetEnv('SystemDrive')，与 InstallDirOnSystemDrive 同口径）、
+// 不可访问盘、候选目录 <盘>:\SubTrans 疑似开发仓库（否则默认目录正好命中
+// 开发工作树，会被 NextButtonClick/PrepareToInstall 的开发仓守卫拦死）。
+// 并列取字母序小者。
+function BestInstallDrive(): String;
+var
+  i: Integer;
+  bestFree, freeBytes, totalBytes: Int64;
+  drv, sysDrive, fixed, cand: String;
+begin
+  Result := '';
+  bestFree := -1;
+  fixed := FixedDriveLetters();
+  if fixed = '' then
+  begin
+    Log('默认安装盘：固定盘集合未知，不猜盘，走回落');
+    Exit;
+  end;
+  sysDrive := Lowercase(GetEnv('SystemDrive'));
+  if sysDrive = '' then
+    sysDrive := 'c:';
+  for i := 1 to 26 do
+  begin
+    drv := Chr(64 + i) + ':\';
+    if Pos(Chr(64 + i) + ':', fixed) > 0 then
+    begin
+      if Lowercase(Copy(drv, 1, 2)) = sysDrive then
+        Log('默认安装盘候选排除 ' + drv + '：系统盘')
+      else if not GetSpaceOnDisk64(drv, freeBytes, totalBytes) then
+        Log('默认安装盘候选跳过 ' + drv + '：不可访问')
+      else
+      begin
+        cand := Copy(drv, 1, 2) + '\SubTrans';
+        if IsDevRepoDir(cand) then
+          Log('默认安装盘候选排除 ' + drv + '：' + cand + ' 疑似开发仓库')
+        else
+        begin
+          Log('默认安装盘候选 ' + drv + '：Free=' + IntToStr(freeBytes) +
+              ' Total=' + IntToStr(totalBytes));
+          if freeBytes > bestFree then
+          begin
+            bestFree := freeBytes;
+            Result := drv;
+          end;
+        end;
+      end;
+    end;
+  end;
+  if Result = '' then
+    Log('默认安装盘：无合格候选盘（仅系统盘／全被开发仓库守卫排除）');
+end;
+
+// Scripted constant：DefaultDirName 与 CurPageChanged 回落同源。
+// 有候选 → <盘>:\SubTrans；否则 Param（{autopf}\SubTrans），交互侧由既有
+// 系统盘告警＋改选入口兜住，静默侧由 PrepareToInstall 记日志。两条路均记日志。
+function PickInstallDir(Param: String): String;
+var
+  drv, reason: String;
+begin
+  drv := BestInstallDrive();
+  if drv <> '' then
+  begin
+    Result := drv + 'SubTrans';
+    reason := '可用空间最大的非系统固定盘';
+  end
+  else
+  begin
+    Result := Param;
+    reason := '无合格候选盘，回落编译默认目录';
+  end;
+  Log('默认安装目录选择：' + Result + '（' + reason + '）');
 end;
 
 // 安装目录是否落在系统盘 / %ProgramFiles%（D2026-1103-05 项②护栏 4 判据；
@@ -594,7 +713,7 @@ begin
     ReadInstalledInfo(ver, loc);
     if (loc <> '') and
        ((not DirExists(loc)) or IsDevRepoDir(loc)) then
-      WizardForm.DirEdit.Text := ExpandConstant('{autopf}') + '\SubTrans';
+      WizardForm.DirEdit.Text := PickInstallDir(ExpandConstant('{autopf}\SubTrans'));
   end;
 end;
 

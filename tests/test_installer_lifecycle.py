@@ -343,8 +343,8 @@ def test_stale_record_fallback_pinned(iss_text):
     """
     assert "procedure CurPageChanged(CurPageID: Integer);" in iss_text
     assert "wpSelectDir" in iss_text
-    # 回落目标 = 编译默认目录 {autopf}\SubTrans
-    assert "ExpandConstant('{autopf}') + '\\SubTrans'" in iss_text
+    # 回落目标与默认同源：PickInstallDir（无候选才落 {autopf}\SubTrans）
+    assert "PickInstallDir(ExpandConstant('{autopf}\\SubTrans'))" in iss_text
     m = re.search(r"if \(loc <> ''\) and\n(.{0,200}?)then", iss_text, re.S)
     assert m, "未找到 F1 回落条件"
     cond = m.group(1)
@@ -368,3 +368,57 @@ def test_dev_repo_guard_pinned(iss_text):
     m2 = re.search(r"function PrepareToInstall.*?Result := '';(.*?)end;", iss_text, re.S)
     assert m2 and "IsDevRepoDir" in m2.group(1), \
         "PrepareToInstall 须在空串初值后做开发仓判定并返回阻断文案"
+
+
+# ---------------------------------------------------------------------------
+# 默认安装目录离 C（D2026-1104-01 项 B4）
+# ---------------------------------------------------------------------------
+
+def test_default_dir_dynamic_non_system_drive_pinned(iss_text):
+    """默认安装目录 = 可用空间最大的非系统固定盘根下 \\SubTrans。
+
+    动态取盘走 [Code] scripted constant，用户在目录页仍可改选；取不到
+    合格候选时回落编译默认 Param（不得凭猜选盘）。
+    """
+    setup = _extract_section(iss_text, "Setup")
+    assert "DefaultDirName={code:PickInstallDir|{autopf}\\SubTrans}" in setup, \
+        "[Setup] 默认目录须改为 scripted constant 形态"
+    # 三函数齐备（定义须先于使用，Pascal Script 无前置声明）
+    assert "function FixedDriveLetters(): String;" in iss_text
+    assert "function BestInstallDrive(): String;" in iss_text
+    assert "function PickInstallDir(Param: String): String;" in iss_text
+    # 取盘面：64 位剩余空间 + 系统盘排除 + 固定盘判据（CIM DriveType 3）
+    best = re.search(
+        r"function BestInstallDrive\(\): String;(.{0,2500})", iss_text, re.S)
+    assert best, "未找到 BestInstallDrive 函数体"
+    best_body = best.group(1)
+    assert "GetSpaceOnDisk64(" in best_body, "取盘面须用 GetSpaceOnDisk64"
+    assert "GetEnv('SystemDrive')" in best_body, "须排除系统盘（SystemDrive）"
+    assert "IsDevRepoDir(" in best_body, "候选盘须排除开发仓库目录"
+    assert "DriveType -eq 3" in iss_text, "固定盘判据须走 CIM DriveType -eq 3"
+    # 回落编译默认 Param（无候选不得猜盘）
+    pick = re.search(
+        r"function PickInstallDir\(Param: String\): String;(.{0,1200})", iss_text,
+        re.S)
+    assert pick, "未找到 PickInstallDir 函数体"
+    assert "Result := Param" in pick.group(1), "无候选须回落 Param"
+    # 负控：三条已证伪路径不得再出现
+    assert "GetSpaceFree" not in iss_text, "不得使用不存在的 GetSpaceFree"
+    assert "ExecAndCaptureOutput" not in iss_text, \
+        "不得使用本机不兼容的 ExecAndCaptureOutput"
+    assert "fsinfo drivetype" not in iss_text, \
+        "不得用本地化输出匹配的 fsinfo drivetype"
+
+
+def test_curpage_changed_dir_fallback_uses_picker(iss_text):
+    """F1 回落与默认同源：缺省/疑似开发仓库时调 PickInstallDir，
+    不再硬编码 {autopf}。"""
+    m = re.search(
+        r"procedure CurPageChanged\(CurPageID: Integer\);(.*?)"
+        r"function NextButtonClick", iss_text, re.S)
+    assert m, "未找到 CurPageChanged 段"
+    body = m.group(1)
+    assert "PickInstallDir(ExpandConstant('{autopf}\\SubTrans'))" in body, \
+        "回落须调 PickInstallDir"
+    assert "ExpandConstant('{autopf}') + '\\SubTrans'" not in body, \
+        "回落行不得再硬编码 {autopf}"
