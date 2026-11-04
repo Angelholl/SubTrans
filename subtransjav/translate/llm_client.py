@@ -237,7 +237,30 @@ def _loopback_http_client(base_url: str, timeout: float):
     if not loopback:
         return None
     from httpx import Client
-    return Client(trust_env=False, timeout=timeout)
+    return Client(trust_env=False, timeout=timeout, verify=_shared_ssl_context())
+
+
+# 段6 性能优化（行为严格等价）：httpx.Client 每次 init 自建 SSL 上下文实测
+# ~0.35s（Windows 证书链加载），共享进程级单例后 ~0.03s。上下文内容用
+# httpx.create_ssl_context() 与默认路径同源同构（certifi CA/ALPN 配置一致），
+# 仅把「每客户端一次」改「每进程一次」；SSLContext 跨连接共享为标准用法。
+# create_ssl_context 异常时回退 None → Client 走默认 verify=True 原路径。
+_shared_ssl_context_instance: Any = None
+_shared_ssl_context_lock = threading.Lock()
+
+
+def _shared_ssl_context():
+    global _shared_ssl_context_instance
+    with _shared_ssl_context_lock:
+        if _shared_ssl_context_instance is None:
+            try:
+                import httpx
+                _shared_ssl_context_instance = httpx.create_ssl_context()
+            except Exception:   # noqa: BLE001 - 上下文构造失败回退默认路径
+                _shared_ssl_context_instance = False
+        if _shared_ssl_context_instance is False:
+            return True         # 回退：默认 verify=True（原行为）
+        return _shared_ssl_context_instance
 
 
 def probe_endpoint_reachable(base_url: str,
