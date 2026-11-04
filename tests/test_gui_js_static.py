@@ -95,14 +95,26 @@ def _js_msg_keys() -> set:
 
 
 def test_app_js_syntax_node_check():
-    """node --check 全文件语法校验（node 不可用时跳过）。"""
+    """node --check 全文件语法校验（node 不可用时跳过）。
+
+    段6 性能重构（校验语义等价）：36 文件逐文件 spawn `node --check`
+    实测 ~52ms/次，改为单次 spawn 用 vm.Script 做经典 Script 解析——
+    与 --check 同口径（.js 非 module 形态下 import/export 同样报
+    SyntaxError），spawn 开销摊平为一次。
+    """
     node = shutil.which("node")
     if not node:
         pytest.skip("node 不可用")
-    for name in js_sources.JS_FILES:
-        r = subprocess.run([node, "--check", str(ASSETS / name)],
-                           capture_output=True, text=True)
-        assert r.returncode == 0, f"{name}: {r.stderr}"
+    checker = (
+        "const fs=require('fs'),vm=require('vm');"
+        "process.argv.slice(1).forEach(f=>{"
+        "try{new vm.Script(fs.readFileSync(f,'utf8'),{filename:f});}"
+        "catch(e){console.error(f+': '+e.message);process.exitCode=1;}});"
+    )
+    files = [str(ASSETS / name) for name in js_sources.JS_FILES]
+    r = subprocess.run([node, "-e", checker, *files],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
 
 
 # ---------------------------------------------------------------------------
