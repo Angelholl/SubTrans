@@ -22,6 +22,7 @@ merge_stats 流供质量报告消费。
 """
 
 import re
+from typing import Any
 
 from .v2_premerge import _timing_span
 
@@ -112,8 +113,9 @@ def classify_kana_entry(text: str) -> str:
 # 清洗主入口
 # ---------------------------------------------------------------------------
 
-def clean_entries(entries: list, merge_enabled: bool = True,
-                  delete_enabled: bool = False) -> tuple:
+def clean_entries(entries: list[dict[str, Any]], merge_enabled: bool = True,
+                  delete_enabled: bool = False
+                  ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """源文假名清洗主入口（纯函数，无 IO）。
 
     entries: parse_srt 产物条目列表（dict: index/timing/text），时间轴升序。
@@ -148,8 +150,8 @@ def clean_entries(entries: list, merge_enabled: bool = True,
         文本前 40 字，无邻居记 null）。
     """
     merged_n = deleted_n = kept_n = exempt_n = 0
-    deleted_log: list = []
-    exempt_log: list = []
+    deleted_log: list[dict[str, Any]] = []
+    exempt_log: list[dict[str, Any]] = []
     if not entries:
         return entries, {"kana_merged": 0, "kana_moan_deleted": 0,
                          "kana_moan_deleted_timings": [], "kana_kept": 0,
@@ -160,7 +162,7 @@ def clean_entries(entries: list, merge_enabled: bool = True,
     spans = [_timing_span(e.get("timing") or "") for e in entries]
     inf = float("inf")
 
-    def side_gap(i: int, j: int):
+    def side_gap(i: int, j: int) -> float | None:
         """条目 i 与后继 j（=i+1）的间隙毫秒。i/j 越界（无邻居）→ inf；
         任一时间轴非法 → None（决策侧保守：不合并不删除）。"""
         if i < 0 or j >= n:
@@ -171,7 +173,7 @@ def clean_entries(entries: list, merge_enabled: bool = True,
 
     # ---- 决策：只依赖原始序列的相邻间隙，与合并执行解耦（可同时成立、
     #      不因删除级联改判——删除条前后间隙必 >1200，不含任何 ≤800 侧）----
-    actions: list = []
+    actions: list[str | None] = []
     for i in range(n):
         if exempt_flags[i]:
             # 豁免条（规格 v3 §4）：决策段入口先判豁免即 keep——先于
@@ -217,7 +219,7 @@ def clean_entries(entries: list, merge_enabled: bool = True,
             actions.append("keep")
 
     # ---- 执行：左→右单趟，carry 为前向缓冲条目 ----
-    out: list = []
+    out: list[dict[str, Any]] = []
     carry = None
     for i in range(n):
         e = entries[i]
@@ -285,7 +287,7 @@ def clean_entries(entries: list, merge_enabled: bool = True,
                  "kana_exempted": exempt_n, "kana_exempted_ledger": exempt_log}
 
 
-def _merge_pair(a: dict, b: dict) -> dict:
+def _merge_pair(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     """合并相邻两条目（a 在前）：文本按时间序拼接，span 取并集
     （a 起 ~ b 止）。条目身份沿用 a（与 premerge 同口径：保留首条
     index 及其余字段）；时间轴格式异常时保持 a 侧原值（防御）。"""

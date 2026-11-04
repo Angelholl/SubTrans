@@ -99,6 +99,8 @@ module = [
     "subtransjav.refine.glossary_learn",
     "subtransjav.refine.grammar_hint",
     "subtransjav.refine.v2_learn",
+    "subtransjav.refine.dialogue_detect",
+    "subtransjav.refine.kana_clean",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

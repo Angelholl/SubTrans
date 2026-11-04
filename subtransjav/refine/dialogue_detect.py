@@ -13,6 +13,8 @@
 - 信号②（单 cue 双句末标点）：剥除引号/括号后句末标点出现 ≥2 次。
 """
 
+from typing import Any
+
 # ---- 常量单一来源（卡面：尾段上限 4、标点集） ----
 SENT_END_PUNCTS = "。？！?!"
 DIALOGUE_TAIL_MAX = 4      # 信号① 尾段核心字符上限
@@ -68,7 +70,7 @@ def _is_dialogue_row(text: str) -> bool:
     return _is_pure_kana(core)
 
 
-def detect_dialogue_rows(entries: list) -> set:
+def detect_dialogue_rows(entries: list[dict[str, Any]]) -> set[int]:
     """对条目列表逐条判定，返回 flagged 的 index 集合（确定性）。"""
     return {e["index"] for e in entries
             if _is_dialogue_row(e.get("text") or "")}
@@ -82,7 +84,8 @@ DIALOGUE_NOTE_TMPL = ("第 {lines} 行可能包含两人对话（句末后接应
                       "应按句读分开表达（如「……。嗯。」）。")
 
 
-def build_injection_block(entries: list, flagged: set) -> str | None:
+def build_injection_block(entries: list[dict[str, Any]],
+                          flagged: set[int]) -> str | None:
     """生成批级条件注入文案。
 
     entries 为本批条目；flagged 为全量 flagged index 集。仅当本批

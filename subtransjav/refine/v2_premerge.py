@@ -169,7 +169,7 @@ def _premerge_entries(entries: list, cfg: RefineConfig = None) -> list:
     return out
 
 
-def _timing_span(timing: str) -> tuple:
+def _timing_span(timing: str) -> tuple[float, float]:
     """解析时间轴为 (start_sec, end_sec)；解析失败返回 (-1, -1)。
 
     时间轴是字幕条目的真实身份标识：cleaner 等环节会重新编号，
