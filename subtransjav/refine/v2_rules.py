@@ -15,6 +15,7 @@ v2_premerge、v2_outputs，严禁反向依赖 pipeline_v2。logger 刻意沿用
 """
 
 import logging
+from typing import Any
 
 from .config import RefineConfig
 from .filters import build_srt, parse_srt
@@ -30,9 +31,12 @@ from .v2_premerge import (
 logger = logging.getLogger("subtransjav.refine.pipeline_v2")
 
 
-def _apply_fallback_rules(cfg: RefineConfig, entries: list,
-                          orig_entries: list,
-                          collector=None, file_name: str = None) -> tuple:
+def _apply_fallback_rules(cfg: RefineConfig, entries: list[dict[str, Any]],
+                          orig_entries: list[dict[str, Any]],
+                          collector: Any = None,
+                          file_name: str | None = None
+                          ) -> tuple[list[dict[str, Any]], list[str], Any,
+                                     set[int], Any, list[dict[str, Any]]]:
     """兜底规则层（profile 驱动）：
     local(strict) → cleaner_rules 清洗 + post_validate 误译拦截；
     cloud(lenient) → 跳过（仅保留语言白名单等零维护校验）。
@@ -59,8 +63,8 @@ def _apply_fallback_rules(cfg: RefineConfig, entries: list,
 
     # post_validate：で误译修正 + 主语误判告警（YAML 单一数据源驱动）
     validator_warnings = []
-    flagged_indexes: set = set()
-    structured_warnings: list = []
+    flagged_indexes: set[int] = set()
+    structured_warnings: list[dict[str, Any]] = []
     try:
         from .post_validate import check_and_fix_translation_errors
         fixes, warnings, flagged_indexes, structured_warnings = \
@@ -131,7 +135,8 @@ def _apply_fallback_rules(cfg: RefineConfig, entries: list,
                 structured_warnings)
 
 
-def _filter_language(cfg: RefineConfig, entries: list, stage_idx: int) -> list:
+def _filter_language(cfg: RefineConfig, entries: list[dict[str, Any]],
+                     stage_idx: int) -> list[dict[str, Any]]:
     """语言白名单校验（零维护通用校验，两档 profile 均启用）。
 
     D1：非中文/乱码条目不再从终稿物理删除——改加 [未翻译] 前缀保留；
@@ -153,11 +158,11 @@ def _filter_language(cfg: RefineConfig, entries: list, stage_idx: int) -> list:
     # 有效条目恢复原 index；无效条目加 [未翻译] 前缀后并回产物（不丢行）。
     # timing→list 多重映射：同 timing 重复条目逐条消费（优先按文本配对），
     # 防止同键覆盖 + kept_timings 集合把无效条跳过回填而静默丢行。
-    by_timing: dict = {}
+    by_timing: dict[str, list[dict[str, Any]]] = {}
     for e in normal:
         by_timing.setdefault(e["timing"], []).append(e)
-    matched: dict = {}               # id(原条目) → 承载它的 kept 条目
-    pseudo: list = []
+    matched: dict[int, dict[str, Any]] = {}   # id(原条目) → 承载它的 kept 条目
+    pseudo: list[dict[str, Any]] = []
     for e in kept_entries:
         bucket = by_timing.get(e["timing"]) or []
         free = [o for o in bucket if id(o) not in matched]

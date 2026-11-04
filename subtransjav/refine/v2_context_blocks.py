@@ -10,7 +10,9 @@ v2 语境注入块层：sidecar / 剧情摘要 / 词表与提示块
 D2026-0925-01（执行契约）。
 """
 
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import Any
 
 from .config import RefineConfig
 from .glossary import format_glossary_block, match_glossary
@@ -60,7 +62,7 @@ MAX_GLOSSARY_INJECT = 100
 
 
 def _v2_glossary_block(cfg: RefineConfig, tag: str, src_text: str,
-                       glossary: list) -> str:
+                       glossary: Iterable[Sequence[str]]) -> str:
     """按阶段复用 legacy 词库生效开关：A→stage1 开关，B→stage2 开关。
 
     命中超过 MAX_GLOSSARY_INJECT 时按词库优先级序只注入前 N 条，
@@ -93,7 +95,7 @@ def _v2_glossary_block(cfg: RefineConfig, tag: str, src_text: str,
     return ""
 
 
-def load_context_sidecar(in_path: str) -> dict | None:
+def load_context_sidecar(in_path: str) -> dict[str, Any] | None:
     """加载 per-片语境 sidecar（v1.2.2 C1）。
 
     文件约定：与输入 srt 同目录同名，后缀 ``.context.md``（如
@@ -113,8 +115,8 @@ def load_context_sidecar(in_path: str) -> dict | None:
     except OSError as e:
         print(f"   ⚠️ 语境 sidecar 读取失败，忽略: {p.name} ({e})")
         return None
-    summary: list = []
-    mishear: list = []
+    summary: list[str] = []
+    mishear: list[tuple[str, str]] = []
     section = None
     for line in text.splitlines():
         s = line.strip()
@@ -139,7 +141,8 @@ def load_context_sidecar(in_path: str) -> dict | None:
     return {"summary": summary, "mishear": mishear}
 
 
-def _load_context_sidecar(cfg: RefineConfig, in_path: str) -> dict | None:
+def _load_context_sidecar(cfg: RefineConfig,
+                          in_path: str) -> dict[str, Any] | None:
     """cfg 开关接线的 sidecar 加载：context_sidecar=False 禁用（返回 None）；
     文件不存在=无注入。加载成功打印摘要行（可见性）。"""
     if not getattr(cfg, "context_sidecar", True):
@@ -152,7 +155,8 @@ def _load_context_sidecar(cfg: RefineConfig, in_path: str) -> dict | None:
     return sidecar
 
 
-def _v2_sidecar_block(src_text: str, sidecar: dict | None) -> str:
+def _v2_sidecar_block(src_text: str,
+                      sidecar: dict[str, Any] | None) -> str:
     """组装语境 sidecar 注入块（A/B 同措辞；仿 glossary 块的命中风格）：
 
     - 剧情摘要块：sidecar 存在且小节非空即注入（冻结措辞引导语在前）；

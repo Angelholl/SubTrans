@@ -9,6 +9,7 @@ import csv
 import json
 import os
 import unicodedata
+from collections.abc import Iterable, Sequence
 
 
 def load_glossary(path: str):
@@ -109,13 +110,14 @@ def term_in_text(term: str, text: str) -> bool:
     return False
 
 
-def match_glossary(text: str, glossary):
+def match_glossary(text: str,
+                   glossary: Iterable[Sequence[str]]) -> list[tuple[str, str]]:
     """命中匹配：term_in_text 单一口径（NFKC 归一 + 拉丁词边界）。
 
     兼容两列 (src, dst) 与三列 (src, dst, aliases) 词条（v1.2.2 D：
     别名不参与命中判定，命中只看源词）。
     """
-    hits = []
+    hits: list[tuple[str, str]] = []
     for entry in glossary:
         src, dst = entry[0], entry[1]
         if term_in_text(src, text):
@@ -131,7 +133,7 @@ GLOSSARY_BLOCK_NOTICE = (
     "translation consistently. Do not add or remove subtitle IDs.")
 
 
-def format_glossary_block(hits):
+def format_glossary_block(hits: list[tuple[str, str]]) -> str:
     """词库命中块（注入提示词）：结构化 JSON 数据块 + 防注入声明。
 
     只呈现主译法（dst），别名不注入（v1.2.2 D：别名仅供冲突判定/

@@ -109,6 +109,8 @@ module = [
     "subtransjav.refine.rules_loader",
     "subtransjav.refine.audio_detect",
     "subtransjav.refine.subtitle_convert",
+    "subtransjav.refine.v2_context_blocks",
+    "subtransjav.refine.v2_rules",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
