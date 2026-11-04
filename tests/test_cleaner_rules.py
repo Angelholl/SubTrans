@@ -77,25 +77,25 @@ def test_parse_srt_multiline():
 
 def test_cqs_consecutive_3_plus(cleaner):
     items = _make_items(["啊", "嗯", "哦"], gap_ms=500)
-    cqs = cleaner._mark_cqs_indices(items)
+    cqs = cleaner._mark_cqs_indices(items, [cleaner._has_substantive(it.text) for it in items])
     assert cqs == {0, 1, 2}
 
 
 def test_cqs_isolated_delete(cleaner):
     items = _make_items(["啊"])
-    cqs = cleaner._mark_cqs_indices(items)
+    cqs = cleaner._mark_cqs_indices(items, [cleaner._has_substantive(it.text) for it in items])
     assert len(cqs) == 0
 
 
 def test_cqs_gap_breaks(cleaner):
     items = _make_items(["啊", "嗯", "哦"], gap_ms=5000)
-    cqs = cleaner._mark_cqs_indices(items)
+    cqs = cleaner._mark_cqs_indices(items, [cleaner._has_substantive(it.text) for it in items])
     assert len(cqs) == 0
 
 
 def test_cqs_substantive_breaks(cleaner):
     items = _make_items(["啊", "你好世界", "哦"], gap_ms=500)
-    cqs = cleaner._mark_cqs_indices(items)
+    cqs = cleaner._mark_cqs_indices(items, [cleaner._has_substantive(it.text) for it in items])
     assert len(cqs) == 0
 
 
@@ -204,7 +204,8 @@ def test_dedup_cross_segment(cleaner):
         Subtitle(index=1, start=0, end=800, text="好舒服"),
         Subtitle(index=2, start=30000, end=30800, text="好舒服"),
     ]
-    result = cleaner._check_60s_dedup(1, items, set())
+    result = cleaner._check_60s_dedup(
+        1, items, set(), [cleaner._extract_emotion_root(it.text) for it in items])
     assert result is True
 
 
@@ -213,7 +214,8 @@ def test_dedup_same_segment(cleaner):
         Subtitle(index=1, start=0, end=800, text="好舒服"),
         Subtitle(index=2, start=1000, end=1800, text="好舒服"),
     ]
-    result = cleaner._check_60s_dedup(1, items, {0, 1})
+    result = cleaner._check_60s_dedup(
+        1, items, {0, 1}, [cleaner._extract_emotion_root(it.text) for it in items])
     assert result is False
 
 

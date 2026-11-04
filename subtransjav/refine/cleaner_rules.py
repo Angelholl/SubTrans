@@ -142,8 +142,26 @@ def format_srt(items: list[Subtitle]) -> str:
     return "\n\n".join(parts) + "\n"
 
 
-class ChineseCleaner:
+@dataclass
+class _ScanPre:
+    """filter() 单次调用的扫描判定预计算束（E2 性能重构，行为严格等价）。
 
+    substantive[j] / hardened[j]: 逐条目预判（与旧实现同参同调；cqs 判定只用
+    substantive，联动保留与 L2 段内内容判定用 substantive or hardened，故分列
+    两个数组）；roots[j]: 60s 去重用情绪根提取；
+    seg_of[j]: j 所属交互段编号（未入段→get 得 None→空 frozenset 兜底，
+    与旧 _get_segment_indices 空 set 同效）；seg_sets[k]: 段成员索引集
+    （60s 去重跳段判定）；seg_content[k]: 段内内容成员 (start, j) 升序
+    （L2 二分窗查询）。"""
+    substantive: list[bool]
+    hardened: list[bool]
+    roots: list[str | None]
+    seg_of: dict[int, int]
+    seg_sets: list[frozenset[int]]
+    seg_content: list[list[tuple[int, int]]]
+
+
+class ChineseCleaner:
     def __init__(self, config_dir: str | None = None):
         self._config_dir = config_dir
         self._load_vocabularies()
@@ -212,7 +230,8 @@ class ChineseCleaner:
     def _is_cqs_candidate(self, item: Subtitle) -> bool:
         return len(item.text) <= 10 and not self._has_substantive(item.text)
 
-    def _mark_cqs_indices(self, items: list[Subtitle]) -> set[int]:
+    def _mark_cqs_indices(self, items: list[Subtitle],
+                          substantive: list[bool]) -> set[int]:
         cqs: set[int] = set()
         i = 0
         n = len(items)
@@ -223,7 +242,7 @@ class ChineseCleaner:
             j = i
             while j + 1 < n:
                 if (
-                    not self._has_substantive(items[j + 1].text)
+                    not substantive[j + 1]
                     and len(items[j + 1].text) <= 10
                     and items[j + 1].start - items[j].end <= 3000
                 ):
@@ -339,19 +358,20 @@ class ChineseCleaner:
                     return True
         return False
 
-    def _check_60s_dedup(self, idx: int, items: list[Subtitle], segment_indices: set[int]) -> bool:
+    def _check_60s_dedup(self, idx: int, items: list[Subtitle],
+                         seg_indices: frozenset[int] | set[int],
+                         roots: list[str | None]) -> bool:
         current_time = items[idx].start
         cutoff = current_time - 60000
-        root = self._extract_emotion_root(items[idx].text)
+        root = roots[idx]
         if not root:
             return False
         for j in range(idx - 1, -1, -1):
             if items[j].start < cutoff:
                 break
-            if j in segment_indices:
+            if j in seg_indices:
                 continue
-            other_root = self._extract_emotion_root(items[j].text)
-            if other_root and other_root == root:
+            if roots[j] and roots[j] == root:
                 return True
         return False
 
@@ -362,22 +382,17 @@ class ChineseCleaner:
                 return True
         return any(pat.search(stripped) for pat in self._hardened_patterns_compiled)
 
-    def _is_linkage_keep(self, item: Subtitle, items: list[Subtitle], idx: int) -> bool:
+    def _is_linkage_keep(self, item: Subtitle, items: list[Subtitle],
+                         idx: int, substantive: list[bool],
+                         hardened: list[bool]) -> bool:
         """联动保留：向后扫描3秒内是否有实义承接"""
         current_end = item.end
         for j in range(idx + 1, len(items)):
             if items[j].start - current_end > 3000:
                 break
-            if self._has_substantive(items[j].text) or self._is_hardened(items[j].text):
+            if substantive[j] or hardened[j]:
                 return True
         return False
-
-    def _get_segment_indices(self, idx: int, segments: list[list[int]]) -> set[int]:
-        """获取idx所在段的所有索引"""
-        for seg in segments:
-            if idx in seg:
-                return set(seg)
-        return set()
 
     @staticmethod
     def _gate_delete(rule: str, source_texts: list[str] | None,
@@ -406,7 +421,7 @@ class ChineseCleaner:
         items: list[Subtitle],
         idx: int,
         cqs_indices: set[int],
-        segments: list[list[int]],
+        pre: _ScanPre,
         source_texts: list[str] | None = None,
     ) -> tuple[bool, str]:
         """判定是否删除。source_texts 为该条目时间轴对应的源文日文行
@@ -416,26 +431,31 @@ class ChineseCleaner:
         命中闸门0 计数类噪声特征才允许删除（实义纯假名源文如 やめて
         一律保留）；L3-L6/L9-L12 维持原门槛。
         L0-L2 为保留路径，不受影响。source_texts=None 时可独立测试，
-        此时按 fail-safe 只保留不删。"""
+        此时按 fail-safe 只保留不删。
+        pre 为 filter() 预计算束（E2 性能重构）：文本判定与段结构一次
+        产出、全程复用，判定语义与旧逐点扫描逐字节等价。"""
         text = item.text.strip()
 
         if self._is_hardened(text):
             return False, "L0-hardened"
 
-        if self._is_linkage_keep(item, items, idx):
+        if self._is_linkage_keep(item, items, idx, pre.substantive,
+                                 pre.hardened):
             return False, "L1-linked"
 
-        seg = self._get_segment_indices(idx, segments)
-        same_seg_has_content = False
-        for j in seg:
-            if j == idx:
-                continue
-            if (abs(items[j].start - item.start) <= 3000
-                    and (self._has_substantive(items[j].text) or self._is_hardened(items[j].text))):
-                same_seg_has_content = True
-                break
-        if same_seg_has_content:
-            return False, "L2-segment-content"
+        # L2 段内内容：段内内容成员按 (start, j) 升序二分定窗
+        # [item.start±3000]，窗内首个 j≠idx 即命中（旧实现逐成员 abs 全扫，
+        # 布尔语义同 ∃ j∈seg\{idx}: |Δstart|≤3000 ∧ 实义）
+        seg_k = pre.seg_of.get(idx)
+        if seg_k is not None:
+            s = item.start
+            members = pre.seg_content[seg_k]
+            lo = bisect_left(members, (s - 3000, -1))
+            for sj, j in members[lo:]:
+                if sj > s + 3000:
+                    break
+                if j != idx:
+                    return False, "L2-segment-content"
 
         if self._is_video_meta(text):
             return self._gate_delete("L3-meta", source_texts)
@@ -463,7 +483,8 @@ class ChineseCleaner:
         if self._is_isolated_address(text):
             return self._gate_delete("L10-address", source_texts)
 
-        if self._check_60s_dedup(idx, items, seg):
+        if seg_k is not None and self._check_60s_dedup(
+                idx, items, pre.seg_sets[seg_k], pre.roots):
             return self._gate_delete("L11-60s-dedup", source_texts,
                                      noise_gate=True)
 
@@ -598,15 +619,33 @@ class ChineseCleaner:
         items = self._merge_fragments(items)
         stats["merged"] = len(pre_items) - len(items)
         evidence = self._map_evidence_to_merged(pre_items, items, source_evidence)
-        cqs_indices = self._mark_cqs_indices(items)
+        # E2 扫描判定预计算：substantive/hardened/roots 逐条目一次判定，
+        # 消除联动保留（向前窗）、L2 段内内容（段成员×条目）、cqs、60s 去重
+        # 各扫描对同文本的反复解析
+        substantive = [self._has_substantive(it.text) for it in items]
+        hardened = [self._is_hardened(it.text) for it in items]
+        roots = [self._extract_emotion_root(it.text) for it in items]
+        cqs_indices = self._mark_cqs_indices(items, substantive)
         segments = self._split_interaction_segments(items)
+        seg_of: dict[int, int] = {}
+        seg_sets: list[frozenset[int]] = []
+        seg_content: list[list[tuple[int, int]]] = []
+        for k, seg in enumerate(segments):
+            seg_sets.append(frozenset(seg))
+            for j in seg:
+                seg_of[j] = k
+            seg_content.append(sorted(
+                (items[j].start, j) for j in seg
+                if substantive[j] or hardened[j]))
+        pre = _ScanPre(substantive, hardened, roots, seg_of, seg_sets,
+                       seg_content)
         kept: list[Subtitle] = []
         for idx, item in enumerate(items):
             if idx in cqs_indices:
                 kept.append(item)
                 continue
             should_del, reason = self._should_delete(
-                item, items, idx, cqs_indices, segments,
+                item, items, idx, cqs_indices, pre,
                 source_texts=evidence.get(idx))
             if should_del:
                 stats["deleted"] += 1
