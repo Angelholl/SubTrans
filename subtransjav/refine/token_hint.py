@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import string
 import threading
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # 惰性单例 jieba（[zh] 可选组件）
@@ -27,7 +28,7 @@ _zh_available: bool | None = None
 _init_lock = threading.Lock()
 
 
-def _get_jieba():
+def _get_jieba() -> Any:
     """懒加载 jieba 模块单例（双重检查锁，防并发重复初始化）。
 
     import 失败（[zh] extra 未安装等）→ 缓存 None，静默降级。
@@ -73,7 +74,7 @@ def _is_punct_token(token: str) -> bool:
 
 
 def _current_text(srt_content: str, current_index: int,
-                  entries: list[dict] | None) -> str:
+                  entries: list[dict[str, Any]] | None) -> str:
     """按 index 定位当前条目文本（找不到/空文本返回 ""，同款查找逻辑）。"""
     if entries is None:
         from .filters import parse_srt
@@ -93,7 +94,7 @@ _CJK_RE = re.compile(r"[一-鿿]")
 
 
 def generate_zh_hints(srt_content: str, current_index: int,
-                      entries: list[dict] | None = None) -> str:
+                      entries: list[dict[str, Any]] | None = None) -> str:
     """zh 源分词提示：jieba 精确模式切分，产出「分词参考」一行提示。
 
     门槛：文本含 CJK、strip 后长度 >= 6、剔除纯标点/空白 token 后
@@ -127,7 +128,7 @@ _UPPER_RE = re.compile(r"\b[A-Z]{2,}\b")
 
 
 def generate_en_hints(srt_content: str, current_index: int,
-                      entries: list[dict] | None = None) -> str:
+                      entries: list[dict[str, Any]] | None = None) -> str:
     """en 源分词提示：内置规则标注全大写缩写/强调（纯规则零依赖）。"""
     text = _current_text(srt_content, current_index, entries)
     m = _UPPER_RE.search(text)

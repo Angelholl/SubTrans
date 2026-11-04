@@ -105,6 +105,8 @@ module = [
     "subtransjav.refine.source_hallucination",
     "subtransjav.refine.filters",
     "subtransjav.refine.output_formats",
+    "subtransjav.refine.token_hint",
+    "subtransjav.refine.rules_loader",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

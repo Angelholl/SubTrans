@@ -13,6 +13,7 @@ instructions.py（提示词生成段）消费。
 
 import functools
 import os
+from typing import Any
 
 import yaml
 
@@ -63,7 +64,7 @@ def resolve_rules_path(config_dir: str = None) -> str:
     return _resolve_rules_path(config_dir)
 
 
-def _nested_get(d: dict, dotted: str):
+def _nested_get(d: dict[str, Any], dotted: str) -> Any:
     cur = d
     for part in dotted.split("."):
         if not isinstance(cur, dict) or part not in cur:
@@ -72,7 +73,7 @@ def _nested_get(d: dict, dotted: str):
     return cur
 
 
-def _validate(rules: dict, path: str):
+def _validate(rules: dict[str, Any], path: str) -> None:
     for key in _REQUIRED_KEYS:
         v = _nested_get(rules, key)
         if v is None or (isinstance(v, str) and not v.strip()):
@@ -81,7 +82,7 @@ def _validate(rules: dict, path: str):
 
 
 @functools.cache
-def _load_cached(path: str, mtime: float) -> dict:
+def _load_cached(path: str, mtime: float) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         rules = yaml.safe_load(f)
     if not isinstance(rules, dict):
@@ -90,7 +91,7 @@ def _load_cached(path: str, mtime: float) -> dict:
     return rules
 
 
-def load_rules(config_dir: str = None) -> dict:
+def load_rules(config_dir: str = None) -> dict[str, Any]:
     """加载翻译规则（用户目录优先，包内回退；带缓存）。
 
     Raises
@@ -113,7 +114,8 @@ def load_rules(config_dir: str = None) -> dict:
         raise RulesLoadError(f"{path}: 读取失败: {e}") from e
 
 
-def load_rules_safe(config_dir: str = None) -> tuple:
+def load_rules_safe(config_dir: str = None) -> tuple[dict[str, Any] | None,
+                                                    str | None]:
     """容错版：返回 (rules, error_msg)。成功时 error_msg 为 None，
     失败时 rules 为 None、error_msg 含路径与原因。"""
     try:
