@@ -227,16 +227,16 @@ class ChineseCleaner:
         if pstr:
             self._parenthetical_re = re.compile(pstr)
 
-    def _is_cqs_candidate(self, item: Subtitle) -> bool:
-        return len(item.text) <= 10 and not self._has_substantive(item.text)
-
     def _mark_cqs_indices(self, items: list[Subtitle],
                           substantive: list[bool]) -> set[int]:
         cqs: set[int] = set()
         i = 0
         n = len(items)
         while i < n:
-            if not self._is_cqs_candidate(items[i]):
+            # 段5 E1' 性能重构：cqs 候选判定复用预计算数组
+            # （旧实现经 _is_cqs_candidate 对同文本二次 _has_substantive；
+            #   substantive[i] == _has_substantive(items[i].text) 由构造保证）
+            if len(items[i].text) > 10 or substantive[i]:
                 i += 1
                 continue
             j = i

@@ -28,6 +28,7 @@ MeCab OOV 兜底会把常见假名串判为已知词——なんでるじゃん�
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from collections.abc import Callable
@@ -52,15 +53,20 @@ MIN_CORE_CHARS = 4
 _JP_KANA_RE = re.compile(r"[ぁ-ゖァ-ヺー]")
 
 
+@functools.cache
+def _is_core_char(ch: str) -> bool:
+    """单字符实义判定（段5 E1' 性能重构，行为严格等价）：
+    unicodedata.category 为纯字符函数，lru_cache 化消除逐字符重复
+    系统调用开销（语料字符表有限，命中率高）。"""
+    return not unicodedata.category(ch).startswith(("P", "S", "Z", "C"))
+
+
 def _core_chars(text: str) -> str:
     """剥除标点/符号/空白/控制符，保留实义字符（假名/汉字/拉丁/数字）。
 
     ー（长音符）unicodedata 类别为 Lm（字母修饰符），按音素成分保留。
     """
-    return "".join(
-        ch for ch in text
-        if not unicodedata.category(ch).startswith(("P", "S", "Z", "C"))
-    )
+    return "".join([ch for ch in text if _is_core_char(ch)])
 
 
 def _tokenize_ja(text: str) -> list[Any] | None:

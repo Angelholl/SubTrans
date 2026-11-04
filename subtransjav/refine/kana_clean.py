@@ -72,16 +72,20 @@ _MEMBER_TABLE = frozenset({
 _EXEMPT_FIELD = "_kana_exempt"
 
 
+#: 片假名→平假名偏移 + 小假名折叠合并为一张 translate 映射表
+#: （段5 E1' 性能重构：逐字符循环→表驱动）。建表时静态预演原实现的
+#: 级联语义：片假名先平移 −0x60，落点若再命中 _SMALL_FOLD 则继续折叠
+#: （ャ→ゃ→や、ヰ→ゐ→い），保证与逐字符循环逐字节等价；表外字符原样。
+_KANA_TRANSLATE = str.maketrans({
+    chr(cp): _SMALL_FOLD.get(chr(cp - 0x60), chr(cp - 0x60))
+    for cp in range(ord("ァ"), ord("ヺ") + 1)
+} | dict(_SMALL_FOLD))
+
+
 def _exempt_core(text: str) -> str:
     """归一 core（规格 v3 §2）：剥标点（复用 _STRIP_PUNCT_RE，长音 ー 在
     剥离集内）→片假名（ァ-ヺ 偏移 −0x60）→小假名折叠。"""
-    core = _STRIP_PUNCT_RE.sub("", text or "")
-    out = []
-    for ch in core:
-        if "ァ" <= ch <= "ヺ":
-            ch = chr(ord(ch) - 0x60)
-        out.append(_SMALL_FOLD.get(ch, ch))
-    return "".join(out)
+    return _STRIP_PUNCT_RE.sub("", text or "").translate(_KANA_TRANSLATE)
 
 
 def is_exempt_entry(text: str) -> bool:

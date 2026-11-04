@@ -36,8 +36,8 @@ _QUOTE_CHARS = "「」『』（）()【】[]{}〈〉《》\"'‘’“”"
 
 def _strip_punct(text: str) -> str:
     """剥除标点与空白，返回剩余字符序列。"""
-    return "".join(ch for ch in text
-                   if ch not in _STRIP_CHARS and not ch.isspace())
+    return "".join([ch for ch in text
+                    if ch not in _STRIP_CHARS and not ch.isspace()])
 
 
 def _is_pure_kana(text: str) -> bool:
