@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -528,21 +529,51 @@ class ChineseCleaner:
         source_evidence: list[list[str] | None] | None,
     ) -> dict[int, list[str]]:
         """把"清洗前条目→源文"证据按时间轴包含关系归并到合并后条目：
-        合并条目继承其全部成员的源文集合（任一成员含汉字即触发保留）。"""
+        合并条目继承其全部成员的源文集合（任一成员含汉字即触发保留）。
+
+        实现口径（性能重构，行为严格等价）：逐对全扫是平方级（3000 条语料
+        实测占清洗链 59%），改为「start 升序索引表 + 二分定窗」——
+        normal 条目（start<=end）由 p.start <= p.end 可知 end 条件蕴含
+        start <= m.end + eps，候选窗收窄为 start∈[m.start-eps, m.end+eps]，
+        窗内再验 end 条件；病态条目（畸形时间轴 start>end，parse_srt 宽容
+        解析可产）推导失效，单独围栏逐对全扫，保证全输入域输出逐字节一致
+        （matched 升序 = pre_items 原序）。"""
         if not source_evidence:
             return {}
-        result: dict[int, list[str]] = {}
+        n = min(len(pre_items), len(source_evidence))
         eps = 1.0
+        result: dict[int, list[str]] = {}
+        normal: list[int] = []
+        patho: list[int] = []
+        for pi in range(n):
+            p = pre_items[pi]
+            if p.start > p.end:
+                patho.append(pi)
+            else:
+                normal.append(pi)
+        order = sorted(normal, key=lambda pi: pre_items[pi].start)
+        starts = [pre_items[pi].start for pi in order]
+        has_patho = bool(patho)
         for mi, m in enumerate(merged_items):
-            texts: list[str] = []
-            for pi, p in enumerate(pre_items):
-                if pi >= len(source_evidence):
-                    break
-                if p.start >= m.start - eps and p.end <= m.end + eps:
-                    ev = source_evidence[pi]
-                    if ev:
-                        texts.extend(ev)
-            if texts:
+            lo = bisect_left(starts, m.start - eps)
+            hi = bisect_right(starts, m.end + eps)
+            matched: list[int] = []
+            for k in range(lo, hi):
+                pi = order[k]
+                p = pre_items[pi]
+                if p.end <= m.end + eps and source_evidence[pi]:
+                    matched.append(pi)
+            if has_patho:
+                for pi in patho:
+                    p = pre_items[pi]
+                    if (p.start >= m.start - eps and p.end <= m.end + eps
+                            and source_evidence[pi]):
+                        matched.append(pi)
+            if matched:
+                matched.sort()
+                texts: list[str] = []
+                for pi in matched:
+                    texts.extend(source_evidence[pi])
                 result[mi] = texts
         return result
 
