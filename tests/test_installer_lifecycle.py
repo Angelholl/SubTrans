@@ -396,6 +396,15 @@ def test_default_dir_dynamic_non_system_drive_pinned(iss_text):
     assert "GetEnv('SystemDrive')" in best_body, "须排除系统盘（SystemDrive）"
     assert "IsDevRepoDir(" in best_body, "候选盘须排除开发仓库目录"
     assert "DriveType -eq 3" in iss_text, "固定盘判据须走 CIM DriveType -eq 3"
+    # 探针文件四路径一致清理：cmd 重定向即使命令失败也会创建文件，
+    # 失败分支漏删即在用户 TEMP 留残留（d1104 验收期修正随钉）
+    fd = re.search(
+        r"function FixedDriveLetters\(\): String;(.{0,1800})", iss_text, re.S)
+    assert fd, "未找到 FixedDriveLetters 函数体"
+    fd_body = fd.group(1)
+    assert fd_body.count("DeleteFile(probe)") >= 4, \
+        "探测启动失败/退出码非零/读取失败/成功四路径须一致清理探针文件"
+    assert "if FileExists(probe) then" in fd_body, "运行前须预删陈旧探针文件"
     # 回落编译默认 Param（无候选不得猜盘）
     pick = re.search(
         r"function PickInstallDir\(Param: String\): String;(.{0,1200})", iss_text,

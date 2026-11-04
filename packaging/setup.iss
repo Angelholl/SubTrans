@@ -580,20 +580,25 @@ begin
   probe := GetTempDir + 'subtrans-drivetypes.txt';
   if FileExists(probe) then
     DeleteFile(probe);
+  // 探针文件在四条路径（启动失败／退出码非零／读取失败／成功）一律清理，
+  // 不留残留（cmd 重定向即使命令失败也会创建文件，故三个失败分支同样要删）。
   if not Exec(ExpandConstant('{cmd}'),
     '/c powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | Select-Object -ExpandProperty DeviceID" > "' + probe + '" 2>nul',
     '', SW_HIDE, ewWaitUntilTerminated, rc) then
   begin
+    DeleteFile(probe);
     Log('默认安装盘：无法启动固定盘探测，固定盘集合未知');
     Exit;
   end;
   if rc <> 0 then
   begin
+    DeleteFile(probe);
     Log('默认安装盘：固定盘探测退出码 ' + IntToStr(rc) + '，集合未知');
     Exit;
   end;
   if not LoadStringFromFile(probe, s) then
   begin
+    DeleteFile(probe);
     Log('默认安装盘：固定盘探测结果读取失败，集合未知');
     Exit;
   end;
