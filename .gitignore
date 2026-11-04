@@ -114,6 +114,7 @@ config/fullchain_c22.json
 # 定义到仓库内的场景（106MB/1.21GB/2.9GB 量级），禁入库
 /runtime/
 
-# autoresearch 会话态（插件 ledger/benchmark，禁入库）
-.auto/
+# autoresearch 会话态：dashboard 静态页禁入库。.auto/ 本体不 ignore——
+# 插件 commitExperiment 用 `git add -A -- . :(exclude).auto` 自排除（git.ts:49），
+# .auto 被 ignore 时 git 拒绝显式命名被忽略路径 → keep 路径报错，故留给插件自排除
 autoresearch-dashboard.html
