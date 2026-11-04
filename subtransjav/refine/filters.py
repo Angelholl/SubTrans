@@ -3,6 +3,7 @@ Refine SRT 工具：解析 / 构建 / 占位行过滤
 """
 
 import re
+from typing import Any
 
 # 模型把要删的行写成占位说明而非真正删除，例如：
 #   （削除：ASR杂音/呼吸声，无实义）   (删除：孤立感叹词)
@@ -18,7 +19,7 @@ CHATTER_LINE = re.compile(
 )
 
 # Module-level lazy singleton for OpenCC t2s converter
-_opencc_converter = None
+_opencc_converter: Any = None
 
 
 def _opencc_t2s_convert(text: str) -> str:
@@ -30,7 +31,7 @@ def _opencc_t2s_convert(text: str) -> str:
             _opencc_converter = opencc.OpenCC("t2s")
         except ImportError:
             return text
-    return _opencc_converter.convert(text)
+    return str(_opencc_converter.convert(text))
 
 
 def strip_chatter_lines(text: str) -> str:
@@ -44,8 +45,8 @@ _SRT_BLOCK = re.compile(
 )
 
 
-def parse_srt(content: str):
-    entries = []
+def parse_srt(content: str) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
     for m in _SRT_BLOCK.finditer(content or ""):
         idx, timing, text = m.group(1), m.group(2), m.group(3).strip()
         if "-->" in timing:
@@ -53,7 +54,7 @@ def parse_srt(content: str):
     return entries
 
 
-def build_srt(entries) -> str:
+def build_srt(entries: list[dict[str, Any]]) -> str:
     out = []
     for i, e in enumerate(entries, 1):
         out.append(str(i))
@@ -68,7 +69,7 @@ def is_placeholder(text: str) -> bool:
     return any(p.search(t) for p in PLACEHOLDER_PATTERNS)
 
 
-def normalize_srt_file(srt_path: str):
+def normalize_srt_file(srt_path: str) -> tuple[int, int]:
     """重写为纯条目格式：剥离模型附加的解释文本与占位条目。
     返回 (保留数, 删除数)。"""
     with open(srt_path, encoding="utf-8") as _f:

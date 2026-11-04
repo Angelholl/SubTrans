@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
+from typing import Any
 
 import pysubs2
 
@@ -42,8 +44,8 @@ def _clean_text(text: str) -> str:
     return _OVERRIDE_RE.sub("", text or "")
 
 
-def _make_events(entries) -> list[pysubs2.SSAEvent]:
-    events = []
+def _make_events(entries: list[dict[str, Any]]) -> list[pysubs2.SSAEvent]:
+    events: list[pysubs2.SSAEvent] = []
     for e in entries:
         start, end = _timing_to_ms(e["timing"])
         if end <= start:            # 零时长规范化（VTT 规范 end>start）
@@ -54,7 +56,7 @@ def _make_events(entries) -> list[pysubs2.SSAEvent]:
     return events
 
 
-def _build_ass(entries) -> str:
+def _build_ass(entries: list[dict[str, Any]]) -> str:
     f = pysubs2.SSAFile()
     # PlayRes 序列化走 info 字典（pysubs2 实证：属性赋值不落盘）
     f.info["PlayResX"] = str(_ASS_PLAY_RES[0])
@@ -84,7 +86,7 @@ def _vtt_escape(text: str) -> str:
                 .replace(">", "&gt;"))
 
 
-def _build_vtt(entries) -> str:
+def _build_vtt(entries: list[dict[str, Any]]) -> str:
     f = pysubs2.SSAFile()
     f.events = []
     for e in entries:
@@ -99,7 +101,7 @@ def _build_vtt(entries) -> str:
     return f.to_string("vtt")
 
 
-def build_extra_text(fmt: str, entries: list[dict]) -> str:
+def build_extra_text(fmt: str, entries: list[dict[str, Any]]) -> str:
     """entries（parse_srt 同构 ``{"index","timing","text"}``）→ ASS/VTT 文本。"""
     if fmt == "ass":
         return _build_ass(entries)
@@ -118,7 +120,8 @@ def existing_extra_formats(final_path: str) -> tuple[str, ...]:
     return found
 
 
-def sync_extra_outputs(final_path: str, entries, formats) -> list[str]:
+def sync_extra_outputs(final_path: str, entries: list[dict[str, Any]],
+                       formats: Iterable[str]) -> list[str]:
     """按 formats 平行写出附加成品件（原子写，UTF-8 无 BOM）。
 
     formats 空 → no-op 返回 []。返回实际写出的路径列表。
@@ -128,7 +131,7 @@ def sync_extra_outputs(final_path: str, entries, formats) -> list[str]:
     from pathlib import Path
 
     base = Path(final_path).with_suffix("")
-    written = []
+    written: list[str] = []
     for fmt in formats:
         out = base.with_suffix(f".{fmt}")
         _atomic_write_text(str(out), build_extra_text(fmt, entries))
