@@ -61,7 +61,13 @@ def break_segment(seg: dict[str, Any], params: dict[str, float] | None = None) -
     words = list(seg.get("words") or [])
     if len(words) < 2:
         return [seg]
-    if _text_len(_join_words(words)) <= max_chars:
+    # E3 性能重构（行为严格等价）：词文本与去空白长度一次判定、全程复用。
+    # _text_len 的 \s+→"" 删除对词拼接是同态（跨界空白 run 在拼接串中仍为
+    # 单一 run 被整删，词内 run 不变），故 len(noWS(拼接)) ≡ Σ len(noWS(词))，
+    # join 后重测可替换为 wlens 切片求和。
+    wtexts = [str(w.get("word") or "") for w in words]
+    wlens = [_text_len(t) for t in wtexts]
+    if sum(wlens) <= max_chars:
         return [seg]
 
     # 候选切点：词 i 与 i+1 之间（间隙=下一词起点-本词终点）
@@ -86,7 +92,7 @@ def break_segment(seg: dict[str, Any], params: dict[str, float] | None = None) -
     cut_map = {i: (pri, i) for pri, i in cuts}
     for i, w in enumerate(words):
         cur.append(w)
-        cur_chars += _text_len(str(w.get("word") or ""))
+        cur_chars += wlens[i]
         if cur_chars >= max_chars and len(cur) >= 2:
             # 窗内可切点：cur[j] 之后的词界（j=0..len(cur)-2），全局词界索引
             # = base + j（base=本窗首词全局下标）。取优先级最高者，同级取最后
@@ -105,7 +111,7 @@ def break_segment(seg: dict[str, Any], params: dict[str, float] | None = None) -
             take = cut_idx - base + 1
             parts.append(cur[:take])
             cur = cur[take:]
-            cur_chars = _text_len(_join_words(cur))
+            cur_chars = sum(wlens[cut_idx + 1: i + 1])
     if cur:
         parts.append(cur)
     if len(parts) <= 1:
