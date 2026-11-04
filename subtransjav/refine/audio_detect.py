@@ -34,6 +34,7 @@ from array import array
 from datetime import datetime, timedelta
 from operator import mul
 from pathlib import Path
+from typing import Any
 
 from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW  # windowed 防黑框单一来源（批0）
 
@@ -235,8 +236,8 @@ def _fmt_ms(ms: int) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{msec:03d}"
 
 
-def _gaps_from_entries(entries: list, min_gap_ms: int
-                       ) -> list[dict]:
+def _gaps_from_entries(entries: list[dict[str, Any]], min_gap_ms: int
+                       ) -> list[dict[str, Any]]:
     """字幕时间轴 gap 提取（相邻条目间隙 ≥ min_gap_ms）。
 
     timing 解析复用 v2_premerge._timing_span（与全链路同源口径）；
@@ -250,7 +251,7 @@ def _gaps_from_entries(entries: list, min_gap_ms: int
             continue
         spans.append((s0, e0, e.get("index")))
     spans.sort(key=lambda x: (x[0], x[1]))
-    gaps: list[dict] = []
+    gaps: list[dict[str, Any]] = []
     for prev, cur in zip(spans, spans[1:], strict=False):
         gap_ms = int(round((cur[0] - prev[1]) * 1000))
         if gap_ms >= min_gap_ms:
@@ -265,12 +266,12 @@ def _gaps_from_entries(entries: list, min_gap_ms: int
 # 主入口
 # ---------------------------------------------------------------------------
 
-def detect_audio_insights(media_path: str, entries: list, *,
+def detect_audio_insights(media_path: str, entries: list[dict[str, Any]], *,
                           temp_root: str,
                           threshold_pct: int = 85,
                           min_gap_ms: int = 300,
                           max_candidates: int = 20,
-                          hop_ms: int = 10) -> dict:
+                          hop_ms: int = 10) -> dict[str, Any]:
     """疑似漏听检测主入口（全容错，异常由调用方再兜一层）。
 
     返回 {"available": bool, "reason": str, "candidates": [...],
@@ -278,8 +279,8 @@ def detect_audio_insights(media_path: str, entries: list, *,
     读 → RMS hop 序列 → 相对分位阈值 → 静音/有声段 → 与字幕 gap
     对照 → 候选列表（截断 max_candidates，超限注明）。任何一步失败
     都降级为 available=False + reason，绝不抛出。"""
-    result: dict = {"available": False, "reason": "",
-                    "candidates": [], "metrics": {}}
+    result: dict[str, Any] = {"available": False, "reason": "",
+                              "candidates": [], "metrics": {}}
     ff = _find_ffmpeg()
     if ff is None:
         result["reason"] = "未检测到 ffmpeg"
@@ -294,7 +295,7 @@ def detect_audio_insights(media_path: str, entries: list, *,
         _extract_wav(ff, media_path, tmp_wav, 16000)
         rate, rms, duration = _hop_rms_series(tmp_wav, hop_ms)
         elapsed = time.monotonic() - t0
-        metrics: dict = {
+        metrics: dict[str, Any] = {
             "sample_rate": rate,
             "duration_s": round(duration, 2),
             "analyze_s": round(elapsed, 2),
@@ -315,7 +316,7 @@ def detect_audio_insights(media_path: str, entries: list, *,
             100.0 * sum(e - s for s, e in segs) / duration, 1) \
             if duration > 0 else 0.0
 
-        candidates: list[dict] = []
+        candidates: list[dict[str, Any]] = []
         truncated = False
         for gap in _gaps_from_entries(entries, min_gap_ms):
             gs, ge = gap["start_ms"] / 1000.0, gap["end_ms"] / 1000.0
@@ -355,7 +356,7 @@ def detect_audio_insights(media_path: str, entries: list, *,
 
 def detect_speech_windows(media_path: str,
                           gap_timings: list[str],
-                          ) -> dict:
+                          ) -> dict[str, Any]:
     """语音窗口提取（3.0 批3 3A，漏听置信门 ≤1s 放弃判定数据源）。
 
     抽一次 wav → RMS hop 序列 → 相对分位阈值 → 有声段，再对每个间隙

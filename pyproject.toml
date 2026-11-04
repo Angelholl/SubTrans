@@ -107,6 +107,8 @@ module = [
     "subtransjav.refine.output_formats",
     "subtransjav.refine.token_hint",
     "subtransjav.refine.rules_loader",
+    "subtransjav.refine.audio_detect",
+    "subtransjav.refine.subtitle_convert",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

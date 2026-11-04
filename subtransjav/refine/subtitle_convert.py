@@ -21,6 +21,7 @@ import os
 import re
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pysubs2
 
@@ -62,11 +63,11 @@ def _parse_vtt_ts(raw: str) -> int | None:
             if m else None)
 
 
-def _ass_candidates(lines: list[str]) -> list[dict]:
+def _ass_candidates(lines: list[str]) -> list[dict[str, Any]]:
     """ASS/SSA 候选提取：[Events] 段内最近一条 Format: 行驱动列映射
     （禁位置硬编码=规格第 2 项同源纪律）；Format 缺失/时间戳解析失败时
     候选退化为仅 (行号, 原文)，不参与 ts 匹配。"""
-    cands: list[dict] = []
+    cands: list[dict[str, Any]] = []
     cols: list[str] | None = None  # [Events] 段内最近 Format: 行的列名表（小写）
     in_events = False
     for lineno, raw in enumerate(lines, 1):
@@ -99,11 +100,11 @@ def _ass_candidates(lines: list[str]) -> list[dict]:
     return cands
 
 
-def _vtt_candidates(lines: list[str]) -> list[dict]:
+def _vtt_candidates(lines: list[str]) -> list[dict[str, Any]]:
     """VTT 候选提取：以含 --> 的时间轴行开块，块内后续非空行 join 为 text；
     候选行号=时间轴行物理行号。"""
-    cands: list[dict] = []
-    cur: dict | None = None
+    cands: list[dict[str, Any]] = []
+    cur: dict[str, Any] | None = None
     for lineno, raw in enumerate(lines, 1):
         s = raw.strip()
         if "-->" in s:
@@ -121,7 +122,7 @@ def _vtt_candidates(lines: list[str]) -> list[dict]:
     return cands
 
 
-def _prewash_candidates(text: str) -> list[dict]:
+def _prewash_candidates(text: str) -> list[dict[str, Any]]:
     """坏行候选预洗（pysubs2 解析前，同一份 _decode 后文本）：
     splitlines() 统一吃 CRLF/CR/LF，行号=1-based 物理行号。"""
     lines = text.splitlines()
@@ -130,7 +131,8 @@ def _prewash_candidates(text: str) -> list[dict]:
     return _vtt_candidates(lines)
 
 
-def _resolve_dropped(cands: list[dict], ev: pysubs2.SSAEvent) -> dict | None:
+def _resolve_dropped(cands: list[dict[str, Any]],
+                     ev: pysubs2.SSAEvent) -> dict[str, Any] | None:
     """dropped_empty 事件归属：①(start,end) 精确匹配恰一命中；
     ②多条（重复时间戳）按 text 归一化（strip）过滤恰一命中；否则行号未定。"""
     ts_hits = [c for c in cands
@@ -151,7 +153,7 @@ def _excerpt(text: str) -> str:
     return t[:_EXCERPT_MAX] + "…" if len(t) > _EXCERPT_MAX else t
 
 
-def _dropped_warning(total: int, details: list[dict]) -> str:
+def _dropped_warning(total: int, details: list[dict[str, Any]]) -> str:
     """坏行告警文案：命中条目「第 L 行「摘录」」前 10 条+上限聚合；
     部分未定收尾（其中 K 处行号未定）；全部未定退回旧纯计数文案。"""
     hits = [d for d in details if d["resolved"]]
@@ -211,7 +213,7 @@ def _decode(data: bytes) -> tuple[str, str]:
     return data.decode(enc), enc
 
 
-def convert_file(input_path: str) -> dict:
+def convert_file(input_path: str) -> dict[str, Any]:
     """转换单个 ASS/SSA/VTT 文件为 SRT。
 
     返回 {"srt_path", "warnings", "dropped_empty", "dropped_details",
@@ -240,7 +242,7 @@ def convert_file(input_path: str) -> dict:
     # spike 实证）——逐条抢救语义，剔除计数+行号/原文明细进告警与返回 dict
     kept: list[pysubs2.SSAEvent] = []
     dropped_empty = 0
-    dropped_details: list[dict] = []
+    dropped_details: list[dict[str, Any]] = []
     for ev in sorted(subs.events, key=lambda e: (e.start, e.end)):
         if not ev.plaintext:
             dropped_empty += 1
