@@ -8,9 +8,11 @@
 
 import contextlib
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # 严重度档位
 SEVERITY_INFO = "info"
@@ -36,7 +38,7 @@ class RiskEvent:
     reason: str = ""               # 风险原因（人类可读）
     action: str = ""               # 已执行的降级动作（空 = 未影响正文内容）
     affected_count: int = 0        # 受影响条数
-    samples: list = field(default_factory=list)   # ≤3 条原文样本
+    samples: list[str] = field(default_factory=list)   # ≤3 条原文样本
     suggestion: str = ""           # 处理建议
     severity: str = SEVERITY_WARNING
     timestamp: str = field(default_factory=_iso_now)
@@ -44,24 +46,24 @@ class RiskEvent:
     # payload）；md 表格（_render_markdown）/ summary_lines /
     # content_degraded 均不感知，旧调用点零影响。
     timing_range: str = ""         # 首条→末条 timing，如 "t0→t1"（单条时两段相同）
-    entry_timings: list = field(default_factory=list)  # 受影响条目的 timing 全列表
+    entry_timings: list[str] = field(default_factory=list)  # 受影响条目的 timing 全列表
 
 
 class RiskCollector:
     """任务级风险收集器：聚合 RiskEvent，并可同步镜像到事件流。"""
 
-    def __init__(self):
-        self.events = []                 # list[RiskEvent]
-        self._emitter = None             # EventEmitter（duck typing）
+    def __init__(self) -> None:
+        self.events: list[RiskEvent] = []     # list[RiskEvent]
+        self._emitter: Any = None             # EventEmitter（duck typing）
         self._untranslated_majority = False
-        self._info_lines = []            # 非风险信息行（闸门0 计数等），随 summary_lines 输出
+        self._info_lines: list[str] = []      # 非风险信息行（闸门0 计数等），随 summary_lines 输出
 
     # ------------------------------------------------------------------
-    def attach_emitter(self, emitter) -> None:
+    def attach_emitter(self, emitter: Any) -> None:
         """挂载事件发射器；此后每次 add() 同步发一条 warning/degraded 事件。"""
         self._emitter = emitter
 
-    def add_summary_line(self, line) -> None:
+    def add_summary_line(self, line: str) -> None:
         """追加一条非风险信息行（如 R8 的闸门0 计数行），随 summary_lines 聚合输出。
 
         信息行不计入风险事件：不影响 risk_count / content_degraded /
@@ -70,9 +72,13 @@ class RiskCollector:
         if line:
             self._info_lines.append(str(line))
 
-    def add(self, stage=None, file=None, entry_range=None, reason=None, action=None,
-            affected_count=0, samples=None, suggestion=None, severity="warning",
-            timing_range="", entry_timings=None) -> RiskEvent:
+    def add(self, stage: str | None = None, file: str | None = None,
+            entry_range: str | None = None, reason: str | None = None,
+            action: str | None = None, affected_count: int = 0,
+            samples: list[str] | None = None,
+            suggestion: str | None = None,
+            severity: str = "warning", timing_range: str = "",
+            entry_timings: list[str] | None = None) -> RiskEvent:
         """记录一条风险；samples 自动截断到 3 条，None 入参归一为空串/0。
 
         timing_range/entry_timings 为 additive 诊断字段（仅进 asdict
@@ -101,9 +107,11 @@ class RiskCollector:
                                    payload=asdict(event))
         return event
 
-    def add_entry_ranged(self, *, stage, file, entries, reason,
-                         action="", severity=SEVERITY_WARNING,
-                         suggestion="") -> RiskEvent:
+    def add_entry_ranged(self, *, stage: str, file: str,
+                         entries: Iterable[dict[str, Any]], reason: str,
+                         action: str = "",
+                         severity: str = SEVERITY_WARNING,
+                         suggestion: str = "") -> RiskEvent:
         """按条目集合记录一条风险：范围/时间轴字段由本 helper 统一推导
         （调用点禁止手拼 "12-15" 范围串）。
 
@@ -135,7 +143,8 @@ class RiskCollector:
                         suggestion=suggestion, timing_range=timing_range,
                         entry_timings=timings)
 
-    def mark_untranslated_majority(self, file=None, total=0, kept=0) -> None:
+    def mark_untranslated_majority(self, file: str | None = None,
+                                   total: int = 0, kept: int = 0) -> None:
         """记录"整段未翻译"标志（保留日文原文占比过高/全部未译）。
 
         同时落一条 critical 事件，保证 summary 与 payload 都能体现。
@@ -174,11 +183,11 @@ class RiskCollector:
         return bool(self.events) or self._untranslated_majority
 
     # ------------------------------------------------------------------
-    def summary_lines(self) -> list:
+    def summary_lines(self) -> list[str]:
         """人类可读的摘要行：风险行（每行 "⚠️ ..." 风格）+ 末行计数汇总，
         再拼接 add_summary_line 追加的非风险信息行（闸门0 计数等）；
         无风险且无信息行返回 []。"""
-        lines = []
+        lines: list[str] = []
         for e in self.events:
             seg = f"⚠️ [{e.severity}] {e.stage or '-'}"
             if e.file:
@@ -203,7 +212,7 @@ class RiskCollector:
         lines.extend(self._info_lines)
         return lines
 
-    def to_payload(self) -> dict:
+    def to_payload(self) -> dict[str, Any]:
         """序列化为可嵌入事件 payload / JSON 报告的 dict。"""
         return {
             "risk_count": len(self.events),
@@ -212,7 +221,8 @@ class RiskCollector:
         }
 
     # ------------------------------------------------------------------
-    def write_reports(self, out_dir, stem):
+    def write_reports(self, out_dir: str | Path,
+                      stem: str) -> dict[str, str] | None:
         """有风险时写 {stem}_风险清单.md + .json，返回 {"md":路径,"json":路径}；无风险不写文件返回 None。"""
         if not self.has_risks:
             return None
@@ -244,6 +254,6 @@ class RiskCollector:
         return "\n".join(lines)
 
 
-def _md_cell(text) -> str:
+def _md_cell(text: Any) -> str:
     """Markdown 表格单元格转义：竖线/换行会破坏表格结构。"""
     return str(text or "").replace("|", "/").replace("\n", " ")

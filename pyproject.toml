@@ -111,6 +111,8 @@ module = [
     "subtransjav.refine.subtitle_convert",
     "subtransjav.refine.v2_context_blocks",
     "subtransjav.refine.v2_rules",
+    "subtransjav.refine.risk",
+    "subtransjav.refine.eval_baseline",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

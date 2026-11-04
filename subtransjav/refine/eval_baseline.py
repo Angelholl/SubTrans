@@ -30,6 +30,7 @@ import pathlib
 import re
 from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import Any
 
 from .. import paths
 from . import audio_detect
@@ -71,7 +72,7 @@ def wilson_lower_bound(successes: int, n: int, z: float = _WILSON_Z) -> float:
     return max(0.0, centre - margin) / denom
 
 
-def wilson_interval(successes: int, n: int) -> dict:
+def wilson_interval(successes: int, n: int) -> dict[str, float]:
     """Wilson score 95% 双端区间（二项比例；n=0 → {"lo": 0.0, "hi": 0.0}）。
 
     hi 由对称性取 1 − 下界(n − successes, n)；仅用于二项计数比
@@ -106,7 +107,7 @@ def _overlap(a: tuple[float, float], b: tuple[float, float]) -> float:
     return inter if inter > 0 else 0.0
 
 
-def speech_windows_full(media_path: str) -> dict:
+def speech_windows_full(media_path: str) -> dict[str, Any]:
     """整片语音窗口 [(start_s, end_s), ...]；诚实退化 → {"__error": 原因}。
 
     与 audio_detect.detect_speech_windows 同原语同阈值（85 分位、10ms hop），
@@ -135,9 +136,9 @@ def speech_windows_full(media_path: str) -> dict:
         return {"__error": "语音窗口检测失败: " + str(e)}
 
 
-def hallucination_proxy(entries: list[dict],
+def hallucination_proxy(entries: list[dict[str, Any]],
                         windows: list[tuple[float, float]] | None,
-                        min_overlap: float = 0.3) -> dict | None:
+                        min_overlap: float = 0.3) -> dict[str, Any] | None:
     """幻听代理：与语音重叠不足行时长 30% 的行占比。窗口缺失 → None。"""
     if windows is None:
         return None
@@ -159,8 +160,9 @@ def hallucination_proxy(entries: list[dict],
             "wilson": wilson_interval(suspect, len(spans))}
 
 
-def omission_proxy(entries: list[dict],
-                   windows: list[tuple[float, float]] | None) -> dict | None:
+def omission_proxy(entries: list[dict[str, Any]],
+                   windows: list[tuple[float, float]] | None
+                   ) -> dict[str, Any] | None:
     """漏听代理：语音窗口时间未被任何行覆盖的占比。窗口缺失 → None。"""
     if windows is None:
         return None
@@ -182,8 +184,9 @@ def _norm_text(t: str) -> str:
     return re.sub(r"\s+", "", t or "")
 
 
-def agreement(entries_a: list[dict], entries_b: list[dict],
-              iou_threshold: float = 0.5, sim_threshold: float = 0.6) -> dict:
+def agreement(entries_a: list[dict[str, Any]], entries_b: list[dict[str, Any]],
+              iou_threshold: float = 0.5,
+              sim_threshold: float = 0.6) -> dict[str, Any]:
     """双引擎一致率：贪婪时轴最优匹配（IoU≥阈值）且文本相似≥阈值。"""
     spans_a = [(i, _timing_span(e.get("timing", ""))) for i, e in enumerate(entries_a)]
     spans_b = [(i, _timing_span(e.get("timing", ""))) for i, e in enumerate(entries_b)]
@@ -230,7 +233,7 @@ def agreement(entries_a: list[dict], entries_b: list[dict],
     }
 
 
-def cps_stats(entries: list[dict]) -> dict:
+def cps_stats(entries: list[dict[str, Any]]) -> dict[str, Any]:
     """行均时长与 CPS 分位（CPS=去空白字符数/显示时长）。"""
     values: list[float] = []
     durs: list[float] = []
@@ -277,7 +280,7 @@ def run_engine(engine_id: str, media_path: str, workdir: str,
 
 
 def evaluate(media_path: str, srt_by_engine: dict[str, str],
-             windows: list[tuple[float, float]] | None = None) -> dict:
+              windows: list[tuple[float, float]] | None = None) -> dict[str, Any]:
     """组装单媒体评测报告（窗口可外注入供测试；缺省现算）。"""
     entries_by_engine = {}
     for engine_id, path in srt_by_engine.items():
@@ -291,7 +294,7 @@ def evaluate(media_path: str, srt_by_engine: dict[str, str],
             windows = None
         else:
             windows = win_info["windows"]
-    engine_reports: dict[str, dict] = {}
+    engine_reports: dict[str, dict[str, Any]] = {}
     for engine_id, entries in entries_by_engine.items():
         engine_reports[engine_id] = {
             "lines": len(entries),
@@ -299,7 +302,7 @@ def evaluate(media_path: str, srt_by_engine: dict[str, str],
             "omission_proxy": omission_proxy(entries, windows),
             "cps": cps_stats(entries),
         }
-    pair_reports: dict[str, dict] = {}
+    pair_reports: dict[str, dict[str, Any]] = {}
     ids = sorted(entries_by_engine)
     for i in range(len(ids)):
         for j in range(i + 1, len(ids)):
@@ -322,7 +325,7 @@ _MD_PROXY_NAMES = {
 }
 
 
-def report_markdown(report: dict) -> str:
+def report_markdown(report: dict[str, Any]) -> str:
     lines = ["# 评测基线报告：" + report["media"], "",
              "生成：" + report["generated_at"] + "（schema " + report["schema"] + "）", ""]
     if report.get("windows_error"):
@@ -367,7 +370,8 @@ def _safe_stem(stem: str) -> str:
     return cleaned[:80]
 
 
-def write_report(report: dict, out_dir: str, stem: str) -> tuple[str, str]:
+def write_report(report: dict[str, Any], out_dir: str,
+                 stem: str) -> tuple[str, str]:
     base = pathlib.Path(out_dir).resolve()
     base.mkdir(parents=True, exist_ok=True)
     safe = _safe_stem(stem)
