@@ -38,6 +38,8 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Callable
+from typing import Any
 
 import yaml
 
@@ -114,7 +116,7 @@ def _config_rules_path(config_dir: str = None) -> str:
     return os.path.join(base, "rules", "source_hallucination.yaml")
 
 
-def _resolve_rules_path(config_dir: str = None) -> str:
+def _resolve_rules_path(config_dir: str | None = None) -> str:
     """用户目录优先，包内默认回退（整文件替换语义）。"""
     p = _config_rules_path(config_dir)
     if os.path.isfile(p):
@@ -122,12 +124,12 @@ def _resolve_rules_path(config_dir: str = None) -> str:
     return _PACKAGE_RULES_PATH
 
 
-def resolve_source_rules_path(config_dir: str = None) -> str:
+def resolve_source_rules_path(config_dir: str | None = None) -> str:
     """实际生效的 source_hallucination.yaml 路径（公开别名）。"""
     return _resolve_rules_path(config_dir)
 
 
-def _nested_get(d: dict, dotted: str):
+def _nested_get(d: dict[str, Any], dotted: str) -> Any:
     cur = d
     for part in dotted.split("."):
         if not isinstance(cur, dict) or part not in cur:
@@ -136,7 +138,7 @@ def _nested_get(d: dict, dotted: str):
     return cur
 
 
-def _validate_rules(rules: dict, path: str):
+def _validate_rules(rules: dict[str, Any], path: str) -> None:
     for key in _REQUIRED_KEYS:
         v = _nested_get(rules, key)
         if v is None or (isinstance(v, str) and not v.strip()):
@@ -147,7 +149,7 @@ def _validate_rules(rules: dict, path: str):
 
 
 @functools.cache
-def _load_cached(path: str, mtime: float) -> dict:
+def _load_cached(path: str, mtime: float) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         rules = yaml.safe_load(f)
     if not isinstance(rules, dict):
@@ -156,7 +158,7 @@ def _load_cached(path: str, mtime: float) -> dict:
     return rules
 
 
-def load_source_rules(config_dir: str = None) -> dict:
+def load_source_rules(config_dir: str | None = None) -> dict[str, Any]:
     """加载闸门0 规则库（用户目录优先，包内回退；带缓存）。
 
     返回解析后的语义对象（manifest 指纹对其做 json.dumps+sha1，
@@ -207,7 +209,7 @@ def _normalize_text(text: str) -> str:
     return _NON_WORD_RE.sub("", text or "")
 
 
-def _timing_span(timing: str) -> tuple:
+def _timing_span(timing: str) -> tuple[float | None, float | None]:
     """解析时间轴为 (start_sec, end_sec)；解析失败返回 (None, None)。"""
     m = _TIMING_RE.match((timing or "").strip())
     if not m:
@@ -236,7 +238,7 @@ def _is_pure_punctuation(raw: str) -> bool:
     return bool(raw) and not _HAS_WORD_RE.search(raw)
 
 
-def _is_unpronounceable(norm: str, cfg: dict) -> bool:
+def _is_unpronounceable(norm: str, cfg: dict[str, Any]) -> bool:
     """不可发音辅音串：纯 ASCII 字母、无开元音（sss/kk/thhr 类）。
 
     仅对拉丁字母条目生效（日文假名串不适用——假名皆开元音节）；
@@ -255,7 +257,8 @@ def _is_unpronounceable(norm: str, cfg: dict) -> bool:
     return not re.search(r"[aeiou]", norm, re.IGNORECASE)
 
 
-def _detect_repeat_flags(norms: list, min_run: int, min_norm_len: int) -> set:
+def _detect_repeat_flags(norms: list[str], min_run: int,
+                         min_norm_len: int) -> set[int]:
     """重复循环：相邻同文条目 ≥min_run 连且规范化长度 ≥min_norm_len。
 
     返回需删除的位置集合。keep_list 命中的位置由主循环提前放行，
@@ -278,9 +281,9 @@ def _detect_repeat_flags(norms: list, min_run: int, min_norm_len: int) -> set:
     return flags
 
 
-def _detect_repeat_flags_adaptive(norms: list, base_cfg: dict,
-                                  tight_cfg: dict,
-                                  tight_positions: set) -> set:
+def _detect_repeat_flags_adaptive(norms: list[str], base_cfg: dict[str, Any],
+                                  tight_cfg: dict[str, Any],
+                                  tight_positions: set[int]) -> set[int]:
     """H4b 条目级重复循环判定（连续组就紧原则）。
 
     "连续组" = 相邻位置规范化文本完全相同的极大段。跨条目组归属规则：
@@ -319,8 +322,9 @@ def _detect_repeat_flags_adaptive(norms: list, base_cfg: dict,
     return flags
 
 
-def _detect_iso_flags(norms: list, iso_words: set, keep_set: set,
-                      min_run: int, max_ratio: float) -> set:
+def _detect_iso_flags(norms: list[str], iso_words: set[str],
+                      keep_set: set[str], min_run: int,
+                      max_ratio: float) -> set[int]:
     """孤立应答词 strict 删除标记：同词连续 ≥min_run 或检出占比 >max_ratio。
 
     仅统计 keep_list 未保护的候选（白名单条目由主循环放行，
@@ -346,7 +350,8 @@ def _detect_iso_flags(norms: list, iso_words: set, keep_set: set,
     return flags
 
 
-def _unit_repeat_len(norm: str, unit_min: int, max_unit_len: int):
+def _unit_repeat_len(norm: str, unit_min: int,
+                     max_unit_len: int) -> int | None:
     """2-max_unit_len 字假名单元整条平铺 ≥unit_min 次时返回单元长，否则 None。"""
     n = len(norm)
     for u in range(2, max_unit_len + 1):
@@ -359,7 +364,7 @@ def _unit_repeat_len(norm: str, unit_min: int, max_unit_len: int):
     return None
 
 
-def _is_nonsense(norm: str, cfg: dict) -> bool:
+def _is_nonsense(norm: str, cfg: dict[str, Any]) -> bool:
     """无意义音节连缀（检出信号即 strict 删除的叠加启发式，同源）：
 
     - 形态门槛：规范化后仅假名、长度达标，且不是整条单假名重复
@@ -389,7 +394,7 @@ def _is_nonsense(norm: str, cfg: dict) -> bool:
 # 主入口
 # ---------------------------------------------------------------------------
 
-def _resolve_valve_pct(cfg) -> int:
+def _resolve_valve_pct(cfg: Any) -> int:
     """保险阀阈值（1-100）；非法值静默回退默认 50（该链路一贯容错）。"""
     try:
         pct = int(getattr(cfg, "v2_source_filter_valve_pct", 50))
@@ -404,8 +409,10 @@ def _default_errors_dir() -> str:
     return paths.data_subdir("Errors")
 
 
-def _archive_dropped(entries, delete_positions, cat_by_pos, errors_dir,
-                     source_name):
+def _archive_dropped(entries: list[dict[str, Any]],
+                     delete_positions: set[int],
+                     cat_by_pos: dict[int, str], errors_dir: str | None,
+                     source_name: str) -> None:
     """删除条目追加归档到 Errors/dropped_entries.log（静默容错）。"""
     if not delete_positions:
         return
@@ -421,11 +428,16 @@ def _archive_dropped(entries, delete_positions, cat_by_pos, errors_dir,
         pass
 
 
-def apply_source_filter(entries: list, cfg, *, source_name: str = "",
-                        config_dir: str = None, rules: dict = None,
-                        errors_dir: str = None, tighten: bool = False,
+def apply_source_filter(entries: list[dict[str, Any]], cfg: Any, *,
+                        source_name: str = "",
+                        config_dir: str | None = None,
+                        rules: dict[str, Any] | None = None,
+                        errors_dir: str | None = None,
+                        tighten: bool = False,
                         samples_limit: int = 0,
-                        tighten_entry_predicate=None) -> tuple:
+                        tighten_entry_predicate: Callable[[dict[str, Any]],
+                                                          bool] | None = None
+                        ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """闸门0 主入口：对原始条目序列做源侧幻觉检测。
 
     参数
@@ -477,7 +489,7 @@ def apply_source_filter(entries: list, cfg, *, source_name: str = "",
     if mode not in ("strict", "default", "off"):
         mode = "default"                # 未知档位按 default 兜底
     valve_pct = _resolve_valve_pct(cfg)
-    stats: dict = {
+    stats: dict[str, Any] = {
         "mode": mode,
         "total": len(entries),
         "deleted": 0,
@@ -522,14 +534,14 @@ def apply_source_filter(entries: list, cfg, *, source_name: str = "",
     else:
         tight_positions = set()
 
-    def _cat_cfg(name: str, pos: int = None) -> dict:
+    def _cat_cfg(name: str, pos: int | None = None) -> dict[str, Any]:
         """类别参数：base 变体；pos 命中低信任集时叠加 tighten 覆盖块。"""
         base = dict(rules.get(name) or {})
         if pos is not None and pos in tight_positions:
             base.update(tighten_block.get(name) or {})
         return base
 
-    def _tight_cfg(name: str, base: dict) -> dict:
+    def _tight_cfg(name: str, base: dict[str, Any]) -> dict[str, Any]:
         """tighten 变体（预计算用）：base 叠加该类收紧覆盖块。"""
         merged = dict(base)
         merged.update(tighten_block.get(name) or {})
@@ -681,7 +693,8 @@ def apply_source_filter(entries: list, cfg, *, source_name: str = "",
     return kept, stats
 
 
-def _match_meta_words(raw: str, words_ja: list, words_en: list) -> bool:
+def _match_meta_words(raw: str, words_ja: list[str],
+                      words_en: list[str]) -> bool:
     """片尾元信息词命中（英语大小写不敏感子串，日语原样子串）。"""
     low = raw.lower()
     return any(w in low for w in words_en) \
@@ -755,8 +768,8 @@ def strong_garble_signal(text: str) -> str | None:
     return None
 
 
-def is_source_counting_noise(text: str, config_dir: str = None,
-                             rules: dict = None) -> bool:
+def is_source_counting_noise(text: str, config_dir: str | None = None,
+                             rules: dict[str, Any] | None = None) -> bool:
     """源侧计数类噪声判定（v1.2.2 C2，公开纯函数；cleaner 的 L7/L8/L11
     删除闸门消费）。
 
@@ -801,9 +814,11 @@ def is_source_counting_noise(text: str, config_dir: str = None,
     return _unit_repeat_len(norm, unit_min, max_unit) is not None
 
 
-def quarantine_review(final_entries: list, candidates: list,
-                      source_lookup: dict,
-                      untranslated_prefix: str = "[未翻译]") -> tuple:
+def quarantine_review(final_entries: list[dict[str, Any]],
+                      candidates: list[dict[str, Any]] | None,
+                      source_lookup: dict[Any, Any] | None,
+                      untranslated_prefix: str = "[未翻译]"
+                      ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """H5 翻译后回捞：把"源文高置信幻觉 + 译文流畅中文"的条目移入隔离区。
 
     场景：闸门0 保险阀降级时（--source-filter off 档不做候选——用户显式
@@ -837,7 +852,7 @@ def quarantine_review(final_entries: list, candidates: list,
     return main, quarantine
 
 
-def gate0_rules_sha1(rules: dict = None) -> str:
+def gate0_rules_sha1(rules: dict[str, Any] | None = None) -> str:
     """规则库语义内容 sha1（json.dumps(sort_keys=True) 后哈希）。
 
     manifest 指纹消费：用户覆盖文件与包内默认谁生效就用谁，

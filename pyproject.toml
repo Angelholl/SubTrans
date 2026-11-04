@@ -101,6 +101,8 @@ module = [
     "subtransjav.refine.v2_learn",
     "subtransjav.refine.dialogue_detect",
     "subtransjav.refine.kana_clean",
+    "subtransjav.refine.post_validate",
+    "subtransjav.refine.source_hallucination",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

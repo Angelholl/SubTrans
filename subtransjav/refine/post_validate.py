@@ -7,6 +7,7 @@
 
 import logging
 import re
+from typing import Any
 
 from .risk import SEVERITY_CRITICAL, SEVERITY_WARNING
 from .rules_loader import load_rules
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------------
 
 
-def _compile_validator_rules():
+def _compile_validator_rules() -> dict[str, dict[str, Any]]:
     """从 YAML 编译校验规则。返回 {name: {regexes..., action...}}。
 
     在模块首次使用时惰性编译；YAML 损坏时抛 RulesLoadError
@@ -37,7 +38,7 @@ def _compile_validator_rules():
     """
     rules = load_rules().get("validator_rules", {})
 
-    compiled = {}
+    compiled: dict[str, dict[str, Any]] = {}
     d = rules.get("dewei_mistranslation", {})
     compiled["dewei"] = {
         "target": re.compile(d["target_pattern"]),
@@ -71,7 +72,7 @@ def _compile_validator_rules():
 _compiled = None
 
 
-def _get_compiled():
+def _get_compiled() -> dict[str, dict[str, Any]]:
     global _compiled
     if _compiled is None:
         _compiled = _compile_validator_rules()
@@ -94,9 +95,9 @@ def _emit_warning(warnings: list[str], text: str, warn_only: bool) -> str:
 
 
 def check_and_fix_translation_errors(
-    src_entries: list[dict],
-    tgt_entries: list[dict],
-) -> tuple[int, list[str], set, list[dict]]:
+    src_entries: list[dict[str, Any]],
+    tgt_entries: list[dict[str, Any]],
+) -> tuple[int, list[str], set[int], list[dict[str, Any]]]:
     """
     翻译质量后验拦截：逐条比对源文与目标文，检测并修正系统性误译。
     返回：(修正条数, 警告列表, flagged_indexes, structured_warnings)
@@ -113,10 +114,11 @@ def check_and_fix_translation_errors(
     """
     fixes = 0
     warnings: list[str] = []
-    flagged_indexes: set = set()
-    structured_warnings: list[dict] = []
+    flagged_indexes: set[int] = set()
+    structured_warnings: list[dict[str, Any]] = []
 
-    def _record(index, timing, category, warn_only, text) -> None:
+    def _record(index: int, timing: str | None, category: str,
+                warn_only: bool, text: str) -> None:
         """字符串告警 + 结构化告警双写（message 逐字节一致）。"""
         message = _emit_warning(warnings, text, warn_only)
         structured_warnings.append({
