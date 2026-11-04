@@ -10,7 +10,8 @@
      有 pending → 退出码 1；
   5. 复标一致率（28 条构 25 同 3 异 → 89.29% <90；26 同 → 92.86% ≥90）
      与争议 id 清单正确；
-  6. 服务端仅绑 127.0.0.1（断言 server_address）+ 端口被占 +1 重试。
+  6. 服务端仅绑 127.0.0.1（断言 server_address）+ 端口被占 +1 重试；占用判定
+     如实（关端口复用，防 Windows 第三方双绑劫持使 +1 防线静默失效）。
 
 钉外补测：首页内嵌 HTML 全中文/零外链/按钮 ≥44px/顶部进度常显。
 全程离线：ffmpeg 走 subprocess 打桩，不起真实切片；server 只绑回环。
@@ -45,6 +46,7 @@ import importlib.util
 import json
 import os
 import re
+import socket
 import threading
 import types
 from pathlib import Path
@@ -490,7 +492,7 @@ def test_pin6_server_binds_loopback_only(tmp_path):
 def test_pin6_port_occupied_retries_next(tmp_path, monkeypatch):
     pkg = _pkg(tmp_path)
     tried: list[int] = []
-    real = mod.ThreadingHTTPServer
+    real = mod._LabelerServer
 
     def fake(addr, handler):
         tried.append(addr[1])
@@ -498,7 +500,7 @@ def test_pin6_port_occupied_retries_next(tmp_path, monkeypatch):
             raise OSError("端口被占")
         return real(addr, handler)
 
-    monkeypatch.setattr(mod, "ThreadingHTTPServer", fake)
+    monkeypatch.setattr(mod, "_LabelerServer", fake)
     httpd = mod.create_server(pkg)
     try:
         assert tried[:2] == [8765, 8766]  # 被占 +1 重试
@@ -506,6 +508,50 @@ def test_pin6_port_occupied_retries_next(tmp_path, monkeypatch):
         assert httpd.server_address[0] == "127.0.0.1"
     finally:
         httpd.server_close()
+
+
+def test_pin6_addr_reuse_is_off():
+    """端口复用必须关：Windows 下 SO_REUSEADDR 允许第三方进程双绑同端口且 bind
+    不报错——bind 成功不等于端口持有者是我们（2026-11-04 本机实测劫持）。"""
+    assert mod._LabelerServer.allow_reuse_address is False
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def test_pin6_foreign_holder_forces_next_port(tmp_path):
+    """外部进程先占端口（Windows 双绑实况形态）时本工具必须如实 +1，
+    不得 bind 停在同端口后被外部应答劫持。改前红：复用开启时 bind 同端口成功。"""
+    pkg = _pkg(tmp_path)
+    port = _free_port()
+
+    class _Foreign(mod.BaseHTTPRequestHandler):
+        def version_string(self) -> str:  # 镜像实况外部应答（Server: NFOSorter/0.4.0）
+            return "Foreign/0.4.0"
+
+        def do_GET(self) -> None:
+            self.send_response(500)
+            self.end_headers()
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    holder = mod.ThreadingHTTPServer(("127.0.0.1", port), _Foreign)
+    thread = threading.Thread(target=holder.serve_forever, daemon=True)
+    thread.start()
+    try:
+        httpd = mod.create_server(pkg, first_port=port, last_port=port + 1)
+        try:
+            assert httpd.server_address[1] == port + 1  # 改前红：停在 port
+        finally:
+            httpd.server_close()
+    finally:
+        holder.shutdown()
+        holder.server_close()
+        thread.join(timeout=10)
 
 
 # ----------------------------------------------------- 钉外：首页内嵌 HTML

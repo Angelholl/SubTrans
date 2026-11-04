@@ -986,14 +986,28 @@ class _Handler(BaseHTTPRequestHandler):
         _send_json(self, {"ok": True, "queue": queue, "count": count})
 
 
+class _LabelerServer(ThreadingHTTPServer):
+    """标注服务专用：只绑回环＋**关端口复用**（allow_reuse_address=False）。
+
+    背景（2026-11-04 本机实测）：`ThreadingHTTPServer` 缺省 `allow_reuse_address=True`
+    ＝SO_REUSEADDR，Windows 下允许第三方进程**双绑同一端口且 bind 不报错**——实测外部
+    工具（应答 `Server: NFOSorter/0.4.0`）先占 127.0.0.1:8765 后，本工具 bind 成功却
+    拿不到流量，「端口被占 +1 重试」防线静默失效（bind 成功≠端口持有者是我们）。
+    关复用后端口真被占即 WSAEADDRINUSE，+1 重试如实生效。
+    同口径先例＝`tools/ruling_b6_web.py`（覆写 `allow_reuse_address = False`）。
+    """
+
+    allow_reuse_address = False
+
+
 def create_server(package: Path | str,
                   first_port: int = _PORT_START,
                   last_port: int = _PORT_END) -> ThreadingHTTPServer:
-    """只绑 127.0.0.1：first_port 被占则 +1 重试至 last_port。"""
+    """只绑 127.0.0.1：first_port 被占则 +1 重试至 last_port（占用判定如实）。"""
     package_dir = str(Path(package).resolve())
     for port in range(first_port, last_port + 1):
         try:
-            httpd = ThreadingHTTPServer(("127.0.0.1", port), _Handler)
+            httpd = _LabelerServer(("127.0.0.1", port), _Handler)
         except OSError:
             continue
         httpd.package_dir = package_dir
