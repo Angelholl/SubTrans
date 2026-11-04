@@ -113,3 +113,7 @@ config/fullchain_c22.json
 # D2026-1103-03/04），不再写仓库根；本条只兜旧版本遗留与用户显式把落位自
 # 定义到仓库内的场景（106MB/1.21GB/2.9GB 量级），禁入库
 /runtime/
+
+# autoresearch 会话态（插件 ledger/benchmark，禁入库）
+.auto/
+autoresearch-dashboard.html
