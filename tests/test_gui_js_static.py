@@ -1963,6 +1963,27 @@ def test_review_transcribe_poll_stops_on_anomalous_payload():
         "清轮 helper 须委托共享核 stopper 并置空"
 
 
+def test_review_pick_failure_feedback_pinned():
+    """A1 同型缺陷面收口（2026-11-04，Standards 轴评审挖出）。
+
+    校对页转录启动的选媒体失败面此前静默 `return`：后端拒绝
+    （success:false 且非 cancelled）零 UI 反馈，与首页卡「点了没反应」
+    真凶同族（桥异常面已由 `_call` 统一兜底，本钉锁拒绝面）。
+    修法同 A1——cancelled 保持静默，其余失败直写状态行，`r.error` 经
+    状态条「未知键回退原文」机制单源直出后端文案，前端不自留副本。"""
+    js = _review_js_source()
+    body = _extract_function(js, "_startTranscribe")
+    assert body, "review.js 缺 _startTranscribe"
+    assert "if (!r || r.cancelled) { return; }" in body, \
+        "桥异常面（_call 已落 error 态）被二次覆盖，或 cancelled 静默语义" \
+        "（cancelled 显式标记契约）被改动"
+    assert "labelKey: r.error" in body, \
+        "后端拒绝分支缺 r.error 直出状态行——静默回潮即「点了没反应」复发"
+    assert "'review_transcribe_failed'" in body, "缺失败兜底文案键"
+    assert "if (!r || !r.success || !r.path) { return; }" not in body, \
+        "拒绝面静默 return 回潮"
+
+
 def test_review_ct2_status_reprobes_each_render():
     """d1102-件F：CT2 状态缓存失效面——空态转录卡每次渲染重探。
 

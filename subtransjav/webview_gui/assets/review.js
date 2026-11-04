@@ -586,7 +586,18 @@ const ReviewUI = {
         if (forcePick || !this._videoPath) {
             this._call(() => api.refine_review_pick_media(),
                        'review_status_error').then((r) => {
-                if (!r || !r.success || !r.path) { return; }
+                // r 为 null＝桥缺席/桥异常已由 _call 落 error 态，不二次覆盖；
+                // cancelled 显式标记（用户主动取消）保持静默；后端拒绝
+                // （success:false 或无 path）此前静默 return＝与首页卡 A1
+                // 「点了没反应」同型。修法＝直写状态行，r.error 经状态条
+                // 「未知键回退原文」单源直出后端 strings.py 文案（d1102-件F）
+                if (!r || r.cancelled) { return; }
+                if (!r.success || !r.path) {
+                    this._status.setState({ state: 'error',
+                                            labelKey: r.error
+                                                || 'review_transcribe_failed' });
+                    return;
+                }
                 this.setVideoPath(r.path);
                 this._beginTranscribe();
             });
