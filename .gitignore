@@ -81,6 +81,17 @@ governance-secret-keywords.json
 # （备份=树外 internal-archive 下 repo-purge-backup-20261028），严禁入库
 artifacts/
 spike/
+
+# 公开仓收窄第二批（D2026-1106-01）：领域调校包/过程文档/评测工具/内部入口脚本只留本地
+docs/examples/jav-domain/
+docs/roadmap.md
+docs/模型与转写实测推荐.md
+/AGENTS.md
+tools/ab_compare.py
+tools/ab_compare_srt.py
+/判批6.bat
+/判批6网页.bat
+/敏感句网页.bat
 docs/design/
 docs/archive/
 docs/governance/
