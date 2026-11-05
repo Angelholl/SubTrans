@@ -25,6 +25,15 @@ ASSETS = (Path(__file__).resolve().parents[1] / "subtransjav"
 REVIEW_JS = ASSETS / "review.js"
 INDEX_HTML = ASSETS / "index.html"
 
+# 批量 JS 语法校验器（单次 spawn，vm.Script 经典 Script 解析）——
+# 正/负例两钉共用同一形态，防「校验器空转恒绿」
+_JS_SYNTAX_CHECKER = (
+    "const fs=require('fs'),vm=require('vm');"
+    "process.argv.slice(1).forEach(f=>{"
+    "try{new vm.Script(fs.readFileSync(f,'utf8'),{filename:f});}"
+    "catch(e){console.error(f+': '+e.message);process.exitCode=1;}});"
+)
+
 
 def _app_js_source() -> str:
     return js_sources.read_all()
@@ -105,16 +114,31 @@ def test_app_js_syntax_node_check():
     node = shutil.which("node")
     if not node:
         pytest.skip("node 不可用")
-    checker = (
-        "const fs=require('fs'),vm=require('vm');"
-        "process.argv.slice(1).forEach(f=>{"
-        "try{new vm.Script(fs.readFileSync(f,'utf8'),{filename:f});}"
-        "catch(e){console.error(f+': '+e.message);process.exitCode=1;}});"
-    )
     files = [str(ASSETS / name) for name in js_sources.JS_FILES]
-    r = subprocess.run([node, "-e", checker, *files],
+    r = subprocess.run([node, "-e", _JS_SYNTAX_CHECKER, *files],
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_app_js_syntax_checker_rejects_bad_js(tmp_path):
+    """负例钉（E2'' 收口手工负例验证入库）：批量校验器必须真拒绝坏语法。
+
+    无负例则校验器空转恒绿（argv/slice 错位类缺陷不可拦）。经典 Script
+    解析口径下顶层 import 与 node --check 同样报 SyntaxError——本钉
+    同时锁死「import/export 同拒绝」等价声明。
+    """
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node 不可用")
+    bad = tmp_path / "bad_syntax.js"
+    bad.write_text("import {x} from './nope.js';\n", encoding="utf-8")
+    r = subprocess.run([node, "-e", _JS_SYNTAX_CHECKER, str(bad)],
+                       capture_output=True, text=True)
+    assert r.returncode == 1, f"坏语法未被拒绝：{r.stdout}{r.stderr}"
+    # 措辞无关断言：V8 对经典解析拒 import 的 message 随版本变体
+    # （"Cannot use import statement outside a module" 等），只锁
+    # 「拒绝发生且指名该文件」两事实
+    assert str(bad) in (r.stderr + r.stdout)
 
 
 # ---------------------------------------------------------------------------
