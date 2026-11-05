@@ -33,4 +33,11 @@ jobs:
         run: python tools/mypy_baseline.py --check
       - name: Test
         shell: bash
-        run: python -m pytest tests -q --cov=subtrans --cov-report=term
+        run: |
+          set +e +o pipefail
+          python -m pytest tests -q --cov=subtrans --cov-report=term 2>&1 | tee /tmp/pytest_ci.log
+          rc=${PIPESTATUS[0]}
+          grep -E "^FAILED" /tmp/pytest_ci.log | head -30 | while IFS= read -r line; do
+            echo "::error title=FAILED::${line#FAILED }"
+          done
+          exit $rc
