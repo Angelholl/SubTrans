@@ -468,7 +468,7 @@ def _utf8_child_env(env_extra: dict[str, str] | None) -> dict[str, str]:
     - ``PYTHONUTF8=1``：子进程 open()/locale 缺省即 UTF-8；
     - ``PYTHONIOENCODING=utf-8:replace``：窄码页管道下输出不崩、不可编码降级替换。
     在 os.environ.copy() 基础上合并 env_extra——显式变量（API 密钥、
-    SUBTRANSJAV_DATA_ROOT 等）自然继承，无需特判。
+    SUBTRANS_DATA_ROOT 等，旧名 SUBTRANSJAV_DATA_ROOT 兜底）自然继承，无需特判。
     """
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"

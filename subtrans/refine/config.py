@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field
 
 from subtrans import paths
+from subtrans.utils.env_compat import env_get
 
 # ---- 批量默认值（需求定稿：本地 30 / 云端 30）----
 DEFAULT_BATCH_LOCAL = 30
@@ -37,7 +38,8 @@ DEFAULT_V2_SOURCE_FILTER_VALVE_PCT = 50  # 闸门0 保险阀：拦截率超过�
 DEFAULT_V2_ASR_META_MIN_COVERAGE_PCT = 30  # 上游 ASR 语音覆盖率告警阈值（%，低于即记风险）
 DEFAULT_V2_ASR_META_STALE_MAX_HOURS = 24   # 上游运行 manifest 新鲜度上限（小时，R6）
 
-# 用户可调字段（config/user_settings.json / 环境变量 SUBTRANSJAV_<大写字段名>）。
+# 用户可调字段（config/user_settings.json / 环境变量 SUBTRANS_<大写字段名>；
+# 旧名 SUBTRANSJAV_<大写字段名> 兜底，D2026-1106-02 ①）。
 # 优先级：默认 < 用户配置文件 < 环境变量 < CLI/GUI 显式赋值（构造后赋值天然最高）。
 TUNABLE_FIELD_TYPES = {
     "temperature_cloud": float,
@@ -49,7 +51,7 @@ TUNABLE_FIELD_TYPES = {
     "premerge_min_fragment_chars": int,
     "v2_concurrency_max": int,
     # A1 缺省重绑定（D2026-0927-01）：v2_ctx_local 纳入用户可调字段，
-    # 用户可经 config/user_settings.json 或 SUBTRANSJAV_V2_CTX_LOCAL 自定
+    # 用户可经 config/user_settings.json 或 SUBTRANS_V2_CTX_LOCAL（旧名兜底）自定
     "v2_ctx_local": int,
     "timeout_llm": float,
     "timeout_http": float,
@@ -265,14 +267,14 @@ def resolve_tunable(name: str):
             value = coerced
         else:
             print(f"⚠️ 用户配置字段 {name} 类型非法，已忽略: {user[name]!r}")
-    env_raw = os.environ.get(f"SUBTRANSJAV_{name.upper()}")
+    env_raw = env_get(name.upper())
     if env_raw is not None and env_raw.strip() != "":
         coerced = _coerce_tunable(env_raw.strip(), typ)
         if coerced is not None:
             value = coerced
         else:
-            print(f"⚠️ 环境变量 SUBTRANSJAV_{name.upper()} 类型非法，已忽略: "
-                  f"{env_raw!r}")
+            print(f"⚠️ 环境变量 SUBTRANS_{name.upper()}（旧名 SUBTRANSJAV_{name.upper()}）"
+                  f"类型非法，已忽略: {env_raw!r}")
     return value
 
 
@@ -371,7 +373,7 @@ class RefineConfig:
     # ------------------------------------------------------------------
     v2_profile: str = "local"       # local=strict兜底(cleaner+误译拦截) | cloud=lenient(仅通用校验)
     v2_concurrency: int = 1         # 批间并发数（1-5，默认1为串行，对所有服务商生效）
-    v2_ctx_local: int = 16384       # 本地模型上下文窗口（批大小/max_tokens 预算依据；缺省演变：32768（历史）→ 22272（作者 16GB 单卡档案值，见文档/示例层）→ 16384（A1 缺省重绑定，D2026-0927-01：通用保守值）。可经 config/user_settings.json 或 SUBTRANSJAV_V2_CTX_LOCAL 覆盖）
+    v2_ctx_local: int = 16384       # 本地模型上下文窗口（批大小/max_tokens 预算依据；缺省演变：32768（历史）→ 22272（作者 16GB 单卡档案值，见文档/示例层）→ 16384（A1 缺省重绑定，D2026-0927-01：通用保守值）。可经 config/user_settings.json 或 SUBTRANS_V2_CTX_LOCAL（旧名 SUBTRANSJAV_V2_CTX_LOCAL 兜底）覆盖）
     v2_keep_untranslated: str = "original"   # D1 后仅兼容保留：A/B 双失败一律回退原文+[未翻译] 标记（原 original/empty 两档已并轨，不再删行）
     # 闸门0 送翻前源侧幻觉检测（预合并前对原始条目生效，两档 profile 均执行；
     # 规则库见 refine/defaults/source_hallucination.yaml）
@@ -420,7 +422,7 @@ class RefineConfig:
     v2_asr_meta_stale_max_hours: int = DEFAULT_V2_ASR_META_STALE_MAX_HOURS
     # v1.2.2 C1 per-片语境 sidecar（{stem}.context.md，与输入 srt 同目录
     # 同名）：剧情摘要 + 误听怀疑表注入 A/B 提示词。默认开；文件不存在=
-    # 无注入；False=禁用。可经 user_settings.json / SUBTRANSJAV_CONTEXT_SIDECAR
+    # 无注入；False=禁用。可经 user_settings.json / SUBTRANS_CONTEXT_SIDECAR
     # 覆盖（TUNABLE_FIELD_TYPES 注册，bool 白名单字面量收敛）。
     context_sidecar: bool = True
     # v1.2.2 Beta 剧情自摘要（auto_synopsis）：闸门0+预合并后自动抽样整片
@@ -428,7 +430,7 @@ class RefineConfig:
     # （绝不写入输出目录/终稿/质量报告）；手写 sidecar【剧情摘要】非空时
     # 手写优先。摘要缓存独立目录 Temp/synopsis_cache/（与 TM 完全隔离）；
     # 摘要文本与缓存不参与 manifest 指纹（与 sidecar 内容同款已知边界）。
-    # 可经 user_settings.json / SUBTRANSJAV_AUTO_SYNOPSIS 覆盖。
+    # 可经 user_settings.json / SUBTRANS_AUTO_SYNOPSIS 覆盖。
     auto_synopsis: bool = True
     synopsis_max_chars: int = 6000  # 抽样文本字符预算（桶采样总限幅）
     # ⑥a 人物表子开关（D2026-1025-01 裁决⑥，2026-10-27）：synopsis v2 任务
@@ -436,19 +438,19 @@ class RefineConfig:
     # 不进直审材料）；ON 恢复 v2 既有行为。C1：无条件入 manifest
     # _CONFIG_FIELDS（default-OFF 改变 v2 默认行为，不套用「默认值缺席归一」
     # ——一次性有意指纹失配，裁决⑥ C1 成文）。
-    # 可经 user_settings.json / SUBTRANSJAV_SYNOPSIS_CAST_ENABLED 覆盖。
+    # 可经 user_settings.json / SUBTRANS_SYNOPSIS_CAST_ENABLED 覆盖。
     synopsis_cast_enabled: bool = False
     # 2.6.0 批 2（D2026-1002-03）：--ai-analyze 注入跨片聚合统计开关
     # （默认开；纯读取侧——只影响分析 prompt，不改管线产物，故不进
     # manifest _CONFIG_FIELDS，asr_meta 路径同款判例；构建失败按无聚合
-    # 继续）。可经 user_settings.json / SUBTRANSJAV_AGGREGATE_STATS_INJECT
+    # 继续）。可经 user_settings.json / SUBTRANS_AGGREGATE_STATS_INJECT
     # 覆盖（bool 白名单字面量收敛）。
     aggregate_stats_inject: bool = True
     # 2.6.0 批 3（D2026-1002-04-批3）：媒体重点对照开关（本地切片重转写，
     # 音频零出域；生效双前置=有媒体+有可用 ASR 模型；纯读取侧不进 manifest
     # 指纹，aggregate_stats_inject 同款判例）。2.6.1 修订（D2026-1002-06，
     # owner 反馈验证应可选）：默认关；经引擎页开关/user_settings.json /
-    # SUBTRANSJAV_MEDIA_CROSSCHECK_ENABLED / CLI
+    # SUBTRANS_MEDIA_CROSSCHECK_ENABLED / CLI
     # --media-crosscheck-enabled 0|1 开启。ASR 模型/上游 python 经
     # CLI --asr-model/--asr-python 或设置 KV（不入指纹，负向钉随批）。
     media_crosscheck_enabled: bool = False
@@ -527,13 +529,13 @@ class RefineConfig:
                 continue
             if getattr(self, name, None) != spec.default:
                 continue                # 已被 CLI/GUI 显式赋值，不覆盖
-            env_raw = os.environ.get(f"SUBTRANSJAV_{name.upper()}")
+            env_raw = env_get(name.upper())
             value = None
             if env_raw is not None and env_raw.strip() != "":
                 value = _coerce_tunable(env_raw.strip(), typ)
                 if value is None:
-                    print(f"⚠️ 环境变量 SUBTRANSJAV_{name.upper()} 类型非法，"
-                          f"已忽略: {env_raw!r}")
+                    print(f"⚠️ 环境变量 SUBTRANS_{name.upper()}（旧名 SUBTRANSJAV_{name.upper()}）"
+                          f"类型非法，已忽略: {env_raw!r}")
             if value is None and name in user:
                 value = _coerce_tunable(user[name], typ)
                 if value is None:

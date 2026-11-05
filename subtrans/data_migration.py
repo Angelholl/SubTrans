@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from subtrans import paths
+from subtrans.utils.env_compat import env_get
 
 __all__ = ["ensure_migrated", "import_legacy", "seed_c22_gate",
            "evaluate_c22_gate", "c22_gate_fingerprint", "C22_GATE_RELPATH"]
@@ -68,7 +69,7 @@ MIGRATION_VERSION = "2.0.0"
 BACKUP_PREFIX = "pre-2.0.0-"
 BACKUP_KEEP = 5                       # 备份 zip 保留最近份数
 MANIFEST_NAME = "migration_manifest.json"
-LEGACY_ROOT_ENV = "SUBTRANSJAV_LEGACY_ROOT"
+LEGACY_ROOT_ENV = "SUBTRANSJAV_LEGACY_ROOT"   # 过渡别名（兜底，D2026-1106-02 ①）
 
 # 属「frozen 默认」的来源标签集合（D2026-1103-05 项②）：新默认（安装目录
 # 旁路）与旧默认收养两标签都要放行迁移与首启插桩门，env/pointer 自定义根
@@ -126,14 +127,15 @@ def _discover_legacy_root() -> Path | None:
     """旧根发现。
 
     优先级：
-    1. 环境变量 ``SUBTRANSJAV_LEGACY_ROOT``（诊断/测试显式指定）；
+    1. 环境变量 ``SUBTRANS_LEGACY_ROOT``（优先；旧名 ``SUBTRANSJAV_LEGACY_ROOT``
+       兜底，D2026-1106-02 ①兼容层）（诊断/测试显式指定）；
     2. frozen 形态下 EXE 所在目录（EXE 首发放/升到旧仓库根目录的场景，
        旧 pip/源码数据即在安装目录 = 旧仓库根）；
     3. 旧 frozen 默认位 ``%LOCALAPPDATA%\\SubTrans``（D2026-1103-05 项②：
        新默认改安装目录旁路后，3.1.1 及以前的存量数据落在此位，
        须被认作旧根；有锚点才认，无锚点维持 2 的既有回退语义）。
     """
-    env = os.environ.get(LEGACY_ROOT_ENV, "").strip()
+    env = env_get("LEGACY_ROOT").strip()
     if env:
         return Path(env)
     import sys as _sys

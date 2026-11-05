@@ -96,7 +96,7 @@ jobs:
           #    中文断言先钉 UTF-8 输出解码（PYTHONUTF8=1 下子进程写 UTF-8，
           #    PS 默认按控制台 OEM 码页解码会把中文比对变乱码——run 37149808709 实证）
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $env:SUBTRANSJAV_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
+          $env:SUBTRANS_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
           $dsOut = (& "$root/subtrans-cli.exe" --dict-status 2>&1) -join "`n"
           if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --dict-status rc=$LASTEXITCODE"; exit 1 }
           Write-Host "$dsOut"
@@ -132,7 +132,7 @@ jobs:
           $cli = "$root/subtrans-cli.exe"
           if (-not (Test-Path $cli)) { Write-Error "MISSING artifact: $cli"; exit 1 }
           # 数据根隔离：全程不触碰 CI 真实 %LOCALAPPDATA%
-          $env:SUBTRANSJAV_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
+          $env:SUBTRANS_DATA_ROOT = "$PWD/Temp/cli_smoke_data"
           # 1) --help 含 --where
           $help = (& $cli --help 2>&1) -join "`n"
           if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --help rc=$LASTEXITCODE"; exit 1 }

@@ -26,6 +26,7 @@ setup_console()
 import platform  # noqa: E402
 
 from subtrans import paths  # noqa: E402  frozen 判定单一来源
+from subtrans.utils.env_compat import env_get  # noqa: E402  env 双前缀兼容层
 from subtrans.utils.process_manager import spawn_refine_cli  # noqa: E402  spawn 单一收敛点
 from subtrans.webview_gui.strings import msg  # noqa: E402  文案表零依赖
 
@@ -401,7 +402,7 @@ def create_window():
     api = TranslateAPI()
 
     icon_path = None
-    if os.getenv('SUBTRANSJAV_NO_ICON', '').lower() not in ('1', 'true', 'yes'):
+    if (env_get("NO_ICON") or "").lower() not in ('1', 'true', 'yes'):
         icon_file = Path(__file__).parent / "assets" / "icon.ico"
         if icon_file.exists():
             icon_path = icon_file
@@ -512,9 +513,10 @@ def main():
         window = create_window()
         print(msg("window_created"))
 
-        # --debug 透传 webview.start；环境变量 SUBTRANSJAV_DEBUG 仍然有效
-        debug_mode = args.debug or os.getenv(
-            'SUBTRANSJAV_DEBUG', '').lower() in ('1', 'true', 'yes')
+        # --debug 透传 webview.start；环境变量 SUBTRANS_DEBUG（旧名
+        # SUBTRANSJAV_DEBUG 兜底，D2026-1106-02 ①）仍然有效
+        debug_mode = args.debug or (env_get("DEBUG") or "").lower() in (
+            '1', 'true', 'yes')
         print(msg("starting_webview", debug=debug_mode))
 
         # private_mode=True avoids WebView2 disk-cache staleness;
