@@ -6335,9 +6335,15 @@ class TranslateAPI:
             ok, reason = evaluate_c22_gate(self._fullchain_c22_path())
         except Exception:
             return {"enabled": False, "reason": "invalid"}
-        if not ok and reason in ("fingerprint-mismatch", "fingerprint-missing"):
-            _log.warning("C22 校准门指纹不匹配（%s）：按关门处理，请重新校准",
-                         reason)
+        if not ok and reason in ("fingerprint-mismatch",
+                                 "fingerprint-version-mismatch",
+                                 "fingerprint-missing"):
+            _log.warning("C22 校准门指纹失效（%s）：按关门处理，%s",
+                         reason, {
+                             "fingerprint-mismatch": "规则集已变更，请重新校准",
+                             "fingerprint-version-mismatch":
+                                 "软件已升级，需重新校准",
+                         }.get(reason, "请重新校准"))
         return {"enabled": bool(ok), "reason": reason}
 
     def _fullchain_c22_enabled(self) -> bool:

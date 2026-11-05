@@ -7566,6 +7566,61 @@ def test_fullchain_automation_status_c22_gate_reason(gui_api_obj, monkeypatch,
     assert gui.fullchain_automation_status()["c22_gate"] == \
         {"enabled": False, "reason": "fingerprint-mismatch"}
 
+    # 测量行版本失配（A1a 新码）：如实透传，键集仍只有 enabled/reason
+    p.write_text(json.dumps(_c22_gate_payload(
+        precision_lb=0.96, n=60, app_version="0.0.0-old")),
+        encoding="utf-8")
+    gate = gui.fullchain_automation_status()["c22_gate"]
+    assert gate == {"enabled": False,
+                    "reason": "fingerprint-version-mismatch"}
+    assert set(gate) == {"enabled", "reason"}
+
+    # seeded 行（无 dev 测量键）版本失配：无证据可失效，门仍开 ok 态
+    p.write_text(json.dumps(_c22_gate_payload(app_version="0.0.0-old")),
+                 encoding="utf-8")
+    gate = gui.fullchain_automation_status()["c22_gate"]
+    assert gate == {"enabled": True, "reason": "ok"}
+    assert set(gate) == {"enabled", "reason"}
+
+
+def test_fullchain_c22_gate_warning_forks_by_reason(gui_api_obj, monkeypatch,
+                                                   tmp_path, caplog):
+    """A1c 日志分叉钉：mismatch→「规则集已变更」、version-mismatch→
+    「软件已升级」；seeded 行版本失配是 ok 开门态，api 侧零 warning。"""
+    import logging
+
+    import subtransjav.refine.config as cfg
+    monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
+    gui = gui_api_obj
+    p = tmp_path / "fullchain_c22.json"
+
+    p.write_text(json.dumps(_c22_gate_payload(rules_sha1="stale")),
+                 encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="subtransjav.gui"):
+        assert gui._fullchain_c22_gate_state() == \
+            {"enabled": False, "reason": "fingerprint-mismatch"}
+    assert any("规则集已变更，请重新校准" in r.message
+               for r in caplog.records)
+
+    caplog.clear()
+    p.write_text(json.dumps(_c22_gate_payload(
+        precision_lb=0.96, n=60, app_version="0.0.0-old")),
+        encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="subtransjav.gui"):
+        assert gui._fullchain_c22_gate_state() == \
+            {"enabled": False, "reason": "fingerprint-version-mismatch"}
+    assert any("软件已升级，需重新校准" in r.message
+               for r in caplog.records)
+    assert not any("规则集已变更" in r.message for r in caplog.records)
+
+    caplog.clear()
+    p.write_text(json.dumps(_c22_gate_payload(app_version="0.0.0-old")),
+                 encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="subtransjav.gui"):
+        assert gui._fullchain_c22_gate_state() == \
+            {"enabled": True, "reason": "ok"}
+    assert not any(r.name == "subtransjav.gui" for r in caplog.records)
+
 
 def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
                                                 tmp_path, caplog):
