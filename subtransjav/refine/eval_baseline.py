@@ -28,7 +28,7 @@ import math
 import os
 import pathlib
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -42,6 +42,7 @@ __all__ = [
     "wilson_interval",
     "speech_windows_full",
     "hallucination_proxy",
+    "fill_subset_stats",
     "omission_proxy",
     "agreement",
     "cps_stats",
@@ -158,6 +159,30 @@ def hallucination_proxy(entries: list[dict[str, Any]],
     return {"lines": len(spans), "suspect": suspect,
             "ratio": round(suspect / len(spans), 4),
             "wilson": wilson_interval(suspect, len(spans))}
+
+
+def fill_subset_stats(entries: list[dict[str, Any]],
+                      fill_indices: Iterable[int],
+                      windows: list[tuple[float, float]] | None,
+                      min_overlap: float = 0.3) -> dict[str, Any]:
+    """件A 评测门分层口径载体（roadmap:196），读数语义与 hallucination_proxy 全片口径同源。
+
+    全片读数（``full``）直接复用 :func:`hallucination_proxy` 本体，与现口径
+    逐字段一致；``fill`` 为同一函数对填充子集（pass2 采纳段，下标须指向
+    ``entries``，来源＝:func:`~subtransjav.refine.pass_merge.adopted_pass2_indices`
+    既有采纳映射，本函数不另设来源标记）的读数。纯统计零 I/O、零新依赖；
+    不接 CLI、不进 GUI、不进 prompt 注入面。
+
+    ``n_full``/``n_fill`` 为两侧条目数（``fill_indices`` 重复下标按集合计）；
+    窗口缺失（windows=None）时两侧读数与 hallucination_proxy 同为 None。
+    """
+    fill_entries = [entries[i] for i in sorted(set(fill_indices))]
+    return {
+        "full": hallucination_proxy(entries, windows, min_overlap),
+        "fill": hallucination_proxy(fill_entries, windows, min_overlap),
+        "n_full": len(entries),
+        "n_fill": len(fill_entries),
+    }
 
 
 def omission_proxy(entries: list[dict[str, Any]],

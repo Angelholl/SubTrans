@@ -12,6 +12,7 @@ from subtransjav.refine.eval_baseline import (
     agreement,
     cps_stats,
     evaluate,
+    fill_subset_stats,
     hallucination_proxy,
     omission_proxy,
     report_markdown,
@@ -450,3 +451,78 @@ def test_main_derives_stem_from_media_name(monkeypatch, tmp_path):
     assert rc == 0
     assert (tmp_path / "r" / "clip-baseline.json").exists()
     assert (tmp_path / "r" / "clip-baseline.md").exists()
+
+
+# ------------------------------------------------ 3.2.0 件A 评测门分层（D2026-1105-06）
+# 填充段子集分报（roadmap:196）：full 侧复用 hallucination_proxy 本体（口径同源），
+# fill 侧只统计 pass2 被采纳填充段；被弃置段不入任何子集。
+
+
+def _seg(idx: int, start: float, end: float, text: str) -> dict:
+    """双 pass 段夹具：同时带 pass_merge 的 start/end 与统计面的 timing。"""
+    e = _ent(idx, start, end, text)
+    e["start"] = start
+    e["end"] = end
+    return e
+
+
+def _fill_fixture():
+    """pass1 两段＋pass2 一采纳（5-6s 静音带）＋一重叠弃置（2.0-3.5s）。"""
+    from subtransjav.refine.pass_merge import adopted_pass2_indices, merge_passes
+
+    pass1 = [_seg(1, 1.0, 3.0, "こんにちは"), _seg(2, 7.0, 9.0, "さようなら")]
+    pass2 = [_seg(3, 5.0, 6.0, "おはよう"), _seg(4, 2.0, 3.5, "ぶつかり")]
+    merged = merge_passes(pass1, pass2, duration=10.0)
+    adopted = adopted_pass2_indices(pass1, pass2, merged)
+    fill_idx = [i for i, seg in enumerate(merged)
+                if any(seg is pass2[j] for j in adopted)]
+    return pass2, merged, fill_idx, adopted
+
+
+class TestFillSubsetStats:
+    def test_fill_subset_reported_separately(self):
+        pass2, merged, fill_idx, adopted = _fill_fixture()
+        r = fill_subset_stats(merged, fill_idx, WIN)
+        # 采纳映射只认 pass2[0]；pass2[1] 与 pass1 重叠被弃置，不入主干
+        assert adopted == [0]
+        assert r["n_full"] == 3 and r["n_fill"] == 1
+        assert r["fill"]["lines"] == 1
+        # 填充段落在静音带（5-6s，两窗口之间）→ 子集可疑率 1.0
+        assert r["fill"]["ratio"] == 1.0
+        # 全片 3 行仅该填充段可疑 → 1/3；分报读数不等于全片读数
+        assert r["full"]["ratio"] == pytest.approx(1 / 3, abs=1e-4)
+        assert r["full"] != r["fill"]
+        # 弃置段（pass2[1]）不在主干、也不进填充子集
+        assert all(seg is not pass2[1] for seg in merged)
+        assert all(seg is not pass2[1] for seg in (merged[i] for i in fill_idx))
+
+    def test_full_matches_direct_hallucination_proxy(self):
+        _pass2, merged, fill_idx, _adopted = _fill_fixture()
+        r = fill_subset_stats(merged, fill_idx, WIN)
+        # 口径同源钉：full 侧逐字段等于直接调 hallucination_proxy
+        assert r["full"] == hallucination_proxy(merged, WIN)
+        assert r["fill"] == hallucination_proxy(
+            [merged[i] for i in fill_idx], WIN)
+
+    def test_windows_missing_none_and_empty_subset(self):
+        _pass2, merged, fill_idx, _adopted = _fill_fixture()
+        r = fill_subset_stats(merged, fill_idx, None)
+        assert r["full"] is None and r["fill"] is None
+        assert r["n_full"] == 3 and r["n_fill"] == 1
+        empty = fill_subset_stats(merged, [], WIN)
+        assert empty["n_fill"] == 0
+        assert empty["fill"]["lines"] == 0 and empty["fill"]["ratio"] is None
+
+
+class TestProxyReturnShapeInvariant:
+    def test_existing_proxy_shapes_unchanged(self):
+        entries = [_seg(1, 1.0, 3.0, "あ"), _seg(2, 5.0, 6.0, "い")]
+        assert set(hallucination_proxy(entries, WIN)) == {
+            "lines", "suspect", "ratio", "wilson"}
+        assert set(omission_proxy(entries, WIN)) == {
+            "speech_s", "uncovered_s", "ratio"}
+        assert set(agreement(entries, entries)) == {
+            "matched", "lines_a", "lines_b", "rate_a", "rate_b",
+            "rate_a_wilson", "rate_b_wilson"}
+        assert set(fill_subset_stats(entries, [0], WIN)) == {
+            "full", "fill", "n_full", "n_fill"}
