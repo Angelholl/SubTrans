@@ -805,6 +805,11 @@ def test_provider_status_exposes_model_dir_fields(tmp_path, monkeypatch):
     monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
     model_root = tmp_path / "models" / "ct2"
     monkeypatch.setenv("SUBTRANS_CT2_MODEL_DIR", str(model_root))
+    # 密闭化：真机有 runtime（manifest 在位）时 provider_status 会搭车跑
+    # 3 次真 selfcheck 子进程（import 全链 ~0.3s/次）；本测试只断言
+    # model_dir 键面，selfcheck 结果键全未断言，stub 既免真机依赖也省子进程。
+    monkeypatch.setattr(asr_runtime, "selfcheck",
+                        lambda: (False, "stub：测试面不跑真自检"))
     st = asr_runtime.provider_status()
     assert st["model_runtime"] == {"dir": str(model_root), "source": "env"}
     assert st["model_present"] is False and st["model_bytes"] == 0
