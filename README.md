@@ -66,6 +66,8 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 
 要求 Python 3.10–3.13。
 
+> **包名过渡说明（3.1.3）**：Python 包名与安装名由 `subtransjav` 改为 `subtrans`（D2026-1106-02）。命令行入口同步改为 `subtrans-refine` / `subtrans-gui`，旧命令名 `subtransjav-refine` / `subtransjav-gui` 作为过渡别名保留（同函数入口，存量脚本零破坏）；环境变量 `SUBTRANS_DATA_ROOT` 等前缀同步改 `SUBTRANS_`，旧名 `SUBTRANSJAV_*` 仍被识别（兜底）。
+
 ```bat
 :: 安装（核心翻译引擎 + CLI）
 pip install -e .
@@ -242,7 +244,7 @@ The GUI is Chinese-oriented; the refine pipeline currently targets Japanese → 
 ### Data Location
 
 - EXE install: `%LOCALAPPDATA%\SubTrans`; pip/source: repository root.
-- Override everything with the `SUBTRANSJAV_DATA_ROOT` environment variable; run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtrans-refine --where`) to print all resolved path anchors (read-only diagnostics).
+- Override everything with the `SUBTRANS_DATA_ROOT` environment variable (legacy `SUBTRANSJAV_DATA_ROOT` still honored); run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtrans-refine --where`) to print all resolved path anchors (read-only diagnostics).
 
 See the Chinese sections above for full details.
 

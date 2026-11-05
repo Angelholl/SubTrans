@@ -8,6 +8,7 @@
 
 ### 变更
 
+- **包名过渡（subtransjav→subtrans）**：Python 包名与安装名由 `subtransjav` 改为 `subtrans`，目录/模块导入/打包布局同步改名（frozen 安装布局 `_internal\subtrans`）。命令行入口改为 `subtrans-refine` / `subtrans-gui`，旧命令名 `subtransjav-refine` / `subtransjav-gui` 作为同函数过渡别名保留；环境变量前缀改为 `SUBTRANS_`（如 `SUBTRANS_DATA_ROOT`），旧名 `SUBTRANSJAV_*` 仍被识别兜底，存量脚本零破坏。历史文档与卸载清理锚中的旧名称按「不改史」原则保留。
 - **自动补行门控升级语义**：软件升级后，默认态的自动补行门不再因版本变化保持关闭（默认门控行随版本延续，版本变化时记录一条提示）；规则集变更仍需重新校准。此前跑过校准工具启用自动补行的用户，升级后需按界面提示重新校准；门控提示原因现已区分「软件已升级」与「规则集已变更」。
 
 ## [3.1.2] - 2026-11-05
