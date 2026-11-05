@@ -375,27 +375,62 @@ def test_dev_repo_guard_pinned(iss_text):
 # ---------------------------------------------------------------------------
 
 def test_default_dir_dynamic_non_system_drive_pinned(iss_text):
-    """默认安装目录 = 可用空间最大的非系统固定盘根下 \\SubTrans。
+    """默认安装目录三级优先（D2026-1105-02）：软件盘标 > D 盘 > C 兜底。
 
-    动态取盘走 [Code] scripted constant，用户在目录页仍可改选；取不到
-    合格候选时回落编译默认 Param（不得凭猜选盘）。
+    动态取盘走 [Code] scripted constant，用户在目录页仍可改选；层1/层2
+    取不到合格候选时回落编译默认 Param（不得凭猜选盘）。
     """
     setup = _extract_section(iss_text, "Setup")
     assert "DefaultDirName={code:PickInstallDir|{autopf}\\SubTrans}" in setup, \
         "[Setup] 默认目录须改为 scripted constant 形态"
-    # 三函数齐备（定义须先于使用，Pascal Script 无前置声明）
+    # 四函数齐备（定义须先于使用，Pascal Script 无前置声明）
     assert "function FixedDriveLetters(): String;" in iss_text
+    assert "function SoftwareLabeledDrives(): String;" in iss_text
     assert "function BestInstallDrive(): String;" in iss_text
     assert "function PickInstallDir(Param: String): String;" in iss_text
     # 取盘面：64 位剩余空间 + 系统盘排除 + 固定盘判据（CIM DriveType 3）
     best = re.search(
-        r"function BestInstallDrive\(\): String;(.{0,2500})", iss_text, re.S)
+        r"function BestInstallDrive\(\): String;(.{0,4000})", iss_text, re.S)
     assert best, "未找到 BestInstallDrive 函数体"
     best_body = best.group(1)
     assert "GetSpaceOnDisk64(" in best_body, "取盘面须用 GetSpaceOnDisk64"
     assert "GetEnv('SystemDrive')" in best_body, "须排除系统盘（SystemDrive）"
     assert "IsDevRepoDir(" in best_body, "候选盘须排除开发仓库目录"
     assert "DriveType -eq 3" in iss_text, "固定盘判据须走 CIM DriveType -eq 3"
+
+
+def test_default_dir_three_tier_priority_pinned(iss_text):
+    """三级优先口径钉死（D2026-1105-02）：软件盘标层1 → D 盘层2 → Param 兜底层3。
+
+    盘标匹配在 PowerShell 侧完成（-match 大小写不敏感），输出仅盘符 ASCII，
+    规避 OEM 码页中文盘标读回乱码；探针文件四路径清理与 FixedDriveLetters
+    同规格。
+    """
+    sw = re.search(
+        r"function SoftwareLabeledDrives\(\): String;(.{0,2200})", iss_text, re.S)
+    assert sw, "未找到 SoftwareLabeledDrives 函数体"
+    sw_body = sw.group(1)
+    assert "software|软件" in sw_body, "层1盘标匹配须覆盖 software 与 软件"
+    assert "-match" in sw_body, "盘标匹配须在 PowerShell -match 侧完成"
+    assert sw_body.count("DeleteFile(probe)") >= 4, \
+        "盘标探针启动失败/退出码非零/读取失败/成功四路径须一致清理"
+    best = re.search(
+        r"function BestInstallDrive\(\): String;(.{0,4000})", iss_text, re.S)
+    assert best, "未找到 BestInstallDrive 函数体"
+    best_body = best.group(1)
+    # 三级次序：SoftwareLabeledDrives 在前、D 盘居中、空串回落压轴
+    i_sw = best_body.index("SoftwareLabeledDrives")
+    i_d = best_body.index("Pos('D:'")
+    assert i_sw < i_d, "层1（软件盘标）须先于层2（D 盘）判定"
+    assert "Pos('D:'" in best_body, "层2须显式判定 D 盘在固定盘集合"
+    assert "IsDevRepoDir('D:\\SubTrans')" in best_body, \
+        "层2命中前须过 D:\\SubTrans 开发仓库守卫"
+    assert "Result := 'D:\\';" in best_body, "层2命中须返回 D:\\"
+    pick = re.search(
+        r"function PickInstallDir\(Param: String\): String;(.{0,1200})", iss_text,
+        re.S)
+    assert pick, "未找到 PickInstallDir 函数体"
+    assert "Result := Param" in pick.group(1), "层3须回落 Param（C 盘兜底）"
     # 探针文件四路径一致清理：cmd 重定向即使命令失败也会创建文件，
     # 失败分支漏删即在用户 TEMP 留残留（d1104 验收期修正随钉）
     fd = re.search(
