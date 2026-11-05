@@ -135,7 +135,7 @@ def _discover_legacy_root() -> Path | None:
        新默认改安装目录旁路后，3.1.1 及以前的存量数据落在此位，
        须被认作旧根；有锚点才认，无锚点维持 2 的既有回退语义）。
     """
-    env = env_get("LEGACY_ROOT").strip()
+    env = (env_get("LEGACY_ROOT") or "").strip()
     if env:
         return Path(env)
     import sys as _sys
