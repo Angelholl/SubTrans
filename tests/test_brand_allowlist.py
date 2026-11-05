@@ -4,6 +4,12 @@
 等于显式白名单 ALLOWLIST。未来任何新代码/新文案引入旧品牌词即本测试变红，
 防止品牌漂移；白名单内每项均带保留理由。
 
+另含上游项目名钉（G19，D2026-1106-01 慢清③）：whisperjav/wjtranslate
+大小写不敏感入钉——品牌散文零容忍（已随慢清②中性化），字面量仅允许
+格式兼容面与清理锚（_UPSTREAM_ALLOWLIST），tests/ 夹具域豁免（
+.whisperjav 后缀族是兼容层被测语义本身，夹具命名纪律由合规终扫门②
+合成名口径治理）。
+
 白名单之外的新增出现 → 先判断是否禁区残留（数据根/spec 名/env 名等第 2 层口径），
 确属新品牌污染则改为 SubTrans，确需保留则在本白名单补条目并注释理由。
 """
@@ -34,29 +40,14 @@ ALLOWLIST = frozenset({
     "packaging/setup.iss",                 # [InstallDelete] 旧开始菜单组 {commonprograms}\SubTransJAV 清理锚（对不存在路径无害空操作）；AppId GUID/env 名禁区不动
     # ---- 用户/历史文档（不改史）----
     "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；不改史）
-    # ---- 运行时/源码注释级残留（数据根默认/AUMID/Documents 输出已随 D2026-1004-04 切 SubTrans，剩 docstring 注释级；env 名全大写不入本钉口径）----
-    "subtrans/webview_gui/api.py",      # 模块 docstring :2 注释级残留（Documents 输出已改 SubTrans）
-    "subtrans/webview_gui/main.py",     # 模块 docstring :2 注释级残留（AUMID 已改为 Angelholl.SubTrans.GUI 模块常量）
-    "subtrans/__init__.py",             # 包 docstring 注释级残留（第 2 层随包名 subtrans 口径）
-    "subtrans/__version__.py",          # 包 docstring 注释级残留
-    "subtrans/refine/__init__.py",      # 包 docstring 注释级残留
-    "subtrans/translate/__init__.py",   # 包 docstring 注释级残留
-    "subtrans/utils/__init__.py",       # 包 docstring 注释级残留
-    "subtrans/utils/console.py",        # docstring 注释级残留
-    "subtrans/utils/process_manager.py",  # docstring 注释级残留
-    # ---- 前端注释级残留（用户不可见；未提交工作树段只读不碰）----
-    "subtrans/webview_gui/assets/app.js",        # 文件头注释 "SubTransJAV GUI 前端控制器"（注释级，非显示文案）
-    "subtrans/webview_gui/assets/style.css",     # 文件头注释（注释级；本文件另有未提交 ASR 行改动，本层不碰）
-    "subtrans/webview_gui/assets/style.dark.css",  # 文件头注释（注释级）
     # ---- 测试（本机路径，allowlist 明文保护）----
     "tests/test_media_path.py",            # 本机仓库绝对路径 D:/SubTransJAV 夹具（禁区）
     "tests/test_strings_and_shortcut.py",  # LEGACY_LNK_NAMES 旧桌面快捷方式名 SubTransJAV.lnk 清理锚（与 uninstall.bat LNK6 同源；d1102 桌面图标空白事故后补，防单侧清理漂移）
-    # ---- 工具脚本（历史输出文案，非产品代码）----
-    "tools/bench_refine.py",               # 基准脚本 print 历史口径
-    # D2026-1028-01 公开仓收窄：spike/fts5_spike.py 与 tools/model_matrix_run.py 随
-    # 讨论/测试材料移出公开仓（本地留档），白名单条目同步删除。
     # ---- bat 残留（旧品牌清理锚）----
     "uninstall.bat",                       # LNK6 旧桌面快捷方式 SubTransJAV.lnk 清理锚（D2026-1004-04 新增；任务栏钉扎 Quick Launch\User Pinned\TaskBar 红线永不清理）；小写 %LOCALAPPDATA%\subtrans 缓存目录清理行不匹配本钉
+    # ---- 慢清①（D2026-1106-01）收尾：源码 docstring/前端文件头/bench print
+    # 注释级残留 13 文件已全部中性化为 SubTrans，白名单条目同步移除（钉的
+    # 精度恢复）；L9 清单见 docs/design/d1106-法律合规审计与清理报告.md。
 })
 
 # 本测试文件自身因白名单理由字符串引用旧品牌词而含品牌词，
@@ -121,5 +112,60 @@ def test_brand_subtrans_only_in_allowlist():
     )
     assert not missing, (
         "白名单条目已不再含 SubTransJAV，请从白名单移除（保持钉的精度）：\n"
+        + "\n".join(missing)
+    )
+
+
+# ---------------------------------------------------------------------------
+# G19 上游项目名钉（D2026-1106-01 慢清③）：whisperjav / wjtranslate
+# ---------------------------------------------------------------------------
+
+# 判定面豁免前缀：docs/design/**（内部工作文档，沿用既有豁免）＋ tests/**
+# （.whisperjav 后缀族夹具=兼容层被测语义；夹具命名纪律归合规终扫门②）。
+# guard 断言锁死豁免面：扩大豁免必须改断言、在 diff 里可见。
+_UPSTREAM_EXEMPT_PREFIXES = ("docs/design/", "tests/")
+
+# 上游名字面量保留白名单（每项一行理由）。仅两类合法保留：
+# ①上游格式兼容面——产物文件名/后缀族常量及其文档说明（D2026-1029-01
+#   「asr_meta 输入兼容三面保留」：功能必须读旧名，字面量=格式事实）；
+# ②清理锚——uninstall.bat LNK 族（拍板保留，与 SubTransJAV 锚同源）。
+_UPSTREAM_ALLOWLIST = frozenset({
+    "CHANGELOG.md",                        # 历史变更记录（不改史）
+    "README.md",                           # 历史产物只读兼容说明（固定文件名/后缀族字面量）
+    "docs/使用与维护手册.md",              # H4a/H4b/只读兼容说明（固定文件名/后缀族字面量）
+    "subtrans/refine/asr_meta.py",         # 格式属主：RUN_META_NAME 与 .whisperjav 后缀剥链常量
+    "subtrans/refine/cli.py",              # CLI 帮助文本须显示固定文件名（用户须知格式事实）
+    "subtrans/refine/pass_disagreement.py",  # 格式属主：.merged 可选尾缀族 _MARKER_RE
+    "subtrans/webview_gui/api.py",         # 剥后缀链注释（引用 asr_meta 常量族，格式事实）
+    "uninstall.bat",                       # LNK2 旧快捷方式名 WhisperJAV Translate.lnk 清理锚（拍板保留）
+})
+
+
+def test_brand_no_upstream_project_names():
+    """上游项目名 whisperjav/wjtranslate 入钉（G19，D2026-1106-01 慢清③）。
+
+    大小写不敏感扫描 tracked 文本文件；豁免面由断言锁死；白名单双向
+    断言（多出=品牌漂移即红，失效条目=钉精度衰减即红）。"""
+    assert _UPSTREAM_EXEMPT_PREFIXES == ("docs/design/", "tests/"), (
+        "上游名钉豁免前缀变更须先评议并改本断言（diff 可见）")
+    hits: dict[str, set[str]] = {}
+    for rel in _tracked_text_files():
+        if rel == _SELF or rel.startswith(_UPSTREAM_EXEMPT_PREFIXES):
+            continue
+        blob = (REPO_ROOT / rel).read_bytes()
+        low = blob.lower()
+        found = {tok for tok in ("whisperjav", "wjtranslate") if tok.encode() in low}
+        if found:
+            hits[rel] = found
+    unexpected = sorted(set(hits) - _UPSTREAM_ALLOWLIST)
+    missing = sorted(rel for rel in _UPSTREAM_ALLOWLIST
+                     if rel not in hits)
+    assert not unexpected, (
+        "发现白名单外的上游项目名 whisperjav/wjtranslate（品牌漂移），"
+        "请改为「上游转写工作流」等中性表述，确属格式兼容面/清理锚则补白名单"
+        "并注释理由：\n" + "\n".join(unexpected)
+    )
+    assert not missing, (
+        "上游名白名单条目已不再含字面量，请从白名单移除（保持钉的精度）：\n"
         + "\n".join(missing)
     )

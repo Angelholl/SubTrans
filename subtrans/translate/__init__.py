@@ -1,5 +1,5 @@
 """
-SubTransJAV Translation Package
+SubTrans Translation Package
 
 v2 pipeline uses ``llm_client.LLMClient`` directly (see
 ``subtrans.refine.pipeline_v2``). ``providers`` provides

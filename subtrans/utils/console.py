@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Console utilities for SubTransJAV.
+Console utilities for SubTrans.
 
 Provides:
 - UTF-8 encoding fix for Windows console
@@ -234,7 +234,7 @@ def ensure_numba_cache_dir() -> None:
 
 def setup_console() -> None:
     """
-    Complete console setup for SubTransJAV.
+    Complete console setup for SubTrans.
 
     Combines UTF-8 encoding fix, warning suppression, and environment
     setup.  Call this at the start of any entry point.

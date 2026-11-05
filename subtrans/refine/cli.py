@@ -37,7 +37,7 @@ def build_parser():
     grp_input.add_argument("--exclude", nargs="*", default=[],
                            help="排除的路径模式（如 *_raw.srt）")
     grp_input.add_argument("--asr-meta", default="",
-                           help="上游 WhisperJAV 运行 manifest（可选，文件或目录）；"
+                           help="上游转写工作流运行 manifest（可选，文件或目录）；"
                                 "未给时自动发现 SRT 同目录同名旁车文件 whisperjav_run.json")
     grp_input.add_argument("--asr-telemetry", default="",
                            help="上游场景级 ASR 转写遥测 JSONL 路径（可选）；"

@@ -1,1 +1,1 @@
-"""Utility helpers shared by the SubTransJAV packages."""
+"""Utility helpers shared by the SubTrans packages."""

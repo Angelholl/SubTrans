@@ -7930,6 +7930,8 @@ def test_js_sources_layer_pinned():
         增 fingerprint-version-mismatch→「软件已升级，需重新校准」一键；
         app-msg.js flowGateOff 为泛化 {reason} 模板、零改动零换代）；
         旧钉 31d4c3b3… / 84991c01… 退役；
+        慢清 L9（D2026-1106-01，主模型亲执）：app.js 头注释旧品牌词中性化
+        （→SubTrans），245B/eac696f4…；旧钉 bc6e6a2f… / 7ed33dde… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7946,7 +7948,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-            "7ed33ddeef8ca45895516da0c8f36d05d7fc811156e4b5dd766c8b1a86fda7a5"), \
+            "9d7f3c957eee50f8b6d09d4f143afe5876bc428adfa6de70c4a1b15caa61b22d"), \
             "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
@@ -7975,8 +7977,8 @@ def test_js_split_integrity_pinned():
        且 review.js 在该序之后（review.js 不属本拆分家族）。
     """
     frozen = {
-        "app.js": (248,
-                   "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
+        "app.js": (245,
+                   "eac696f41c292854d926af11862e9c20433885f7e443a3340bb98cdd0e52f50c"),
         "app-msg.js": (69634,
                        "67fcb894f23f992da7ad43eca8da03446122fe416e56ab8456ff7e14b6a17486"),
         "app-modal.js": (92946,

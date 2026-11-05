@@ -1,5 +1,5 @@
 """
-SubTransJAV PyWebView GUI Entry Point
+SubTrans PyWebView GUI Entry Point
 
 Standalone desktop GUI for the two-stage SRT refinement pipeline
 (stage A: cleanup + translation; stage B: review + polish).

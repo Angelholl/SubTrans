@@ -1,5 +1,5 @@
 """
-Process management utilities for SubTransJAV.
+Process management utilities for SubTrans.
 
 Provides cross-platform process tree termination to ensure
 child processes (including GPU workers) are properly cleaned up

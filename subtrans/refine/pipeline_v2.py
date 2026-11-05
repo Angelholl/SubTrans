@@ -1477,12 +1477,12 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
     if not orig_entries:
         raise RefineError("输入 SRT 无有效条目")
 
-    # H4a：上游 ASR 运行信号（whisperjav_run.json）——先于闸门0 加载；
+    # H4a：上游 ASR 运行信号（固定名运行 manifest，asr_meta.RUN_META_NAME）——先于闸门0 加载；
     # run 状态可疑时收紧闸门0（tighten），覆盖率过低仅告警。
     # asr_meta 模块只出信号不 import risk：风险接线由本层完成，全程容错。
     asr_meta = load_asr_meta(cfg, in_path)
     # v1.5 音频链路（D2026-0929-04 P2）：媒体路径解析——显式 --media-path
-    # 覆盖 > 上游 whisperjav_run.json files[].output 配对 > 空。身份元数据
+    # 覆盖 > 上游运行 manifest files[].output 配对 > 空。身份元数据
     # 非信任信号：stale 不阻塞；警告由 resolve_media_path 并入
     # asr_meta["warnings"]（随 upstream_block 透传），并在告警通道可见化
     # （配对失败/override 不存在不阻断）。

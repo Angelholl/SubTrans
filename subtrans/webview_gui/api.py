@@ -1,5 +1,5 @@
 """
-SubTransJAV PyWebView API
+SubTrans PyWebView API
 
 Backend API for the standalone SRT translation GUI.
 Maintains the thin wrapper pattern - delegates work to the

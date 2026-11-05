@@ -1,5 +1,5 @@
 /**
- * SubTransJAV GUI 前端控制器
+ * SubTrans GUI 前端控制器
  *
  * Features:
  * - SRT 文件列表管理（按钮选择 / 文件夹扫描 / 拖拽）

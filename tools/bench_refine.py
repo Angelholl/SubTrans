@@ -148,7 +148,7 @@ def bench_e2e(workdir: str) -> dict:
 
 def main() -> int:
     print("=" * 64)
-    print("SubTransJAV refine 性能基准 "
+    print("SubTrans refine 性能基准 "
           f"(entries={TOTAL}, tm_hits={TM_HITS}, grammar={GRAMMAR_N})")
     print("=" * 64)
 

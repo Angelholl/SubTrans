@@ -19,7 +19,8 @@ def is_pipeline_intermediate(name: str) -> bool:
 
     2.7.3 件④（D2026-1005）：GUI 文件夹收编智能过滤用——流水线中间稿
     （pass1/pass2、_refine_A 中断残留）与终稿（_final_cn 等）不是用户想
-    收编的翻译输入，产成品是 .merged.subtrans/.merged.whisperjav。
+    收编的翻译输入，产成品带 .merged 收编标记后缀（可选尾缀族见
+    pass_disagreement）。
 
     判定规则（对剥掉 .srt 后缀的 stem 末尾锚定、大小写敏感，随产出侧
     命名原样）：

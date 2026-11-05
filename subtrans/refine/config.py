@@ -378,8 +378,9 @@ class RefineConfig:
     v2_source_filter: str = "default"       # strict | default | off（仿 v2_profile 档位声明）
     # 保险阀：拦截率超过该百分比则全文件降级为只计数（1-100）
     v2_source_filter_valve_pct: int = DEFAULT_V2_SOURCE_FILTER_VALVE_PCT
-    # 上游 WhisperJAV 运行 manifest（H4a 信号通道）：文件或目录路径，空=自动
-    # 发现 SRT 同目录 whisperjav_run.json。刻意不进 manifest._CONFIG_FIELDS
+    # 上游转写工作流运行 manifest（H4a 信号通道）：文件或目录路径，空=自动
+    # 发现 SRT 同目录固定名旁车文件（常量见 asr_meta.RUN_META_NAME）。刻意不进
+    # manifest._CONFIG_FIELDS
     # （路径变化不应误失效；信号内容经 asr_meta_sha1 入指纹，R1）
     asr_meta: str = ""
     # 上游场景级 ASR 转写遥测（H4b 信号通道）：JSONL 文件路径，空=自动发现
@@ -388,7 +389,7 @@ class RefineConfig:
     # 的同一先例——自适应与否由 adaptive_thresholds 开关入指纹承载）
     asr_telemetry: str = ""
     # v1.5 媒体路径链路（D2026-0929-04 P2）：显式指定媒体文件路径；缺省
-    # 经上游 whisperjav_run.json 自动配对（asr_meta.resolve_media_path，
+    # 经上游运行 manifest 自动配对（asr_meta.resolve_media_path，
     # files[].output ↔ 输入 SRT）。validate() 不做硬校验。指纹口径见
     # manifest.compute_config_hash：显式覆盖值以规范化 sha1 参与，自动
     # 发现值不参与指纹。
