@@ -126,8 +126,13 @@ class FakeServer:
 
         self.httpd = HTTPServer(("127.0.0.1", 0), Handler)
         self.port = self.httpd.server_port
-        self.thread = threading.Thread(target=self.httpd.serve_forever,
-                                       daemon=True)
+        # poll_interval 只控 serve_forever 空闲轮询粒度（shutdown 标志检查
+        # 延迟）；默认 0.5s 令每条测试收尾固定空等 ~0.5s，与请求处理语义
+        # 无关，缩到 0.01s 纯省收尾。
+        self.thread = threading.Thread(
+            target=self.httpd.serve_forever,
+            kwargs={"poll_interval": 0.01},
+            daemon=True)
         self.thread.start()
 
     def url(self):
