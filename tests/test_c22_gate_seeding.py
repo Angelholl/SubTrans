@@ -5,8 +5,9 @@
 - 原子写入：写失败不落半态、fail-closed 且记日志；
 - dev metrics 不随包下发：seeding 缺省行只含 enabled+指纹，不带
   measured_at/precision_lb/coverage/n；
-- 指纹 fail-closed：rules_sha1+app_version 缺失/不匹配一律关门
-  （含读取侧 API 集成）；
+- 指纹 fail-closed：rules_sha1+app_version 缺失一律关门；失配按行型分治
+  （测量行双分量绑定、seeded 行只绑 rules_sha1，D2026-1105-06）(含读取侧
+  API 集成)；
 - 三条升级路径：全新安装（无文件）、3.1.1 实装（存量五字段行）、
   3.0 连跳（无中间版本行，重复 seeding 幂等）均钉。
 
@@ -283,11 +284,47 @@ def test_evaluate_gate_ok_only_with_matching_fingerprint(tmp_path):
     assert dm.evaluate_c22_gate(gate) == (True, "ok")
 
 
-@pytest.mark.parametrize("field", ["rules_sha1", "app_version"])
-def test_evaluate_gate_closes_on_fingerprint_mismatch(tmp_path, field):
-    gate = _write_gate(tmp_path / "config", **{field: "deadbeef"})
-    ok, reason = dm.evaluate_c22_gate(gate)
-    assert ok is False and reason == "fingerprint-mismatch"
+# 行型分治五态矩阵（D2026-1105-06 裁决③）：seeded 行只比 rules_sha1，
+# 测量行维持版本绑定；任一行型 rules 失配一律关门。
+# 测量行夹具：带任一 dev 测量键即为测量行（存在性判定，不看 truthiness）。
+_MEASURED_FULL = {"measured_at": "2026-11-01T00:00:00", "precision_lb": 0.9,
+                  "coverage": 0.8, "n": 120}
+
+
+def test_evaluate_gate_seeded_rules_mismatch_closed(tmp_path):
+    """① seeded 行 × rules 失配 → 关门。"""
+    gate = _write_gate(tmp_path / "config", rules_sha1="deadbeef")
+    assert dm.evaluate_c22_gate(gate) == (False, "fingerprint-mismatch")
+
+
+def test_evaluate_gate_seeded_version_mismatch_allowed_with_warning(
+        tmp_path, caplog):
+    """② seeded 行 × 版本失配 → 放行，仅记 warning（无测量证据可失效）。"""
+    gate = _write_gate(tmp_path / "config", app_version="0.0.0-old")
+    with caplog.at_level(logging.WARNING, logger="subtransjav.data_migration"):
+        ok, reason = dm.evaluate_c22_gate(gate)
+    assert (ok, reason) == (True, "ok")
+    assert any(r.levelno >= logging.WARNING for r in caplog.records), \
+        "seeded 行版本失配必须留 warning 日志"
+
+
+def test_evaluate_gate_measured_rules_mismatch_closed(tmp_path):
+    """③ 测量行 × rules 失配 → 关门。"""
+    gate = _write_gate(tmp_path / "config", rules_sha1="deadbeef",
+                       **_MEASURED_FULL)
+    assert dm.evaluate_c22_gate(gate) == (False, "fingerprint-mismatch")
+
+
+@pytest.mark.parametrize("extra", [
+    _MEASURED_FULL,
+    {"precision_lb": 0.9, "n": 120},  # ⑤ 无 measured_at 仍判测量行
+    {"measured_at": ""},              # ⑤ 空串仍判测量行（存在性判定）
+])
+def test_evaluate_gate_measured_version_mismatch_closed(tmp_path, extra):
+    """④⑤ 测量行 × 版本失配 → 新原因码关门（含无/空 measured_at 夹具）。"""
+    gate = _write_gate(tmp_path / "config", app_version="0.0.0-old", **extra)
+    assert dm.evaluate_c22_gate(gate) == (
+        False, "fingerprint-version-mismatch")
 
 
 @pytest.mark.parametrize("field", ["rules_sha1", "app_version"])

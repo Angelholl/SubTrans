@@ -35,8 +35,11 @@ C22 校准门 seeding（D2026-1101-01）：与迁移共用同一首启插桩点�
 才写缺省行（enabled=true + rules_sha1/app_version 指纹），存量行（含显式
 enabled:false、旧版五字段测量行）零扰动；写入走同目录临时文件 + os.replace
 原子替换，失败零残留并记日志。dev 实测字段（measured_at/precision_lb/
-coverage/n）只属于校准工具输出，绝不随 seeding 下发。指纹不匹配（含缺失）
-的存量行由读取侧关门并提示重新校准——旧测量依据不得静默复用。
+coverage/n）只属于校准工具输出，绝不随 seeding 下发。读取侧按行型分治
+（D2026-1105-06 裁决③）：测量行指纹不匹配（含缺失、版本失配）关门并要求
+重新校准——旧测量依据不得静默复用；seeded 缺省行只绑定 rules_sha1，纯版本
+升级不关门（仅记日志）。该判定是自束防误用（防旧测量依据静默复用/误配开门），
+非对抗性安全边界——能改安装文件者不受其约束。
 """
 
 from __future__ import annotations
@@ -641,9 +644,21 @@ def evaluate_c22_gate(gate_path: str | Path, *,
     """门控读取判定（纯读、零写）：返回 ``(是否开门, 原因码)``。
 
     原因码：``ok`` / ``missing`` / ``invalid`` / ``disabled`` /
-    ``fingerprint-missing`` / ``fingerprint-mismatch``。
-    ``enabled is True`` 之外还要求 rules_sha1+app_version 与当前生效规则集/
-    版本一致——缺失也算不匹配（旧测量依据不得静默复用，D2026-1101-01 §三④）。
+    ``fingerprint-missing`` / ``fingerprint-mismatch`` /
+    ``fingerprint-version-mismatch``。
+
+    ``enabled is True`` 之外按**行型分治**（D2026-1105-06 裁决③）：
+
+    - 测量行（含任一 dev 测量键，存在性判定、不看取值；混入/歧义按测量行
+      fail-closed）：rules_sha1 失配→``fingerprint-mismatch``；版本失配→
+      ``fingerprint-version-mismatch``（测量依据与版本绑定，升级即失效）。
+    - seeded 行（无任何 dev 测量键）：只比 rules_sha1（失配→
+      ``fingerprint-mismatch``）；版本失配→放行 ``(True, "ok")`` 并记一条
+      warning（该行无校准证据可失效，纯版本升级不应关门）。
+    - 两键存在性必填语义不变：缺失任一→``fingerprint-missing``。
+
+    威胁模型：本判定是**自束防误用**（防止旧测量依据被静默复用、防止
+    误配行开门），不是防对抗——能改本文件的攻击者可 outright 关闭门控。
     """
     try:
         data = json.loads(Path(gate_path).read_text(encoding="utf-8"))
@@ -662,8 +677,16 @@ def evaluate_c22_gate(gate_path: str | Path, *,
     stored_version = data.get("app_version")
     if not stored_rules or not stored_version:
         return False, "fingerprint-missing"
-    if stored_rules != expect_rules or stored_version != expect_version:
+    # 行型判定：存在性判定（空串/None 仍算测量行），混入按测量行 fail-closed
+    is_measured_row = any(k in data for k in _C22_DEV_METRIC_KEYS)
+    if stored_rules != expect_rules:
         return False, "fingerprint-mismatch"
+    if stored_version != expect_version:
+        if is_measured_row:
+            return False, "fingerprint-version-mismatch"
+        _logger.warning("C22 门控版本指纹不符但为 seeded 行（无测量证据可"
+                        "失效），按 rules_sha1 放行: 存储 %s / 当前 %s",
+                        stored_version, expect_version)
     return True, "ok"
 
 
