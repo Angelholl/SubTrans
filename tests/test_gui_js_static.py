@@ -5911,8 +5911,9 @@ def test_home_flow_overview_lastrun_missed_skipped_pinned():
 def test_home_flow_overview_gate_reason_humanized_pinned():
     """件E#3：门 reason 码→人话映射钉。
 
-    六个后端原因码（ok 外的 missing/invalid/disabled/fingerprint-missing/
-    fingerprint-mismatch）一律经 GATE_REASON_TEXT 映射，禁止裸码直出。"""
+    七个后端原因码（ok 外的 missing/invalid/disabled/fingerprint-missing/
+    fingerprint-mismatch/fingerprint-version-mismatch）一律经 GATE_REASON_TEXT
+    映射，禁止裸码直出。"""
     init = (ASSETS / "app-init.js").read_text(encoding="utf-8")
     m = re.search(r"const GATE_REASON_TEXT = \{(.*?)\n\};", init, re.S)
     assert m, "app-init.js 缺门原因映射表 GATE_REASON_TEXT"
@@ -5921,7 +5922,9 @@ def test_home_flow_overview_gate_reason_humanized_pinned():
                        ("invalid", "门控文件损坏或无法读取"),
                        ("disabled", "校准尚未启用"),
                        ("fingerprint-missing", "校准指纹缺失，需重新校准"),
-                       ("fingerprint-mismatch", "规则集已变更，需重新校准")):
+                       ("fingerprint-mismatch", "规则集已变更，需重新校准"),
+                       ("fingerprint-version-mismatch",
+                        "软件已升级，需重新校准")):
         assert f"'{code}': '{text}'" in table, \
             f"门原因映射缺码或中文口径: {code}"
     body = _extract_function(init, "_applyFullchainStatus")
@@ -7922,6 +7925,11 @@ def test_js_sources_layer_pinned():
         e950e6eb…（ct2MigrateAsk 预览+双向询问，四 pick/reset 函数接线
         also_* 连带参数）；refine 家族 344bf9c5…/219,698B；
         旧钉 1e9f5640… / 5f2212a7… / bd360fac… / 3c4887ec… 退役；
+        d1105 GATE 文案分叉（D2026-1105-06，卡 A1b）：全库拼接
+        0820a9f0…/537,992B、app-init.js 21,069B/433b5ed6…（GATE_REASON_TEXT
+        增 fingerprint-version-mismatch→「软件已升级，需重新校准」一键；
+        app-msg.js flowGateOff 为泛化 {reason} 模板、零改动零换代）；
+        旧钉 31d4c3b3… / 84991c01… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7938,7 +7946,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "31d4c3b3b0634a5e272e15930042de45a4540651dc8734c832b87740f88f54ab"), \
+        "0820a9f0f9e61d1f9e950ce97741f20eff7ed0d631d566645906061bfed69472"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
@@ -8029,8 +8037,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (20996,
-                        "84991c01b71a21b5fd2f5cc5b7ae156f973bba50b886d6c2573957eb21b07717"),
+        "app-init.js": (21069,
+                        "433b5ed604e4227fb4859134b0c176b8e7152fbaed8bd9a80d95ed6e824541f7"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,

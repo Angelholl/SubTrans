@@ -212,6 +212,7 @@ const GATE_REASON_TEXT = {
     'disabled': '校准尚未启用',
     'fingerprint-missing': '校准指纹缺失，需重新校准',
     'fingerprint-mismatch': '规则集已变更，需重新校准',
+    'fingerprint-version-mismatch': '软件已升级，需重新校准',
 };
 
 const FlowOverview = {
