@@ -7946,8 +7946,8 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "0820a9f0f9e61d1f9e950ce97741f20eff7ed0d631d566645906061bfed69472"), \
-        "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
+            "7ed33ddeef8ca45895516da0c8f36d05d7fc811156e4b5dd766c8b1a86fda7a5"), \
+            "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
     # 换代；前值 213,752B＝d1103 引擎落位行；前值 204,408B＝d1023-批3），
@@ -7977,8 +7977,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (69637,
-                       "f082f74486f09248da147ec35ede861ead09c80fbfc018d4ae5fe48309213b1d"),
+        "app-msg.js": (69634,
+                       "67fcb894f23f992da7ad43eca8da03446122fe416e56ab8456ff7e14b6a17486"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
@@ -7999,8 +7999,8 @@ def test_js_split_integrity_pinned():
                              "2b4d435badd728491b076d295a4ff6b32109637166a790bfc12072e43c8686e3"),
         "app-translator.js": (20288,
                               "a745d62347ff7734b6971aeccfc181e0c799144aa31b066f384c86957a22adf0"),
-        "app-theme.js": (4234,
-                         "943902377f465a30975c4e77d443ec784b0f44855203139c1055a5c6185f8d34"),
+        "app-theme.js": (4231,
+                         "9e8b7a72b6979ef1edbbc02a12a8234e631be6d5b6810c07998254a5ab11e893"),
         "app-shortcuts.js": (2326,
                              "e355cf1d8dd6036a58dbd5f61110cc51031307d715ea7ddb3d682821bac42e0a"),
         "app-about.js": (705,
@@ -8037,8 +8037,8 @@ def test_js_split_integrity_pinned():
                                "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
         "app-refine-boot.js": (2654,
                              "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
-        "app-init.js": (21069,
-                        "433b5ed604e4227fb4859134b0c176b8e7152fbaed8bd9a80d95ed6e824541f7"),
+        "app-init.js": (21063,
+                        "0aade72570004bd1ac70980f13fceefc11287c1734f3d95931393994676d4784"),
         "app-encode-dock.js": (23174,
                                "539cfa44efb56e74108fd90192de8b855b6d32c55f5fd240631804c6bcd21146"),
         "app-feature-status.js": (851,
