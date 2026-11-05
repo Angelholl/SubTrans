@@ -1,6 +1,6 @@
 """ensure_lmstudio_model TTL 卸载等待复查单测（全部 mock，不触网、不真 sleep）。
 
-背景（D2026-1006-01 件⑨，owner 真机 mufr-006 现场）：LM Studio 空闲 TTL
+背景（D2026-1006-01 件⑨，owner 真机现场）：LM Studio 空闲 TTL
 自动卸载把审校模型卸掉后（阶段 A 只用小模型，不重置大模型空闲计时），
 无 lms CLI 时预检直接失败跳过整个文件；改为有限等待复查，给"在 LM Studio
 手动加载"一个自动检测续跑窗口。

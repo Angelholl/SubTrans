@@ -245,19 +245,16 @@ def test_anti_reversal_clause_synced_across_prompts():
     assert "やめないで 才是\"别停\"" in b_card, "B 卡缺 やめないで 正译说明"
     assert "最低=差劲" in b_card and "狡猾/不公平" in b_card, "B 卡三类反义不齐"
 
-    # 批次 B 闭环：两卡新增行同步钉扎（首=脖子 / イク系变体）——
-    # 新增行在 A 卡（反义条款旁）与 B 卡（审校核查项旁）必须同时在场
+    # 批次 B 闭环：两卡新增行同步钉扎（首=脖子）——
+    # 新增行在 A 卡（反义条款旁）与 B 卡（审校核查项旁）必须同时在场。
+    # イク系变体条款已随 D2026-1106-01 移出提示词层（通用卡无领域措辞），
+    # 保护下沉至规则层 climax_iku_variant 代码校验（下方键钉保留）。
     for card_name in ("角色-净语翻译.txt", "角色-审校抛光.txt"):
         card = sources[card_name]
         assert "身体语境下 首=脖子（不是头）" in card, \
             f"{card_name} 缺 首=脖子 条款"
         assert "首が回らない、首を長くする、首になる、首をかしげる" in card, \
             f"{card_name} 缺习语负向排除例示"
-        assert "イク 系（イく/イク/イっ/イきそう/いっちゃう）" in card, \
-            f"{card_name} 缺 イク系 变体条款"
-        assert "禁止泛化为普通\"去\"" in card, f"{card_name} 缺泛化禁令"
-        assert "行く/行きます/行った/行こう 不受影响" in card, \
-            f"{card_name} 缺普通行く系豁免"
     # 对应规则 YAML 键同步在场
     for key in ("body_part_kubi", "climax_iku_variant"):
         assert key in rules_v, f"批次 B 规则键缺失: {key}"

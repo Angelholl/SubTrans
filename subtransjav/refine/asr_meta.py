@@ -53,7 +53,7 @@ SUSPECT_STATUSES = frozenset(("suspect", "empty", "failed"))
 ASR_TELEMETRY_SUFFIX = ".asr_telemetry.jsonl"
 
 # SRT 文件名需逐段剥除的语言/管线后缀（发现遥测时定位文件名前缀用）。
-# 真实命名：SRT=4k2.me@mihd-002.ja.whisperjav.srt 而遥测=4k2.me@mihd-002.
+# 命名示例：SRT=demo@sample-001.ja.whisperjav.srt 而遥测=demo@sample-001.
 # asr_telemetry.jsonl——禁止 naive stem（剥 .srt 后直接拿来当匹配前缀必零命中）。
 _STEM_STRIP_SUFFIXES = (".ja.whisperjav", ".whisperjav", ".ja")
 

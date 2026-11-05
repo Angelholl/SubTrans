@@ -149,9 +149,9 @@ def test_discovery_strips_language_and_pipeline_suffixes(tmp_path):
 
 
 def test_discovery_real_world_naming(tmp_path):
-    """真实命名：SRT=4k2.me@mihd-002.ja.whisperjav.srt 而
-    telemetry=4k2.me@mihd-002.asr_telemetry.jsonl。"""
-    stem = "4k2.me@mihd-002"
+    """跨层前缀命名：SRT=demo@sample-001.ja.whisperjav.srt 而
+    telemetry=demo@sample-001.asr_telemetry.jsonl。"""
+    stem = "demo@sample-001"
     srt = tmp_path / f"{stem}.ja.whisperjav.srt"
     srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nあ\n", encoding="utf-8")
     _write_telemetry(tmp_path, [_scene(1)], stem=stem)

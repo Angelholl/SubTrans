@@ -447,11 +447,11 @@ def test_telemetry_corrupt_file_never_raises(tmp_path):
 def test_resolve_media_path_samedir_fallback_no_manifest(tmp_path):
     """manifest 缺失（file_ref 空）→ SRT 同目录剥链候选（含 .merged 层）
     精确匹配视频扩展名闭集回退命中。"""
-    srt = _write_srt(tmp_path, name="4k2.me@mihd-002.ja.merged.whisperjav.srt")
-    (tmp_path / "4k2.me@mihd-002.mp4").write_bytes(b"\x00")
+    srt = _write_srt(tmp_path, name="demo@sample-001.ja.merged.whisperjav.srt")
+    (tmp_path / "demo@sample-001.mp4").write_bytes(b"\x00")
     media, source = resolve_media_path(str(srt), {"warnings": []})
     assert source == "samedir"
-    assert media == str(tmp_path / "4k2.me@mihd-002.mp4")
+    assert media == str(tmp_path / "demo@sample-001.mp4")
 
 
 def test_resolve_media_path_samedir_fallback_manifest_no_hit(tmp_path):
@@ -459,8 +459,8 @@ def test_resolve_media_path_samedir_fallback_manifest_no_hit(tmp_path):
     _write_meta(tmp_path, {"status": "OK",
                            "files": [{"output": "other.srt",
                                       "path": "x.mp4"}]})
-    srt = _write_srt(tmp_path, name="4k2.me@mihd-002.ja.merged.whisperjav.srt")
-    (tmp_path / "4k2.me@mihd-002.mkv").write_bytes(b"\x00")
+    srt = _write_srt(tmp_path, name="demo@sample-001.ja.merged.whisperjav.srt")
+    (tmp_path / "demo@sample-001.mkv").write_bytes(b"\x00")
     result = {"warnings": []}
     media, source = resolve_media_path(str(srt), result)
     assert source == "samedir"

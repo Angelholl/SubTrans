@@ -26,7 +26,7 @@ from subtransjav.utils.process_manager import run_with_timeout_tree
 
 _PS_TIMEOUT_S = 30  # lms ps 探测专用短超时，避免 ps 挂死拖满 load 超时
 
-# 件⑨（D2026-1006-01，owner 真机 mufr-006 现场）：LM Studio 空闲 TTL 自动
+# 件⑨（D2026-1006-01，owner 真机现场）：LM Studio 空闲 TTL 自动
 # 卸载会在阶段间隙把大模型卸掉（阶段 A 只用小模型，不重置大模型空闲计时）。
 # 无 lms CLI 时无法自动加载，改为有限等待复查：每 WAIT_INTERVAL_S 秒重查
 # 一次在载状态，共 WAIT_RECHECKS 次，给"在 LM Studio 手动加载"一个
@@ -161,7 +161,7 @@ def ensure_lmstudio_model(endpoint: str, model: str,
     对齐判定：未在载 / 已载但 ctx 与 ctx_tokens 不符 / 已载但并发与
     parallel 不符，满足任一即"卸载全部 → 带参加载"。
 
-    TTL 卸载等待复查（D2026-1006-01 件⑨，owner 真机 mufr-006 现场）：
+    TTL 卸载等待复查（D2026-1006-01 件⑨，owner 真机现场）：
     模型已下载但不在载（疑似 LM Studio 空闲 TTL 自动卸载——阶段 A 只用
     小模型不重置大模型空闲计时）且无 lms CLI 时，不立即失败，而是有限
     等待复查（WAIT_RECHECKS × WAIT_INTERVAL_S）：期间在 LM Studio 中

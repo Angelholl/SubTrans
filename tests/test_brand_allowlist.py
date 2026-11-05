@@ -30,18 +30,10 @@ _BINARY_EXTS = {
 # 属引用非漂移；白名单只保留产品面与 docs 根级/历史档案（原 20 条
 # docs/design 条目随之移除）。
 ALLOWLIST = frozenset({
-    # ---- CI/打包链（批1 后残余：历史注释 + 旧开始菜单组清理锚）----
-    ".github/workflows/release.yml",       # 行1历史注释（发布定案号，不改史）；spec 名/dist 目录/产物 exe 名已随批1 改 SubTrans
-    "packaging/setup.iss",                 # :1 历史注释 + [InstallDelete] 旧开始菜单组 {commonprograms}\SubTransJAV 清理锚（对不存在路径无害空操作）；AppId GUID/env 名禁区不动
-    "pyproject.toml",                      # 顶部注释 pip install -e 为 dev/构建形态真实口径（D2026-1004-04 C1 保留）；entry points 用小写包名 subtransjav（保持现状）
-    # ---- 用户/历史文档（渊源句、历史沿革、走查记录，不改史；README/手册已随批3 收敛正文）----
-    "README.md",                           # 渊源句（"由 SubTransJAV 项目迭代而来"/evolved from + 上游渊源句"旧名 SubTransJAV 由此而来"）；数据根路径已随批3 切 %LOCALAPPDATA%\SubTrans
-    "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；新版本记录随发版 SOP 定版）
-    "LICENSE",                             # 版权署名 The SubTransJAV Project Authors（法律文本不改）
-    "docs/使用与维护手册.md",               # 标题渊源口径（历史文档标题；批3 收敛正文与数据根口径后仍保留）
-    "docs/roadmap.md",                     # 历史规划文档
-    "AGENTS.md",                            # 项目规则（标题/正文引用产品全称；仓库级权威文档）
-    "docs/examples/direction-packs/README.txt",  # 方向包示例说明（历史口径句）
+    # ---- CI/打包链（清理锚；历史注释行已随 D2026-1106-01 中性化）----
+    "packaging/setup.iss",                 # [InstallDelete] 旧开始菜单组 {commonprograms}\SubTransJAV 清理锚（对不存在路径无害空操作）；AppId GUID/env 名禁区不动
+    # ---- 用户/历史文档（不改史）----
+    "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；不改史）
     # ---- 运行时/源码注释级残留（数据根默认/AUMID/Documents 输出已随 D2026-1004-04 切 SubTrans，剩 docstring 注释级；env 名全大写不入本钉口径）----
     "subtransjav/webview_gui/api.py",      # 模块 docstring :2 注释级残留（Documents 输出已改 SubTrans）
     "subtransjav/webview_gui/main.py",     # 模块 docstring :2 注释级残留（AUMID 已改为 Angelholl.SubTrans.GUI 模块常量）

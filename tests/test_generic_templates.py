@@ -28,6 +28,8 @@ FORBIDDEN_TOKENS = [
     "JAV", "jav", "成人", "性爱", "高潮", "中出", "内射", "精液",
     "小穴", "阴部", "骚", "淫", "插入", "抽插", "敏感词", "挑逗",
     "エロ", "イク", "イく",
+    "爱液", "潮吹", "淫水", "鸡巴", "肉棒", "烂逼", "骚逼", "贱穴",
+    "母狗", "婊子", "マンコ", "チンポ", "ザーメン", "愛液", "中出し",
 ]
 
 
@@ -57,7 +59,7 @@ def test_pkg_templates_readme_exists():
     text = readme.read_text(encoding="utf-8")
     assert "通用" in text
     assert "四级回落" in text or "优先级" in text
-    assert "jav-domain" in text  # 指向领域示例包
+    assert "领域" in text  # 领域定制指引
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +71,20 @@ def test_generic_cards_no_domain_residue(fname):
     text = (PKG_TEMPLATES / fname).read_text(encoding="utf-8")
     for token in FORBIDDEN_TOKENS:
         assert token not in text, f"通用卡残留领域措辞 '{token}'（{fname}）"
+
+
+REPO_CONFIG_TEMPLATES = Path(__file__).resolve().parents[1] / "config" / "templates"
+
+
+@pytest.mark.parametrize("fname", list(V2_TEMPLATE_FILES.values()))
+def test_repo_config_cards_no_domain_residue(fname):
+    """公开仓自带的数据根覆盖层模板卡（config/templates/）同样无领域残留。"""
+    p = REPO_CONFIG_TEMPLATES / fname
+    if not p.is_file():
+        pytest.skip(f"数据根覆盖层无此卡：{p}")
+    text = p.read_text(encoding="utf-8")
+    for token in FORBIDDEN_TOKENS:
+        assert token not in text, f"数据根卡残留领域措辞 '{token}'（{fname}）"
 
 
 # ---------------------------------------------------------------------------
