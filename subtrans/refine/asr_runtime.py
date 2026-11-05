@@ -35,7 +35,6 @@ import threading
 import time
 
 from .. import paths
-from ..utils.env_compat import env_get
 from ..utils.subprocess_flags import CREATE_NO_WINDOW
 
 __all__ = [
@@ -179,14 +178,12 @@ def _default_runtime_root() -> tuple[str, str]:
     return paths.data_subdir("runtime", "ct2"), "default"
 
 
-def _resolve_dir_setting(env_suffix: str, key: str, default_fn) -> dict:
+def _resolve_dir_setting(env_name: str, key: str, default_fn) -> dict:
     """落位解析序共用面（D2026-1103-04 评审补漏：运行时/模型两键的解析体
     逐字同构，抽此一处）：环境变量 > settings 键 > 现形默认。
 
-    环境变量双前缀读取（``SUBTRANS_<env_suffix>`` 优先、旧名
-    ``SUBTRANSJAV_<env_suffix>`` 兜底，D2026-1106-02 ①）。
     ``default_fn()`` 返回 ``(路径, 来源标签)``；全程只读探测，不建目录。"""
-    override = (env_get(env_suffix) or "").strip()
+    override = os.environ.get(env_name, "").strip()
     if override:
         return {"dir": override, "source": "env"}
     cfg = ""
@@ -204,11 +201,10 @@ def _resolve_dir_setting(env_suffix: str, key: str, default_fn) -> dict:
 def runtime_dir_info() -> dict:
     """运行时落位与来源（source ∈ env/settings/default/legacy）。
 
-    解析序：环境变量 ``SUBTRANS_CT2_RUNTIME_DIR``（优先；旧名
-    ``SUBTRANSJAV_CT2_RUNTIME_DIR`` 兜底，D2026-1106-02 ①）（测试隔离/CI 用，
+    解析序：环境变量 ``SUBTRANS_CT2_RUNTIME_DIR``（测试隔离/CI 用，
     优先级最高）> settings 键 ``ct2_runtime_dir``（GUI 可自定义）>
     现形默认（见 _default_runtime_root）。"""
-    return _resolve_dir_setting("CT2_RUNTIME_DIR",
+    return _resolve_dir_setting("SUBTRANS_CT2_RUNTIME_DIR",
                                 CT2_RUNTIME_DIR_KEY, _default_runtime_root)
 
 
@@ -383,11 +379,10 @@ def ct2_model_dir_info() -> dict:
     """模型落位与来源（source ∈ env/settings/default/legacy）。
 
     解析序与运行时同构（共用 _resolve_dir_setting）：环境变量
-    ``SUBTRANS_CT2_MODEL_DIR``（优先；旧名 ``SUBTRANSJAV_CT2_MODEL_DIR``
-    兜底，D2026-1106-02 ①）（测试隔离/CI 用，优先级最高）> settings
+    ``SUBTRANS_CT2_MODEL_DIR``（测试隔离/CI 用，优先级最高）> settings
     键 ``ct2_model_dir``（GUI 可自定义）> 现形默认（见 _default_model_root）。
     只读探测，不建目录。"""
-    return _resolve_dir_setting("CT2_MODEL_DIR",
+    return _resolve_dir_setting("SUBTRANS_CT2_MODEL_DIR",
                                 CT2_MODEL_DIR_KEY, _default_model_root)
 
 

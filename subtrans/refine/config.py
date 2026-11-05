@@ -7,7 +7,6 @@ import os
 from dataclasses import dataclass, field
 
 from subtrans import paths
-from subtrans.utils.env_compat import env_get
 
 # ---- 批量默认值（需求定稿：本地 30 / 云端 30）----
 DEFAULT_BATCH_LOCAL = 30
@@ -38,8 +37,7 @@ DEFAULT_V2_SOURCE_FILTER_VALVE_PCT = 50  # 闸门0 保险阀：拦截率超过�
 DEFAULT_V2_ASR_META_MIN_COVERAGE_PCT = 30  # 上游 ASR 语音覆盖率告警阈值（%，低于即记风险）
 DEFAULT_V2_ASR_META_STALE_MAX_HOURS = 24   # 上游运行 manifest 新鲜度上限（小时，R6）
 
-# 用户可调字段（config/user_settings.json / 环境变量 SUBTRANS_<大写字段名>；
-# 旧名 SUBTRANSJAV_<大写字段名> 兜底，D2026-1106-02 ①）。
+# 用户可调字段（config/user_settings.json / 环境变量 SUBTRANS_<大写字段名>）。
 # 优先级：默认 < 用户配置文件 < 环境变量 < CLI/GUI 显式赋值（构造后赋值天然最高）。
 TUNABLE_FIELD_TYPES = {
     "temperature_cloud": float,
@@ -51,7 +49,7 @@ TUNABLE_FIELD_TYPES = {
     "premerge_min_fragment_chars": int,
     "v2_concurrency_max": int,
     # A1 缺省重绑定（D2026-0927-01）：v2_ctx_local 纳入用户可调字段，
-    # 用户可经 config/user_settings.json 或 SUBTRANS_V2_CTX_LOCAL（旧名兜底）自定
+    # 用户可经 config/user_settings.json 或 SUBTRANS_V2_CTX_LOCAL 自定
     "v2_ctx_local": int,
     "timeout_llm": float,
     "timeout_http": float,
@@ -267,14 +265,14 @@ def resolve_tunable(name: str):
             value = coerced
         else:
             print(f"⚠️ 用户配置字段 {name} 类型非法，已忽略: {user[name]!r}")
-    env_raw = env_get(name.upper())
+    env_raw = os.environ.get(f"SUBTRANS_{name.upper()}")
     if env_raw is not None and env_raw.strip() != "":
         coerced = _coerce_tunable(env_raw.strip(), typ)
         if coerced is not None:
             value = coerced
         else:
-            print(f"⚠️ 环境变量 SUBTRANS_{name.upper()}（旧名 SUBTRANSJAV_{name.upper()}）"
-                  f"类型非法，已忽略: {env_raw!r}")
+            print(f"⚠️ 环境变量 SUBTRANS_{name.upper()} 类型非法，已忽略: "
+                  f"{env_raw!r}")
     return value
 
 
@@ -373,7 +371,7 @@ class RefineConfig:
     # ------------------------------------------------------------------
     v2_profile: str = "local"       # local=strict兜底(cleaner+误译拦截) | cloud=lenient(仅通用校验)
     v2_concurrency: int = 1         # 批间并发数（1-5，默认1为串行，对所有服务商生效）
-    v2_ctx_local: int = 16384       # 本地模型上下文窗口（批大小/max_tokens 预算依据；缺省演变：32768（历史）→ 22272（作者 16GB 单卡档案值，见文档/示例层）→ 16384（A1 缺省重绑定，D2026-0927-01：通用保守值）。可经 config/user_settings.json 或 SUBTRANS_V2_CTX_LOCAL（旧名 SUBTRANSJAV_V2_CTX_LOCAL 兜底）覆盖）
+    v2_ctx_local: int = 16384       # 本地模型上下文窗口（批大小/max_tokens 预算依据；缺省演变：32768（历史）→ 22272（作者 16GB 单卡档案值，见文档/示例层）→ 16384（A1 缺省重绑定，D2026-0927-01：通用保守值）。可经 config/user_settings.json 或 SUBTRANS_V2_CTX_LOCAL 覆盖）
     v2_keep_untranslated: str = "original"   # D1 后仅兼容保留：A/B 双失败一律回退原文+[未翻译] 标记（原 original/empty 两档已并轨，不再删行）
     # 闸门0 送翻前源侧幻觉检测（预合并前对原始条目生效，两档 profile 均执行；
     # 规则库见 refine/defaults/source_hallucination.yaml）
@@ -529,13 +527,13 @@ class RefineConfig:
                 continue
             if getattr(self, name, None) != spec.default:
                 continue                # 已被 CLI/GUI 显式赋值，不覆盖
-            env_raw = env_get(name.upper())
+            env_raw = os.environ.get(f"SUBTRANS_{name.upper()}")
             value = None
             if env_raw is not None and env_raw.strip() != "":
                 value = _coerce_tunable(env_raw.strip(), typ)
                 if value is None:
-                    print(f"⚠️ 环境变量 SUBTRANS_{name.upper()}（旧名 SUBTRANSJAV_{name.upper()}）"
-                          f"类型非法，已忽略: {env_raw!r}")
+                    print(f"⚠️ 环境变量 SUBTRANS_{name.upper()} 类型非法，"
+                          f"已忽略: {env_raw!r}")
             if value is None and name in user:
                 value = _coerce_tunable(user[name], typ)
                 if value is None:

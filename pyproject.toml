@@ -131,9 +131,6 @@ extra_checks = true
 [project.scripts]
 subtrans-refine = "subtrans.refine.cli:main"
 subtrans-gui = "subtrans.webview_gui.main:main"
-# 过渡别名（D2026-1106-02 ①）：旧命令名保留同函数入口，存量脚本零破坏；下线时点随 4.0 发版另议
-subtransjav-refine = "subtrans.refine.cli:main"
-subtransjav-gui = "subtrans.webview_gui.main:main"
 
 # -----------------------------------------------------------------------------
 # Setuptools Configuration

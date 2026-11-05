@@ -46,9 +46,9 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 - onedir 打包 + Inno Setup 安装器，数据根位于 `%LOCALAPPDATA%\SubTrans`；**卸载不删除用户数据**（词库/TM/配置/产物均保留）。
 - 安装器内置 WebView2 检测与引导（GUI 运行时依赖）。
 - 完整性口径＝发布页提供的 `SHA256SUMS.txt`（安装包校验值）：下载后在 CMD 执行 `certutil -hashfile 安装包文件名 SHA256` 比对，一致即文件未被篡改（默认完整性核验方式）。
-- 环境变量 `SUBTRANSJAV_DATA_ROOT` 优先级最高，可整体重定位数据根（词库/TM/配置/产物锚点）。
+- 环境变量 `SUBTRANS_DATA_ROOT` 优先级最高，可整体重定位数据根（词库/TM/配置/产物锚点）。
 - `subtrans-cli.exe --where`（EXE 版位于安装目录；pip/源码版为 `subtrans-refine --where`）一次性诊断当前全部路径锚点（只读零副作用），排障首选。
-- EXE 版数据根默认 `%LOCALAPPDATA%\SubTrans`；pip / 源码版数据位置在仓库根（同样可用 `SUBTRANSJAV_DATA_ROOT` 重定位）。
+- EXE 版数据根默认 `%LOCALAPPDATA%\SubTrans`；pip / 源码版数据位置在仓库根（同样可用 `SUBTRANS_DATA_ROOT` 重定位）。
 
 ## 安装
 
@@ -66,7 +66,7 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 
 要求 Python 3.10–3.13。
 
-> **包名过渡说明（3.1.3）**：Python 包名与安装名由 `subtransjav` 改为 `subtrans`（D2026-1106-02）。命令行入口同步改为 `subtrans-refine` / `subtrans-gui`，旧命令名 `subtransjav-refine` / `subtransjav-gui` 作为过渡别名保留（同函数入口，存量脚本零破坏）；环境变量 `SUBTRANS_DATA_ROOT` 等前缀同步改 `SUBTRANS_`，旧名 `SUBTRANSJAV_*` 仍被识别（兜底）。
+> **包名过渡说明（3.1.3）**：Python 包名与安装名由 `subtransjav` 改为 `subtrans`（D2026-1106-02）。命令行入口同步改为 `subtrans-refine` / `subtrans-gui`（旧命令名 `subtransjav-*` 已移除，升级后请改用新名）；环境变量前缀统一为 `SUBTRANS_`，旧名 `SUBTRANSJAV_*` 已移除不再识别（如 `SUBTRANSJAV_DATA_ROOT` 需改设 `SUBTRANS_DATA_ROOT`，否则数据根回默认位）。
 
 ```bat
 :: 安装（核心翻译引擎 + CLI）
@@ -164,7 +164,7 @@ SRT 输入
 
 ## 配置分层速查
 
-优先级从低到高：内置默认 < `config/user_settings.json` < `SUBTRANSJAV_*` 环境变量 < CLI/GUI 显式赋值。
+优先级从低到高：内置默认 < `config/user_settings.json` < `SUBTRANS_*` 环境变量 < CLI/GUI 显式赋值。
 
 | 字段 | 默认值 | 说明 |
 |---|---|---|
@@ -179,7 +179,7 @@ SRT 输入
 | `v2_ctx_local` | 16384 | 本地上下文窗口（22272 为作者档案参考值） |
 | `v2_concurrency` | 1 | 批间并发数（钳制上限见 `v2_concurrency_max`） |
 
-环境变量命名：`SUBTRANSJAV_` + 大写字段名（如 `SUBTRANSJAV_TIMEOUT_LLM=600`）。完整语义见 `docs/使用与维护手册.md` 第 2 节。
+环境变量命名：`SUBTRANS_` + 大写字段名（如 `SUBTRANS_TIMEOUT_LLM=600`）。完整语义见 `docs/使用与维护手册.md` 第 2 节。
 
 ## 断点恢复
 
@@ -244,7 +244,7 @@ The GUI is Chinese-oriented; the refine pipeline currently targets Japanese → 
 ### Data Location
 
 - EXE install: `%LOCALAPPDATA%\SubTrans`; pip/source: repository root.
-- Override everything with the `SUBTRANS_DATA_ROOT` environment variable (legacy `SUBTRANSJAV_DATA_ROOT` still honored); run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtrans-refine --where`) to print all resolved path anchors (read-only diagnostics).
+- Override everything with the `SUBTRANS_DATA_ROOT` environment variable (the legacy `SUBTRANSJAV_*` prefix was removed in 3.1.3 and is no longer honored); run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtrans-refine --where`) to print all resolved path anchors (read-only diagnostics).
 
 See the Chinese sections above for full details.
 

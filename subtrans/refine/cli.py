@@ -203,8 +203,7 @@ def build_parser():
     grp_v2.add_argument("--v2-ctx", type=int, default=None,
                         help="本地模型上下文窗口（不传=缺省 16384 通用保守值，"
                              "可经 config/user_settings.json 或环境变量 "
-                             "SUBTRANS_V2_CTX_LOCAL（旧名 SUBTRANSJAV_V2_CTX_LOCAL "
-                             "兜底）覆盖；22272 为作者 16GB "
+                             "SUBTRANS_V2_CTX_LOCAL 覆盖；22272 为作者 16GB "
                              "单卡档案值示例，非缺省；LM Studio 手工改过 ctx 时"
                              "用本参数显式覆盖）")
     grp_v2.add_argument("--force", action="store_true",

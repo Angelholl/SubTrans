@@ -6,9 +6,6 @@ frozen（PyInstaller）形态下一切旧"仓库根"写入语义改为用户数�
 
 本模块只依赖标准库（os/sys/pathlib），禁止 import 项目内其他模块，
 防止循环依赖（config/tm/secrets 等模块级常量在其 import 期即调用本模块）。
-（env 双前缀读取为内联实现——SUBTRANS_DATA_ROOT 优先、SUBTRANSJAV_DATA_ROOT
-兜底，D2026-1106-02 ①；同构共享件见 utils/env_compat.py，一致性由
-tests/test_env_compat.py 钉死，本文件契约「禁止 import 项目内其他模块」不变。）
 """
 
 import os
@@ -160,8 +157,7 @@ def _frozen_default_resolution() -> tuple[Path, str]:
 def data_root() -> Path:
     """数据根目录，四级优先级：
 
-    1. 环境变量 ``SUBTRANS_DATA_ROOT``（优先；旧名 ``SUBTRANSJAV_DATA_ROOT``
-       兜底，兼容层见 utils/env_compat.py，D2026-1106-02 ①）（非空才生效）；
+    1. 环境变量 ``SUBTRANS_DATA_ROOT``（非空才生效）；
     2. pointer 文件 ``.data-root``（单行绝对路径；不存在/为空/非法则忽略）；
     3. frozen → 落点 A 默认 ``<安装目录父>\\<安装目录名>-data``（默认离 C，
        D2026-1103-05 项②；旧 ``%LOCALAPPDATA%\\SubTrans`` 有数据且新默认无
@@ -170,10 +166,7 @@ def data_root() -> Path:
 
     注意：各模块级常量在 import 期已求值，pointer 修改须重启应用生效。
     """
-    env = os.environ.get("SUBTRANS_DATA_ROOT")
-    if env is None:
-        env = os.environ.get("SUBTRANSJAV_DATA_ROOT", "")
-    env = env.strip()
+    env = os.environ.get("SUBTRANS_DATA_ROOT", "").strip()
     if env:
         return Path(env)
     pointer = _read_data_root_pointer()
@@ -187,8 +180,7 @@ def data_root() -> Path:
 def data_root_source() -> str:
     """数据根来源标识：``"env"`` / ``"pointer"`` / ``"frozen-default"`` /
     ``"frozen-legacy-default"``（旧默认位收养）/ ``"legacy"``（源码形态）。"""
-    if os.environ.get("SUBTRANS_DATA_ROOT") is not None or \
-            os.environ.get("SUBTRANSJAV_DATA_ROOT", "").strip():
+    if os.environ.get("SUBTRANS_DATA_ROOT", "").strip():
         return "env"
     if _read_data_root_pointer():
         return "pointer"
