@@ -348,6 +348,7 @@ def test_evaluate_gate_missing_corrupt_disabled(tmp_path):
 
 
 def test_gui_gate_reader_closes_on_stale_fingerprint(tmp_path, monkeypatch):
+    pytest.importorskip("webview")  # api.py 顶层 import webview；无 gui extra 恒 skip（CI 口径）
     from subtrans.refine import config as cfg_mod
     from subtrans.webview_gui.api import TranslateAPI
 
@@ -358,6 +359,7 @@ def test_gui_gate_reader_closes_on_stale_fingerprint(tmp_path, monkeypatch):
 
 
 def test_gui_gate_reader_opens_with_matching_fingerprint(tmp_path, monkeypatch):
+    pytest.importorskip("webview")  # api.py 顶层 import webview；无 gui extra 恒 skip（CI 口径）
     from subtrans.refine import config as cfg_mod
     from subtrans.webview_gui.api import TranslateAPI
 
