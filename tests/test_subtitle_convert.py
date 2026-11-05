@@ -43,31 +43,31 @@ def _write(path: Path, text: str, encoding: str = "utf-8") -> Path:
 
 class TestDetectEncoding:
     def test_utf8_plain(self):
-        from subtransjav.refine.subtitle_convert import detect_encoding
+        from subtrans.refine.subtitle_convert import detect_encoding
         assert detect_encoding("1\n00:00:01,000 --> 00:00:02,000\n中文\n"
                                .encode()) == "utf-8"
 
     def test_utf8_bom(self):
-        from subtransjav.refine.subtitle_convert import detect_encoding
+        from subtrans.refine.subtitle_convert import detect_encoding
         assert detect_encoding("字幕\n".encode("utf-8-sig")) == "utf-8-sig"
 
     def test_cp932(self):
         # 样本含 "、"（cp932 字节 0x81 0x41）→ 严格 utf-8 必败，落到 cp932
-        from subtransjav.refine.subtitle_convert import detect_encoding
+        from subtrans.refine.subtitle_convert import detect_encoding
         data = "こんにちは、字幕\n".encode("cp932")
         assert detect_encoding(data) == "cp932"
         assert data.decode("cp932") == "こんにちは、字幕\n"
 
     def test_gb18030(self):
         # 样本含 BMP 外字符（gb18030 四字节序列）→ utf-8/cp932 均严格失败
-        from subtransjav.refine.subtitle_convert import detect_encoding
+        from subtrans.refine.subtitle_convert import detect_encoding
         data = "𠀀中文测试\n".encode("gb18030")
         assert detect_encoding(data) == "gb18030"
         assert data.decode("gb18030") == "𠀀中文测试\n"
 
     def test_undecodable_raises_with_attempts(self):
         # b"\x81\x39"：utf-8 非法起始 / cp932 非法序列 / gb18030 不完整序列
-        from subtransjav.refine.subtitle_convert import (
+        from subtrans.refine.subtitle_convert import (
             ConvertError,
             detect_encoding,
         )
@@ -82,7 +82,7 @@ class TestDetectEncoding:
 
 class TestVttTimestampTagStrip:
     def test_timestamp_tag_stripped_and_counted(self, tmp_path):
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "sample.vtt", (
             "WEBVTT\n"
             "\n"
@@ -107,7 +107,7 @@ class TestEmptyEventDrop:
         告警退回纯计数兜底文案、dropped_details 记 resolved=False。
         2.6.5 段1⑤ 行号明细特性的预期行为变更：可解析坏行才升级为
         「第 L 行「摘录」」明细（见 TestBadLineDetail* 各用例）。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "bad.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:20.00,0:00:22.00,Default,,0,0,0,,正常行前\n"
                    + "Dialogue: 这一行字段数不足且时间非法\n"
@@ -148,7 +148,7 @@ class TestBadLineDetailAss:
     def test_ssa_v4_field_order_variant(self, tmp_path):
         """fixture①：SSA V4 字段序变体（Marked, Start, End, ...）空文本
         Dialogue → Format 行驱动列映射（禁位置硬编码），行号正确。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         lines = [
             "[Script Info]",
             "ScriptType: v4.00",
@@ -177,7 +177,7 @@ class TestBadLineDetailAss:
 
     def test_utf8sig_crlf_line_numbers_match_editor(self, tmp_path):
         """fixture②：utf-8-sig BOM + CRLF → 行号与编辑器一致（1-based 物理行号）。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         lines = _HDR_LINES + [
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR,"
             " MarginV, Effect, Text",                                       # 行 9
@@ -195,7 +195,7 @@ class TestBadLineDetailAss:
 
     def test_vtt_empty_cue_block_resolved_to_timeline_line(self, tmp_path):
         """VTT 补充：空 cue 块归属到 --> 时间轴行物理行号（块内无非空行）。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "bad.vtt", (
             "WEBVTT\n"
             "\n"
@@ -215,7 +215,7 @@ class TestBadLineDetailAss:
 class TestDuplicateTimestampDisambiguation:
     def test_same_ts_one_empty_one_text_resolved_by_text(self, tmp_path):
         """fixture③a：重复时间戳一空一非空 → text strip 消歧命中空行。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "dup1.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,\n"
                    + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,非空消歧\n")
@@ -229,7 +229,7 @@ class TestDuplicateTimestampDisambiguation:
     def test_same_ts_both_empty_unresolved_fallback(self, tmp_path):
         """fixture③b：双空（重复时间戳均空文本）→ 消歧失败行号未定，
         全部未定退回旧纯计数文案兜底（规格归属规则 2/3）。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "dup2.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,\n"
                    + "Dialogue: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,\n")
@@ -244,7 +244,7 @@ class TestDetailAggregationLimit:
     def test_over_ten_bad_lines_capped_with_total_suffix(self, tmp_path):
         """上限聚合：>10 条坏行 → 明细只取前 10 条，收尾「等 N 处」，
         全部命中无「行号未定」收尾。"""
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         bad = [f"Dialogue: 0,0:00:{10 + i:02d}.00,0:00:{10 + i:02d}.05,"
                f"Default,,0,0,0,," for i in range(12)]       # 行 10-21，坏行 12 条
         p = _write(tmp_path / "many.ass",
@@ -268,7 +268,7 @@ class TestDetailAggregationLimit:
 
 class TestOverlapShift:
     def test_later_start_pushed_to_prev_end(self, tmp_path):
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "ov.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:01.00,0:00:05.00,Default,,0,0,0,,第一条\n"
                    + "Dialogue: 0,0:00:03.00,0:00:07.00,Default,,0,0,0,,第二条\n")
@@ -284,7 +284,7 @@ class TestOverlapShift:
 
 class TestTimelineAssertion:
     def test_centisecond_zero_padding_and_regex(self, tmp_path):
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "cs.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:00.90,0:00:01.05,Default,,0,0,0,,零填充样例\n")
         res = convert_file(str(p))
@@ -300,7 +300,7 @@ class TestTimelineAssertion:
 
 class TestConvNamingIdempotent:
     def test_run_twice_same_result(self, tmp_path):
-        from subtransjav.refine.subtitle_convert import convert_file
+        from subtrans.refine.subtitle_convert import convert_file
         p = _write(tmp_path / "foo.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,命名样例\n")
         r1 = convert_file(str(p))
@@ -319,7 +319,7 @@ class TestConvNamingIdempotent:
 
 class TestConvertInputs:
     def test_unsupported_ext_passthrough(self, tmp_path):
-        from subtransjav.refine.subtitle_convert import (
+        from subtrans.refine.subtitle_convert import (
             SUPPORTED_EXTS,
             convert_inputs,
         )
@@ -332,7 +332,7 @@ class TestConvertInputs:
         assert not (tmp_path / "a.txt.conv.srt").exists()
 
     def test_end_to_end_ass_to_conv_srt(self, tmp_path):
-        from subtransjav.refine.subtitle_convert import convert_inputs
+        from subtrans.refine.subtitle_convert import convert_inputs
         p = _write(tmp_path / "jp.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,こんにちは\n"
                    + "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,中文字幕\n")
@@ -348,7 +348,7 @@ class TestConvertInputs:
 
 class TestCliWiring:
     def test_config_from_args_converts_and_prints(self, tmp_path, capsys):
-        from subtransjav.refine.cli import build_parser, config_from_args
+        from subtrans.refine.cli import build_parser, config_from_args
         p = _write(tmp_path / "s.ass", _HDR + _EVFMT
                    + "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,接线样例\n")
         cfg = config_from_args(build_parser().parse_args(["-i", str(p)]))
@@ -357,7 +357,7 @@ class TestCliWiring:
         assert "🔄 格式转换: 1 个 ASS/VTT → SRT（0 警告）" in out
 
     def test_config_from_args_srt_zero_noise(self, tmp_path, capsys):
-        from subtransjav.refine.cli import build_parser, config_from_args
+        from subtrans.refine.cli import build_parser, config_from_args
         p = _write(tmp_path / "s.srt",
                    "1\n00:00:01,000 --> 00:00:02,000\n普通\n")
         cfg = config_from_args(build_parser().parse_args(["-i", str(p)]))
@@ -370,7 +370,7 @@ class TestCliWiring:
 
 class TestGuiFiletypePin:
     def test_file_type_subtitle_key_registered(self):
-        from subtransjav.webview_gui.strings import MSG
+        from subtrans.webview_gui.strings import MSG
         # 2.7.2 件1（D2026-1005-02）：描述段去 `/`（pywebview parse_file_type
         # 描述段正则不容斜杠，旧串致对话框整体挂死）
         assert MSG["file_type_subtitle"] == "ASS SSA VTT 字幕 (*.ass;*.ssa;*.vtt)"
@@ -381,12 +381,12 @@ class TestGuiFiletypePin:
         pywebview 6.2.1 parse_file_type 描述段正则 ``^([\\w ]+)`` 不容 `/`，
         含斜杠即 ValueError → create_file_dialog 整体失败。
         """
-        from subtransjav.webview_gui.strings import MSG
+        from subtrans.webview_gui.strings import MSG
         desc = MSG["file_type_subtitle"].split("(", 1)[0].strip()
         assert "/" not in desc, f"file_type_subtitle 描述段含非法 `/`: {desc!r}"
 
     def test_select_srt_files_dialog_includes_subtitle_type(self):
-        src = (Path(__file__).resolve().parents[1] / "subtransjav"
+        src = (Path(__file__).resolve().parents[1] / "subtrans"
                / "webview_gui" / "api.py").read_text(encoding="utf-8")
         body = src.split("def select_srt_files", 1)[1] \
                   .split("def select_srt_folder", 1)[0]

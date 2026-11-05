@@ -1,7 +1,7 @@
 """refine.secrets 单元测试（P0 #3/#4：损坏不覆盖、跨平台不崩溃）"""
 import pytest
 
-from subtransjav.refine import secrets
+from subtrans.refine import secrets
 
 
 def test_store_read_roundtrip(tmp_path):

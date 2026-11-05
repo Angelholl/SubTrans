@@ -1,7 +1,7 @@
 """中文净语者规则引擎单元测试"""
 import pytest
 
-from subtransjav.refine.cleaner_rules import ChineseCleaner, Subtitle, clean_srt, format_srt, parse_srt
+from subtrans.refine.cleaner_rules import ChineseCleaner, Subtitle, clean_srt, format_srt, parse_srt
 
 
 def _make_items(texts, gap_ms=1000, start_ms=0):

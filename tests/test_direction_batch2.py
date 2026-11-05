@@ -6,20 +6,20 @@
 import json
 from types import SimpleNamespace
 
-from subtransjav.refine.language_validator import (
+from subtrans.refine.language_validator import (
     _normalize_target,
     is_valid_stage_text,
 )
-from subtransjav.refine.manifest import _v2_stage_prompts_sha1
-from subtransjav.refine.pipeline_v2 import (
+from subtrans.refine.manifest import _v2_stage_prompts_sha1
+from subtrans.refine.pipeline_v2 import (
     _generic_stage_prompt,
     _grammar_cache_key,
     _is_default_direction,
     _load_v2_instruction,
     _stage_b_banner,
 )
-from subtransjav.refine.source_hallucination import is_fluent_target
-from subtransjav.refine.v2_outputs import final_stem
+from subtrans.refine.source_hallucination import is_fluent_target
+from subtrans.refine.v2_outputs import final_stem
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ def test_generic_stage_prompt_direction_wording():
     assert "翻译成英文" in a and "英文译文" in a
     assert "英文原文 ||| 英文译文" in b or "中文原文 ||| 英文译文" in b
     # 无日语特调段标记（拟声假名/中文抛光豁免等仅 ja→zh 所有）
-    from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
+    from subtrans.refine.pipeline_v2 import V2_STAGE_PROMPTS
     for tag in ("A", "B"):
         assert _generic_stage_prompt(tag, "ja", "zh") != V2_STAGE_PROMPTS[tag]
 
@@ -63,7 +63,7 @@ def test_generic_stage_prompt_no_echo_clause():
     assert "禁止 Markdown 加粗" in a
     assert "Translation>" in a
     # 缺省方向内置提示词零触碰（防回显条款仅进非缺省兜底词）
-    from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
+    from subtrans.refine.pipeline_v2 import V2_STAGE_PROMPTS
     for tag in ("A", "B"):
         assert "[Grammar Tip]" not in V2_STAGE_PROMPTS[tag]
 
@@ -106,7 +106,7 @@ def test_generic_stage_prompt_b_numbered_protocol():
 
 def test_load_v2_instruction_default_byte_identical(tmp_path):
     """缺省方向：无 ### prompt 卡拼内置提示词（现状路径，B 卡加固段照旧）。"""
-    from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
+    from subtrans.refine.pipeline_v2 import V2_STAGE_PROMPTS
     card = tmp_path / "card_a.txt"
     card.write_text("你是净语翻译角色。", encoding="utf-8")
     cfg = _cfg_for(card, tmp_path)
@@ -117,7 +117,7 @@ def test_load_v2_instruction_default_byte_identical(tmp_path):
 
 def test_load_v2_instruction_non_default_suppresses_hardened(tmp_path):
     """非缺省方向：卡无 ### prompt 时拼通用提示词，不追加中文抛光豁免段。"""
-    from subtransjav.refine.pipeline_v2 import hardened_suffix
+    from subtrans.refine.pipeline_v2 import hardened_suffix
     card = tmp_path / "card_a_en.txt"
     card.write_text("You are a clean-translate role.", encoding="utf-8")
     cfg = _cfg_for(card, tmp_path)
@@ -140,7 +140,7 @@ def test_load_v2_instruction_non_default_suppresses_hardened(tmp_path):
 def _cfg_for(card_path, tmp_path):
     """最小 cfg：4 槽 stages（0/2 生产槽各配显式卡，1/3 停用）——槽位对齐
     V2_STAGE_SLOT 索引语义。"""
-    from subtransjav.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.config import RefineConfig, StageConfig
     return RefineConfig(
         inputs=[str(tmp_path / "in.srt")] if (tmp_path / "in.srt").exists()
         else [],
@@ -217,7 +217,7 @@ def test_v2_stage_prompts_sha1_default_matches_legacy():
 def test_resume_state_direction_aware(tmp_path, monkeypatch):
     import os
 
-    from subtransjav.webview_gui.event_stream import resume_state_for_path
+    from subtrans.webview_gui.event_stream import resume_state_for_path
     srt = tmp_path / "show.srt"
     srt.write_text("1\n00:00:01,000 --> 00:00:02,000\nx\n", encoding="utf-8")
     # ja→en 任务：_final_en.srt 存在即 completed（_final_cn 不存在）

@@ -3,8 +3,8 @@
 import io
 import json
 
-from subtransjav.refine.events import EventEmitter, parse_event_line
-from subtransjav.refine.risk import (
+from subtrans.refine.events import EventEmitter, parse_event_line
+from subtrans.refine.risk import (
     SEVERITY_CRITICAL,
     SEVERITY_INFO,
     SEVERITY_WARNING,

@@ -27,15 +27,15 @@ pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试", exc_type=ImportError)
 
-from subtransjav.refine.events import EventEmitter  # noqa: E402
-from subtransjav.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
+from subtrans.refine.events import EventEmitter  # noqa: E402
+from subtrans.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
     REPO_ROOT,
     SESSION_SELECTED_PATHS,
     TranslateAPI,
     _build_refine_args,
     register_session_paths,
 )
-from subtransjav.webview_gui.event_stream import EventStreamParser  # noqa: E402
+from subtrans.webview_gui.event_stream import EventStreamParser  # noqa: E402
 
 
 @pytest.fixture()
@@ -51,7 +51,7 @@ def _isolate_child_procs_ledger(tmp_path, monkeypatch):
     """批4：子进程台账落点打桩到测试 tmp（登记/自愈路径防真实写仓库
     config/；仅重定向 api._child_procs_ledger_path，不触碰 CONFIG_DIR
     其余消费方，零既有行为扰动）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     monkeypatch.setattr(
         api_mod, "_child_procs_ledger_path",
         lambda: str(tmp_path / "config" / "child_procs.json"))
@@ -397,7 +397,7 @@ class _StopLaunch(Exception):
 def _capture_popen(monkeypatch, captured, api_obj):
     import threading
 
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     # _translate_lock 由 __init__ 创建；object.__new__ 实例需手动补齐
     api_obj._translate_lock = threading.Lock()
@@ -735,7 +735,7 @@ def test_refine_template_registered_dir_still_works(gui_api_obj):
     目录锚在用户主目录之下（_resolve_safe_path 的 home 白名单内），
     且测试产物在 finally 中清理，不残留。
     """
-    d = Path.home() / ("subtransjav_tpl_test_" + uuid.uuid4().hex[:8])
+    d = Path.home() / ("subtrans_tpl_test_" + uuid.uuid4().hex[:8])
     register_session_paths([str(d)])
     try:
         saved = gui_api_obj.refine_save_template("A", "卡片内容", str(d))
@@ -760,7 +760,7 @@ def test_refine_get_template_default_dir_still_works(gui_api_obj):
 # ---------------------------------------------------------------------------
 
 def _home_glossary_dir() -> Path:
-    d = Path.home() / ("subtransjav_gl_test_" + uuid.uuid4().hex[:8])
+    d = Path.home() / ("subtrans_gl_test_" + uuid.uuid4().hex[:8])
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -946,7 +946,7 @@ def test_refine_get_stage_settings_first_run_flag(gui_api_obj, tmp_path,
 def test_refine_asr_status_ct2_only_shape(gui_api_obj, tmp_path,
                                           monkeypatch):
     """status=ct2 状态单一来源＋crosscheck 回显＋saved_* 废弃壳回显。"""
-    from subtransjav.refine import asr_env
+    from subtrans.refine import asr_env
     path = tmp_path / "refine_stage_settings.json"
     path.write_text(
         json.dumps({"stages": [], "settings": {
@@ -970,7 +970,7 @@ def test_refine_asr_status_ct2_only_shape(gui_api_obj, tmp_path,
 def test_refine_asr_status_crosscheck_default_false(gui_api_obj, tmp_path,
                                                     monkeypatch):
     """KV 无 media_crosscheck_enabled → crosscheck_enabled=False（默认关）。"""
-    from subtransjav.refine import asr_env
+    from subtrans.refine import asr_env
     path = tmp_path / "refine_stage_settings.json"
     path.write_text('{"stages": [], "settings": {}}', encoding="utf-8")
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
@@ -1028,7 +1028,7 @@ def test_cancel_translation_sentinel_period_returns_failure(gui_api_obj):
 def test_cancel_translation_success_sets_cancelled_after_kill(
         gui_api_obj, monkeypatch):
     """击杀成功路径：cancelled 状态在击杀完成之后置位，句柄清空。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     api = _manual_state_api(gui_api_obj)
 
     class _FakeProc:
@@ -1053,7 +1053,7 @@ def test_cancel_translation_success_sets_cancelled_after_kill(
 def test_cancel_translation_kill_failure_keeps_running_state(
         gui_api_obj, monkeypatch):
     """击杀抛异常：不得置 cancelled，进程句柄保留（进程仍在运行）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     api = _manual_state_api(gui_api_obj)
 
     class _UnkillableProc:
@@ -1087,7 +1087,7 @@ _OUTSIDE_DB = os.path.join(os.path.expanduser("~"), os.pardir, os.pardir,
 
 def _install_fake_tm(monkeypatch):
     """替身 TranslationMemory：记录构造参数，杜绝测试触碰真实 sqlite。"""
-    import subtransjav.refine.tm as tm_mod
+    import subtrans.refine.tm as tm_mod
     constructed: list = []
 
     class _FakeTM:
@@ -1244,7 +1244,7 @@ def _install_fake_ai_run(monkeypatch, *, returncode=0, stderr="",
     """替身 spawn_refine_cli（分析链）：捕获 CLI 参数与 spawn 环境，
     杜绝真实子进程。批4 起分析链改 Popen+communicate，替身自
     subprocess.run 捕获同步迁移（args/kwargs 捕获语义不变）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     captured: dict = {}
     procs: list[_FakeAnalyzeProc] = []
 
@@ -1343,7 +1343,7 @@ def test_refine_ai_analyze_crosscheck_detail_default_empty(
 
 def _install_fake_secret(monkeypatch, stored=("deepseek",)):
     """替身 DPAPI read_secret：仅 stored 中 provider 返回假密钥。"""
-    import subtransjav.refine.secrets as secrets_mod
+    import subtrans.refine.secrets as secrets_mod
     monkeypatch.setattr(
         secrets_mod, "read_secret",
         lambda name, store_path=None: "sk-fake" if name in stored else "")
@@ -1457,8 +1457,8 @@ def test_refine_ai_analyze_user_directory_guard_differential(
     至不含测试路径的假目录——tmp_path 在假 home 外，修复前会被
     _resolve_safe_path 拒绝，修复后必须放行。
     """
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.security as security_mod
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.security as security_mod
 
     fake_home = tmp_path / "fakehome"
     fake_home.mkdir()
@@ -1534,7 +1534,7 @@ def test_refine_ai_analyze_parse_failed_degraded(gui_api_obj, monkeypatch,
 # ---------------------------------------------------------------------------
 # 批4（D2026-1008-01）：AI 分析/一键修复可停止 + 登记治理 + 启动自愈。
 # 真子进程以 ``sys.executable -c "import time; time.sleep(30)"`` 制造
-# （-c 串尾注释携带 "subtransjav <kind 旗标>"，cmdline 身份核验第③重
+# （-c 串尾注释携带 "subtrans <kind 旗标>"，cmdline 身份核验第③重
 # 可命中的最小真实载体）；finally 全量兜底回收，防测试进程外泄。
 # ---------------------------------------------------------------------------
 
@@ -1545,7 +1545,7 @@ def _spawn_marker_proc(marker: str, **popen_kw) -> subprocess.Popen:
     kw.update(popen_kw)
     proc = subprocess.Popen(
         [sys.executable, "-c",
-         f"import time; time.sleep(30)  # subtransjav {marker}"], **kw)
+         f"import time; time.sleep(30)  # subtrans {marker}"], **kw)
     _wait_proc_alive(proc)
     return proc
 
@@ -1595,7 +1595,7 @@ def _ensure_reaped(proc: subprocess.Popen) -> None:
 
 def _install_real_sleep_spawn(monkeypatch, marker: str = "--ai-analyze"):
     """替身 spawn_refine_cli：返回真长睡子进程（登记/取消链全真实）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     procs: list[subprocess.Popen] = []
 
     def _fake_spawn(args, **kwargs):
@@ -1633,7 +1633,7 @@ def test_ai_analyze_cancel_kills_proc_and_reports_cancelled(
         gui_api_obj, monkeypatch, tmp_path):
     """取消链全真实：取消桥 → 身份核验树杀 → cancelled 结果 + 进程短窗
     退出 + 登记/台账收尾。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     report = _make_ai_report(tmp_path, with_companion=False)
     _install_fake_stage_settings(gui_api_obj, monkeypatch)
     procs = _install_real_sleep_spawn(monkeypatch)
@@ -1705,7 +1705,7 @@ def test_terminate_registered_kills_matching_entry():
     """身份核验命中：create_time/cmdline 全匹配 → 真实整树击杀。"""
     import psutil
 
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     proc = _spawn_marker_proc("--ai-analyze")
     try:
         entry = {"proc": proc, "pid": proc.pid,
@@ -1723,7 +1723,7 @@ def test_terminate_registered_skips_on_create_time_mismatch():
     只报 skipped 原因。"""
     import psutil
 
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     proc = _spawn_marker_proc("--ai-analyze")
     try:
         entry = {"proc": proc, "pid": proc.pid,
@@ -1743,7 +1743,7 @@ def test_child_ledger_write_on_register_and_remove_on_reap(
     正常 reap → 条目移除。"""
     import psutil
 
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     report = _make_ai_report(tmp_path, with_companion=False)
     _install_fake_stage_settings(gui_api_obj, monkeypatch)
     procs = _install_real_sleep_spawn(monkeypatch)
@@ -1780,7 +1780,7 @@ def test_selfheal_kills_matching_ledger_entries(gui_api_obj):
     → 树杀 + gui.log 一行 + 台账写空。"""
     import psutil
 
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     proc = _spawn_marker_proc("--ai-analyze")
     try:
         path = api_mod._child_procs_ledger_path()
@@ -1800,7 +1800,7 @@ def test_selfheal_skips_mismatched_ledger_entries(gui_api_obj):
     台账仍写空。"""
     import psutil
 
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     proc = _spawn_marker_proc("--ai-analyze")
     try:
         path = api_mod._child_procs_ledger_path()
@@ -1835,7 +1835,7 @@ def test_on_exit_cleanup_covers_all_three_slots(gui_api_obj):
         assert gui_api_obj._translate_process is None
         assert gui_api_obj._ai_analyze_proc is None
         assert gui_api_obj._batch_fix_proc is None
-        import subtransjav.webview_gui.api as api_mod
+        import subtrans.webview_gui.api as api_mod
         assert api_mod._ledger_read_entries(
             api_mod._child_procs_ledger_path()) == []
         # _translate 哨兵语义零变化：True 哨兵被忽略且被清位（不炸）
@@ -1851,7 +1851,7 @@ def test_batch_fix_cancel_reports_cancelled_and_skips_verify(
         gui_api_obj, monkeypatch, tmp_path):
     """修复链取消：取消桥树杀执行器 → cancelled 结果，且绝不自动复跑
     AI 分析（verify 键不得出现）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     items = [_bf_item(3, _T3, "甲")]
     guide = _make_bf_guide(tmp_path, items)
     _install_fake_secret(monkeypatch, stored=("deepseek",))
@@ -1886,8 +1886,8 @@ def test_batch_fix_cancel_reports_cancelled_and_skips_verify(
 def test_refine_ai_apply_glossary_passes_entries(gui_api_obj, monkeypatch,
                                                  tmp_path):
     """词库追加：走 config.default_glossary_path 同源路径 + 逐条状态回传。"""
-    import subtransjav.refine.config as cfg_mod
-    import subtransjav.refine.glossary as gl_mod
+    import subtrans.refine.config as cfg_mod
+    import subtrans.refine.glossary as gl_mod
     gp = tmp_path / "glossary.csv"
     monkeypatch.setattr(cfg_mod, "default_glossary_path", lambda: str(gp))
     seen: dict = {}
@@ -1920,8 +1920,8 @@ def test_refine_ai_apply_tm_store_and_conflict_warn(gui_api_obj,
                                                     monkeypatch,
                                                     tmp_path):
     """TM 落库：store 新增/已存在状态 + watch 未裁决冲突 conflict_warn 黄标。"""
-    import subtransjav.refine.glossary_conflict as gc_mod
-    import subtransjav.refine.tm as tm_mod
+    import subtrans.refine.glossary_conflict as gc_mod
+    import subtrans.refine.tm as tm_mod
 
     stored: list = []
 
@@ -1965,8 +1965,8 @@ def test_refine_ai_apply_tm_watch_missing_no_block(gui_api_obj,
                                                    monkeypatch,
                                                    tmp_path):
     """watch JSON 缺失 → 不阻断，warn 全 False。"""
-    import subtransjav.refine.glossary_conflict as gc_mod
-    import subtransjav.refine.tm as tm_mod
+    import subtrans.refine.glossary_conflict as gc_mod
+    import subtrans.refine.tm as tm_mod
 
     class _FakeTM:
         def __init__(self, db_path=None):
@@ -2019,7 +2019,7 @@ def _install_fake_ffprobe(monkeypatch, video="", audio="", duration_s=3600.0):
     """替身 ffprobe 链路：shutil.which 命中 + subprocess.run 返回 codec JSON；
     format=duration 查询（2.7.4 件2 层② 时长验证/④ 时长守卫）返回
     duration_s（缺省 3600s=媒体时长充足）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     captured: dict = {}
 
     def _fake_run(args, **kwargs):
@@ -2067,9 +2067,9 @@ def test_refine_audio_preview_clip_fallback(gui_api_obj, monkeypatch,
                                             tmp_path):
     """clip 态：mkv + hevc 边界编码 → ffmpeg 抽 [start-0.5, end+0.5] wav；
     timing 起点为负时钳制到 0。"""
-    import subtransjav.refine.audio_detect as ad
-    import subtransjav.refine.config as cfg_mod
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.audio_detect as ad
+    import subtrans.refine.config as cfg_mod
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep02.mkv"
     media.write_bytes(b"fake-mkv")
@@ -2111,8 +2111,8 @@ def test_refine_audio_preview_clip_fallback(gui_api_obj, monkeypatch,
 
 def test_refine_audio_preview_no_ffmpeg(gui_api_obj, monkeypatch, tmp_path):
     """无 ffmpeg：mp4/m4a（aac 语义）尝试 direct；其余容器报错灰显。"""
-    import subtransjav.refine.audio_detect as ad
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.audio_detect as ad
+    import subtrans.webview_gui.api as api_mod
 
     monkeypatch.setattr(api_mod.shutil, "which", lambda name: None)
     monkeypatch.setattr(ad, "_find_ffmpeg", lambda: None)
@@ -2163,7 +2163,7 @@ def test_refine_audio_preview_guide_missing_media_path(gui_api_obj,
 # ---------------------------------------------------------------------------
 def test_refine_get_data_root_default(gui_api_obj, monkeypatch):
     """读态：返回 data_root/source/pointer/is_frozen，与 paths 同源。"""
-    from subtransjav import paths
+    from subtrans import paths
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
     got = gui_api_obj.refine_get_data_root()
     assert got["success"] is True
@@ -2176,7 +2176,7 @@ def test_refine_get_data_root_default(gui_api_obj, monkeypatch):
 def test_refine_set_data_root_writes_pointer(gui_api_obj, monkeypatch,
                                              tmp_path):
     """写态：绝对路径写入 pointer 文件，need_restart=True。"""
-    from subtransjav import paths
+    from subtrans import paths
     pointer = tmp_path / ".data-root"
     monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: pointer)
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
@@ -2192,7 +2192,7 @@ def test_refine_set_data_root_writes_pointer(gui_api_obj, monkeypatch,
 def test_refine_set_data_root_clear_and_reject(gui_api_obj, monkeypatch,
                                                tmp_path):
     """清除态（空串=恢复默认）+ 相对路径拒绝。"""
-    from subtransjav import paths
+    from subtrans import paths
     pointer = tmp_path / ".data-root"
     monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: pointer)
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
@@ -2245,7 +2245,7 @@ def _learned_csv(rows: list[tuple]) -> str:
 
 def test_learned_glossary_missing(gui_api_obj, monkeypatch, tmp_path):
     """文件缺失：exists=False 零门槛不报错。"""
-    from subtransjav.refine import config as cfg_mod
+    from subtrans.refine import config as cfg_mod
     monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(tmp_path))
     got = gui_api_obj.refine_get_learned_glossary()
     assert got["success"] is True
@@ -2255,7 +2255,7 @@ def test_learned_glossary_missing(gui_api_obj, monkeypatch, tmp_path):
 
 def test_learned_glossary_present(gui_api_obj, monkeypatch, tmp_path):
     """存在：返回 source/target/aliases 行（utf-8-sig 兼容）。"""
-    from subtransjav.refine import config as cfg_mod
+    from subtrans.refine import config as cfg_mod
     cfg = tmp_path / "glossary_learned.csv"
     cfg.write_text(
         "マスター,主人,女将|ママ\n先生,老师,\n", encoding="utf-8-sig")
@@ -2272,7 +2272,7 @@ def test_learned_glossary_present(gui_api_obj, monkeypatch, tmp_path):
 
 def test_learned_glossary_truncated_at_cap(gui_api_obj, monkeypatch, tmp_path):
     """上限截断：只返回前 500 行，total/truncated 如实。"""
-    from subtransjav.refine import config as cfg_mod
+    from subtrans.refine import config as cfg_mod
     cfg = tmp_path / "glossary_learned.csv"
     lines = "".join(f"src{i},dst{i}\n" for i in range(503))
     cfg.write_text(lines, encoding="utf-8")
@@ -2309,7 +2309,7 @@ def _dict_dl_wait_idle(kind: str, timeout: float = 5.0) -> None:
     """等待 kind 的下载 worker 收口（注册表条目清除）。daemon 线程跨测试
     残留会在 monkeypatch 还原后调用真实 download_dict（真实网络），故每
     例收尾必须等待收口。"""
-    from subtransjav.webview_gui import api as api_mod
+    from subtrans.webview_gui import api as api_mod
     deadline = time.time() + timeout
     while time.time() < deadline:
         with api_mod._DICT_DL_LOCK:
@@ -2327,7 +2327,7 @@ def test_refine_dict_download_success_and_checksum(gui_api_obj, monkeypatch,
     failed 快照透出给轮询，不再经本方法返回值——原同步错误映射断言随
     语义废止，失败快照语义由 test_dict_manager 覆盖）。保留原覆盖意图：
     kind 白名单放行 + 会话可启动 + worker 真实调用 download_dict。"""
-    from subtransjav.refine import dict_manager as dm
+    from subtrans.refine import dict_manager as dm
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     calls = []
 
@@ -2347,8 +2347,8 @@ def test_refine_dict_download_async_immediate_session(gui_api_obj,
                                                       monkeypatch):
     """2.7.3 件⑤ ①：立即返回不阻塞 jsapi 线程——download_dict 打桩为
     慢函数，返回时 worker 仍在跑（同步实现会在此挂死至慢函数返回）。"""
-    from subtransjav.refine import dict_manager as dm
-    from subtransjav.webview_gui import api as api_mod
+    from subtrans.refine import dict_manager as dm
+    from subtrans.webview_gui import api as api_mod
     started = threading.Event()
     release = threading.Event()
 
@@ -2375,7 +2375,7 @@ def test_refine_dict_download_same_kind_busy_rejected(gui_api_obj,
                                                       monkeypatch):
     """2.7.3 件⑤ ②：同 kind 旧线程存活 → 二次调用被 dict_download_busy
     人话拒绝（HRO-1 单一活跃下载者）；异 kind 不受互斥影响。"""
-    from subtransjav.refine import dict_manager as dm
+    from subtrans.refine import dict_manager as dm
     release = threading.Event()
 
     def _slow(kind, *args, **kwargs):
@@ -2400,7 +2400,7 @@ def test_refine_dict_download_stop_sets_event_no_snapshot(gui_api_obj,
                                                           monkeypatch):
     """2.7.3 件⑤ ③：stop 端点置位 Event（下载线程可观测）且绝不乐观写
     stopped 快照（HRO-1.3：快照只能由下载线程检查点收口写）。"""
-    from subtransjav.refine import dict_manager as dm
+    from subtrans.refine import dict_manager as dm
     monkeypatch.setattr(dm, "_DOWNLOAD_PROGRESS", {})
     seen_stop = threading.Event()
 
@@ -2424,7 +2424,7 @@ def test_refine_dict_download_stop_sets_event_no_snapshot(gui_api_obj,
 
 def test_refine_dict_download_stop_idempotent_no_entry(gui_api_obj):
     """2.7.3 件⑤ ④：无线程时 stop 幂等宽容 False（绝不抛错）。"""
-    from subtransjav.webview_gui import api as api_mod
+    from subtrans.webview_gui import api as api_mod
     with api_mod._DICT_DL_LOCK:
         api_mod._DICT_DL_REGISTRY.pop("sudachi", None)
     assert gui_api_obj.refine_dict_download_stop("sudachi") \
@@ -2434,8 +2434,8 @@ def test_refine_dict_download_stop_idempotent_no_entry(gui_api_obj):
 def test_refine_dict_download_registry_cleared_can_restart(gui_api_obj,
                                                            monkeypatch):
     """2.7.3 件⑤ ⑤：线程收口后注册表清空、可再次下载（新 session_id）。"""
-    from subtransjav.refine import dict_manager as dm
-    from subtransjav.webview_gui import api as api_mod
+    from subtrans.refine import dict_manager as dm
+    from subtrans.webview_gui import api as api_mod
     monkeypatch.setattr(dm, "download_dict", lambda kind, *a, **k: "x")
     first = gui_api_obj.refine_dict_download("sudachi")
     assert first["success"] is True
@@ -2454,8 +2454,8 @@ def test_refine_dict_download_register_start_atomic(gui_api_obj, monkeypatch):
     内放大竞态，此时并发第二次调用会看到 is_alive()=False 覆盖条目致双
     下载；修复后第二次调用阻塞等锁、锁释放时线程必已活，必被
     dict_download_busy 拒（单一活跃下载者不变量）。"""
-    from subtransjav.refine import dict_manager as dm
-    from subtransjav.webview_gui import api as api_mod
+    from subtrans.refine import dict_manager as dm
+    from subtrans.webview_gui import api as api_mod
     real_thread_cls = threading.Thread        # 补丁前捕获真身（编排线程用）
     dl_gate = threading.Event()               # 放大 start 前窗口
     gated_seen = []
@@ -2506,7 +2506,7 @@ def test_refine_dict_download_register_start_atomic(gui_api_obj, monkeypatch):
 
 def test_refine_dict_download_progress_endpoint(gui_api_obj, monkeypatch):
     """进度端点（第四批词典下载体验）：success+快照；无记录 success+空。"""
-    from subtransjav.refine import dict_manager as dm
+    from subtrans.refine import dict_manager as dm
     # api 方法为函数内导入，patch 源模块属性才生效
     monkeypatch.setattr(dm, "_DOWNLOAD_PROGRESS", {
         "sudachi": {"kind": "sudachi", "phase": "download",
@@ -2617,7 +2617,7 @@ def test_build_refine_args_cleaner_config_dir_flag():
 
 def test_refine_pick_guide_json_no_active_window(gui_api_obj, monkeypatch):
     """无活动窗口时导读 json 对话框桥走 error 分支（no_active_window）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     monkeypatch.setattr(api_mod.webview, "windows", [])
     r = gui_api_obj.refine_pick_guide_json()
     assert r["success"] is False
@@ -2633,7 +2633,7 @@ def test_refine_pick_guide_json_no_active_window(gui_api_obj, monkeypatch):
 
 def _dyn_tpl_dir() -> Path:
     """主目录下登记一个会话目录（_ensure_template_dir 白名单内）。"""
-    d = Path.home() / ("subtransjav_tpl_dyn_" + uuid.uuid4().hex[:8])
+    d = Path.home() / ("subtrans_tpl_dyn_" + uuid.uuid4().hex[:8])
     d.mkdir(parents=True, exist_ok=True)
     register_session_paths([str(d)])
     return d
@@ -2683,7 +2683,7 @@ def test_refine_list_templates_empty_dir_pkg_fallback(gui_api_obj):
 
 def test_refine_list_templates_missing_dir_no_mkdir(gui_api_obj):
     """目录不存在：不创建目录，pkg_fallback=True。"""
-    d = Path.home() / ("subtransjav_tpl_absent_" + uuid.uuid4().hex[:8])
+    d = Path.home() / ("subtrans_tpl_absent_" + uuid.uuid4().hex[:8])
     register_session_paths([str(d)])
     try:
         r = gui_api_obj.refine_list_templates(str(d))
@@ -2696,7 +2696,7 @@ def test_refine_list_templates_missing_dir_no_mkdir(gui_api_obj):
 
 def test_refine_list_templates_unregistered_dir_rejected(gui_api_obj):
     """未登记目录走目录位守卫拒绝（不新增任意目录列举能力）。"""
-    outsider = Path.home() / ("subtransjav_no_such_" + uuid.uuid4().hex[:8])
+    outsider = Path.home() / ("subtrans_no_such_" + uuid.uuid4().hex[:8])
     r = gui_api_obj.refine_list_templates(str(outsider))
     assert r["success"] is False
 
@@ -2797,7 +2797,7 @@ def test_refine_get_template_by_name_traversal_rejected(gui_api_obj):
 
 def test_refine_get_template_by_name_missing_reports_error(gui_api_obj):
     """load-by-name 不做 pkg 回落：文件缺失走 template_file_missing 分支。"""
-    from subtransjav.webview_gui.strings import msg
+    from subtrans.webview_gui.strings import msg
     d = _dyn_tpl_dir()
     try:
         (d / "README-说明.txt").write_text("r", encoding="utf-8")
@@ -2818,8 +2818,8 @@ def test_get_translation_status_exposes_files_status(gui_api_obj):
     """NDJSON 解析器归组的 per-file 状态经 files_status 键透传给前端。"""
     import io
 
-    from subtransjav.refine.events import EventEmitter
-    from subtransjav.webview_gui.event_stream import EventStreamParser
+    from subtrans.refine.events import EventEmitter
+    from subtrans.webview_gui.event_stream import EventStreamParser
 
     api = _manual_state_api(gui_api_obj)
     buf = io.StringIO()
@@ -2900,7 +2900,7 @@ def test_pump_stdout_non_event_line_passthrough(gui_api_obj):
 def test_pump_stdout_logs_enqueued_lines_to_gui_log(gui_api_obj, monkeypatch):
     """入队行全量落盘：logger.info 收到 strip 行尾换行的行
     （事件人话行与非事件行均落盘；心跳不入队故也不落盘）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     records: list = []
 
@@ -3066,7 +3066,7 @@ def _install_fake_bf_spawn(monkeypatch, *, lines=(), rc=0, ledger_path=None,
     台账）；复验 --ai-analyze 路径（批4 起为 Popen+communicate 形状，
     按 argv 旗标识别）可选覆写建议件后返回 _FakeAnalyzeProc（refine_ai_analyze
     消费 communicate 返回的 .stderr/.returncode）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     captured: dict = {}
 
     def _fake_spawn(args, **kwargs):
@@ -3100,7 +3100,7 @@ def _install_fake_bf_spawn(monkeypatch, *, lines=(), rc=0, ledger_path=None,
 
 def test_batch_fix_constants_pinned():
     """成本护栏常量钉：单批上限/超时/导读后缀。"""
-    from subtransjav.webview_gui.api import TranslateAPI as _T
+    from subtrans.webview_gui.api import TranslateAPI as _T
     assert _T._BATCH_FIX_MAX_ENTRIES == 50
     assert _T._BATCH_FIX_TIMEOUT_S == 1800
     assert _T._GUIDE_SUFFIX == "_质量报告导读.json"
@@ -3341,7 +3341,7 @@ def test_batch_fix_skipped_counted_not_failed(gui_api_obj, monkeypatch,
 def test_batch_fix_timeout_reports_ledger_semantics(gui_api_obj, monkeypatch,
                                                     tmp_path):
     """超时：杀树+如实口径（已落盘以台账为准，可再发起）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     items = [_bf_item(3, _T3, "甲")]
     guide = _make_bf_guide(tmp_path, items)
     monkeypatch.setattr(api_mod, "terminate_process_tree", lambda pid: None)
@@ -3479,7 +3479,7 @@ def test_fix_matrix_stage_a_empty_denied_verbatim(gui_api_obj, monkeypatch):
 def test_fix_matrix_provider_default_fallback(gui_api_obj, monkeypatch):
     """矩阵⑤ 服务商默认兜底：阶段A model 空但 provider=zen（表内有默认
     模型）→ 默认模型生效，source=stage_a_follow。"""
-    from subtransjav.refine.config import PROVIDER_MODEL_DEFAULTS
+    from subtrans.refine.config import PROVIDER_MODEL_DEFAULTS
     _install_fake_stages(gui_api_obj, monkeypatch,
                          stage1={"provider": "zen", "endpoint": "",
                                  "model": ""})
@@ -3598,7 +3598,7 @@ def test_batch_fix_rejects_when_model_unresolvable(gui_api_obj, monkeypatch,
 
 def test_endpoint_probe_timeout_constant_pinned():
     """C8 探活超时常量钉（秒）：只判连通，超时=不通。"""
-    from subtransjav.webview_gui.api import TranslateAPI as _T
+    from subtrans.webview_gui.api import TranslateAPI as _T
     assert _T._ENDPOINT_PROBE_TIMEOUT_S == 5
 
 
@@ -3619,7 +3619,7 @@ def test_batch_fix_probe_blocks_spawn_when_endpoint_down(gui_api_obj,
         probe_calls.append((endpoint, kwargs.get("timeout")))
         return False, "connection refused"
 
-    import subtransjav.translate.llm_client as llm_mod
+    import subtrans.translate.llm_client as llm_mod
     monkeypatch.setattr(llm_mod, "probe_endpoint_reachable", _fake_probe)
     captured = _install_fake_bf_spawn(monkeypatch)
     r = gui_api_obj.refine_batch_fix(str(guide), [3])
@@ -3646,7 +3646,7 @@ def test_batch_fix_probe_passes_then_spawns(gui_api_obj, monkeypatch,
         probe_endpoints.append(endpoint)
         return True, "HTTP 404"                 # 非 2xx 也算通
 
-    import subtransjav.translate.llm_client as llm_mod
+    import subtrans.translate.llm_client as llm_mod
     monkeypatch.setattr(llm_mod, "probe_endpoint_reachable", _fake_probe)
     _install_fake_bf_spawn(monkeypatch, lines=["ok"], rc=0,
                            verify_suggestions={"glossary": [], "tm": [],
@@ -3666,7 +3666,7 @@ def test_batch_fix_cloud_provider_skips_probe(gui_api_obj, monkeypatch,
     def _must_not_probe(endpoint, **kwargs):
         raise AssertionError("云端 provider 不得触发端点探活")
 
-    import subtransjav.translate.llm_client as llm_mod
+    import subtrans.translate.llm_client as llm_mod
     monkeypatch.setattr(llm_mod, "probe_endpoint_reachable", _must_not_probe)
     captured = _install_fake_bf_spawn(monkeypatch, lines=["ok"], rc=0)
     r = gui_api_obj.refine_batch_fix(str(guide), [3], "deepseek",
@@ -3755,7 +3755,7 @@ def test_review_probe_clip_audio(gui_api_obj, monkeypatch, tmp_path):
 
 def test_review_probe_error_when_undetectable(gui_api_obj, monkeypatch, tmp_path):
     """error 态：ffprobe 缺失且非乐观直连容器 → error + codec_probe=False。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     media = tmp_path / "ep03.mkv"
     media.write_bytes(b"fake-mkv")
     monkeypatch.setattr(api_mod.shutil, "which", lambda name: None)
@@ -3829,9 +3829,9 @@ def test_review_transcode_command_construction(gui_api_obj, monkeypatch,
                                                 tmp_path):
     """转码命令构造：libx264/veryfast/crf 23/aac/-progress pipe:1 +
     输出路径 rt_{sha256[:12]}.mp4；线程同步化直测主体。"""
-    import subtransjav.refine.audio_detect as ad
-    import subtransjav.refine.config as cfg_mod
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.audio_detect as ad
+    import subtrans.refine.config as cfg_mod
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep01.mkv"
     media.write_bytes(b"fake-mkv")
@@ -3883,7 +3883,7 @@ def test_review_transcode_command_construction(gui_api_obj, monkeypatch,
 def test_review_save_backup_failure_aborts(gui_api_obj, monkeypatch, tmp_path):
     """备份先行中止（D2）：copy2 两次（含重试一次）均失败 → success=False
     且原文件未动、无半截 .bak.srt 残留。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     original = "1\n00:00:01,000 --> 00:00:02,000\n旧\n"
     p = tmp_path / "a.srt"
     p.write_text(original, encoding="utf-8")
@@ -3979,13 +3979,13 @@ def test_review_pick_save_path_no_window(gui_api_obj):
 
 def test_review_bak_srt_excluded_from_sources(gui_api_obj, monkeypatch, tmp_path):
     """C1：*.bak.srt 在 batch.find_srt_files 与 select_srt_folder 两处排除。"""
-    from subtransjav.refine.batch import find_srt_files
+    from subtrans.refine.batch import find_srt_files
     (tmp_path / "a.srt").write_text("x", encoding="utf-8")
     (tmp_path / "a.bak.srt").write_text("bak", encoding="utf-8")
     files = find_srt_files(str(tmp_path), recursive=False)
     assert str(tmp_path / "a.srt") in files
     assert all(not f.endswith(".bak.srt") for f in files)
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     class FakeWin:
         @staticmethod
@@ -4072,7 +4072,7 @@ def test_codec_direct_two_matrices_diverge():
     实测分叉点：m4a 容器（ext 集差异：仅 audio-preview 集）；
     .mp4+mp3 音频（audio 集差异：仅 review 集）。两套常量均为
     TranslateAPI 类属性（模块级不可 import）。"""
-    from subtransjav.webview_gui.api import TranslateAPI, _codec_direct
+    from subtrans.webview_gui.api import TranslateAPI, _codec_direct
     ap = TranslateAPI._AUDIO_PREVIEW_DIRECT_EXTS
     av = TranslateAPI._AUDIO_PREVIEW_DIRECT_VIDEO
     aa = TranslateAPI._AUDIO_PREVIEW_DIRECT_AUDIO
@@ -4089,7 +4089,7 @@ def test_codec_direct_two_matrices_diverge():
 
 def test_fs_utils_atomic_write_and_backup_suffix(tmp_path):
     """fs_utils 收口（批 3 技术债 a/b）：原子写成功+无残留+BACKUP_SUFFIX。"""
-    from subtransjav.refine import fs_utils
+    from subtrans.refine import fs_utils
     p = tmp_path / "x.srt"
     fs_utils._atomic_write_text(str(p), "内容", suffix=".srt.tmp")
     assert p.read_text(encoding="utf-8") == "内容"
@@ -4115,9 +4115,9 @@ def test_ensure_template_dir_default_persisted_then_config(
         gui_api_obj, isolated_user_dirs, monkeypatch):
     """缺省目录解析（批1a 件3）：user_dirs.templates_dir → 数据根
     config/templates 两级依次回落。"""
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.user_dirs as ud
-    from subtransjav.refine.config import default_templates_dir
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.user_dirs as ud
+    from subtrans.refine.config import default_templates_dir
     # 未持久化 → 服务端默认目录
     assert os.path.normcase(api_mod._ensure_template_dir(None)) == \
         os.path.normcase(str(Path(default_templates_dir()).resolve()))
@@ -4134,8 +4134,8 @@ def test_ensure_template_dir_default_persisted_then_config(
 def test_ensure_template_dir_persistent_registered_dir_allowed(
         gui_api_obj, tmp_path, monkeypatch):
     """显式传入持久登记目录 → 放行（重启仍生效语义，件3）。"""
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.user_dirs as ud
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.user_dirs as ud
     d = tmp_path / "persisted_cards"
     d.mkdir()
     monkeypatch.setattr(ud, "get_registered_dirs",
@@ -4147,7 +4147,7 @@ def test_ensure_template_dir_persistent_registered_dir_allowed(
 def test_ensure_template_dir_session_registered_dir_still_allowed(
         gui_api_obj, tmp_path):
     """显式传入会话登记目录 → 放行（既有语义保留，不因持久化收窄）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     d = tmp_path / "session_cards"
     d.mkdir()
     register_session_paths([str(d)])
@@ -4159,8 +4159,8 @@ def test_ensure_template_dir_unregistered_dir_still_rejected(
         gui_api_obj, tmp_path, monkeypatch):
     """四类拒绝对照：目录在白名单锚内但未登记（会话+持久均无）→ 拒绝
     （持久化改革不放宽登记语义）。"""
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.user_dirs as ud
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.user_dirs as ud
     monkeypatch.setattr(ud, "get_registered_dirs", lambda: [])
     monkeypatch.setattr(ud, "get_templates_dir", lambda: None)
     d = tmp_path / "unregistered_cards"
@@ -4175,8 +4175,8 @@ def test_refine_pick_folder_persists_and_sets_templates_dir(
         gui_api_obj, isolated_user_dirs, monkeypatch, tmp_path):
     """件3 e2e：refine_pick_folder('templates') → 会话登记 + 持久
     registered_dirs + set_templates_dir；此后缺省目录跟随持久值。"""
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.user_dirs as ud
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.user_dirs as ud
     picked = tmp_path / "picked"
     picked.mkdir()
 
@@ -4205,8 +4205,8 @@ def test_review_save_registered_e_drive_dir_ok(gui_api_obj, monkeypatch):
     持久登记 monkeypatch + 原子写捕获，验证裁决与落盘点）。"""
     if os.name != "nt":
         pytest.skip("盘符语义仅 Windows")
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.user_dirs as ud
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.user_dirs as ud
     fake_e = r"E:\SubJAV"
     monkeypatch.setattr(ud, "get_registered_dirs",
                         lambda: [ud.normalize_key(fake_e)])
@@ -4227,8 +4227,8 @@ def test_review_saveas_registered_e_drive_ok(gui_api_obj, monkeypatch):
     """另存为：目标在持久登记"E 盘"目录（不存在文件）→ 直接原子写放行。"""
     if os.name != "nt":
         pytest.skip("盘符语义仅 Windows")
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.user_dirs as ud
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.user_dirs as ud
     fake_e = r"E:\SubJAV"
     monkeypatch.setattr(ud, "get_registered_dirs",
                         lambda: [ud.normalize_key(fake_e)])
@@ -4254,7 +4254,7 @@ def test_review_save_allowed_session_fallback_branch(gui_api_obj, monkeypatch,
                                                      tmp_path):
     """会话登记兜底分支：_resolve_safe_path 拒绝但路径 ∈ 会话登记 → 放行
     （覆盖对话框/拖放登记的任意盘文件的保存路径）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     p = tmp_path / "s.srt"
     monkeypatch.setattr(
         api_mod, "SESSION_SELECTED_PATHS", {str(p.resolve())})
@@ -4297,7 +4297,7 @@ def test_review_save_srt_sanitize_blank_line_roundtrip(gui_api_obj, tmp_path):
 
 def test_transcode_sync_timeout_unlinks_partial(tmp_path, monkeypatch):
     """审计③a：超时 kill 路径清理半截产物（成功才保留，防 cache 误复用）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     out = tmp_path / "out.mp4"
     out.write_bytes(b"partial-bytes")
     clock = iter([0.0, 1.0, 999.0])
@@ -4319,7 +4319,7 @@ def test_transcode_sync_timeout_unlinks_partial(tmp_path, monkeypatch):
 
 def test_transcode_sync_exception_unlinks_partial(tmp_path, monkeypatch):
     """审计③a：异常路径（wait 抛错）同样清理半截产物。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     out = tmp_path / "out.mp4"
     out.write_bytes(b"partial-bytes")
 
@@ -4343,7 +4343,7 @@ def test_transcode_sync_exception_unlinks_partial(tmp_path, monkeypatch):
 
 def test_transcode_sync_success_keeps_file(tmp_path, monkeypatch):
     """审计③a 对照：成功路径产物保留不误删。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     out = tmp_path / "out.mp4"
     out.write_bytes(b"transcoded-bytes")
 
@@ -4367,9 +4367,9 @@ def test_review_transcode_cache_integrity(gui_api_obj, monkeypatch, tmp_path):
     不复用走重转码；探到正时长才 cached 复用。"""
     import hashlib
 
-    import subtransjav.refine.audio_detect as ad
-    import subtransjav.refine.config as cfg_mod
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.audio_detect as ad
+    import subtrans.refine.config as cfg_mod
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep01.mkv"
     media.write_bytes(b"fake-mkv")
@@ -4407,9 +4407,9 @@ def test_review_transcode_cache_integrity(gui_api_obj, monkeypatch, tmp_path):
 
 def test_review_transcode_inflight_lock(gui_api_obj, monkeypatch, tmp_path):
     """审计③d：per-media 在飞锁——重复调用幂等返回"转码中"，完成后移除。"""
-    import subtransjav.refine.audio_detect as ad
-    import subtransjav.refine.config as cfg_mod
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.audio_detect as ad
+    import subtrans.refine.config as cfg_mod
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep01.mkv"
     media.write_bytes(b"fake-mkv")
@@ -4447,8 +4447,8 @@ def test_review_transcribe_start_running_done(gui_api_obj, monkeypatch, tmp_path
     fake 引擎替身（test_c22_calibration 的 batch 打桩先例）：阻塞在
     Event 上模拟长转录，验证 running 快照、per-media 在飞锁拒绝、
     完成后产出 SRT 路径如实返回。"""
-    import subtransjav.refine.asr_env as asr_env
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.asr_env as asr_env
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep01.mp4"
     media.write_bytes(b"fake-mp4")
@@ -4503,8 +4503,8 @@ def test_review_transcribe_start_running_done(gui_api_obj, monkeypatch, tmp_path
 
 def test_review_transcribe_error_passthrough(gui_api_obj, monkeypatch, tmp_path):
     """d1102-件D：失败面 error 原样透传（不抛），在飞集合清理。"""
-    import subtransjav.refine.asr_env as asr_env
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.asr_env as asr_env
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep02.mp4"
     media.write_bytes(b"fake-mp4")
@@ -4544,8 +4544,8 @@ def test_review_transcribe_worker_exception_no_hang(
     先例曾出现异常逃出 worker 导致 running 永挂；后端已收口（except 兜底），
     本钉锁死：running=False + error_key=review_transcribe_failed + 在飞集合
     清理，防后续重构把异常兜底删掉。"""
-    import subtransjav.refine.asr_env as asr_env
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.refine.asr_env as asr_env
+    import subtrans.webview_gui.api as api_mod
 
     media = tmp_path / "ep03.mp4"
     media.write_bytes(b"fake-mp4")
@@ -4581,7 +4581,7 @@ def test_review_transcribe_error_keys_registered_in_mapping_table():
     该表自称「后端错误点 → 前端 REVIEW_MSG 键名，显式映射防暗合」；
     新增 error_key 不入表＝暗合回归（件D 评审硬违规项）。
     """
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     src = Path(api_mod.__file__).read_text(encoding="utf-8")
     start = src.index("error_key 映射表")
@@ -4603,7 +4603,7 @@ def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
     download_dict(kind, source=..., stop_event=...) 调用，source 语义
     不变——既有 mock 改 kwargs 兼容形，非法值仍由 download_dict 按
     auto 处理）。"""
-    from subtransjav.refine import dict_manager as dm
+    from subtrans.refine import dict_manager as dm
     rec = {}
 
     def _fake(kind, *args, **kwargs):
@@ -4656,15 +4656,15 @@ def test_file_type_subtitle_filter_parse_pin():
     """
     from webview.util import parse_file_type
 
-    from subtransjav.webview_gui.strings import MSG
+    from subtrans.webview_gui.strings import MSG
     assert parse_file_type(MSG["file_type_subtitle"]) == \
         ("ASS SSA VTT 字幕", "*.ass;*.ssa;*.vtt")
 
 
 def test_select_srt_folder_subtitle_only_hint_branch(gui_api_obj, monkeypatch, tmp_path):
     """2.7.2 件1：目录只有 ASS/SSA/VTT 无 .srt → 针对性提示分支（复用 message 通道）。"""
-    import subtransjav.webview_gui.api as api_mod
-    from subtransjav.webview_gui.strings import msg
+    import subtrans.webview_gui.api as api_mod
+    from subtrans.webview_gui.strings import msg
     (tmp_path / "a.ass").write_text("x", encoding="utf-8")
     (tmp_path / "b.vtt").write_text("x", encoding="utf-8")
 
@@ -4683,7 +4683,7 @@ def test_select_srt_folder_srt_regression(gui_api_obj, monkeypatch, tmp_path):
     """回归钉：目录含 .srt 时行为与改动前一致（收编 .srt，不受新分支影响）。"""
     (tmp_path / "a.srt").write_text("x", encoding="utf-8")
     (tmp_path / "a.ass").write_text("x", encoding="utf-8")
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     class FakeWin:
         @staticmethod
@@ -4699,8 +4699,8 @@ def test_select_srt_folder_srt_regression(gui_api_obj, monkeypatch, tmp_path):
 
 def test_select_srt_folder_empty_keeps_no_srt_channel(gui_api_obj, monkeypatch, tmp_path):
     """目录既无 .srt 也无 ASS/SSA/VTT → 走原 no_srt_in_folder 通道不变。"""
-    import subtransjav.webview_gui.api as api_mod
-    from subtransjav.webview_gui.strings import msg
+    import subtrans.webview_gui.api as api_mod
+    from subtrans.webview_gui.strings import msg
 
     class FakeWin:
         @staticmethod
@@ -4717,7 +4717,7 @@ def test_on_drop_event_subtitle_exts_whitelist(gui_api_obj, monkeypatch):
     """2.7.2 件1：拖拽白名单放行 .ass/.ssa/.vtt（.srt 原路径不变），.txt 拒收。"""
     import webview
 
-    from subtransjav.webview_gui.main import on_drop_event
+    from subtrans.webview_gui.main import on_drop_event
 
     scripts = []
 
@@ -4752,8 +4752,8 @@ def test_select_srt_folder_subtitle_exts_pinned_to_drop_whitelist():
     属刻意设计（.srt 由 glob 收编），故比对对象=main 放行集字幕子集去 .srt。
     """
     root = Path(__file__).resolve().parents[1]
-    api_src = (root / "subtransjav" / "webview_gui" / "api.py").read_text(encoding="utf-8")
-    main_src = (root / "subtransjav" / "webview_gui" / "main.py").read_text(encoding="utf-8")
+    api_src = (root / "subtrans" / "webview_gui" / "api.py").read_text(encoding="utf-8")
+    main_src = (root / "subtrans" / "webview_gui" / "main.py").read_text(encoding="utf-8")
 
     body = api_src.split("def select_srt_folder", 1)[1] \
                   .split("def scan_srt_folder", 1)[0]
@@ -4783,10 +4783,10 @@ def test_select_srt_folder_subtitle_exts_pinned_to_drop_whitelist():
 
 def test_select_srt_folder_mixed_dir_net_set_and_skipped(gui_api_obj, monkeypatch, tmp_path):
     """混合目录：paths=净集（流水线产物被滤），skipped 明细+计数齐全。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     names = ["movie.srt", "a.ja.pass1.srt", "a.ja.pass2.srt",
-             "a_refine_A.srt", "a_final_cn.srt", "a.ja.merged.subtransjav.srt"]
+             "a_refine_A.srt", "a_final_cn.srt", "a.ja.merged.subtrans.srt"]
     for n in names:
         (tmp_path / n).write_text("x", encoding="utf-8")
 
@@ -4800,7 +4800,7 @@ def test_select_srt_folder_mixed_dir_net_set_and_skipped(gui_api_obj, monkeypatc
     assert r["success"] is True
     # 净集：普通件 + merged 产成品（不排）
     assert str(tmp_path / "movie.srt") in r["paths"]
-    assert str(tmp_path / "a.ja.merged.subtransjav.srt") in r["paths"]
+    assert str(tmp_path / "a.ja.merged.subtrans.srt") in r["paths"]
     assert str(tmp_path / "a.ja.pass1.srt") not in r["paths"]
     assert str(tmp_path / "a_refine_A.srt") not in r["paths"]
     assert str(tmp_path / "a_final_cn.srt") not in r["paths"]
@@ -4812,8 +4812,8 @@ def test_select_srt_folder_mixed_dir_net_set_and_skipped(gui_api_obj, monkeypatc
 
 def test_select_srt_folder_all_pipeline_fourth_branch(gui_api_obj, monkeypatch, tmp_path):
     """全滤光：目录确有 .srt 但全是流水线产物 → 第四分支 message+skipped。"""
-    import subtransjav.webview_gui.api as api_mod
-    from subtransjav.webview_gui.strings import msg
+    import subtrans.webview_gui.api as api_mod
+    from subtrans.webview_gui.strings import msg
     for n in ("a.ja.pass1.srt", "a.ja.pass2.srt", "a_refine_A.srt", "a_final_cn.srt"):
         (tmp_path / n).write_text("x", encoding="utf-8")
 
@@ -4832,8 +4832,8 @@ def test_select_srt_folder_all_pipeline_fourth_branch(gui_api_obj, monkeypatch, 
 
 def test_select_srt_folder_all_pipeline_branch_precedes_ass_branch(gui_api_obj, monkeypatch, tmp_path):
     """第四分支优先于 ass 系分支：目录有流水线 .srt + .ass → 如实诊断而非提示 ass。"""
-    import subtransjav.webview_gui.api as api_mod
-    from subtransjav.webview_gui.strings import msg
+    import subtrans.webview_gui.api as api_mod
+    from subtrans.webview_gui.strings import msg
     (tmp_path / "a.ja.pass1.srt").write_text("x", encoding="utf-8")
     (tmp_path / "a.ass").write_text("x", encoding="utf-8")
 
@@ -4850,8 +4850,8 @@ def test_select_srt_folder_all_pipeline_branch_precedes_ass_branch(gui_api_obj, 
 
 def test_select_srt_folder_bak_exclusion_still_first(gui_api_obj, monkeypatch, tmp_path):
     """bak 排除仍优先：bak-only 目录不走第四分支，保持原 no_srt_in_folder 通道。"""
-    import subtransjav.webview_gui.api as api_mod
-    from subtransjav.webview_gui.strings import msg
+    import subtrans.webview_gui.api as api_mod
+    from subtrans.webview_gui.strings import msg
     (tmp_path / "a.bak.srt").write_text("x", encoding="utf-8")
 
     class FakeWin:
@@ -4868,7 +4868,7 @@ def test_select_srt_folder_bak_exclusion_still_first(gui_api_obj, monkeypatch, t
 
 def test_select_srt_folder_bak_filtered_before_pipeline_split(gui_api_obj, monkeypatch, tmp_path):
     """bak 排除 + 流水线过滤共存：bak 不计入 skipped，净件照常收编。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     (tmp_path / "movie.srt").write_text("x", encoding="utf-8")
     (tmp_path / "movie.bak.srt").write_text("x", encoding="utf-8")
     (tmp_path / "movie.ja.pass1.srt").write_text("x", encoding="utf-8")
@@ -4907,8 +4907,8 @@ def test_scan_srt_folder_skipped_count_passthrough(gui_api_obj, monkeypatch, tmp
 
 def test_strip_stem_suffixes_public_export():
     """剥链公共名导出（唯一实现，禁第二份）：owner 实名样本 + 中文/日语样本。"""
-    import subtransjav.refine.asr_meta as am
-    from subtransjav.refine.asr_meta import strip_stem_suffixes
+    import subtrans.refine.asr_meta as am
+    from subtrans.refine.asr_meta import strip_stem_suffixes
     # owner 实名样本：4k2.me@sample-aja.merged.whisperjav_质量报告导读.json
     # → 剥导读后缀 + 管线后缀 → 4k2.me@sample-aja.merged
     assert strip_stem_suffixes("4k2.me@sample-aja.merged.whisperjav") \
@@ -4978,7 +4978,7 @@ def test_preview_infer_duration_mismatch_rejected(gui_api_obj, monkeypatch,
 def test_preview_infer_ffprobe_fail_rejected(gui_api_obj, monkeypatch,
                                              tmp_path):
     """ffprobe 探测失败拒绝（fail-closed）：rc≠0 → verify_failed。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     _make_video(tmp_path, "ep12.mp4")
     guide = _make_guide(tmp_path, stem="ep12")
     monkeypatch.setattr(api_mod.shutil, "which",
@@ -5153,8 +5153,8 @@ def test_refine_ai_apply_tm_telemetry_features_only(gui_api_obj, monkeypatch,
     计数，不含 TM 原文；不阻断不改落库行为。"""
     import logging
 
-    import subtransjav.refine.glossary_conflict as gc_mod
-    import subtransjav.refine.tm as tm_mod
+    import subtrans.refine.glossary_conflict as gc_mod
+    import subtrans.refine.tm as tm_mod
 
     stored: list = []
 
@@ -5181,14 +5181,14 @@ def test_refine_ai_apply_tm_telemetry_features_only(gui_api_obj, monkeypatch,
         {"source": multi_src, "target": "多句译"},
         {"source": normal_src, "target": "普通译"},
     ]
-    with caplog.at_level(logging.DEBUG, logger="subtransjav.gui"):
+    with caplog.at_level(logging.DEBUG, logger="subtrans.gui"):
         r = gui_api_obj.refine_ai_apply_tm(
             json.dumps(entries, ensure_ascii=False))
     assert r["success"] is True
     assert stored == [(e["source"], e["target"]) for e in entries], \
         "埋点不得改变落库行为"
     debug_text = "\n".join(rec.getMessage() for rec in caplog.records
-                           if rec.name == "subtransjav.gui")
+                           if rec.name == "subtrans.gui")
     assert "flagged=2" in debug_text and "total=3" in debug_text, \
         "聚合特征计数缺失（长句 1 + 多句标点 1）"
     assert "max_len=120" in debug_text and "max_sent_punct=3" in debug_text
@@ -5208,7 +5208,7 @@ def test_refine_ai_apply_tm_telemetry_features_only(gui_api_obj, monkeypatch,
 def test_preview_last_dir_saved_on_override(gui_api_obj, monkeypatch, tmp_path):
     """override 保存成功 → preview_media_last_dir KV 落所选媒体父目录
     （normcase 绝对路径）；空串删除不触碰该键。"""
-    from subtransjav.paths import normalize_path_case
+    from subtrans.paths import normalize_path_case
     settings_path = tmp_path / "refine_stage_settings.json"
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(settings_path))
@@ -5250,7 +5250,7 @@ def test_preview_last_dir_multi_candidate_fail_closed(gui_api_obj, monkeypatch,
                                                       tmp_path):
     """⑤ 多候选 fail-closed：last_dir 内 X.mp4+X.mkv → no_candidate 带
     候选列表，error 标注来源目录（跨目录候选集不合并）。"""
-    from subtransjav.paths import normalize_path_case
+    from subtrans.paths import normalize_path_case
     settings_path = tmp_path / "refine_stage_settings.json"
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(settings_path))
@@ -5342,7 +5342,7 @@ def test_encode_session_hook_not_fired_on_error_or_cancelled(gui_api_obj):
 
 def test_encode_session_hook_guard_blocks_second_call(gui_api_obj, monkeypatch):
     """C9：once 守卫——同会话第二次直接短路（真实方法直调不产生第二次副作用）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     api = object.__new__(TranslateAPI)
     api._session_hook_fired = True   # 模拟已触发
     seen = []
@@ -5355,7 +5355,7 @@ def test_encode_session_hook_guard_blocks_second_call(gui_api_obj, monkeypatch):
 
 def test_start_translation_rejected_while_encoding(gui_api_obj, monkeypatch):
     """互斥（D2）：压制运行中 start_translation 拒绝并人话显因。"""
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.encode_queue as eq
     gui_api_obj._translate_lock = threading.Lock()
     monkeypatch.setattr(eq, "encode_active", lambda: True)
     r = gui_api_obj.start_translation({"inputs": []})
@@ -5365,7 +5365,7 @@ def test_start_translation_rejected_while_encoding(gui_api_obj, monkeypatch):
 def test_encode_commit_rejected_while_translating(gui_api_obj, tmp_path,
                                                   monkeypatch):
     """互斥（D2）：翻译槽被占（_translate_running 同锁置位）→ commit 拒。"""
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.encode_queue as eq
     video = tmp_path / "v.mp4"
     video.write_bytes(b"v")
     sub = tmp_path / "v.srt"
@@ -5379,7 +5379,7 @@ def test_encode_commit_rejected_while_translating(gui_api_obj, tmp_path,
 
 def test_encode_last_params_roundtrip(gui_api_obj, tmp_path, monkeypatch):
     """上次压制参数持久化（fs_utils 原子写；CONFIG_DIR 打桩隔离）。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     assert gui_api_obj.encode_get_last_params()["params"] == {}
     assert gui_api_obj.encode_save_last_params(
@@ -5401,7 +5401,7 @@ def test_encode_save_params_valid_writes_hardsub_last(gui_api_obj, tmp_path,
                                                       monkeypatch):
     """合法参数：写 hardsub_last.json 且与读路径同源；原子写无 tmp 残留；
     非 EncodeParams 字段（out_dir）透传保留；盖 saved_at 供摘要行。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     root = tmp_path / "dataroot"
     root.mkdir()
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
@@ -5428,7 +5428,7 @@ def test_encode_save_params_invalid_rejected_with_reason_and_tip(gui_api_obj,
                                                                  tmp_path,
                                                                  monkeypatch):
     """非法参数：拒绝带人话原因+tip，且不落盘（校验前置）。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     r = gui_api_obj.encode_save_params(json.dumps({"video_format": "mpeg2"}))
     assert r["success"] is False and "视频格式" in r["error"], "须显因"
@@ -5447,8 +5447,8 @@ def test_encode_save_params_invalid_rejected_with_reason_and_tip(gui_api_obj,
 def test_encode_save_params_never_enqueues_job(gui_api_obj, tmp_path,
                                                monkeypatch):
     """只校验不建 job 不入队：enqueue_batch 若被触碰即炸；互斥槽不被占用。"""
-    import subtransjav.refine.config as cfg
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.refine.config as cfg
+    import subtrans.webview_gui.encode_queue as eq
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
 
     def _boom(*_a, **_k):
@@ -5488,9 +5488,9 @@ def _install_preflight_stubs(gui_api_obj, monkeypatch, *, missing=(),
                              ffprobe_path="ffprobe.exe", probe=None,
                              speed=2.0, estimate=1234):
     """供给/探测/估算/GPU 解析全打桩；返回 (supply, probe 调用记录)。"""
-    import subtransjav.refine.ffmpeg_supply as supply_mod
-    import subtransjav.refine.hardsub as hardsub_mod
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.refine.ffmpeg_supply as supply_mod
+    import subtrans.refine.hardsub as hardsub_mod
+    import subtrans.webview_gui.encode_queue as eq
     supply = supply_mod.SupplyResult(
         "ffmpeg.exe", ffprobe_path, {}, list(missing))
     probe_calls: list = []
@@ -5557,7 +5557,7 @@ def test_encode_preflight_probe_ok_eta_and_bytes(gui_api_obj, tmp_path,
                                                 monkeypatch):
     """探测成功：out_path/overwrite/duration/音轨/eta/估算字节全量回填，
     total_eta 累加；供给/探测均为注入值（断言只认 mock）。"""
-    import subtransjav.refine.ffmpeg_supply as supply_mod
+    import subtrans.refine.ffmpeg_supply as supply_mod
     video = tmp_path / "v.mp4"
     video.write_bytes(b"v")
     out = tmp_path / "v_hardsub.mp4"
@@ -5602,7 +5602,7 @@ def test_encode_preflight_probe_error_recorded(gui_api_obj, tmp_path,
                                               monkeypatch):
     """探测失败：FfprobeError 收敛为 item.probe_error（不抛、不计 eta），
     其余条目照常返回。"""
-    import subtransjav.refine.ffmpeg_supply as supply_mod
+    import subtrans.refine.ffmpeg_supply as supply_mod
     video = tmp_path / "v.mp4"
     video.write_bytes(b"v")
 
@@ -5619,7 +5619,7 @@ def test_encode_preflight_probe_error_recorded(gui_api_obj, tmp_path,
 
 def test_encode_presets_crud_and_cap(gui_api_obj, tmp_path, monkeypatch):
     """批2 预设：CRUD+上限 20+内置三档只读。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     lst = gui_api_obj.encode_presets_list()
     assert lst["success"] and len(lst["builtin"]) == 3 and lst["user"] == {}
@@ -5639,7 +5639,7 @@ def test_encode_presets_crud_and_cap(gui_api_obj, tmp_path, monkeypatch):
 def test_encode_presets_corruption_degrades_with_bak(gui_api_obj, tmp_path,
                                                      monkeypatch):
     """批2 预设：文件损坏→key 级降级回空+.bak 留档。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     assert gui_api_obj.encode_preset_save("keep", {"quality": "balanced"})["success"]
     path = tmp_path / "hardsub_presets.json"
@@ -5659,8 +5659,8 @@ def test_encode_presets_corruption_degrades_with_bak(gui_api_obj, tmp_path,
 @pytest.fixture()
 def _auto_env(tmp_path, monkeypatch):
     """自动化测试环境：CONFIG_DIR 打桩 + 干净互斥态 + 队列供给桩。"""
-    import subtransjav.refine.config as cfg
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.refine.config as cfg
+    import subtrans.webview_gui.encode_queue as eq
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     monkeypatch.setattr(eq, "_encode_active", False)
     monkeypatch.setattr(eq, "_translate_running", False)
@@ -5695,12 +5695,12 @@ def test_automation_enqueues_done_and_skips_existing(gui_api_obj, _auto_env,
     import json as _json
     settings = {"settings": {"encode_auto_enabled": True}}
     (tmp := _auto_env["media"].parent / "cfg").mkdir(exist_ok=True)
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp))
     (tmp / "refine_stage_settings.json").write_text(
         _json.dumps(settings), encoding="utf-8")
     # 队列供给桩已由 _auto_env 注入（missing=[] → 入队走通；spawn 桩防真进程）
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.encode_queue as eq
     monkeypatch.setattr(eq, "_spawn_ffmpeg",
                         lambda argv: (_ for _ in ()).throw(OSError("no ffmpeg")))
     gui_api_obj._on_translation_session_completed(
@@ -5720,7 +5720,7 @@ def test_automation_skips_existing_output(gui_api_obj, _auto_env, monkeypatch):
     """成品已存在→跳过不入队（自动压制 skip-existing，决策自动化定稿）。"""
     import json as _json
 
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     tmp = _auto_env["media"].parent / "cfg2"
     tmp.mkdir(exist_ok=True)
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp))
@@ -5771,7 +5771,7 @@ class _WarmupFakeProc:
 
 def _install_fake_warmup_spawn(monkeypatch):
     """替身 spawn_refine_cli（预热链）：捕获 CLI argv，返回可控假进程。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     procs: list = []
     argvs: list = []
 
@@ -5796,7 +5796,7 @@ def test_warmup_bridge_spawn_args_and_single_flight(gui_api_obj, monkeypatch):
     """桥主路径：spawn 旗标同分析参源（--warmup-analysis/--ai-model/
     --s1-provider）+ 单飞（在飞二次调用不重复 spawn）+ 登记/台账含 warmup
     + reap 收口 loaded。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
                         lambda: _fake_settings({}))
     monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded", lambda ep: [])
@@ -5878,7 +5878,7 @@ def test_start_translation_blocked_while_warmup_loading(gui_api_obj,
                                                         monkeypatch):
     """互锁兜底：预热 loading 中 start_translation 拒启并带 warmup_loading；
     已 claim 的翻译槽原路归还（防泄漏）；终态放行。"""
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.encode_queue as eq
     gui_api_obj._translate_lock = threading.Lock()
     monkeypatch.setattr(eq, "encode_active", lambda: False)
     monkeypatch.setattr(eq, "claim_translate_slot", lambda: True)
@@ -5951,7 +5951,7 @@ def test_warmup_cancel_targets_warmup_slot_only(gui_api_obj):
 
 def test_exit_cleanup_includes_warmup_slot(gui_api_obj):
     """⑦ 退出清理（C5）：预热槽纳入 terminate_registered 全覆盖 + 台账写空。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     gui_api_obj._init_ai_state()
     gui_api_obj._translate_lock = threading.Lock()
     gui_api_obj._warmup_proc = {"proc": None, "pid": 999998,
@@ -5972,7 +5972,7 @@ def test_session_completed_triggers_warmup_hook(gui_api_obj, monkeypatch,
     CONFIG_DIR 打桩隔离本机真实设置（_fullchain_auto_enabled 直读文件
     不过替身——owner 真机全链开关开启态会令钩子改道全链分支，warmup 由
     链首承接，本测试须在隔离环境验证直调路径）。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     cfgdir = tmp_path / "cfg"
     cfgdir.mkdir()
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(cfgdir))
@@ -6026,8 +6026,8 @@ def test_warmup_status_bridge_shapes(gui_api_obj, monkeypatch):
 def test_cli_warmup_analysis_invokes_client_and_exit_code(monkeypatch):
     """⑧ --warmup-analysis 早退分流：_make_ai_client 被调且退出码 0/1
     （替身客户端零触网）。"""
-    import subtransjav.refine.cli as cli_mod
-    import subtransjav.refine.quality_advisor as qa_mod
+    import subtrans.refine.cli as cli_mod
+    import subtrans.refine.quality_advisor as qa_mod
     calls: list = []
 
     def _fake_client(cfg, model_override=""):
@@ -6047,7 +6047,7 @@ def test_cli_warmup_analysis_invokes_client_and_exit_code(monkeypatch):
 
 def test_warmup_analysis_flag_in_child_kind_markers():
     """kind→旗标映射含 warmup（身份核验第③重依据）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     assert api_mod._CHILD_KIND_MARKERS.get("warmup") == "--warmup-analysis"
 
 
@@ -6174,7 +6174,7 @@ def test_warmup_bridge_resolve_not_ok_reason_passthrough(gui_api_obj,
 
 def test_warmup_bridge_spawn_error_marks_failed(gui_api_obj, monkeypatch):
     """spawn 抛异常：状态机 loading→failed 收口 + 错误透传，不留 loading 悬挂。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     monkeypatch.setattr(gui_api_obj, "refine_get_stage_settings",
                         lambda: _fake_settings({}))
     monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded", lambda ep: [])
@@ -6207,7 +6207,7 @@ def _fullchain_env(gui_api_obj, monkeypatch, tmp_path, *, settings,
     + 端点探活桩（C8 预检与预热 loaded 探测不真连 localhost:1234，
     CI 无 LM Studio 也稳定；仿 test_batch_fix_probe_passes_then_spawns
     假探活口径，非 2xx 也算通）。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     d = tmp_path / "cfg"
     d.mkdir(exist_ok=True)
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(d))
@@ -6219,7 +6219,7 @@ def _fullchain_env(gui_api_obj, monkeypatch, tmp_path, *, settings,
         gui_api_obj, "refine_get_stage_settings",
         lambda: {"success": True, "stages": stages, "settings": settings,
                  "key_status": {}, "first_run": False})
-    import subtransjav.translate.llm_client as llm_mod
+    import subtrans.translate.llm_client as llm_mod
     monkeypatch.setattr(llm_mod, "probe_endpoint_reachable",
                         lambda endpoint, **kw: (True, "HTTP 404"))
     monkeypatch.setattr(gui_api_obj, "_warmup_probe_loaded",
@@ -6232,7 +6232,7 @@ def test_fullchain_switch_default_off_and_roundtrip(gui_api_obj, monkeypatch,
     """开关缺省关 + 保存/读取 roundtrip（CONFIG_DIR 打桩）：KV
     fullchain_auto_enabled 走 refine_save_stage_settings 持久化，与
     encode_auto_enabled 同文件共存互不覆盖。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
     assert gui._fullchain_auto_enabled() is False      # 缺省关（无文件）
@@ -6348,7 +6348,7 @@ def test_fullchain_single_analyze_invariant(gui_api_obj, monkeypatch,
                                     "observations": []})
     monkeypatch.setattr(gui_api_obj, "refine_warmup_analysis_model",
                         lambda m, p: {"success": True})
-    import subtransjav.refine.asr_env as asr_env_mod
+    import subtrans.refine.asr_env as asr_env_mod
     batch_calls: list = []
     monkeypatch.setattr(asr_env_mod, "batch_transcribe_clips",
                         lambda media, timings, **kw:
@@ -6414,7 +6414,7 @@ def test_fullchain_cloud_provider_gate(gui_api_obj, monkeypatch, tmp_path,
         settings={"fullchain_auto_enabled": True},
         stage1={"provider": "deepseek", "endpoint": "", "model": "cloud-m"})
     captured = _install_fake_bf_spawn(monkeypatch)
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._session_hook_fired = False
         gui_api_obj._on_translation_session_completed(
             {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
@@ -6439,7 +6439,7 @@ def _install_fullchain_auto_stubs(gui_api_obj, monkeypatch, tmp_path, *,
                                   cfg=None, warm=None):
     """链主体分支夹具：CONFIG_DIR 隔离 + 模型解析/预热/漏听段/压制开关
     全替身（cfg 可为 dict 或 callable，便于注入异常）。"""
-    import subtransjav.refine.config as cfg_mod
+    import subtrans.refine.config as cfg_mod
     cfg_dir = tmp_path / "cfg"
     cfg_dir.mkdir(exist_ok=True)
     monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(cfg_dir))
@@ -6754,11 +6754,11 @@ def test_fullchain_notices_record_skip_reason(gui_api_obj, monkeypatch,
 def test_fullchain_c7_encode_after_verify(gui_api_obj, _auto_env, monkeypatch):
     """C7 时序门（双开）：压制入队发生在复验（--ai-analyze spawn）之后——
     fake spawn 捕获序=批修复→分析→encode 标记；入队任务带 auto 标记。"""
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.encode_queue as eq
     gui_api_obj._init_ai_state()
     # 双开 KV（真实文件：钩子入口 _fullchain_auto_enabled + 链尾
     # _encode_automation_enabled 均直读文件；CONFIG_DIR 换独立目录）
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     cfgdir = _auto_env["media"].parent / "cfg_fc"
     cfgdir.mkdir(exist_ok=True)
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(cfgdir))
@@ -6776,7 +6776,7 @@ def test_fullchain_c7_encode_after_verify(gui_api_obj, _auto_env, monkeypatch):
                  "key_status": {}, "first_run": False})
     # C8 端点预检桩（CI 无 LM Studio；与 _fullchain_env 同口径，
     # 非 2xx 也算通——本测试未走 helper，须自打）
-    import subtransjav.translate.llm_client as llm_mod
+    import subtrans.translate.llm_client as llm_mod
     monkeypatch.setattr(llm_mod, "probe_endpoint_reachable",
                         lambda endpoint, **kw: (True, "HTTP 404"))
     media = _auto_env["media"]
@@ -6843,7 +6843,7 @@ def test_batch_fix_reentry_guard_rejects_concurrent(gui_api_obj, monkeypatch,
     """重入守卫（批1 a 段）：第一调用阻塞在 fake spawn wait 期间第二调用
     被结构化拒绝（batch_fix_running，不二次 spawn）；finally 清位后可
     再次发起。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     gui_api_obj._init_ai_state()
     release = threading.Event()
     entered = threading.Event()
@@ -6907,7 +6907,7 @@ def test_fullchain_c9_interrupted_last_run(gui_api_obj, monkeypatch,
     """C9「上次未完成」判定：fullchain_last_run.json 无 ended_at 且
     phase!=done → unfinished True + entries_pending 透出；done 快照/缺失
     快照 → False（不误报）。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     p = tmp_path / "fullchain_last_run.json"
     p.write_text(json.dumps(
@@ -6943,8 +6943,8 @@ def test_fullchain_blocks_start_translation(gui_api_obj, monkeypatch):
     spawn（零出域）。"""
     import threading
 
-    import subtransjav.webview_gui.api as api_mod
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.api as api_mod
+    import subtrans.webview_gui.encode_queue as eq
     monkeypatch.setattr(eq, "_encode_active", False)
     monkeypatch.setattr(eq, "_translate_running", False)
     gui_api_obj._init_ai_state()
@@ -7048,7 +7048,7 @@ def test_fullchain_tail_encode_skipped_when_manual_busy(gui_api_obj, _auto_env,
     （复验恰 1 次、phase=done）。"""
     import logging
 
-    import subtransjav.webview_gui.encode_queue as eq
+    import subtrans.webview_gui.encode_queue as eq
     gui_api_obj._init_ai_state()
     _fullchain_env(
         gui_api_obj, monkeypatch, _auto_env["media"].parent,
@@ -7073,7 +7073,7 @@ def test_fullchain_tail_encode_skipped_when_manual_busy(gui_api_obj, _auto_env,
                         lambda s, **k: encode_calls.append((s, k)))
     assert eq.claim_encode_slot() is True, "预置：手动压制在飞（互斥槽已占）"
     try:
-        with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        with caplog.at_level(logging.INFO, logger="subtrans.gui"):
             gui_api_obj._session_hook_fired = False
             gui_api_obj._on_translation_session_completed(
                 {"files": {_auto_env["srt"]: "done"}})
@@ -7117,7 +7117,7 @@ def test_fullchain_verify_skipped_when_manual_analyze_busy(gui_api_obj,
     with gui_api_obj._ai_lock:
         gui_api_obj._ai_analyze_running = True   # 预置：手动分析在飞
     try:
-        with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        with caplog.at_level(logging.INFO, logger="subtrans.gui"):
             gui_api_obj._session_hook_fired = False
             gui_api_obj._on_translation_session_completed(
                 {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
@@ -7158,7 +7158,7 @@ def test_fullchain_config_error_injection(gui_api_obj, monkeypatch, tmp_path,
         monkeypatch.setattr(
             gui_api_obj, "_resolve_ai_model_config",
             lambda *a, _c=dict(case), **k: dict(_c))
-        with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+        with caplog.at_level(logging.INFO, logger="subtrans.gui"):
             gui_api_obj._session_hook_fired = False
             gui_api_obj._on_translation_session_completed(
                 {"files": {str(tmp_path / "ep01_final_cn.srt"): "done"}})
@@ -7185,8 +7185,8 @@ def _make_rollback_env(tmp_path: Path, ledger, final_texts=None):
     """回滚夹具：导读（v2）+ 台账 + 终稿（final_stem 契约名）。
 
     final_texts: {timing: text} 终稿两块（缺省甲/乙）。"""
-    from subtransjav.refine.filters import build_srt
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.filters import build_srt
+    from subtrans.refine.v2_outputs import final_stem
     guide = {"version": 2, "stem": _BF_GUIDE_STEM,
              "items": [_bf_item(1, _RT1, ""), _bf_item(2, _RT2, "")],
              "direction": "", "media_path": ""}
@@ -7214,8 +7214,8 @@ def _applied_rec(timing, old, new):
 
 
 def _read_rollback_final(tmp_path: Path):
-    from subtransjav.refine.filters import parse_srt
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.filters import parse_srt
+    from subtrans.refine.v2_outputs import final_stem
     return parse_srt(
         (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").read_text(
             encoding="utf-8"))
@@ -7224,8 +7224,8 @@ def _read_rollback_final(tmp_path: Path):
 def test_fullchain_rollback_happy_path(gui_api_obj, tmp_path, monkeypatch):
     """回滚 happy path：applied 记录 old_text 回写终稿 + rollback 台账
     追加（10 键齐）+ 写序契约保持（台账先于终稿落盘）。"""
-    import subtransjav.refine.fs_utils as fs_mod
-    from subtransjav.refine import action_retranslate as art
+    import subtrans.refine.fs_utils as fs_mod
+    from subtrans.refine import action_retranslate as art
     guide = _make_rollback_env(tmp_path, [
         _applied_rec(_RT1, "甲（原）", "甲（已改）")])
     order: list = []
@@ -7284,7 +7284,7 @@ def test_fullchain_rollback_unmatched_timing(gui_api_obj, tmp_path):
 
 def test_fullchain_rollback_final_missing(gui_api_obj, tmp_path):
     """终稿缺失：结构化失败（msg 人话文案），台账不被误追加。"""
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.v2_outputs import final_stem
     guide = _make_rollback_env(tmp_path, [
         _applied_rec(_RT1, "甲（原）", "甲（已改）")])
     (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").unlink()
@@ -7323,8 +7323,8 @@ def test_fullchain_rollback_auto_insert_deleted(gui_api_obj, tmp_path):
          "source_partial": False},
     ])
     # 终稿含已插入行（auto_insert 记录 timing 处第三块）
-    from subtransjav.refine.filters import build_srt as _bsrt
-    from subtransjav.refine.v2_outputs import final_stem as _fstem
+    from subtrans.refine.filters import build_srt as _bsrt
+    from subtrans.refine.v2_outputs import final_stem as _fstem
     (tmp_path / f"{_fstem(_BF_GUIDE_STEM)}.srt").write_text(
         _bsrt([
             {"index": 1, "timing": _RT1, "text": "甲（已改）"},
@@ -7395,8 +7395,8 @@ def _make_missed_env(tmp_path: Path, *, items=None, media=True,
                      final=True, extras=None):
     """漏听段夹具：导读（含 suspected_missed_speech 观察+media_path）+
     哑媒体文件 + 终稿（final_stem 契约名）。"""
-    from subtransjav.refine.filters import build_srt
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.filters import build_srt
+    from subtrans.refine.v2_outputs import final_stem
     media_path = ""
     if media:
         media_path = str(tmp_path / "ep01.mp4")
@@ -7424,8 +7424,8 @@ def _make_missed_env(tmp_path: Path, *, items=None, media=True,
 def _install_missed_stubs(monkeypatch, *, text=_MTEXT):
     """打桩 detect_speech_windows（每窗口 3s 语音）+ batch_transcribe_
     clips（高置信段，三维全过门）；返回 (detect 调用, batch 调用)。"""
-    import subtransjav.refine.asr_env as asr_mod
-    import subtransjav.refine.audio_detect as ad_mod
+    import subtrans.refine.asr_env as asr_mod
+    import subtrans.refine.audio_detect as ad_mod
     detect_calls: list = []
     batch_calls: list = []
 
@@ -7452,7 +7452,7 @@ def test_session_stage_a_snapshot_fallback(gui_api_obj, monkeypatch,
     """批1 真机反馈修复：阶段A 设置从未落盘（refine_stage_settings.json
     不存在）时，_stage_a_* 三兄弟回落会话快照——链 provider 门/手动修复
     解析与翻译主流程同源，不再误判服务商原因。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
     gui._init_ai_state()
@@ -7476,7 +7476,7 @@ def test_session_stage_a_save_settings_clears_snapshot(gui_api_obj,
                                                        tmp_path):
     """保存阶段设置=用户显式表态：清会话快照，落盘值生效不被旧快照
     遮蔽。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
     gui._init_ai_state()
@@ -7509,7 +7509,7 @@ def test_capture_session_stage_a_extracts_options(gui_api_obj):
 def _c22_gate_payload(**extra) -> dict:
     """C22 门控文件夹具：带当前规则/版本指纹（D2026-1101-01 §三④：
     读取侧要求 rules_sha1+app_version 与现行规则/版本一致，缺失即关门）。"""
-    from subtransjav.data_migration import c22_gate_fingerprint
+    from subtrans.data_migration import c22_gate_fingerprint
 
     rules_sha1, app_version = c22_gate_fingerprint()
     return {"enabled": True, "rules_sha1": rules_sha1,
@@ -7521,7 +7521,7 @@ def test_fullchain_c22_gate_default_off_helper(gui_api_obj, monkeypatch,
     """_fullchain_c22_enabled fail-closed：缺失/损坏/enabled 非 True/指纹
     缺失或不匹配均 False；enabled is True 且指纹吻合才放行（CONFIG_DIR
     打桩）。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
     assert gui._fullchain_c22_enabled() is False       # 缺失
@@ -7547,7 +7547,7 @@ def test_fullchain_automation_status_c22_gate_reason(gui_api_obj, monkeypatch,
     """d1102-件C 桥前置：fullchain_automation_status 只读透出
     ``c22_gate:{enabled,reason}``。门开=ok、门关（缺失）=missing、
     指纹失效=fingerprint-mismatch 均如实回传，零行为改动。"""
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
 
@@ -7589,14 +7589,14 @@ def test_fullchain_c22_gate_warning_forks_by_reason(gui_api_obj, monkeypatch,
     「软件已升级」；seeded 行版本失配是 ok 开门态，api 侧零 warning。"""
     import logging
 
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     gui = gui_api_obj
     p = tmp_path / "fullchain_c22.json"
 
     p.write_text(json.dumps(_c22_gate_payload(rules_sha1="stale")),
                  encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="subtransjav.gui"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.gui"):
         assert gui._fullchain_c22_gate_state() == \
             {"enabled": False, "reason": "fingerprint-mismatch"}
     assert any("规则集已变更，请重新校准" in r.message
@@ -7606,7 +7606,7 @@ def test_fullchain_c22_gate_warning_forks_by_reason(gui_api_obj, monkeypatch,
     p.write_text(json.dumps(_c22_gate_payload(
         precision_lb=0.96, n=60, app_version="0.0.0-old")),
         encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="subtransjav.gui"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.gui"):
         assert gui._fullchain_c22_gate_state() == \
             {"enabled": False, "reason": "fingerprint-version-mismatch"}
     assert any("软件已升级，需重新校准" in r.message
@@ -7616,10 +7616,10 @@ def test_fullchain_c22_gate_warning_forks_by_reason(gui_api_obj, monkeypatch,
     caplog.clear()
     p.write_text(json.dumps(_c22_gate_payload(app_version="0.0.0-old")),
                  encoding="utf-8")
-    with caplog.at_level(logging.WARNING, logger="subtransjav.gui"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.gui"):
         assert gui._fullchain_c22_gate_state() == \
             {"enabled": True, "reason": "ok"}
-    assert not any(r.name == "subtransjav.gui" for r in caplog.records)
+    assert not any(r.name == "subtrans.gui" for r in caplog.records)
 
 
 def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
@@ -7630,15 +7630,15 @@ def test_fullchain_missed_gate_off_abandons_all(gui_api_obj, monkeypatch,
     首次在盘落 config/fullchain_c22.json 时实测泄入翻红，主审亲修）。"""
     import logging
 
-    import subtransjav.refine.config as _cfg
-    from subtransjav.refine.v2_outputs import final_stem
+    import subtrans.refine.config as _cfg
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
     final_before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
                     ).read_text(encoding="utf-8")
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide), "stem":
               _BF_GUIDE_STEM}], run)
@@ -7656,11 +7656,11 @@ def test_fullchain_missed_gate_on_inserts(gui_api_obj, monkeypatch,
     high 补行——终稿 +1 行且重编号/台账 auto_insert 10 键/写序契约
     （ledger 先于 final 落盘）/guide extras.auto_insert 标记/SRT 正文
     零标记。"""
-    import subtransjav.refine.config as _cfg
-    import subtransjav.refine.fs_utils as fs_mod
-    from subtransjav.refine import action_retranslate as art
-    from subtransjav.refine.filters import parse_srt
-    from subtransjav.refine.v2_outputs import final_stem
+    import subtrans.refine.config as _cfg
+    import subtrans.refine.fs_utils as fs_mod
+    from subtrans.refine import action_retranslate as art
+    from subtrans.refine.filters import parse_srt
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path, extras={"对齐率": "98.0%"})
     _install_missed_stubs(monkeypatch)
@@ -7732,9 +7732,9 @@ def test_fullchain_missed_gate_on_invariant_failure_abandons(
     文件放弃，终稿/台账/extras 零落盘。"""
     import logging
 
-    import subtransjav.refine.config as _cfg
-    from subtransjav.refine import missed_insert as mi
-    from subtransjav.refine.v2_outputs import final_stem
+    import subtrans.refine.config as _cfg
+    from subtrans.refine import missed_insert as mi
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(_cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
@@ -7748,7 +7748,7 @@ def test_fullchain_missed_gate_on_invariant_failure_abandons(
     final_before = (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt"
                     ).read_text(encoding="utf-8")
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide), "stem":
               _BF_GUIDE_STEM}], run)
@@ -7774,7 +7774,7 @@ def test_fullchain_missed_c21_first_20(gui_api_obj, monkeypatch, tmp_path,
                for i in range(25)])
     detect_calls, batch_calls = _install_missed_stubs(monkeypatch)
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide), "stem":
               _BF_GUIDE_STEM}], run)
@@ -7791,7 +7791,7 @@ def test_fullchain_missed_c18_no_media(gui_api_obj, monkeypatch, tmp_path,
     guide = _make_missed_env(tmp_path, media=False)
     detect_calls, batch_calls = _install_missed_stubs(monkeypatch)
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide), "stem":
               _BF_GUIDE_STEM}], run)
@@ -7805,12 +7805,12 @@ def test_fullchain_missed_invalid_guide_notice(gui_api_obj, monkeypatch,
     """导读校验失败：通知「漏听段跳过」+原因，零计数变化、零后续探测。"""
     import logging
 
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     monkeypatch.setattr(gui_api_obj, "_load_validated_guide",
                         lambda p: ("", "", None, {"error": "导读损坏"}))
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(tmp_path / "ep01_质量报告导读.json"),
               "p": "", "stem": _BF_GUIDE_STEM}], run)
@@ -7824,9 +7824,9 @@ def test_fullchain_missed_detect_failure_c18_degrade(gui_api_obj, monkeypatch,
     """语音窗口检测抛异常：诚实退化（C18）——全部跳过并通知，不落盘。"""
     import logging
 
-    import subtransjav.refine.asr_env as asr_mod
-    import subtransjav.refine.audio_detect as ad_mod
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.asr_env as asr_mod
+    import subtrans.refine.audio_detect as ad_mod
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
 
@@ -7840,7 +7840,7 @@ def test_fullchain_missed_detect_failure_c18_degrade(gui_api_obj, monkeypatch,
                                            for x in t])
     monkeypatch.setattr(asr_mod, "cleanup_clips", lambda *a, **k: 0)
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide),
               "stem": _BF_GUIDE_STEM}], run)
@@ -7853,9 +7853,9 @@ def test_fullchain_missed_batch_failure_c18_degrade(gui_api_obj, monkeypatch,
     """批量转写抛异常：转写项全部 ok=False → 诚实退化（C18）全部跳过。"""
     import logging
 
-    import subtransjav.refine.asr_env as asr_mod
-    import subtransjav.refine.audio_detect as ad_mod
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.asr_env as asr_mod
+    import subtrans.refine.audio_detect as ad_mod
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     monkeypatch.setattr(ad_mod, "detect_speech_windows",
@@ -7867,7 +7867,7 @@ def test_fullchain_missed_batch_failure_c18_degrade(gui_api_obj, monkeypatch,
     monkeypatch.setattr(asr_mod, "batch_transcribe_clips", _boom)
     monkeypatch.setattr(asr_mod, "cleanup_clips", lambda *a, **k: 0)
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide),
               "stem": _BF_GUIDE_STEM}], run)
@@ -7878,9 +7878,9 @@ def test_fullchain_missed_batch_failure_c18_degrade(gui_api_obj, monkeypatch,
 def test_fullchain_missed_cleanup_failure_tolerated(gui_api_obj, monkeypatch,
                                                     tmp_path):
     """切片清理抛异常：仅记日志，不阻断后续置信门/门控分叉。"""
-    import subtransjav.refine.asr_env as asr_mod
-    import subtransjav.refine.config as cfg
-    from subtransjav.refine.v2_outputs import final_stem
+    import subtrans.refine.asr_env as asr_mod
+    import subtrans.refine.config as cfg
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
@@ -7904,9 +7904,9 @@ def test_fullchain_missed_cleanup_failure_tolerated(gui_api_obj, monkeypatch,
 def test_fullchain_missed_item_skips_empty_timing_and_bad_transcript(
         gui_api_obj, monkeypatch, tmp_path):
     """逐条放弃：空 timing 与转写失败各计 1，high 条目按门控缺省关放弃。"""
-    import subtransjav.refine.asr_env as asr_mod
-    import subtransjav.refine.audio_detect as ad_mod
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.asr_env as asr_mod
+    import subtrans.refine.audio_detect as ad_mod
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     t_bad = "00:00:20,000 --> 00:00:23,000"
     guide = _make_missed_env(tmp_path, items=[
@@ -7938,14 +7938,14 @@ def test_fullchain_missed_final_missing_abandons(gui_api_obj, monkeypatch,
     """门控开但终稿缺失：自动补行整批放弃（零写入）并通知放弃数。"""
     import logging
 
-    import subtransjav.refine.config as cfg
+    import subtrans.refine.config as cfg
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path, final=False)
     _install_missed_stubs(monkeypatch)
     (tmp_path / "fullchain_c22.json").write_text(
         json.dumps(_c22_gate_payload()), encoding="utf-8")
     run = {"missed_skipped": 0}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_fullchain_missed_stage(
             [{"guide_path": str(guide), "p": str(guide),
               "stem": _BF_GUIDE_STEM}], run)
@@ -7957,9 +7957,9 @@ def test_fullchain_missed_final_missing_abandons(gui_api_obj, monkeypatch,
 def test_fullchain_missed_write_failure_abandons(gui_api_obj, monkeypatch,
                                                  tmp_path):
     """台账写失败：该文件整体放弃——终稿/台账零落盘，计数如实。"""
-    import subtransjav.refine.action_retranslate as art
-    import subtransjav.refine.config as cfg
-    from subtransjav.refine.v2_outputs import final_stem
+    import subtrans.refine.action_retranslate as art
+    import subtrans.refine.config as cfg
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)
     _install_missed_stubs(monkeypatch)
@@ -7987,10 +7987,10 @@ def test_fullchain_missed_extras_default_and_write_failure(gui_api_obj,
                                                            tmp_path):
     """guide 无 extras 键时补行标记走默认 {}；导读写回失败仅记日志，
     终稿/台账已落盘（写序契约不回退）。"""
-    import subtransjav.refine.config as cfg
-    import subtransjav.refine.fs_utils as fs_mod
-    from subtransjav.refine.filters import parse_srt
-    from subtransjav.refine.v2_outputs import final_stem
+    import subtrans.refine.config as cfg
+    import subtrans.refine.fs_utils as fs_mod
+    from subtrans.refine.filters import parse_srt
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(tmp_path))
     guide = _make_missed_env(tmp_path)          # 无 extras 键
     _install_missed_stubs(monkeypatch)
@@ -8033,8 +8033,8 @@ def test_fullchain_rollback_delete_clears_extras(gui_api_obj, tmp_path):
                                         "text": "补行文本"}]}
     guide.write_text(json.dumps(gdata, ensure_ascii=False),
                      encoding="utf-8")
-    from subtransjav.refine.filters import build_srt
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.filters import build_srt
+    from subtrans.refine.v2_outputs import final_stem
     (tmp_path / f"{final_stem(_BF_GUIDE_STEM)}.srt").write_text(
         build_srt([
             {"index": 1, "timing": _RT1, "text": "甲（已改）"},
@@ -8065,7 +8065,7 @@ def test_fullchain_rollback_delete_clears_extras(gui_api_obj, tmp_path):
 def _encode_env(gui_api_obj, monkeypatch, tmp_path):
     """C23 压制测试环境：视频/终稿伴生 + out_dir/commit 打桩。
     返回 (commits, params_box)。"""
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.v2_outputs import final_stem
     monkeypatch.setattr(gui_api_obj, "encode_get_last_params",
                         lambda: {"params": {"out_dir": str(tmp_path)}})
     commits: list = []
@@ -8086,7 +8086,7 @@ def test_encode_skip_existing_mtime_requeue(gui_api_obj, monkeypatch,
     +notice；成品不旧于终稿 → 照旧跳过。"""
     import logging
 
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.v2_outputs import final_stem
     _encode_env(gui_api_obj, monkeypatch, tmp_path)
     video = tmp_path / "ep01.mp4"
     video.write_bytes(b"v")
@@ -8095,7 +8095,7 @@ def test_encode_skip_existing_mtime_requeue(gui_api_obj, monkeypatch,
                    encoding="utf-8")
     out = tmp_path / "ep01_hardsub.mp4"
     summary = {"files": {str(sub): "done"}}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         # 成品较新 → 跳过
         out.write_bytes(b"new")
         future = time.time() + 100
@@ -8116,8 +8116,8 @@ def test_encode_auto_insert_sorted_last_and_checkpoint(
     自动压制+告警。"""
     import logging
 
-    from subtransjav.refine.pipeline_support import GUIDE_JSON_SUFFIX
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.pipeline_support import GUIDE_JSON_SUFFIX
+    from subtrans.refine.v2_outputs import final_stem
     commits, _ = _encode_env(gui_api_obj, monkeypatch, tmp_path)
     # 两个文件：ep01（普通）、ep02（含 auto_insert 标记）
     jobs = []
@@ -8136,7 +8136,7 @@ def test_encode_auto_insert_sorted_last_and_checkpoint(
             json.dumps(gdata, ensure_ascii=False), encoding="utf-8")
         jobs.append(str(sub))
     summary = {"files": {jobs[0]: "done", jobs[1]: "done"}}
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         # 第一轮：ep02 标记有+台账无 → 排除+告警；仅 ep01 入队
         gui_api_obj._run_encode_automation(summary, from_fullchain=True)
         # 修复一致性（补台账）后：两文件入队且 ep02 排队尾
@@ -8164,7 +8164,7 @@ def test_encode_needs_confirm_mtime_requeue(gui_api_obj, monkeypatch,
     晚于成品 → allow_overwrite=True 重新入队；不旧 → 照旧跳过。"""
     import logging
 
-    from subtransjav.refine.v2_outputs import final_stem
+    from subtrans.refine.v2_outputs import final_stem
     calls: list = []
 
     def _commit(jobs, params, allow_overwrite=False, from_fullchain=False):
@@ -8184,7 +8184,7 @@ def test_encode_needs_confirm_mtime_requeue(gui_api_obj, monkeypatch,
     out = tmp_path / "ep01_hardsub.mp4"
     out.write_bytes(b"old")
     os.utime(out, (time.time() - 100,) * 2)
-    with caplog.at_level(logging.INFO, logger="subtransjav.gui"):
+    with caplog.at_level(logging.INFO, logger="subtrans.gui"):
         gui_api_obj._run_encode_automation({"files": {str(sub): "done"}},
                                            from_fullchain=True)
     assert calls == [{"n": 1, "allow_overwrite": False},
@@ -8199,7 +8199,7 @@ def test_encode_needs_confirm_mtime_requeue(gui_api_obj, monkeypatch,
 @pytest.fixture
 def _eval_dir(tmp_path, monkeypatch):
     """评测报告目录打桩到 tmp（api.paths.data_subdir 重定向）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     eval_dir = tmp_path / "reports" / "eval"
     eval_dir.mkdir(parents=True)
     monkeypatch.setattr(api_mod.paths, "data_subdir",
@@ -8211,7 +8211,7 @@ def _mk_report(eval_dir, name, report=None):
     p = eval_dir / name
     p.write_text(json.dumps(
         report if report is not None else
-        {"schema": "subtransjav.eval_baseline/1", "media": "a.mp4",
+        {"schema": "subtrans.eval_baseline/1", "media": "a.mp4",
          "generated_at": "2026-10-30T00:00:00+00:00",
          "engines": {}, "pairs": {}}, ensure_ascii=False),
         encoding="utf-8")
@@ -8238,7 +8238,7 @@ def test_eval_reports_list_sorted_capped_and_dir(gui_api_obj, _eval_dir):
 def test_eval_reports_list_missing_dir_empty_not_error(gui_api_obj, tmp_path,
                                                        monkeypatch):
     """目录未生成 → success+空列表+empty_reason（引导语义非错误）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     monkeypatch.setattr(api_mod.paths, "data_subdir",
                         lambda *parts: str(tmp_path.joinpath(*parts)))
     got = gui_api_obj.eval_reports_list()
@@ -8250,7 +8250,7 @@ def test_eval_reports_list_missing_dir_empty_not_error(gui_api_obj, tmp_path,
 def test_eval_reports_get_ok(gui_api_obj, _eval_dir):
     """合法读取：data 透传＋name/mtime 回显。"""
     _mk_report(_eval_dir, "ep1-baseline.json",
-               {"schema": "subtransjav.eval_baseline/1", "media": "ep1.mp4"})
+               {"schema": "subtrans.eval_baseline/1", "media": "ep1.mp4"})
     got = gui_api_obj.eval_reports_get("ep1-baseline.json")
     assert got["success"] is True
     assert got["name"] == "ep1-baseline.json"

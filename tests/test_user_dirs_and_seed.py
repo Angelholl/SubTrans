@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav import paths
-from subtransjav.refine import template_seed
-from subtransjav.webview_gui import security, user_dirs
+from subtrans import paths
+from subtrans.refine import template_seed
+from subtrans.webview_gui import security, user_dirs
 
 
 @pytest.fixture()

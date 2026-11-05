@@ -63,8 +63,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from subtransjav.refine.asr_env import resolve_ffmpeg  # noqa: E402
-from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW  # noqa: E402
+from subtrans.refine.asr_env import resolve_ffmpeg  # noqa: E402
+from subtrans.utils.subprocess_flags import CREATE_NO_WINDOW  # noqa: E402
 
 _PORT_START = 8765
 _PORT_END = 8774

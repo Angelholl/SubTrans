@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from subtransjav.refine import asr_env, asr_runner, asr_runtime
+from subtrans.refine import asr_env, asr_runner, asr_runtime
 
 
 class TestEngineRouting:
@@ -126,7 +126,7 @@ class TestCt2E2EWithFake:
         assert "こんにちは" in text
         sidecar = json.loads(
             pathlib.Path(str(srt_out) + ".words.json").read_text(encoding="utf-8"))
-        assert sidecar["schema"] == "subtransjav.ct2.words/1"
+        assert sidecar["schema"] == "subtrans.ct2.words/1"
         assert sidecar["segments"][0]["words"][0]["word"] == "こんにちは"
 
 
@@ -203,7 +203,7 @@ class TestCt2DualPass:
             assert (srt_out.parent / name).is_file(), name
         dual = json.loads(
             (srt_out.parent / "a.srt.dualpass.json").read_text(encoding="utf-8"))
-        assert dual["schema"] == "subtransjav.ct2.dualpass/1"
+        assert dual["schema"] == "subtrans.ct2.dualpass/1"
         assert dual["gap_threshold_s"] == 1.0
         assert dual["pass1"]["params"]["beam_size"] == 5
         assert dual["pass2"]["params"] == {

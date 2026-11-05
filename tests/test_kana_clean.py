@@ -6,7 +6,7 @@
 豁免台账与计数、模拟器-模块等价（v3 参数定死）。
 """
 
-from subtransjav.refine.kana_clean import (
+from subtrans.refine.kana_clean import (
     CLASS_CONTENT,
     CLASS_KEEP,
     CLASS_MOAN,
@@ -642,14 +642,14 @@ def _sim_norm_core(core: str) -> str:
 
 
 def _sim_is_exempt(text: str) -> bool:
-    from subtransjav.refine.kana_clean import _STRIP_PUNCT_RE
+    from subtrans.refine.kana_clean import _STRIP_PUNCT_RE
     return _sim_norm_core(_STRIP_PUNCT_RE.sub("", text or "")) in _SIM_MEMBER_TABLE
 
 
 def _sim_engine(entries, *, delete_enabled=False):
     """zero.py engine() 的 v3 定参移植（frag=200/moan=800/守卫全开），
     只保留与输出等价性相关的结构（追踪性遥测不在等值断言面）。"""
-    from subtransjav.refine.kana_clean import (
+    from subtrans.refine.kana_clean import (
         CLASS_MOAN,
         CLASS_SHORT,
         ISOLATED_GAP_MS,
@@ -853,9 +853,9 @@ def test_a2_tripwire_not_implemented():
     后再动，禁止直接改断言数字消音。"""
     import dataclasses
 
-    import subtransjav.refine.kana_clean as kc
-    import subtransjav.refine.manifest as mf
-    from subtransjav.refine.config import RefineConfig
+    import subtrans.refine.kana_clean as kc
+    import subtrans.refine.manifest as mf
+    from subtrans.refine.config import RefineConfig
 
     assert kc.FRAGMENT_GAP_MS == 200, (
         "FRAGMENT_GAP_MS 偏离 200（D2026-1025-01 裁决③ tripwire）："

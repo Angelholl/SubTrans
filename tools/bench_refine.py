@@ -50,7 +50,7 @@ def make_entries(n: int) -> list:
 
 def bench_tm_exact(workdir: str) -> dict:
     """[1] TM 精确查询：逐条 vs 批量。"""
-    from subtransjav.refine.tm import TranslationMemory
+    from subtrans.refine.tm import TranslationMemory
 
     entries = make_entries(TOTAL)
     sources = [e["text"] for e in entries]
@@ -87,7 +87,7 @@ def bench_tm_exact(workdir: str) -> dict:
 
 def bench_grammar(workdir: str) -> dict:
     """[2] 语法提示：500 条冷/热缓存（复用同一批条目与上下文）。"""
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
 
     entries = make_entries(GRAMMAR_N)
     t0 = time.perf_counter()
@@ -106,7 +106,7 @@ class _FakeBenchClient:
     def translate_entries(self, entries, *, system_text, user_prompt,
                           max_batch_size=30, allow_empty_deletions=False,
                           progress=None):
-        from subtransjav.translate.llm_client import BatchResult
+        from subtrans.translate.llm_client import BatchResult
         return BatchResult(
             translations={e["index"]: f"译-{e['index']}" for e in entries},
             deleted=set(), failed=[])
@@ -114,9 +114,9 @@ class _FakeBenchClient:
 
 def bench_e2e(workdir: str) -> dict:
     """[3] fake client 全管线单文件端到端。"""
-    from subtransjav.refine import pipeline_v2 as pv
-    from subtransjav.refine.config import RefineConfig, StageConfig
-    from subtransjav.refine.filters import build_srt
+    from subtrans.refine import pipeline_v2 as pv
+    from subtrans.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.filters import build_srt
 
     in_path = os.path.join(workdir, "bench.japanese.srt")
     with open(in_path, "w", encoding="utf-8") as f:

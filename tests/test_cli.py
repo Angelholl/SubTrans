@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-import subtransjav.refine.config as refine_config
-import subtransjav.refine.pipeline_v2 as pv
-from subtransjav.refine.cli import build_parser, config_from_args, main
+import subtrans.refine.config as refine_config
+import subtrans.refine.pipeline_v2 as pv
+from subtrans.refine.cli import build_parser, config_from_args, main
 
 
 def test_config_from_args_builds_v2_slots(tmp_path):
@@ -152,7 +152,7 @@ def test_cli_exit_code_partial_degradation(tmp_path, monkeypatch, capsys):
 
 def test_cli_exit_code_all_failed(tmp_path, monkeypatch):
     """全部失败走现有 RefineError 路径 → 退出码 1。"""
-    from subtransjav.refine.pipeline_support import RefineError
+    from subtrans.refine.pipeline_support import RefineError
     _isolate_logs(tmp_path, monkeypatch)
     _fake_run_v2(monkeypatch, error=RefineError("全部 1 个文件均处理失败"))
     with pytest.raises(SystemExit) as ei:
@@ -210,7 +210,7 @@ def test_cli_dry_run_exit_codes_unchanged(tmp_path, monkeypatch):
 
 def test_cli_validate_flags_unknown_provider():
     """argparse choices 之外（程序内构造）的未知 provider 必须被 validate 兜住。"""
-    from subtransjav.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.config import RefineConfig, StageConfig
     cfg = RefineConfig(
         inputs=["whatever.srt"],
         stages=[StageConfig(0, True, "no-such-provider", "some-model")],
@@ -359,7 +359,7 @@ def test_cli_fallback_local_with_empty_model_fails_validation(tmp_path):
 
 
 def test_main_module_entry_forwards_exit_code():
-    """python -m subtransjav.refine 冒烟：--help 退出码 0。
+    """python -m subtrans.refine 冒烟：--help 退出码 0。
 
     __main__.py 必须经 sys.exit(main()) 转发返回值，否则行动层执行器
     （0=成功/1=全败/2=entries 非法/3=部分降级）的退出码在 python -m 下
@@ -377,12 +377,12 @@ def test_main_module_entry_forwards_exit_code():
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parents[1]
-    src = (repo_root / "subtransjav" / "refine" / "__main__.py").read_text(
+    src = (repo_root / "subtrans" / "refine" / "__main__.py").read_text(
         encoding="utf-8")
     assert "sys.exit(main())" in src, \
         "__main__.py 丢失 sys.exit(main())，python -m 下退出码将不传播"
     r = subprocess.run(
-        [sys.executable, "-m", "subtransjav.refine", "--help"],
+        [sys.executable, "-m", "subtrans.refine", "--help"],
         capture_output=True, cwd=str(repo_root),
         env={**os.environ, "PYTHONIOENCODING": "cp1252"})
     assert r.returncode == 0
@@ -421,7 +421,7 @@ def test_cli_ai_analyze_early_exit_calls_advisor(tmp_path, monkeypatch,
     """给定 --ai-analyze 后早退分流（不跑 run_v2），advisor 收到 cfg/args。"""
     import json as _json
 
-    import subtransjav.refine.quality_advisor as qa_mod
+    import subtrans.refine.quality_advisor as qa_mod
     _ai_materials(tmp_path)
     calls = []
 
@@ -442,7 +442,7 @@ def test_cli_ai_analyze_early_exit_calls_advisor(tmp_path, monkeypatch,
 
 
 def test_cli_ai_analyze_exit_code_propagated(tmp_path, monkeypatch):
-    import subtransjav.refine.quality_advisor as qa_mod
+    import subtrans.refine.quality_advisor as qa_mod
     _ai_materials(tmp_path)
     monkeypatch.setattr(qa_mod, "run_ai_analyze", lambda cfg, args: 1)
     assert main(["--ai-analyze",
@@ -452,8 +452,8 @@ def test_cli_ai_analyze_exit_code_propagated(tmp_path, monkeypatch):
 def test_cli_ai_analyze_params_not_in_config_fingerprint():
     """负向钉（手法同行动层参数）：--ai-analyze/--ai-model 走 CLI 直连，
     不进 RefineConfig → 天然不进 manifest 指纹。"""
-    from subtransjav.refine.config import RefineConfig
-    from subtransjav.refine.manifest import _CONFIG_FIELDS, compute_config_hash
+    from subtrans.refine.config import RefineConfig
+    from subtrans.refine.manifest import _CONFIG_FIELDS, compute_config_hash
     assert "ai_analyze" not in _CONFIG_FIELDS
     assert "ai_model" not in _CONFIG_FIELDS
     base = RefineConfig(inputs=["a.srt"])
@@ -486,7 +486,7 @@ def test_cli_media_crosscheck_flag_three_states(tmp_path):
     assert cfg_def.media_crosscheck_enabled is False   # dataclass 缺省
 
     # 旗标不进 manifest 指纹（负向钉随批）
-    from subtransjav.refine.manifest import _CONFIG_FIELDS
+    from subtrans.refine.manifest import _CONFIG_FIELDS
     assert "media_crosscheck_enabled" not in _CONFIG_FIELDS
 
 
@@ -502,7 +502,7 @@ def test_cli_media_crosscheck_invalid_choice_exits(tmp_path, capsys):
 # --where 数据路径诊断（D2026-0929-07 点 3：一次报全、零副作用早退）
 # ---------------------------------------------------------------------------
 def test_cli_where_prints_key_fields(capsys):
-    from subtransjav.refine.cli import main
+    from subtrans.refine.cli import main
     rc = main(["--where"])
     assert rc == 0
     out = capsys.readouterr().out
@@ -514,8 +514,8 @@ def test_cli_where_prints_key_fields(capsys):
 
 def test_cli_where_migration_note_by_mode(monkeypatch, capsys):
     """--where 迁移状态行按运行形态分支：frozen 报自动迁移与当前状态，源码保留旧文案。"""
-    from subtransjav import paths
-    from subtransjav.refine import cli as cli_mod
+    from subtrans import paths
+    from subtrans.refine import cli as cli_mod
 
     monkeypatch.setattr(paths, "is_frozen", lambda: True)
     assert cli_mod.main(["--where"]) == 0
@@ -531,7 +531,7 @@ def test_cli_where_migration_note_by_mode(monkeypatch, capsys):
 
 def test_cli_where_exits_before_config_from_args(monkeypatch):
     """--where 必须早退于 config_from_args（纯诊断不建配置）。"""
-    from subtransjav.refine import cli as cli_mod
+    from subtrans.refine import cli as cli_mod
     calls = []
     monkeypatch.setattr(cli_mod, "config_from_args",
                         lambda args: calls.append(args))
@@ -542,14 +542,14 @@ def test_cli_where_exits_before_config_from_args(monkeypatch):
 def test_cli_where_zero_side_effects(tmp_path, monkeypatch):
     """--where 全程只读：数据根指向 tmp 后，不得在 tmp 创建任何目录。"""
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-    from subtransjav.refine.cli import main
+    from subtrans.refine.cli import main
     assert main(["--where"]) == 0
     assert list(tmp_path.rglob("*")) == []
 
 
 def test_cli_where_fts5_probe_line():
     """--where 输出含 FTS5 可用性行（2.6.4 批1 冻结包探测载体，D2026-1003-05 A1）。"""
-    from subtransjav.refine import cli
+    from subtrans.refine import cli
     out = cli._print_where()
     # 宽松断言：只钉前缀行存在，不绑定可用/不可用（极旧环境 sqlite3 可能无 FTS5）
     assert "FTS5 全文搜索:" in out
@@ -595,7 +595,7 @@ def test_harden_stdio_pipe_uses_utf8(monkeypatch):
     PYTHONIOENCODING（2026-10-06 动态实验实证），GUI 按 utf-8 解码管道，
     编码必须显式钉 utf-8 修 frozen GBK 乱码。
     """
-    from subtransjav.refine.cli import _harden_stdio
+    from subtrans.refine.cli import _harden_stdio
     out = _FakeStream(tty=False)
     err = _FakeStream(tty=False)
     monkeypatch.setattr("sys.stdout", out)
@@ -610,7 +610,7 @@ def test_harden_stdio_pipe_uses_utf8(monkeypatch):
 
 def test_harden_stdio_tty_keeps_encoding_untouched(monkeypatch):
     """isatty=True（真实终端）：只放宽 errors，encoding 不动（cp936 中文照常）。"""
-    from subtransjav.refine.cli import _harden_stdio
+    from subtrans.refine.cli import _harden_stdio
     out = _FakeStream(tty=True)
     err = _FakeStream(tty=True)
     monkeypatch.setattr("sys.stdout", out)
@@ -626,7 +626,7 @@ def test_harden_stdio_tty_keeps_encoding_untouched(monkeypatch):
 def test_harden_stdio_tolerates_broken_streams(monkeypatch):
     """无 reconfigure 属性 / reconfigure 抛 ValueError / isatty 抛 OSError：
     全部静默跳过，绝不外抛影响主流程。"""
-    from subtransjav.refine.cli import _harden_stdio
+    from subtrans.refine.cli import _harden_stdio
     no_attr = _FakeStream(tty=False, support_reconfigure=False)
     broken = _FakeStream(tty=False, fail_reconfigure=True)
     broken_tty = _FakeStream(tty=True, fail_isatty=True)
@@ -649,7 +649,7 @@ def test_harden_stdio_tolerates_broken_streams(monkeypatch):
 
 def test_cli_asr_flags_deprecated_shell_warning(capsys):
     """传入退役旗标 → stderr 一行退役警告，主流程不受阻（--where 正常退出 0）。"""
-    from subtransjav.refine.cli import main
+    from subtrans.refine.cli import main
     rc = main(["--asr-model", "large-v2", "--asr-python", "x.exe", "--where"])
     assert rc == 0
     err = capsys.readouterr().err
@@ -658,7 +658,7 @@ def test_cli_asr_flags_deprecated_shell_warning(capsys):
 
 def test_cli_asr_flags_absent_no_warning(capsys):
     """未传退役旗标 → 无警告（防误伤常态调用）。"""
-    from subtransjav.refine.cli import main
+    from subtrans.refine.cli import main
     rc = main(["--where"])
     assert rc == 0
     assert "已退役" not in capsys.readouterr().err
@@ -670,7 +670,7 @@ def test_cli_asr_flags_absent_no_warning(capsys):
 
 def test_cli_transcribe_media_not_ready_errors(tmp_path, monkeypatch, capsys):
     """引擎未就绪 → 明示报错（提示安装链路）＋退出码非 0。"""
-    from subtransjav.refine import asr_env
+    from subtrans.refine import asr_env
     monkeypatch.setattr(asr_env, "_ct2_ready", lambda: False)
     media = tmp_path / "a.mp4"
     media.write_bytes(b"x")
@@ -685,7 +685,7 @@ def test_cli_transcribe_media_ready_passes_params(tmp_path, monkeypatch,
     """就绪分支：--passes/--media/--srt-out 参数透传 runner 子进程。"""
     import types as _types
 
-    from subtransjav.refine import asr_env, asr_runtime
+    from subtrans.refine import asr_env, asr_runtime
     media = tmp_path / "a.mp4"
     media.write_bytes(b"x")
     srt_out = tmp_path / "out" / "a.srt"
@@ -717,7 +717,7 @@ def test_cli_transcribe_media_default_srt_out_from_media(tmp_path,
     """缺省输出路径=媒体同目录同名 .srt；单 pass 不加 --passes 旗标。"""
     import types as _types
 
-    from subtransjav.refine import asr_env, asr_runtime
+    from subtrans.refine import asr_env, asr_runtime
     media = tmp_path / "a.mp4"
     media.write_bytes(b"x")
     captured = {}

@@ -1,7 +1,7 @@
 """通用化 P1（D2026-0930-01）：包内自带通用模板 + 角色卡四级回落。
 
 覆盖：
-1. 包内通用模板存在且两张齐全（subtransjav/refine/defaults/templates/）；
+1. 包内通用模板存在且两张齐全（subtrans/refine/defaults/templates/）；
 2. 通用模板无 JAV/成人专属残留措辞（grep 级断言）；
 3. 四级回落：显式文件优先 / 数据根 config/templates 优先于包内 /
    仅包内时成功读取 / 全缺时明确报错；
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import pipeline_v2
-from subtransjav.refine.pipeline_v2 import V2_TEMPLATE_FILES, _read_v2_card
+from subtrans.refine import pipeline_v2
+from subtrans.refine.pipeline_v2 import V2_TEMPLATE_FILES, _read_v2_card
 
 # ---------------------------------------------------------------------------
 # 路径常量

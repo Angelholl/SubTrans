@@ -3,7 +3,7 @@
 runner 在 ct2 运行时解释器下以脚本直调执行（asr_env._runner_script_path 形态），
 无包上下文——`from .line_breaker import` 相对导入必 ImportError，断行器在产品
 路径恒静默降级。本钉模拟该形态（spec_from_file_location 无包装载）断言断行器
-可解析；并钉包形态装载结果与 subtransjav.refine.line_breaker.break_segments 同源。
+可解析；并钉包形态装载结果与 subtrans.refine.line_breaker.break_segments 同源。
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import sys
 import types
 
 _RUNNER = (pathlib.Path(__file__).resolve().parent.parent
-           / "subtransjav" / "refine" / "asr_runner.py")
+           / "subtrans" / "refine" / "asr_runner.py")
 
 
 def _load_runner_standalone():
@@ -38,7 +38,7 @@ def test_runner_standalone_loads_break_segments():
 
 def test_runner_package_form_same_function():
     """包形态装载结果=包内 line_breaker.break_segments（同源不漂移）。"""
-    from subtransjav.refine import asr_runner, line_breaker
+    from subtrans.refine import asr_runner, line_breaker
     assert asr_runner._load_break_segments() is line_breaker.break_segments
 
 
@@ -56,12 +56,12 @@ def test_runner_standalone_loads_pass_merge(tmp_path):
         "s = importlib.util.spec_from_file_location('_ct2_runner_probe', p)\n"
         "m = importlib.util.module_from_spec(s)\n"
         "s.loader.exec_module(m)\n"
-        "assert 'subtransjav' not in sys.modules, '包上下文泄漏'\n"
+        "assert 'subtrans' not in sys.modules, '包上下文泄漏'\n"
         "pm = m._load_pass_merge()\n"
-        "assert 'subtransjav' not in sys.modules, '包上下文泄漏'\n"
+        "assert 'subtrans' not in sys.modules, '包上下文泄漏'\n"
         "assert callable(getattr(pm, 'merge_passes', None)), 'merge_passes 缺失'\n"
         "assert getattr(pm, 'DUALPASS_SCHEMA', '') == "
-        "'subtransjav.ct2.dualpass/1'\n"
+        "'subtrans.ct2.dualpass/1'\n"
         "assert pathlib.Path(pm.__file__).name == 'pass_merge.py'\n"
     )
     subprocess.run([sys.executable, "-I", "-c", code, str(_RUNNER)],
@@ -71,7 +71,7 @@ def test_runner_standalone_loads_pass_merge(tmp_path):
 
 def test_runner_package_form_pass_merge_same_module():
     """包形态装载结果=包内 pass_merge（同源不漂移，仍走相对导入）。"""
-    from subtransjav.refine import asr_runner, pass_merge
+    from subtrans.refine import asr_runner, pass_merge
     assert asr_runner._load_pass_merge() is pass_merge
 
 

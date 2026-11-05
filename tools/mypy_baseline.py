@@ -2,7 +2,7 @@
 """mypy 基线门禁脚本（D9 决策，1.3.1）。
 
 两种模式：
-- 默认 ``--check``：跑 ``mypy subtransjav``，解析 ``file:line: error: msg [code]``，
+- 默认 ``--check``：跑 ``mypy subtrans``，解析 ``file:line: error: msg [code]``，
   与 mypy-baseline.txt 做集合差——不在基线内的错误即退出码 1；基线内存量放行。
 - ``--update``：重写基线文件并在 stdout 打印提示，供决策日志留痕。
 
@@ -27,7 +27,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_FILE = PROJECT_ROOT / "mypy-baseline.txt"
-TARGET = "subtransjav"
+TARGET = "subtrans"
 
 # 历史注记见模块 docstring：强制 3.12，不可覆盖。
 FORCED_PYTHON_VERSION = "3.12"

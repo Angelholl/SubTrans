@@ -8,8 +8,8 @@ write_divergence_review_csv / build_quality_report 的 TM 行与噪声闸门行�
 
 import re
 
-from subtransjav.refine.post_validate import is_untranslated_text
-from subtransjav.refine.quality_report import (
+from subtrans.refine.post_validate import is_untranslated_text
+from subtrans.refine.quality_report import (
     _final_text_for_span,
     _is_untranslated,
     _split_disagreement_rows,
@@ -427,7 +427,7 @@ def test_guide_sink_collects_snapshot_same_source_as_report():
                                                   m_sink).group(1))
     # sections 标题集 == 报告文本中实际出现的已知九章节【】标题集
     # （【结论】/【白话导读】非注解章节，不在采集范围）
-    from subtransjav.refine.quality_report import _SECTION_NOTES
+    from subtrans.refine.quality_report import _SECTION_NOTES
     known = {prefix for prefix, _ in _SECTION_NOTES}
     txt_titles = {ln.split("】")[0] + "】" for ln in report.splitlines()
                   if ln.startswith("【")
@@ -447,7 +447,7 @@ def test_guide_sink_absent_keeps_output_byte_identical(monkeypatch):
     """
     from datetime import datetime
 
-    import subtransjav.refine.quality_report as quality_report
+    import subtrans.refine.quality_report as quality_report
 
     class _FrozenDateTime(datetime):
         @classmethod
@@ -833,7 +833,7 @@ def test_cps_min_duration_gate_skips_ultra_short():
         _sys.path.insert(0, _tools_dir)
     from cps_distribution import CPS_MIN_DURATION_S
 
-    from subtransjav.refine import quality_report as qr
+    from subtrans.refine import quality_report as qr
     assert qr._CPS_MIN_DURATION_S == CPS_MIN_DURATION_S == 0.5
 
 
@@ -855,7 +855,7 @@ def test_normal_entries_zero_observation_rows():
 # ----------------------------------------------------------------------
 def _patch_whitelist_path(monkeypatch, path):
     monkeypatch.setattr(
-        "subtransjav.refine.config.single_line_whitelist_path",
+        "subtrans.refine.config.single_line_whitelist_path",
         lambda: str(path))
 
 
@@ -934,7 +934,7 @@ def test_single_line_whitelist_invalid_regex_skipped_warns(monkeypatch,
 # ----------------------------------------------------------------------
 def test_cps_action_scan_threshold_and_cjk_only():
     """行动层：仅 CJK 条目参与、严格大于阈值、时长门槛与观测层同源。"""
-    from subtransjav.refine import quality_report as qr
+    from subtrans.refine import quality_report as qr
     t_fast = "00:00:01,000 --> 00:00:02,000"    # 30 字/1s = 30 CPS
     t_slow = "00:00:03,000 --> 00:00:08,000"    # 10 字/5s = 2 CPS
     t_short = "00:00:09,000 --> 00:00:09,400"   # 时长 <0.5s 不参与
@@ -951,7 +951,7 @@ def test_cps_action_scan_threshold_and_cjk_only():
 
 def test_cps_action_truncation_keeps_highest():
     """截断：超上限按 CPS 降序保留最高 N 条，truncated=True。"""
-    from subtransjav.refine import quality_report as qr
+    from subtrans.refine import quality_report as qr
     final = [{"index": i + 1,
               "timing": "00:00:01,000 --> 00:00:02,000",
               "text": "这" * (10 * (i + 1))} for i in range(5)]
@@ -1004,7 +1004,7 @@ def test_cps_action_truncation_note_in_report():
 
 def test_cps_action_tunables_registered_and_defaults():
     """三参数注册 TUNABLE_FIELD_TYPES 且缺省值与定标一致。"""
-    from subtransjav.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
+    from subtrans.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
     assert TUNABLE_FIELD_TYPES["cps_action_enabled"] is bool
     assert TUNABLE_FIELD_TYPES["cps_action_threshold"] is float
     assert TUNABLE_FIELD_TYPES["cps_action_max_per_film"] is int
@@ -1016,7 +1016,7 @@ def test_cps_action_tunables_registered_and_defaults():
 
 def test_cps_too_fast_retranslate_hint():
     """定点重翻处理要点登记（压缩字数降语速）。"""
-    from subtransjav.refine.action_retranslate import _CATEGORY_HINTS
+    from subtrans.refine.action_retranslate import _CATEGORY_HINTS
     assert "压缩字数" in _CATEGORY_HINTS["cps_too_fast"]
     assert "不得删除条目" in _CATEGORY_HINTS["cps_too_fast"]
 
@@ -1135,7 +1135,7 @@ def test_large_shift_still_misaligned():
 def test_render_garble_hear_section_variants():
     """渲染分支：None/不可用/0 条整节省略；有行逐条 `#index timing 源:`
     单行形态；超上限注明「其余 N 条略」。"""
-    from subtransjav.refine.quality_report import render_garble_hear_section
+    from subtrans.refine.quality_report import render_garble_hear_section
     t = "00:00:01,000 --> 00:00:02,000"
     assert render_garble_hear_section(None) == ""
     assert render_garble_hear_section({"available": False, "items": []}) == ""

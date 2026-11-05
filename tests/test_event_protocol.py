@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-from subtransjav.refine.events import EVENT_TYPES, PROTOCOL_VERSION, EventEmitter, parse_event_line
+from subtrans.refine.events import EVENT_TYPES, PROTOCOL_VERSION, EventEmitter, parse_event_line
 
 # 协议行完整键集合（冻结契约，缺一不可、不可增减）
 EXPECTED_KEYS = {"protocol_version", "task_id", "seq", "timestamp", "type", "phase", "file", "payload"}

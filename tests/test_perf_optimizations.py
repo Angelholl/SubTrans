@@ -16,10 +16,10 @@ import time
 
 import pytest
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.config import RefineConfig, StageConfig
-from subtransjav.refine.tm import TranslationMemory
-from subtransjav.translate.llm_client import BatchResult
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.config import RefineConfig, StageConfig
+from subtrans.refine.tm import TranslationMemory
+from subtrans.translate.llm_client import BatchResult
 
 # ---------------------------------------------------------------------------
 # 公共工具
@@ -179,7 +179,7 @@ def test_stage_a_falls_back_to_per_entry_without_exact_map(tmp_path,
 # ---------------------------------------------------------------------------
 
 def _patch_fake_generator(monkeypatch, counter):
-    import subtransjav.refine.grammar_hint as gh
+    import subtrans.refine.grammar_hint as gh
     monkeypatch.setattr(gh, "is_grammar_hint_available", lambda: True)
 
     def fake_generate(srt, idx, entries=None):
@@ -323,7 +323,7 @@ def test_file_parallel_isolated_failure(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_slow_glossary_learn_does_not_block_and_warns(tmp_path, monkeypatch):
-    import subtransjav.refine.glossary_learn as gmod
+    import subtrans.refine.glossary_learn as gmod
 
     started = threading.Event()
     release = threading.Event()
@@ -353,7 +353,7 @@ def test_slow_glossary_learn_does_not_block_and_warns(tmp_path, monkeypatch):
 
 
 def test_fast_glossary_learn_no_timeout_warning(tmp_path, monkeypatch):
-    import subtransjav.refine.glossary_learn as gmod
+    import subtrans.refine.glossary_learn as gmod
 
     monkeypatch.setattr(gmod, "learn_from_s2_output", lambda *a, **k: 0)
     inputs = _setup_files(tmp_path, monkeypatch, ["demo.japanese.srt"])

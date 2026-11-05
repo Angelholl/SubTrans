@@ -14,12 +14,12 @@ pytestmark = [pytest.mark.gui]
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试",
                     exc_type=ImportError)
 
-import subtransjav.webview_gui.api as api_mod  # noqa: E402  须在 importorskip 之后
-from subtransjav.webview_gui.api import (  # noqa: E402
+import subtrans.webview_gui.api as api_mod  # noqa: E402  须在 importorskip 之后
+from subtrans.webview_gui.api import (  # noqa: E402
     SESSION_SELECTED_PATHS,
     TranslateAPI,
 )
-from subtransjav.webview_gui.encode_queue import get_encode_queue  # noqa: E402
+from subtrans.webview_gui.encode_queue import get_encode_queue  # noqa: E402
 
 
 @pytest.fixture()
@@ -65,7 +65,7 @@ def test_get_version_contract(gui_api_obj):
 
 def test_get_system_status_grammar_available(gui_api_obj, monkeypatch):
     """api.py:853 get_system_status：子状态正常分支。"""
-    from subtransjav.refine import grammar_hint
+    from subtrans.refine import grammar_hint
     monkeypatch.setattr(grammar_hint, "is_grammar_hint_available", lambda: True)
     r = gui_api_obj.get_system_status()
     assert r["success"] is True
@@ -74,7 +74,7 @@ def test_get_system_status_grammar_available(gui_api_obj, monkeypatch):
 
 def test_get_system_status_grammar_import_error_degrades(gui_api_obj, monkeypatch):
     """api.py:853 get_system_status：ImportError 降级为 unavailable。"""
-    from subtransjav.refine import grammar_hint
+    from subtrans.refine import grammar_hint
 
     def _boom():
         raise ImportError("sudachi 缺席")
@@ -106,7 +106,7 @@ def test_refine_default_paths_contract(gui_api_obj, monkeypatch, tmp_path):
 
 def test_refine_ct2_status_not_installed_shape(gui_api_obj, monkeypatch):
     """api.py:1612 refine_ct2_status：未装运行时态 + 快照合并。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     monkeypatch.setattr(asr_runtime, "provider_status", lambda: {
         "installed": False, "selfcheck": "fail", "models": []})
     monkeypatch.setattr(asr_runtime, "gpu_patch_status", lambda: {"missing": []})
@@ -171,7 +171,7 @@ def test_tm_get_stats_contract(gui_api_obj, tmp_path):
 
 def test_tm_clear_stage_legal(gui_api_obj, tmp_path):
     """api.py:5166 tm_clear：stage=1 定向清空，stage=0 保留。"""
-    from subtransjav.refine.tm import TranslationMemory
+    from subtrans.refine.tm import TranslationMemory
     db = tmp_path / "tm.sqlite"
     tm = TranslationMemory(str(db))
     try:
@@ -192,7 +192,7 @@ def test_tm_clear_stage_legal(gui_api_obj, tmp_path):
 
 def test_tm_clear_illegal_stage_noop(gui_api_obj, tmp_path):
     """api.py:5166 tm_clear：现状对非法 stage 无范围校验——成功且零删除。"""
-    from subtransjav.refine.tm import TranslationMemory
+    from subtrans.refine.tm import TranslationMemory
     db = tmp_path / "tm.sqlite"
     tm = TranslationMemory(str(db))
     try:
@@ -210,7 +210,7 @@ def test_tm_clear_illegal_stage_noop(gui_api_obj, tmp_path):
 
 def test_tm_export_csv_overwrites_existing(gui_api_obj, tmp_path):
     """api.py:5187 tm_export_csv：覆盖既有文件，返回落点路径。"""
-    from subtransjav.refine.tm import TranslationMemory
+    from subtrans.refine.tm import TranslationMemory
     db = tmp_path / "tm.sqlite"
     tm = TranslationMemory(str(db))
     try:
@@ -229,7 +229,7 @@ def test_tm_export_csv_overwrites_existing(gui_api_obj, tmp_path):
 
 def test_tm_import_csv_skips_bad_rows(gui_api_obj, tmp_path):
     """api.py:5207 tm_import_csv：坏行跳过，只计有效新增。"""
-    from subtransjav.refine.tm import TranslationMemory
+    from subtrans.refine.tm import TranslationMemory
     db = tmp_path / "tm.sqlite"
     csv = tmp_path / "in.csv"
     csv.write_text(
@@ -342,7 +342,7 @@ def test_ffmpeg_supply_stop_without_download(gui_api_obj):
 
 def test_refine_ct2_model_download_invalid_param(gui_api_obj, monkeypatch):
     """api.py:1653 refine_ct2_model_download：非法参数走桩，不起真下载。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     seen = []
 
     def _fake(model):
@@ -505,7 +505,7 @@ def _capture_threads(monkeypatch, captured):
 
 def test_refine_ct2_install_started(gui_api_obj, monkeypatch):
     """api.py:1640 refine_ct2_install：started=True 透传成功并带 provider。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     seen = []
 
     def _fake(provider):
@@ -520,7 +520,7 @@ def test_refine_ct2_install_started(gui_api_obj, monkeypatch):
 
 def test_refine_ct2_install_already_running(gui_api_obj, monkeypatch):
     """api.py:1640 refine_ct2_install：重复启动被拒，reason 原样透传。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     monkeypatch.setattr(asr_runtime, "start_install",
                         lambda p: {"started": False, "reason": "已有 ct2 安装任务在跑"})
     r = gui_api_obj.refine_ct2_install("auto")
@@ -531,7 +531,7 @@ def test_refine_ct2_install_already_running(gui_api_obj, monkeypatch):
 
 def test_refine_ct2_install_invalid_provider_short_circuits(gui_api_obj, monkeypatch):
     """api.py:1640 refine_ct2_install：非法 provider 前置拒绝，不调安装。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     seen = []
     monkeypatch.setattr(asr_runtime, "start_install",
                         lambda p: seen.append(p) or {"started": True})
@@ -542,7 +542,7 @@ def test_refine_ct2_install_invalid_provider_short_circuits(gui_api_obj, monkeyp
 
 def test_refine_ct2_install_internal_error(gui_api_obj, monkeypatch):
     """api.py:1640 refine_ct2_install：内部异常降级为结构化失败。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
 
     def _boom(provider):
         raise RuntimeError("安装入口炸")
@@ -555,7 +555,7 @@ def test_refine_ct2_install_internal_error(gui_api_obj, monkeypatch):
 
 def test_refine_ct2_gpu_install_started(gui_api_obj, monkeypatch):
     """api.py:1628 refine_ct2_gpu_install：started=True 透传成功。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     monkeypatch.setattr(asr_runtime, "start_gpu_patch_install",
                         lambda: {"started": True})
     assert gui_api_obj.refine_ct2_gpu_install() == {"success": True, "started": True}
@@ -563,7 +563,7 @@ def test_refine_ct2_gpu_install_started(gui_api_obj, monkeypatch):
 
 def test_refine_ct2_gpu_install_precheck_blocked(gui_api_obj, monkeypatch):
     """api.py:1628 refine_ct2_gpu_install：前置拦截（未装运行时）透传 reason。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     monkeypatch.setattr(asr_runtime, "start_gpu_patch_install",
                         lambda: {"started": False, "reason": "CT2 运行时未安装"})
     r = gui_api_obj.refine_ct2_gpu_install()
@@ -574,7 +574,7 @@ def test_refine_ct2_gpu_install_precheck_blocked(gui_api_obj, monkeypatch):
 
 def test_refine_ct2_gpu_install_internal_error(gui_api_obj, monkeypatch):
     """api.py:1628 refine_ct2_gpu_install：内部异常降级为结构化失败。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
 
     def _boom():
         raise RuntimeError("补丁安装入口炸")
@@ -590,9 +590,9 @@ def test_refine_ct2_runtime_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     形态仓库树内目标拒绝（脱钩裁定不因可自定义而松动）／在飞操作禁切换／
     合法自定义写入后来源翻 settings／空串恢复默认。写侧复用
     refine_save_stage_settings settings KV 通道（桥面零自有 open 写点）。"""
-    from subtransjav import paths
-    from subtransjav.refine import asr_runtime
-    from subtransjav.refine import config as refine_config
+    from subtrans import paths
+    from subtrans.refine import asr_runtime
+    from subtrans.refine import config as refine_config
 
     cfg = tmp_path / "config"
     cfg.mkdir()
@@ -660,9 +660,9 @@ def test_refine_ct2_model_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     一样」）：模型落位桥面——共用守卫（绝对路径门／在飞禁切／项目内目标拒，
     模型件文案给模型专属理由不得套运行时扫描面口径）＋独立 settings 键
     （与运行时键互不覆盖）＋回包带 has_model，状态面带体量。"""
-    from subtransjav import paths
-    from subtransjav.refine import asr_runtime
-    from subtransjav.refine import config as refine_config
+    from subtrans import paths
+    from subtrans.refine import asr_runtime
+    from subtrans.refine import config as refine_config
 
     cfg = tmp_path / "config"
     cfg.mkdir()
@@ -754,8 +754,8 @@ def test_ffmpeg_supply_download_worker_completes(gui_api_obj, monkeypatch, tmp_p
     """api.py:5736 后台 worker：下载完成置 done、回进度并清 busy。"""
     captured = []
     _capture_threads(monkeypatch, captured)
-    from subtransjav import paths
-    from subtransjav.refine import ffmpeg_supply
+    from subtrans import paths
+    from subtrans.refine import ffmpeg_supply
     calls = []
 
     def _fake_download(root, progress_cb=None, stop_event=None):
@@ -786,8 +786,8 @@ def test_ffmpeg_supply_download_worker_failure(gui_api_obj, monkeypatch, tmp_pat
     """api.py:5736 后台 worker：下载异常置 failed 并保留错误文本。"""
     captured = []
     _capture_threads(monkeypatch, captured)
-    from subtransjav import paths
-    from subtransjav.refine import ffmpeg_supply
+    from subtrans import paths
+    from subtrans.refine import ffmpeg_supply
 
     def _boom(root, progress_cb=None, stop_event=None):
         raise RuntimeError("网络断")
@@ -818,8 +818,8 @@ def test_refine_ct2_link_migrate_also_bridge(gui_api_obj, tmp_path,
     带出（行内自洽：迁移成功才写配置）；preview 只读面返回 cur/link 事实。"""
     import os as _os
 
-    from subtransjav.refine import asr_runtime
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import asr_runtime
+    from subtrans.refine import config as refine_config
 
     cfg = tmp_path / "config"
     cfg.mkdir()

@@ -1,7 +1,7 @@
 """
 双引擎分歧离线重算与阈值矩阵验收
 ================================
-对已产出的 ``*.merged.subtransjav.srt`` 批量离线重算双引擎分歧（从 SRT 现算，
+对已产出的 ``*.merged.subtrans.srt`` 批量离线重算双引擎分歧（从 SRT 现算，
 不读历史 JSON），并按 160 行人工标注验收伪影判定阈值：
 
 1. 标注匹配：标注行（sample160.txt + labeled_sample.json，只读）按
@@ -31,8 +31,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.filters import parse_srt
-from subtransjav.refine.pass_disagreement import (
+from subtrans.refine.filters import parse_srt
+from subtrans.refine.pass_disagreement import (
     IOU_THRESHOLD,
     OFFSET_THRESHOLD,
     REVIEW_OPTIONAL_THRESHOLD,
@@ -42,7 +42,7 @@ from subtransjav.refine.pass_disagreement import (
     judge_artifact,
     probe_disagreement_mode,
 )
-from subtransjav.refine.quality_report import (
+from subtrans.refine.quality_report import (
     _weight,
     render_disagreement_section,
     write_divergence_review_csv,
@@ -75,11 +75,11 @@ def _read_text(path: Path) -> str:
 
 
 def _file_prefix(srt_path: Path) -> str:
-    """新文件 stem（去掉 .ja.merged.subtransjav.srt）前 10 字符（分桶键）。"""
+    """新文件 stem（去掉 .ja.merged.subtrans.srt）前 10 字符（分桶键）。"""
     stem = srt_path.name
     if stem.lower().endswith(".srt"):
         stem = stem[:-4]
-    suffix = ".ja.merged.subtransjav"
+    suffix = ".ja.merged.subtrans"
     if stem.endswith(suffix):
         stem = stem[:-len(suffix)]
     return stem[:10]
@@ -358,10 +358,10 @@ def main(argv=None) -> int:
         files = [Path(f) for f in args.files]
     else:
         root = Path(args.input_dir)
-        files = sorted(root.rglob("*.merged.subtransjav.srt"))
+        files = sorted(root.rglob("*.merged.subtrans.srt"))
     files = [f for f in files if f.is_file()]
     if not files:
-        print("未找到任何 *.merged.subtransjav.srt 输入文件")
+        print("未找到任何 *.merged.subtrans.srt 输入文件")
         return 1
 
     # ---- 输出目录（只写新建 run_ 目录，不碰旧文件）----

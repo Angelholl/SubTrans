@@ -1,6 +1,6 @@
 """spawn 收敛钉测试（D2026-0929-06 修订③ + 07 点 1 / 08 点 1）。
 
-钉死约束：subtransjav 包内除 process_manager.py（spawn_refine_cli 单一
+钉死约束：subtrans 包内除 process_manager.py（spawn_refine_cli 单一
 收敛点）外，不允许任何 ``subprocess`` 调用（Popen/run/call/check_call/
 check_output）的解释器参数含 ``sys.executable``。按 AST 语义判定而非文本
 grep——``Path(sys.executable).parent``（model_cache 类用法）等非 spawn
@@ -12,7 +12,7 @@ grep——``Path(sys.executable).parent``（model_cache 类用法）等非 spawn
 import ast
 from pathlib import Path
 
-import subtransjav
+import subtrans
 
 # 收敛点白名单：spawn_refine_cli 所在文件
 ALLOWED = {"process_manager.py"}
@@ -60,7 +60,7 @@ def _violations(path: Path) -> list[str]:
 
 def test_no_sys_executable_spawn_outside_process_manager():
     """钉：包内 spawn 点全部收敛到 process_manager.py。"""
-    pkg_dir = Path(subtransjav.__file__).resolve().parent
+    pkg_dir = Path(subtrans.__file__).resolve().parent
     bad: list[str] = []
     for py in sorted(pkg_dir.rglob("*.py")):
         if py.name in ALLOWED:
@@ -105,7 +105,7 @@ def _frozen_spawn_cmd(monkeypatch, cli_exe_exists: bool) -> list[str]:
     import subprocess
     import sys as _sys
 
-    import subtransjav.utils.process_manager as pm
+    import subtrans.utils.process_manager as pm
 
     monkeypatch.setattr(_sys, "frozen", True, raising=False)
     monkeypatch.setattr(Path, "exists", lambda self: cli_exe_exists)

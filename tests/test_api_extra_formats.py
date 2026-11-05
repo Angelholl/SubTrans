@@ -16,9 +16,9 @@ pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试", exc_type=ImportError)
 
-from subtransjav.refine.filters import build_srt, parse_srt  # noqa: E402
-from subtransjav.refine.v2_outputs import final_stem  # noqa: E402
-from subtransjav.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
+from subtrans.refine.filters import build_srt, parse_srt  # noqa: E402
+from subtrans.refine.v2_outputs import final_stem  # noqa: E402
+from subtrans.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
     TranslateAPI,
     _build_refine_args,
 )
@@ -149,9 +149,9 @@ def _make_missed_env(tmp_path: Path, with_ass: bool):
 
 
 def _run_missed_stage(api_obj, tmp_path, guide_path, monkeypatch):
-    import subtransjav.refine.asr_env as asr_env
-    import subtransjav.refine.audio_detect as audio_detect
-    import subtransjav.refine.missed_insert as missed_insert
+    import subtrans.refine.asr_env as asr_env
+    import subtrans.refine.audio_detect as audio_detect
+    import subtrans.refine.missed_insert as missed_insert
 
     monkeypatch.setattr(audio_detect, "detect_speech_windows",
                         lambda media, timings: {})

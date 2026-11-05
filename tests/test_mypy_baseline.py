@@ -36,12 +36,12 @@ def test_check_rc0_passes(monkeypatch, tmp_path):
 
 def test_check_rc1_errors_in_baseline_passes(monkeypatch, tmp_path):
     """rc=1 + 可解析错误行且基线含全部当前错误 → --check 退出 0。"""
-    output = ("subtransjav/foo.py:1: error: x [attr-defined]\n"
-              "subtransjav/bar.py:2: error: y [union-attr]\n")
+    output = ("subtrans/foo.py:1: error: x [attr-defined]\n"
+              "subtrans/bar.py:2: error: y [union-attr]\n")
     baseline = _patch(monkeypatch, tmp_path, 1, output)
     baseline.write_text(
-        "subtransjav/foo.py:1: [attr-defined]\n"
-        "subtransjav/bar.py:2: [union-attr]\n", encoding="utf-8")
+        "subtrans/foo.py:1: [attr-defined]\n"
+        "subtrans/bar.py:2: [union-attr]\n", encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ARGV_CHECK)
     assert mb.main() == 0
 

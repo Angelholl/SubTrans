@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine import ffmpeg_supply as fs  # noqa: E402
+from subtrans.refine import ffmpeg_supply as fs  # noqa: E402
 
 PINNED_URL = ("https://github.com/BtbN/FFmpeg-Builds/releases/download/"
               "autobuild-2026-10-06-13-06/ffmpeg-N-127222-g151814650f-win64-gpl.zip")

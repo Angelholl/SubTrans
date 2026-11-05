@@ -22,7 +22,7 @@ from pathlib import Path
 import js_sources
 
 ROOT = Path(__file__).resolve().parent.parent
-_ASSETS = ROOT / "subtransjav" / "webview_gui" / "assets"
+_ASSETS = ROOT / "subtrans" / "webview_gui" / "assets"
 HTML = (_ASSETS / "index.html").read_text(encoding="utf-8")
 JS = js_sources.read_all()
 CSS = (_ASSETS / "style.css").read_text(encoding="utf-8")

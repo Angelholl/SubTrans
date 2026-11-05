@@ -13,7 +13,7 @@ import pytest
 
 pysubs2 = pytest.importorskip("pysubs2")
 
-from subtransjav.refine.output_formats import (  # noqa: E402
+from subtrans.refine.output_formats import (  # noqa: E402
     EXTRA_FORMATS,
     build_extra_text,
     existing_extra_formats,

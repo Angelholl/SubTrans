@@ -2,11 +2,11 @@
 
 命令行形态保留完整控制台语义（console=True），与 GUI 主程序
 （entry_gui.py，windowed）共享同一 PyInstaller onedir 产物（_internal
-datas/binaries 只留一份）。逻辑全部委托 subtransjav.refine.cli.main。
+datas/binaries 只留一份）。逻辑全部委托 subtrans.refine.cli.main。
 """
 
 import sys
 
-from subtransjav.refine.cli import main
+from subtrans.refine.cli import main
 
 sys.exit(main())

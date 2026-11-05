@@ -4,7 +4,7 @@
 """
 import json
 
-from subtransjav.refine import quality_advisor as qa
+from subtrans.refine import quality_advisor as qa
 
 # ---------------------------------------------------------------------------
 # 固定材料
@@ -221,7 +221,7 @@ def test_run_ai_analyze_crosscheck_detail_persisted(tmp_path, monkeypatch):
     analyze_quality_report 闭合契约）；喂 LLM 的对照块口径不变。"""
     import argparse
 
-    from subtransjav.refine.config import RefineConfig
+    from subtrans.refine.config import RefineConfig
 
     report = tmp_path / "ep01_质量报告.txt"
     report.write_text("【结论】x\n", encoding="utf-8")
@@ -259,7 +259,7 @@ def test_run_ai_analyze_crosscheck_off_empty_detail(tmp_path, monkeypatch):
     """件A：开关关时不编排对照，落盘统一空列表（schema 恒有键）。"""
     import argparse
 
-    from subtransjav.refine.config import RefineConfig
+    from subtrans.refine.config import RefineConfig
 
     report = tmp_path / "ep01_质量报告.txt"
     report.write_text("【结论】x\n", encoding="utf-8")

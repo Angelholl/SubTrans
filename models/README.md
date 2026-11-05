@@ -8,7 +8,7 @@
 - 阶段B（审校抛光）：heretic35b
 - 服务商：lmstudio（本地 LM Studio）
 
-代码落点：`subtransjav/refine/config.py` `RefineConfig.stages` 默认工厂——
+代码落点：`subtrans/refine/config.py` `RefineConfig.stages` 默认工厂——
 
 - 槽0（阶段A）：`qwen3.8-27b-uncensored-joyfox-aggressive`
 - 槽2（阶段B）：`qwen3.6-35b-a3b-uncensored-heretic-apex`

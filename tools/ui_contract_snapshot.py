@@ -1,6 +1,6 @@
 """UI 契约快照再生工具（3.1 阶段 1 地基批卡2，D2026-1012-01）。
 
-从 ``subtransjav/webview_gui/assets/index.html`` 提取 id 全集与 data-i18n 键
+从 ``subtrans/webview_gui/assets/index.html`` 提取 id 全集与 data-i18n 键
 全集（正则与 ``tests/test_ui_phase3_redlines.py`` 的 ``_current_ids()`` /
 ``_current_i18n_keys()`` 逐字符一致），与 ``tests/ui_contract_snapshot.json``
 现有快照 diff 并逐条打印新增/删除；**仅带 ``--update`` 才写盘**。stdlib-only。
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-HTML_PATH = ROOT / "subtransjav" / "webview_gui" / "assets" / "index.html"
+HTML_PATH = ROOT / "subtrans" / "webview_gui" / "assets" / "index.html"
 SNAPSHOT_PATH = ROOT / "tests" / "ui_contract_snapshot.json"
 
 # 与 tests/test_ui_phase3_redlines.py::_current_ids/_current_i18n_keys 逐字符一致

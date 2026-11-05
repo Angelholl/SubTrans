@@ -1,5 +1,5 @@
 """
-Tests for subtransjav.refine.grammar_hint module.
+Tests for subtrans.refine.grammar_hint module.
 """
 
 
@@ -59,7 +59,7 @@ class TestConnectiveParticle:
 
     def test_connective_particle_split_token(self):
         """接续助词「けど」应被检测并提示。"""
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.grammar_hint import generate_grammar_hints
         hint = generate_grammar_hints(SRT_CONNECTIVE, 2)
         # 应包含转折提示
         assert "けど" in hint or "转折" in hint or "不过" in hint
@@ -70,7 +70,7 @@ class TestConnectiveParticle:
         注意：此测试在无 SudachiPy 环境下验证 fallback 模式。
         fallback 模式使用正则检测，不会产生"转折"误报。
         """
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.grammar_hint import generate_grammar_hints
         # 「私がします」中的 が 是格助词（主语标记），不是接続助词
         srt = "1\n00:00:01,000 --> 00:00:03,000\n私がします\n\n"
         hint = generate_grammar_hints(srt, 1)
@@ -90,7 +90,7 @@ class TestContextEllipsis:
 
     def test_bokutachi_context_ellipsis(self):
         """「ボクたち、水泳部の部長で…」应检测省略主语。"""
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.grammar_hint import generate_grammar_hints
         hint = generate_grammar_hints(SRT_BOKUTACHI, 2)
         # 应包含省略提示或修饰关系提示
         assert hint  # 至少应有提示
@@ -107,8 +107,8 @@ class TestFallback:
 
     def test_fallback_when_sudachi_unavailable(self):
         """回退模式应能检测基本的转折和修饰关系。"""
-        from subtransjav.refine.filters import parse_srt
-        from subtransjav.refine.grammar_hint import _detect_rules_fallback
+        from subtrans.refine.filters import parse_srt
+        from subtrans.refine.grammar_hint import _detect_rules_fallback
 
         entries = parse_srt(SRT_CONNECTIVE)
         # 使用条目2（含けど）
@@ -127,7 +127,7 @@ class TestCleanResidue:
 
     def test_clean_grammar_hint_residue(self):
         """应能清理【语法提示】和原文：标记。"""
-        from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+        from subtrans.refine.cleaner_rules import clean_grammar_hint_residue
 
         # 完整残留
         text1 = "【语法提示】\n- 补出\"是\"\n原文：ボクたち、水泳部の部長で…"
@@ -148,7 +148,7 @@ class TestCleanResidue:
 
     def test_clean_residue_line_start_prefix(self):
         """孤立"原文："回显整行删除（仅限行首，注入格式总在行首）。"""
-        from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+        from subtrans.refine.cleaner_rules import clean_grammar_hint_residue
 
         # LLM 回显丢失【语法提示】块、仅剩行首"原文：…"行 → 整行清理
         assert clean_grammar_hint_residue("原文：ボクたち") == ""
@@ -158,7 +158,7 @@ class TestCleanResidue:
 
     def test_clean_residue_pipe_separator_echo(self):
         """阶段B"日文 ||| 中文"回显：只保留最后一个分隔符后的中文侧。"""
-        from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+        from subtrans.refine.cleaner_rules import clean_grammar_hint_residue
 
         # 提示块 + 原文行整体回显
         cleaned = clean_grammar_hint_residue(
@@ -189,8 +189,8 @@ class TestPluralAdnominalAndDeRentou:
 
     def test_fallback_rule7_plural_adnominal(self):
         """fallback 路径（无 Sudachi）：正则命中 → 输出定语提示。"""
-        from subtransjav.refine.filters import parse_srt
-        from subtransjav.refine.grammar_hint import _detect_rules_fallback
+        from subtrans.refine.filters import parse_srt
+        from subtrans.refine.grammar_hint import _detect_rules_fallback
 
         text = parse_srt(SRT_DE_ADNOMINAL)[0]["text"]
         hints = _detect_rules_fallback(text, [], [])
@@ -198,15 +198,15 @@ class TestPluralAdnominalAndDeRentou:
 
     def test_generate_rule7(self):
         """生成的提示包含"定语"与"禁止"（Sudachi 或 fallback 路径均应命中）。"""
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.grammar_hint import generate_grammar_hints
         hint = generate_grammar_hints(SRT_DE_ADNOMINAL, 1)
         assert "定语" in hint
         assert "禁止" in hint
 
     def test_sudachi_rule7_when_available(self):
         """Sudachi 路径（已安装 sudachipy 时）：检测规则⑦命中。"""
-        from subtransjav.refine.filters import parse_srt
-        from subtransjav.refine.grammar_hint import _detect_rules, is_grammar_hint_available
+        from subtrans.refine.filters import parse_srt
+        from subtrans.refine.grammar_hint import _detect_rules, is_grammar_hint_available
         if not is_grammar_hint_available():
             return  # 未安装则由 fallback 用例覆盖
         text = parse_srt(SRT_DE_ADNOMINAL)[0]["text"]
@@ -215,7 +215,7 @@ class TestPluralAdnominalAndDeRentou:
 
     def test_sudachi_rule8_de_rentou_when_available(self):
         """Sudachi 路径（已安装 sudachipy 时）：助動詞「だ」連用形「で」→ 中顿提示。"""
-        from subtransjav.refine.grammar_hint import _detect_rules, is_grammar_hint_available
+        from subtrans.refine.grammar_hint import _detect_rules, is_grammar_hint_available
         if not is_grammar_hint_available():
             return  # 未安装则跳过（fallback 无法区分格助詞/助動詞，宁缺毋滥）
         hints = _detect_rules("僕たち水泳部の部長で", [], [])
@@ -223,7 +223,7 @@ class TestPluralAdnominalAndDeRentou:
 
     def test_subject_sentence_no_false_positive(self):
         """僕たちが主语句（僕たちが公園で遊ぶ）不应触发规则⑦定语提示。"""
-        from subtransjav.refine.grammar_hint import _detect_rules, is_grammar_hint_available
+        from subtrans.refine.grammar_hint import _detect_rules, is_grammar_hint_available
         if not is_grammar_hint_available():
             return
         hints = _detect_rules("僕たちが公園で遊ぶ", [], [])
@@ -239,8 +239,8 @@ class TestEntriesParameter:
 
     def test_entries_parameter_optimization(self):
         """传入预解析 entries 应返回相同结果。"""
-        from subtransjav.refine.filters import parse_srt
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.filters import parse_srt
+        from subtrans.refine.grammar_hint import generate_grammar_hints
 
         entries = parse_srt(SRT_CONNECTIVE)
 
@@ -254,13 +254,13 @@ class TestEntriesParameter:
 
     def test_nonexistent_index_returns_empty(self):
         """不存在的条目序号应返回空字符串。"""
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.grammar_hint import generate_grammar_hints
         hint = generate_grammar_hints(SRT_SIMPLE, 999)
         assert hint == ""
 
     def test_empty_srt_returns_empty(self):
         """空 SRT 应返回空字符串。"""
-        from subtransjav.refine.grammar_hint import generate_grammar_hints
+        from subtrans.refine.grammar_hint import generate_grammar_hints
         hint = generate_grammar_hints("", 1)
         assert hint == ""
 
@@ -276,7 +276,7 @@ class TestThreadSafety:
     def test_concurrent_cold_cache_tokenize(self):
         import threading
 
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
         if not gh.is_grammar_hint_available():
             return  # 未安装 sudachipy 时无从触发，由既有 fallback 用例覆盖
         gh._tokenize_cached.cache_clear()
@@ -318,7 +318,7 @@ class TestDictionaryFailureDegradation:
         import sys
         import types
 
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
 
         class _Boom:
             def __init__(self) -> None:
@@ -334,7 +334,7 @@ class TestDictionaryFailureDegradation:
             # 可用性判定降级为 False，不抛
             assert gh.is_grammar_hint_available() is False
             # 规则检测走 fallback，不炸
-            from subtransjav.refine.filters import parse_srt
+            from subtrans.refine.filters import parse_srt
             entries = parse_srt(SRT_CONNECTIVE)
             hints = gh._detect_rules_fallback(
                 entries[1]["text"], entries[:1], entries[2:])
@@ -356,7 +356,7 @@ class TestDictionaryFailureDegradation:
         import sys
         import types
 
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
 
         class _Panic(BaseException):
             pass
@@ -379,7 +379,7 @@ class TestDictionaryFailureDegradation:
         try:
             assert gh.is_grammar_hint_available() is False, \
                 "缺省词典缺失须预检降级（不试 create、不崩进程）"
-            from subtransjav.refine.filters import parse_srt
+            from subtrans.refine.filters import parse_srt
             entries = parse_srt(SRT_CONNECTIVE)
             hints = gh._detect_rules_fallback(
                 entries[1]["text"], entries[:1], entries[2:])
@@ -402,7 +402,7 @@ class TestReleaseTokenizer:
         import sys
         import types
 
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
 
         class _FakeTok:
             def tokenize(self, text):
@@ -424,7 +424,7 @@ class TestReleaseTokenizer:
         return _FakeDictionary, _FakeTok
 
     def test_release_clears_singleton_and_cache(self, monkeypatch):
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
         self._install_fake_sudachipy(monkeypatch)
 
         # 预置：实例已建、缓存已有条目
@@ -440,7 +440,7 @@ class TestReleaseTokenizer:
 
     def test_after_release_called_within_init_lock(self):
         """after_release 必须在仍持 _init_lock 的区间内被调。"""
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
         observed = {}
 
         def _probe():
@@ -458,7 +458,7 @@ class TestReleaseTokenizer:
         """释放后 _get_tokenizer 能重建实例，与既有「直置 None」清法语义
         兼容（参照 TestThreadSafety 的手工清法）：_tokenize_cached 随即
         走重建实例正常分词。"""
-        from subtransjav.refine import grammar_hint as gh
+        from subtrans.refine import grammar_hint as gh
         _, fake_tok = self._install_fake_sudachipy(monkeypatch)
 
         # 预置实例后释放

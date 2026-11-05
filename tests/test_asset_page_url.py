@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.gui]
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过",
                     exc_type=ImportError)
 
-from subtransjav.webview_gui.main import (  # noqa: E402  须在 importorskip 之后
+from subtrans.webview_gui.main import (  # noqa: E402  须在 importorskip 之后
     asset_page_url,
 )
 

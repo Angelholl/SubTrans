@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from subtransjav.refine import action_retranslate
-from subtransjav.refine.action_retranslate import (
+from subtrans.refine import action_retranslate
+from subtrans.refine.action_retranslate import (
     parse_entries_arg,
     run_action_retranslate,
 )
-from subtransjav.refine.config import RefineConfig
-from subtransjav.refine.filters import build_srt, parse_srt
+from subtrans.refine.config import RefineConfig
+from subtrans.refine.filters import build_srt, parse_srt
 
 T1 = "00:00:01,000 --> 00:00:02,000"
 T2 = "00:00:03,000 --> 00:00:04,000"
@@ -465,7 +465,7 @@ def test_action_sample_limits_selection(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 
 def test_action_params_not_in_config_fingerprint():
-    from subtransjav.refine.manifest import _CONFIG_FIELDS, compute_config_hash
+    from subtrans.refine.manifest import _CONFIG_FIELDS, compute_config_hash
     assert "action_retranslate" not in _CONFIG_FIELDS
     # 含/不含行动层参数的 cfg 哈希必须相等（参数走 CLI 直连，不进指纹；
     # 手法同 test_manifest_model 的哈希敏感度钉）
@@ -551,8 +551,8 @@ def test_action_client_slot_a_isomorphism(monkeypatch):
     _resolve_action_model 台账兜底链=override→槽 A 模型→服务商默认
     （与 _resolve_ai_model 同构）。CLI --action-model 缺省路径=空覆盖
     → 槽 A 链（GUI spawn 侧恒传解析 model，缺省链为 CLI 直跑兜底）。"""
-    from subtransjav.refine import pipeline_v2
-    from subtransjav.refine.config import StageConfig
+    from subtrans.refine import pipeline_v2
+    from subtrans.refine.config import StageConfig
 
     cfg = RefineConfig(stages=[
         StageConfig(0, True, "deepseek", "a-model"),
@@ -834,7 +834,7 @@ def test_apply_regenerates_existing_extra_ass(tmp_path, install_client):
     """预置同名 .ass 附加件 → apply 重翻终稿后 .ass 同步再生，与 SRT 逐条
     一致（event 数相等、文本=重翻后）；无预置件时重翻后仍无 .ass（再生非
     新增）。"""
-    from subtransjav.refine.output_formats import existing_extra_formats
+    from subtrans.refine.output_formats import existing_extra_formats
     pytest.importorskip("pysubs2")
     import pysubs2
 

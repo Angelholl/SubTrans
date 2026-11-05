@@ -12,7 +12,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from subtransjav.refine.tm import TranslationMemory, ensure_direction_columns
+from subtrans.refine.tm import TranslationMemory, ensure_direction_columns
 
 
 def _make_tm(tmp_path):
@@ -193,8 +193,8 @@ class TestDirectionWiring:
 
     def test_init_tm_uses_cfg_direction(self, tmp_path):
         """①pipeline_support 构造（zh→en cfg）：store 不传语言落 zh/en。"""
-        from subtransjav.refine.config import RefineConfig
-        from subtransjav.refine.pipeline_support import _init_tm
+        from subtrans.refine.config import RefineConfig
+        from subtrans.refine.pipeline_support import _init_tm
         cfg = RefineConfig(inputs=[], tm_enabled=True,
                            tm_db_path=str(tmp_path / "tm.db"))
         cfg.source_lang = "zh"
@@ -214,8 +214,8 @@ class TestDirectionWiring:
 
     def test_init_tm_default_config_stays_ja_zh(self, tmp_path):
         """②缺省配置构造：实例缺省 ja/zh（存量行为不变钉）。"""
-        from subtransjav.refine.config import RefineConfig
-        from subtransjav.refine.pipeline_support import _init_tm
+        from subtrans.refine.config import RefineConfig
+        from subtrans.refine.pipeline_support import _init_tm
         cfg = RefineConfig(inputs=[], tm_enabled=True,
                            tm_db_path=str(tmp_path / "tm.db"))
         tm = _init_tm(cfg)

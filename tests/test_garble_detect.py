@@ -12,9 +12,9 @@ system_full.dic 实证——
 
 import pytest
 
-from subtransjav.refine import garble_detect
-from subtransjav.refine import grammar_hint as _gh
-from subtransjav.refine.garble_detect import (
+from subtrans.refine import garble_detect
+from subtrans.refine import grammar_hint as _gh
+from subtrans.refine.garble_detect import (
     MIN_CORE_CHARS,
     OOV_RATIO_THRESHOLD,
     judge_garble_text,

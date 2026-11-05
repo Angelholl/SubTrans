@@ -21,9 +21,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine import ffmpeg_supply as fsup  # noqa: E402
-from subtransjav.refine import hardsub  # noqa: E402
-from subtransjav.webview_gui import encode_queue as eq  # noqa: E402
+from subtrans.refine import ffmpeg_supply as fsup  # noqa: E402
+from subtrans.refine import hardsub  # noqa: E402
+from subtrans.webview_gui import encode_queue as eq  # noqa: E402
 
 SUPPLY = fsup.SupplyResult(ffmpeg_path="ffmpeg-fake", ffprobe_path="ffprobe-fake",
                            capability={"ok": True}, missing=[])
@@ -594,7 +594,7 @@ class _KillableProc:
 
 
 def test_kill_tree_falls_back_when_tree_kill_unsuccessful(monkeypatch):
-    from subtransjav.utils import process_manager
+    from subtrans.utils import process_manager
     monkeypatch.setattr(process_manager, "terminate_process_tree",
                         lambda pid: {"success": False})
     proc = _KillableProc()
@@ -603,7 +603,7 @@ def test_kill_tree_falls_back_when_tree_kill_unsuccessful(monkeypatch):
 
 
 def test_kill_tree_swallows_exception_and_single_kills(monkeypatch):
-    from subtransjav.utils import process_manager
+    from subtrans.utils import process_manager
 
     def boom(pid):
         raise RuntimeError("psutil 不可用")
@@ -634,7 +634,7 @@ class _WaitProc:
 
 
 def test_wait_proc_timeout_kills_then_returns_code(monkeypatch):
-    from subtransjav.utils import process_manager
+    from subtrans.utils import process_manager
     killed = []
     monkeypatch.setattr(process_manager, "terminate_process_tree",
                         lambda pid: (killed.append(pid), {"success": True})[1])
@@ -645,7 +645,7 @@ def test_wait_proc_timeout_kills_then_returns_code(monkeypatch):
 
 
 def test_wait_proc_timeout_without_exit_returns_minus_one(monkeypatch):
-    from subtransjav.utils import process_manager
+    from subtrans.utils import process_manager
     monkeypatch.setattr(process_manager, "terminate_process_tree",
                         lambda pid: {"success": True})
     proc = _WaitProc([subprocess.TimeoutExpired("ffmpeg", 30.0),

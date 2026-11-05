@@ -30,12 +30,12 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SETUP_ISS = REPO_ROOT / "packaging" / "setup.iss"
 UNINSTALL_BAT = REPO_ROOT / "uninstall.bat"
-# 仓库实况：data_migration.py 位于 subtransjav/ 包根（非 webview_gui/ 子包）
-DATA_MIGRATION = REPO_ROOT / "subtransjav" / "data_migration.py"
+# 仓库实况：data_migration.py 位于 subtrans/ 包根（非 webview_gui/ 子包）
+DATA_MIGRATION = REPO_ROOT / "subtrans" / "data_migration.py"
 
 APPID_LINE = "{{8F3A5C1E-6B2D-4E9A-9C47-1D0B5A7E2F31}"
 
-# 10 锚（与 subtransjav/data_migration.py 白名单 + 运行时落盘对齐；
+# 10 锚（与 subtrans/data_migration.py 白名单 + 运行时落盘对齐；
 # glossary_conflict_watch.json 实际位于 Temp/translation_memory/）
 ANCHOR_FILENAMES = [
     "user_dirs.json",
@@ -234,7 +234,7 @@ def test_guard_reversal_comment_pinned(iss_text):
 def test_anchor_aligns_with_migration_whitelist():
     """data_migration.py 白名单中的用户数据文件名必须全部出现在 iss 锚点。
 
-    白名单（subtransjav/data_migration.py ``_BASE_FILES``，8 项）均含于
+    白名单（subtrans/data_migration.py ``_BASE_FILES``，8 项）均含于
     iss 10 锚集合；DelTree 整树删除下 tm.db 的 -wal/-shm 旁车与
     glossary_conflict_watch.json.bak 随目录一并清除，无需单列锚点；
     config/templates 目录锚覆盖白名单未单列的角色卡/模板目录。
@@ -359,8 +359,8 @@ def test_dev_repo_guard_pinned(iss_text):
     assert m, "未找到 IsDevRepoDir 判定体"
     body = m.group(1)
     assert "'\\.git'" in body, "判定须含 .git 目录特征"
-    assert "pyproject.toml" in body and "subtransjav" in body, \
-        "判定须含 pyproject.toml + subtransjav 源码结构特征"
+    assert "pyproject.toml" in body and "subtrans" in body, \
+        "判定须含 pyproject.toml + subtrans 源码结构特征"
     # 双闸：交互目录页 NextButtonClick + 覆盖 /SILENT /DIR= 的 PrepareToInstall
     assert "function NextButtonClick(CurPageID: Integer): Boolean;" in iss_text
     assert "function PrepareToInstall(var NeedsRestart: Boolean): String;" in iss_text

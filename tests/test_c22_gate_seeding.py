@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav import data_migration as dm
+from subtrans import data_migration as dm
 
 _DEV_METRIC_KEYS = {"measured_at", "precision_lb", "coverage", "n"}
 
@@ -106,7 +106,7 @@ def test_corrupt_file_fail_closed_keeps_bytes_and_logs(tmp_path, caplog):
     gate.write_text('{"enabled": tr', encoding="utf-8")
     before = gate.read_bytes()
 
-    with caplog.at_level(logging.WARNING, logger="subtransjav.data_migration"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.data_migration"):
         assert dm.seed_c22_gate(cfg) == "skipped-invalid"
     assert gate.read_bytes() == before, "损坏文件不得被静默改写"
     assert any("C22" in r.message for r in caplog.records)
@@ -126,7 +126,7 @@ def test_non_dict_json_fail_closed(tmp_path):
 # 原子写入：失败不落半态
 # ---------------------------------------------------------------------------
 def test_atomic_write_failure_fail_closed(tmp_path, monkeypatch, caplog):
-    from subtransjav.refine import fs_utils
+    from subtrans.refine import fs_utils
 
     cfg = tmp_path / "config"
 
@@ -134,7 +134,7 @@ def test_atomic_write_failure_fail_closed(tmp_path, monkeypatch, caplog):
         raise OSError("disk full")
 
     monkeypatch.setattr(fs_utils, "_atomic_write_text", _boom)
-    with caplog.at_level(logging.WARNING, logger="subtransjav.data_migration"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.data_migration"):
         assert dm.seed_c22_gate(cfg) == "failed:OSError"
     assert not _gate(cfg).exists(), "写失败必须零残留（不得留半态文件）"
     if cfg.is_dir():
@@ -254,7 +254,7 @@ def test_migration_failure_skips_seeding(monkeypatch, tmp_path):
 
 
 def test_pip_form_never_seeds(monkeypatch, tmp_path):
-    from subtransjav.refine import config as cfg_mod
+    from subtrans.refine import config as cfg_mod
 
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
@@ -301,7 +301,7 @@ def test_evaluate_gate_seeded_version_mismatch_allowed_with_warning(
         tmp_path, caplog):
     """② seeded 行 × 版本失配 → 放行，仅记 warning（无测量证据可失效）。"""
     gate = _write_gate(tmp_path / "config", app_version="0.0.0-old")
-    with caplog.at_level(logging.WARNING, logger="subtransjav.data_migration"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.data_migration"):
         ok, reason = dm.evaluate_c22_gate(gate)
     assert (ok, reason) == (True, "ok")
     assert any(r.levelno >= logging.WARNING for r in caplog.records), \
@@ -348,8 +348,8 @@ def test_evaluate_gate_missing_corrupt_disabled(tmp_path):
 
 
 def test_gui_gate_reader_closes_on_stale_fingerprint(tmp_path, monkeypatch):
-    from subtransjav.refine import config as cfg_mod
-    from subtransjav.webview_gui.api import TranslateAPI
+    from subtrans.refine import config as cfg_mod
+    from subtrans.webview_gui.api import TranslateAPI
 
     monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(tmp_path))
     gui = object.__new__(TranslateAPI)
@@ -358,8 +358,8 @@ def test_gui_gate_reader_closes_on_stale_fingerprint(tmp_path, monkeypatch):
 
 
 def test_gui_gate_reader_opens_with_matching_fingerprint(tmp_path, monkeypatch):
-    from subtransjav.refine import config as cfg_mod
-    from subtransjav.webview_gui.api import TranslateAPI
+    from subtrans.refine import config as cfg_mod
+    from subtrans.webview_gui.api import TranslateAPI
 
     monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(tmp_path))
     gui = object.__new__(TranslateAPI)

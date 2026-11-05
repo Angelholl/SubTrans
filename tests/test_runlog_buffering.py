@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.runlog import TeeWriter, write_summary  # noqa: E402
+from subtrans.refine.runlog import TeeWriter, write_summary  # noqa: E402
 
 
 def _open_like_cli(tmp_path):

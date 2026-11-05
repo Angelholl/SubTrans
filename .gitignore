@@ -50,9 +50,9 @@ tm_full_backup_*.csv
 *.lnk
 
 # 发布传输工件（本地临时，不入库）
-subtransjav-d1-d5-commit.txt
-subtransjav-d1-d5.bundle
-subtransjav-d1-d5.patch
+subtrans-d1-d5-commit.txt
+subtrans-d1-d5.bundle
+subtrans-d1-d5.patch
 
 # 数据根指针（GUI 自选数据保存目录，本地生成不入库）
 .data-root

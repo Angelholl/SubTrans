@@ -37,7 +37,7 @@ import sys
 import tempfile
 import zipfile
 
-# 与 subtransjav/refine/asr_runtime.py PINNED_DEPS 同步（构建期断言防漂移）
+# 与 subtrans/refine/asr_runtime.py PINNED_DEPS 同步（构建期断言防漂移）
 PINNED_DEPS: list[str] = [
     "faster-whisper==1.2.1",
     "ctranslate2==4.8.4",

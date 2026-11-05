@@ -7,7 +7,7 @@ gbk/cp932 双失败负向钉。
 """
 import pytest
 
-from subtransjav.refine.srt_encoding import sniff_text_encoding
+from subtrans.refine.srt_encoding import sniff_text_encoding
 
 
 def test_sniff_utf8_bom():

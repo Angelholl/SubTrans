@@ -129,7 +129,7 @@ def test_match_any_semantics():
     assert match_any("config/api_keys.bin")
     assert match_any("internal_docs/notes.md")
     assert match_any("Temp/build_blind_pack.py")
-    assert not match_any("subtransjav/refine/cli.py")
+    assert not match_any("subtrans/refine/cli.py")
     assert not match_any("tools/guard_banned_paths.py")
 
 

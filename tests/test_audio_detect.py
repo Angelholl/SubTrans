@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import audio_detect as ad
-from subtransjav.refine.audio_detect import (
+from subtrans.refine import audio_detect as ad
+from subtrans.refine.audio_detect import (
     cleanup_stale_audio_files,
     detect_audio_insights,
 )
@@ -226,7 +226,7 @@ def test_stale_cleanup(tmp_path):
 # ---------------------------------------------------------------------------
 
 def _report_and_guide(audio_insights):
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:00,000 --> 00:00:01,000",
              "text": "あ"}]
     final = [{"index": 1, "timing": "00:00:00,000 --> 00:00:01,000",
@@ -299,7 +299,7 @@ def test_report_truncated_note():
 # ---------------------------------------------------------------------------
 
 def _make_pipeline_cfg(tmp_path, **kw):
-    from subtransjav.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.config import RefineConfig, StageConfig
     cfg = RefineConfig(inputs=[], tm_enabled=False, v2_profile="cloud", **kw)
     cfg.stages = [
         StageConfig(0, True, "lmstudio", "fake-model"),
@@ -319,7 +319,7 @@ class _FakeClient:
     def translate_entries(self, entries, *, system_text, user_prompt,
                           max_batch_size=30, allow_empty_deletions=False,
                           scene_threshold=60.0, progress=None):
-        from subtransjav.translate.llm_client import BatchResult
+        from subtrans.translate.llm_client import BatchResult
         self.calls.append([e["index"] for e in entries])
         is_stage_b = any("|||" in e["text"] for e in entries)
         translations = {
@@ -332,7 +332,7 @@ class _FakeClient:
 
 def _wire_pipeline(tmp_path, monkeypatch):
     """复用 test_pipeline_v2 的 e2e 接线模式（假 LLM / 假 TM / 隔离 Errors）。"""
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
 
     def _fake_tmp(p, s):
         d = tmp_path / "work"
@@ -341,7 +341,7 @@ def _wire_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(pv, "refine_tmp_dir", _fake_tmp)
     monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: _FakeClient())
     monkeypatch.setattr(pv, "_init_tm", lambda c: None)
-    import subtransjav.refine.source_hallucination as gate0
+    import subtrans.refine.source_hallucination as gate0
     monkeypatch.setattr(gate0, "_default_errors_dir",
                         lambda: str(tmp_path / "Errors"))
 
@@ -360,8 +360,8 @@ def _write_input_srt(tmp_path):
 def test_pipeline_integrates_audio_insights(tmp_path, monkeypatch):
     """管线集成：media_path 非空 + 开关开 → 报告含新节、导读含新类别且
     仅观测（current_text=None，不进行动条目）。"""
-    from subtransjav.refine import audio_detect as admod
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import audio_detect as admod
+    from subtrans.refine import pipeline_v2 as pv
 
     fake_result = {"available": True, "reason": "",
                    "candidates": [{"index": 3,
@@ -390,8 +390,8 @@ def test_pipeline_integrates_audio_insights(tmp_path, monkeypatch):
 
 def test_pipeline_disabled_omits_section(tmp_path, monkeypatch):
     """关闭开关 → 报告无新节、导读无新类别。"""
-    from subtransjav.refine import audio_detect as admod
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import audio_detect as admod
+    from subtrans.refine import pipeline_v2 as pv
 
     called = []
     monkeypatch.setattr(admod, "detect_audio_insights",
@@ -412,8 +412,8 @@ def test_pipeline_disabled_omits_section(tmp_path, monkeypatch):
 
 def test_pipeline_no_media_omits_section(tmp_path, monkeypatch):
     """无 media_path（契约路径为空）→ 检测不执行、章节缺席。"""
-    from subtransjav.refine import audio_detect as admod
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import audio_detect as admod
+    from subtrans.refine import pipeline_v2 as pv
 
     called = []
     monkeypatch.setattr(admod, "detect_audio_insights",
@@ -429,8 +429,8 @@ def test_pipeline_no_media_omits_section(tmp_path, monkeypatch):
 
 def test_pipeline_detect_crash_degrades(tmp_path, monkeypatch):
     """检测函数抛异常 → 降级为 available=False 一行说明，不阻断管线。"""
-    from subtransjav.refine import audio_detect as admod
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import audio_detect as admod
+    from subtrans.refine import pipeline_v2 as pv
 
     def _boom(*a, **k):
         raise RuntimeError("kaboom")
@@ -450,13 +450,13 @@ def test_pipeline_detect_crash_degrades(tmp_path, monkeypatch):
 
 def test_audio_detect_tunable_fields_registered(monkeypatch):
     """4 个 audio_detect 字段进 TUNABLE 表，env 覆盖生效（bool 白名单）。"""
-    from subtransjav.refine.config import TUNABLE_FIELD_TYPES
+    from subtrans.refine.config import TUNABLE_FIELD_TYPES
     for name in ("audio_detect_enabled", "audio_detect_threshold_pct",
                  "audio_detect_min_gap_ms", "audio_detect_max_candidates"):
         assert name in TUNABLE_FIELD_TYPES
     monkeypatch.setenv("SUBTRANSJAV_AUDIO_DETECT_ENABLED", "0")
     monkeypatch.setenv("SUBTRANSJAV_AUDIO_DETECT_THRESHOLD_PCT", "90")
-    from subtransjav.refine.config import RefineConfig
+    from subtrans.refine.config import RefineConfig
     cfg = RefineConfig(inputs=[])
     assert cfg.audio_detect_enabled is False
     assert cfg.audio_detect_threshold_pct == 90

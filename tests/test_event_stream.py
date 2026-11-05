@@ -9,8 +9,8 @@ import io
 import time
 from pathlib import Path
 
-from subtransjav.refine.events import EventEmitter
-from subtransjav.webview_gui.event_stream import (
+from subtrans.refine.events import EventEmitter
+from subtrans.webview_gui.event_stream import (
     RISKS_CAP,
     EventStreamParser,
     format_event_line,

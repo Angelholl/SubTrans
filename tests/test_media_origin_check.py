@@ -13,9 +13,9 @@ import pytest
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI 测试")
 
-from subtransjav.webview_gui import main as gui_main  # noqa: E402
+from subtrans.webview_gui import main as gui_main  # noqa: E402
 
-_LOGGER_NAME = "subtransjav.gui"
+_LOGGER_NAME = "subtrans.gui"
 _BANNER_ID = "stj-media-origin-banner"
 
 

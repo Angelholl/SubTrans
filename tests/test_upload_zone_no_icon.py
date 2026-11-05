@@ -16,7 +16,7 @@ dz-icon 升级为全站口径——index.html / style.css / 全部 js 资产均�
 from pathlib import Path
 
 ASSETS = (Path(__file__).resolve().parents[1]
-          / "subtransjav" / "webview_gui" / "assets")
+          / "subtrans" / "webview_gui" / "assets")
 INDEX_HTML = ASSETS / "index.html"
 STYLE_CSS = ASSETS / "style.css"
 REVIEW_JS = ASSETS / "review.js"

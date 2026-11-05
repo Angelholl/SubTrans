@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav import data_migration as dm
-from subtransjav import paths
-from subtransjav.refine import secrets as sec
+from subtrans import data_migration as dm
+from subtrans import paths
+from subtrans.refine import secrets as sec
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +218,7 @@ def test_half_migration_cleanup_respects_whitelist(roots):
 # 多实例锁 / 幂等边界
 # ---------------------------------------------------------------------------
 def test_lock_conflict_skips(roots, monkeypatch):
-    from subtransjav.refine.artifact_lock import ArtifactLockConflict
+    from subtrans.refine.artifact_lock import ArtifactLockConflict
 
     legacy, new_root = roots
     _make_legacy(legacy)
@@ -332,7 +332,7 @@ def test_c22_seeding_still_runs_on_adopted_root(monkeypatch, tmp_path):
 # 桩点
 # ---------------------------------------------------------------------------
 def test_cli_stub_where_early_exit_not_counted(monkeypatch, tmp_path, capsys):
-    from subtransjav.refine import cli
+    from subtrans.refine import cli
 
     calls = []
     monkeypatch.setattr(dm, "ensure_migrated",
@@ -342,7 +342,7 @@ def test_cli_stub_where_early_exit_not_counted(monkeypatch, tmp_path, capsys):
 
 
 def test_cli_stub_normal_path_counted_once(monkeypatch, tmp_path):
-    from subtransjav.refine import cli
+    from subtrans.refine import cli
 
     calls = []
     monkeypatch.setattr(dm, "ensure_migrated",
@@ -371,8 +371,8 @@ def test_gui_stub_present_source_level():
 def import_roots(monkeypatch, tmp_path):
     """导入测试夹具：数据根经 SUBTRANSJAV_DATA_ROOT 指向 tmp；
     TM/配置锚点常量（tm._DEFAULT_TM_DIR / config.CONFIG_DIR）动态重定向。"""
-    from subtransjav.refine import config as cfg_mod
-    from subtransjav.refine import tm as tm_mod
+    from subtrans.refine import config as cfg_mod
+    from subtrans.refine import tm as tm_mod
 
     root = tmp_path / "dataroot"
     legacy = tmp_path / "legacy"

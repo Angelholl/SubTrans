@@ -11,7 +11,7 @@ import sys
 import types
 
 _RUNNER = (pathlib.Path(__file__).resolve().parent.parent
-           / "subtransjav" / "refine" / "asr_runner.py")
+           / "subtrans" / "refine" / "asr_runner.py")
 
 
 def _load_runner_standalone():
@@ -24,7 +24,7 @@ def _load_runner_standalone():
 
 def _make_dll_dir(tmp_path, missing: tuple[str, ...] = ()):
     """构造 gpu-dll 目录：默认全 10 件齐全，missing 指定缺件（半套注入）。"""
-    from subtransjav.refine.asr_runner import GPU_DLL_REQUIRED
+    from subtrans.refine.asr_runner import GPU_DLL_REQUIRED
     d = tmp_path / "gpu-dll"
     d.mkdir()
     for name in GPU_DLL_REQUIRED:
@@ -60,7 +60,7 @@ def test_resolve_half_dll_falls_back_cpu(tmp_path):
     assert "cudnn_ops64_9.dll" in note
     d2 = tmp_path / "gpu-dll2"
     d2.mkdir()
-    from subtransjav.refine.asr_runner import GPU_DLL_REQUIRED as _req
+    from subtrans.refine.asr_runner import GPU_DLL_REQUIRED as _req
     for name in _req:
         if name not in ("cublas64_12.dll", "cublasLt64_12.dll"):
             (d2 / name).write_bytes(b"x")
@@ -117,7 +117,7 @@ def test_load_model_gpu_failure_falls_back_cpu(tmp_path, monkeypatch):
 
 def test_gpu_dll_required_list_shape():
     """必需清单形状钉：cublas 两件＋cudnn 主八子，防清单漂移。"""
-    from subtransjav.refine.asr_runner import GPU_DLL_REQUIRED
+    from subtrans.refine.asr_runner import GPU_DLL_REQUIRED
     assert len(GPU_DLL_REQUIRED) == 10
     assert "cublas64_12.dll" in GPU_DLL_REQUIRED
     assert "cudnn_ops64_9.dll" in GPU_DLL_REQUIRED

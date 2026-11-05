@@ -7,7 +7,7 @@ MSG 键表单一归属：msg_source() 返回含键表的那份文件文本（红
 
 from pathlib import Path
 
-ASSETS = Path(__file__).resolve().parent.parent / "subtransjav" / "webview_gui" / "assets"
+ASSETS = Path(__file__).resolve().parent.parent / "subtrans" / "webview_gui" / "assets"
 
 # 加载序 = index.html <script> 顺序 = 原始定义序；每批拆分随批更新本表
 JS_FILES = [

@@ -58,15 +58,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from subtransjav import data_migration as _dm  # noqa: E402
-from subtransjav import paths  # noqa: E402
-from subtransjav.refine.asr_env import (  # noqa: E402
+from subtrans import data_migration as _dm  # noqa: E402
+from subtrans import paths  # noqa: E402
+from subtrans.refine.asr_env import (  # noqa: E402
     _MAX_CLIPS,
     batch_transcribe_clips,
     cleanup_clips,
 )
-from subtransjav.refine.audio_detect import detect_speech_windows  # noqa: E402
-from subtransjav.refine.missed_insert import classify_transcript  # noqa: E402
+from subtrans.refine.audio_detect import detect_speech_windows  # noqa: E402
+from subtrans.refine.missed_insert import classify_transcript  # noqa: E402
 
 # C22 首版从严（owner 拍板②）：高置信桶精确率 Wilson 95% 置信下界门槛
 _PRECISION_LB_GATE = 0.95

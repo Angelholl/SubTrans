@@ -10,7 +10,7 @@
 | 来源 | 状态 | 说明 |
 | --- | --- | --- |
 | 历史 dropped 语料 | 已固化 | 固化于 `tests/test_language_validator.py` 的既有断言，不重复收录 |
-| 构造样本 | 本集（49 条） | 按规则库 `subtransjav/refine/defaults/source_hallucination.yaml` 文档化阈值构造，覆盖七类别正样本、阈值边界与近邻负样本 |
+| 构造样本 | 本集（49 条） | 按规则库 `subtrans/refine/defaults/source_hallucination.yaml` 文档化阈值构造，覆盖七类别正样本、阈值边界与近邻负样本 |
 | 真实 1.9.2 语料 | **待用户提供**（截止期已到，未提供） | 按裁决基线降级标注为"构造集基线"；用户提供后以 `origin: "real"` 追加条目并递增小版本号，重跑基线 |
 
 ## 2. 防循环验证

@@ -20,18 +20,18 @@ import types
 
 import pytest
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.asr_meta import (
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.asr_meta import (
     ASR_TELEMETRY_SUFFIX,
     load_asr_telemetry,
     scene_low_trust,
 )
-from subtransjav.refine.config import RefineConfig, StageConfig
-from subtransjav.refine.events import parse_event_line
-from subtransjav.refine.manifest import _CONFIG_FIELDS, compute_config_hash
-from subtransjav.refine.pipeline_v2 import map_entries_to_scenes
-from subtransjav.refine.source_hallucination import apply_source_filter
-from subtransjav.translate.llm_client import BatchResult
+from subtrans.refine.config import RefineConfig, StageConfig
+from subtrans.refine.events import parse_event_line
+from subtrans.refine.manifest import _CONFIG_FIELDS, compute_config_hash
+from subtrans.refine.pipeline_v2 import map_entries_to_scenes
+from subtrans.refine.source_hallucination import apply_source_filter
+from subtrans.translate.llm_client import BatchResult
 
 # ---------------------------------------------------------------------------
 # 工具
@@ -369,7 +369,7 @@ def _wire_e2e(tmp_path, monkeypatch, fake):
     monkeypatch.setattr(pv, "refine_tmp_dir", _fake_tmp)
     monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: fake)
     monkeypatch.setattr(pv, "_init_tm", lambda c: None)
-    import subtransjav.refine.source_hallucination as gate0
+    import subtrans.refine.source_hallucination as gate0
     monkeypatch.setattr(gate0, "_default_errors_dir",
                         lambda: str(tmp_path / "Errors"))
 
@@ -486,7 +486,7 @@ def test_config_hash_changes_with_adaptive_thresholds():
 
 
 def test_cli_flags_wired_to_config():
-    from subtransjav.refine.cli import build_parser, config_from_args
+    from subtrans.refine.cli import build_parser, config_from_args
     args = build_parser().parse_args(
         ["-i", "x.srt", "--adaptive-thresholds",
          "--asr-telemetry", "t.jsonl"])
@@ -502,7 +502,7 @@ def test_cli_flags_wired_to_config():
 def test_gui_args_adaptive_thresholds_flag():
     _webview = pytest.importorskip("webview", exc_type=ImportError)
     assert _webview is not None
-    from subtransjav.webview_gui.api import _build_refine_args
+    from subtrans.webview_gui.api import _build_refine_args
     args = _build_refine_args({"inputs": ["a.srt"],
                                "adaptive_thresholds": True})
     assert "--adaptive-thresholds" in args

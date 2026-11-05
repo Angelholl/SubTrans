@@ -6,7 +6,7 @@
 整条 ≤4 字纯假名豁免（a 项独立成行面）。纯函数、确定性。
 """
 
-from subtransjav.refine.dialogue_detect import (
+from subtrans.refine.dialogue_detect import (
     DIALOGUE_TAIL_MAX,
     SENT_END_PUNCTS,
     build_injection_block,

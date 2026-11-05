@@ -192,7 +192,7 @@ class FakeClient:
     def translate_entries(self, entries, *, system_text, user_prompt,
                           max_batch_size=30, allow_empty_deletions=False,
                           scene_threshold=60.0, progress=None):
-        from subtransjav.translate.llm_client import BatchResult
+        from subtrans.translate.llm_client import BatchResult
         self.calls.append([e["index"] for e in entries])
         self.entry_log.append([dict(e) for e in entries])
         is_stage_b = any("|||" in e["text"] for e in entries)
@@ -219,7 +219,7 @@ class FakeClient:
 
 def _make_stubs(work_dir: Path, watch_json: Path) -> dict:
     """返回 {module: {attr: 原值}} 的打桩表（调用方 try/finally 恢复）。"""
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
     work_dir.mkdir(parents=True, exist_ok=True)
     watch_json.parent.mkdir(parents=True, exist_ok=True)
 
@@ -248,7 +248,7 @@ def _restore_stubs(stubs: dict) -> None:
 # ---------------------------------------------------------------- capture
 
 def _build_cfg(in_path: Path, run_dir: Path, glossary_path: str):
-    from subtransjav.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.config import RefineConfig, StageConfig
     cfg = RefineConfig(
         inputs=[str(in_path)],
         output_dir=str(run_dir),
@@ -269,7 +269,7 @@ def _build_cfg(in_path: Path, run_dir: Path, glossary_path: str):
 
 
 def _capture_one(in_path: Path, out_root: Path, glossary_path: str) -> dict:
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
     stem = in_path.stem
     run_dir = out_root / stem
     if run_dir.exists():

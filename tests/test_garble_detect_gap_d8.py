@@ -12,9 +12,9 @@
 - 命中条目字段形状（index/timing/text/oov_ratio 四位四舍五入）。
 """
 
-from subtransjav.refine import garble_detect
-from subtransjav.refine import grammar_hint as _gh
-from subtransjav.refine.garble_detect import judge_garble_text, scan_garble_suspects
+from subtrans.refine import garble_detect
+from subtrans.refine import grammar_hint as _gh
+from subtrans.refine.garble_detect import judge_garble_text, scan_garble_suspects
 
 _T = "00:00:01,000 --> 00:00:02,000"
 

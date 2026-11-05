@@ -5,7 +5,7 @@ import unicodedata
 from pathlib import Path
 from types import SimpleNamespace
 
-from subtransjav.refine.polish import POLICY_DEFAULTS, polish_entries
+from subtrans.refine.polish import POLICY_DEFAULTS, polish_entries
 
 STATS_KEYS = {
     "whitespace_collapsed",
@@ -390,7 +390,7 @@ def test_dropped_empty_entry():
 
 
 def _pipeline_cfg(**kw):
-    from subtransjav.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.config import RefineConfig, StageConfig
     options = dict(inputs=[], templates_dir="", tm_enabled=False,
                    v2_profile="cloud", quality_report=False)
     options.update(kw)
@@ -411,7 +411,7 @@ class _FakeClient:
         self.calls = []
 
     def translate_entries(self, entries, *, system_text, user_prompt, **kwargs):
-        from subtransjav.translate.llm_client import BatchResult
+        from subtrans.translate.llm_client import BatchResult
         self.calls.append([e["index"] for e in entries])
         stage_b = any("|||" in e.get("text", "") for e in entries)
         translations = {
@@ -421,7 +421,7 @@ class _FakeClient:
 
 
 def _run_pipeline(tmp_path, monkeypatch, **kw):
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
     cfg = _pipeline_cfg(**kw)
     in_srt = tmp_path / "demo.srt"
     in_srt.write_text(
@@ -441,7 +441,7 @@ def _run_pipeline(tmp_path, monkeypatch, **kw):
 
 def test_pipeline_polish_default_off_is_zero_change(tmp_path, monkeypatch):
     """默认关：polish_entries 零调用，终稿逐字保留句号。"""
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
     calls = []
     monkeypatch.setattr(pv, "polish_entries",
                         lambda *a, **k: calls.append(1))
@@ -453,7 +453,7 @@ def test_pipeline_polish_default_off_is_zero_change(tmp_path, monkeypatch):
 
 def test_pipeline_polish_enabled_applies_and_links_stats(tmp_path, monkeypatch):
     """开：终稿句号消失，stats 挂进质量报告 merge_stats 数据链路。"""
-    from subtransjav.refine import quality_report as qr
+    from subtrans.refine import quality_report as qr
     captured = {}
 
     def _fake_build(*args, **kwargs):
@@ -478,16 +478,16 @@ def _legacy_cfg(cfg):
 
 def test_config_hash_off_matches_legacy_config_shape():
     """默认关：指纹与不含 polish_* 属性的旧配置逐字节一致。"""
-    from subtransjav.refine.config import RefineConfig
-    from subtransjav.refine.manifest import compute_config_hash
+    from subtrans.refine.config import RefineConfig
+    from subtrans.refine.manifest import compute_config_hash
     cfg = RefineConfig(inputs=[], templates_dir="", tm_enabled=False)
     assert compute_config_hash(cfg) == compute_config_hash(_legacy_cfg(cfg))
 
 
 def test_config_hash_polish_three_states():
     """指纹三态：H_off ≠ H_on_default ≠ H_on_changed；关时改参不影响。"""
-    from subtransjav.refine.config import RefineConfig
-    from subtransjav.refine.manifest import compute_config_hash
+    from subtrans.refine.config import RefineConfig
+    from subtrans.refine.manifest import compute_config_hash
 
     def _hash(**kw):
         return compute_config_hash(RefineConfig(
@@ -506,7 +506,7 @@ def test_config_hash_polish_three_states():
 
 def test_config_policy_bool_switches():
     """config 折算：默认两开关 True；显式 False 走 _POLISH_BOOL_FIELDS 映射生效。"""
-    from subtransjav.refine.config import RefineConfig, polish_policy_from_config
+    from subtrans.refine.config import RefineConfig, polish_policy_from_config
 
     def _policy(**kw):
         return polish_policy_from_config(RefineConfig(
@@ -523,7 +523,7 @@ def test_config_policy_bool_switches():
 
 def test_cli_new_switch_flags():
     """CLI：--polish-no-rewrap / --polish-no-clamp-long → cfg False；缺省 True。"""
-    from subtransjav.refine.cli import build_parser, config_from_args
+    from subtrans.refine.cli import build_parser, config_from_args
 
     args = build_parser().parse_args(["-i", "x.srt"])
     cfg = config_from_args(args)
@@ -539,7 +539,7 @@ def test_cli_new_switch_flags():
 
 def test_cli_keep_final_period_flag():
     """CLI：--polish-keep-final-period → cfg.polish_strip_final_period=False；缺省 True。"""
-    from subtransjav.refine.cli import build_parser, config_from_args
+    from subtrans.refine.cli import build_parser, config_from_args
 
     args = build_parser().parse_args(["-i", "x.srt"])
     cfg = config_from_args(args)

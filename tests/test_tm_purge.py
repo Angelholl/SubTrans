@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 import tm_purge  # noqa: E402
 
-from subtransjav.refine import pipeline_v2 as pv  # noqa: E402
-from subtransjav.refine.tm import TranslationMemory, _normalize, _simhash, ensure_source_name_column  # noqa: E402
+from subtrans.refine import pipeline_v2 as pv  # noqa: E402
+from subtrans.refine.tm import TranslationMemory, _normalize, _simhash, ensure_source_name_column  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 构造辅助

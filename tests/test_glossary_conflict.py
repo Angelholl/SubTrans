@@ -19,15 +19,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 import glossary_learned_reset as glr  # noqa: E402
 
-from subtransjav.refine import pipeline_v2 as pv  # noqa: E402
-from subtransjav.refine.config import RefineConfig  # noqa: E402
-from subtransjav.refine.glossary import (  # noqa: E402
+from subtrans.refine import pipeline_v2 as pv  # noqa: E402
+from subtrans.refine.config import RefineConfig  # noqa: E402
+from subtrans.refine.glossary import (  # noqa: E402
     format_glossary_block,
     load_glossary,
     load_glossary_ex,
     match_glossary,
 )
-from subtransjav.refine.glossary_conflict import (  # noqa: E402
+from subtrans.refine.glossary_conflict import (  # noqa: E402
     ADVICE_INSUFFICIENT,
     ADVICE_NOT_READY,
     ADVICE_READY,
@@ -38,14 +38,14 @@ from subtransjav.refine.glossary_conflict import (  # noqa: E402
     scan_glossary_conflicts,
     write_conflict_csv,
 )
-from subtransjav.refine.manifest import compute_config_hash as _cch  # noqa: E402
-from subtransjav.refine.quality_report import (  # noqa: E402
+from subtrans.refine.manifest import compute_config_hash as _cch  # noqa: E402
+from subtrans.refine.quality_report import (  # noqa: E402
     build_quality_report,
     render_conflict_section,
     render_term_consistency_section,
 )
-from subtransjav.refine.tm import TranslationMemory  # noqa: E402
-from subtransjav.translate.llm_client import BatchResult  # noqa: E402
+from subtrans.refine.tm import TranslationMemory  # noqa: E402
+from subtrans.translate.llm_client import BatchResult  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # 构造辅助（中性合成文本）
@@ -104,7 +104,7 @@ class TestGlossaryAliases:
         p = _write_glossary_csv(tmp_path / "g.csv", GLOSSARY_3COL)
         learned = tmp_path / "learned.csv"
         learned.write_text("ザーメン,精液\n", encoding="utf-8-sig")
-        import subtransjav.refine.pipeline_support as ps
+        import subtrans.refine.pipeline_support as ps
         monkeypatch.setattr(ps, "learned_glossary_path", lambda: str(learned))
         merged = ps.load_glossary_merged(RefineConfig(glossary_path=str(p)))
         assert ("ムラムラ", "心痒", ("燥热", "悸动")) in merged
@@ -131,7 +131,7 @@ class TestGlossaryOverrideChain:
 
     def _merged(self, tmp_path, monkeypatch, override_rows, user_rows,
                 learned_rows):
-        import subtransjav.refine.pipeline_support as ps
+        import subtrans.refine.pipeline_support as ps
         ov = up = None
         if override_rows is not None:
             ov = _write_glossary_csv(tmp_path / "ovr.csv", override_rows)
@@ -170,7 +170,7 @@ class TestGlossaryOverrideChain:
         user_rows = [("先生", "用户老师", None),
                      ("ムラムラ", "心痒", "燥热")]
         learned_rows = [("ザーメン", "精液"), ("先生", "learned老师")]
-        import subtransjav.refine.pipeline_support as ps
+        import subtrans.refine.pipeline_support as ps
         up = _write_glossary_csv(tmp_path / "user.csv", user_rows)
         learned = tmp_path / "learned.csv"
         learned.write_text(
@@ -195,7 +195,7 @@ class TestGlossaryMergeConflictWarning:
             self, tmp_path, monkeypatch, capsys):
         """override/user/learned 三层同 src 异 dst：一行告警含三层信息
         与最终保留值；返回结构不变。"""
-        import subtransjav.refine.pipeline_support as ps
+        import subtrans.refine.pipeline_support as ps
         ov = _write_glossary_csv(tmp_path / "ovr.csv",
                                  [("先生", "覆盖老师", None)])
         up = _write_glossary_csv(tmp_path / "user.csv",
@@ -215,7 +215,7 @@ class TestGlossaryMergeConflictWarning:
 
     def test_no_conflict_no_warning(self, tmp_path, monkeypatch, capsys):
         """无同 src 冲突 → 不打印告警行。"""
-        import subtransjav.refine.pipeline_support as ps
+        import subtrans.refine.pipeline_support as ps
         up = _write_glossary_csv(tmp_path / "user.csv",
                                  [("先生", "用户老师", None)])
         learned = tmp_path / "learned.csv"
@@ -234,7 +234,7 @@ class TestGlossaryMergeLearnedPins:
     def test_learned_first_only_and_upper_layers_suppress_learned(
             self, tmp_path, monkeypatch):
         """learned 层同 src 只留首条；override/user 层同 src 压制 learned。"""
-        import subtransjav.refine.pipeline_support as ps
+        import subtrans.refine.pipeline_support as ps
         ov = _write_glossary_csv(tmp_path / "ovr.csv",
                                  [("先生", "覆盖老师", None)])
         up = _write_glossary_csv(tmp_path / "user.csv",
@@ -392,7 +392,7 @@ class TestWatchJson:
         窗口经 slow_load 放大使交错确定性发生——无锁实现下双方都在
         对方写入前读到空旧版，后写覆盖前写丢 1 条；加锁后串行化，
         两条记录都在。"""
-        from subtransjav.refine import glossary_conflict as gconf
+        from subtrans.refine import glossary_conflict as gconf
         p = str(tmp_path / "watch.json")
         real_load = gconf.load_watch_records
 
@@ -584,7 +584,7 @@ class TestLearnEnabledGate:
 
     def test_disabled_skips_learn(self, monkeypatch):
         calls = []
-        import subtransjav.refine.glossary_learn as gl
+        import subtrans.refine.glossary_learn as gl
         monkeypatch.setattr(gl, "learn_from_s2_output",
                             lambda *a, **k: calls.append((a, k)) or 0)
         cfg_off = RefineConfig(auto_glossary=True, glossary_learn_enabled=False)
@@ -593,7 +593,7 @@ class TestLearnEnabledGate:
 
     def test_default_enabled_learns(self, monkeypatch, tmp_path):
         calls = []
-        import subtransjav.refine.glossary_learn as gl
+        import subtrans.refine.glossary_learn as gl
         monkeypatch.setattr(gl, "learn_from_s2_output",
                             lambda *a, **k: calls.append((a, k)) or 0)
         # D2026-0921-02 起默认 False：学习路径需显式开启

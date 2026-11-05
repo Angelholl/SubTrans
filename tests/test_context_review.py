@@ -53,7 +53,7 @@ def _fmt(sec: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def write_csv(path: Path, rows: list, label: str = "demo.ja.merged.subtransjav.srt") -> None:
+def write_csv(path: Path, rows: list, label: str = "demo.ja.merged.subtrans.srt") -> None:
     """写一个 mini 分歧复核 CSV。rows: [(分组, 时间轴, 相似度, pass1, pass2, final)]。"""
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.writer(f)
@@ -487,10 +487,10 @@ def build_mini_dir(tmp: Path, name: str = "demo",
                    timings: list = None) -> Path:
     """tmp 下构造 1 片 mini 数据（CSV + pass1/pass2/final_cn 各 12 行）。
 
-    命名与生产一致：merged={name}.ja.merged.subtransjav.srt，
-    CSV={name}.ja.merged.subtransjav_分歧复核.csv，
+    命名与生产一致：merged={name}.ja.merged.subtrans.srt，
+    CSV={name}.ja.merged.subtrans_分歧复核.csv，
     pass1/pass2={name}.ja.pass1.srt / {name}.ja.pass2.srt，
-    final_cn={name}.ja.merged.subtransjav_final_cn.srt。
+    final_cn={name}.ja.merged.subtrans_final_cn.srt。
     """
     d = tmp / name
     d.mkdir(parents=True)
@@ -499,8 +499,8 @@ def build_mini_dir(tmp: Path, name: str = "demo",
     fin = srt_text(12, prefix="中文_")
     (d / f"{name}.ja.pass1.srt").write_text(p1, encoding="utf-8")
     (d / f"{name}.ja.pass2.srt").write_text(p2, encoding="utf-8")
-    (d / f"{name}.ja.merged.subtransjav.srt").write_text(p1, encoding="utf-8")
-    (d / f"{name}.ja.merged.subtransjav_final_cn.srt").write_text(fin, encoding="utf-8")
+    (d / f"{name}.ja.merged.subtrans.srt").write_text(p1, encoding="utf-8")
+    (d / f"{name}.ja.merged.subtrans_final_cn.srt").write_text(fin, encoding="utf-8")
     # 分歧行 3 条必看（时间轴对应 SRT 第 4/5/6 条）+ 1 可选 + 1 已过滤
     timings = timings or [
         "00:00:12,000 --> 00:00:15,000",
@@ -511,8 +511,8 @@ def build_mini_dir(tmp: Path, name: str = "demo",
             for i, t in enumerate(timings)]
     rows.append(("可选", "00:00:24,000 --> 00:00:27,000", 0.40, "可甲", "可乙", "可译"))
     rows.append(("已过滤", "00:00:28,000 --> 00:00:31,000", 0.01, "滤甲", "滤乙", "滤译"))
-    csv_path = d / f"{name}.ja.merged.subtransjav{cr.CSV_SUFFIX}"
-    write_csv(csv_path, rows, label=f"{name}.ja.merged.subtransjav.srt")
+    csv_path = d / f"{name}.ja.merged.subtrans{cr.CSV_SUFFIX}"
+    write_csv(csv_path, rows, label=f"{name}.ja.merged.subtrans.srt")
     return d
 
 
@@ -628,12 +628,12 @@ class TestMisc:
         assert cr.collect_review_csvs(p) == [p]
 
     def test_sibling_paths_for_csv(self, tmp_path):
-        csv_path = tmp_path / "sample_movie_abc123.ja.merged.subtransjav_分歧复核.csv"
+        csv_path = tmp_path / "sample_movie_abc123.ja.merged.subtrans_分歧复核.csv"
         sibs = cr.sibling_paths_for_csv(csv_path)
         assert sibs["pass1"] == tmp_path / "sample_movie_abc123.ja.pass1.srt"
         assert sibs["pass2"] == tmp_path / "sample_movie_abc123.ja.pass2.srt"
         assert sibs["final_cn"] == \
-            tmp_path / "sample_movie_abc123.ja.merged.subtransjav_final_cn.srt"
+            tmp_path / "sample_movie_abc123.ja.merged.subtrans_final_cn.srt"
 
     def test_usage_summary(self):
         recs = [

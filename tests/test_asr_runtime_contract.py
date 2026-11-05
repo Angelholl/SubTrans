@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from subtransjav.refine import asr_runtime, dict_manager
+from subtrans.refine import asr_runtime, dict_manager
 
 # ---------------------------------------------------------------- fixtures
 
@@ -75,7 +75,7 @@ def _pin_fixture_zip(monkeypatch, zip_path: Path, members: dict[str, bytes]) -> 
     def _fake_http_get(url, dest, progress=None, stop_event=None):
         shutil.copyfile(str(zip_path), dest)
 
-    import subtransjav.refine.dict_manager as dm
+    import subtrans.refine.dict_manager as dm
     monkeypatch.setattr(dm, "_http_get", _fake_http_get)
     return sha
 
@@ -268,7 +268,7 @@ def _runtime_skeleton(rt: Path) -> None:
 
 
 def _gpu_patch_members() -> dict[str, bytes]:
-    from subtransjav.refine.asr_runner import GPU_DLL_REQUIRED
+    from subtrans.refine.asr_runner import GPU_DLL_REQUIRED
     members = {"gpu_patch_manifest.json": json.dumps({
         "built_at": "2026-10-29T00:00:00",
         "wheel_versions": {"nvidia-cublas-cu12": "12.8.5.5",
@@ -406,7 +406,7 @@ class TestGpuPatchContract:
     def test_gpu_patch_download_rejects_unpinned_host(self):
         """点亮后守卫下载仍受域白名单约束：非白名单域（含 huggingface.co）
         即拒——白名单与 pin 双门缺一不可（裁决⑤）。"""
-        from subtransjav.refine.dict_manager import DictDownloadError
+        from subtrans.refine.dict_manager import DictDownloadError
         with pytest.raises(DictDownloadError) as ei:
             asr_runtime._guarded_download(
                 "https://huggingface.co/Angelholl/faster-whisper-large-v2-ct2"
@@ -502,7 +502,7 @@ def _settings_kv(dir_value: str) -> str:
 def test_ct2_runtime_dir_resolution_order(tmp_path, monkeypatch):
     """解析序 env > settings 键 > 现形默认，来源标签随源切换（GUI 落位行＋
     CLI 诊断消费；负控：settings 键不被读取即红）。"""
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import config as refine_config
     monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
     cfg = tmp_path / "config"
     cfg.mkdir()
@@ -534,12 +534,12 @@ def test_ct2_runtime_default_sibling_off_repo(tmp_path, monkeypatch):
     且随仓库所在盘走不再固定 C 盘（owner 走查 D2026-1103-03）。
     旧 LOCALAPPDATA 位降为 legacy 兜底：新位无运行时而旧位有认证运行时时
     沿用旧位（防存量用户升级后静默重下 106MB 运行时＋1.21GB GPU 补丁）。"""
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import config as refine_config
     monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR",
                         str(tmp_path / "no-conf"))
     repo = tmp_path / "repo"
-    (repo / "subtransjav").mkdir(parents=True)
+    (repo / "subtrans").mkdir(parents=True)
     monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: repo)
     monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: repo)
     local = tmp_path / "localappdata"
@@ -630,11 +630,11 @@ def test_default_root_legacy_fallback_accepts_venv_form(tmp_path, monkeypatch):
     回落 legacy，不让存量用户升级后静默重下（评审补漏 D2026-1103-03）。
     放宽只在**落位选择面**：认证判定仍绑 manifest 单一布局（is_installed 不
     松动，D2026-1028-04）；半套骨架（有 python 无 site-packages）不算可复用。"""
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import config as refine_config
     monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
     repo = tmp_path / "repo"
-    (repo / "subtransjav").mkdir(parents=True)
+    (repo / "subtrans").mkdir(parents=True)
     monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: repo)
     monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: repo)
     local = tmp_path / "localappdata"
@@ -670,7 +670,7 @@ def _model_skeleton(root: Path, model: str = "large-v2") -> Path:
 def test_ct2_model_dir_resolution_order(tmp_path, monkeypatch):
     """解析序 env > settings 键 > 现形默认；与运行时键互不干扰（两键两
     来源各读各的，混读即红）。"""
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import config as refine_config
     monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
     cfg = tmp_path / "config"
     cfg.mkdir()
@@ -701,11 +701,11 @@ def test_ct2_model_default_gate_and_legacy_candidates(tmp_path, monkeypatch):
     默认改仓库同级旁路；数据根自定义与 frozen 一律随数据根——否则存量用户
     旧件失联静默重下 2.9 GB。legacy 候选按序取首个有货者（旧仓库位有货即
     标 legacy），旁路有货则新默认优先。"""
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import config as refine_config
     monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
     repo = tmp_path / "repo"
-    (repo / "subtransjav").mkdir(parents=True)
+    (repo / "subtrans").mkdir(parents=True)
     monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: repo)
     monkeypatch.setattr(asr_runtime.paths, "data_root", lambda: repo)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
@@ -746,7 +746,7 @@ def test_runtime_default_gate_excludes_frozen(tmp_path, monkeypatch):
     """运行时侧同一门控自查修正（D2026-1103-04）：frozen 下 app_root() 依
     D2026-0929-08 返回数据根，旧实现以「数据根=仓库根」为条件即误命中，会把
     frozen 实例运行时指向数据根同级旁路或另一实例旧位。"""
-    from subtransjav.refine import config as refine_config
+    from subtrans.refine import config as refine_config
     monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
     data = tmp_path / "frozen-data"

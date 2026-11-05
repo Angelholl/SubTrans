@@ -13,12 +13,12 @@ import os
 
 import pytest
 
-import subtransjav.refine.pipeline_v2 as pv
-import subtransjav.refine.v2_learn as v2_learn
-import subtransjav.refine.v2_manifest_fp as v2_manifest_fp
-import subtransjav.refine.v2_outputs as v2_outputs
-import subtransjav.refine.v2_premerge as v2_premerge
-import subtransjav.refine.v2_rules as v2_rules
+import subtrans.refine.pipeline_v2 as pv
+import subtrans.refine.v2_learn as v2_learn
+import subtrans.refine.v2_manifest_fp as v2_manifest_fp
+import subtrans.refine.v2_outputs as v2_outputs
+import subtrans.refine.v2_premerge as v2_premerge
+import subtrans.refine.v2_rules as v2_rules
 
 # ---------------------------------------------------------------------------
 # v2_premerge：时间轴解析与 [未翻译] 标记规范化
@@ -121,7 +121,7 @@ class TestPremerge:
 class TestContextBlocks:
     def test_synopsis_prompt_block_contains_tag(self):
         """_synopsis_prompt_block：非空摘要时块含 _SYNOPSIS_BLOCK_TAG。"""
-        from subtransjav.refine import v2_context_blocks
+        from subtrans.refine import v2_context_blocks
         block = v2_context_blocks._synopsis_prompt_block("梗概正文")
         assert v2_context_blocks._SYNOPSIS_BLOCK_TAG in block
         assert "梗概正文" in block
@@ -129,7 +129,7 @@ class TestContextBlocks:
 
     def test_v2_glossary_block_hit_rendered(self, monkeypatch):
         """_v2_glossary_block：A 档开关开启且命中时渲染词表块。"""
-        from subtransjav.refine import v2_context_blocks
+        from subtrans.refine import v2_context_blocks
 
         class _Cfg:
             apply_glossary_stage1 = True
@@ -149,7 +149,7 @@ class TestContextBlocks:
     def test_v2_glossary_block_injection_cap(self, monkeypatch, capsys):
         """_v2_glossary_block：命中超过 MAX_GLOSSARY_INJECT 时按词库
         优先级序截断前 100 条，并打印两行上报（命中总数 / 注入与省略数）。"""
-        from subtransjav.refine import v2_context_blocks
+        from subtrans.refine import v2_context_blocks
 
         class _Cfg:
             apply_glossary_stage1 = True
@@ -301,7 +301,7 @@ class TestOutputs:
                                                         monkeypatch):
         """_atomic_write_text：os.replace 遇 PermissionError（WinError 32/33
         文件占用）时有界重试，最终成功且临时文件清理。"""
-        from subtransjav.refine import fs_utils
+        from subtrans.refine import fs_utils
 
         target = tmp_path / "out.srt"
         calls = {"n": 0}
@@ -323,7 +323,7 @@ class TestOutputs:
     def test_atomic_write_text_retry_exhausted_raises(self, tmp_path,
                                                       monkeypatch):
         """_atomic_write_text：重试耗尽后抛原异常（PermissionError）。"""
-        from subtransjav.refine import fs_utils
+        from subtrans.refine import fs_utils
 
         target = tmp_path / "out.srt"
 
@@ -468,8 +468,8 @@ class TestFacadeBinding:
         assert pv._backup_existing_outputs \
             is v2_outputs._backup_existing_outputs
         # 批次 2 迁出符号同样钉住
-        import subtransjav.refine.v2_learn as _vl
-        import subtransjav.refine.v2_rules as _vr
+        import subtrans.refine.v2_learn as _vl
+        import subtrans.refine.v2_rules as _vr
         assert pv._learn_to_tm is _vl._learn_to_tm
         assert pv._auto_learn_glossary is _vl._auto_learn_glossary
         assert pv._apply_fallback_rules is _vr._apply_fallback_rules

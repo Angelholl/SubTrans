@@ -12,7 +12,7 @@ requests），故统一 setattr 到 lmstudio 模块命名空间。
 
 import types
 
-from subtransjav.utils import lmstudio as lm
+from subtrans.utils import lmstudio as lm
 
 EP = "http://localhost:1234/v1"
 

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import artifact_lock as al
+from subtrans.refine import artifact_lock as al
 
 
 class _FakeMsvcrt:
@@ -68,7 +68,7 @@ def test_release_is_idempotent_and_none_safe(tmp_path, monkeypatch):
     """release 二次调用为无操作（不重复解锁/关闭），None 句柄安全。"""
     fake = _FakeMsvcrt()
     monkeypatch.setattr(al, "msvcrt", fake)
-    lock_file = tmp_path / ".abc.subtransjav.lock"
+    lock_file = tmp_path / ".abc.subtrans.lock"
     handle = _handle_with_content(lock_file, "token=d5token\n", "d5token")
 
     al.release_artifact_lock(handle)
@@ -86,8 +86,8 @@ def test_release_windows_token_mismatch_keeps_file_and_warns(
     """Windows 分支 token 不符（疑似他方接管）→ 告警且不删锁文件。"""
     fake = _FakeMsvcrt()
     monkeypatch.setattr(al, "msvcrt", fake)
-    lock_file = tmp_path / ".abc.subtransjav.lock"
-    third_content = "subtransjav-lock pid=999999 token=thirdparty\n"
+    lock_file = tmp_path / ".abc.subtrans.lock"
+    third_content = "subtrans-lock pid=999999 token=thirdparty\n"
     handle = _handle_with_content(lock_file, third_content, "d5token")
 
     handle.release()
@@ -103,9 +103,9 @@ def test_release_windows_token_match_removes_file(tmp_path, monkeypatch):
     """Windows 分支内容含本句柄 token → 解锁、关闭后删除锁文件。"""
     fake = _FakeMsvcrt()
     monkeypatch.setattr(al, "msvcrt", fake)
-    lock_file = tmp_path / ".abc.subtransjav.lock"
+    lock_file = tmp_path / ".abc.subtrans.lock"
     handle = _handle_with_content(
-        lock_file, "subtransjav-lock pid=1 token=d5token\n", "d5token")
+        lock_file, "subtrans-lock pid=1 token=d5token\n", "d5token")
 
     handle.release()
 
@@ -258,7 +258,7 @@ def test_release_posix_unlinks_before_unlock_and_close(
     monkeypatch.setattr(al.os, "remove", _remove)
     monkeypatch.setattr(al.os, "close", _close)
 
-    lock_file = tmp_path / ".abc.subtransjav.lock"
+    lock_file = tmp_path / ".abc.subtrans.lock"
     lock_file.write_text("token=d5token\n", encoding="utf-8")
     fd = os.open(str(lock_file), os.O_RDWR)
     handle = al.ArtifactLockHandle(str(lock_file), fd, token="d5token")
@@ -292,7 +292,7 @@ def test_release_posix_tolerates_unlink_unlock_close_errors(
         lambda path: (_ for _ in ()).throw(OSError(errno.EPERM, "denied")))
     monkeypatch.setattr(al.os, "close", _close_after_real)
 
-    lock_file = tmp_path / ".abc.subtransjav.lock"
+    lock_file = tmp_path / ".abc.subtrans.lock"
     lock_file.write_text("token=d5token\n", encoding="utf-8")
     fd = os.open(str(lock_file), os.O_RDWR)
     handle = al.ArtifactLockHandle(str(lock_file), fd, token="d5token")

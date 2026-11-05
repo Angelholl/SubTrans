@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.hardsub import (  # noqa: E402
+from subtrans.refine.hardsub import (  # noqa: E402
     BannedFlagError,
     EncodeParams,
     assert_generators_consistent,

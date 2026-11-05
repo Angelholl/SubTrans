@@ -13,7 +13,7 @@ import types
 
 import pytest
 
-import subtransjav.utils.process_manager as pm
+import subtrans.utils.process_manager as pm
 
 
 def _sleep_proc(seconds: int = 60) -> subprocess.Popen:
@@ -415,7 +415,7 @@ def test_run_with_timeout_tree_taskkill_failure_falls_back_single_kill(
 
     monkeypatch.setattr(pm.subprocess, "Popen", _recording_popen)
     try:
-        with caplog.at_level(logging.WARNING, logger="subtransjav"):
+        with caplog.at_level(logging.WARNING, logger="subtrans"):
             result = pm.run_with_timeout_tree(
                 [sys.executable, "-c", "import time; time.sleep(60)"],
                 timeout=1.0)
@@ -484,7 +484,7 @@ def test_terminate_process_tree_robust_taskkill_failure_returns_false(
     proc = _sleep_proc()
     try:
         _wait_alive(proc)
-        with caplog.at_level(logging.WARNING, logger="subtransjav"):
+        with caplog.at_level(logging.WARNING, logger="subtrans"):
             ok = pm.terminate_process_tree_robust(proc.pid)
         assert ok is False
         assert any("taskkill" in r.getMessage() for r in caplog.records)
@@ -536,7 +536,7 @@ def test_terminate_process_tree_robust_posix_non_leader_degrades_single_kill(
         _wait_alive(proc)
         if os.getpgid(proc.pid) == proc.pid:
             pytest.skip("环境使子进程自成进程组，无非 leader 场景可测")
-        with caplog.at_level(logging.WARNING, logger="subtransjav"):
+        with caplog.at_level(logging.WARNING, logger="subtrans"):
             ok = pm.terminate_process_tree_robust(proc.pid)
         assert ok is True
         assert any("进程组" in r.getMessage() and "单杀" in r.getMessage()

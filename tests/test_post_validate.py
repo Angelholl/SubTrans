@@ -2,7 +2,7 @@
 post_validate.py 补充测试：覆盖误替换守卫与双检测组合场景。
 """
 
-from subtransjav.refine.post_validate import check_and_fix_translation_errors
+from subtrans.refine.post_validate import check_and_fix_translation_errors
 
 
 def test_zawei_no_de_in_src_kept():
@@ -54,7 +54,7 @@ def test_detection1_then_detection2_both_fire():
 def test_subject_target_pattern_samples():
     """re.match 语义（从头匹配）下的验收样例：仅单数"我/俺是"命中，
     复数"我们是"为正确方向不命中（负向前瞻排除）。"""
-    from subtransjav.refine.post_validate import _get_compiled
+    from subtrans.refine.post_validate import _get_compiled
     pat = _get_compiled()["subject"]["target"]
     assert pat.match("我是游泳部的部长"), "「我是…」（单数）应命中"
     assert pat.match("俺是部长"), "「俺是…」（单数）应命中"
@@ -68,7 +68,7 @@ def test_subject_target_pattern_samples():
 
 def test_subject_source_pattern_adnominal_only():
     """source_pattern 收紧为定语构造：僕たち+…+で 命中，僕たちは部長だ 不误伤。"""
-    from subtransjav.refine.post_validate import _get_compiled
+    from subtrans.refine.post_validate import _get_compiled
     pat = _get_compiled()["subject"]["source"]
     assert pat.search("ボクたち、水泳部の部長で")
     assert pat.search("僕たち水泳部の部長で")
@@ -151,7 +151,7 @@ def test_warn_only_true_default_behavior():
 def test_warn_only_false_hard_warning(monkeypatch):
     """warn_only=false：告警加 [硬性] 前缀并 logger.error；
     dewei 仍自动修正；subject 无可靠自动修正手段，不发明改写逻辑。"""
-    from subtransjav.refine import post_validate as pvm
+    from subtrans.refine import post_validate as pvm
 
     compiled = pvm._get_compiled()
     monkeypatch.setitem(compiled, "dewei",
@@ -376,7 +376,7 @@ def test_structured_warnings_fields_and_message_parity():
 def test_structured_warnings_hard_rule_severity_critical(monkeypatch):
     """warn_only=false（硬性）：结构化 severity=critical，message 含
     "[硬性] " 前缀且与字符串告警一致；category 记规则名。"""
-    from subtransjav.refine import post_validate as pvm
+    from subtrans.refine import post_validate as pvm
 
     compiled = pvm._get_compiled()
     monkeypatch.setitem(compiled, "subject",

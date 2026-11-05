@@ -4,7 +4,7 @@
 import json
 import sys
 
-from subtransjav.refine.line_breaker import (
+from subtrans.refine.line_breaker import (
     POLICY_DEFAULTS,
     _cov_span,
     break_segment,
@@ -119,7 +119,7 @@ class TestMainCli:
                  _w("う" * 8, start=2.5, end=3.5)]
         seg = _seg(words)
         src = tmp_path / "words.json"
-        src.write_text(json.dumps({"schema": "subtransjav.ct2.words/1",
+        src.write_text(json.dumps({"schema": "subtrans.ct2.words/1",
                                    "segments": [seg], "src": "synthetic"},
                                   ensure_ascii=False), encoding="utf-8")
         srt = tmp_path / "out.srt"
@@ -133,7 +133,7 @@ class TestMainCli:
         assert "00:00:02,500 --> 00:00:03,500" in srt_text
         side = tmp_path / "out.srt.words.json"
         payload = json.loads(side.read_text(encoding="utf-8"))
-        assert payload["schema"] == "subtransjav.ct2.words/1"
+        assert payload["schema"] == "subtrans.ct2.words/1"
         assert payload["broken_by"] == "line_breaker/1"
         assert payload["src"] == "synthetic"           # 原 sidecar 字段原样透传
         assert len(payload["segments"]) == 3

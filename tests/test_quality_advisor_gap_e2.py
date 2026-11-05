@@ -12,8 +12,8 @@ import argparse
 import json
 from pathlib import Path
 
-from subtransjav.refine import quality_advisor as qa
-from subtransjav.refine.config import RefineConfig
+from subtrans.refine import quality_advisor as qa
+from subtrans.refine.config import RefineConfig
 
 _OK_JSON = json.dumps({
     "glossary": [{"src": "先生", "target": "老师", "reason": "统一称谓"}],
@@ -68,7 +68,7 @@ def test_load_conflict_summary_missing_or_corrupt_returns_empty(tmp_path):
 def test_make_ai_client_override_only_replaces_stage0_model(monkeypatch):
     """非空 override：仅槽0 模型换、入参 cfg 本体不变、其余槽原样；
     空 override：cfg 原样透传（同一对象）。"""
-    from subtransjav.refine import pipeline_v2
+    from subtrans.refine import pipeline_v2
 
     cfg = RefineConfig(inputs=[])
     original_model = cfg.stages[0].model

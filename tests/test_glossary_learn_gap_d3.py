@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 
-from subtransjav.refine import glossary_learn as gl
-from subtransjav.refine.glossary_learn import (
+from subtrans.refine import glossary_learn as gl
+from subtrans.refine.glossary_learn import (
     _acquire_glossary_lock,
     _parse_csv_pairs,
     _release_glossary_lock,
@@ -27,7 +27,7 @@ from subtransjav.refine.glossary_learn import (
     save_learned_glossary,
 )
 
-LOGGER_NAME = "subtransjav.refine.glossary_learn"
+LOGGER_NAME = "subtrans.refine.glossary_learn"
 
 
 # ---------------------------------------------------------------------------

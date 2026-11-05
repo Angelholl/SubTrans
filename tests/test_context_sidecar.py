@@ -14,10 +14,10 @@ import json
 
 import pytest
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.config import RefineConfig, StageConfig
-from subtransjav.refine.quality_report import build_quality_report
-from subtransjav.translate.llm_client import BatchResult
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.config import RefineConfig, StageConfig
+from subtrans.refine.quality_report import build_quality_report
+from subtrans.translate.llm_client import BatchResult
 
 # 冻结措辞（与任务冻结口径逐字一致；pipeline_v2 中的常量必须能逐字对上）
 SUMMARY_NOTICE = ("以下为剧情背景参考，仅用于消解歧义；与单句字面义和术语表"
@@ -216,7 +216,7 @@ def test_context_sidecar_disabled_by_cfg(tmp_path):
 
 
 def test_context_sidecar_user_settings_layering(tmp_path, monkeypatch):
-    from subtransjav.refine import config as rc
+    from subtrans.refine import config as rc
     monkeypatch.setattr(rc, "CONFIG_DIR", str(tmp_path))
     monkeypatch.delenv("SUBTRANSJAV_CONTEXT_SIDECAR", raising=False)
     (tmp_path / "user_settings.json").write_text(
@@ -238,7 +238,7 @@ def test_config_hash_sensitive_to_context_sidecar():
     """context_sidecar 参与 manifest 配置指纹（开关变化使旧产物失效）"""
     import types
 
-    from subtransjav.refine.manifest import compute_config_hash
+    from subtrans.refine.manifest import compute_config_hash
     fields = dict(profile=None,
                   stages=[StageConfig(0, True, "lmstudio", "m")],
                   endpoints={}, batch_local=30, batch_cloud=30,

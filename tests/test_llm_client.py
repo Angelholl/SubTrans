@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import httpx
 import pytest
 
-from subtransjav.translate.llm_client import (
+from subtrans.translate.llm_client import (
     ClientConfig,
     LLMClient,
     LLMError,
@@ -367,7 +367,7 @@ def test_transient_error_backoff_then_success():
 
 def test_fatal_error_raises_llm_error():
     """translate_batch 层面：致命错误向上抛（由调用方决定隔离策略）。"""
-    from subtransjav.translate.llm_client import LLMError
+    from subtrans.translate.llm_client import LLMError
     server = FakeServer([{"__status__": 401}])
     try:
         c = _client(server)
@@ -522,7 +522,7 @@ def test_is_transient_auth_not_retried():
 def test_loopback_http_client_bypasses_env_proxy(monkeypatch):
     """回环 base_url → trust_env=False 专用客户端（无视代理 env）；
     非回环端点返回 None，保持 openai 默认行为不变。"""
-    from subtransjav.translate import llm_client as lc
+    from subtrans.translate import llm_client as lc
     for env in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
                 "http_proxy", "https_proxy", "all_proxy"):
         monkeypatch.setenv(env, "http://proxy.example:7890")
@@ -590,7 +590,7 @@ def test_is_transient_connection_refused_fast_fail():
 def test_connection_refused_fails_fast_without_backoff(monkeypatch):
     """连接拒绝异常即使 max_retries=3 也不进入退避重试（0 次等待）。"""
     sleeps = []
-    monkeypatch.setattr("subtransjav.translate.llm_client.time.sleep",
+    monkeypatch.setattr("subtrans.translate.llm_client.time.sleep",
                         lambda s: sleeps.append(s))
     cfg = ClientConfig(base_url="http://127.0.0.1:1/v1", model="m",
                        max_retries=3, backoff_time=5.0)
@@ -616,7 +616,7 @@ def test_connection_refused_fails_fast_without_backoff(monkeypatch):
 # D2026-0924-02：请求期 "Model unloaded" 识别与自动恢复
 # ---------------------------------------------------------------------------
 
-from subtransjav.translate.llm_client import (  # noqa: E402
+from subtrans.translate.llm_client import (  # noqa: E402
     ModelUnloadedError,
 )
 
@@ -813,9 +813,9 @@ def test_plain_400_does_not_trigger_recovery():
 
 def test_pipeline_injects_recovery_for_lmstudio_only(monkeypatch):
     """管线接线：lmstudio provider 注入回调，云端 provider 不注入。"""
-    from subtransjav.refine import pipeline_v2 as pv
-    from subtransjav.refine.config import RefineConfig, StageConfig
-    from subtransjav.refine.pipeline_v2 import V2_STAGE_SLOT
+    from subtrans.refine import pipeline_v2 as pv
+    from subtrans.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.pipeline_v2 import V2_STAGE_SLOT
 
     monkeypatch.setattr(pv, "_ensure_lmstudio_engine",
                         lambda *a, **kw: None)
@@ -850,7 +850,7 @@ def test_probe_endpoint_reachable_ssrf_boundary_rejects(monkeypatch):
     均不得被触碰）。"""
     import httpx
 
-    from subtransjav.translate.llm_client import probe_endpoint_reachable
+    from subtrans.translate.llm_client import probe_endpoint_reachable
 
     def _no_request(*args, **kwargs):
         raise AssertionError("边界外端点不得发起 HTTP 请求")
@@ -875,7 +875,7 @@ def test_probe_endpoint_reachable_ssrf_boundary_allows_local(monkeypatch):
     正常发起探活，HTTP 任意响应码都算通。"""
     import httpx
 
-    from subtransjav.translate.llm_client import probe_endpoint_reachable
+    from subtrans.translate.llm_client import probe_endpoint_reachable
 
     def _fake_client_get(self, url, **kwargs):
         return _FakeProbeResp(200)

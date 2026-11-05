@@ -9,7 +9,7 @@ import types
 
 import pytest
 
-from subtransjav.utils import lmstudio as lm
+from subtrans.utils import lmstudio as lm
 
 
 class _Resp:

@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 import tm_promote  # noqa: E402
 
-from subtransjav.refine.tm import TranslationMemory  # noqa: E402
+from subtrans.refine.tm import TranslationMemory  # noqa: E402
 
 
 def _make_db(path, pairs):

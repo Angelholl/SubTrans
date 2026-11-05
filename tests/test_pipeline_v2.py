@@ -12,10 +12,10 @@ from pathlib import Path
 import pysubs2
 import pytest
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.config import RefineConfig, StageConfig
-from subtransjav.refine.events import parse_event_line
-from subtransjav.refine.manifest import (
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.config import RefineConfig, StageConfig
+from subtrans.refine.events import parse_event_line
+from subtrans.refine.manifest import (
     MANIFEST_VERSION,
     StageRecord,
     TaskManifest,
@@ -24,8 +24,8 @@ from subtransjav.refine.manifest import (
     manifest_path,
     save_manifest,
 )
-from subtransjav.refine.tm import TranslationMemory
-from subtransjav.translate.llm_client import BatchResult
+from subtrans.refine.tm import TranslationMemory
+from subtrans.translate.llm_client import BatchResult
 
 # ---------------------------------------------------------------------------
 # 工具
@@ -341,7 +341,7 @@ def test_retry_budget_d7_merged_lines_degrade_to_untranslated(
     终稿条目数不变、缺失行带 [未翻译]、风险清单计数正确。
     （重试恰 2 次的预算语义由 tests/test_llm_client.py 协议层测试钉住。）
     """
-    from subtransjav.refine.risk import RiskCollector
+    from subtrans.refine.risk import RiskCollector
     cfg = _make_cfg(tmp_path)
     entries = _entries("こんにちは", "さようなら", "ありがとう", "おやすみ")
     monkeypatch.setattr(pv, "_make_client",
@@ -482,7 +482,7 @@ def test_run_single_v2_end_to_end(tmp_path, monkeypatch):
 def test_run_single_v2_extra_output_formats(tmp_path, monkeypatch):
     """extra_output_formats=["ass","vtt"] → {stem}_final_cn.ass/.vtt 在场，
     event 数=终稿 SRT 条数（D2026-1023-02）。"""
-    from subtransjav.refine.filters import parse_srt
+    from subtrans.refine.filters import parse_srt
 
     cfg = _make_cfg(tmp_path, extra_output_formats=["ass", "vtt"])
     in_srt = tmp_path / "demo.srt"
@@ -596,7 +596,7 @@ def test_cloud_fallback_disabled_for_local(tmp_path, monkeypatch):
 def test_cleaner_config_dir_wired(tmp_path, monkeypatch):
     """GUI「净语配置目录」→ strict 档 clean_srt(config_dir=...)。"""
     calls = {}
-    import subtransjav.refine.cleaner_rules as cr
+    import subtrans.refine.cleaner_rules as cr
     def fake_clean_srt(srt, config_dir=None, source_map=None):
         calls["config_dir"] = config_dir
         calls["source_map"] = source_map
@@ -642,7 +642,7 @@ def test_timing_span():
 
 def test_cleaner_renumbering_index_restored(tmp_path, monkeypatch):
     """cleaner 重新编号后，必须按时间轴恢复原始 index（防错位）。"""
-    import subtransjav.refine.cleaner_rules as cr
+    import subtrans.refine.cleaner_rules as cr
 
     def fake_clean_srt(srt, config_dir=None, source_map=None):
         # 模拟 cleaner：删掉第2条并重新编号（原文 index 1,3 → 输出 1,2）
@@ -695,7 +695,7 @@ def test_learn_skips_merged_and_mismatched_lines():
 
 def test_grammar_hints_injected(tmp_path, monkeypatch):
     """SudachiPy 可用时，语法提示注入 LLM 输入（不污染原文与产物）。"""
-    import subtransjav.refine.grammar_hint as gh
+    import subtrans.refine.grammar_hint as gh
     cfg = _make_cfg(tmp_path)
     entries = _entries("こんにちは", "さようなら")
     monkeypatch.setattr(gh, "is_grammar_hint_available", lambda: True)
@@ -712,7 +712,7 @@ def test_grammar_hints_injected(tmp_path, monkeypatch):
 
 
 def test_grammar_hints_unavailable_skipped(tmp_path, monkeypatch):
-    import subtransjav.refine.grammar_hint as gh
+    import subtrans.refine.grammar_hint as gh
     cfg = _make_cfg(tmp_path)
     entries = _entries("こんにちは")
     monkeypatch.setattr(gh, "is_grammar_hint_available", lambda: False)
@@ -725,7 +725,7 @@ def test_grammar_hints_unavailable_skipped(tmp_path, monkeypatch):
 def test_grammar_hints_injected_in_stage_b(tmp_path, monkeypatch):
     """阶段B 输入同样注入语法提示（`原文：日文 ||| 译文` 格式），
     且 LLM 回显的提示残留被 clean_grammar_hint_residue 兜底清理。"""
-    import subtransjav.refine.grammar_hint as gh
+    import subtrans.refine.grammar_hint as gh
     cfg = _make_cfg(tmp_path)
     entries = _entries("ボクたち、水泳部の部長で")
     monkeypatch.setattr(gh, "is_grammar_hint_available", lambda: True)
@@ -799,7 +799,7 @@ def test_fuzzy_inject_disabled(tmp_path, monkeypatch):
 
 def test_glossary_learn_filters_hallucinated_terms(tmp_path, monkeypatch):
     """提取出的术语必须真实存在于源文/译文中（防幻觉词入库）。"""
-    import subtransjav.refine.glossary_learn as gl
+    import subtrans.refine.glossary_learn as gl
 
     src = tmp_path / "src.srt"
     tgt = tmp_path / "tgt.srt"
@@ -821,7 +821,7 @@ def test_glossary_learn_filters_hallucinated_terms(tmp_path, monkeypatch):
 
 
 def test_quality_report_metrics():
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
 
     orig = [
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000", "text": "挿入する"},
@@ -837,7 +837,7 @@ def test_quality_report_metrics():
 
 
 def test_quality_report_pass():
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "挿入する"}]
     final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -848,7 +848,7 @@ def test_quality_report_pass():
 
 
 def test_quality_report_flags_kana_and_untranslated():
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "あ"}]
     final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -864,7 +864,7 @@ def test_quality_report_flags_kana_and_untranslated():
 
 def test_quality_report_review_checklist():
     """复核工单：假名残留分类 / 未对齐 / 校验告警 逐条列出编号与时间轴。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
 
     expected = [
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -925,7 +925,7 @@ def test_quality_report_review_checklist():
 
 def test_quality_report_kana_grouped_per_entry():
     """D3：同条目多个假名串归并为一条复核项，片段清单列全并标注总段数。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "内容"}]
     # 同一条目 5 个假名串（含汉字，非 [未翻译]）
@@ -950,7 +950,7 @@ def test_quality_report_kana_grouped_per_entry():
 
 def test_quality_report_disposal_section():
     """D2：处置章节渲染闸门0 删除台账（总数/分类/样本/归档指引）。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "挿入する"}]
     final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -991,7 +991,7 @@ def test_quality_report_disposal_section():
 
 def test_quality_report_garble_review_section():
     """D5：乱码强译复核小节——置于【处置】之后，上限 20 条，空表显示无样本。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "挿入する"}]
     final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -1077,7 +1077,7 @@ def test_run_single_v2_garble_review_wired(tmp_path, monkeypatch):
 
 def test_quality_report_entry_identity_check():
     """D2：条数核对恒等式——平衡 ✅、人为破坏计数 ⚠️ 且两侧数值可见。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
 
     def _e(i):
         return {"index": i,
@@ -1134,7 +1134,7 @@ def test_quality_report_entry_identity_check():
 
 def test_quality_report_untranslated_section():
     """D1 口径：[未翻译] 条目单列小节逐条列出，与假名残留章不重复计数。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
          "text": "こんにちは"},
@@ -1175,7 +1175,7 @@ def test_quality_report_untranslated_section():
 
 def test_quality_report_no_miss_threshold_lists_all():
     """漏覆盖不再设 2% 门槛：1 条也逐条列出。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "挿入する"}]
     final = []
@@ -1186,7 +1186,7 @@ def test_quality_report_no_miss_threshold_lists_all():
 def test_quality_report_miss_split_missing_entry_and_untranslated():
     """漏覆盖双口径：整条缺失（missing_entry）与条目在但未译
     （untranslated_content，[未翻译] 前缀兼容带/不带尾空格两形态）。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     expected = [
         # 1: 终稿无条目 → missing_entry（原口径回归）
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -1227,7 +1227,7 @@ def test_quality_report_miss_split_missing_entry_and_untranslated():
 
 def test_quality_report_miss_untranslated_kana_only_not_counted():
     """原文纯假名（无汉字）终稿 [未翻译] → 不计入任何漏覆盖口径（不误报）。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "こんにちは"}]
     final = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -1240,7 +1240,7 @@ def test_quality_report_miss_untranslated_kana_only_not_counted():
 
 
 def test_v2_config_new_fields():
-    from subtransjav.refine.config import RefineConfig
+    from subtrans.refine.config import RefineConfig
     cfg = RefineConfig()
     assert cfg.tm_fuzzy_inject is True
     assert cfg.tm_fuzzy_threshold == 0.98
@@ -1307,7 +1307,7 @@ def test_stage_b_keep_untranslated_empty(tmp_path, monkeypatch):
 
 def test_validate_v2_requires_stage_b_model():
     """v2 阶段A/阶段B（槽位0/2）必须配置模型（legacy 规则引擎跳过分支已删除）。"""
-    from subtransjav.refine.config import RefineConfig, StageConfig
+    from subtrans.refine.config import RefineConfig, StageConfig
     cfg = RefineConfig(inputs=[__import__("os").path.abspath(__file__)])
     cfg.stages = [StageConfig(0, True, "lmstudio", ""),   # 阶段A 未配模型
                   StageConfig(1, False, "deepseek", ""),
@@ -1328,8 +1328,8 @@ def test_gui_progress_contract():
     from pathlib import Path as _P
     root = _P(__file__).resolve().parent.parent
 
-    llm_src = (root / "subtransjav/translate/llm_client.py")         .read_text(encoding="utf-8")
-    pv_src = (root / "subtransjav/refine/pipeline_v2.py")         .read_text(encoding="utf-8")
+    llm_src = (root / "subtrans/translate/llm_client.py")         .read_text(encoding="utf-8")
+    pv_src = (root / "subtrans/refine/pipeline_v2.py")         .read_text(encoding="utf-8")
 
     # api.py 解析用的正则对实际输出样例命中
     rx_stage = re.compile(r'\[STAGE\]\s*(.+)')
@@ -1909,7 +1909,7 @@ def _wire_gate0_e2e(tmp_path, monkeypatch, fake):
     monkeypatch.setattr(pv, "_make_client", lambda cfg, tag: fake)
     monkeypatch.setattr(pv, "_init_tm", lambda c: None)
     # 归档目录隔离到临时目录（不污染仓库 Errors/）
-    import subtransjav.refine.source_hallucination as gate0
+    import subtrans.refine.source_hallucination as gate0
     monkeypatch.setattr(gate0, "_default_errors_dir",
                         lambda: str(tmp_path / "Errors"))
 
@@ -2460,7 +2460,7 @@ def test_resume_realign_post_validate_and_tm_gate(tmp_path, monkeypatch, capsys)
     """HIGH-1 回归（strict）：resume 复用 out_a 后 post_validate 按 index
     配对必须与 orig 同空间——跳号错位时 dewei 修正不得落到他行译文上，
     flagged 归因不得错行（TM 学习门槛随之对齐）。"""
-    import subtransjav.refine.cleaner_rules as cr
+    import subtrans.refine.cleaner_rules as cr
 
     def _passthrough_clean(srt, config_dir=None, source_map=None):
         return srt, {"merged": 0, "deleted": 0, "deleted_by_rule": {},
@@ -2979,7 +2979,7 @@ def test_kana_stage_both_switches_off_noop():
 
 def test_quality_report_kana_clean_line_and_section():
     """报告：统计区「源文清洗」子行 + 【源文清洗】删除台账（时间戳+原文）。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
 
     orig = [
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
@@ -3015,7 +3015,7 @@ def test_quality_report_kana_clean_line_and_section():
 
 def test_quality_report_kana_absent_line_omitted():
     """kana 键缺失（未运行/旧调用方）时不出现源文清洗行——只加不减契约。"""
-    from subtransjav.refine.quality_report import build_quality_report
+    from subtrans.refine.quality_report import build_quality_report
 
     orig = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000",
              "text": "挿入する"}]
@@ -3078,7 +3078,7 @@ class InjStubClient:
     def translate_entries(self, entries, *, system_text, user_prompt,
                           max_batch_size=30, allow_empty_deletions=False,
                           scene_threshold=60.0, progress=None):
-        from subtransjav.translate.llm_client import BatchResult
+        from subtrans.translate.llm_client import BatchResult
         self.entries_calls.append(
             (user_prompt, [e["index"] for e in entries]))
         ans = self._answer(entries, user_prompt)

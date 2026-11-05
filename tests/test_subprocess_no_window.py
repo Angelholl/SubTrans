@@ -11,7 +11,7 @@ GUI 进程内未设 creationflags 的 subprocess.run/Popen 在 Windows 上会闪
    直传 0 维持控制台语义）内，每个
    subprocess.run/Popen/check_output/check_call（含
    ``from subprocess import`` 形态）调用都带 creationflags 关键字；
-2. 共享常量 subtransjav.utils.subprocess_flags.CREATE_NO_WINDOW：
+2. 共享常量 subtrans.utils.subprocess_flags.CREATE_NO_WINDOW：
    Windows 语义 = 0x08000000、POSIX 语义 = 0——平台无关复核（Ubuntu CI
    照样绿）：AST 摘取常量赋值表达式，在假 os.name 下分别求值；
 3. process_manager 的 spawn 收敛点确实消费该共享常量（单一来源防旁路，
@@ -25,14 +25,14 @@ import os
 import types
 from pathlib import Path
 
-import subtransjav
+import subtrans
 
 # 钉测范围：GUI windowed 进程内直接 spawn 的模块 + spawn 单一收敛点
 MODULES = [
-    Path(subtransjav.__file__).parent / "webview_gui" / "api.py",
-    Path(subtransjav.__file__).parent / "refine" / "asr_env.py",
-    Path(subtransjav.__file__).parent / "refine" / "audio_detect.py",
-    Path(subtransjav.__file__).parent / "utils" / "process_manager.py",
+    Path(subtrans.__file__).parent / "webview_gui" / "api.py",
+    Path(subtrans.__file__).parent / "refine" / "asr_env.py",
+    Path(subtrans.__file__).parent / "refine" / "audio_detect.py",
+    Path(subtrans.__file__).parent / "utils" / "process_manager.py",
 ]
 
 # subprocess 顶层 spawn 族（批0 关注带窗口语义的进程创建面）
@@ -91,7 +91,7 @@ def test_all_spawn_calls_carry_creationflags():
         offenders.extend(_bare_spawn_calls(path))
     assert offenders == [], (
         "以下 subprocess 调用未带 creationflags（windowed 打包会闪黑框，"
-        "统一补 subtransjav.utils.subprocess_flags.CREATE_NO_WINDOW）: "
+        "统一补 subtrans.utils.subprocess_flags.CREATE_NO_WINDOW）: "
         + ", ".join(offenders))
 
 
@@ -99,7 +99,7 @@ def test_all_spawn_calls_carry_creationflags():
 # 共享常量语义（平台无关：假 os 模块 exec 源码求值）
 # ---------------------------------------------------------------------------
 
-_CONST_MODULE = (Path(subtransjav.__file__).parent / "utils"
+_CONST_MODULE = (Path(subtrans.__file__).parent / "utils"
                  / "subprocess_flags.py")
 
 
@@ -138,13 +138,13 @@ def test_constant_posix_semantics():
 
 def test_imported_constant_matches_platform_semantics():
     """真实导入值与当前平台的模拟求值一致（单一来源未被旁路硬编码）。"""
-    from subtransjav.utils.subprocess_flags import CREATE_NO_WINDOW
+    from subtrans.utils.subprocess_flags import CREATE_NO_WINDOW
     assert _const_value_for(
         "nt" if os.name == "nt" else "posix") == CREATE_NO_WINDOW
 
 
 def test_process_manager_consumes_shared_constant():
     """spawn 收敛点 process_manager 消费共享常量（别名导入、行为不变）。"""
-    from subtransjav.utils import process_manager as pm
+    from subtrans.utils import process_manager as pm
     assert _const_value_for(
         "nt" if os.name == "nt" else "posix") == pm._CREATE_NO_WINDOW

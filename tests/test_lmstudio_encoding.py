@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.utils import lmstudio as lm  # noqa: E402
+from subtrans.utils import lmstudio as lm  # noqa: E402
 
 
 def test_run_lms_forces_utf8_replace(monkeypatch):

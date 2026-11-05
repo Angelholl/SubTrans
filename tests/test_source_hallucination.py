@@ -16,8 +16,8 @@ import types
 import pytest
 import yaml
 
-from subtransjav.refine import source_hallucination as sh
-from subtransjav.refine.source_hallucination import (
+from subtrans.refine import source_hallucination as sh
+from subtrans.refine.source_hallucination import (
     SourceRulesLoadError,
     apply_source_filter,
     gate0_rules_sha1,
@@ -337,7 +337,7 @@ def test_valve_threshold_configurable():
 def test_whitelist_words_survive_default_gate():
     """六集合全部成员逐词作为条目跑 default 档 → 零删除（白名单最高优先）；
     计数类命中仅计入检出统计（可见性），不影响删除。"""
-    from subtransjav.refine.language_validator import _WHITELIST_JA
+    from subtrans.refine.language_validator import _WHITELIST_JA
     rules = load_source_rules()
     iso_words = {str(w).strip() for w in
                  (rules.get("isolated_response") or {}).get("words") or []}
@@ -354,7 +354,7 @@ def test_whitelist_words_survive_default_gate():
 def test_keep_list_matches_language_validator_whitelist():
     """口径一致性：keep_list 默认值与 _WHITELIST_JA 并集完全一致
     （防"一处删一处保"漂移；任一侧更新必须同步）。"""
-    from subtransjav.refine.language_validator import _WHITELIST_JA
+    from subtrans.refine.language_validator import _WHITELIST_JA
     rules = load_source_rules()
     assert set(rules["keep_list"]) == set(_WHITELIST_JA)
 
@@ -430,7 +430,7 @@ def test_gate0_rules_sha1_semantic_and_stable():
 def test_config_hash_tracks_gate0_rules_semantic_content(
         tmp_path, isolated_rules, monkeypatch):
     """manifest 指纹消费规则库语义内容：内容变 → 指纹变；内容还原 → 指纹还原。"""
-    from subtransjav.refine.manifest import compute_config_hash
+    from subtrans.refine.manifest import compute_config_hash
     rules = _minimal_rules()
     isolated_rules(rules)
     h1 = compute_config_hash(types.SimpleNamespace(stages=[]))
@@ -736,7 +736,7 @@ def test_no_samples_key_without_limit():
 # ---------------------------------------------------------------------------
 
 def test_config_validate_rejects_bad_source_filter():
-    from subtransjav.refine.config import RefineConfig
+    from subtrans.refine.config import RefineConfig
     cfg = RefineConfig()
     cfg.v2_source_filter = "bogus"
     errs = cfg.validate()
@@ -745,7 +745,7 @@ def test_config_validate_rejects_bad_source_filter():
 
 @pytest.mark.parametrize("bad", [0, 101, -5, "abc"])
 def test_config_validate_rejects_bad_valve_pct(bad):
-    from subtransjav.refine.config import RefineConfig
+    from subtrans.refine.config import RefineConfig
     cfg = RefineConfig()
     cfg.v2_source_filter_valve_pct = bad
     errs = cfg.validate()
@@ -753,7 +753,7 @@ def test_config_validate_rejects_bad_valve_pct(bad):
 
 
 def test_config_defaults():
-    from subtransjav.refine.config import DEFAULT_V2_SOURCE_FILTER_VALVE_PCT, RefineConfig
+    from subtrans.refine.config import DEFAULT_V2_SOURCE_FILTER_VALVE_PCT, RefineConfig
     cfg = RefineConfig()
     assert cfg.v2_source_filter == "default"
     assert cfg.v2_source_filter_valve_pct == 50

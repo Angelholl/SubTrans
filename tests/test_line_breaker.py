@@ -1,6 +1,6 @@
 # 3.2.1 断行器钉（D2026-1028-03）：确定性切分+三顺序不变量（文本守恒/时间轴
 # 守恒/幂等）+CPS 改善。纯合成词级夹具，零模型零网络。
-from subtransjav.refine.line_breaker import (
+from subtrans.refine.line_breaker import (
     POLICY_DEFAULTS,
     break_segment,
     break_segments,

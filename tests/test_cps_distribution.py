@@ -41,7 +41,7 @@ def _write_srt(tmp_path: Path, name: str = "demo.srt") -> Path:
 
 def test_tool_thresholds_same_as_quality_report():
     """同口径钉：工具常量与 quality_report 观测阈值逐值相等（防漂移）。"""
-    from subtransjav.refine import quality_report as qr
+    from subtrans.refine import quality_report as qr
     assert CPS_CJK_BASE == qr._CPS_CJK_BASE
     assert CPS_OTHER_BASE == qr._CPS_OTHER_BASE
     assert CPS_TOLERANCE == qr._CPS_TOLERANCE

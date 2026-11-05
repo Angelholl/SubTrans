@@ -20,15 +20,15 @@ from pathlib import Path
 import js_sources
 import pytest
 
-from subtransjav.refine import config as rc
-from subtransjav.webview_gui.event_stream import (
+from subtrans.refine import config as rc
+from subtrans.webview_gui.event_stream import (
     HEARTBEAT_STALE_S_DEFAULT,
     EventStreamParser,
 )
-from subtransjav.webview_gui.strings import MSG, msg
+from subtrans.webview_gui.strings import MSG, msg
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-WEBVIEW_GUI_DIR = REPO_ROOT / "subtransjav" / "webview_gui"
+WEBVIEW_GUI_DIR = REPO_ROOT / "subtrans" / "webview_gui"
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +575,7 @@ def test_heartbeat_stale_s_user_file_override(_isolated_config):
 
 def test_heartbeat_stale_s_not_in_manifest_fingerprint():
     """GUI 观察参数不参与产物指纹：不在 manifest 白名单字段中。"""
-    from subtransjav.refine.manifest import _CONFIG_FIELDS
+    from subtrans.refine.manifest import _CONFIG_FIELDS
     assert "heartbeat_stale_s" not in _CONFIG_FIELDS
 
 

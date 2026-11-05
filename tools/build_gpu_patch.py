@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
               "（NVIDIA 许可随包附义务）")
         return 1
     manifest = {
-        "schema": "subtransjav.gpu_patch/1",
+        "schema": "subtrans.gpu_patch/1",
         "built_at": args.built_at,
         "wheel_versions": {"nvidia-cublas-cu12": CUBLAS_PIN["version"],
                            "nvidia-cudnn-cu12": CUDNN_PIN["version"]},

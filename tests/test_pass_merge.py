@@ -4,7 +4,7 @@
 落界且与主干零重叠时被采纳；越界/重叠弃置；合并结果幂等。
 """
 
-from subtransjav.refine.pass_merge import (
+from subtrans.refine.pass_merge import (
     GAP_THRESHOLD_S,
     adopted_pass2_indices,
     merge_passes,

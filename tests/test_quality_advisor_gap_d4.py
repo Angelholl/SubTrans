@@ -10,8 +10,8 @@ import argparse
 import dataclasses
 import json
 
-from subtransjav.refine import quality_advisor as qa
-from subtransjav.refine.config import RefineConfig
+from subtrans.refine import quality_advisor as qa
+from subtrans.refine.config import RefineConfig
 
 _OK_JSON = json.dumps({
     "glossary": [{"src": "先生", "target": "老师", "reason": "统一称谓"}],
@@ -123,7 +123,7 @@ def test_run_ai_analyze_preconditions_and_degraded_continue(
         tmp_path, monkeypatch):
     """报告/导读/JSON/items/客户端失败均 rc1；聚合与媒体对照失败按无
     对应块继续；成功路径落盘建议件。"""
-    from subtransjav.refine import aggregate_stats, asr_env
+    from subtrans.refine import aggregate_stats, asr_env
 
     cfg = RefineConfig(inputs=[])
     cfg.aggregate_stats_inject = False

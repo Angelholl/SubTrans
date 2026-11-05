@@ -16,7 +16,7 @@ SubTrans 缺省自带日→中两张角色卡（净语翻译/审校抛光）。�
 
 怎么用（CLI）
 --------
-subtransjav-refine -i 输入.srt --source-lang zh --target-lang en ^
+subtrans-refine -i 输入.srt --source-lang zh --target-lang en ^
   --s1-instructions 角色-净语翻译.zh2en.txt ^
   --s3-instructions 角色-审校抛光.zh2en.txt
 

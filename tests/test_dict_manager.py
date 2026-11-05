@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import dict_manager as dm
+from subtrans.refine import dict_manager as dm
 
 # 打补丁前的真身（模块导入期捕获；测试内断言 build_opener 已被替换）
 _REAL_BUILD_OPENER = urllib.request.build_opener
@@ -625,7 +625,7 @@ def test_sudachi_custom_dict_path_when_present(monkeypatch, tmp_path):
 
 def test_get_tokenizer_prefers_custom_dict(monkeypatch, tmp_path):
     """grammar_hint 单例：存在用户下载词典时按路径构造。"""
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
     fake_dic = tmp_path / "system_core.dic"
     fake_dic.write_bytes(b"dic")
     monkeypatch.setattr(dm, "sudachi_custom_dict_path",
@@ -656,7 +656,7 @@ def test_get_tokenizer_prefers_custom_dict(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 def test_cli_dict_status_smoke(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-    from subtransjav.refine import cli
+    from subtrans.refine import cli
     assert cli.main(["--dict-status"]) == 0
     out = capsys.readouterr().out
     assert "sudachi" in out and "jieba" in out and "english_rules" in out
@@ -664,7 +664,7 @@ def test_cli_dict_status_smoke(monkeypatch, tmp_path, capsys):
 
 def test_cli_dict_download_local_missing_file(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
-    from subtransjav.refine import cli
+    from subtrans.refine import cli
     rc = cli.main(["--dict-download", "sudachi",
                    "--dict-from-file", str(tmp_path / "nope.whl")])
     assert rc == 1
@@ -990,7 +990,7 @@ def test_replace_locked_release_then_retry_succeeds(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dm.os, "replace", _flaky_replace)
 
-    import subtransjav.refine.grammar_hint as gh
+    import subtrans.refine.grammar_hint as gh
     released = []
 
     def _fake_release(after_release=None):
@@ -1031,7 +1031,7 @@ def test_replace_locked_persists_raises_narrow_error(monkeypatch, tmp_path):
 
     monkeypatch.setattr(dm.os, "replace", _always_locked)
 
-    import subtransjav.refine.grammar_hint as gh
+    import subtrans.refine.grammar_hint as gh
 
     def _fake_release(after_release=None):
         # 模拟真实契约：重试闭包必被调（仍抛 PermissionError → 窄域异常）

@@ -110,7 +110,7 @@ def test_semantic_case_expected_review(case):
     判定口径与管线终稿后复核候选一致：
     (strong_garble_signal 源文命中) AND is_fluent_zh(译文) AND 源文不含汉字
     """
-    from subtransjav.refine.source_hallucination import (
+    from subtrans.refine.source_hallucination import (
         is_fluent_zh,
         strong_garble_signal,
     )
@@ -153,7 +153,7 @@ def test_antonym_case_expected_warn(case):
     """B2 硬守卫：双侧锚定（源文命中指定形态 AND 译文命中目标集）→ 告警；
     任一侧不成立 → 不告警。判定口径与 check_and_fix_translation_errors
     的 antonym_* 检测一致（compiled 规则逐条判定，warn_only 不改文本）。"""
-    from subtransjav.refine.post_validate import _get_compiled
+    from subtrans.refine.post_validate import _get_compiled
     compiled = _get_compiled()
     src = case["source"]
     zh = case["translation"]

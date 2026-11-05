@@ -4,8 +4,8 @@
 """
 from pathlib import Path
 
-from subtransjav.refine.config import RefineConfig, StageConfig
-from subtransjav.refine.v2_outputs import final_stem, final_suffix
+from subtrans.refine.config import RefineConfig, StageConfig
+from subtrans.refine.v2_outputs import final_stem, final_suffix
 
 
 # ---------------------------------------------------------------------------

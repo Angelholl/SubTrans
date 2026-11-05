@@ -32,10 +32,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.source_hallucination import apply_source_filter
+from subtrans.refine.source_hallucination import apply_source_filter
 
 # ---------------------------------------------------------------------------
-# 口径常量（与 subtransjav/refine/source_hallucination.py 的标签映射同源；
+# 口径常量（与 subtrans/refine/source_hallucination.py 的标签映射同源；
 # 此处复制而非 import 私有符号，保持脚本对实现的只读独立性）
 # ---------------------------------------------------------------------------
 

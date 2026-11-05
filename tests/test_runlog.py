@@ -4,8 +4,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from subtransjav.refine import runlog
-from subtransjav.refine.runlog import TeeWriter
+from subtrans.refine import runlog
+from subtrans.refine.runlog import TeeWriter
 
 
 class _NullStream:

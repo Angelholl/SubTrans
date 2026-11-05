@@ -68,12 +68,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.filters import parse_srt  # noqa: E402
-from subtransjav.refine.pipeline_v2 import _premerge_entries  # noqa: E402
+from subtrans.refine.filters import parse_srt  # noqa: E402
+from subtrans.refine.pipeline_v2 import _premerge_entries  # noqa: E402
 
 # 与 tm.py 同源复用：content_hash 的归一化/哈希定义必须与入库侧完全一致，
 # 否则 raw/premerge 精确匹配会漏配——此处耦合即正确性，勿本地复制实现
-from subtransjav.refine.tm import TranslationMemory, _default_tm_path, _simhash  # noqa: E402
+from subtrans.refine.tm import TranslationMemory, _default_tm_path, _simhash  # noqa: E402
 
 logger = logging.getLogger("tm_purge")
 

@@ -6,7 +6,7 @@ additive 钉：timing_range/entry_timings 只进 asdict 路径（风险清单.js
 
 import json
 
-from subtransjav.refine.risk import (
+from subtrans.refine.risk import (
     SEVERITY_WARNING,
     RiskCollector,
 )

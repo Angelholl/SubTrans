@@ -1,4 +1,4 @@
-"""subtransjav.paths 数据路径单一来源测试（打包地基批）"""
+"""subtrans.paths 数据路径单一来源测试（打包地基批）"""
 import datetime
 import re
 import sys
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav import paths
+from subtrans import paths
 
 REPO_ROOT = Path(paths.__file__).resolve().parents[1]
 
@@ -191,7 +191,7 @@ def test_cli_where_source_map_covers_all_labels():
     """护栏 10：cli --where 的中文映射须覆盖 data_root_source 全部标签。"""
     import inspect
 
-    from subtransjav.refine import cli as cli_mod
+    from subtrans.refine import cli as cli_mod
     src = inspect.getsource(cli_mod._print_where)
     for label in ("env", "pointer", "frozen-default",
                   "frozen-legacy-default", "legacy"):
@@ -236,7 +236,7 @@ def test_legacy_retention_eol_pinned():
     d = datetime.date.fromisoformat(paths.LEGACY_RETENTION_EOL)
     assert (d.year, d.month, d.day) == (2027, 6, 30)
     # 迁移模块文档与常量口径同步（防文档漂移）
-    from subtransjav import data_migration as dm
+    from subtrans import data_migration as dm
     assert "LEGACY_RETENTION_EOL" in (dm.__doc__ or "")
 
 
@@ -244,33 +244,33 @@ def test_legacy_retention_eol_pinned():
 # 锚点路径钉（D2026-0924-04：源码形态逐字节一致，回归基线只增不减）
 # ---------------------------------------------------------------------------
 def test_pin_config_dir_is_repo_config():
-    from subtransjav.refine import config as rc
+    from subtrans.refine import config as rc
     assert str(REPO_ROOT / "config") == rc.CONFIG_DIR
 
 
 def test_pin_temp_dir_is_repo_temp():
-    from subtransjav.refine import config as rc
+    from subtrans.refine import config as rc
     assert str(REPO_ROOT / "Temp") == rc.TEMP_DIR
 
 
 def test_pin_tm_default_dir_is_repo_temp_translation_memory():
-    from subtransjav.refine import tm
+    from subtrans.refine import tm
     assert str(REPO_ROOT / "Temp" / "translation_memory") == tm._DEFAULT_TM_DIR
 
 
 def test_pin_glossary_conflict_watch_path():
-    from subtransjav.refine import glossary_conflict as gc
+    from subtrans.refine import glossary_conflict as gc
     assert gc.default_watch_path() == str(
         REPO_ROOT / "Temp" / "translation_memory" / "glossary_conflict_watch.json")
 
 
 def test_pin_secrets_config_store_is_repo_config():
-    from subtransjav.refine import secrets as sec
+    from subtrans.refine import secrets as sec
     assert str(REPO_ROOT / "config" / "api_keys.bin") == sec._CONFIG_STORE
 
 
 def test_pin_learned_glossary_path_is_repo_config():
-    from subtransjav.refine import pipeline_support as ps
+    from subtrans.refine import pipeline_support as ps
     assert ps.learned_glossary_path() == str(
         REPO_ROOT / "config" / "glossary_learned.csv")
 
@@ -379,7 +379,7 @@ def test_no_pointer_file_behavior_unchanged(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 def test_resolve_action_source_path_l1_source_name_hit(tmp_path):
     """L1：guide["source"] 指名文件存在于导读目录 → 原样返回该 Path。"""
-    from subtransjav.refine import pipeline_support as ps
+    from subtrans.refine import pipeline_support as ps
     src = tmp_path / "ep01.japanese.srt"
     src.write_text("1\n00:00:01,000 --> 00:00:02,000\n甲\n", encoding="utf-8")
     guide = tmp_path / "ep01_质量报告导读.json"
@@ -390,7 +390,7 @@ def test_resolve_action_source_path_l1_source_name_hit(tmp_path):
 def test_resolve_action_source_path_l2_stem_srt_fallback(tmp_path):
     """L2：source 指名文件不存在 → 兜底 {stem}.srt（导读文件名剥
     _质量报告导读.json 后缀），str|Path 入参均可。"""
-    from subtransjav.refine import pipeline_support as ps
+    from subtrans.refine import pipeline_support as ps
     (tmp_path / "ep01.srt").write_text("", encoding="utf-8")
     guide = tmp_path / "ep01_质量报告导读.json"
     guide.write_text("{}", encoding="utf-8")
@@ -402,7 +402,7 @@ def test_resolve_action_source_path_l2_stem_srt_fallback(tmp_path):
 
 def test_resolve_action_source_path_empty_source_skips_l1(tmp_path):
     """source_name 空串/空白：跳过 L1 直接走 L2（不拼 guide_dir/"" 目录）。"""
-    from subtransjav.refine import pipeline_support as ps
+    from subtrans.refine import pipeline_support as ps
     (tmp_path / "ep01.srt").write_text("", encoding="utf-8")
     guide = tmp_path / "ep01_质量报告导读.json"
     guide.write_text("{}", encoding="utf-8")
@@ -412,7 +412,7 @@ def test_resolve_action_source_path_empty_source_skips_l1(tmp_path):
 
 def test_resolve_action_source_path_l1_wins_over_l2(tmp_path):
     """L1 与 L2 同时可得 → L1（真实输入名）优先。"""
-    from subtransjav.refine import pipeline_support as ps
+    from subtrans.refine import pipeline_support as ps
     real_src = tmp_path / "movie_v2.srt"
     real_src.write_text("", encoding="utf-8")
     (tmp_path / "ep01.srt").write_text("", encoding="utf-8")
@@ -423,7 +423,7 @@ def test_resolve_action_source_path_l1_wins_over_l2(tmp_path):
 
 def test_resolve_action_source_path_none_when_unresolved(tmp_path):
     """L3：两处皆无 → None（退化，调用方不传 --action-source）。"""
-    from subtransjav.refine import pipeline_support as ps
+    from subtrans.refine import pipeline_support as ps
     guide = tmp_path / "ep01_质量报告导读.json"
     guide.write_text("{}", encoding="utf-8")
     assert ps.resolve_action_source_path(guide, "missing.srt") is None

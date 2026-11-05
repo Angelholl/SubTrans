@@ -7,8 +7,8 @@
 
 import pytest
 
-from subtransjav.refine import post_validate
-from subtransjav.refine.rules_loader import (
+from subtrans.refine import post_validate
+from subtrans.refine.rules_loader import (
     RulesLoadError,
     load_rules,
     load_rules_safe,
@@ -106,7 +106,7 @@ def test_user_rules_yaml_matches_package_default():
     """防漂移：用户目录副本与包内回退副本应逐字节一致。
 
     config/rules/translation_rules.yaml 是用户目录副本（load_rules 的
-    首选来源），subtransjav/refine/defaults/translation_rules.yaml
+    首选来源），subtrans/refine/defaults/translation_rules.yaml
     是包内回退副本（用户副本缺失时兜底）。两者内容不一致时，
     "改包内 YAML 不生效"或"回退行为与用户配置不同"的漂移就会静默发生；
     本测试锁定两者同步更新（如未来允许差异，应改为断言 defaults 是
@@ -114,7 +114,7 @@ def test_user_rules_yaml_matches_package_default():
     """
     from pathlib import Path
 
-    import subtransjav.refine.rules_loader as rl
+    import subtrans.refine.rules_loader as rl
 
     repo_root = Path(rl.__file__).resolve().parents[2]
     user_copy = repo_root / "config" / "rules" / "translation_rules.yaml"
@@ -176,7 +176,7 @@ def test_no_false_positive():
 # ---------------------------------------------------------------------------
 
 def test_prompt_sections_match_yaml():
-    from subtransjav.refine import instructions as instr
+    from subtrans.refine import instructions as instr
     p = load_rules()["prompt_sections"]
 
     # RETRY_CLEANING = "\n" + YAML retry_cleaning
@@ -188,7 +188,7 @@ def test_prompt_sections_match_yaml():
 
 def test_retry_cleaning_semantics():
     """重试指令必须保护'留空=有意删除'语义（防误回填）。"""
-    from subtransjav.refine import instructions as instr
+    from subtrans.refine import instructions as instr
     assert "留空表示该条目被有意删除" in instr.RETRY_CLEANING
     assert "严禁为其编造或回填内容" in instr.RETRY_CLEANING
 
@@ -206,8 +206,8 @@ def test_anti_reversal_clause_synced_across_prompts():
     """
     from pathlib import Path
 
-    import subtransjav.refine.rules_loader as rl
-    from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
+    import subtrans.refine.rules_loader as rl
+    from subtrans.refine.pipeline_v2 import V2_STAGE_PROMPTS
 
     repo_root = Path(rl.__file__).resolve().parents[2]
     tpl_dir = repo_root / "config" / "templates"
@@ -274,8 +274,8 @@ def test_onomatopoeia_clause_synced_across_prompts():
     """
     from pathlib import Path
 
-    import subtransjav.refine.rules_loader as rl
-    from subtransjav.refine.pipeline_v2 import V2_STAGE_PROMPTS
+    import subtrans.refine.rules_loader as rl
+    from subtrans.refine.pipeline_v2 import V2_STAGE_PROMPTS
 
     repo_root = Path(rl.__file__).resolve().parents[2]
     tpl_dir = repo_root / "config" / "templates"

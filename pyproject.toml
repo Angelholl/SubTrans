@@ -13,7 +13,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "subtransjav"
+name = "subtrans"
 version = "3.1.3.dev0"
 description = "Standalone two-stage (v2) SRT subtitle translation toolkit (net-speech refine pipeline)"
 readme = "README.md"
@@ -84,35 +84,35 @@ exclude = ["build", "Temp"]
 # 维持现状）。
 [[tool.mypy.overrides]]
 module = [
-    "subtransjav.refine.pass_merge",
-    "subtransjav.refine.pass_disagreement",
-    "subtransjav.refine.line_breaker",
-    "subtransjav.refine.artifact_lock",
-    "subtransjav.refine.srt_encoding",
-    "subtransjav.webview_gui.security",
-    "subtransjav.webview_gui.user_dirs",
-    "subtransjav.webview_gui.encode_queue",
-    "subtransjav.webview_gui.event_stream",
-    "subtransjav.utils.process_manager",
-    "subtransjav.refine.garble_detect",
-    "subtransjav.refine.quality_advisor",
-    "subtransjav.refine.glossary_learn",
-    "subtransjav.refine.grammar_hint",
-    "subtransjav.refine.v2_learn",
-    "subtransjav.refine.dialogue_detect",
-    "subtransjav.refine.kana_clean",
-    "subtransjav.refine.post_validate",
-    "subtransjav.refine.source_hallucination",
-    "subtransjav.refine.filters",
-    "subtransjav.refine.output_formats",
-    "subtransjav.refine.token_hint",
-    "subtransjav.refine.rules_loader",
-    "subtransjav.refine.audio_detect",
-    "subtransjav.refine.subtitle_convert",
-    "subtransjav.refine.v2_context_blocks",
-    "subtransjav.refine.v2_rules",
-    "subtransjav.refine.risk",
-    "subtransjav.refine.eval_baseline",
+    "subtrans.refine.pass_merge",
+    "subtrans.refine.pass_disagreement",
+    "subtrans.refine.line_breaker",
+    "subtrans.refine.artifact_lock",
+    "subtrans.refine.srt_encoding",
+    "subtrans.webview_gui.security",
+    "subtrans.webview_gui.user_dirs",
+    "subtrans.webview_gui.encode_queue",
+    "subtrans.webview_gui.event_stream",
+    "subtrans.utils.process_manager",
+    "subtrans.refine.garble_detect",
+    "subtrans.refine.quality_advisor",
+    "subtrans.refine.glossary_learn",
+    "subtrans.refine.grammar_hint",
+    "subtrans.refine.v2_learn",
+    "subtrans.refine.dialogue_detect",
+    "subtrans.refine.kana_clean",
+    "subtrans.refine.post_validate",
+    "subtrans.refine.source_hallucination",
+    "subtrans.refine.filters",
+    "subtrans.refine.output_formats",
+    "subtrans.refine.token_hint",
+    "subtrans.refine.rules_loader",
+    "subtrans.refine.audio_detect",
+    "subtrans.refine.subtitle_convert",
+    "subtrans.refine.v2_context_blocks",
+    "subtrans.refine.v2_rules",
+    "subtrans.refine.risk",
+    "subtrans.refine.eval_baseline",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
@@ -129,19 +129,19 @@ strict_equality = true
 extra_checks = true
 
 [project.scripts]
-subtransjav-refine = "subtransjav.refine.cli:main"
-subtransjav-gui = "subtransjav.webview_gui.main:main"
+subtrans-refine = "subtrans.refine.cli:main"
+subtrans-gui = "subtrans.webview_gui.main:main"
 
 # -----------------------------------------------------------------------------
 # Setuptools Configuration
 # -----------------------------------------------------------------------------
 [tool.setuptools.packages.find]
-include = ["subtransjav*"]
+include = ["subtrans*"]
 exclude = ["tests*", "config*", "models*"]
 
 [tool.setuptools.package-data]
-"subtransjav.webview_gui" = ["assets/*.html", "assets/*.css", "assets/*.js", "assets/*.ico"]
-"subtransjav.refine" = ["defaults/*.yaml"]
+"subtrans.webview_gui" = ["assets/*.html", "assets/*.css", "assets/*.js", "assets/*.ico"]
+"subtrans.refine" = ["defaults/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,7 +1,7 @@
 # 3.3.0 预置机制钉（D2026-1028-03）：默认关拒执行+门 fail-closed+编排数学。
 import json
 
-from subtransjav.refine.quality_autoloop import (
+from subtrans.refine.quality_autoloop import (
     ACTIVATION_ENABLED,
     GATE_DEFAULTS,
     plan_autofix,
@@ -31,7 +31,7 @@ class TestActivation:
         assert calls == []          # 关闭态绝不触执行件
 
     def test_cli_status_shows_prerequisites(self, capsys):
-        from subtransjav.refine.quality_autoloop import main
+        from subtrans.refine.quality_autoloop import main
         assert main(["--status"]) == 0
         st = json.loads(capsys.readouterr().out)
         assert st["activation_enabled"] is False
@@ -79,7 +79,7 @@ class TestPlan:
 
 class TestCycleMath:
     def test_release_path(self, monkeypatch):
-        import subtransjav.refine.quality_autoloop as m
+        import subtrans.refine.quality_autoloop as m
         monkeypatch.setattr(m, "ACTIVATION_ENABLED", True)
         fixed = []
 
@@ -97,7 +97,7 @@ class TestCycleMath:
         assert fixed == [0, 1, 2, 3, 4]
 
     def test_degrade_on_gate_fail(self, monkeypatch):
-        import subtransjav.refine.quality_autoloop as m
+        import subtrans.refine.quality_autoloop as m
         monkeypatch.setattr(m, "ACTIVATION_ENABLED", True)
         r = run_autoloop_cycle([_sug(1)], fix_fn=lambda i: True,
                                reverify_fn=lambda p: (1, 2),
@@ -105,13 +105,13 @@ class TestCycleMath:
         assert r["action"] == "degrade"
 
     def test_no_targets_degrades(self, monkeypatch):
-        import subtransjav.refine.quality_autoloop as m
+        import subtrans.refine.quality_autoloop as m
         monkeypatch.setattr(m, "ACTIVATION_ENABLED", True)
         r = run_autoloop_cycle([], fix_fn=lambda i: True)
         assert r["action"] == "degrade" and r["planned"] == 0
 
     def test_fix_failure_counted(self, monkeypatch):
-        import subtransjav.refine.quality_autoloop as m
+        import subtrans.refine.quality_autoloop as m
         monkeypatch.setattr(m, "ACTIVATION_ENABLED", True)
         r = run_autoloop_cycle([_sug(i) for i in range(3)],
                                fix_fn=lambda i: i["index"] != 1,

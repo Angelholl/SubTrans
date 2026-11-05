@@ -10,9 +10,9 @@
 import sys
 from types import SimpleNamespace
 
-from subtransjav.refine import v2_learn as vl
-from subtransjav.refine.risk import SEVERITY_INFO, RiskCollector
-from subtransjav.refine.tm import TranslationMemory
+from subtrans.refine import v2_learn as vl
+from subtrans.refine.risk import SEVERITY_INFO, RiskCollector
+from subtrans.refine.tm import TranslationMemory
 
 
 def _ts(sec: float) -> str:
@@ -36,7 +36,7 @@ def test_auto_learn_disabled_records_skip(monkeypatch, tmp_path, capsys):
         calls.append((args, kwargs))
         return 0
 
-    monkeypatch.setattr("subtransjav.refine.glossary_learn.learn_from_s2_output",
+    monkeypatch.setattr("subtrans.refine.glossary_learn.learn_from_s2_output",
                         _fake_learn)
     collector = RiskCollector()
     cfg = SimpleNamespace(glossary_learn_enabled=False)
@@ -68,7 +68,7 @@ def test_auto_learn_endpoint_failure_falls_back_and_prints_count(monkeypatch,
                          "learned_path": learned_path, **kwargs})
         return 7
 
-    monkeypatch.setattr("subtransjav.refine.glossary_learn.learn_from_s2_output",
+    monkeypatch.setattr("subtrans.refine.glossary_learn.learn_from_s2_output",
                         _fake_learn)
     glossary = tmp_path / "glossary_learned.csv"
     monkeypatch.setattr(vl, "learned_glossary_path", lambda: str(glossary))
@@ -101,7 +101,7 @@ def test_auto_learn_endpoint_failure_falls_back_and_prints_count(monkeypatch,
 def test_learn_to_tm_downgrades_when_post_validate_unavailable(monkeypatch,
                                                                tmp_path):
     # sys.modules 置 None → 函数内 ``from .post_validate import ...`` 抛 ImportError
-    monkeypatch.setitem(sys.modules, "subtransjav.refine.post_validate", None)
+    monkeypatch.setitem(sys.modules, "subtrans.refine.post_validate", None)
     tm = TranslationMemory(str(tmp_path / "tm.db"))
 
     orig = [

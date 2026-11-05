@@ -39,8 +39,8 @@ _STRICT_FLAGS = {
     "extra_checks",
 }
 _STRICT_MODULES = {
-    "subtransjav.refine.pass_merge",
-    "subtransjav.refine.pass_disagreement",
+    "subtrans.refine.pass_merge",
+    "subtrans.refine.pass_disagreement",
 }
 
 
@@ -80,7 +80,7 @@ def test_strict_scope_flags_complete():
 
 # 补卡6（D2026-1030-07 第 5 类二轮）：line_breaker 纳入 strict 面。
 # 独立断言，既有模块面 _STRICT_MODULES 与上述两条断言保持零改动。
-_LINE_BREAKER_MODULE = "subtransjav.refine.line_breaker"
+_LINE_BREAKER_MODULE = "subtrans.refine.line_breaker"
 
 
 @pytest.mark.skipif(not _HAS_TOMLIB, reason="tomllib requires 3.11+")

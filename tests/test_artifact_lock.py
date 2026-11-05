@@ -26,7 +26,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine import artifact_lock as al  # noqa: E402
+from subtrans.refine import artifact_lock as al  # noqa: E402
 
 
 def _touch(p: Path) -> str:
@@ -42,8 +42,8 @@ def test_same_input_same_outdir_second_acquire_rejected(tmp_path):
     h1 = al.acquire_artifact_lock(inp, str(out_dir))
     assert h1 is not None
     try:
-        assert (out_dir / ".subtransjav.lock").exists() or \
-            any(f.name.endswith(".subtransjav.lock")
+        assert (out_dir / ".subtrans.lock").exists() or \
+            any(f.name.endswith(".subtrans.lock")
                 for f in out_dir.iterdir())
         with pytest.raises(al.ArtifactLockConflict):
             al.acquire_artifact_lock(inp, str(out_dir))   # 冲突 → 拒绝
@@ -221,7 +221,7 @@ def test_release_never_deletes_third_party_replaced_lock(tmp_path):
     # 模拟竞态窗口：本方 release 的前两步（解锁+关闭）已发生——手动
     # 关闭句柄（msvcrt 区域锁随句柄关闭自动失效），第三方随即接管路径
     os.close(h._fd)                              # 白盒：只关句柄不删文件
-    third_content = "subtransjav-lock pid=999999 token=thirdparty0001\n"
+    third_content = "subtrans-lock pid=999999 token=thirdparty0001\n"
     lock_file.write_text(third_content, encoding="utf-8")
     al.release_artifact_lock(h)
     assert lock_file.exists(), "他方接管的锁文件被误删（须宁残留勿误删）"

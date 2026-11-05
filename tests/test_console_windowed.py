@@ -7,7 +7,7 @@ GUI 主程序改 windowed 子系统后，sys.stdout/stderr 可能为：
 """
 import sys
 
-from subtransjav.utils.console import (
+from subtrans.utils.console import (
     _fix_stream_encoding,
     safe_print,
     setup_console,

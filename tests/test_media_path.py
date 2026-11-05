@@ -19,14 +19,14 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine.asr_meta import (
+from subtrans.refine.asr_meta import (
     RUN_META_NAME,
     fingerprint,
     load_asr_meta,
     resolve_media_path,
 )
-from subtransjav.refine.manifest import compute_config_hash, validate_manifest
-from subtransjav.refine.quality_report import (
+from subtrans.refine.manifest import compute_config_hash, validate_manifest
+from subtrans.refine.quality_report import (
     build_quality_report,
     write_guide_json,
 )

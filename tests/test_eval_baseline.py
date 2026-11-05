@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-from subtransjav.refine.eval_baseline import (
+from subtrans.refine.eval_baseline import (
     WILSON_Z_95,
     _safe_stem,
     _timing_span,
@@ -25,7 +25,7 @@ from subtransjav.refine.eval_baseline import (
 
 
 def make_srt(tmp_path, name, entries):
-    from subtransjav.refine.filters import build_srt
+    from subtrans.refine.filters import build_srt
     p = tmp_path / name
     p.write_text(build_srt(entries), encoding="utf-8")
     return str(p)
@@ -151,7 +151,7 @@ class TestEvaluateAndReport:
         assert rep["engines"]["upstream"]["hallucination_proxy"] is None
         assert rep["engines"]["ct2"]["omission_proxy"] is None
         assert rep["pairs"]["ct2+upstream"]["matched"] == 1
-        assert rep["schema"] == "subtransjav.eval_baseline/1"
+        assert rep["schema"] == "subtrans.eval_baseline/1"
 
     def test_report_with_injected_windows(self, tmp_path):
         entries = [_ent(1, 1.0, 3.0, "こんにちは")]
@@ -171,7 +171,7 @@ class TestEvaluateAndReport:
         # stem 白名单净化：分隔符与点线全替 _
         assert json_path.endswith("bad_name-baseline.json")
         data = json.loads(pathlib.Path(json_path).read_text(encoding="utf-8"))
-        assert data["schema"] == "subtransjav.eval_baseline/1"
+        assert data["schema"] == "subtrans.eval_baseline/1"
         assert md_path.endswith("-baseline.md")
 
     def test_safe_stem(self):
@@ -183,7 +183,7 @@ class TestEvaluateAndReport:
 
 class TestCli:
     def test_main_happy_and_bad_input(self, tmp_path, capsys):
-        from subtransjav.refine.eval_baseline import main
+        from subtrans.refine.eval_baseline import main
         entries = [_ent(1, 1.0, 3.0, "あ")]
         pa = make_srt(tmp_path, "a.srt", entries)
         out = str(tmp_path / "r")
@@ -258,14 +258,14 @@ class TestEvaluateWilsonFields:
 
 def test_default_out_dir_is_data_root_reports_eval(monkeypatch, tmp_path):
     """CLI 缺省 --out＝数据根 reports/eval/（D2026-1030-02 B1 定案）。"""
-    import subtransjav.refine.eval_baseline as eb
+    import subtrans.refine.eval_baseline as eb
     monkeypatch.setattr(eb.paths, "data_subdir",
                         lambda *parts: str(tmp_path.joinpath(*parts)))
     assert eb.default_out_dir() == str(tmp_path / "reports" / "eval")
 
 
 # ------------------------------------------------ 补卡1 边界扩补（D2026-1030-07 白名单第 1 类）
-# 只增不改：下列新钉逐条对齐实码分支（subtransjav/refine/eval_baseline.py），
+# 只增不改：下列新钉逐条对齐实码分支（subtrans/refine/eval_baseline.py），
 # 合成夹具零 ffmpeg/网络/模型；I/O 分支一律 monkeypatch，不真跑子进程。
 
 
@@ -372,20 +372,20 @@ class TestCpsMixedRows:
 class TestSpeechWindowsDegradation:
     def test_ffmpeg_missing_returns_error(self, monkeypatch):
         # :109-113：_find_ffmpeg() is None → {"__error": "未检测到 ffmpeg"}（禁真跑）
-        from subtransjav.refine import audio_detect
+        from subtrans.refine import audio_detect
         monkeypatch.setattr(audio_detect, "_find_ffmpeg", lambda: None)
         assert speech_windows_full("whatever.mp4") == {"__error": "未检测到 ffmpeg"}
 
     def test_missing_media_returns_error(self, monkeypatch, tmp_path):
         # :114-115：ffmpeg 在但媒体不存在/为空 → {"__error": "无媒体文件"}
-        from subtransjav.refine import audio_detect
+        from subtrans.refine import audio_detect
         monkeypatch.setattr(audio_detect, "_find_ffmpeg", lambda: "ffmpeg-stub")
         assert speech_windows_full(str(tmp_path / "gone.mp4")) == {"__error": "无媒体文件"}
         assert speech_windows_full("") == {"__error": "无媒体文件"}
 
     def test_detection_exception_returns_error(self, monkeypatch):
         # :135：任一步抛异常 → 兜底 {"__error": "语音窗口检测失败: ..."}，绝不外抛
-        from subtransjav.refine import audio_detect
+        from subtrans.refine import audio_detect
 
         def _boom():
             raise RuntimeError("boom")
@@ -408,7 +408,7 @@ class TestWriteReportEscapeGuard:
         # :379-380：os.pardir in parts / parent != base 越界守卫（双保险）。
         # 正常路径 stem 已被白名单净化不可越界，此处 monkeypatch 净化函数注入
         # 越界前缀以触达守卫，验证仍抛 ValueError 且不落盘。
-        import subtransjav.refine.eval_baseline as eb
+        import subtrans.refine.eval_baseline as eb
         monkeypatch.setattr(eb, "_safe_stem", lambda _s: "../evil")
         out = tmp_path / "out"
         with pytest.raises(ValueError) as ei:
@@ -426,7 +426,7 @@ def test_safe_stem_all_illegal_falls_back_to_eval():
 def test_report_markdown_windows_error_degradation(monkeypatch, tmp_path):
     # :328-330：windows_error 非空 → 退化提示行 + 窗口类指标 null（窗口缺失）。
     # 窗口检测 monkeypatch 隔断，避免环境 ffmpeg 差异影响判定。
-    import subtransjav.refine.eval_baseline as eb
+    import subtrans.refine.eval_baseline as eb
     monkeypatch.setattr(eb, "speech_windows_full", lambda _p: {"__error": "无媒体文件"})
     entries = [_ent(1, 1.0, 3.0, "あ")]
     pa = make_srt(tmp_path, "a.srt", entries)
@@ -441,7 +441,7 @@ def test_report_markdown_windows_error_degradation(monkeypatch, tmp_path):
 
 def test_main_derives_stem_from_media_name(monkeypatch, tmp_path):
     # :416-417：media 非空且未给 --stem → stem=媒体名去扩展名；窗口检测 monkeypatch 隔断
-    import subtransjav.refine.eval_baseline as eb
+    import subtrans.refine.eval_baseline as eb
     monkeypatch.setattr(eb, "speech_windows_full", lambda _p: {"__error": "无媒体文件"})
     entries = [_ent(1, 1.0, 3.0, "あ")]
     pa = make_srt(tmp_path, "a.srt", entries)
@@ -468,7 +468,7 @@ def _seg(idx: int, start: float, end: float, text: str) -> dict:
 
 def _fill_fixture():
     """pass1 两段＋pass2 一采纳（5-6s 静音带）＋一重叠弃置（2.0-3.5s）。"""
-    from subtransjav.refine.pass_merge import adopted_pass2_indices, merge_passes
+    from subtrans.refine.pass_merge import adopted_pass2_indices, merge_passes
 
     pass1 = [_seg(1, 1.0, 3.0, "こんにちは"), _seg(2, 7.0, 9.0, "さようなら")]
     pass2 = [_seg(3, 5.0, 6.0, "おはよう"), _seg(4, 2.0, 3.5, "ぶつかり")]

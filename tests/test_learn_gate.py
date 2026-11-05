@@ -4,9 +4,9 @@ TM 学习准入门槛测试
 覆盖 scan_learn_defect 单测 + _learn_to_tm 行为单测（gate 开/关）。
 """
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.post_validate import scan_learn_defect
-from subtransjav.refine.tm import TranslationMemory
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.post_validate import scan_learn_defect
+from subtrans.refine.tm import TranslationMemory
 
 # ---------------------------------------------------------------------------
 # scan_learn_defect 单测
@@ -177,7 +177,7 @@ def test_validator_antonym_warning_blocks_tm_learn(tmp_path):
 
     全部为中性合成文本。
     """
-    from subtransjav.refine.post_validate import check_and_fix_translation_errors
+    from subtrans.refine.post_validate import check_and_fix_translation_errors
 
     orig = _make_entries([
         "やめて、やめてよ…",          # 1: antonym_yamete 命中（→别停）

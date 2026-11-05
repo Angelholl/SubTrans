@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import glossary_learn as gl
-from subtransjav.refine.glossary_learn import (
+from subtrans.refine import glossary_learn as gl
+from subtrans.refine.glossary_learn import (
     _acquire_glossary_lock,
     _ensure_http_url,
     _release_glossary_lock,
@@ -88,7 +88,7 @@ def test_corrupt_learned_file_aborts_save(tmp_path, monkeypatch, caplog):
     in_f, out_f = _s2_files(tmp_path, src="新しい", dst="術語")
     monkeypatch.setattr(gl, "extract_glossary_from_pair",
                         lambda *a, **k: [("新しい", "術語")])
-    with caplog.at_level(logging.WARNING, logger="subtransjav.refine.glossary_learn"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.refine.glossary_learn"):
         n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
     assert n == 0
     assert p.read_bytes() == before              # 既有文件未被清空覆盖
@@ -105,7 +105,7 @@ def test_lock_timeout_skips_save(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(gl, "_acquire_glossary_lock", lambda *a, **k: None)
     monkeypatch.setattr(gl, "extract_glossary_from_pair",
                         lambda *a, **k: [("新词", "新译")])
-    with caplog.at_level(logging.WARNING, logger="subtransjav.refine.glossary_learn"):
+    with caplog.at_level(logging.WARNING, logger="subtrans.refine.glossary_learn"):
         n = gl.learn_from_s2_output(str(in_f), str(out_f), str(p))
     assert n == 0
     assert p.read_bytes() == before              # 无锁不写
@@ -154,12 +154,12 @@ def test_ensure_http_url_allows_local_http():
 # ---------------------------------------------------------------------------
 
 def _hold_artifact_lock(path):
-    from subtransjav.refine.artifact_lock import acquire_artifact_lock
+    from subtrans.refine.artifact_lock import acquire_artifact_lock
     return acquire_artifact_lock(path, os.path.dirname(os.path.abspath(path)))
 
 
 def test_append_glossary_entries_added(tmp_path):
-    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    from subtrans.refine.glossary import append_glossary_entries, load_glossary_ex
     p = str(tmp_path / "glossary.csv")
     statuses = append_glossary_entries(
         [{"src": "先生", "target": "老师"}], glossary_path=p)
@@ -169,7 +169,7 @@ def test_append_glossary_entries_added(tmp_path):
 
 
 def test_append_glossary_entries_existing_not_overwritten(tmp_path):
-    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    from subtrans.refine.glossary import append_glossary_entries, load_glossary_ex
     p = str(tmp_path / "glossary.csv")
     save_learned_glossary(p, [("先生", "老师")])
     statuses = append_glossary_entries(
@@ -182,7 +182,7 @@ def test_append_glossary_entries_existing_not_overwritten(tmp_path):
 
 
 def test_append_glossary_entries_ascii_case_insensitive(tmp_path):
-    from subtransjav.refine.glossary import append_glossary_entries
+    from subtrans.refine.glossary import append_glossary_entries
     p = str(tmp_path / "glossary.csv")
     save_learned_glossary(p, [("IKU", "去了")])
     statuses = append_glossary_entries(
@@ -191,7 +191,7 @@ def test_append_glossary_entries_ascii_case_insensitive(tmp_path):
 
 
 def test_append_glossary_entries_aliases_third_column(tmp_path):
-    from subtransjav.refine.glossary import append_glossary_entries, load_glossary_ex
+    from subtrans.refine.glossary import append_glossary_entries, load_glossary_ex
     p = str(tmp_path / "glossary.csv")
     append_glossary_entries(
         [{"src": "先生", "target": "老师", "aliases": ["师傅", "讲师"]}],
@@ -202,7 +202,7 @@ def test_append_glossary_entries_aliases_third_column(tmp_path):
 
 def test_append_glossary_entries_locked_no_write(tmp_path):
     """并发锁语义：他方持锁时追加返回全部 locked，文件内容不变。"""
-    from subtransjav.refine.glossary import append_glossary_entries
+    from subtrans.refine.glossary import append_glossary_entries
     p = str(tmp_path / "glossary.csv")
     save_learned_glossary(p, [("既有", "词条")])
     before = Path(p).read_bytes()

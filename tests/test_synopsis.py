@@ -14,12 +14,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine import synopsis as syn
-from subtransjav.refine.cli import build_parser
-from subtransjav.refine.config import RefineConfig, StageConfig
-from subtransjav.refine.manifest import compute_config_hash
-from subtransjav.translate.llm_client import BatchResult, LLMClient
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine import synopsis as syn
+from subtrans.refine.cli import build_parser
+from subtrans.refine.config import RefineConfig, StageConfig
+from subtrans.refine.manifest import compute_config_hash
+from subtrans.translate.llm_client import BatchResult, LLMClient
 
 # ---------------------------------------------------------------------------
 # 工具
@@ -410,7 +410,7 @@ def test_request_synopsis_temperature_missing_warns_once(tmp_path,
     monkeypatch.setattr(syn, "_TEMP_WARNED", False)
     cdir = tmp_path / "c"
     with caplog.at_level(logging.WARNING,
-                         logger="subtransjav.refine.synopsis"):
+                         logger="subtrans.refine.synopsis"):
         syn.request_synopsis(CountingClient("梗概"), "入力", provider="p",
                              model="m", cache_dir=str(cdir))
         syn.request_synopsis(CountingClient("梗概"), "入力2", provider="p",
@@ -430,7 +430,7 @@ def test_request_synopsis_truncated_no_cache(tmp_path, caplog):
     client = CountingClient("梗概被截断", finish_reason="length")
     before = syn.synopsis_truncation_stats()
     with caplog.at_level(logging.INFO,
-                         logger="subtransjav.refine.synopsis"):
+                         logger="subtrans.refine.synopsis"):
         out = syn.request_synopsis(client, "入力", provider="p", model="m",
                                    cache_dir=str(cdir))
     assert out is None
@@ -446,7 +446,7 @@ def test_request_synopsis_finish_none_warns_and_caches(tmp_path, caplog):
     cdir = tmp_path / "c"
     client = CountingClient("梗概无finish", finish_reason=None)
     with caplog.at_level(logging.WARNING,
-                         logger="subtransjav.refine.synopsis"):
+                         logger="subtrans.refine.synopsis"):
         out = syn.request_synopsis(client, "入力", provider="p", model="m",
                                    cache_dir=str(cdir))
     assert out == "梗概无finish"                     # 按未截断正常处理
@@ -618,7 +618,7 @@ def test_request_synopsis_cast_flag_prompt_and_cache_isolation(tmp_path):
 def test_config_hash_sensitive_to_synopsis_cast_switch():
     """⑥a C1：无条件入 _CONFIG_FIELDS；ON/OFF 两态指纹不同；且 OFF 态指纹
     与开关引入前（字段缺席模拟）不同＝有意失配（不套用默认值缺席归一）。"""
-    import subtransjav.refine.manifest as mf
+    import subtrans.refine.manifest as mf
     assert "synopsis_cast_enabled" in mf._CONFIG_FIELDS
     base = compute_config_hash(_make_cfg())
     assert compute_config_hash(_make_cfg(synopsis_cast_enabled=True)) != base

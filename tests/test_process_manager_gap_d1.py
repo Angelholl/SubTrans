@@ -15,7 +15,7 @@ import logging
 import subprocess
 import types
 
-import subtransjav.utils.process_manager as pm
+import subtrans.utils.process_manager as pm
 
 # ---------------------------------------------------------------------------
 # 伪对象：异常类、伪进程、伪 psutil 模块
@@ -196,7 +196,7 @@ def test_no_psutil_terminate_and_kill_report_failure(monkeypatch):
 def test_no_psutil_get_process_tree_returns_empty(monkeypatch, caplog):
     """无 psutil：get_process_tree 返回 [] 并记录 warning。"""
     monkeypatch.setattr(pm, "PSUTIL_AVAILABLE", False)
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         assert pm.get_process_tree(1234) == []
     assert any("psutil not available" in r.getMessage() for r in caplog.records)
 
@@ -357,7 +357,7 @@ def test_run_timeout_psutil_tree_kill_and_failure_warning(monkeypatch, caplog):
     monkeypatch.setattr(
         pm, "terminate_process_tree",
         lambda pid: {"success": False, "errors": ["denied"]})
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         result = pm.run_with_timeout_tree(["fake-cmd"], timeout=0.5)
     assert result.timed_out is True
     assert any("树杀未完全成功" in r.getMessage() for r in caplog.records)
@@ -376,7 +376,7 @@ def test_run_timeout_taskkill_fallback(monkeypatch, caplog):
         return False, "taskkill 退出码 5"
 
     monkeypatch.setattr(pm, "_taskkill_tree", _fake_taskkill)
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         result = pm.run_with_timeout_tree(["fake-cmd"], timeout=0.5)
     assert result.timed_out is True
     assert calls == [4321]
@@ -441,7 +441,7 @@ def test_robust_posix_killpg_oserror_returns_false(monkeypatch, caplog):
     _install_posix_signal(monkeypatch)
     fake_os, _ = _fake_posix_os(7002, killpg_error=OSError("eprem"))
     monkeypatch.setattr(pm, "os", fake_os)
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         assert pm.terminate_process_tree_robust(7002) is False
     assert any("killpg 树杀失败" in r.getMessage() for r in caplog.records)
 
@@ -454,7 +454,7 @@ def test_robust_posix_non_leader_degrades_single_kill(monkeypatch, caplog):
     # 同组非 leader：pgid != pid → 单杀
     fake_os, calls = _fake_posix_os(1)
     monkeypatch.setattr(pm, "os", fake_os)
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         assert pm.terminate_process_tree_robust(7003) is True
     assert calls["kill"] == [(7003, _FAKE_SIGKILL)]
     assert calls["killpg"] == []
@@ -475,7 +475,7 @@ def test_robust_posix_non_leader_degrades_single_kill(monkeypatch, caplog):
     # 单杀时其他 OSError → False + 告警
     fake_os, _ = _fake_posix_os(1, kill_error=OSError("eperm"))
     monkeypatch.setattr(pm, "os", fake_os)
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         assert pm.terminate_process_tree_robust(7006) is False
     assert any("单杀降级失败" in r.getMessage() for r in caplog.records)
 

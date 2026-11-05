@@ -33,8 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.glossary_learn import load_learned_glossary  # noqa: E402
-from subtransjav.refine.pipeline_support import learned_glossary_path  # noqa: E402
+from subtrans.refine.glossary_learn import load_learned_glossary  # noqa: E402
+from subtrans.refine.pipeline_support import learned_glossary_path  # noqa: E402
 
 
 def normalize_keep_term(term: str) -> str:

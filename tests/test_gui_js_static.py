@@ -20,7 +20,7 @@ from pathlib import Path
 import js_sources
 import pytest
 
-ASSETS = (Path(__file__).resolve().parents[1] / "subtransjav"
+ASSETS = (Path(__file__).resolve().parents[1] / "subtrans"
           / "webview_gui" / "assets")
 REVIEW_JS = ASSETS / "review.js"
 INDEX_HTML = ASSETS / "index.html"
@@ -622,7 +622,7 @@ def test_build_refine_args_polish_flag_whitelist():
     pytest.importorskip("webview",
                         reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试",
                         exc_type=ImportError)
-    from subtransjav.webview_gui.api import _build_refine_args  # noqa: PLC0415
+    from subtrans.webview_gui.api import _build_refine_args  # noqa: PLC0415
 
     args = _build_refine_args({"inputs": ["a.srt"], "polish_enabled": True})
     assert args.count("--polish") == 1, "polish_enabled=True 须转发 --polish"
@@ -1769,7 +1769,7 @@ def test_review_video_exts_consistent():
     JS 视频集（防三处字面量——含 strings.py file_type_video
     过滤器文案——漂移）。
     """
-    main_src = (Path(__file__).resolve().parents[1] / "subtransjav"
+    main_src = (Path(__file__).resolve().parents[1] / "subtrans"
                 / "webview_gui" / "main.py").read_text(encoding="utf-8")
     m = re.search(r"allowed_exts\s*=\s*\(([^)]*)\)", main_src)
     assert m, "main.py 未找到 allowed_exts 元组"
@@ -5623,10 +5623,10 @@ def test_translate_splitter_retired_pinned():
     assert "translate-splitter" not in css, "style.css 仍残留分隔条样式"
     assert "--translate-split" not in css, "style.css 仍残留比例变量"
     assert "TranslateSplit" not in js, "app-file-list.js 仍残留 TranslateSplit"
-    assert "subtransjav.translate.split" not in js,         "比例记忆键应随整器退役（不得残留 localStorage 读写）"
+    assert "subtrans.translate.split" not in js,         "比例记忆键应随整器退役（不得残留 localStorage 读写）"
     # d1102-卡A 覆盖层化：抽屉高度记忆键随把手/调高逻辑一并退役
     cm = (ASSETS / "app-console.js").read_text(encoding="utf-8")
-    assert "subtransjav.console.h" not in cm, \
+    assert "subtrans.console.h" not in cm, \
         "抽屉高度记忆键应随覆盖层化退役（覆盖层定高 72vh 无记忆）"
 
 
@@ -6024,7 +6024,7 @@ def test_inline_width_allowlist():
 # ---------------------------------------------------------------------------
 
 # 卡G2 行为面的四个字面锚点（钉②断言用；与 app.js 实现逐字对应）
-_ASIDE_COLLAPSE_KEY = "subtransjav.aside.collapsed"
+_ASIDE_COLLAPSE_KEY = "subtrans.aside.collapsed"
 _ASIDE_COLLAPSE_CLASS = "aside-collapsed"
 # 卡N（D2026-1013-01 追记）：折叠把手双功能融合——两钮合并为单钮双态
 _ASIDE_COLLAPSE_MSEL = ".aside-toggle-btn"
@@ -6178,7 +6178,7 @@ def test_aside_collapse_structure():
 
 def test_aside_collapse_behavior():
     """卡G2 行为钉（D2026-1013-01 §2.2d/e/f + §2.5）：
-    ①app.js 含 localStorage 键串 `subtransjav.aside.collapsed`（单写记忆层）；
+    ①app.js 含 localStorage 键串 `subtrans.aside.collapsed`（单写记忆层）；
     ②启动默认按窗口阈值 1240（innerWidth <= 1240 默认收起，记忆优先于阈值）；
     ③两钮 aria-label/title 复用既有 MSG.collapse_toggle（零新增 MSG 键）；
     ④workbench/按钮获取带 null 守卫（无 workbench 页面不崩）；
@@ -6188,7 +6188,7 @@ def test_aside_collapse_behavior():
     collapse_toggle 回填/守卫均不在）；完成 app.js 改法 1-2 后转绿。"""
     src = _app_js_source()
     assert _ASIDE_COLLAPSE_KEY in src, (
-        "app.js 缺 localStorage 键串 subtransjav.aside.collapsed"
+        "app.js 缺 localStorage 键串 subtrans.aside.collapsed"
         "（折叠记忆层未落，§2.2e localStorage 单写）")
     seg = _aside_collapse_segment(src)
     assert _ASIDE_COLLAPSE_CLASS in seg, \
@@ -8522,7 +8522,7 @@ def test_ct2_runtime_dir_ui_pinned():
         encoding="utf-8")
     assert "def read_ui_settings()" in cfg, \
         "refine 层缺设置 KV 读取面（禁 asr_runtime 反向 import webview_gui）"
-    assert "from subtransjav.webview_gui" not in (
+    assert "from subtrans.webview_gui" not in (
         ASSETS.parent.parent / "refine" / "asr_runtime.py"
     ).read_text(encoding="utf-8"), "refine 层禁 import webview_gui（分层方向）"
 

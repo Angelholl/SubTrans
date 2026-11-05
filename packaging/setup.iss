@@ -23,7 +23,7 @@ AppVersion={#version}
 DefaultDirName={code:PickInstallDir|{autopf}\SubTrans}
 DefaultGroupName={#MyAppName}
 ; 安装器自身图标（D2026-1004-01）：相对本 .iss 所在目录解析
-SetupIconFile=..\subtransjav\webview_gui\assets\icon.ico
+SetupIconFile=..\subtrans\webview_gui\assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -264,8 +264,8 @@ begin
       Result := Result + 1;
 end;
 
-// 锚点硬门槛：10 锚与 subtransjav/data_migration.py 旧根白名单 +
-// subtransjav/paths.py DATA_ANCHORS + 运行时落盘对齐（glossary_conflict_watch.json
+// 锚点硬门槛：10 锚与 subtrans/data_migration.py 旧根白名单 +
+// subtrans/paths.py DATA_ANCHORS + 运行时落盘对齐（glossary_conflict_watch.json
 // 实际位于 Temp/translation_memory/，非 config\；config\templates 为角色卡/模板
 // 目录；user_dirs.json 为 webview_gui/user_dirs.py 持久登记文件；
 // fullchain_c22.json 为 C22 校准门产品态配置行，D2026-1101-01）。任一命中即
@@ -370,7 +370,7 @@ begin
   end;
 end;
 
-// R2 数据根四级解析（与 subtransjav/paths.py data_root() 对齐，仅安装器口径）：
+// R2 数据根四级解析（与 subtrans/paths.py data_root() 对齐，仅安装器口径）：
 // 1) 环境变量 SUBTRANSJAV_DATA_ROOT（非空才生效）；
 // 2) 指针文件 .data-root（frozen 下固定在 exe 同目录 = {app}，单行绝对路径）；
 // 3) frozen 默认＝落点 A（安装目录旁路），新默认无锚点而旧 %LOCALAPPDATA%\SubTrans
@@ -545,7 +545,7 @@ var
 //      开发仓库 → 预填回落 PickInstallDir（与默认同源；无合格候选才用
 //      编译默认 {autopf}\SubTrans）；
 //   F2 开发仓库拒装（交互+静默双闸）：所选目录含 .git，或含 pyproject.toml
-//      且有 subtransjav/ 源码包目录 → 目录页 Next 与 PrepareToInstall 拒绝。
+//      且有 subtrans/ 源码包目录 → 目录页 Next 与 PrepareToInstall 拒绝。
 // ---------------------------------------------------------------------------
 
 function IsDevRepoDir(const dir: String): Boolean;
@@ -559,7 +559,7 @@ begin
   Result :=
     DirExists(trimmed + '\.git') or
     (FileExists(trimmed + '\pyproject.toml') and
-     DirExists(trimmed + '\subtransjav'));
+     DirExists(trimmed + '\subtrans'));
 end;
 
 // 默认安装目录选盘三级优先（D2026-1105-02，owner 令，取代 D2026-1104-01
@@ -817,7 +817,7 @@ begin
     if IsDevRepoDir(WizardForm.DirEdit.Text) then
     begin
       Result := False;
-      MsgBox('所选目录疑似开发仓库（含 .git，或 pyproject.toml + subtransjav 源码结构），' + #13#10 +
+      MsgBox('所选目录疑似开发仓库（含 .git，或 pyproject.toml + subtrans 源码结构），' + #13#10 +
              '不能作为 SubTrans 安装目录，否则会污染开发工作树。' + #13#10 +
              '请另选实际安装目录。', mbError, MB_OK);
       Exit;
@@ -841,7 +841,7 @@ begin
   Result := '';
   if IsDevRepoDir(WizardDirValue) then
   begin
-    Result := '安装目录是开发仓库（含 .git 或 pyproject.toml + subtransjav 源码结构），已阻止安装；' +
+    Result := '安装目录是开发仓库（含 .git 或 pyproject.toml + subtrans 源码结构），已阻止安装；' +
               '静默安装请用 /DIR= 指定实际安装目录。';
     Exit;
   end;

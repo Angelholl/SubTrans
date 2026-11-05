@@ -13,7 +13,7 @@ import os
 import time
 import types
 
-from subtransjav.refine.asr_meta import (
+from subtrans.refine.asr_meta import (
     RUN_META_NAME,
     SUSPECT_STATUSES,
     fingerprint,
@@ -263,7 +263,7 @@ def test_suspect_statuses_constant():
 # ---------------------------------------------------------------------------
 
 def test_config_defaults_for_asr_meta_fields():
-    from subtransjav.refine.config import (
+    from subtrans.refine.config import (
         DEFAULT_V2_ASR_META_MIN_COVERAGE_PCT,
         DEFAULT_V2_ASR_META_STALE_MAX_HOURS,
         RefineConfig,

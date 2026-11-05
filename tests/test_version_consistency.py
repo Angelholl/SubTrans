@@ -18,16 +18,16 @@ def _pyproject_version() -> str:
 
 
 def test_pyproject_version_matches_dunder_version():
-    from subtransjav.__version__ import __version__
+    from subtrans.__version__ import __version__
 
     assert _pyproject_version() == __version__, (
-        "pyproject.toml version 与 subtransjav/__version__.py __version__ 不一致；"
+        "pyproject.toml version 与 subtrans/__version__.py __version__ 不一致；"
         "bump 版本时两处必须同批修改"
     )
 
 
 def test_display_version_tracks_pep440_version():
-    from subtransjav.__version__ import __version__, __version_display__
+    from subtrans.__version__ import __version__, __version_display__
 
     assert __version_display__ == __version__, (
         "__version_display__（UI About/CMD 显示）必须与 __version__ 一致"
@@ -35,7 +35,7 @@ def test_display_version_tracks_pep440_version():
 
 
 def test_version_info_tracks_pep440_version():
-    from subtransjav.__version__ import __version__, __version_info__
+    from subtrans.__version__ import __version__, __version_info__
 
     # main 常驻滚动 dev 号（D2026-1001-03 第⑧项）：__version__ 形如 "2.3.0.dev0"，
     # 仅取前三段数字段校验；发布版无 dev 后缀时同样兼容，断言语义不变

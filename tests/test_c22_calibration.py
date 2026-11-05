@@ -248,7 +248,7 @@ def test_enable_pass_writes_fingerprint_and_gate_opens(c22, tmp_path,
     data = json.loads(gate.read_text(encoding="utf-8"))
     assert data["enabled"] is True
     assert data["rules_sha1"] and data["app_version"]
-    from subtransjav.data_migration import evaluate_c22_gate
+    from subtrans.data_migration import evaluate_c22_gate
     assert evaluate_c22_gate(gate) == (True, "ok")
 
 
@@ -257,7 +257,7 @@ def test_enable_without_fingerprint_refuses_exit_2(c22, tmp_path,
     """规则集指纹不可得 → 拒写门控退出码 2 且文件不产生（无锁不写）。"""
     monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
     monkeypatch.setattr(mod, "_gate_verdict", lambda agg: "pass")
-    import subtransjav.data_migration as dm
+    import subtrans.data_migration as dm
     monkeypatch.setattr(dm, "c22_gate_fingerprint",
                         lambda app_version=None: (None, ""))
     guide = _write_guide(tmp_path, [T1, T2])

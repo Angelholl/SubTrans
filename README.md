@@ -47,7 +47,7 @@ A dual-engine subtitle translation & refinement toolkit with built-in persona te
 - 安装器内置 WebView2 检测与引导（GUI 运行时依赖）。
 - 完整性口径＝发布页提供的 `SHA256SUMS.txt`（安装包校验值）：下载后在 CMD 执行 `certutil -hashfile 安装包文件名 SHA256` 比对，一致即文件未被篡改（默认完整性核验方式）。
 - 环境变量 `SUBTRANSJAV_DATA_ROOT` 优先级最高，可整体重定位数据根（词库/TM/配置/产物锚点）。
-- `subtrans-cli.exe --where`（EXE 版位于安装目录；pip/源码版为 `subtransjav-refine --where`）一次性诊断当前全部路径锚点（只读零副作用），排障首选。
+- `subtrans-cli.exe --where`（EXE 版位于安装目录；pip/源码版为 `subtrans-refine --where`）一次性诊断当前全部路径锚点（只读零副作用），排障首选。
 - EXE 版数据根默认 `%LOCALAPPDATA%\SubTrans`；pip / 源码版数据位置在仓库根（同样可用 `SUBTRANSJAV_DATA_ROOT` 重定位）。
 
 ## 安装
@@ -75,8 +75,8 @@ pip install -e ".[gui]"
 
 :: 可选：日语语法提示词典数据（core 版/完整版二选一；不装则语法提示自动降级）
 :: 词典数据一律下载式——EXE 版在引擎页「词典管理」一键下载；pip/CLI 版：
-python -m subtransjav.refine.cli --dict-download sudachi          :: core 版
-python -m subtransjav.refine.cli --dict-download sudachi_full     :: 完整版（约 137MB zip，CDN 单源）
+python -m subtrans.refine.cli --dict-download sudachi          :: core 版
+python -m subtrans.refine.cli --dict-download sudachi_full     :: 完整版（约 137MB zip，CDN 单源）
 ```
 
 > **进阶与开发**：想修改代码或自定义构建的进阶用户，请 fork 本仓库（[Angelholl/SubTrans](https://github.com/Angelholl/SubTrans)）后按上文 ②③ 自行构建；EXE 安装包用户无需使用源码与 pip 方式。
@@ -101,9 +101,9 @@ python -m subtransjav.refine.cli --dict-download sudachi_full     :: 完整版�
 
 ```bat
 :: GUI
-subtransjav-gui
+subtrans-gui
 
-:: CLI 全流程（单文件）——EXE 用户运行安装目录内的 subtrans-cli.exe（下例以默认安装路径为例）；pip/源码用户将命令替换为 subtransjav-refine
+:: CLI 全流程（单文件）——EXE 用户运行安装目录内的 subtrans-cli.exe（下例以默认安装路径为例）；pip/源码用户将命令替换为 subtrans-refine
 & "C:\Program Files\SubTrans\subtrans-cli.exe" -i 字幕.srt --profile local --s1-provider lmstudio --s1-model <模型名> --s3-provider lmstudio --s3-model <模型名>
 
 :: CLI 批量（目录递归）
@@ -184,7 +184,7 @@ SRT 输入
 长任务中断后可续跑，复用已完成的阶段A 产物，不重复计算：
 
 ```bat
-:: 指纹（输入/配置/词库/TM）校验通过才复用（EXE 用户运行安装目录内的 subtrans-cli.exe；pip/源码用户替换为 subtransjav-refine）：
+:: 指纹（输入/配置/词库/TM）校验通过才复用（EXE 用户运行安装目录内的 subtrans-cli.exe；pip/源码用户替换为 subtrans-refine）：
 & "C:\Program Files\SubTrans\subtrans-cli.exe" -i 字幕.srt ... --resume
 
 :: 指纹不匹配仍强制复用旧产物（自行承担错位风险）：
@@ -206,16 +206,16 @@ SRT 输入
 - **提示模型未指定？** `lmstudio` / `ollama` / `siliconflow` / `custom` 需经 `--s1-model` / `--s3-model` 指定模型名。
 - **云端密钥放哪？** 三级解析：CLI/GUI 传参 > 环境变量 > GUI 保存（DPAPI 加密存储）；本地服务无需密钥。
 - **只想看执行计划、不实际调用？** 加 `--dry-run`。
-- **我的数据（词库/TM/配置）在哪？** 运行安装目录内的 `subtrans-cli.exe --where`（pip/源码版为 `subtransjav-refine --where`）一次报全当前全部路径锚点；EXE 版默认在 `%LOCALAPPDATA%\SubTrans`，pip 版在仓库根。
+- **我的数据（词库/TM/配置）在哪？** 运行安装目录内的 `subtrans-cli.exe --where`（pip/源码版为 `subtrans-refine --where`）一次报全当前全部路径锚点；EXE 版默认在 `%LOCALAPPDATA%\SubTrans`，pip 版在仓库根。
 - **杀毒软件报毒怎么办？** 部分杀软（含 Windows Defender）可能对 Python 打包文件误报，不代表文件有问题。处理步骤：① 从官方 Releases 下载并核对发布页提供的 SHA256 校验值；② 核对一致后将被隔离的文件「恢复」，并把安装包/安装目录加入杀软白名单；③ 仍持续误报可向杀软厂商提交误报申诉（如微软 Defender 的[文件提交页](https://www.microsoft.com/en-us/wdsi/filesubmission)），厂商核实后会更新病毒库放行。
 
 更多问题见 [docs/使用与维护手册.md](docs/使用与维护手册.md)。
 
 ## 词库与模板（自配）
 
-`config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target，可选第三列 target_aliases 别名，`|` 分隔）与 TM 库不入版本库，克隆后按需自建。
+`config/templates/`（角色卡/幻觉模式/加固短语）与 `subtrans/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target，可选第三列 target_aliases 别名，`|` 分隔）与 TM 库不入版本库，克隆后按需自建。
 
-初始自带通用模板角色卡与默认规则（`config/templates/` 与 `subtransjav/refine/defaults/`，可编辑/可覆盖）；词库 CSV（`--glossary`）与 TM 库不入版本库，克隆后按需自建。领域扩展包可参照 `docs/examples/` 下的示例结构自行定制。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
+初始自带通用模板角色卡与默认规则（`config/templates/` 与 `subtrans/refine/defaults/`，可编辑/可覆盖）；词库 CSV（`--glossary`）与 TM 库不入版本库，克隆后按需自建。领域扩展包可参照 `docs/examples/` 下的示例结构自行定制。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
 
 ## English Quickstart
 
@@ -231,7 +231,7 @@ pip install -e ".[gui]"
 ### Quick Start
 
 1. Install [LM Studio](https://lmstudio.ai/), download a model, and start its local server (default `http://localhost:1234/v1`). Local models are **not** bundled — you must provide your own.
-2. Launch the GUI (`subtransjav-gui`) and pick the provider/model in the 引擎与模型 (Engine & Model) tab, or use the CLI (`subtrans-cli.exe` inside the EXE install directory; pip/source users: `subtransjav-refine`):
+2. Launch the GUI (`subtrans-gui`) and pick the provider/model in the 引擎与模型 (Engine & Model) tab, or use the CLI (`subtrans-cli.exe` inside the EXE install directory; pip/source users: `subtrans-refine`):
 
 ```bat
 & "C:\Program Files\SubTrans\subtrans-cli.exe" -i subs.srt --profile local --s1-provider lmstudio --s1-model <model> --s3-provider lmstudio --s3-model <model>
@@ -242,7 +242,7 @@ The GUI is Chinese-oriented; the refine pipeline currently targets Japanese → 
 ### Data Location
 
 - EXE install: `%LOCALAPPDATA%\SubTrans`; pip/source: repository root.
-- Override everything with the `SUBTRANSJAV_DATA_ROOT` environment variable; run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtransjav-refine --where`) to print all resolved path anchors (read-only diagnostics).
+- Override everything with the `SUBTRANSJAV_DATA_ROOT` environment variable; run `subtrans-cli.exe --where` from the EXE install directory (pip/source: `subtrans-refine --where`) to print all resolved path anchors (read-only diagnostics).
 
 See the Chinese sections above for full details.
 

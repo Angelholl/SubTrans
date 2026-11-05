@@ -5,8 +5,8 @@
 （禁 ±1 算术外推）。
 """
 
-from subtransjav.refine.quality_report import resolve_final_block
-from subtransjav.refine.v2_premerge import _align_orig_by_timing, _premerge_entries
+from subtrans.refine.quality_report import resolve_final_block
+from subtrans.refine.v2_premerge import _align_orig_by_timing, _premerge_entries
 
 
 def test_premerge_merge_creates_index_hole():
@@ -52,7 +52,7 @@ def test_cleaner_delete_then_index_restore():
 def test_quarantine_moved_out_keeps_other_indexes():
     """③ 隔离区移出：source_hallucination.quarantine_review 语义——
     被移出条目从主稿消失但其余 index 原样保留（不重编号）。"""
-    from subtransjav.refine.source_hallucination import quarantine_review
+    from subtrans.refine.source_hallucination import quarantine_review
     final = [
         {"index": 1, "timing": "00:00:01,000 --> 00:00:02,000", "text": "第一条"},
         {"index": 2, "timing": "00:00:03,000 --> 00:00:04,000", "text": "流畅中文句子"},

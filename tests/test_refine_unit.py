@@ -5,9 +5,9 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from subtransjav.refine.config import LOCAL_BATCH_HARD_CAP, RefineConfig, StageConfig
-from subtransjav.refine.filters import build_srt, filter_placeholder_file, is_placeholder, parse_srt
-from subtransjav.refine.glossary import (
+from subtrans.refine.config import LOCAL_BATCH_HARD_CAP, RefineConfig, StageConfig
+from subtrans.refine.filters import build_srt, filter_placeholder_file, is_placeholder, parse_srt
+from subtrans.refine.glossary import (
     format_glossary_block,
     load_glossary,
     load_glossary_ex,
@@ -15,7 +15,7 @@ from subtransjav.refine.glossary import (
     save_glossary,
     term_in_text,
 )
-from subtransjav.refine.instructions import write_effective_instructions
+from subtrans.refine.instructions import write_effective_instructions
 
 SAMPLE_SRT = """1
 00:00:01,000 --> 00:00:03,000
@@ -141,7 +141,7 @@ def test_placeholder_detection():
 
 
 def test_chatter_strip():
-    from subtransjav.refine.filters import strip_chatter_lines
+    from subtrans.refine.filters import strip_chatter_lines
     dirty = "台词。\n本批次共4条字幕，全部保留。#1为测试\nScene 1 分析"
     assert strip_chatter_lines(dirty) == "台词。"
 
@@ -194,7 +194,7 @@ def test_validate_missing_endpoint():
 
 # ---------------- post_validate ----------------
 def test_post_validate_zawei_ja_to_zh():
-    from subtransjav.refine.post_validate import check_and_fix_translation_errors
+    from subtrans.refine.post_validate import check_and_fix_translation_errors
     src = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000", "text": "学校で有名です"}]
     tgt = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000", "text": "作为学校很有名"}]
     fixes, _, _flagged, _structured = check_and_fix_translation_errors(src, tgt)
@@ -204,7 +204,7 @@ def test_post_validate_zawei_ja_to_zh():
 
 
 def test_post_validate_zawei_toshite_kept():
-    from subtransjav.refine.post_validate import check_and_fix_translation_errors
+    from subtrans.refine.post_validate import check_and_fix_translation_errors
     src = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000", "text": "医者として有名です"}]
     tgt = [{"index": 1, "timing": "00:00:01,000 --> 00:00:02,000", "text": "作为医生很有名"}]
     fixes, _, _flagged, _structured = check_and_fix_translation_errors(src, tgt)

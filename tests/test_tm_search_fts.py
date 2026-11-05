@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS tm_entries (
 
 
 def _make_tm(tmp_path, name="tm_search.db"):
-    from subtransjav.refine.tm import TranslationMemory
+    from subtrans.refine.tm import TranslationMemory
     db_path = os.path.join(str(tmp_path), name)
     return TranslationMemory(db_path), db_path
 
@@ -98,7 +98,7 @@ class TestLegacyDbAutoFts:
         conn.commit()
         conn.close()
 
-        from subtransjav.refine.tm import TranslationMemory
+        from subtrans.refine.tm import TranslationMemory
         tm = TranslationMemory(db_path)
         try:
             # 打开即自动建面（幂等迁移链末端 _ensure_fts）
@@ -249,7 +249,7 @@ class TestRebuildMigrationCoherence:
         conn.commit()
         conn.close()
 
-        from subtransjav.refine.tm import TranslationMemory
+        from subtrans.refine.tm import TranslationMemory
         tm = TranslationMemory(db_path)
         try:
             # 打开即迁移重建：新 schema + FTS 面连带重建

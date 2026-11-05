@@ -15,9 +15,9 @@ import types
 
 import pytest
 
-from subtransjav.refine import config as rc
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.config import (
+from subtrans.refine import config as rc
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.config import (
     DEEPSEEK_BASE_DEFAULT,
     DEFAULT_PREMERGE_MAX_CHARS,
     DEFAULT_PREMERGE_MAX_GAP_S,
@@ -36,7 +36,7 @@ from subtransjav.refine.config import (
     resolve_tunable,
     user_settings_path,
 )
-from subtransjav.refine.manifest import compute_config_hash
+from subtrans.refine.manifest import compute_config_hash
 
 # ---------------------------------------------------------------------------
 # 工具：把用户配置文件重定向到 tmp_path，隔离真实 repo 配置
@@ -330,5 +330,5 @@ def test_d20260922_02_legacy_providers_removed_pin():
     """D2026-0922-02 裁决二：PROVIDER_CONFIGS 六条孤立 legacy 条目
     （glm/groq/openrouter/gemini/claude/gpt）已删除，仅保留现役集合，
     正向钉防止回添。"""
-    from subtransjav.translate.providers import PROVIDER_CONFIGS
+    from subtrans.translate.providers import PROVIDER_CONFIGS
     assert set(PROVIDER_CONFIGS) == {"deepseek", "ollama", "custom"}

@@ -9,10 +9,10 @@ from types import SimpleNamespace
 
 import pytest
 
-import subtransjav.refine.grammar_hint as gh
-import subtransjav.refine.pipeline_v2 as pv
-import subtransjav.refine.token_hint as token_hint
-from subtransjav.refine.pipeline_v2 import (
+import subtrans.refine.grammar_hint as gh
+import subtrans.refine.pipeline_v2 as pv
+import subtrans.refine.token_hint as token_hint
+from subtrans.refine.pipeline_v2 import (
     _collect_grammar_hints,
     _direction_key,
 )
@@ -255,7 +255,7 @@ def test_direction_passthrough_to_cache_key(monkeypatch):
 # ---------------------------------------------------------------------------
 def test_grammar_hint_residue_cleaner():
     """残留清理钉：【语法提示】块 + " ||| " 回显兜底保留译文侧。"""
-    from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+    from subtrans.refine.cleaner_rules import clean_grammar_hint_residue
     dirty = "【语法提示】\n- 分词参考：X | Y\n原文：中文 ||| English line"
     assert clean_grammar_hint_residue(dirty) == "English line"
 
@@ -279,7 +279,7 @@ _EN_ECHO_DIRTY = (
 
 def test_clean_residue_en_mode_strips_english_echo():
     """②en 方向：真实污染形态多行样例清理后只剩裸译文。"""
-    from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+    from subtrans.refine.cleaner_rules import clean_grammar_hint_residue
     out = clean_grammar_hint_residue(_EN_ECHO_DIRTY, "en")
     assert out == ("The pingpong ball auction is over; \n"
                    "let's practice again next week.")
@@ -291,7 +291,7 @@ def test_clean_residue_en_mode_strips_english_echo():
 
 def test_clean_residue_default_ignores_english_echo():
     """③缺省行为钉：不传/传 zh 均不激活英文模式（缺省零感知）。"""
-    from subtransjav.refine.cleaner_rules import clean_grammar_hint_residue
+    from subtrans.refine.cleaner_rules import clean_grammar_hint_residue
     for cleaned in (clean_grammar_hint_residue(_EN_ECHO_DIRTY),
                     clean_grammar_hint_residue(_EN_ECHO_DIRTY, "zh")):
         assert cleaned == _EN_ECHO_DIRTY.strip()

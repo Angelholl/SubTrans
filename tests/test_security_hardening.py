@@ -11,7 +11,7 @@ class TestSafePrintSepEnd:
 
     def test_safe_print_with_sep_and_end_no_error(self):
         """Normal path: sep/end are respected."""
-        from subtransjav.utils.console import safe_print
+        from subtrans.utils.console import safe_print
 
         buf = io.StringIO()
         safe_print("a", "b", sep="|", end="!\n", file=buf)
@@ -19,7 +19,7 @@ class TestSafePrintSepEnd:
 
     def test_safe_print_fallback_preserves_sep(self):
         """When UnicodeEncodeError is raised, sep should still be applied."""
-        from subtransjav.utils.console import safe_print
+        from subtrans.utils.console import safe_print
 
         # Create a stream that raises UnicodeEncodeError on write
         class BrokenStream(io.StringIO):
@@ -47,7 +47,7 @@ class TestSafePrintSepEnd:
 
     def test_safe_print_fallback_multiple_args_with_sep(self):
         """Fallback path must use custom sep, not default space."""
-        from subtransjav.utils.console import safe_print
+        from subtrans.utils.console import safe_print
 
         # monkeypatch sys.stdout to force UnicodeEncodeError
         class FailOnceWriter(io.StringIO):

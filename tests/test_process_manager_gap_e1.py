@@ -19,7 +19,7 @@ import types
 
 import pytest
 
-import subtransjav.utils.process_manager as pm
+import subtrans.utils.process_manager as pm
 
 # ---------------------------------------------------------------------------
 # 伪对象：异常类、伪进程、伪 psutil 模块
@@ -148,7 +148,7 @@ def _install_posix_signal(monkeypatch):
 def test_get_process_tree_generic_exception_warns_with_pid(monkeypatch, caplog):
     """Process(pid) 抛通用异常：告警含 pid，返回 []。"""
     _install_psutil(monkeypatch, _raiser(RuntimeError("enum boom")))
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         assert pm.get_process_tree(3101) == []
     messages = [r.getMessage() for r in caplog.records]
     assert any(
@@ -212,7 +212,7 @@ def test_single_kill_swallows_exception_and_warns(caplog):
         def kill(self):
             raise OSError("kill failed")
 
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         pm._single_kill(_BrokenProc())  # 不抛即通过
     messages = [r.getMessage() for r in caplog.records]
     assert any("兜底单杀失败" in m and "3301" in m for m in messages)
@@ -254,7 +254,7 @@ def test_run_timeout_posix_killpg_error_still_single_kills(monkeypatch, caplog):
 
     monkeypatch.setattr(
         pm, "os", types.SimpleNamespace(name="posix", killpg=_killpg))
-    with caplog.at_level(logging.WARNING, logger="subtransjav"):
+    with caplog.at_level(logging.WARNING, logger="subtrans"):
         result = pm.run_with_timeout_tree(["fake-cmd"], timeout=0.5)
     assert result.timed_out is True
     assert result.stdout == "out"

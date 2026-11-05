@@ -44,8 +44,8 @@ from pathlib import Path, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.filters import parse_srt
-from subtransjav.refine.pass_disagreement import (
+from subtrans.refine.filters import parse_srt
+from subtrans.refine.pass_disagreement import (
     _LANG_RE,
     _MARKER_RE,
     _timing_span,
@@ -178,7 +178,7 @@ def sibling_paths_for_csv(csv_path: Path) -> dict:
     """从分歧复核 CSV 路径推同目录 pass1/pass2/final_cn 路径。
 
     CSV 名 = merged 名 + ``_分歧复核.csv``；merged stem 为
-    ``{base}.{lang}.merged[.subtransjav]``（剥法同 pass_disagreement）。
+    ``{base}.{lang}.merged[.subtrans]``（剥法同 pass_disagreement）。
     只拼路径不查存在性，返回 {"merged","pass1","pass2","final_cn"}。
     """
     stem = csv_path.name[:-len(CSV_SUFFIX)]      # = merged 文件 stem

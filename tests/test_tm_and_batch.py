@@ -18,7 +18,7 @@ class TestTranslationMemory:
     """Test TranslationMemory class."""
 
     def _make_tm(self, tmp_path):
-        from subtransjav.refine.tm import TranslationMemory
+        from subtrans.refine.tm import TranslationMemory
         db_path = os.path.join(str(tmp_path), "test_tm.db")
         return TranslationMemory(db_path)
 
@@ -137,7 +137,7 @@ class TestTranslationMemory:
             assert added == 0  # same content, not "new"
 
             # Import into a NEW TM (should add all)
-            from subtransjav.refine.tm import TranslationMemory
+            from subtrans.refine.tm import TranslationMemory
             db2 = os.path.join(str(tmp_path), "test_tm2.db")
             tm2 = TranslationMemory(db2)
             added2 = tm2.import_csv(csv_path)
@@ -186,7 +186,7 @@ class TestBatchProcessing:
     """Test batch directory scanning."""
 
     def test_find_srt_files_flat(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         # Create test files
         (tmp_path / "a.srt").write_text("test")
@@ -198,7 +198,7 @@ class TestBatchProcessing:
         assert all(f.endswith(".srt") for f in files)
 
     def test_find_srt_files_recursive(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         subdir = tmp_path / "sub"
         subdir.mkdir()
@@ -214,7 +214,7 @@ class TestBatchProcessing:
         assert len(files_rec) == 2
 
     def test_find_srt_files_min_size(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         (tmp_path / "small.srt").write_text("x")
         (tmp_path / "large.srt").write_text("x" * 1000)
@@ -224,7 +224,7 @@ class TestBatchProcessing:
         assert "large.srt" in files[0]
 
     def test_find_srt_files_max_size(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         (tmp_path / "small.srt").write_text("x")
         (tmp_path / "large.srt").write_text("x" * 1000)
@@ -234,7 +234,7 @@ class TestBatchProcessing:
         assert "small.srt" in files[0]
 
     def test_find_srt_files_exclude(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         (tmp_path / "good.srt").write_text("test")
         (tmp_path / "video_raw.srt").write_text("test")
@@ -249,7 +249,7 @@ class TestBatchProcessing:
         assert "good.srt" in files[0]
 
     def test_find_srt_files_pattern(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         (tmp_path / "video.ja.srt").write_text("test")
         (tmp_path / "video.cn.srt").write_text("test")
@@ -261,7 +261,7 @@ class TestBatchProcessing:
         assert "video.ja.srt" in files[0]
 
     def test_scan_summary(self, tmp_path):
-        from subtransjav.refine.batch import scan_summary
+        from subtrans.refine.batch import scan_summary
 
         (tmp_path / "a.srt").write_text("x" * 100)
         (tmp_path / "b.srt").write_text("x" * 200)
@@ -274,19 +274,19 @@ class TestBatchProcessing:
         assert summary["total_size_mb"] < 1
 
     def test_empty_directory(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         files = find_srt_files(str(tmp_path))
         assert files == []
 
     def test_nonexistent_directory(self):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         with pytest.raises(FileNotFoundError):
             find_srt_files("/nonexistent/path")
 
     def test_sorted_output(self, tmp_path):
-        from subtransjav.refine.batch import find_srt_files
+        from subtrans.refine.batch import find_srt_files
 
         (tmp_path / "c.srt").write_text("test")
         (tmp_path / "a.srt").write_text("test")
@@ -304,14 +304,14 @@ class TestCLIBatchArgs:
     """Test CLI argument parsing for new batch and TM features."""
 
     def test_parse_input_dir(self):
-        from subtransjav.refine.cli import build_parser
+        from subtrans.refine.cli import build_parser
         parser = build_parser()
         args = parser.parse_args(["--input-dir", "/tmp/srt", "-r"])
         assert args.input_dir == "/tmp/srt"
         assert args.recursive is True
 
     def test_parse_filter_options(self):
-        from subtransjav.refine.cli import build_parser
+        from subtrans.refine.cli import build_parser
         parser = build_parser()
         args = parser.parse_args([
             "--input-dir", "/tmp",
@@ -324,7 +324,7 @@ class TestCLIBatchArgs:
         assert args.max_size == 10000
 
     def test_parse_tm_options(self):
-        from subtransjav.refine.cli import build_parser
+        from subtrans.refine.cli import build_parser
         parser = build_parser()
         args = parser.parse_args([
             "-i", "test.srt",
@@ -335,13 +335,13 @@ class TestCLIBatchArgs:
         assert args.tm_threshold == 0.9
 
     def test_parse_no_tm(self):
-        from subtransjav.refine.cli import build_parser
+        from subtrans.refine.cli import build_parser
         parser = build_parser()
         args = parser.parse_args(["-i", "test.srt", "--no-tm"])
         assert args.no_tm is True
 
     def test_parse_tm_stats(self):
-        from subtransjav.refine.cli import build_parser
+        from subtrans.refine.cli import build_parser
         parser = build_parser()
         args = parser.parse_args(["--tm-stats"])
         assert args.tm_stats is True
@@ -349,7 +349,7 @@ class TestCLIBatchArgs:
     def test_collect_input_files_from_dir(self, tmp_path):
         from argparse import Namespace
 
-        from subtransjav.refine.cli import _collect_input_files
+        from subtrans.refine.cli import _collect_input_files
 
         (tmp_path / "a.srt").write_text("test")
         (tmp_path / "b.srt").write_text("test")
@@ -372,7 +372,7 @@ class TestCLIBatchArgs:
         """Test combining -i files with --input-dir scanning."""
         from argparse import Namespace
 
-        from subtransjav.refine.cli import _collect_input_files
+        from subtrans.refine.cli import _collect_input_files
 
         extra = tmp_path / "extra.srt"
         extra.write_text("test")
@@ -397,7 +397,7 @@ class TestCLIBatchArgs:
         """Test that duplicate files are removed."""
         from argparse import Namespace
 
-        from subtransjav.refine.cli import _collect_input_files
+        from subtrans.refine.cli import _collect_input_files
 
         f = tmp_path / "test.srt"
         f.write_text("test")
@@ -424,7 +424,7 @@ class TestCLIBatchArgs:
 def test_is_pipeline_intermediate_truth_table():
     """is_pipeline_intermediate：pass/_refine_/_final_ 命中；merged 产成品
     与末尾锚定防误伤项不命中（关键钉：merged 不排）。"""
-    from subtransjav.refine.batch import is_pipeline_intermediate
+    from subtrans.refine.batch import is_pipeline_intermediate
 
     # True：流水线中间稿 / 中断残留 / 终稿（多语言码）
     assert is_pipeline_intermediate("a.ja.pass1.srt") is True
@@ -436,7 +436,7 @@ def test_is_pipeline_intermediate_truth_table():
     assert is_pipeline_intermediate("a.pass1_final_cn.srt") is True
 
     # False（关键钉）：merged 产成品不排（可能被当输入再收编）
-    assert is_pipeline_intermediate("a.ja.merged.subtransjav.srt") is False
+    assert is_pipeline_intermediate("a.ja.merged.subtrans.srt") is False
     assert is_pipeline_intermediate("a.ja.merged.whisperjav.srt") is False
     # 末尾锚定防误伤：_refine_/_final_ 不在词尾
     assert is_pipeline_intermediate("b_refine_notes.srt") is False
@@ -447,7 +447,7 @@ def test_is_pipeline_intermediate_truth_table():
 def test_find_srt_files_cli_default_contract_pin(tmp_path):
     """CLI 契约钉：find_srt_files 默认口径一字不改——含 _final_cn.srt 的
     目录仍返回它（流水线过滤只发生在 GUI 层）。"""
-    from subtransjav.refine.batch import find_srt_files
+    from subtrans.refine.batch import find_srt_files
 
     (tmp_path / "a_final_cn.srt").write_text("test")
     (tmp_path / "a.ja.pass1.srt").write_text("test")

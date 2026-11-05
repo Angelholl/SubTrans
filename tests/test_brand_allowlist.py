@@ -35,19 +35,19 @@ ALLOWLIST = frozenset({
     # ---- 用户/历史文档（不改史）----
     "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；不改史）
     # ---- 运行时/源码注释级残留（数据根默认/AUMID/Documents 输出已随 D2026-1004-04 切 SubTrans，剩 docstring 注释级；env 名全大写不入本钉口径）----
-    "subtransjav/webview_gui/api.py",      # 模块 docstring :2 注释级残留（Documents 输出已改 SubTrans）
-    "subtransjav/webview_gui/main.py",     # 模块 docstring :2 注释级残留（AUMID 已改为 Angelholl.SubTrans.GUI 模块常量）
-    "subtransjav/__init__.py",             # 包 docstring 注释级残留（第 2 层随包名 subtransjav 口径）
-    "subtransjav/__version__.py",          # 包 docstring 注释级残留
-    "subtransjav/refine/__init__.py",      # 包 docstring 注释级残留
-    "subtransjav/translate/__init__.py",   # 包 docstring 注释级残留
-    "subtransjav/utils/__init__.py",       # 包 docstring 注释级残留
-    "subtransjav/utils/console.py",        # docstring 注释级残留
-    "subtransjav/utils/process_manager.py",  # docstring 注释级残留
+    "subtrans/webview_gui/api.py",      # 模块 docstring :2 注释级残留（Documents 输出已改 SubTrans）
+    "subtrans/webview_gui/main.py",     # 模块 docstring :2 注释级残留（AUMID 已改为 Angelholl.SubTrans.GUI 模块常量）
+    "subtrans/__init__.py",             # 包 docstring 注释级残留（第 2 层随包名 subtrans 口径）
+    "subtrans/__version__.py",          # 包 docstring 注释级残留
+    "subtrans/refine/__init__.py",      # 包 docstring 注释级残留
+    "subtrans/translate/__init__.py",   # 包 docstring 注释级残留
+    "subtrans/utils/__init__.py",       # 包 docstring 注释级残留
+    "subtrans/utils/console.py",        # docstring 注释级残留
+    "subtrans/utils/process_manager.py",  # docstring 注释级残留
     # ---- 前端注释级残留（用户不可见；未提交工作树段只读不碰）----
-    "subtransjav/webview_gui/assets/app.js",        # 文件头注释 "SubTransJAV GUI 前端控制器"（注释级，非显示文案）
-    "subtransjav/webview_gui/assets/style.css",     # 文件头注释（注释级；本文件另有未提交 ASR 行改动，本层不碰）
-    "subtransjav/webview_gui/assets/style.dark.css",  # 文件头注释（注释级）
+    "subtrans/webview_gui/assets/app.js",        # 文件头注释 "SubTransJAV GUI 前端控制器"（注释级，非显示文案）
+    "subtrans/webview_gui/assets/style.css",     # 文件头注释（注释级；本文件另有未提交 ASR 行改动，本层不碰）
+    "subtrans/webview_gui/assets/style.dark.css",  # 文件头注释（注释级）
     # ---- 测试（本机路径，allowlist 明文保护）----
     "tests/test_media_path.py",            # 本机仓库绝对路径 D:/SubTransJAV 夹具（禁区）
     "tests/test_strings_and_shortcut.py",  # LEGACY_LNK_NAMES 旧桌面快捷方式名 SubTransJAV.lnk 清理锚（与 uninstall.bat LNK6 同源；d1102 桌面图标空白事故后补，防单侧清理漂移）
@@ -56,7 +56,7 @@ ALLOWLIST = frozenset({
     # D2026-1028-01 公开仓收窄：spike/fts5_spike.py 与 tools/model_matrix_run.py 随
     # 讨论/测试材料移出公开仓（本地留档），白名单条目同步删除。
     # ---- bat 残留（旧品牌清理锚）----
-    "uninstall.bat",                       # LNK6 旧桌面快捷方式 SubTransJAV.lnk 清理锚（D2026-1004-04 新增；任务栏钉扎 Quick Launch\User Pinned\TaskBar 红线永不清理）；小写 %LOCALAPPDATA%\subtransjav 缓存目录清理行不匹配本钉
+    "uninstall.bat",                       # LNK6 旧桌面快捷方式 SubTransJAV.lnk 清理锚（D2026-1004-04 新增；任务栏钉扎 Quick Launch\User Pinned\TaskBar 红线永不清理）；小写 %LOCALAPPDATA%\subtrans 缓存目录清理行不匹配本钉
 })
 
 # 本测试文件自身因白名单理由字符串引用旧品牌词而含品牌词，
@@ -99,7 +99,7 @@ def _tracked_text_files() -> list[str]:
     return files
 
 
-def test_brand_subtransjav_only_in_allowlist():
+def test_brand_subtrans_only_in_allowlist():
     """含旧品牌词 SubTransJAV 的 tracked 文本文件集合 == 白名单（防品牌漂移钉）。
 
     docs/design/** 豁免出判定面（D2026-1012-03），豁免面由断言锁死。"""

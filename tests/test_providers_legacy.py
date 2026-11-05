@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 
-from subtransjav.refine.config import PROVIDER_MODEL_DEFAULTS, RefineConfig, StageConfig
-from subtransjav.translate.providers import PROVIDER_CONFIGS
+from subtrans.refine.config import PROVIDER_MODEL_DEFAULTS, RefineConfig, StageConfig
+from subtrans.translate.providers import PROVIDER_CONFIGS
 
 _LEGACY_VETO_MODEL = "gemma3:12b"
 

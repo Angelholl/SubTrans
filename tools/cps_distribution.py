@@ -8,7 +8,7 @@ per-file 与全局分布（count/mean/p50/p90/p95/max、超阈计数），供日
 用法：
     python tools/cps_distribution.py a.srt b.srt [--json] [--telemetry PATH]
 
-口径免责声明（与 subtransjav.refine.quality_report【语速与间隙观测】
+口径免责声明（与 subtrans.refine.quality_report【语速与间隙观测】
 同源，阈值勿单改）：
 - CPS = 条目文本去全部空白后的字符数 / 条目时长（秒）；
 - CJK 为主（ord(c)>0x2E80 字符占比 ≥50%）基准 8、其他基准 20，容差
@@ -31,10 +31,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from subtransjav.refine.asr_meta import load_asr_telemetry  # noqa: E402
-from subtransjav.refine.config import RefineConfig  # noqa: E402
-from subtransjav.refine.filters import parse_srt  # noqa: E402
-from subtransjav.refine.v2_premerge import _timing_span  # noqa: E402
+from subtrans.refine.asr_meta import load_asr_telemetry  # noqa: E402
+from subtrans.refine.config import RefineConfig  # noqa: E402
+from subtrans.refine.filters import parse_srt  # noqa: E402
+from subtrans.refine.v2_premerge import _timing_span  # noqa: E402
 
 # CPS 阈值常量（与 quality_report._CPS_* 同值；test_cps_distribution 钉等值）
 CPS_CJK_BASE = 8.0

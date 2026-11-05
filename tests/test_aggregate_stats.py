@@ -8,8 +8,8 @@ import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
-from subtransjav.refine import aggregate_stats as ags
-from subtransjav.refine import quality_advisor as qa
+from subtrans.refine import aggregate_stats as ags
+from subtrans.refine import quality_advisor as qa
 
 
 def _make_tm_db(path: Path, rows: list[tuple[str, float]]):
@@ -87,7 +87,7 @@ def test_block_truncates_at_char_limit(monkeypatch, tmp_path):
 
 def test_default_tm_db_path_no_mkdir(tmp_path, monkeypatch):
     """零写路径：默认路径推导不得触发 makedirs。"""
-    import subtransjav.refine.tm as tm_mod
+    import subtrans.refine.tm as tm_mod
     monkeypatch.setattr(tm_mod, "_DEFAULT_TM_DIR", str(tmp_path / "sub"))
     p = Path(ags.default_tm_db_path())
     assert p.name == "tm.db"
@@ -99,8 +99,8 @@ def test_default_tm_db_path_no_mkdir(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_aggregate_flag_registered_and_not_in_fingerprint():
-    from subtransjav.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
-    from subtransjav.refine.manifest import _CONFIG_FIELDS
+    from subtrans.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
+    from subtrans.refine.manifest import _CONFIG_FIELDS
     assert TUNABLE_FIELD_TYPES.get("aggregate_stats_inject") is bool
     assert "aggregate_stats_inject" not in _CONFIG_FIELDS
     assert RefineConfig(inputs=["a.srt"]).aggregate_stats_inject is True
@@ -108,7 +108,7 @@ def test_aggregate_flag_registered_and_not_in_fingerprint():
 
 def test_tm_stats_window_flag_not_in_fingerprint():
     """owner 修订：--tm-stats-window 三档旗标不入 manifest 指纹。"""
-    from subtransjav.refine.manifest import _CONFIG_FIELDS
+    from subtrans.refine.manifest import _CONFIG_FIELDS
     assert "tm_stats_window" not in _CONFIG_FIELDS
 
 

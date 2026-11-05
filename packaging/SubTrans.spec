@@ -6,7 +6,7 @@
 - webview_gui.main.get_asset_path 的 frozen 分支按
   sys._MEIPASS/webview_gui_assets/<相对路径> 找资源，故 assets 目录
   的 datas 目标名固定为 "webview_gui_assets"（建后须实测核对布局）；
-- refine defaults 保持包内相对路径 subtransjav/refine/defaults，
+- refine defaults 保持包内相对路径 subtrans/refine/defaults，
   rules_loader.py:34 / source_hallucination.py:74 按 __file__ 拼接可达。
 
 禁 UPX（D2026-0929-07 点 9：upx=False，避免误压缩损坏 DLL/运行时）。
@@ -29,12 +29,12 @@ BLOCK = None  # 不禁用任何 hook（webview / pythonnet 官方 hook 需自动
 
 datas = [
     # GUI 资源：目标名 webview_gui_assets，与 get_asset_path frozen 分支一致
-    (os.path.join(SPECPATH, "..", "subtransjav", "webview_gui", "assets"),
+    (os.path.join(SPECPATH, "..", "subtrans", "webview_gui", "assets"),
      "webview_gui_assets"),
     # refine 默认规则：保持包内相对路径
     # （整目录递归拷贝，已覆盖 defaults/templates/**——通用角色卡随包内回落链走）
-    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "defaults"),
-     os.path.join("subtransjav", "refine", "defaults")),
+    (os.path.join(SPECPATH, "..", "subtrans", "refine", "defaults"),
+     os.path.join("subtrans", "refine", "defaults")),
     # asr_runner.py 单文件随包（2.7.1 件1 D2026-1005-01：frozen 上游
     # python 脚本路径直调 asr_runner，不再依赖 -m 数据根包形态）；
     # 落点与 asr_env._runner_script_path() frozen 分支逐字节一致。
@@ -42,26 +42,26 @@ datas = [
     # dest 以文件名结尾会把产物装成嵌套目录 asr_runner.py/asr_runner.py，
     # is_file() 判假→frozen 静默回退 -m 形态必失败（CI Test-Path 对
     # 目录恒真故冒烟未拦）；2026-10-10 测试包轮实证修复
-    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "asr_runner.py"),
-     os.path.join("subtransjav", "refine")),
+    (os.path.join(SPECPATH, "..", "subtrans", "refine", "asr_runner.py"),
+     os.path.join("subtrans", "refine")),
     # line_breaker.py 随包（3.2.1 件①）：asr_runner 脚本直调形态的断行器
     # 回退装载按同目录文件路径解析（_load_break_segments），缺件=断行在
     # frozen 形态静默降级回原生段（2026-10-29 测试包冒烟双路径实证拦获）。
-    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "line_breaker.py"),
-     os.path.join("subtransjav", "refine")),
+    (os.path.join(SPECPATH, "..", "subtrans", "refine", "line_breaker.py"),
+     os.path.join("subtrans", "refine")),
     # pass_merge.py 随包（3.2.0 件A，卡C §七 勘误）：asr_runner 脚本直调
     # 形态的双 pass 合并件回退装载按同目录文件路径解析（_load_pass_merge），
     # 缺件=--passes 2 在 frozen 形态不可用（明示报错，不静默）。
-    (os.path.join(SPECPATH, "..", "subtransjav", "refine", "pass_merge.py"),
-     os.path.join("subtransjav", "refine")),
+    (os.path.join(SPECPATH, "..", "subtrans", "refine", "pass_merge.py"),
+     os.path.join("subtrans", "refine")),
 ]
 # 词典数据不进包（D3 去捆绑 D2026-1001）：sudachidict_core（system.dic 约
 # 208MB）不再随安装器分发，语法提示运行时 Dictionary() 失败走既有
 # try/except 降级链自动降级，词典经 CLI --dict-download / GUI 引擎页下载。
 
 hiddenimports = [
-    "subtransjav.refine.cli",
-    "subtransjav.translate.providers",
+    "subtrans.refine.cli",
+    "subtrans.translate.providers",
     "webview.platforms.winforms",
     "clr",
     "jieba",  # 显式钉防重构漂移（token_hint 函数内惰性 import 静态不可见）；数据文件由 pyinstaller-hooks-contrib 官方 hook-jieba.py 自动收集，勿重复 collect_data_files（D2026-1004-01）
@@ -107,7 +107,7 @@ a_cli = Analysis(
 )
 pyz_cli = PYZ(a_cli.pure)
 
-_ICON = os.path.join(SPECPATH, "..", "subtransjav", "webview_gui", "assets", "icon.ico")
+_ICON = os.path.join(SPECPATH, "..", "subtrans", "webview_gui", "assets", "icon.ico")
 
 exe_gui = EXE(
     pyz,

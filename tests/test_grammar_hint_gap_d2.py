@@ -114,7 +114,7 @@ def _detect_with_tokens(
     text: str,
     context_before: list[dict] | None = None,
 ) -> list[str]:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     monkeypatch.setattr(gh, "_get_tokenizer", lambda: _StubTokenizer(tokens))
     return gh._detect_rules(text, list(context_before or []), [])
@@ -126,8 +126,8 @@ def _detect_with_tokens(
 
 @pytest.fixture(autouse=True)
 def _isolated_grammar_hint(monkeypatch) -> Iterator[None]:
-    from subtransjav.refine import dict_manager
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import dict_manager
+    from subtrans.refine import grammar_hint as gh
 
     monkeypatch.setattr(gh, "_tokenizer_instance", None)
     monkeypatch.setattr(gh, "_sudachi_available", None)
@@ -144,7 +144,7 @@ def _isolated_grammar_hint(monkeypatch) -> Iterator[None]:
 # ---------------------------------------------------------------------------
 
 def test_bundled_dict_missing_import_error_returns_false(monkeypatch) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     # sys.modules 置 None → import 抛 ImportError（模块整体缺席口径）
     monkeypatch.setitem(sys.modules, "sudachidict_core", None)
@@ -154,7 +154,7 @@ def test_bundled_dict_missing_import_error_returns_false(monkeypatch) -> None:
 def test_bundled_dict_missing_without_system_dic_returns_true(
     monkeypatch, tmp_path
 ) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     _install_fake_core(monkeypatch, tmp_path, with_dic=False)
     assert gh._bundled_dict_missing() is True
@@ -163,7 +163,7 @@ def test_bundled_dict_missing_without_system_dic_returns_true(
 def test_bundled_dict_missing_with_system_dic_returns_false(
     monkeypatch, tmp_path
 ) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     _install_fake_core(monkeypatch, tmp_path, with_dic=True)
     assert gh._bundled_dict_missing() is False
@@ -176,8 +176,8 @@ def test_bundled_dict_missing_with_system_dic_returns_false(
 def test_custom_dict_failure_with_bundled_missing_raises_and_degrades(
     monkeypatch,
 ) -> None:
-    from subtransjav.refine import dict_manager
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import dict_manager
+    from subtrans.refine import grammar_hint as gh
 
     constructed: list[str] = []
 
@@ -208,8 +208,8 @@ def test_custom_dict_failure_with_bundled_missing_raises_and_degrades(
 def test_custom_dict_failure_with_bundled_present_falls_back_and_warns(
     monkeypatch, capsys
 ) -> None:
-    from subtransjav.refine import dict_manager
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import dict_manager
+    from subtrans.refine import grammar_hint as gh
 
     created: list[str] = []
     tokenizer = _Tok("猫", ("名詞",))
@@ -242,7 +242,7 @@ def test_custom_dict_failure_with_bundled_present_falls_back_and_warns(
 
 
 def test_bundled_missing_without_custom_raises_and_degrades(monkeypatch) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     constructed: list[str] = []
 
@@ -265,8 +265,8 @@ def test_bundled_missing_without_custom_raises_and_degrades(monkeypatch) -> None
 
 
 def test_custom_dict_loaded_by_path_when_available(monkeypatch) -> None:
-    from subtransjav.refine import dict_manager
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import dict_manager
+    from subtrans.refine import grammar_hint as gh
 
     created: list[str] = []
     tokenizer = _Tok("犬", ("名詞",))
@@ -295,7 +295,7 @@ def test_custom_dict_loaded_by_path_when_available(monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 def test_double_checked_lock_initializes_singleton_once(monkeypatch) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     inits: list[int] = []
     tokenizer = _Tok("空", ("名詞",))
@@ -320,7 +320,7 @@ def test_double_checked_lock_initializes_singleton_once(monkeypatch) -> None:
 def test_initialization_exception_marks_unavailable_and_routes_fallback(
     monkeypatch,
 ) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     class _BoomDictionary:
         def __init__(self, dict: str = "") -> None:  # noqa: A002
@@ -437,7 +437,7 @@ def test_rule6_context_ellipsis(monkeypatch) -> None:
 
 
 def test_rule7_plural_pronoun_adnominal(monkeypatch) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     # 拆分形态：ボク(代名詞) + たち(接尾辞) + 名词 + で(格助詞 句末)
     split_hints = _detect_with_tokens(
@@ -466,7 +466,7 @@ def test_rule7_plural_pronoun_adnominal(monkeypatch) -> None:
 
 
 def test_rule8_da_renyokei_de(monkeypatch) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     hints = _detect_with_tokens(
         monkeypatch,
@@ -484,7 +484,7 @@ def test_rule8_da_renyokei_de(monkeypatch) -> None:
 def test_detect_rules_routes_to_fallback_when_tokenize_returns_none(
     monkeypatch,
 ) -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     monkeypatch.setattr(gh, "_get_tokenizer", lambda: None)
     monkeypatch.setattr(
@@ -496,7 +496,7 @@ def test_detect_rules_routes_to_fallback_when_tokenize_returns_none(
 
 
 def test_fallback_regex_covers_connective_possessive_ellipsis_plural() -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     connective = gh._detect_rules_fallback("先輩は優しいけど、厳しいです。", [], [])
     assert any("けど" in hint and "转折" in hint for hint in connective)
@@ -516,7 +516,7 @@ def test_fallback_regex_covers_connective_possessive_ellipsis_plural() -> None:
 
 
 def test_fallback_plural_not_fired_for_wa_ga_subject() -> None:
-    from subtransjav.refine import grammar_hint as gh
+    from subtrans.refine import grammar_hint as gh
 
     for text in ("僕たちは部長だ", "僕たちが公園で遊ぶ"):
         assert gh._HINT_PLURAL_ADNOMINAL not in gh._detect_rules_fallback(

@@ -27,8 +27,8 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav import paths
-from subtransjav.refine import dict_manager as dm
+from subtrans import paths
+from subtrans.refine import dict_manager as dm
 
 
 def _norm(path: str | Path) -> str:
@@ -529,7 +529,7 @@ def test_migrate_skips_temp_leftovers(_isolated_dict_state):
 def _api_cls():
     pytest.importorskip("webview", reason="pywebview 未安装时跳过 API 面用例",
                         exc_type=ImportError)
-    from subtransjav.webview_gui.api import TranslateAPI
+    from subtrans.webview_gui.api import TranslateAPI
     return TranslateAPI
 
 
@@ -540,7 +540,7 @@ def gui_api():
 
 def _fake_window(monkeypatch, picked: Path | None) -> None:
     """打桩原生目录对话框（picked=None 模拟取消）。"""
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
 
     class FakeWin:
         @staticmethod
@@ -582,7 +582,7 @@ def test_api_migrate_success_contract(gui_api, _isolated_dict_state):
 def test_api_clear_dict_dir_contract(gui_api, _isolated_dict_state):
     """恢复默认契约：had_custom/effective_dir/old_files；持久值清除。"""
     root = _isolated_dict_state
-    from subtransjav.webview_gui import user_dirs as ud
+    from subtrans.webview_gui import user_dirs as ud
     custom = root / "custom"
     custom.mkdir()
     ud.set_dict_dir(str(custom))
@@ -598,7 +598,7 @@ def test_api_clear_dict_dir_contract(gui_api, _isolated_dict_state):
 def test_api_pick_dict_dir_flow(gui_api, monkeypatch, _isolated_dict_state):
     """pick 收口 e2e：对话框 → 持久登记 + dict_dir 持久化 + 进程注入 +
     needs_migration 标记（旧目录有词典文件时）；取消原样透传不注入。"""
-    from subtransjav.webview_gui import user_dirs as ud
+    from subtrans.webview_gui import user_dirs as ud
     root = _isolated_dict_state
     (root / "dict" / "sudachi").mkdir(parents=True)
     (root / "dict" / "sudachi" / "old.dic").write_bytes(b"OLD")
@@ -626,7 +626,7 @@ def test_api_pick_dict_dir_flow(gui_api, monkeypatch, _isolated_dict_state):
 def test_api_pick_folder_purpose_dict_persists(
         gui_api, monkeypatch, _isolated_dict_state):
     """refine_pick_folder('dict')：持久写 user_dirs.dict_dir（不含注入）。"""
-    from subtransjav.webview_gui import user_dirs as ud
+    from subtrans.webview_gui import user_dirs as ud
     picked = _isolated_dict_state / "picked2"
     picked.mkdir()
     _fake_window(monkeypatch, picked)
@@ -645,13 +645,13 @@ def test_api_init_loads_persisted_dict_dir(
     """
     pytest.importorskip("webview", reason="pywebview 未安装时跳过 API 面用例",
                         exc_type=ImportError)
-    from subtransjav.webview_gui import user_dirs as ud
+    from subtrans.webview_gui import user_dirs as ud
     root = _isolated_dict_state
     custom = root / "startup"
     custom.mkdir()
     ud.set_dict_dir(str(custom))
     dm.set_custom_dir(None)
-    import subtransjav.webview_gui.api as api_mod
+    import subtrans.webview_gui.api as api_mod
     api_mod._load_dict_dir_override()
     assert _norm(dm.effective_dict_dir()) == _norm(custom)
 

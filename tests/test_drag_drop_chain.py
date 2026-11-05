@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-GUI_DIR = ROOT / "subtransjav" / "webview_gui"
+GUI_DIR = ROOT / "subtrans" / "webview_gui"
 
 SUBTITLE_EXTS = {".srt", ".ass", ".ssa", ".vtt"}
 
@@ -92,7 +92,7 @@ def test_on_drop_event_emits_chain_diagnostics(capsys, monkeypatch):
         "webview", reason="pywebview 为可选 gui extra，未安装时跳过",
         exc_type=ImportError)
 
-    from subtransjav.webview_gui.main import on_drop_event
+    from subtrans.webview_gui.main import on_drop_event
 
     scripts = []
 
@@ -120,7 +120,7 @@ def test_filelist_drop_listener_must_not_stop_propagation():
     pywebview 桥的 document 级 drop 监听（main.py bind_dom_events）靠冒泡接收，
     目标层拦断 = document 收不到 = 拖拽文件永不加载（v2.6.0 起回归）。"""
     from pathlib import Path
-    body = Path("subtransjav/webview_gui/assets/app-file-list.js").read_text(encoding="utf-8")
+    body = Path("subtrans/webview_gui/assets/app-file-list.js").read_text(encoding="utf-8")
     drop_block = body[body.index("fileList.addEventListener('drop'"):]
     drop_block = drop_block[:drop_block.index("});")]
     code_only = "\n".join(line for line in drop_block.splitlines()

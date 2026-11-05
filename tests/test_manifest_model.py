@@ -6,8 +6,8 @@ import os
 import types
 from pathlib import Path
 
-from subtransjav.refine.config import StageConfig
-from subtransjav.refine.manifest import (
+from subtrans.refine.config import StageConfig
+from subtrans.refine.manifest import (
     MANIFEST_VERSION,
     STAGE_STATUSES,
     StageRecord,
@@ -262,7 +262,7 @@ def test_config_hash_tracks_role_card_content_only(tmp_path):
 def test_config_hash_templates_dir_dot_aligned_with_loader(tmp_path, monkeypatch):
     """D2 回归：templates_dir="."（CLI 默认，=进程 CWD）必须与加载侧同规则
     解析为默认模板目录——同配置跨运行指纹稳定，不受 CWD 运行产物影响。"""
-    from subtransjav.refine.config import default_templates_dir
+    from subtrans.refine.config import default_templates_dir
     assert compute_config_hash(_make_cfg(templates_dir=".")) == \
         compute_config_hash(_make_cfg(templates_dir=default_templates_dir()))
     assert compute_config_hash(_make_cfg(templates_dir="./")) == \
@@ -284,7 +284,7 @@ def test_config_hash_templates_dir_dot_aligned_with_loader(tmp_path, monkeypatch
 
 def test_config_hash_sensitive_to_rules_yaml(tmp_path, monkeypatch):
     """指令源之一 translation_rules.yaml（阶段B加固段数据源）内容变化 -> 指纹变化。"""
-    import subtransjav.refine.manifest as mf
+    import subtrans.refine.manifest as mf
     rules = tmp_path / "translation_rules.yaml"
     rules.write_text("prompt_sections: {hardened_suffix: v1}", encoding="utf-8")
     monkeypatch.setattr(mf, "_rules_yaml_path", lambda: str(rules))
@@ -331,7 +331,7 @@ def test_config_hash_sensitive_to_gate0_fields():
 def test_config_hash_tracks_gate0_rules_semantic_content(tmp_path, monkeypatch):
     """gate0_rules_sha1 是解析后语义内容哈希：内容变 → 指纹变；
     路径不变、内容还原 → 指纹还原（非原始文件字节哈希）。"""
-    import subtransjav.refine.source_hallucination as sh
+    import subtrans.refine.source_hallucination as sh
     rules_file = tmp_path / "source_hallucination.yaml"
     _rewrite_rules_bumping_mtime(rules_file, _GATE0_RULES_YAML,
                                  1_700_000_000)
@@ -353,7 +353,7 @@ def test_config_hash_tracks_gate0_rules_semantic_content(tmp_path, monkeypatch):
 
 def test_config_hash_tolerates_missing_gate0_rules(tmp_path, monkeypatch):
     """规则库解析不可得 → gate0_rules_sha1 记 None，指纹计算不崩。"""
-    import subtransjav.refine.source_hallucination as sh
+    import subtrans.refine.source_hallucination as sh
     rules_file = tmp_path / "source_hallucination.yaml"
     rules_file.write_text("keep_list: [ broken", encoding="utf-8")
     monkeypatch.setattr(sh, "_resolve_rules_path",
@@ -364,8 +364,8 @@ def test_config_hash_tolerates_missing_gate0_rules(tmp_path, monkeypatch):
 
 def test_v2_template_constants_pinned_to_pipeline():
     """契约：manifest 侧角色卡文件名/槽位必须与 pipeline_v2 加载侧一致（防漂移）。"""
-    import subtransjav.refine.manifest as mf
-    from subtransjav.refine import pipeline_v2 as pv
+    import subtrans.refine.manifest as mf
+    from subtrans.refine import pipeline_v2 as pv
     assert mf._V2_TEMPLATE_FILES == pv.V2_TEMPLATE_FILES
     assert tuple(mf._V2_STAGE_SLOTS) == tuple(pv.V2_STAGE_SLOT.items())
 
@@ -373,8 +373,8 @@ def test_v2_template_constants_pinned_to_pipeline():
 def test_instruction_source_files_match_loader(tmp_path, monkeypatch):
     """契约：指纹侧收集的指令源文件必须与加载侧 _load_v2_instruction 实际
     读取一致（角色卡目录解析、显式 instructions 优先）。"""
-    import subtransjav.refine.manifest as mf
-    from subtransjav.refine import pipeline_v2 as pv
+    import subtrans.refine.manifest as mf
+    from subtrans.refine import pipeline_v2 as pv
 
     tpl = tmp_path / "templates"
     tpl.mkdir()
@@ -557,7 +557,7 @@ def test_delete_resume_artifacts_never_touches_final_deliverables(tmp_path):
 def test_config_hash_tracks_v2_stage_prompts(monkeypatch):
     """D1：内置阶段提示词（V2_STAGE_PROMPTS）参与 config_hash——
     不落盘的指令源变更后，--resume 必须拒绝复用旧提示词产出的阶段产物。"""
-    from subtransjav.refine import pipeline_v2 as pv_d1
+    from subtrans.refine import pipeline_v2 as pv_d1
     h1 = compute_config_hash(_make_cfg())
     monkeypatch.setitem(pv_d1.V2_STAGE_PROMPTS, "B", "changed prompt")
     assert compute_config_hash(_make_cfg()) != h1
@@ -571,7 +571,7 @@ def test_backup_existing_outputs_covers_risk_reports(tmp_path):
     """--force 备份表必须覆盖全部 9 个产物（含风险清单 md/json、导读
     json、D11 契约④的重翻台账与 D2026-0929 的 AI 质量建议件），且同一
     次调用共用同一时间戳（防漂移契约）。"""
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
 
     names = [
         "ep01_final_cn.srt",
@@ -602,7 +602,7 @@ def test_backup_existing_outputs_covers_risk_reports(tmp_path):
 
 def test_backup_existing_outputs_noop_when_no_outputs(tmp_path):
     """空目录调用：不产生任何 _bak_ 文件、不抛异常。"""
-    from subtransjav.refine import pipeline_v2 as pv
+    from subtrans.refine import pipeline_v2 as pv
 
     pv._backup_existing_outputs(str(tmp_path), "ep01")
     assert list(tmp_path.iterdir()) == []
@@ -612,8 +612,8 @@ def test_remove_stale_risk_reports_matches_writer_names(tmp_path):
     """双钉契约：清理函数的文件名必须覆盖 RiskCollector.write_reports
     产出，并按 W1a/D11 契约④扩至四件（导读 json + 重翻台账写前清旧）；
     同目录无关文件不受影响。"""
-    from subtransjav.refine import pipeline_v2 as pv
-    from subtransjav.refine.risk import RiskCollector
+    from subtrans.refine import pipeline_v2 as pv
+    from subtrans.refine.risk import RiskCollector
 
     unrelated = tmp_path / "ep01_final_cn.srt"
     unrelated.write_text("1\n", encoding="utf-8")

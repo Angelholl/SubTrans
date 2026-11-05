@@ -6,13 +6,13 @@ report 常量复用不复制）也在此钉住（防口径漂移）。
 import pytest
 from pytest import approx
 
-from subtransjav.refine import missed_insert as mi
-from subtransjav.refine.asr_meta import (
+from subtrans.refine import missed_insert as mi
+from subtrans.refine.asr_meta import (
     _TRUST_MAX_COMPRESSION_RATIO,
     _TRUST_MIN_MEAN_LOGPROB,
     _TRUST_NO_SPEECH_PROB,
 )
-from subtransjav.refine.quality_report import _CPS_CJK_BASE, _CPS_TOLERANCE
+from subtrans.refine.quality_report import _CPS_CJK_BASE, _CPS_TOLERANCE
 
 T_WINDOW = "00:00:05,000 --> 00:00:07,000"   # 2s 间隙窗口
 

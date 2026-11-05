@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import pass_disagreement as pd
-from subtransjav.refine.pass_disagreement import (
+from subtrans.refine import pass_disagreement as pd
+from subtrans.refine.pass_disagreement import (
     REVIEW_STRICT_THRESHOLD,
     _best_overlap,
     _normalize,
@@ -22,7 +22,7 @@ from subtransjav.refine.pass_disagreement import (
     judge_artifact,
     probe_disagreement_mode,
 )
-from subtransjav.refine.quality_report import write_divergence_review_csv
+from subtrans.refine.quality_report import write_divergence_review_csv
 
 
 def _srt(entries):
@@ -34,7 +34,7 @@ def _srt(entries):
 def test_find_pass_siblings(tmp_path):
     (tmp_path / "X.ja.pass1.srt").write_text("", encoding="utf-8")
     (tmp_path / "X.ja.pass2.srt").write_text("", encoding="utf-8")
-    merged = tmp_path / "X.ja.merged.subtransjav.srt"
+    merged = tmp_path / "X.ja.merged.subtrans.srt"
     merged.write_text("", encoding="utf-8")
 
     p1, p2 = find_pass_siblings(str(merged))
@@ -46,8 +46,8 @@ def test_find_pass_siblings(tmp_path):
     d = tmp_path / "only_p1"
     d.mkdir()
     (d / "Y.ja.pass1.srt").write_text("", encoding="utf-8")
-    (d / "Y.ja.merged.subtransjav.srt").write_text("", encoding="utf-8")
-    a, b = find_pass_siblings(str(d / "Y.ja.merged.subtransjav.srt"))
+    (d / "Y.ja.merged.subtrans.srt").write_text("", encoding="utf-8")
+    a, b = find_pass_siblings(str(d / "Y.ja.merged.subtrans.srt"))
     assert (a, b) == (None, None)
 
 
@@ -69,7 +69,7 @@ def test_collect_disagreement(tmp_path):
 
     (tmp_path / "X.ja.pass1.srt").write_text(pass1, encoding="utf-8")
     (tmp_path / "X.ja.pass2.srt").write_text(pass2, encoding="utf-8")
-    mp = tmp_path / "X.ja.merged.subtransjav.srt"
+    mp = tmp_path / "X.ja.merged.subtrans.srt"
     mp.write_text(merged, encoding="utf-8")
 
     result = collect_disagreement(str(mp))
@@ -85,7 +85,7 @@ def test_collect_disagreement(tmp_path):
 
 
 def test_collect_disagreement_no_siblings(tmp_path):
-    p = tmp_path / "Z.ja.merged.subtransjav.srt"
+    p = tmp_path / "Z.ja.merged.subtrans.srt"
     p.write_text(_srt([(1, "00:00:01,000 --> 00:00:03,000", "x")]),
                  encoding="utf-8")
     assert collect_disagreement(str(p)) is None
@@ -99,7 +99,7 @@ def test_probe_disagreement_mode_dual(tmp_path):
     """pass1/pass2 齐全 → dual。"""
     (tmp_path / "A.ja.pass1.srt").write_text("", encoding="utf-8")
     (tmp_path / "A.ja.pass2.srt").write_text("", encoding="utf-8")
-    mp = tmp_path / "A.ja.merged.subtransjav.srt"
+    mp = tmp_path / "A.ja.merged.subtrans.srt"
     mp.write_text("", encoding="utf-8")
     assert probe_disagreement_mode(str(mp)) == "dual"
 
@@ -107,7 +107,7 @@ def test_probe_disagreement_mode_dual(tmp_path):
 def test_probe_disagreement_mode_missing_pass1(tmp_path):
     """仅缺 pass1 → missing_pass1。"""
     (tmp_path / "B.ja.pass2.srt").write_text("", encoding="utf-8")
-    mp = tmp_path / "B.ja.merged.subtransjav.srt"
+    mp = tmp_path / "B.ja.merged.subtrans.srt"
     mp.write_text("", encoding="utf-8")
     assert probe_disagreement_mode(str(mp)) == "missing_pass1"
 
@@ -115,14 +115,14 @@ def test_probe_disagreement_mode_missing_pass1(tmp_path):
 def test_probe_disagreement_mode_missing_pass2(tmp_path):
     """仅缺 pass2 → missing_pass2。"""
     (tmp_path / "C.ja.pass1.srt").write_text("", encoding="utf-8")
-    mp = tmp_path / "C.ja.merged.subtransjav.srt"
+    mp = tmp_path / "C.ja.merged.subtrans.srt"
     mp.write_text("", encoding="utf-8")
     assert probe_disagreement_mode(str(mp)) == "missing_pass2"
 
 
 def test_probe_disagreement_mode_none(tmp_path):
     """两个兄弟文件都缺失 → none。"""
-    mp = tmp_path / "D.ja.merged.subtransjav.srt"
+    mp = tmp_path / "D.ja.merged.subtrans.srt"
     mp.write_text("", encoding="utf-8")
     assert probe_disagreement_mode(str(mp)) == "none"
 
@@ -209,21 +209,21 @@ def test_best_overlap_no_overlap():
 
 
 def test_sibling_paths_lang_and_markers():
-    """语言后缀解析；缺省语言码为 ja；merged 可带 .subtransjav 后缀。"""
+    """语言后缀解析；缺省语言码为 ja；merged 可带 .subtrans 后缀。"""
     # 带语言后缀
-    p, p1, p2 = _sibling_paths("/tmp/X.ja.merged.subtransjav.srt")
+    p, p1, p2 = _sibling_paths("/tmp/X.ja.merged.subtrans.srt")
     assert p1.name == "X.ja.pass1.srt"
     assert p2.name == "X.ja.pass2.srt"
     # 其他语言码
-    _, p1, p2 = _sibling_paths("/tmp/X.zh.merged.subtransjav.srt")
+    _, p1, p2 = _sibling_paths("/tmp/X.zh.merged.subtrans.srt")
     assert p1.name == "X.zh.pass1.srt"
     assert p2.name == "X.zh.pass2.srt"
-    # merged 不带 .subtransjav 后缀
+    # merged 不带 .subtrans 后缀
     _, p1, p2 = _sibling_paths("/tmp/X.ja.merged.srt")
     assert p1.name == "X.ja.pass1.srt"
     assert p2.name == "X.ja.pass2.srt"
     # 无语言后缀 → 默认 ja
-    _, p1, p2 = _sibling_paths("/tmp/X.merged.subtransjav.srt")
+    _, p1, p2 = _sibling_paths("/tmp/X.merged.subtrans.srt")
     assert p1.name == "X.ja.pass1.srt"
     assert p2.name == "X.ja.pass2.srt"
     # 传入 pass1 文件本身 → 兄弟路径与其重合（只拼路径不查存在性）
@@ -245,7 +245,7 @@ def test_collect_disagreement_no_timeline_overlap(tmp_path):
     ])
     (tmp_path / "E.ja.pass1.srt").write_text(pass1, encoding="utf-8")
     (tmp_path / "E.ja.pass2.srt").write_text(pass2, encoding="utf-8")
-    mp = tmp_path / "E.ja.merged.subtransjav.srt"
+    mp = tmp_path / "E.ja.merged.subtrans.srt"
     mp.write_text(merged, encoding="utf-8")
 
     result = collect_disagreement(str(mp))
@@ -313,11 +313,11 @@ def test_collect_disagreement_whisperjav_naming_end_to_end(tmp_path):
 
 
 def test_sibling_paths_legacy_naming_backward_compat():
-    """旧命名回归：.merged.subtransjav / 裸 .merged / 裸 pass1/pass2 的
+    """旧命名回归：.merged.subtrans / 裸 .merged / 裸 pass1/pass2 的
     base/lang 剥离结果与修复前逐项一致。"""
-    # 旧命名一：.merged.subtransjav.srt
-    own, p1, p2 = _sibling_paths("/tmp/X.ja.merged.subtransjav.srt")
-    assert own.name == "X.ja.merged.subtransjav.srt"
+    # 旧命名一：.merged.subtrans.srt
+    own, p1, p2 = _sibling_paths("/tmp/X.ja.merged.subtrans.srt")
+    assert own.name == "X.ja.merged.subtrans.srt"
     assert own.parent == p1.parent == p2.parent
     assert p1.name == "X.ja.pass1.srt"
     assert p2.name == "X.ja.pass2.srt"
@@ -336,7 +336,7 @@ def test_sibling_paths_legacy_naming_backward_compat():
 
 def test_find_pass_siblings_parse_failure_logs_warning(caplog):
     """命名解析失败 → (None, None) 且模块 logger 发出 WARNING（与缺失区分）。"""
-    logger_name = "subtransjav.refine.pass_disagreement"
+    logger_name = "subtrans.refine.pass_disagreement"
     with caplog.at_level(logging.WARNING, logger=logger_name):
         a, b = find_pass_siblings(None)  # type: ignore[arg-type]
     assert (a, b) == (None, None)
@@ -348,7 +348,7 @@ def test_find_pass_siblings_parse_failure_logs_warning(caplog):
 
 def test_find_pass_siblings_missing_files_no_warning(tmp_path, caplog):
     """命名正常但兄弟文件缺失 → (None, None) 且无 WARNING（正常业务场景）。"""
-    logger_name = "subtransjav.refine.pass_disagreement"
+    logger_name = "subtrans.refine.pass_disagreement"
     mp = tmp_path / "D.ja.merged.whisperjav.srt"
     mp.write_text("", encoding="utf-8")
     with caplog.at_level(logging.WARNING, logger=logger_name):
@@ -367,7 +367,7 @@ def test_diagnosis_marker_mismatch_vs_missing_siblings(tmp_path, caplog):
     无 pass1/pass2（单引擎正常场景）→ DEBUG 含"无兄弟 pass 文件（命名
     解析成功…）"且无 WARNING。
     """
-    logger_name = "subtransjav.refine.pass_disagreement"
+    logger_name = "subtrans.refine.pass_disagreement"
 
     # 场景一：正则不匹配（文件名无任何阶段标记）
     # _sibling_paths 按文档契约抛 ValueError，异常信息含"命名解析失败"
@@ -404,13 +404,13 @@ def test_diagnosis_marker_mismatch_vs_missing_siblings(tmp_path, caplog):
 
 def test_is_pass_intermediate_truth_table():
     """is_pass_intermediate：pass1/pass2 中间稿 True；merged 产成品/普通件 False。"""
-    from subtransjav.refine.pass_disagreement import is_pass_intermediate
+    from subtrans.refine.pass_disagreement import is_pass_intermediate
 
     # pass 中间稿（剥 .srt 后的 stem）
     assert is_pass_intermediate("M.ja.pass1") is True
     assert is_pass_intermediate("M.ja.pass2") is True
     # merged 产成品（关键钉：_PASS_MARKER_RE 刻意不含 merged 分支）
-    assert is_pass_intermediate("M.ja.merged.subtransjav") is False
+    assert is_pass_intermediate("M.ja.merged.subtrans") is False
     assert is_pass_intermediate("M.ja.merged.whisperjav") is False
     # 末尾锚定防误伤 / 普通文件
     assert is_pass_intermediate("M.pass1_final_cn") is False
@@ -420,10 +420,10 @@ def test_is_pass_intermediate_truth_table():
 def test_pass_marker_consistency_pin():
     """一致性钉：is_pass_intermediate 为 True 的 stem 必然匹配 _MARKER_RE
     （防未来 _MARKER_RE 编辑丢失 pass1|pass2 分支）。"""
-    from subtransjav.refine.pass_disagreement import _MARKER_RE, is_pass_intermediate
+    from subtrans.refine.pass_disagreement import _MARKER_RE, is_pass_intermediate
 
     for stem in ("M.ja.pass1", "M.ja.pass2", "M.zh.pass1",
-                 "M.ja.merged.subtransjav", "M.ja.merged.whisperjav", "movie"):
+                 "M.ja.merged.subtrans", "M.ja.merged.whisperjav", "movie"):
         if is_pass_intermediate(stem):
             assert _MARKER_RE.search(stem), \
                 f"{stem} 判为 pass 中间稿却未命中 _MARKER_RE（pass 分支疑丢失）"
@@ -431,7 +431,7 @@ def test_pass_marker_consistency_pin():
 
 # ---------------------------------------------------------------------------
 # 补卡2（D2026-1030-07）：pass_disagreement 模块边界薄弱分支
-# 断言一律以 subtransjav/refine/pass_disagreement.py 实码现状为准。
+# 断言一律以 subtrans/refine/pass_disagreement.py 实码现状为准。
 # ---------------------------------------------------------------------------
 
 def _srt_ts(ms):
@@ -464,7 +464,7 @@ def test_best_overlap_empty_entries_none():
 
 def test_probe_disagreement_mode_bare_exception_none(tmp_path, monkeypatch):
     """probe_disagreement_mode 非 ValueError 异常兜底 → "none"（:159-160）。"""
-    mp = tmp_path / "P.ja.merged.subtransjav.srt"
+    mp = tmp_path / "P.ja.merged.subtrans.srt"
     mp.write_text("", encoding="utf-8")
 
     def _boom(self):
@@ -485,14 +485,14 @@ def test_sibling_paths_lang_family_suffixes():
 
 def test_sibling_paths_lang_case_sensitive_contract():
     """_LANG_RE 小写锚定：大写语言码不剥离、回落 ja（_LANG_RE :25 现状契约）。"""
-    _, p1, p2 = _sibling_paths("/tmp/X.JA.merged.subtransjav.srt")
+    _, p1, p2 = _sibling_paths("/tmp/X.JA.merged.subtrans.srt")
     assert p1.name == "X.JA.ja.pass1.srt"
     assert p2.name == "X.JA.ja.pass2.srt"
     _, p1, p2 = _sibling_paths("/tmp/X.Japanese.merged.srt")
     assert p1.name == "X.Japanese.ja.pass1.srt"
     # 阶段标记同样大小写敏感：大写 MERGED 不命中 _MARKER_RE → ValueError
     with pytest.raises(ValueError, match="命名解析失败"):
-        _sibling_paths("/tmp/X.ja.MERGED.subtransjav.srt")
+        _sibling_paths("/tmp/X.ja.MERGED.subtrans.srt")
 
 
 def test_collect_disagreement_iou_union_zero_defensive(tmp_path, monkeypatch):
@@ -506,7 +506,7 @@ def test_collect_disagreement_iou_union_zero_defensive(tmp_path, monkeypatch):
         _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
     (tmp_path / "Q.ja.pass2.srt").write_text(
         _srt([(1, "00:00:01,000 --> 00:00:02,000", "乙")]), encoding="utf-8")
-    mp = tmp_path / "Q.ja.merged.subtransjav.srt"
+    mp = tmp_path / "Q.ja.merged.subtrans.srt"
     mp.write_text(_srt([(1, "00:00:01,000 --> 00:00:02,000", "丙")]),
                   encoding="utf-8")
 
@@ -547,7 +547,7 @@ def test_collect_disagreement_iou_property_bounded(tmp_path):
 
     (tmp_path / "R.ja.pass1.srt").write_text(_srt(p1_entries), encoding="utf-8")
     (tmp_path / "R.ja.pass2.srt").write_text(_srt(p2_entries), encoding="utf-8")
-    mp = tmp_path / "R.ja.merged.subtransjav.srt"
+    mp = tmp_path / "R.ja.merged.subtrans.srt"
     mp.write_text(_srt(merged_entries), encoding="utf-8")
 
     result = collect_disagreement(str(mp))
@@ -583,7 +583,7 @@ def test_collect_disagreement_non_utf8_srt_tolerated(tmp_path):
         _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
     (tmp_path / "S.ja.pass2.srt").write_bytes(
         b"\xff\xfe\x00\x00 not utf-8")
-    mp = tmp_path / "S.ja.merged.subtransjav.srt"
+    mp = tmp_path / "S.ja.merged.subtrans.srt"
     mp.write_text(
         _srt([(1, "00:00:01,000 --> 00:00:02,000", "甲")]), encoding="utf-8")
 
@@ -604,7 +604,7 @@ def _srt_with_illegal_bytes(entries, corrupt_first: bool = False) -> bytes:
 
 
 _ILLEGAL_LEG_TO_NAME = {
-    "own": "V.ja.merged.subtransjav.srt",
+    "own": "V.ja.merged.subtrans.srt",
     "pass1": "V.ja.pass1.srt",
     "pass2": "V.ja.pass2.srt",
 }
@@ -680,7 +680,7 @@ def test_collect_disagreement_malformed_utf8_srt_contract(tmp_path):
     """损坏但可解码的 SRT：parse_srt 解析为空 → total=0/matched=0/rows=[]。"""
     (tmp_path / "T.ja.pass1.srt").write_text("垃圾内容", encoding="utf-8")
     (tmp_path / "T.ja.pass2.srt").write_text("垃圾内容", encoding="utf-8")
-    mp = tmp_path / "T.ja.merged.subtransjav.srt"
+    mp = tmp_path / "T.ja.merged.subtrans.srt"
     mp.write_text("不是 SRT 的任何文本", encoding="utf-8")
 
     result = collect_disagreement(str(mp))

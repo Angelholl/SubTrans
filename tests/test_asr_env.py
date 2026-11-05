@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from subtransjav.refine import asr_env
+from subtrans.refine import asr_env
 
 
 @pytest.fixture(autouse=True)
@@ -49,7 +49,7 @@ def test_transcribe_media_no_engine_points_to_asrdict_page(tmp_path):
 
 def test_ct2_model_missing_points_to_asrdict_page(monkeypatch):
     """同上：ct2 模型未落位导向（「模型未落位」串保留，只换页名）。"""
-    from subtransjav.refine import asr_runtime
+    from subtrans.refine import asr_runtime
     monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
     monkeypatch.setattr(asr_runtime, "resolve_ct2_model_dir",
                         lambda *a, **k: "")
@@ -165,8 +165,8 @@ def test_resolve_ffmpeg_path_only(monkeypatch, tmp_path):
 
 def test_media_crosscheck_flag_registered_and_not_in_fingerprint():
     """2.6.1 修订（D2026-1002-06）：默认值翻转 False（验证可选化）。"""
-    from subtransjav.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
-    from subtransjav.refine.manifest import _CONFIG_FIELDS
+    from subtrans.refine.config import TUNABLE_FIELD_TYPES, RefineConfig
+    from subtrans.refine.manifest import _CONFIG_FIELDS
     assert TUNABLE_FIELD_TYPES.get("media_crosscheck_enabled") is bool
     assert "media_crosscheck_enabled" not in _CONFIG_FIELDS
     assert "asr_model" not in _CONFIG_FIELDS
@@ -207,11 +207,11 @@ def test_runner_script_path_dev(monkeypatch):
 
 
 def test_runner_script_path_frozen_internal(monkeypatch, tmp_path):
-    """frozen：exe 同目录 _internal/subtransjav/refine/asr_runner.py 命中。"""
+    """frozen：exe 同目录 _internal/subtrans/refine/asr_runner.py 命中。"""
     import sys
     exe = tmp_path / "SubTrans.exe"
     exe.write_bytes(b"")
-    runner = (tmp_path / "_internal" / "subtransjav" / "refine"
+    runner = (tmp_path / "_internal" / "subtrans" / "refine"
               / "asr_runner.py")
     runner.parent.mkdir(parents=True)
     runner.write_text("# runner", encoding="utf-8")
@@ -240,7 +240,7 @@ def test_runner_script_path_frozen_fallback_and_miss(monkeypatch, tmp_path):
 def test_runner_direct_call_no_stdlib_hijack():
     """回归钉①（指定差分，ct2 形态）：venv python（无 faster_whisper）直调
     runner 脚本——预期失败="No module named 'faster_whisper'"，而非
-    "No module named 'subtransjav'"（secrets.py 劫持消除的可区分失败面）。"""
+    "No module named 'subtrans'"（secrets.py 劫持消除的可区分失败面）。"""
     import subprocess
     import sys as _sys
     import tempfile
@@ -262,10 +262,10 @@ def test_runner_direct_call_no_stdlib_hijack():
     payload = json.loads(lines[-1])
     assert payload["ok"] is False
     assert "No module named 'faster_whisper'" in payload["error"]
-    # 劫持可区分面：失败原因链不含 "No module named 'subtransjav'"
+    # 劫持可区分面：失败原因链不含 "No module named 'subtrans'"
     # （被劫持时 refine/secrets.py 顶部 import 先炸出该错；注意安装指引
-    # 文案本身含 subtransjav 字样，须按完整错误形态匹配）
-    assert "No module named 'subtransjav'" not in payload["error"], \
+    # 文案本身含 subtrans 字样，须按完整错误形态匹配）
+    assert "No module named 'subtrans'" not in payload["error"], \
         "secrets.py 仍劫持标准库导入链（sys.path 自清失效）"
 
 
@@ -286,7 +286,7 @@ def test_runner_direct_call_secrets_resolves_stdlib(tmp_path):
     dir_b.mkdir()
     shutil.copy(real_runner, dir_a / "asr_runner.py")
     (dir_a / "secrets.py").write_text(
-        "from subtransjav import paths\n", encoding="utf-8")
+        "from subtrans import paths\n", encoding="utf-8")
     (dir_b / "faster_whisper.py").write_text(
         "import secrets\n"
         "\n"

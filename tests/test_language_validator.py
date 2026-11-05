@@ -5,8 +5,8 @@ language_validator 回归测试
 """
 import pytest
 
-from subtransjav.refine import config as rc
-from subtransjav.refine.language_validator import (
+from subtrans.refine import config as rc
+from subtrans.refine.language_validator import (
     DroppedEntryLog,
     is_valid_stage_text,
 )

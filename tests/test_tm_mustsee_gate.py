@@ -8,10 +8,10 @@ TM 学习第三层门槛测试
   → _split_disagreement_rows → 必看 span 集合 → _learn_to_tm 跳过。
 """
 
-from subtransjav.refine import pipeline_v2 as pv
-from subtransjav.refine.pass_disagreement import collect_disagreement, probe_disagreement_mode
-from subtransjav.refine.quality_report import _split_disagreement_rows
-from subtransjav.refine.tm import TranslationMemory
+from subtrans.refine import pipeline_v2 as pv
+from subtrans.refine.pass_disagreement import collect_disagreement, probe_disagreement_mode
+from subtrans.refine.quality_report import _split_disagreement_rows
+from subtrans.refine.tm import TranslationMemory
 
 # ---------------------------------------------------------------------------
 # 工具
@@ -128,7 +128,7 @@ def test_end_to_end_disagreement_to_learn_gate(tmp_path, capsys):
     - 行3：应和词「うん」在伪影白名单 → 已过滤伪影（非必看）→
       不受第三层约束，正常入库（必看= similarity<0.30 且非伪影）。
     """
-    merged_path = tmp_path / "X.ja.merged.subtransjav.srt"
+    merged_path = tmp_path / "X.ja.merged.subtrans.srt"
     merged = _srt([
         (1, "00:00:01,000 --> 00:00:03,000", "学校のプールでの練習風景"),
         (2, "00:00:04,000 --> 00:00:06,000", "今日はいい天気ですね"),
@@ -166,7 +166,7 @@ def test_end_to_end_disagreement_to_learn_gate(tmp_path, capsys):
     assert must_see_spans == {(1.0, 3.0)}
 
     # 2) 学习循环的 orig 侧 = 同一 merged 文件解析出的 entries
-    from subtransjav.refine.filters import parse_srt
+    from subtrans.refine.filters import parse_srt
     orig = parse_srt(merged_path.read_text(encoding="utf-8"))
     final = [
         {"index": 1, "timing": orig[0]["timing"], "text": "学校泳池的训练风景"},
