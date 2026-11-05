@@ -860,15 +860,22 @@ def _model_ok_src(src: Path) -> bool:
 
 class TestCt2MigrateContract:
     def test_runtime_same_volume_atomic_rename(self, tmp_path, monkeypatch):
-        """同卷＝目录级 os.rename 原子迁：源消失、目标 manifest 认证通过。"""
+        """同卷＝目录级 os.rename 原子迁：源消失、目标 manifest 认证通过。
+
+        _same_volume 用 splitdrive 盘符语义（Windows 安装面）；POSIX 下恒判
+        跨卷走 copy→manifest 认证→删源 等效路径，终点不变（moved+认证通过），
+        仅 same_volume 标志位随平台语义。"""
         src = tmp_path / "old" / "ct2"
         _runtime_skeleton(src)
         dst = tmp_path / "new" / "ct2"
         monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(src))
         out = asr_runtime.migrate_ct2_tree("runtime", dst=str(dst))
         assert out["moved"] is True and out["error"] == ""
-        assert out["same_volume"] is True
-        assert not src.exists(), "同卷原子迁后源必须消失"
+        if os.name == "nt":
+            assert out["same_volume"] is True
+        else:
+            assert out["same_volume"] is False
+        assert not src.exists(), "迁移后源必须消失（同卷改名/跨卷拷验两路径同终态）"
         assert asr_runtime.read_runtime_manifest(str(dst)) is not None, \
             "迁移后 manifest 认证须通过"
 

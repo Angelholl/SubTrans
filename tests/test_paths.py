@@ -1,5 +1,6 @@
 """subtrans.paths 数据路径单一来源测试（打包地基批）"""
 import datetime
+import os
 import re
 import sys
 from pathlib import Path
@@ -125,20 +126,28 @@ def test_data_root_source_form_is_repo_root(monkeypatch):
 # ---------------------------------------------------------------------------
 # 落点 A 推导规格对照表（与 packaging/setup.iss _DefaultDataRootFor 同规格）
 # ---------------------------------------------------------------------------
+@pytest.mark.skipif(os.name != "nt",
+                    reason="frozen 数据根旁路命名属 Windows 安装面语义（Path 语义随 OS，非 nt 形态对照无意义）")
 @pytest.mark.parametrize("install_dir,expected", [
-    (r"D:\SubTrans", r"D:\SubTrans-data"),
-    (r"C:\Program Files\SubTrans", r"C:\Program Files\SubTrans-data"),
-    ("D:\\SubTrans\\", r"D:\SubTrans-data"),        # 尾斜杠
-    (r"D:\SubTrans-data", r"D:\SubTrans-data-data"),  # 名字已带 -data
-    (r"D:\a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z\SubTrans",
-     r"D:\a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z\SubTrans-data"),  # 长路径
-    (r"\\server\share\SubTrans", r"\\server\share\SubTrans-data"),  # UNC
-    ("D:\\", r"D:\SubTrans-data"),                  # 盘根
-    (r"D:", r"D:\SubTrans-data"),                   # 盘根无斜杠
-    (r"\\server", r"\\server\SubTrans-data"),        # UNC 服务根
-    (r"\\server\share", r"\\server\share\SubTrans-data"),  # UNC 分享根（视作根）
-    ("\\", r"\SubTrans-data"),                      # 单根（无盘符无 UNC）
-    ("D:/SubTrans", r"D:\SubTrans-data"),            # 正斜杠形态
+    pytest.param(r"D:\SubTrans", r"D:\SubTrans-data"),
+    pytest.param(r"C:\Program Files\SubTrans", r"C:\Program Files\SubTrans-data"),
+    pytest.param("D:\\SubTrans\\", r"D:\SubTrans-data"),        # 尾斜杠
+    pytest.param(r"D:\SubTrans-data", r"D:\SubTrans-data-data"),  # 名字已带 -data
+    pytest.param(r"D:\a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z\SubTrans",
+                 r"D:\a\b\c\d\e\f\g\h\i\j\k\l\m\n\o\p\q\r\s\t\u\v\w\x\y\z\SubTrans-data"),  # 长路径
+    pytest.param(r"\\server\share\SubTrans", r"\\server\share\SubTrans-data",
+                 marks=pytest.mark.skipif(sys.version_info < (3, 12),
+                                          reason="pathlib UNC .parent 语义 3.12 才对齐（win<3.12 腿 skip）")),
+    pytest.param("D:\\", r"D:\SubTrans-data"),                  # 盘根
+    pytest.param(r"D:", r"D:\SubTrans-data"),                   # 盘根无斜杠
+    pytest.param(r"\\server", r"\\server\SubTrans-data",
+                 marks=pytest.mark.skipif(sys.version_info < (3, 12),
+                                          reason="pathlib UNC 语义版本差（win<3.12 腿 skip）")),
+    pytest.param(r"\\server\share", r"\\server\share\SubTrans-data",
+                 marks=pytest.mark.skipif(sys.version_info < (3, 12),
+                                          reason="pathlib UNC 语义版本差（win<3.12 腿 skip）")),
+    pytest.param("\\", r"\SubTrans-data"),                      # 单根（无盘符无 UNC）
+    pytest.param("D:/SubTrans", r"D:\SubTrans-data"),            # 正斜杠形态
 ])
 def test_default_data_root_for_forms(install_dir, expected):
     """形态对照表钉死推导规格：普通/Program Files/尾斜杠/-data 结尾/长路径/
