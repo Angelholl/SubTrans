@@ -1,10 +1,10 @@
 # SubTrans
 
-> 由 SubTransJAV 项目迭代而来：原 JAV 领域专用字幕翻译工具，现为通用字幕翻译与精修工具链。
+> 由早期字幕翻译工具迭代而来的通用字幕翻译与精修工具链。
 
 自带角色卡与词典的双引擎字幕翻译与精修工具链：LLM 提示词工程 + 术语自学习（自动学习默认关闭）+ 幻觉检测 + 质量审校，日→中方向开箱即用，内置 CT2 本地转写引擎支撑媒体对照与漏听核对（按需安装）；初始自带通用模板，动漫、GAL 等领域可自设模板与规则。
 
-A dual-engine subtitle translation & refinement toolkit (evolved from the SubTransJAV project) with built-in persona templates and dictionaries: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review, Japanese→Chinese out of the box. Ships with a built-in CT2 transcription engine (opt-in install) for media cross-checks and missed-line verification; ships with a general-purpose template, and domain templates (anime, GAL, etc.) can be customized.
+A dual-engine subtitle translation & refinement toolkit with built-in persona templates and dictionaries: LLM prompt engineering, self-learning glossary/TM (opt-in), hallucination detection and quality review, Japanese→Chinese out of the box. Ships with a built-in CT2 transcription engine (opt-in install) for media cross-checks and missed-line verification; ships with a general-purpose template, and domain templates (anime, GAL, etc.) can be customized.
 
 ## 下载与安装
 
@@ -118,7 +118,7 @@ GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留
 
 ## 本地模型推荐速查
 
-> 定版结论来自两轮全有序矩阵实测（66 个测试单元零失败）；参测模型、关键发现与速度口径等完整内容见 [docs/模型与转写实测推荐.md](docs/模型与转写实测推荐.md)。
+> 定版结论来自两轮全有序矩阵实测（66 个测试单元零失败）；参测模型、关键发现与速度口径等完整内容存内部记录。
 
 | 场景 | 搭配（阶段A → 阶段B） | 说明 |
 |---|---|---|
@@ -127,11 +127,11 @@ GUI 左侧导航分两组——「工作区」：**字幕翻译**（主页保留
 | 不推荐 | sakura14b 做 A；joyfox27b / sakura14b 做 B | 草稿缺陷 / 吞台词 / 整行缺失 |
 
 - 本地服务（lmstudio / ollama / siliconflow / custom）模型均需 `--s1-model` / `--s3-model` 显式指定（GUI 在引擎页选择）；云端 deepseek / zen 有内置默认模型。`--profile` 与模型搭配无关。
-- 测试语料为 JAV 影片（日译中方向），结论仅代表该领域实测表现；通用场景请选择你自备的通用翻译模型（如 qwen / gemma 等），席位搭配逻辑仍可参考。
+- 测试语料为特定领域影片（日译中方向），结论仅代表该领域实测表现；通用场景请选择你自备的通用翻译模型（如 qwen / gemma 等），席位搭配逻辑仍可参考。
 
 ## 关于上游转写（历史产物只读兼容）
 
-本项目转写已内置（CT2 自管运行时，见上方特性与安装说明），不依赖、不分发任何上游转写环境。对既有用户的历史产物保持**只读兼容**：上游 WhisperJAV 工作流产出的源文 SRT（`.merged.whisperjav` 命名族）、运行清单 `whisperjav_run.json` 与遥测旁车 `.asr_telemetry.jsonl` 可直接作为输入被识别与配对（媒体配对、条目级阈值自适应等特性照常生效）。上游工具自身的用法不在本文档范围；历史实测记录见 [docs/模型与转写实测推荐.md](docs/模型与转写实测推荐.md)（存档性质）。
+本项目转写已内置（CT2 自管运行时，见上方特性与安装说明），不依赖、不分发任何上游转写环境。对既有用户的历史产物保持**只读兼容**：上游转写工作流产出的源文 SRT（`.merged.whisperjav` 命名族）、运行清单 `whisperjav_run.json` 与遥测旁车 `.asr_telemetry.jsonl` 可直接作为输入被识别与配对（媒体配对、条目级阈值自适应等特性照常生效）。上游工具自身的用法不在本文档范围；历史实测记录存内部记录。
 
 ## 架构一览
 
@@ -215,7 +215,7 @@ SRT 输入
 
 `config/templates/`（角色卡/幻觉模式/加固短语）与 `subtransjav/refine/defaults/`（默认规则）为通用默认；词库 CSV（`--glossary`，两列 source,target，可选第三列 target_aliases 别名，`|` 分隔）与 TM 库不入版本库，克隆后按需自建。
 
-初始自带通用模板角色卡与默认规则（`config/templates/` 与 `subtransjav/refine/defaults/`，可编辑/可覆盖）；词库 CSV（`--glossary`）与 TM 库不入版本库，克隆后按需自建。领域扩展包（如 JAV）见 `docs/examples/`。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
+初始自带通用模板角色卡与默认规则（`config/templates/` 与 `subtransjav/refine/defaults/`，可编辑/可覆盖）；词库 CSV（`--glossary`）与 TM 库不入版本库，克隆后按需自建。领域扩展包可参照 `docs/examples/` 下的示例结构自行定制。TM 翻译记忆库的自动学习产物（`glossary_learned.csv`、`tm.db`）由你自己的翻译流程生成，管理命令见 `--tm-stats` / `--tm-export` / `--tm-import` / `--tm-clear`。
 
 ## English Quickstart
 
@@ -252,8 +252,8 @@ See the Chinese sections above for full details.
 
 ## 声明
 
-- 本项目为开源字幕翻译工具，使用者须遵守所在地区法律法规。因项目历史领域背景，随仓库保留的领域示例包（`docs/examples/jav-domain/`）与模型/转写实测文档（[docs/模型与转写实测推荐.md](docs/模型与转写实测推荐.md)）涉及成人领域内容，是否适用请自行判断。
-- 上游转写工具：[WhisperJAV](https://github.com/meizhong986/WhisperJAV)——分工：转写归上游，翻译+精修归本仓库（旧名 SubTransJAV 由此而来）。仓库已更名 SubTrans，旧名保留历史沿革，定位为通用字幕翻译项目。上游 v1.9.2+ 的运行清单（`whisperjav_run.json`）可通过 `--asr-meta` 接入本仓库双幻觉防护（转写可信度信号驱动精修侧自适应过滤）；旧版上游产物同样支持。
+- 本项目为开源字幕翻译工具，使用者须遵守所在地区法律法规，不得将本工具用于违反当地法律的用途；特定领域调校包（含成人领域）不在仓库分发范围。
+- 转写兼容口径：转写归上游工具，翻译+精修归本仓库；本仓库定位为通用字幕翻译项目。上游 v1.9.2+ 的运行清单（`whisperjav_run.json`）可通过 `--asr-meta` 接入本仓库双幻觉防护（转写可信度信号驱动精修侧自适应过滤）；旧版上游产物同样支持。
 - **设计参考**：GUI 信息架构参考了 [buxuku/SmartSub](https://github.com/buxuku/SmartSub)（MIT 许可）的分层收纳思路（引擎/模型集中管理 + 主界面任务流化），仅借鉴交互理念与信息架构，未复制其代码与图形资产。
 - **非商业声明**：本项目基于个人使用设计，在 GitHub 公开仅为开源分享，未商业化、未收取任何费用。
 - **联系与整改**：如权利人认为本项目中的商标、图形、文案等内容侵犯其权益，可通过 Issue 联系，我将及时核实并整改。

@@ -1,7 +1,7 @@
 # =============================================================================
-# SubTransJAV - pyproject.toml
+# SubTrans - pyproject.toml
 # =============================================================================
-# 从 SubTransJAV 项目剥离的独立字幕翻译（净语翻译两阶段流水线（v2））项目。
+# 通用字幕翻译工具（净语翻译两阶段流水线（v2））。
 #
 # 安装：
 #   pip install -e .            # 核心翻译引擎（refine CLI 所需）
@@ -15,7 +15,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "subtransjav"
 version = "3.1.3.dev0"
-description = "Standalone two-stage (v2) SRT subtitle translation (net-speech refine pipeline) extracted from SubTransJAV"
+description = "Standalone two-stage (v2) SRT subtitle translation toolkit (net-speech refine pipeline)"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "MeiZhong"}]

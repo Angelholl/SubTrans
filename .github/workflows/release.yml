@@ -1,4 +1,4 @@
-# SubTransJAV 发布构建草稿（D2026-0929-05 P2/07 定案）
+# SubTrans 发布构建（D2026-0929-05 P2/07 定案）
 #
 # 运行时验证依赖：pythonnet 需要宿主机 .NET runtime（hostfxr.dll），
 # CI 只能证明"能打包"，真机核验（GUI 启动、WebView2 加载、翻译链路）
