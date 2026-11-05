@@ -241,7 +241,7 @@ const MSG = {
     sourceKanaLblMerge: '源文短句合并',
     sourceKanaNoteMerge: '把源文中的短假名句并入相邻句（仅 ja→zh 生效）；默认开启，取消则逐条保留原样。',
     sourceKanaLblMoanDelete: '删除孤立喘息',
-    sourceKanaNoteMoanDelete: '仅删孤立喘息词（ああ/ん 等），词表与批3a 模块单一来源；本开关会话级生效、不持久化。',
+    sourceKanaNoteMoanDelete: '仅删孤立喘息词（ああ/ん 等）；本开关会话级生效、不持久化。',
 
     // TM 与断点合并弹窗（D2026-1024-01 批3 件B）：高级参数 TAB「TM 与断点」
     // 入口组+弹窗壳文案；8 控件标签/长提示 title/placeholder/分区标题全部
@@ -316,8 +316,8 @@ const MSG = {
     follow_stage_default: '跟随阶段 A（默认）',
     ai_model_label: '分析模型',
     cross_film_window: '跨片统计窗口',
-    stage_a_label: '阶段A 净语+翻译（日译中）',
-    stage_b_label: '阶段B 审校+抛光（中文）',
+    stage_a_label: '阶段A 净语+翻译',
+    stage_b_label: '阶段B 审校+抛光',
     provider_zen: 'Zen 免费',
     provider_lmstudio: '本地 LM Studio',
     provider_ollama: '本地 Ollama',

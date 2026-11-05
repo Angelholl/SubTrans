@@ -58,7 +58,7 @@ def build_parser():
 
     p.add_argument("--extra-output-format", choices=["ass", "vtt"],
                    action="append", default=[],
-                   help="终稿平行附加成品件格式（可重复传，默认不写附加件，D2026-1023-02）")
+                   help="终稿平行附加成品件格式（可重复传，默认不写附加件）")
 
     # ---- 确定性字幕清洗层（默认关，D2026-1023-03 D3）----
     p.add_argument("--polish", action="store_true",
@@ -79,7 +79,7 @@ def build_parser():
     p.add_argument("--polish-remove-dialogue-gt", action="store_true",
                    help="删除行首对话标记 >>（默认保留）")
     p.add_argument("--polish-keep-final-period", action="store_true",
-                   help="句末去句号=保留句号（默认去：句尾句号统一删除，D2026-1024-01）")
+                   help="句末去句号=保留句号（默认去：句尾句号统一删除）")
     p.add_argument("--polish-no-rewrap", dest="polish_rewrap_enabled",
                    action="store_false",
                    help="关闭拆行重排（默认开：超宽/超行文本自动重排）")
@@ -90,7 +90,7 @@ def build_parser():
     # ---- 源文假名清洗（ja→zh，D2026-1025-01 批3a）----
     p.add_argument("--source-kana-merge", dest="source_kana_merge_enabled",
                    action="store_true", default=True,
-                   help="源文纯假名短句/喘息并入相邻条（默认开，D2026-1025-01）")
+                   help="源文纯假名短句/喘息并入相邻条（默认开）")
     p.add_argument("--no-source-kana-merge",
                    dest="source_kana_merge_enabled", action="store_false",
                    help="关闭源文假名短句合并（--source-kana-merge 反向旗标）")
@@ -247,7 +247,7 @@ def build_parser():
                                  "完整源文；缺省退化为导读摘录）")
     grp_action.add_argument("--action-model", default="",
                             help="重翻模型名（缺省用阶段A/槽 A 模型；"
-                                 "P2/D2026-1008-02 与 AI 分析同槽同源）")
+                                 "与 AI 分析同槽同源）")
     grp_action.add_argument("--action-sample", type=int, default=0,
                             help="只取选中条目的前 N 条（0=不限；供小样对比工作流）")
     grp_action.add_argument("--apply", action="store_true",

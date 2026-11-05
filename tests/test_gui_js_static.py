@@ -7902,7 +7902,7 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-        "a2c7cecf0ca6a96ed8acfb01b15a8a8b1c52b8154a20f6fb8c9445b009d833ee"), \
+        "31d4c3b3b0634a5e272e15930042de45a4540651dc8734c832b87740f88f54ab"), \
         "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
     # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
@@ -7933,8 +7933,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (248,
                    "bc6e6a2f16167a94af74e404d368a5daca9e4fd3de0a8c063496da9b456aa9a0"),
-        "app-msg.js": (69700,
-                       "b46c45f0cc9ee8332fcc56fc952637b419248f5e633d392827e6b0ffd195bb10"),
+        "app-msg.js": (69637,
+                       "f082f74486f09248da147ec35ede861ead09c80fbfc018d4ae5fe48309213b1d"),
         "app-modal.js": (92946,
                          "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
         "app-error-handler.js": (745,
