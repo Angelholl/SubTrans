@@ -218,7 +218,7 @@ def test_context_sidecar_disabled_by_cfg(tmp_path):
 def test_context_sidecar_user_settings_layering(tmp_path, monkeypatch):
     from subtrans.refine import config as rc
     monkeypatch.setattr(rc, "CONFIG_DIR", str(tmp_path))
-    monkeypatch.delenv("SUBTRANSJAV_CONTEXT_SIDECAR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CONTEXT_SIDECAR", raising=False)
     (tmp_path / "user_settings.json").write_text(
         json.dumps({"context_sidecar": False}), encoding="utf-8")
     assert RefineConfig().context_sidecar is False   # 用户文件覆盖默认
@@ -226,11 +226,11 @@ def test_context_sidecar_user_settings_layering(tmp_path, monkeypatch):
     assert RefineConfig(context_sidecar=False).context_sidecar is False
     # 环境变量（用户文件清空后单独验证白名单字面量）
     (tmp_path / "user_settings.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("SUBTRANSJAV_CONTEXT_SIDECAR", "false")
+    monkeypatch.setenv("SUBTRANS_CONTEXT_SIDECAR", "false")
     assert RefineConfig().context_sidecar is False
-    monkeypatch.setenv("SUBTRANSJAV_CONTEXT_SIDECAR", "true")
+    monkeypatch.setenv("SUBTRANS_CONTEXT_SIDECAR", "true")
     assert RefineConfig().context_sidecar is True
-    monkeypatch.setenv("SUBTRANSJAV_CONTEXT_SIDECAR", "bogus")
+    monkeypatch.setenv("SUBTRANS_CONTEXT_SIDECAR", "bogus")
     assert RefineConfig().context_sidecar is True    # 非法值回退默认
 
 

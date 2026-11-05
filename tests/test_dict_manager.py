@@ -62,7 +62,7 @@ class _FakeResponse:
 # 布局与清单
 # ---------------------------------------------------------------------------
 def test_dict_dir_under_data_root(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     assert Path(dm.dict_dir()) == tmp_path / "dict"
 
 
@@ -78,7 +78,7 @@ def test_source_manifest_parses_three_kinds():
 
 
 def test_kind_dir_under_dict_root(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     assert Path(dm.kind_dir("sudachi")) == tmp_path / "dict" / "sudachi"
 
 
@@ -94,7 +94,7 @@ def test_unknown_kind_rejected():
 # 下载链路（monkeypatch 网络）
 # ---------------------------------------------------------------------------
 def test_download_dict_success(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -110,7 +110,7 @@ def test_download_dict_success(monkeypatch, tmp_path):
 
 def test_download_dict_checksum_error_no_fallback(monkeypatch, tmp_path):
     """SHA256 不符：拒绝落位且不轮换下一源（防串改文件换源洗白）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     calls = []
 
@@ -133,7 +133,7 @@ def test_download_dict_checksum_error_no_fallback(monkeypatch, tmp_path):
 
 def test_download_dict_network_fallback(monkeypatch, tmp_path):
     """主源网络失败 → 镜像 fallback 成功。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -153,7 +153,7 @@ def test_download_dict_network_fallback(monkeypatch, tmp_path):
 
 
 def test_download_dict_all_sources_down(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True}])
@@ -408,7 +408,7 @@ def test_checksum_mismatch_never_retried(monkeypatch, tmp_path):
     handlers_seen, open_calls = _patch_build_opener(
         monkeypatch,
         lambda req: _StreamResponse(wheel, chunk=64, total=len(wheel)))
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "0" * 64, "sha256_verified": True}])
@@ -462,7 +462,7 @@ def test_failed_snapshot_carries_diag(monkeypatch, tmp_path):
     """D2026-1004-01 C3：CL 不符走完 download_dict → phase=failed 且快照
     带 diag（_DIAG_FIELDS 七键齐全；proxy ∈ {system, direct}、attempts
     ∈ {1, 2}）；.part 残留已清。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True}])
@@ -485,7 +485,7 @@ def test_failed_snapshot_carries_diag(monkeypatch, tmp_path):
 
 def test_download_dict_progress_phase_chain(monkeypatch, tmp_path):
     """网络成功全链：download→verify→extract→done（done 带最终字节数）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -515,7 +515,7 @@ def test_download_dict_progress_phase_chain(monkeypatch, tmp_path):
 
 def test_download_dict_progress_reset_per_source(monkeypatch, tmp_path):
     """跨源 fallback：每源重置 downloaded=0/total=None，计数不跨源残留。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -547,7 +547,7 @@ def test_download_dict_progress_reset_per_source(monkeypatch, tmp_path):
 
 def test_download_dict_progress_failed_phase(monkeypatch, tmp_path):
     """全源失败：phase=failed + error 文案，异常照旧向上抛（api 语义不变）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True}])
@@ -571,7 +571,7 @@ def test_download_progress_no_record_returns_empty(monkeypatch):
 
 def test_local_wheel_import_verifies_hash(monkeypatch, tmp_path):
     """离线导入：wheel 哈希相符落位，不符拒绝。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -603,7 +603,7 @@ def test_url_allowlist_blocks_non_https_and_unknown_host():
 # 状态与 grammar_hint 接线
 # ---------------------------------------------------------------------------
 def test_dict_status_structure(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     st = dm.dict_status()
     # 2.5.0 修复A：kind 架构增 sudachi_full（core 零迁移，full=文件存在判定）
     assert set(st["dicts"]) == {"sudachi", "sudachi_full", "jieba",
@@ -616,7 +616,7 @@ def test_dict_status_structure(monkeypatch, tmp_path):
 
 
 def test_sudachi_custom_dict_path_when_present(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     dic = tmp_path / "dict" / "sudachi" / "system_core.dic"
     dic.parent.mkdir(parents=True)
     dic.write_bytes(b"dic")
@@ -655,7 +655,7 @@ def test_get_tokenizer_prefers_custom_dict(monkeypatch, tmp_path):
 # CLI 冒烟
 # ---------------------------------------------------------------------------
 def test_cli_dict_status_smoke(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     from subtrans.refine import cli
     assert cli.main(["--dict-status"]) == 0
     out = capsys.readouterr().out
@@ -663,7 +663,7 @@ def test_cli_dict_status_smoke(monkeypatch, tmp_path, capsys):
 
 
 def test_cli_dict_download_local_missing_file(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     from subtrans.refine import cli
     rc = cli.main(["--dict-download", "sudachi",
                    "--dict-from-file", str(tmp_path / "nope.whl")])
@@ -688,7 +688,7 @@ def _manifest_full(monkeypatch, sha: str) -> None:
 def test_download_dict_source_official_keeps_cloudfront(monkeypatch, tmp_path):
     """评议员条件②核心用例：official=排除镜像而非只留 pypi——sudachi_full
     官方源就是 cloudfront-cdn，official 模式不得空集。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     zbuf = _fake_wheel(member="system_full.dic")
     sha = hashlib.sha256(zbuf).hexdigest()
     _manifest_full(monkeypatch, sha)
@@ -707,7 +707,7 @@ def test_download_dict_source_mirror_full_lit_hf_mirror_real_manifest(
     hf-mirror 条目已点亮（sha256_verified=true + /resolve/f9304753 直链 +
     sha256 与 cloudfront pin 一致），mirror 模式入池且唯一候选即 hf-mirror
     直链（mirror 池只收 role=mirror，不回官方——回退仅 auto 链语义）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     calls = []
 
     def _fail_get(url, dest, progress=None, stop_event=None):
@@ -746,7 +746,7 @@ def test_download_dict_source_official_and_mirror_split(monkeypatch, tmp_path):
     """sudachi 双源分流：official 只走 pypi（排除 role=mirror 的 tuna）；
     mirror 只走 tuna。（2.7.3 件② role 旗标泛化：fixture 随清单语义补
     role=mirror——verified 镜像不因角色混入 official 池。）"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -769,7 +769,7 @@ def test_download_dict_source_official_and_mirror_split(monkeypatch, tmp_path):
 def test_download_dict_fallback_note_visible(monkeypatch, tmp_path):
     """评议员条件①：auto 轮换由静默升级为可见——镜像源下载期间快照带
     粘滞 note（1s 轮询必能采样）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -797,7 +797,7 @@ def test_download_dict_fallback_note_visible(monkeypatch, tmp_path):
 
 def test_download_dict_invalid_source_falls_back_auto(monkeypatch, tmp_path):
     """非法 source 按 auto（顺序全取：pypi 失败轮换 tuna 成功）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -822,7 +822,7 @@ def test_download_dict_invalid_source_falls_back_auto(monkeypatch, tmp_path):
 def test_dict_status_sources_summary(monkeypatch, tmp_path):
     """sources 摘要键：从清单推导，仅 target_name 非空 kind（追加式，不删
     既有断言——test_dict_status_structure 不受扰）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     st = dm.dict_status()
     s = st["sources"]
     assert s["sudachi"] == {"has_official": True, "has_mirror": True}
@@ -895,7 +895,7 @@ def test_download_dict_unlit_mirror_not_in_any_pool(monkeypatch, tmp_path):
     入 auto 池（实际只走 cloudfront）；mirror 请求显式报「无镜像源」；
     official 池仍走 cloudfront；GUI 数据面 has_mirror=false（mirBtn
     disabled 的数据源，不虚亮）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     zbuf = _fake_wheel(member="system_full.dic")
     sha = hashlib.sha256(zbuf).hexdigest()
     _manifest_full_with_mirror(monkeypatch, sha, mirror_verified=False)
@@ -919,7 +919,7 @@ def test_download_dict_lit_mirror_auto_order_and_fallback_note(
     """点亮模拟钉（fixture 翻转 sha256_verified=true）：auto 链按 JSON 列表
     序 [hf-mirror, cloudfront] 镜像优先；镜像段网络失败自动轮换回
     cloudfront，快照 note 方向感知=「镜像源不可达，已回退官方源」。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     zbuf = _fake_wheel(member="system_full.dic")
     sha = hashlib.sha256(zbuf).hexdigest()
     _manifest_full_with_mirror(monkeypatch, sha, mirror_verified=True)
@@ -949,7 +949,7 @@ def test_download_dict_lit_mirror_and_official_split(monkeypatch, tmp_path):
     """点亮模拟钉：mirror 请求走 hf-mirror 直链；role 隔离（HRO-2 最严重
     项）——镜像条目即使 sha256_verified=true 也不入 official 池，official
     仍只走 cloudfront（防官方语义被镜像击穿的回归钉）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     zbuf = _fake_wheel(member="system_full.dic")
     sha = hashlib.sha256(zbuf).hexdigest()
     _manifest_full_with_mirror(monkeypatch, sha, mirror_verified=True)
@@ -970,7 +970,7 @@ def test_download_dict_lit_mirror_and_official_split(monkeypatch, tmp_path):
 def test_replace_locked_release_then_retry_succeeds(monkeypatch, tmp_path):
     """os.replace 首抛 PermissionError → 释放分词器（侦确认被调）→
     重试成功 → done 快照且词典落位。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -1010,7 +1010,7 @@ def test_replace_locked_release_then_retry_succeeds(monkeypatch, tmp_path):
 def test_replace_locked_persists_raises_narrow_error(monkeypatch, tmp_path):
     """重试仍被锁 → 窄域异常（不继承 DictDownloadError，不轮换、无回退
     note）+ failed 快照人话消息 + .downloading/.extracting 残件清理。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [
@@ -1059,7 +1059,7 @@ def test_replace_locked_persists_raises_narrow_error(monkeypatch, tmp_path):
 def test_extracting_tmp_cleaned_on_mid_extract_error(monkeypatch, tmp_path):
     """解压中途 IO 异常 → DictChecksumError 且 .extracting 残件清理
     （补断言：_extract_dic 内 :555-561 清理覆盖解压循环抛错路径）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     out = tmp_path / "out.dic"
 
     class _BrokenSrc:
@@ -1141,7 +1141,7 @@ def test_http_get_stop_in_chunk_loop_no_attempt2(monkeypatch, tmp_path):
 def test_download_dict_stop_at_source_loop_head(monkeypatch, tmp_path):
     """源循环头置位 → 首源未访问、第二源未尝试；收口 stopped 快照
     （note 带重下指引、不写 error/diag）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True},
@@ -1167,7 +1167,7 @@ def test_download_dict_stop_at_source_loop_head(monkeypatch, tmp_path):
 def test_download_dict_stop_not_swallowed_by_rotation(monkeypatch, tmp_path):
     """源#1 下载中置位 → 源轮换捕获不得吞掉 DictDownloadStopped：第二源
     未尝试、不打「已回退」假 note，收口 stopped 快照。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     _manifest_with_downloads(monkeypatch, [
         {"source": "pypi", "url": "https://files.pythonhosted.org/a.whl",
          "sha256": "1" * 64, "sha256_verified": True},
@@ -1195,7 +1195,7 @@ def test_download_dict_stop_not_swallowed_by_rotation(monkeypatch, tmp_path):
 def test_download_dict_stop_in_extract_loop_cleanup(monkeypatch, tmp_path):
     """解压循环置位 → stopped 快照（note 指引）+ .downloading/.extracting
     残件清理（复用件①清理链）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     wheel = _fake_wheel()
     sha = hashlib.sha256(wheel).hexdigest()
     _manifest_with_downloads(monkeypatch, [

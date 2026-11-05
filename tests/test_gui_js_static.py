@@ -8580,6 +8580,6 @@ def test_ct2_model_dir_ui_pinned():
                ).read_text(encoding="utf-8")
     assert 'CT2_MODEL_DIR_KEY = "ct2_model_dir"' in runtime, \
         "模型设置键名须为 refine 层单源常量（前端/桥禁各自字面）"
-    assert "SUBTRANSJAV_CT2_MODEL_DIR" in runtime, "模型落位 env 覆盖口缺失"
+    assert "SUBTRANS_CT2_MODEL_DIR" in runtime, "模型落位 env 覆盖口缺失"
     assert "def has_model_at(" in runtime, \
         "落位行「该位置有无模型」读取面缺失（误切空位须可见）"

@@ -289,10 +289,10 @@ def test_cli_v2_ctx_default_is_generic_16384_with_layering(tmp_path,
                                                            monkeypatch):
     """A1 缺省重绑定（D2026-0927-01）：CLI 不传 --v2-ctx 时缺省=通用保守值
     16384；22272 退到文档/示例层（作者 16GB 档案值，非全局缺省）。
-    分层契约：默认 16384 < user_settings.json < SUBTRANSJAV_V2_CTX_LOCAL
+    分层契约：默认 16384 < user_settings.json < SUBTRANS_V2_CTX_LOCAL
     < 显式 --v2-ctx（显式 22272 档案值仍生效）。"""
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path))
-    monkeypatch.delenv("SUBTRANSJAV_V2_CTX_LOCAL", raising=False)
+    monkeypatch.delenv("SUBTRANS_V2_CTX_LOCAL", raising=False)
 
     # 不传 --v2-ctx：dataclass 缺省 16384
     cfg = config_from_args(build_parser().parse_args(
@@ -307,7 +307,7 @@ def test_cli_v2_ctx_default_is_generic_16384_with_layering(tmp_path,
     assert cfg2.v2_ctx_local == 8192
 
     # 环境变量分层覆盖（高于用户文件）
-    monkeypatch.setenv("SUBTRANSJAV_V2_CTX_LOCAL", "12288")
+    monkeypatch.setenv("SUBTRANS_V2_CTX_LOCAL", "12288")
     cfg3 = config_from_args(build_parser().parse_args(
         ["-i", str(tmp_path / "x.srt")]))
     assert cfg3.v2_ctx_local == 12288
@@ -541,7 +541,7 @@ def test_cli_where_exits_before_config_from_args(monkeypatch):
 
 def test_cli_where_zero_side_effects(tmp_path, monkeypatch):
     """--where 全程只读：数据根指向 tmp 后，不得在 tmp 创建任何目录。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     from subtrans.refine.cli import main
     assert main(["--where"]) == 0
     assert list(tmp_path.rglob("*")) == []

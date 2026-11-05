@@ -28,7 +28,7 @@ def test_is_frozen_true_when_patched(monkeypatch):
 # data_root 三级优先级
 # ---------------------------------------------------------------------------
 def test_data_root_env_priority(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     assert paths.data_root() == Path(tmp_path)
     assert paths.data_root_source() == "env"
 
@@ -43,7 +43,7 @@ def _patch_frozen_install(monkeypatch, tmp_path, install_name="install"):
     install.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     return install
 
 
@@ -59,7 +59,7 @@ def _write_anchor(root: Path) -> Path:
 def test_data_root_env_blank_ignored(monkeypatch, tmp_path):
     _patch_frozen_install(monkeypatch, tmp_path)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", "   ")
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", "   ")
     assert paths.data_root() == tmp_path / "install-data"
 
 
@@ -116,7 +116,7 @@ def test_data_root_frozen_localappdata_missing_no_home_fallback(monkeypatch, tmp
 
 
 def test_data_root_source_form_is_repo_root(monkeypatch):
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     assert paths.data_root() == REPO_ROOT
     assert paths.data_root_source() == "legacy"
@@ -175,9 +175,9 @@ def test_paths_anchors_align_with_iss_gate():
 # data_root_source 标签面（env/pointer/frozen-default/frozen-legacy-default/legacy）
 # ---------------------------------------------------------------------------
 def test_data_root_source_five_values(monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     assert paths.data_root_source() == "env"
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT")
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT")
     _patch_frozen_install(monkeypatch, tmp_path)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     assert paths.data_root_source() == "frozen-default"
@@ -202,7 +202,7 @@ def test_cli_where_source_map_covers_all_labels():
 # data_subdir
 # ---------------------------------------------------------------------------
 def test_data_subdir_source_form_relative_structure(monkeypatch):
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     assert paths.data_subdir("Temp", "translation_memory").endswith(
         str(Path("Temp") / "translation_memory"))
@@ -283,7 +283,7 @@ def pointer_tmp(monkeypatch, tmp_path):
     """把 pointer 文件指到 tmp，隔离仓库根真实 .data-root。"""
     p = tmp_path / ".data-root"
     monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: p)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     return p
 
@@ -303,7 +303,7 @@ def test_env_wins_over_pointer(pointer_tmp, monkeypatch):
     pointer_tmp.write_text(str(target), encoding="utf-8")
     env_dir = pointer_tmp.parent / "envroot"
     env_dir.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(env_dir))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(env_dir))
     assert paths.data_root() == env_dir
     assert paths.data_root_source() == "env"
 
@@ -351,7 +351,7 @@ def test_frozen_pointer_lives_next_to_executable(monkeypatch, tmp_path):
     exe.write_bytes(b"")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     target = tmp_path / "data"
     target.mkdir()
     ok, new_root = paths.set_data_root_pointer(str(target))
@@ -367,7 +367,7 @@ def test_no_pointer_file_behavior_unchanged(monkeypatch, tmp_path):
     """pointer 不存在时行为与现状逐字节一致（回归钉）。"""
     monkeypatch.setattr(paths, "_data_root_pointer_path",
                         lambda: tmp_path / ".data-root")
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     assert paths.data_root() == REPO_ROOT
     assert paths.data_root_source() == "legacy"

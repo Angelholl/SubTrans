@@ -454,8 +454,8 @@ def test_audio_detect_tunable_fields_registered(monkeypatch):
     for name in ("audio_detect_enabled", "audio_detect_threshold_pct",
                  "audio_detect_min_gap_ms", "audio_detect_max_candidates"):
         assert name in TUNABLE_FIELD_TYPES
-    monkeypatch.setenv("SUBTRANSJAV_AUDIO_DETECT_ENABLED", "0")
-    monkeypatch.setenv("SUBTRANSJAV_AUDIO_DETECT_THRESHOLD_PCT", "90")
+    monkeypatch.setenv("SUBTRANS_AUDIO_DETECT_ENABLED", "0")
+    monkeypatch.setenv("SUBTRANS_AUDIO_DETECT_THRESHOLD_PCT", "90")
     from subtrans.refine.config import RefineConfig
     cfg = RefineConfig(inputs=[])
     assert cfg.audio_detect_enabled is False

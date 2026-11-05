@@ -7,7 +7,7 @@
   （D2026-1103-05 项②：新默认＝安装目录旁路，非 %LOCALAPPDATA%；LOCALAPPDATA
   在夹具里退居「旧默认位」角色，沿 tests/test_paths.py 口径）。
 
-旧根发现经 SUBTRANSJAV_LEGACY_ROOT 显式指定（data_migration._discover_legacy_root
+旧根发现经 SUBTRANS_LEGACY_ROOT 显式指定（data_migration._discover_legacy_root
 的 env 优先级即诊断/测试通道）。
 """
 import json
@@ -41,7 +41,7 @@ def roots(monkeypatch, tmp_path):
     install.mkdir()
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
     return legacy, tmp_path / "install-data"
@@ -237,7 +237,7 @@ def test_lock_conflict_skips(roots, monkeypatch):
 def test_pip_form_never_migrates(monkeypatch, tmp_path):
     legacy = tmp_path / "legacy"
     _make_legacy(legacy)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.delenv("LOCALAPPDATA", raising=False)
     monkeypatch.setattr(sys, "frozen", False, raising=False)
     monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
@@ -251,7 +251,7 @@ def test_pip_form_never_migrates(monkeypatch, tmp_path):
 def test_env_specified_root_skips(roots, monkeypatch, tmp_path):
     legacy, _new_root = roots
     _make_legacy(legacy)
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path / "custom"))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path / "custom"))
     assert dm.ensure_migrated(verbose=False) == "not-applicable:env-root"
     assert not (tmp_path / "custom" / paths.MIGRATION_SENTINEL).exists()
 
@@ -279,7 +279,7 @@ def _frozen_install_and_lac(monkeypatch, tmp_path, seed_old_default: bool,
     (lac / "SubTrans").mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.delenv(dm.LEGACY_ROOT_ENV, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     if seed_old_default:
@@ -369,7 +369,7 @@ def test_gui_stub_present_source_level():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def import_roots(monkeypatch, tmp_path):
-    """导入测试夹具：数据根经 SUBTRANSJAV_DATA_ROOT 指向 tmp；
+    """导入测试夹具：数据根经 SUBTRANS_DATA_ROOT 指向 tmp；
     TM/配置锚点常量（tm._DEFAULT_TM_DIR / config.CONFIG_DIR）动态重定向。"""
     from subtrans.refine import config as cfg_mod
     from subtrans.refine import tm as tm_mod
@@ -378,7 +378,7 @@ def import_roots(monkeypatch, tmp_path):
     legacy = tmp_path / "legacy"
     legacy.mkdir()
     root.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(root))
     monkeypatch.setattr(tm_mod, "_DEFAULT_TM_DIR", str(root / "Temp" / "translation_memory"))
     monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(root / "config"))
     return legacy, root

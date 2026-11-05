@@ -5,7 +5,7 @@
 - api.py / main.py 源码无英文残留文案（防回归，与验收 grep 同口径）；
 - ``EventStreamParser`` 心跳超时阈值参数化（默认 15.0 行为不变）；
 - ``refine.config`` 新增字段 ``heartbeat_stale_s`` 的默认值与分层覆盖
-  （用户配置文件 / 环境变量 SUBTRANSJAV_HEARTBEAT_STALE_S）；
+  （用户配置文件 / 环境变量 SUBTRANS_HEARTBEAT_STALE_S）；
 - ``首次安装.bat``（GBK 编码）调用 create_shortcut.py 的失败兜底与引号包裹；
 - ``create_shortcut.py`` 不再使用 os.execv（Windows 空格路径缺陷）且
   WorkingDirectory 指向仓库根；
@@ -552,7 +552,7 @@ def test_snapshot_keeps_legacy_keys():
 @pytest.fixture()
 def _isolated_config(tmp_path, monkeypatch):
     monkeypatch.setattr(rc, "CONFIG_DIR", str(tmp_path))
-    monkeypatch.delenv("SUBTRANSJAV_HEARTBEAT_STALE_S", raising=False)
+    monkeypatch.delenv("SUBTRANS_HEARTBEAT_STALE_S", raising=False)
     yield tmp_path
 
 
@@ -563,7 +563,7 @@ def test_heartbeat_stale_s_default_value(_isolated_config):
 
 
 def test_heartbeat_stale_s_env_override(_isolated_config, monkeypatch):
-    monkeypatch.setenv("SUBTRANSJAV_HEARTBEAT_STALE_S", "30")
+    monkeypatch.setenv("SUBTRANS_HEARTBEAT_STALE_S", "30")
     assert rc.resolve_tunable("heartbeat_stale_s") == pytest.approx(30.0)
 
 

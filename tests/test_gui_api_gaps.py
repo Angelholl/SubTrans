@@ -599,7 +599,7 @@ def test_refine_ct2_runtime_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(cfg / "refine_stage_settings.json"))
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
 
     r = gui_api_obj.refine_ct2_runtime_dir_set("relative/dir")
     assert r["success"] is False, "非绝对路径未被拒"
@@ -669,8 +669,8 @@ def test_refine_ct2_model_dir_bridges(gui_api_obj, tmp_path, monkeypatch):
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(cfg / "refine_stage_settings.json"))
-    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(asr_runtime, "operation_progress",
                         lambda: {"phase": "idle"})
 
@@ -826,8 +826,8 @@ def test_refine_ct2_link_migrate_also_bridge(gui_api_obj, tmp_path,
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(cfg))
     monkeypatch.setattr(gui_api_obj, "_refine_stage_settings_path",
                         lambda: str(cfg / "refine_stage_settings.json"))
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
-    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
 
     # 默认解析位隔离（事故修复钉：无 settings 态的 src 解析曾指向本机
     # 真实默认落位——迁移面把 owner 真实运行时/模型 5.2GB 当迁移源搬进

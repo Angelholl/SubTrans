@@ -371,7 +371,8 @@ begin
 end;
 
 // R2 数据根四级解析（与 subtrans/paths.py data_root() 对齐，仅安装器口径）：
-// 1) 环境变量 SUBTRANSJAV_DATA_ROOT（非空才生效）；
+// 1) 环境变量 SUBTRANS_DATA_ROOT（优先；旧名 SUBTRANSJAV_DATA_ROOT 兜底，
+//    D2026-1106-02 ①兼容层）（非空才生效）；
 // 2) 指针文件 .data-root（frozen 下固定在 exe 同目录 = {app}，单行绝对路径）；
 // 3) frozen 默认＝落点 A（安装目录旁路），新默认无锚点而旧 %LOCALAPPDATA%\SubTrans
 //    有锚点时收养旧根（护栏 6，不静默迁移）；
@@ -382,8 +383,10 @@ var
 begin
   Result := '';
   srcLabel := '';
-  // 1) 环境变量
-  env := Trim(GetEnv('SUBTRANSJAV_DATA_ROOT'));
+  // 1) 环境变量（双前缀：SUBTRANS_DATA_ROOT 优先、旧名兜底，D2026-1106-02 ①）
+  env := Trim(GetEnv('SUBTRANS_DATA_ROOT'));
+  if env = '' then
+    env := Trim(GetEnv('SUBTRANSJAV_DATA_ROOT'));
   if env <> '' then
   begin
     Result := env;
@@ -867,9 +870,10 @@ begin
     Log('[data-root] {app} 为空，跳过指针写入');
     Exit;
   end;
-  if Trim(GetEnv('SUBTRANSJAV_DATA_ROOT')) <> '' then
+  if (Trim(GetEnv('SUBTRANS_DATA_ROOT')) <> '') or
+     (Trim(GetEnv('SUBTRANSJAV_DATA_ROOT')) <> '') then
   begin
-    Log('[data-root] 环境变量 SUBTRANSJAV_DATA_ROOT 已生效（优先级高于指针），不写指针');
+    Log('[data-root] 环境变量 SUBTRANS_DATA_ROOT（或旧名 SUBTRANSJAV_DATA_ROOT）已生效（优先级高于指针），不写指针');
     Exit;
   end;
   existing := _ReadDataRootPointer(appLoc);
@@ -996,7 +1000,7 @@ begin
   begin
     DataDelete := False;
     MsgBox('未在 ' + root + ' 识别到本地数据文件，本次卸载按保留数据处理。' + #13#10 +
-           '若曾用环境变量 SUBTRANSJAV_DATA_ROOT 自定义数据目录，请自行核查实际位置；' +
+           '若曾用环境变量 SUBTRANS_DATA_ROOT（旧名 SUBTRANSJAV_DATA_ROOT）自定义数据目录，请自行核查实际位置；' +
            '仅含模型/词典等可重新下载资源的目录亦会拒删，可手动清理。',
            mbInformation, MB_OK);
     Exit;

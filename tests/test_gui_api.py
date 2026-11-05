@@ -2164,7 +2164,7 @@ def test_refine_audio_preview_guide_missing_media_path(gui_api_obj,
 def test_refine_get_data_root_default(gui_api_obj, monkeypatch):
     """读态：返回 data_root/source/pointer/is_frozen，与 paths 同源。"""
     from subtrans import paths
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     got = gui_api_obj.refine_get_data_root()
     assert got["success"] is True
     assert got["data_root"] == str(paths.data_root())
@@ -2179,7 +2179,7 @@ def test_refine_set_data_root_writes_pointer(gui_api_obj, monkeypatch,
     from subtrans import paths
     pointer = tmp_path / ".data-root"
     monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: pointer)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     target = tmp_path / "custom_root"
     target.mkdir()
     got = gui_api_obj.refine_set_data_root(str(target))
@@ -2195,7 +2195,7 @@ def test_refine_set_data_root_clear_and_reject(gui_api_obj, monkeypatch,
     from subtrans import paths
     pointer = tmp_path / ".data-root"
     monkeypatch.setattr(paths, "_data_root_pointer_path", lambda: pointer)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     target = tmp_path / "custom_root"
     target.mkdir()
     assert gui_api_obj.refine_set_data_root(str(target))["success"] is True
@@ -2289,7 +2289,7 @@ def test_learned_glossary_truncated_at_cap(gui_api_obj, monkeypatch, tmp_path):
 # 词典管理端点（2.1 引擎页词典管理三区块）
 # ---------------------------------------------------------------------------
 def test_refine_dict_status_shape(gui_api_obj, monkeypatch, tmp_path):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     got = gui_api_obj.refine_dict_status()
     assert got["success"] is True
     # 2.5.0 修复A：kind 架构增 sudachi_full（文件存在判定，未装即 False）
@@ -2328,7 +2328,7 @@ def test_refine_dict_download_success_and_checksum(gui_api_obj, monkeypatch,
     语义废止，失败快照语义由 test_dict_manager 覆盖）。保留原覆盖意图：
     kind 白名单放行 + 会话可启动 + worker 真实调用 download_dict。"""
     from subtrans.refine import dict_manager as dm
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     calls = []
 
     def _fake(kind, *args, **kwargs):
@@ -4099,7 +4099,7 @@ def test_fs_utils_atomic_write_and_backup_suffix(tmp_path):
 
 # ---------------------------------------------------------------------------
 # 批1a（D2026-1002-12）：角色卡目录持久化 + 审计①校对保存收口
-# 持久化文件一律经 SUBTRANSJAV_DATA_ROOT 隔离到 tmp，绝不写真实仓库 config。
+# 持久化文件一律经 SUBTRANS_DATA_ROOT 隔离到 tmp，绝不写真实仓库 config。
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
@@ -4107,7 +4107,7 @@ def isolated_user_dirs(tmp_path, monkeypatch):
     """把数据根指向 tmp（env 通道现读），user_dirs.json 隔离落盘。"""
     root = tmp_path / "dataroot"
     root.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(root))
     return root
 
 
@@ -4627,7 +4627,7 @@ def test_refine_dict_download_source_passthrough(gui_api_obj, monkeypatch):
 
 def test_refine_dict_status_sources_summary(gui_api_obj, monkeypatch, tmp_path):
     """dict_status 增 sources 摘要键（追加式，既有 shape 断言不删）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     got = gui_api_obj.refine_dict_status()
     assert got["success"] is True
     assert got["sources"]["sudachi_full"]["has_mirror"] is True
@@ -5393,7 +5393,7 @@ def test_encode_last_params_roundtrip(gui_api_obj, tmp_path, monkeypatch):
 # encode_preflight 同路径（_parse_encode_params），只校验不建 job 不入队，
 # 通过后原子写 config/hardsub_last.json。数据根隔离：CONFIG_DIR 与读路径
 # （encode_get_last_params）同一 import 期常量，沿用本文件既有打桩先例
-# （test_encode_last_params_roundtrip），另设 SUBTRANSJAV_DATA_ROOT 环境变量
+# （test_encode_last_params_roundtrip），另设 SUBTRANS_DATA_ROOT 环境变量
 # 双保险（env 通道现读 helper 兜底隔离）。
 # ---------------------------------------------------------------------------
 
@@ -5404,7 +5404,7 @@ def test_encode_save_params_valid_writes_hardsub_last(gui_api_obj, tmp_path,
     import subtrans.refine.config as cfg
     root = tmp_path / "dataroot"
     root.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(root))
     monkeypatch.setattr(cfg, "CONFIG_DIR", str(root / "config"))
     params = {"video_format": "h265", "quality": "quality", "font_size": 28,
               "volume_db": -1.5, "out_dir": str(tmp_path)}

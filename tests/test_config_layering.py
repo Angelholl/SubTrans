@@ -47,7 +47,7 @@ def _isolated_user_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(rc, "CONFIG_DIR", str(tmp_path))
     # 清理可能影响结果的同名环境变量
     for name in rc.TUNABLE_FIELD_TYPES:
-        monkeypatch.delenv(f"SUBTRANSJAV_{name.upper()}", raising=False)
+        monkeypatch.delenv(f"SUBTRANS_{name.upper()}", raising=False)
     yield
 
 
@@ -130,14 +130,14 @@ def test_layering_user_file_overrides_default(tmp_path):
 
 def test_layering_env_overrides_user_file(tmp_path, monkeypatch):
     _write_user_settings(tmp_path, {"temperature_cloud": 0.3})
-    monkeypatch.setenv("SUBTRANSJAV_TEMPERATURE_CLOUD", "0.7")
+    monkeypatch.setenv("SUBTRANS_TEMPERATURE_CLOUD", "0.7")
     assert RefineConfig().temperature_cloud == 0.7
 
 
 def test_layering_explicit_assignment_beats_user_file_and_env(
         tmp_path, monkeypatch):
     _write_user_settings(tmp_path, {"temperature_cloud": 0.3})
-    monkeypatch.setenv("SUBTRANSJAV_TEMPERATURE_CLOUD", "0.7")
+    monkeypatch.setenv("SUBTRANS_TEMPERATURE_CLOUD", "0.7")
     cfg = RefineConfig(temperature_cloud=0.9)   # 模拟 CLI/GUI 显式赋值
     assert cfg.temperature_cloud == 0.9
 
@@ -146,7 +146,7 @@ def test_layering_invalid_typed_values_ignored(tmp_path, monkeypatch,
                                                capsys):
     _write_user_settings(tmp_path, {"premerge_max_items": "abc",
                                     "timeout_http": 30})
-    monkeypatch.setenv("SUBTRANSJAV_V2_CONCURRENCY_MAX", "not-an-int")
+    monkeypatch.setenv("SUBTRANS_V2_CONCURRENCY_MAX", "not-an-int")
     cfg = RefineConfig()
     assert cfg.premerge_max_items == 3          # 非法 -> 默认
     assert cfg.timeout_http == 30.0             # 合法 -> 生效
@@ -159,7 +159,7 @@ def test_resolve_tunable_follows_layering(tmp_path, monkeypatch):
     assert resolve_tunable("timeout_probe") == 5.0
     _write_user_settings(tmp_path, {"timeout_probe": 8})
     assert resolve_tunable("timeout_probe") == 8.0
-    monkeypatch.setenv("SUBTRANSJAV_TIMEOUT_PROBE", "2")
+    monkeypatch.setenv("SUBTRANS_TIMEOUT_PROBE", "2")
     assert resolve_tunable("timeout_probe") == 2.0
     with pytest.raises(KeyError):
         resolve_tunable("no_such_field")
@@ -183,7 +183,7 @@ def test_v2_ctx_local_layering_user_file_env_explicit(tmp_path, monkeypatch):
     assert RefineConfig().v2_ctx_local == 8192
     assert resolve_tunable("v2_ctx_local") == 8192
     # 环境变量覆盖（高于用户文件）
-    monkeypatch.setenv("SUBTRANSJAV_V2_CTX_LOCAL", "12288")
+    monkeypatch.setenv("SUBTRANS_V2_CTX_LOCAL", "12288")
     assert RefineConfig().v2_ctx_local == 12288
     assert resolve_tunable("v2_ctx_local") == 12288
     # 显式赋值最高（模拟 CLI/GUI 构造后赋值；显式 22272 档案值仍生效）

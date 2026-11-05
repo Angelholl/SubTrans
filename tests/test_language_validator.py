@@ -216,7 +216,7 @@ class TestDroppedEntryLogRotation:
     def _isolated_config(self, tmp_path, monkeypatch):
         """配置隔离：真实 user_settings.json / 环境变量不干扰阈值解析。"""
         monkeypatch.setattr(rc, "CONFIG_DIR", str(tmp_path))
-        monkeypatch.delenv("SUBTRANSJAV_DROPPED_LOG_ROTATE_MB",
+        monkeypatch.delenv("SUBTRANS_DROPPED_LOG_ROTATE_MB",
                            raising=False)
 
     @staticmethod
@@ -229,7 +229,7 @@ class TestDroppedEntryLogRotation:
 
     def test_rotate_above_threshold(self, tmp_path, monkeypatch):
         """超过阈值：既有内容轮转到 -1.log，主文件重新开始"""
-        monkeypatch.setenv("SUBTRANSJAV_DROPPED_LOG_ROTATE_MB", "1")
+        monkeypatch.setenv("SUBTRANS_DROPPED_LOG_ROTATE_MB", "1")
         errors = self._make_log(tmp_path, _MB + 1)
         log = DroppedEntryLog(str(errors))
 
@@ -245,7 +245,7 @@ class TestDroppedEntryLogRotation:
     def test_rotate_increments_seq_when_minus_one_exists(
             self, tmp_path, monkeypatch):
         """-1.log 已存在时轮转到 -2.log（序号取首个空位）"""
-        monkeypatch.setenv("SUBTRANSJAV_DROPPED_LOG_ROTATE_MB", "1")
+        monkeypatch.setenv("SUBTRANS_DROPPED_LOG_ROTATE_MB", "1")
         errors = self._make_log(tmp_path, _MB + 1)
         (errors / "dropped_entries-1.log").write_text("上一轮内容",
                                                       encoding="utf-8")
@@ -262,7 +262,7 @@ class TestDroppedEntryLogRotation:
 
     def test_no_rotate_below_threshold(self, tmp_path, monkeypatch):
         """阈值以下：正常追加，不产生轮转文件"""
-        monkeypatch.setenv("SUBTRANSJAV_DROPPED_LOG_ROTATE_MB", "1")
+        monkeypatch.setenv("SUBTRANS_DROPPED_LOG_ROTATE_MB", "1")
         errors = self._make_log(tmp_path, 1024)
         log = DroppedEntryLog(str(errors))
 
@@ -277,6 +277,6 @@ class TestDroppedEntryLogRotation:
     def test_invalid_threshold_falls_back_to_default(self, monkeypatch):
         """配置非法（<=0 / 类型非法）时回退默认 5MB，不抛异常"""
         for bad in ("-3", "0", "abc"):
-            monkeypatch.setenv("SUBTRANSJAV_DROPPED_LOG_ROTATE_MB", bad)
+            monkeypatch.setenv("SUBTRANS_DROPPED_LOG_ROTATE_MB", bad)
             assert DroppedEntryLog._resolve_rotate_mb() == \
                 rc.DEFAULT_DROPPED_LOG_ROTATE_MB, f"非法值 {bad!r} 应回退默认"

@@ -6,7 +6,7 @@
    锚点逃逸仍拦 / 纯函数边界（不 import 持久化模块）；
 3. template_seed：frozen 门 / 幂等（二次零拷贝）/ 不覆盖已存在文件 /
    版本哨兵升级补新文件；
-4. 数据根隔离：一律经 ``SUBTRANSJAV_DATA_ROOT`` 环境变量把数据根指向
+4. 数据根隔离：一律经 ``SUBTRANS_DATA_ROOT`` 环境变量把数据根指向
    tmp，绝不写仓库真实 ``config/user_dirs.json``。
 """
 import json
@@ -26,7 +26,7 @@ def fake_data_root(tmp_path, monkeypatch):
     """把数据根指向 tmp（env 通道现读），隔离真实仓库 config。"""
     root = tmp_path / "dataroot"
     root.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(root))
     return root
 
 

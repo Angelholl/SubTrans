@@ -256,7 +256,7 @@ class TestSegmentsToSrt:
 
 class TestAsrRuntime:
     def test_status_fresh_state(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         st = asr_runtime.provider_status()
         assert st["installed"] is False
         assert st["selfcheck"] == "fail"
@@ -266,7 +266,7 @@ class TestAsrRuntime:
         assert st["models"][0]["verified"] is True    # 2026-10-29 三门核验后翻转
 
     def test_install_zip_download_failure_honest(self, tmp_path, monkeypatch, capsys):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
 
         def boom(*a, **k):
             raise RuntimeError("sha256 不符（模拟）")
@@ -277,7 +277,7 @@ class TestAsrRuntime:
         assert "运行时安装失败" in capsys.readouterr().out
 
     def test_install_zip_happy_path_mocked(self, tmp_path, monkeypatch, capsys):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(asr_runtime, "_guarded_download",
                             lambda *a, **k: None)
         monkeypatch.setattr(asr_runtime, "_verify_zip_layout", lambda p: None)
@@ -293,7 +293,7 @@ class TestAsrRuntime:
         assert "sha256 核验通过" in out and "自检" in out
 
     def test_download_model_verified_gate(self, tmp_path, monkeypatch, capsys):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         # verified 现已翻转 True（三门核验过）；门的关断语义仍须钉住——
         # 强制 False 回放关断路径
         monkeypatch.setitem(asr_runtime.CT2_MODELS[0], "verified", False)
@@ -319,7 +319,7 @@ class TestAsrRuntime:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             pathlib.Path(dest).write_bytes(buf.getvalue())
 
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(asr_runtime, "_guarded_download", fake_download)
         monkeypatch.setitem(asr_runtime.CT2_MODELS[0], "verified", True)
         rc = asr_runtime.download_model("large-v2")
@@ -329,14 +329,14 @@ class TestAsrRuntime:
         assert not (dest / "faster-whisper-large-v2").exists()
 
     def test_install_venv_rejected_when_frozen(self, tmp_path, monkeypatch, capsys):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(sys, "frozen", True, raising=False)
         rc = asr_runtime.install("venv")
         assert rc == 3
         assert "frozen" in capsys.readouterr().out
 
     def test_resolve_model_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         assert asr_runtime.resolve_ct2_model_dir("large-v2") == ""
         mdir = tmp_path / "models" / "ct2" / "large-v2"
         mdir.mkdir(parents=True)
@@ -348,7 +348,7 @@ class TestAsrRuntime:
         assert asr_runtime.resolve_ct2_model_dir("x", str(tmp_path / "nope")) == ""
 
     def test_runner_command_shape(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         cmd = asr_runtime.ct2_runner_command("m.mp4", "o.srt", model_dir=str(tmp_path))
         assert cmd[0] == asr_runtime.runtime_python()
         assert "--engine" in cmd and "ct2" in cmd
@@ -360,7 +360,7 @@ class TestAsrRuntime:
         assert cmd2[cmd2.index("--beam-size") + 1] == "3"
 
     def test_cli_status(self, tmp_path, monkeypatch, capsys):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         rc = asr_runtime.main(["status"])
         assert rc == 0
         st = json.loads(capsys.readouterr().out)
@@ -383,7 +383,7 @@ class TestDecouple:
 
     def test_run_transcription_dispatches_ct2(self, tmp_path, monkeypatch):
         # ct2 就绪 → ct2 路径（monkeypatch _run_transcription_ct2 捕获调用）
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
         seen = {}
 
@@ -400,7 +400,7 @@ class TestDecouple:
                                                             monkeypatch):
         # ct2 未装：唯一错误出口＝安装导向人话（退役批对冲钉，「唯一引擎，
         # 首次使用需安装」口径；不再有 legacy whisper 回落）
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         r = asr_env.run_transcription("clip.wav")
         assert r["ok"] is False and "唯一引擎" in r["error"]
         assert "asr_runtime install" in r["error"]
@@ -409,7 +409,7 @@ class TestDecouple:
         assert "引擎页" not in r["error"]
 
     def test_probe_includes_ct2_section(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         st = asr_env._ct2_status()
         assert st["installed"] is False and st["model_present"] is False
         assert st["model"] == "large-v2"
@@ -428,7 +428,7 @@ class TestConfidencePassthrough:
 
     def test_batch_ct2_path_passes_confidence_keys(self, tmp_path,
                                                    monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
         monkeypatch.setattr(
             asr_env, "slice_clips",
@@ -457,7 +457,7 @@ class TestConfidencePassthrough:
     def test_batch_ct2_only_no_whisper_fallback(self, tmp_path, monkeypatch):
         """退役批对冲钉：批量链 ct2 唯一——运行时/模型未落位时逐 timing
         如实报错（不再有 legacy whisper 回落分支）。"""
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(
             asr_env, "slice_clips",
             lambda media, timings, max_clips=20: {
@@ -470,7 +470,7 @@ class TestConfidencePassthrough:
 
     def test_batch_slice_failure_honest(self, tmp_path, monkeypatch):
         """切片整段失败 → 全 timing 如实标记（不静默，C17 口径）。"""
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(
             asr_env, "slice_clips",
             lambda media, timings, max_clips=20: {
@@ -486,7 +486,7 @@ class TestAsyncOps:
         asr_runtime._set_op("idle", "", "")
 
     def test_install_async_lifecycle(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         monkeypatch.setattr(asr_runtime, "install", lambda provider="auto": 0)
         r = asr_runtime.start_install("venv")
         assert r["started"] is True
@@ -502,7 +502,7 @@ class TestAsyncOps:
         assert r2["started"] in (True, False)   # idle 后可重入
 
     def test_double_start_rejected(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         started = threading.Event()
 
         def slow_install(provider="auto"):
@@ -518,7 +518,7 @@ class TestAsyncOps:
         assert r2["started"] is False and "在跑" in r2["reason"]
 
     def test_model_download_async_gate(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         # verified 已翻转 True；门的关断语义回放须强制 False（防真实 3GB 下载）
         monkeypatch.setitem(asr_runtime.CT2_MODELS[0], "verified", False)
         r = asr_runtime.start_model_download("large-v2")
@@ -572,7 +572,7 @@ class TestRunnerParserExactMatch:
     def test_runner_command_keeps_model_element(self, tmp_path, monkeypatch):
         # 钉3：ct2_runner_command 契约保活——--model 元素原样保留且
         # 与 --model-dir 各自独立成对（cmd 构造面零变化）
-        monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+        monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
         cmd = asr_runtime.ct2_runner_command("m.mp4", "o.srt",
                                              model_dir=str(tmp_path))
         assert cmd[cmd.index("--model") + 1] == "large-v2"

@@ -179,7 +179,7 @@ def frozen_root(monkeypatch, tmp_path):
     install.mkdir()
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.delenv(dm.LEGACY_ROOT_ENV, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     return tmp_path / "install-data"
@@ -207,7 +207,7 @@ def _make_upgrade_roots(monkeypatch, tmp_path):
     install.mkdir()
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(install / "SubTrans.exe"))
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(lac))
     monkeypatch.setenv(dm.LEGACY_ROOT_ENV, str(legacy))
     (legacy / "config" / "user_settings.json").write_text(
@@ -257,7 +257,7 @@ def test_pip_form_never_seeds(monkeypatch, tmp_path):
     from subtrans.refine import config as cfg_mod
 
     monkeypatch.setattr(sys, "frozen", False, raising=False)
-    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    monkeypatch.delenv("SUBTRANS_DATA_ROOT", raising=False)
     monkeypatch.delenv(dm.LEGACY_ROOT_ENV, raising=False)
     cfg_dir = tmp_path / "config"
     monkeypatch.setattr(cfg_mod, "CONFIG_DIR", str(cfg_dir))

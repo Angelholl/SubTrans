@@ -14,7 +14,7 @@
    refine_dict_migrate 返回契约；未设置自定义目录时 migrate 拒绝；
 4. 引导哨兵：should_show 首真后假；frozen 门（源码形态恒否不落地）。
 
-隔离口径：数据根经 ``SUBTRANSJAV_DATA_ROOT`` 指向 tmp；frozen 哨兵经
+隔离口径：数据根经 ``SUBTRANS_DATA_ROOT`` 指向 tmp；frozen 哨兵经
 ``sys.executable`` 指向 tmp（绝不写真实 exe/python 同目录）；dict_manager
 进程内自定义目录态、进度表与 JSON 直读缓存每例复位。webview 缺席时仅
 API 面用例软跳过。
@@ -42,7 +42,7 @@ def _isolated_dict_state(tmp_path, monkeypatch):
     + user_dirs.json 直读缓存复位（追补裁定后 effective 走三级解析）。"""
     root = tmp_path / "dataroot"
     root.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(root))
     monkeypatch.setattr(dm, "_CUSTOM_DICT_DIR", None)
     monkeypatch.setattr(dm, "_DOWNLOAD_PROGRESS", {})
     monkeypatch.setattr(dm, "_USER_DIRS_CACHE", {"key": None, "value": None})
@@ -272,7 +272,7 @@ def test_user_dirs_json_cache_key_includes_path(
     # 换新数据根（同名文件、不同根）
     root2 = root.parent / "dataroot2"
     root2.mkdir()
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(root2))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(root2))
     b = root2.parent / "cache_path_b"
     b.mkdir()
     _write_user_dirs_json(root2, {"dict_dir": str(b)})

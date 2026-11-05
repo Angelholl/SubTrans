@@ -122,7 +122,7 @@ def test_uninstall_size_list_ct2_pinned(iss_text):
 def test_data_root_resolution_pinned(iss_text):
     """数据根四级解析与 paths.py data_root() 对齐（含落点 A 新默认，
     D2026-1103-05 项②）。"""
-    assert "SUBTRANSJAV_DATA_ROOT" in iss_text
+    assert "SUBTRANS_DATA_ROOT" in iss_text
     assert ".data-root" in iss_text
     assert "LOCALAPPDATA" in iss_text
     assert "function ResolveDataRoot(" in iss_text
@@ -188,8 +188,8 @@ def test_anchor_gate_pinned(iss_text):
     assert "未在" in iss_text
     assert "按保留数据处理" in iss_text
     m = re.search(r"识别到本地数据文件(.{0,400})", iss_text, re.S)
-    assert m and "SUBTRANSJAV_DATA_ROOT" in m.group(1), \
-        "拒删提示文案应包含环境变量 SUBTRANSJAV_DATA_ROOT 的自查提示"
+    assert m and "SUBTRANS_DATA_ROOT" in m.group(1), \
+        "拒删提示文案应包含环境变量 SUBTRANS_DATA_ROOT 的自查提示"
 
 
 def test_depth_gate_pinned(iss_text):

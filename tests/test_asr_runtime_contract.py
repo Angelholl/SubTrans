@@ -84,8 +84,8 @@ def _pin_fixture_zip(monkeypatch, zip_path: Path, members: dict[str, bytes]) -> 
 def isolated_env(tmp_path, monkeypatch):
     """运行时落位与数据根全隔离（防 site-packages 内容落仓库树）。"""
     rt = tmp_path / "rt"
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(rt))
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(rt))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path / "data"))
     return rt
 
 
@@ -503,7 +503,7 @@ def test_ct2_runtime_dir_resolution_order(tmp_path, monkeypatch):
     """解析序 env > settings 键 > 现形默认，来源标签随源切换（GUI 落位行＋
     CLI 诊断消费；负控：settings 键不被读取即红）。"""
     from subtrans.refine import config as refine_config
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     cfg = tmp_path / "config"
     cfg.mkdir()
     (cfg / "refine_stage_settings.json").write_text(
@@ -514,12 +514,12 @@ def test_ct2_runtime_dir_resolution_order(tmp_path, monkeypatch):
     assert info["source"] == "settings"
     assert asr_runtime.runtime_root() == str(tmp_path / "custom")
     # env 优先级最高（测试隔离/CI 通道不得被设置键遮蔽）
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(tmp_path / "envrt"))
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(tmp_path / "envrt"))
     assert asr_runtime.runtime_dir_info()["source"] == "env"
     # 空串＝清除自定义回落默认（GUI「恢复默认」语义）
     (cfg / "refine_stage_settings.json").write_text(
         _settings_kv(""), encoding="utf-8")
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     assert asr_runtime.runtime_dir_info()["source"] != "settings"
     # 设置文件缺失/非法一律缺省语义不抛
     monkeypatch.setattr(refine_config, "CONFIG_DIR",
@@ -535,7 +535,7 @@ def test_ct2_runtime_default_sibling_off_repo(tmp_path, monkeypatch):
     旧 LOCALAPPDATA 位降为 legacy 兜底：新位无运行时而旧位有认证运行时时
     沿用旧位（防存量用户升级后静默重下 106MB 运行时＋1.21GB GPU 补丁）。"""
     from subtrans.refine import config as refine_config
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR",
                         str(tmp_path / "no-conf"))
     repo = tmp_path / "repo"
@@ -576,7 +576,7 @@ def test_cuda_probe_cache_keyed_by_runtime_root(tmp_path, monkeypatch):
     monkeypatch.setattr(asr_runtime, "_cuda_probe_cache", None)
     root_a = tmp_path / "rtA"
     _runtime_skeleton(root_a)
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(root_a))
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(root_a))
     calls: list[str] = []
 
     class _Proc:
@@ -595,7 +595,7 @@ def test_cuda_probe_cache_keyed_by_runtime_root(tmp_path, monkeypatch):
 
     root_b = tmp_path / "rtB"
     _runtime_skeleton(root_b)
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(root_b))
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(root_b))
     assert asr_runtime.cuda_device_count() == 1
     assert len(calls) == 2, "切根未重探（缓存未按运行时根分键）"
     assert _norm(calls[1]) == _norm(str(root_b / "python" / "python.exe"))
@@ -609,7 +609,7 @@ def test_download_tmp_path_follows_runtime_root(tmp_path, monkeypatch):
     自定义位恰为盘根时退回系统临时目录（不在盘根建目录）。"""
     root = tmp_path / "outer" / "ct2"
     root.mkdir(parents=True)
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(root))
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(root))
     p = asr_runtime._download_tmp_path("ct2-gpu-patch.zip.tmp")
     assert _norm(p) == _norm(str(tmp_path / "outer" / ".ct2-downloads"
                                  / "ct2-gpu-patch.zip.tmp"))
@@ -618,7 +618,7 @@ def test_download_tmp_path_follows_runtime_root(tmp_path, monkeypatch):
         "半成品 zip 不得躺在解包目标运行时根内"
 
     drive = Path(str(tmp_path)).drive + os.sep
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", drive)
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", drive)
     p2 = asr_runtime._download_tmp_path("ct2-runtime.zip.part.tmp")
     assert not _norm(p2).startswith(_norm(drive + ".ct2-downloads")), \
         "自定义位为盘根时不得在盘根建目录"
@@ -631,7 +631,7 @@ def test_default_root_legacy_fallback_accepts_venv_form(tmp_path, monkeypatch):
     放宽只在**落位选择面**：认证判定仍绑 manifest 单一布局（is_installed 不
     松动，D2026-1028-04）；半套骨架（有 python 无 site-packages）不算可复用。"""
     from subtrans.refine import config as refine_config
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
     repo = tmp_path / "repo"
     (repo / "subtrans").mkdir(parents=True)
@@ -671,7 +671,7 @@ def test_ct2_model_dir_resolution_order(tmp_path, monkeypatch):
     """解析序 env > settings 键 > 现形默认；与运行时键互不干扰（两键两
     来源各读各的，混读即红）。"""
     from subtrans.refine import config as refine_config
-    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
     cfg = tmp_path / "config"
     cfg.mkdir()
     (cfg / "refine_stage_settings.json").write_text(json.dumps({
@@ -682,17 +682,17 @@ def test_ct2_model_dir_resolution_order(tmp_path, monkeypatch):
     assert info["dir"] == str(tmp_path / "custom"), "settings 键未生效"
     assert info["source"] == "settings"
     assert asr_runtime.ct2_model_dir() == str(tmp_path / "custom")
-    monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(tmp_path / "envm"))
+    monkeypatch.setenv("SUBTRANS_CT2_MODEL_DIR", str(tmp_path / "envm"))
     assert asr_runtime.ct2_model_dir_info()["source"] == "env"
     # 两键互不干扰：运行时 env 值不得被模型面读走
-    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
-    monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(tmp_path / "rt"))
+    monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
+    monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(tmp_path / "rt"))
     assert asr_runtime.ct2_model_dir_info()["source"] == "settings"
     assert asr_runtime.runtime_dir_info()["dir"] == str(tmp_path / "rt")
     # 空串＝清除自定义（GUI「恢复默认」语义）
     (cfg / "refine_stage_settings.json").write_text(json.dumps(
         {"settings": {asr_runtime.CT2_MODEL_DIR_KEY: ""}}), encoding="utf-8")
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     assert asr_runtime.ct2_model_dir_info()["source"] != "settings"
 
 
@@ -702,7 +702,7 @@ def test_ct2_model_default_gate_and_legacy_candidates(tmp_path, monkeypatch):
     旧件失联静默重下 2.9 GB。legacy 候选按序取首个有货者（旧仓库位有货即
     标 legacy），旁路有货则新默认优先。"""
     from subtrans.refine import config as refine_config
-    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
     repo = tmp_path / "repo"
     (repo / "subtrans").mkdir(parents=True)
@@ -747,7 +747,7 @@ def test_runtime_default_gate_excludes_frozen(tmp_path, monkeypatch):
     D2026-0929-08 返回数据根，旧实现以「数据根=仓库根」为条件即误命中，会把
     frozen 实例运行时指向数据根同级旁路或另一实例旧位。"""
     from subtrans.refine import config as refine_config
-    monkeypatch.delenv("SUBTRANSJAV_CT2_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(refine_config, "CONFIG_DIR", str(tmp_path / "no-conf"))
     data = tmp_path / "frozen-data"
     monkeypatch.setattr(asr_runtime.paths, "app_root", lambda: data)
@@ -766,7 +766,7 @@ def test_model_download_tmp_path_and_atomic_install(tmp_path, monkeypatch):
     落位」谓词当真，还会让 legacy 兜底选中坏目录）。"""
     model_root = tmp_path / "engine" / "models" / "ct2"
     model_root.mkdir(parents=True)
-    monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(model_root))
+    monkeypatch.setenv("SUBTRANS_CT2_MODEL_DIR", str(model_root))
     p = asr_runtime._download_tmp_path("large-v2-ct2.zip.tmp",
                                        asr_runtime.ct2_model_dir())
     assert _norm(p) == _norm(str(tmp_path / "engine" / "models"
@@ -802,9 +802,9 @@ def test_provider_status_exposes_model_dir_fields(tmp_path, monkeypatch):
     """GUI 模型落位行要显「该位置有无模型＋体量」，provider_status 须透出
     model_dir/model_source/model_present/model_bytes 四键（D2026-1103-04）；
     models 列表仍＝pin 常量，不得被就地加键污染。"""
-    monkeypatch.delenv("SUBTRANSJAV_CT2_MODEL_DIR", raising=False)
+    monkeypatch.delenv("SUBTRANS_CT2_MODEL_DIR", raising=False)
     model_root = tmp_path / "models" / "ct2"
-    monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(model_root))
+    monkeypatch.setenv("SUBTRANS_CT2_MODEL_DIR", str(model_root))
     st = asr_runtime.provider_status()
     assert st["model_runtime"] == {"dir": str(model_root), "source": "env"}
     assert st["model_present"] is False and st["model_bytes"] == 0
@@ -859,7 +859,7 @@ class TestCt2MigrateContract:
         src = tmp_path / "old" / "ct2"
         _runtime_skeleton(src)
         dst = tmp_path / "new" / "ct2"
-        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src))
+        monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(src))
         out = asr_runtime.migrate_ct2_tree("runtime", dst=str(dst))
         assert out["moved"] is True and out["error"] == ""
         assert out["same_volume"] is True
@@ -873,7 +873,7 @@ class TestCt2MigrateContract:
         src = tmp_path / "old" / "ct2"
         _runtime_skeleton(src)
         dst = tmp_path / "new" / "ct2"
-        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src))
+        monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(src))
         monkeypatch.setattr(asr_runtime, "_same_volume", lambda a, b: False)
         out = asr_runtime.migrate_ct2_tree("runtime", dst=str(dst))
         assert out["moved"] is True and out["same_volume"] is False
@@ -884,7 +884,7 @@ class TestCt2MigrateContract:
         src2 = tmp_path / "old2" / "ct2"
         _runtime_skeleton(src2)
         dst2 = tmp_path / "new2" / "ct2"
-        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src2))
+        monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(src2))
         real_copy = asr_runtime.shutil.copytree
 
         def corrupt_copy(src_, dst_, *a, **kw):
@@ -905,7 +905,7 @@ class TestCt2MigrateContract:
         src = tmp_path / "old" / "models" / "ct2"
         _model_skeleton(src)
         dst = tmp_path / "new" / "models" / "ct2"
-        monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(src))
+        monkeypatch.setenv("SUBTRANS_CT2_MODEL_DIR", str(src))
         monkeypatch.setattr(asr_runtime, "_same_volume", lambda a, b: False)
         out = asr_runtime.migrate_ct2_tree("model", dst=str(dst))
         assert out["moved"] is True and out["error"] == ""
@@ -918,7 +918,7 @@ class TestCt2MigrateContract:
         src2 = tmp_path / "old2" / "models" / "ct2"
         _model_skeleton(src2)
         dst2 = tmp_path / "new2" / "models" / "ct2"
-        monkeypatch.setenv("SUBTRANSJAV_CT2_MODEL_DIR", str(src2))
+        monkeypatch.setenv("SUBTRANS_CT2_MODEL_DIR", str(src2))
         real_copy = asr_runtime.shutil.copytree
 
         def corrupt_copy(src_, dst_, **kw):
@@ -935,14 +935,14 @@ class TestCt2MigrateContract:
     def test_migrate_noop_guards(self, tmp_path, monkeypatch):
         """现位无货＝no-op（只改配置场景）；dst 非空拒绝且不动目标；
         同位拒绝。"""
-        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR",
+        monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR",
                            str(tmp_path / "empty-src"))
         out = asr_runtime.migrate_ct2_tree("runtime", dst=str(tmp_path / "d1"))
         assert out["moved"] is False and out["error"] == ""
 
         src = tmp_path / "src"
         _runtime_skeleton(src)
-        monkeypatch.setenv("SUBTRANSJAV_CT2_RUNTIME_DIR", str(src))
+        monkeypatch.setenv("SUBTRANS_CT2_RUNTIME_DIR", str(src))
         busy = tmp_path / "busy"
         busy.mkdir()
         (busy / "occupant").write_bytes(b"occupied")

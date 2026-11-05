@@ -131,7 +131,7 @@ def test_pin3_mismatch_main_exit_1(c22, tmp_path, capsys):
 # ------------------------------------------------- 钉4 门控语义不回归（防外溢）
 
 def test_pin4_gate_not_written_without_enable(c22, tmp_path, monkeypatch):
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     guide = _write_guide(tmp_path, [T1, T2])
     manifest = _write_manifest(tmp_path, [
         {"guide": str(guide), "media": "x.mkv", "label": True,
@@ -217,7 +217,7 @@ def test_gate_verdict_dual_condition_and_unjudgeable():
 def test_gate_unjudgeable_refuses_enable_exit_2(c22, tmp_path, monkeypatch,
                                                 capsys):
     """n_high < 30 → --enable 拒写门控退出码 2（fail-closed 不破）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     guide = _write_guide(tmp_path, [T1])
     manifest = _write_manifest(tmp_path, [
         {"guide": str(guide), "media": "x.mkv", "label": True,
@@ -235,7 +235,7 @@ def test_enable_pass_writes_fingerprint_and_gate_opens(c22, tmp_path,
                                                        monkeypatch):
     """verdict=pass 且 --enable → 写门控行并入 rules_sha1/app_version，
     且产物可被读取侧 evaluate_c22_gate 开门（写入↔读取闭环）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     monkeypatch.setattr(mod, "_gate_verdict", lambda agg: "pass")
     guide = _write_guide(tmp_path, [T1, T2])
     manifest = _write_manifest(tmp_path, [
@@ -255,7 +255,7 @@ def test_enable_pass_writes_fingerprint_and_gate_opens(c22, tmp_path,
 def test_enable_without_fingerprint_refuses_exit_2(c22, tmp_path,
                                                    monkeypatch, capsys):
     """规则集指纹不可得 → 拒写门控退出码 2 且文件不产生（无锁不写）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     monkeypatch.setattr(mod, "_gate_verdict", lambda agg: "pass")
     import subtrans.data_migration as dm
     monkeypatch.setattr(dm, "c22_gate_fingerprint",
@@ -296,7 +296,7 @@ def test_aggregate_asr_error_triage_buckets(c22, monkeypatch, tmp_path):
 def test_report_triage_column_and_verdict(c22, tmp_path, monkeypatch):
     """报告面：asr_error 独立列（reasons 不再拼 error 文本）＋verdict
     与分诊计数入汇总。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     monkeypatch.setattr(c22, "batch_transcribe_clips",
                         lambda media, timings, **k: [
                             {"segments": [], "text": "",
@@ -334,7 +334,7 @@ def test_reference_readout_flips_energy_gate_rows(c22, tmp_path, monkeypatch):
 
 def test_reference_section_no_gate_semantics(c22, tmp_path, monkeypatch):
     """参照节物理隔离：只报计数与点精确率，无门判定语义字段。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     guide = _write_guide(tmp_path, [T1])
     manifest = _write_manifest(tmp_path, [
         {"guide": str(guide), "media": "x.mkv", "label": True,
@@ -409,7 +409,7 @@ def test_pin8_breath_ref_recovered_noise_excluded_both(c22, tmp_path):
 
 def test_pin8_exclusion_section_and_audit_list(c22, tmp_path, monkeypatch):
     """报告面：排除面统计节＋分原因＋排除项清单表＋样本明细 exclude 列。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     manifest = _write_manifest(tmp_path, [
         {"media": "x.mkv", "label": True,
          "timings": [T1, T2], "labels": [True, False],
@@ -426,7 +426,7 @@ def test_pin8_exclusion_section_and_audit_list(c22, tmp_path, monkeypatch):
 
 def test_pin8_unattributed_over_cap_warn(c22, tmp_path, monkeypatch):
     """不可归因排除率超预注册上限 → 报告 WARN 行（仅呈报不阻断）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     timings = [f"00:00:0{i},000 --> 00:00:0{i},500" for i in range(9)]
     manifest = _write_manifest(tmp_path, [
         {"media": "x.mkv", "label": True,
@@ -451,7 +451,7 @@ def test_pin8_timings_over_max_clips_fails_closed(c22, tmp_path):
 def test_pin8_timings_without_guide_replays(c22, tmp_path, monkeypatch):
     """guide 惰性化：无 guide 键、仅 timings 显式清单 → 回放正常
     （main 层校验放宽为二者其一）。"""
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     manifest = _write_manifest(tmp_path, [
         {"media": "x.mkv", "label": True,
          "timings": [T1], "labels": [True]}])
@@ -484,7 +484,7 @@ def _windows_subsecond(media: str, timings: list[str]) -> dict:
 
 def _run_manifest(c22, tmp_path, monkeypatch, name: str,
                   argv_extra: list[str]) -> str:
-    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     monkeypatch.setattr(c22, "detect_speech_windows", _windows_subsecond)
     manifest = _write_manifest(tmp_path, [
         {"media": "x.mkv", "label": True,
