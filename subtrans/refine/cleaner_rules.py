@@ -4,6 +4,7 @@ import re
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -602,14 +603,14 @@ class ChineseCleaner:
         self,
         items: list[Subtitle],
         source_evidence: list[list[str] | None] | None = None,
-    ) -> tuple[list[Subtitle], dict]:
+    ) -> tuple[list[Subtitle], dict[str, Any]]:
         """碎片合并 + 规则删除。source_evidence 与 items（清洗前）等长，
         每项为该条目对应的源文日文行列表（None=无证据 → fail-safe 保留）。
         返回 (保留条目, stats)，stats 含 merged / deleted / deleted_by_rule /
         kept_by_source_evidence / kept_by_noise_gate（v1.2.2 C2：因未命中
         噪声证据而免删的条数）/ kept_by_noise_gate_timings（对应条目的
         时间轴串列表，质量报告"纯假名实义保留 [未翻译] 标记"统计消费）。"""
-        stats: dict = {"merged": 0, "deleted": 0,
+        stats: dict[str, Any] = {"merged": 0, "deleted": 0,
                        "deleted_by_rule": {}, "kept_by_source_evidence": 0,
                        "kept_by_noise_gate": 0,
                        "kept_by_noise_gate_timings": []}
@@ -732,7 +733,7 @@ def clean_srt(
     srt_content: str,
     config_dir: str | None = None,
     source_map: dict[str, str | list[str]] | None = None,
-) -> tuple[str, dict]:
+) -> tuple[str, dict[str, Any]]:
     """规则清洗 SRT，返回 (cleaned_srt, stats)。
 
     source_map（可选，v1.2.1 P0 源侧证据门槛）：清洗前条目的 timing 串
@@ -751,7 +752,7 @@ def clean_srt(
     """
     cleaner = ChineseCleaner(config_dir)
     items = parse_srt(srt_content)
-    stats: dict = {"merged": 0, "deleted": 0,
+    stats: dict[str, Any] = {"merged": 0, "deleted": 0,
                    "deleted_by_rule": {}, "kept_by_source_evidence": 0,
                    "kept_by_noise_gate": 0, "kept_by_noise_gate_timings": []}
     if not items:

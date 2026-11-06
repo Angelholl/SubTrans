@@ -138,6 +138,7 @@ module = [
     # 段12 strict 修债：3–6 条级模块（探测排序实测）修一件入名单一件，只增不减。
     "subtrans.refine.events",
     "subtrans.refine.hardsub",
+    "subtrans.refine.cleaner_rules",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
