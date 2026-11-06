@@ -22,13 +22,17 @@
 import ipaddress
 import logging
 import re
+import ssl
 import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from httpx import Client
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,7 @@ DEFAULT_TOKEN_BUDGET = {
 
 
 def cap_batch_size(max_batch_size: int, n_ctx: int,
-                   token_budget: dict | None = None) -> int:
+                   token_budget: dict[str, int] | None = None) -> int:
     """按上下文窗口收紧批大小。n_ctx 过小（装不下固定开销）时返回 1。"""
     b = token_budget or DEFAULT_TOKEN_BUDGET
     safe_max = (n_ctx - b["overhead"]) // b["tokens_per_line"]
@@ -55,7 +59,7 @@ def cap_batch_size(max_batch_size: int, n_ctx: int,
 
 
 def compute_max_output_tokens(batch_size: int, n_ctx: int,
-                              token_budget: dict | None = None) -> int:
+                              token_budget: dict[str, int] | None = None) -> int:
     """为本地模型计算 max_tokens 上限，防止上下文溢出。
 
     返回值永远不超过 available = n_ctx - overhead - 输入预算；
@@ -89,16 +93,16 @@ class ClientConfig:
     concurrency: int = 1           # 批间并发（本地模型保持 1）
     n_ctx: int | None = None       # 本地上下文窗口（启用 max_tokens 预算与批收紧）
     max_tokens: int | None = None  # 显式覆盖输出上限
-    token_budget: dict = field(default_factory=lambda: dict(DEFAULT_TOKEN_BUDGET))
+    token_budget: dict[str, int] = field(default_factory=lambda: dict(DEFAULT_TOKEN_BUDGET))
 
 
 @dataclass
 class BatchResult:
     """translate_entries 结果。translations 值为空串表示"有意删除"。"""
-    translations: dict             # index -> text
-    deleted: set                   # index 集合（留空=删除）
-    failed: list                   # 重试后仍无法解析的 index（协议失败行）
-    untranslated: frozenset = frozenset()   # failed 子集：裸占位串形态行
+    translations: dict[int, str]            # index -> text
+    deleted: set[int]                       # index 集合（留空=删除）
+    failed: list[int]                       # 重试后仍无法解析的 index（协议失败行）
+    untranslated: frozenset[int] = frozenset()   # failed 子集：裸占位串形态行
     # （d1028-37 观测件，D2026-1028-05 B5 拍板臂 A 维持＋第三案：模型对
     # 残句确定性拒译的频率与挽回信号单列带出，零行为变更；空集=无）
 
@@ -145,7 +149,7 @@ _UNTRANSLATED_MARK = "[未翻译]"
 # ---------------------------------------------------------------------------
 
 
-def parse_numbered_response(text: str, expected: set | None = None) -> dict:
+def parse_numbered_response(text: str, expected: set[int] | None = None) -> dict[int, str]:
     """解析 #N / Translation> / 正文 协议响应。
 
     expected: 本批期望的编号集合。提供时，正文中独立成行的 #N 若不在
@@ -202,7 +206,7 @@ def parse_numbered_response(text: str, expected: set | None = None) -> dict:
     return out
 
 
-def format_numbered_entries(entries: list) -> str:
+def format_numbered_entries(entries: list[dict[str, Any]]) -> str:
     """把条目格式化为输入协议文本。"""
     blocks = []
     for e in entries:
@@ -215,7 +219,7 @@ def format_numbered_entries(entries: list) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _loopback_http_client(base_url: str, timeout: float):
+def _loopback_http_client(base_url: str, timeout: float) -> "Client | None":
     """回环端点构造 trust_env=False 的 httpx.Client；非回环返回 None（O6）。
 
     背景：系统代理（Windows 系统设置或 HTTP_PROXY/HTTPS_PROXY 环境变量）
@@ -245,11 +249,11 @@ def _loopback_http_client(base_url: str, timeout: float):
 # httpx.create_ssl_context() 与默认路径同源同构（certifi CA/ALPN 配置一致），
 # 仅把「每客户端一次」改「每进程一次」；SSLContext 跨连接共享为标准用法。
 # create_ssl_context 异常时回退 None → Client 走默认 verify=True 原路径。
-_shared_ssl_context_instance: Any = None
+_shared_ssl_context_instance: ssl.SSLContext | bool | None = None
 _shared_ssl_context_lock = threading.Lock()
 
 
-def _shared_ssl_context():
+def _shared_ssl_context() -> ssl.SSLContext | bool:
     global _shared_ssl_context_instance
     with _shared_ssl_context_lock:
         if _shared_ssl_context_instance is None:
@@ -317,7 +321,8 @@ def probe_endpoint_reachable(base_url: str,
 class LLMClient:
     """OpenAI 兼容字幕翻译客户端。"""
 
-    def __init__(self, config: ClientConfig, log=None,
+    def __init__(self, config: ClientConfig,
+                 log: Callable[[str], None] | None = None,
                  unloaded_recovery: Callable[[], None] | None = None):
         self.config = config
         self._log = log or (lambda msg: None)
@@ -332,11 +337,11 @@ class LLMClient:
         self._recovery_credit = 1
         # 裸占位串观测集（d1028-37 第三案）：translate_batch 判定归集，
         # translate_entries 终局对 failed 行分类——零行为变更纯观测
-        self._placeholder_hits: set = set()
+        self._placeholder_hits: set[int] = set()
 
     # -- 单批请求 -----------------------------------------------------------
 
-    def _ensure_openai_client(self):
+    def _ensure_openai_client(self) -> Any:
         """懒构造并复用 OpenAI 客户端（双重检查加锁防并发重复初始化）。
 
         回环端点（LM Studio / Ollama 等本地服务）改用 trust_env=False 的
@@ -359,7 +364,10 @@ class LLMClient:
                             api_key=cfg.api_key or "not-needed",
                             timeout=cfg.timeout,
                             max_retries=0,   # 瞬态退避由本模块统一控制（避免双层重试叠加）
-                            http_client=http_client,   # None=openai 默认行为
+                            # openai>=3.37 存根只认 httpx2 client 形态，但运行时
+                            # 显式兼容 legacy httpx（_httpx2.is_legacy_httpx_sync_client
+                            # 专设判定，O6 回环直连即走此路径）——存根缺口窄口
+                            http_client=http_client,   # type: ignore[arg-type]  # None=openai 默认行为
                         )
                     except BaseException:
                         if http_client is not None:
@@ -423,7 +431,7 @@ class LLMClient:
         raise LLMError(f"LLM 调用失败: {last_err}")
 
     def _chat_with_finish(self, system_text: str, user_text: str,
-                          max_tokens: int | None = None) -> tuple:
+                          max_tokens: int | None = None) -> tuple[str, str | None]:
         """_chat 薄封装（D2026-1025-01）：返回 (text, finish_reason) 二元组。
 
         不改动 _chat 本体的签名与行为——完整复用其既有请求路径（瞬态退避/
@@ -434,10 +442,10 @@ class LLMClient:
         为串行（concurrency=1），包装窗口内无并发批共用该客户端。
         """
         client = self._ensure_openai_client()
-        captured: dict = {"finish_reason": None}
+        captured: dict[str, str | None] = {"finish_reason": None}
         original_create = client.chat.completions.create
 
-        def _capturing_create(**kwargs):
+        def _capturing_create(**kwargs: Any) -> Any:
             resp = original_create(**kwargs)
             try:
                 fr = getattr(resp.choices[0], "finish_reason", None)
@@ -542,8 +550,8 @@ class LLMClient:
 
     # -- 批处理 -------------------------------------------------------------
 
-    def build_batches(self, entries: list, max_batch_size: int,
-                      scene_threshold: float = 60.0) -> list:
+    def build_batches(self, entries: list[dict[str, Any]], max_batch_size: int,
+                      scene_threshold: float = 60.0) -> list[list[dict[str, Any]]]:
         """按场景间隙 + 大小上限切批。
 
         场景切分：相邻条目起始时间间隔 > scene_threshold 秒时断批
@@ -554,7 +562,7 @@ class LLMClient:
                 max_batch_size, self.config.n_ctx, self.config.token_budget)
         max_batch_size = max(1, int(max_batch_size))
 
-        def _start_sec(e):
+        def _start_sec(e: dict[str, Any]) -> float | None:
             m = re.match(r"(\d+):(\d+):(\d+)[,.](\d+)", e.get("timing") or "")
             if not m:
                 return None
@@ -562,7 +570,7 @@ class LLMClient:
             return h * 3600 + mi * 60 + s + ms / 1000.0
 
         batches = []
-        cur: list = []
+        cur: list[dict[str, Any]] = []
         prev_start = None
         for e in entries:
             start = _start_sec(e)
@@ -578,9 +586,10 @@ class LLMClient:
             batches.append(cur)
         return batches
 
-    def translate_batch(self, entries: list, *, system_text: str,
-                        user_prompt: str, allow_empty_deletions: bool,
-                        max_output_tokens: int | None = None) -> dict:
+    def translate_batch(self, entries: list[dict[str, Any]], *,
+                        system_text: str, user_prompt: str,
+                        allow_empty_deletions: bool,
+                        max_output_tokens: int | None = None) -> dict[int, str]:
         """翻译单批，返回 {index: text}（空串=删除）。缺行由调用方重试。"""
         user_text = f"{user_prompt}\n\n{format_numbered_entries(entries)}"
         content = self._chat(system_text, user_text,
@@ -606,11 +615,12 @@ class LLMClient:
                 result[idx] = text
         return result
 
-    def translate_entries(self, entries: list, *, system_text: str,
-                          user_prompt: str, max_batch_size: int = 30,
+    def translate_entries(self, entries: list[dict[str, Any]], *,
+                          system_text: str, user_prompt: str,
+                          max_batch_size: int = 30,
                           scene_threshold: float = 60.0,
                           allow_empty_deletions: bool = False,
-                          progress=None,
+                          progress: Callable[[str], None] | None = None,
                           unloaded_recovery: Callable[[], None] | None = None,
                           ) -> BatchResult:
         """全量翻译：分批 → 并发/串行执行 → 缺行定向重试一次。
@@ -627,8 +637,8 @@ class LLMClient:
         results = {}
         done = [0]
 
-        def _run_batch(batch):
-            def _attempt():
+        def _run_batch(batch: list[dict[str, Any]]) -> dict[int, str]:
+            def _attempt() -> dict[int, str]:
                 n = self.config.n_ctx
                 mot = (compute_max_output_tokens(len(batch), n,
                                                  self.config.token_budget)
@@ -666,13 +676,14 @@ class LLMClient:
                         raise
                     return _attempt()
 
-        def _report(fut):
+        def _report(fut: Future[dict[int, str]]) -> None:
             with self._lock:
                 done[0] += 1
                 if progress:
                     progress(f"批次 {done[0]}/{total}")
 
-        def _warn_line_deficit(batch_no: int, batch: list, res: dict) -> None:
+        def _warn_line_deficit(batch_no: int, batch: list[dict[str, Any]],
+                               res: dict[int, str]) -> None:
             """D7 批后行数守卫：输出行数 ≠ 输入行数时告警（缺行定向重试
             仍是主守卫，此处只保证失配不静默）。"""
             if len(res) == len(batch):
