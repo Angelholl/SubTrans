@@ -14,8 +14,12 @@ import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from ..paths import normalize_path_case
+
+if TYPE_CHECKING:
+    from .config import RefineConfig
 
 # 清单协议版本：字段布局发生不兼容变更时递增
 MANIFEST_VERSION = 1
@@ -54,12 +58,12 @@ class TaskManifest:
     config_hash: str
     glossary_sha1: str | None = None
     tm_sha1: str | None = None
-    models: dict = field(default_factory=dict)
+    models: dict[str, dict[str, str]] = field(default_factory=dict)
     # {"A": {"provider","model","endpoint"}, "B": {...}}
     out_dir: str = ""
     stem: str = ""
-    outputs: dict = field(default_factory=lambda: {"A": None, "final": None})
-    stages: dict = field(default_factory=lambda: {k: StageRecord() for k in _STAGE_KEYS})
+    outputs: dict[str, str | None] = field(default_factory=lambda: {"A": None, "final": None})
+    stages: dict[str, StageRecord] = field(default_factory=lambda: {k: StageRecord() for k in _STAGE_KEYS})
     started_at: str = ""
     updated_at: str = ""
     run_pid: int | None = None
@@ -68,19 +72,19 @@ class TaskManifest:
     direction: str = "ja→zh"
 
     # ------------------------------------------------------------------
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """递归序列化（嵌套 StageRecord 一并转 dict）。"""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d) -> "TaskManifest":
+    def from_dict(cls, d: dict[str, Any]) -> "TaskManifest":
         """从 dict 反序列化；缺失字段回退默认值（容忍旧文件/手工编辑）。"""
         stages_raw = d.get("stages") or {}
         stages = {}
         for key in _STAGE_KEYS:
             raw = stages_raw.get(key)
             stages[key] = StageRecord(**raw) if isinstance(raw, dict) else StageRecord()
-        outputs = {"A": None, "final": None}
+        outputs: dict[str, str | None] = {"A": None, "final": None}
         outputs.update(d.get("outputs") or {})
         return cls(
             manifest_version=d.get("manifest_version", MANIFEST_VERSION),
@@ -102,12 +106,13 @@ class TaskManifest:
         )
 
     # ------------------------------------------------------------------
-    def mark_running(self, stage) -> None:
+    def mark_running(self, stage: str) -> None:
         """标记阶段开始运行，并刷新 updated_at。"""
         self.stages.setdefault(stage, StageRecord()).status = "running"
         self.updated_at = _iso_now()
 
-    def mark_done(self, stage, output, entries, degraded_count=0) -> None:
+    def mark_done(self, stage: str, output: str | None, entries: int,
+                  degraded_count: int = 0) -> None:
         """标记阶段完成（记录产物/条目数/降级数），并刷新 updated_at。"""
         rec = self.stages.setdefault(stage, StageRecord())
         rec.status = "done"
@@ -122,12 +127,12 @@ class TaskManifest:
 # 路径与持久化
 # ----------------------------------------------------------------------
 
-def manifest_path(out_dir, stem) -> Path:
+def manifest_path(out_dir: str, stem: str) -> Path:
     """清单文件路径：{out_dir}/{stem}_manifest.json。"""
     return Path(out_dir) / f"{stem}_manifest.json"
 
 
-def save_manifest(path, manifest) -> None:
+def save_manifest(path: str | Path, manifest: TaskManifest) -> None:
     """原子写清单：同目录 .tmp + os.replace，防止中断留下半截 JSON。"""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -145,7 +150,7 @@ def save_manifest(path, manifest) -> None:
                 tmp.unlink()
 
 
-def load_manifest(path):
+def load_manifest(path: str | Path) -> TaskManifest | None:
     """读取清单；不存在 / JSON 损坏 / 版本不符 -> None（调用方按"不可复用"处理）。"""
     p = Path(path)
     if not p.is_file():
@@ -160,7 +165,7 @@ def load_manifest(path):
     return TaskManifest.from_dict(data)
 
 
-def delete_resume_artifacts(out_dir, stem) -> list:
+def delete_resume_artifacts(out_dir: str, stem: str) -> list[str]:
     """删除断点续跑相关产物（存在才删），返回实际删除的文件名列表。"""
     removed = []
     names = (manifest_path(out_dir, stem).name, f"{stem}_refine_A.srt",
@@ -184,7 +189,7 @@ def delete_resume_artifacts(out_dir, stem) -> list:
 # 指纹计算
 # ----------------------------------------------------------------------
 
-def compute_file_sha1(path) -> str:
+def compute_file_sha1(path: str | Path) -> str:
     """文件内容 sha1（分块读取，避免大文件占内存）。"""
     digest = hashlib.sha1()
     with open(path, "rb") as f:
@@ -193,7 +198,7 @@ def compute_file_sha1(path) -> str:
     return digest.hexdigest()
 
 
-def compute_dir_hash(path):
+def compute_dir_hash(path: str | None) -> str | None:
     """目录指纹：所有文件按相对路径排序后联合 sha1；目录不存在返回 None。"""
     if not path:
         return None
@@ -211,7 +216,7 @@ def compute_dir_hash(path):
     return digest.hexdigest()
 
 
-def compute_glossary_sha1(path):
+def compute_glossary_sha1(path: str | None) -> str | None:
     """术语表内容 sha1；path 为 None 或文件不存在 -> None（跳过检查）。"""
     if not path or not Path(path).is_file():
         return None
@@ -227,21 +232,21 @@ _V2_STAGE_SLOTS = (("A", 0), ("B", 2))
 _TEMPLATE_DIR_PLACEHOLDERS = (".", "./", "..")
 
 
-def _resolve_templates_dir(cfg):
+def _resolve_templates_dir(cfg: "RefineConfig") -> str | None:
     """解析角色卡目录，规则与加载侧一致：空/"."/"./"/".." → default_templates_dir()。
 
     CLI 默认 templates_dir="."（= 进程 CWD）：指纹若按字面值做整树哈希，
     上一轮运行写出的 Temp/Logs 文件就会改变指纹，导致同配置 --resume
     也被判"配置已变化"（v1.1.0-beta D2 根因），且全树扫描耗时数秒。
     """
-    td = getattr(cfg, "templates_dir", None)
+    td: str | None = getattr(cfg, "templates_dir", None)
     if not td or td in _TEMPLATE_DIR_PLACEHOLDERS:
         from .config import default_templates_dir
         td = default_templates_dir()
     return td or None
 
 
-def _rules_yaml_path():
+def _rules_yaml_path() -> str | None:
     """translation_rules.yaml 实际生效路径（用户目录优先，包内回退）。
 
     该文件经 hardened_suffix/retry_cleaning 拼入阶段B指令，属"改了产物
@@ -255,7 +260,7 @@ def _rules_yaml_path():
     return p if p and os.path.isfile(p) else None
 
 
-def _gate0_rules_sha1():
+def _gate0_rules_sha1() -> str | None:
     """闸门0 规则库语义内容 sha1（实际生效的那份：用户覆盖优先，包内回退）。
 
     对解析后的规则对象做 json.dumps(sort_keys=True, ensure_ascii=False)
@@ -270,7 +275,7 @@ def _gate0_rules_sha1():
         return None
 
 
-def _asr_meta_sha1(cfg):
+def _asr_meta_sha1(cfg: "RefineConfig") -> str | None:
     """上游 ASR 运行信号语义指纹（H4a/R1）：asr_meta.fingerprint 的结果。
 
     - cfg.asr_meta 路径刻意不进 _CONFIG_FIELDS：路径变化不应误失效；
@@ -284,7 +289,7 @@ def _asr_meta_sha1(cfg):
         return None
 
 
-def _v2_stage_prompts_sha1(cfg=None) -> str:
+def _v2_stage_prompts_sha1(cfg: "RefineConfig | None" = None) -> str | None:
     """v2 阶段提示词语义指纹（D1；2.1 cfg 感知，D2026-0930-04 ⑧）。
 
     提示词与角色卡共同决定模型行为，却不落任何文件——不纳入指纹的话，
@@ -314,7 +319,7 @@ def _v2_stage_prompts_sha1(cfg=None) -> str:
         return None
 
 
-def instruction_source_files(cfg) -> list:
+def instruction_source_files(cfg: "RefineConfig") -> list[str]:
     """收集管线实际会读取的指令源文件（存在才收录），对齐加载侧
     pipeline_v2._load_v2_instruction 的读取集合：
 
@@ -422,7 +427,7 @@ _STAGE_FIELDS = ("index", "enabled", "provider", "model", "instructions",
                  "endpoint")
 
 
-def compute_config_hash(cfg) -> str:
+def compute_config_hash(cfg: "RefineConfig") -> str:
     """计算配置指纹：影响产物有效性的字段联合 sha1。
 
     - 对 cfg 用 getattr 取值，缺失字段记 None（容忍简易 cfg 对象）。
@@ -489,7 +494,9 @@ def compute_config_hash(cfg) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
-def validate_manifest(manifest, *, input_sha1, config_hash, glossary_sha1=None, tm_sha1=None) -> list:
+def validate_manifest(manifest: TaskManifest, *, input_sha1: str,
+                      config_hash: str, glossary_sha1: str | None = None,
+                      tm_sha1: str | None = None) -> list[str]:
     """校验旧清单对应的产物能否复用；返回中文不匹配原因列表（空列表=可复用）。
 
     - glossary_sha1 / tm_sha1 为 None 时跳过对应检查（本次任务未启用该资源）。
