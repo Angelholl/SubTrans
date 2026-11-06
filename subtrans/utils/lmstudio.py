@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 
 import requests
 
@@ -58,13 +59,14 @@ def _find_lms() -> str:
     return ""
 
 
-def _loaded_ids(root: str) -> set:
+def _loaded_ids(root: str) -> set[str]:
     """/v1/models 只含已加载模型；服务不可达抛异常由调用方处理。"""
     r = requests.get(f"{root}/v1/models", timeout=5)
     return {m.get("id") for m in r.json().get("data", [])}
 
 
-def _loaded_ctx(root: str, model: str, log=None) -> int:
+def _loaded_ctx(root: str, model: str,
+                log: Callable[[str], object] | None = None) -> int:
     """读取已载模型的实际上下文长度；拿不到（旧版无 v0 API / 字段缺失）返回 0。
 
     v0 API 字段名无正式兼容承诺，按 observed 命名取值并全面容错：
@@ -91,7 +93,8 @@ def _loaded_ctx(root: str, model: str, log=None) -> int:
     return 0
 
 
-def _loaded_parallel(lms: str, model: str, log=None) -> int:
+def _loaded_parallel(lms: str, model: str,
+                     log: Callable[[str], object] | None = None) -> int:
     """读取已载模型的实际并发数（lms ps --json 条目顶层 parallel 字段）。
 
     ps schema 无正式兼容承诺，全面容错：条目未找到 / 字段缺失 /
@@ -135,7 +138,8 @@ def _loaded_parallel(lms: str, model: str, log=None) -> int:
     return 0
 
 
-def _run_lms(lms: str, args: list, timeout: float) -> subprocess.CompletedProcess:
+def _run_lms(lms: str, args: list[str],
+             timeout: float) -> subprocess.CompletedProcess[str]:
     # 必须显式 encoding="utf-8"：缺省时 Windows 按 locale（cp936）解码
     # 子进程输出，模型名/输出含非 GBK 字符会条件性 UnicodeDecodeError，
     # 且不被上层 except 捕获；lms 输出为 UTF-8，errors="replace" 兜底
@@ -150,11 +154,11 @@ def _run_lms(lms: str, args: list, timeout: float) -> subprocess.CompletedProces
 
 def ensure_lmstudio_model(endpoint: str, model: str,
                           load_timeout: float = 600,
-                          log=None,
+                          log: Callable[[str], object] | None = None,
                           ctx_tokens: int | None = None,
                           parallel: int | None = None,
                           gpu: str = "max",
-                          evict_others: bool = True) -> tuple:
+                          evict_others: bool = True) -> tuple[bool, str]:
     """确保 LM Studio 已按管线配置加载指定模型（含槽位切换自动卸载）。
 
     返回 (ok: bool, message: str)。失败时 message 为可直接展示的原因。
