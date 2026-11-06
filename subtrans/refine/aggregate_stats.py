@@ -12,6 +12,7 @@ CLI 旗标 ``--tm-stats-window``，缺省 30 天）；CPS/风险类跨片对比�
 import sqlite3
 import time
 from pathlib import Path
+from typing import Any
 
 _TM_LOOKBACK_DEFAULT = 30
 _AGG_BLOCK_CHAR_LIMIT = 2000
@@ -30,7 +31,7 @@ def default_tm_db_path() -> str:
 
 
 def query_tm_summary(db_path: str, current_stem: str = "",
-                     window_days: int | None = _TM_LOOKBACK_DEFAULT) -> dict | None:
+                     window_days: int | None = _TM_LOOKBACK_DEFAULT) -> dict[str, Any] | None:
     """tm.db 只读聚合（mode=ro＋busy_timeout；任何异常降级返回 None）。
 
     window_days：7/30＝按 created_at 回看天数；None＝永久（全部）。

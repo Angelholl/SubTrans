@@ -131,6 +131,7 @@ module = [
     # 段11 strict 修债：1 条级模块修一条入名单一件（只增不减）。
     "subtrans.data_migration",
     "subtrans.refine.__main__",
+    "subtrans.refine.aggregate_stats",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
