@@ -14,8 +14,17 @@ import contextlib
 import os
 import time
 from datetime import datetime
+from typing import Protocol
 
 LOG_RETENTION_DAYS = 7
+
+
+class _Writer(Protocol):
+    """TeeWriter 与运行摘要所需的最小流面（只写不读）。"""
+
+    def write(self, s: str) -> object: ...
+
+    def flush(self) -> object: ...
 
 
 def _stamp() -> str:
@@ -29,7 +38,8 @@ class TeeWriter:
     _MARK_WARN = ('failed validation', 'NO MATCHES', '⚠️')
     _MARK_FAILOVER = ('[failover]',)
 
-    def __init__(self, original, fileobj, counts: dict = None):
+    def __init__(self, original: _Writer, fileobj: _Writer,
+                 counts: dict[str, int] | None = None) -> None:
         self._original = original
         self._file = fileobj
         self._buf = ""
@@ -37,7 +47,7 @@ class TeeWriter:
             else {'error': 0, 'warn': 0, 'failover': 0}
 
     # ------------------------------------------------------------------
-    def write(self, s):
+    def write(self, s: str) -> int:
         with contextlib.suppress(Exception):
             self._original.write(s)
         self._buf += s
@@ -46,20 +56,20 @@ class TeeWriter:
             self._write_line(line)
         return len(s)
 
-    def flush(self):
+    def flush(self) -> None:
         with contextlib.suppress(Exception):
             self._original.flush()
         with contextlib.suppress(Exception):
             self._file.flush()
 
-    def close(self):
+    def close(self) -> None:
         if self._buf:
             self._write_line(self._buf)
             self._buf = ""
         self.flush()
 
     # ------------------------------------------------------------------
-    def _write_line(self, line: str):
+    def _write_line(self, line: str) -> None:
         try:
             if line.strip():
                 self._classify(line)
@@ -69,7 +79,7 @@ class TeeWriter:
         except Exception:
             pass
 
-    def _classify(self, line: str):
+    def _classify(self, line: str) -> None:
         if any(m in line for m in self._MARK_FAILOVER):
             self.counts['failover'] += 1
         elif any(m in line for m in self._MARK_ERROR):
@@ -159,8 +169,8 @@ def format_duration(seconds: float) -> str:
     return (f"{h}h{m:02d}m{s:02d}s" if h else f"{m}m{s:02d}s")
 
 
-def write_summary(f, status: str, elapsed: float, inputs: int,
-                  counts: dict, log_path: str):
+def write_summary(f: _Writer, status: str, elapsed: float, inputs: int,
+                  counts: dict[str, int], log_path: str) -> None:
     """在日志末尾追加运行摘要块。"""
     bar = '=' * 52
     lines = [
