@@ -139,7 +139,7 @@ class EncodeParams:
     quality: str = "balanced"           # compress / balanced / quality
     resolution: str = "original"        # original / 720p / 1080p / 1440p / 2160p
     enhance_on: bool = True             # False=忠实源出口（去增强链）
-    enhance_params: dict = field(default_factory=lambda: dict(DEFAULT_ENHANCE_PARAMS))
+    enhance_params: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_ENHANCE_PARAMS))
     font_size: int = 22                 # 受控 12~72
     audio_mode: str = "copy"            # copy / 96k / 128k / 192k
     rate_mode: str = "quality_tier"     # quality_tier / target_vbr
@@ -182,7 +182,7 @@ def validate_params(params: EncodeParams) -> None:
         raise ValueError(f"音量增益须在 ±12dB 内: {params.volume_db}")
 
 
-def _validate_enhance_params(ep: dict) -> None:
+def _validate_enhance_params(ep: dict[str, str]) -> None:
     """增强链参数受控范围（批3 旋钮化，决策九-1：各带受控范围校验）。
 
     - hqdn3d=「luma_sp:chroma_sp:luma_tmp:chroma_tmp」四数值，各 0~10；
@@ -493,7 +493,7 @@ def parse_custom_params(s: str) -> list[str]:
 # - gpu：批2 硬件后端（nvenc/qsv/amf 码控映射；程序特权旗标含黑名单成员
 #   ——黑名单只约束用户逃生门，程序侧不受限）
 # - 批3 预留：音量增益（-af 生成者）届时注册
-_GENERATOR_REGISTRY: dict[str, frozenset] = {
+_GENERATOR_REGISTRY: dict[str, frozenset[str]] = {
     "core": frozenset({
         "-f", "-movflags", "-sn", "-map", "-c:v", "-crf", "-preset",
         "-b:v", "-maxrate", "-bufsize", "-c:a", "-b:a",
