@@ -147,6 +147,7 @@ module = [
     "subtrans.utils.lmstudio",
     "subtrans.refine.glossary",
     "subtrans.refine.pipeline_support",
+    "subtrans.refine.synopsis",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

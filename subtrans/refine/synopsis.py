@@ -24,6 +24,7 @@ import os
 import re
 import threading
 from pathlib import Path
+from typing import Any, Protocol
 
 from .config import TEMP_DIR
 from .source_hallucination import is_source_counting_noise
@@ -95,7 +96,8 @@ def _start_sec(timing: str) -> float:
     return g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000.0
 
 
-def build_synopsis_input(entries: list, max_chars: int = 6000) -> tuple:
+def build_synopsis_input(entries: list[dict[str, Any]],
+                         max_chars: int = 6000) -> tuple[str, dict[str, Any]]:
     """从条目序列（闸门0+预合并后，含 timing/text）抽样剧情行。
 
     步骤：
@@ -132,7 +134,7 @@ def build_synopsis_input(entries: list, max_chars: int = 6000) -> tuple:
         return "", {"buckets": 0, "bucket_ranges": [], "chars": 0,
                     "total_chars": 0}
 
-    def _span(first: dict, last: dict) -> dict:
+    def _span(first: dict[str, Any], last: dict[str, Any]) -> dict[str, Any]:
         return {"first_index": first.get("index"),
                 "last_index": last.get("index"),
                 "first_start": round(_start_sec(first["timing"]), 3),
@@ -201,10 +203,10 @@ def cache_key(provider: str, model: str, sampled_text: str, *,
 # （不进质量报告/manifest）。total＝实际发生的 LLM 生成调用数（缓存命中
 # 与硬失败不计），truncated＝其中 finish_reason=="length" 被丢弃的次数。
 _STATS_LOCK = threading.Lock()
-_STATS: dict = {"total": 0, "truncated": 0}
+_STATS: dict[str, int] = {"total": 0, "truncated": 0}
 
 
-def synopsis_truncation_stats() -> dict:
+def synopsis_truncation_stats() -> dict[str, int]:
     """只读暴露截断率计数：{"total": N, "truncated": M}（副本）。"""
     with _STATS_LOCK:
         return dict(_STATS)
@@ -237,7 +239,7 @@ def _write_cast_sidecar(cpath: Path, text: str) -> None:
 
 
 # 每键一把 threading.Lock（防多文件并行时同键重复调用/写缓存）
-_KEY_LOCKS: dict = {}
+_KEY_LOCKS: dict[str, threading.Lock] = {}
 _KEY_LOCKS_GUARD = threading.Lock()
 
 
@@ -258,7 +260,18 @@ def _atomic_write_text(path: Path, text: str) -> None:
     _atomic(path, text, suffix=".tmp")
 
 
-def request_synopsis(client, sampled_text: str, *, provider: str, model: str,
+class _ChatClient(Protocol):
+    """request_synopsis 依赖的最小聊天面：真实实现＝translate.llm_client 的
+    LLMClient（其 `_chat` 同款签名），测试 stub 只需提供 `_chat`。
+    `_chat_with_finish` 是可选薄封装——本模块用 getattr 探测，缺失即回退
+    `_chat` 按未截断处理，故不进协议面。"""
+
+    def _chat(self, system_text: str, user_text: str,
+              max_tokens: int | None = None) -> str: ...
+
+
+def request_synopsis(client: _ChatClient, sampled_text: str, *,
+                     provider: str, model: str,
                      cache_dir: str | None = None,
                      max_tokens: int = SYNOPSIS_MAX_TOKENS,
                      temperature: float | None = None,
