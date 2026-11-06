@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import tempfile
+from typing import cast
 
 from subtrans import paths
 
@@ -73,7 +74,7 @@ def _dpapi_unprotect(data: bytes) -> bytes:
 
 
 # ---------------- 存取接口 ----------------
-def _atomic_write(path: str, data: bytes):
+def _atomic_write(path: str, data: bytes) -> None:
     """原子写：临时文件 + fsync + os.replace，避免中途崩溃损坏密钥库。"""
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)
@@ -90,7 +91,7 @@ def _atomic_write(path: str, data: bytes):
         raise
 
 
-def store_secret(name: str, value: str, store_path: str = None):
+def store_secret(name: str, value: str, store_path: str | None = None) -> None:
     """加密保存；value 为空串表示删除该项。
 
     密钥库损坏时会抛出异常（拒绝覆盖），避免静默清空全部密钥。
@@ -110,7 +111,7 @@ def store_secret(name: str, value: str, store_path: str = None):
     _atomic_write(path, payload)
 
 
-def read_secret(name: str, store_path: str = None) -> str:
+def read_secret(name: str, store_path: str | None = None) -> str:
     path = store_path or get_store_path()
     if not os.path.isfile(path):
         return ""
@@ -135,7 +136,7 @@ def read_secret(name: str, store_path: str = None) -> str:
         return ""
 
 
-def _read_raw(path: str) -> dict:
+def _read_raw(path: str) -> dict[str, str]:
     """读取密钥库原始字典。
 
     文件不存在返回空；文件存在但损坏/无法解密时抛出异常（而非静默返回空），
@@ -147,4 +148,6 @@ def _read_raw(path: str) -> dict:
         raw = _f.read()
     if os.name == "nt":
         raw = _dpapi_unprotect(raw)
-    return json.loads(raw.decode("utf-8"))
+    # 库形状契约：JSON 对象 name -> base64(hex(bytes))（store_secret 同款写入）；
+    # json.loads 返回 Any，按契约收窄为 dict[str, str]，运行时行为不变。
+    return cast("dict[str, str]", json.loads(raw.decode("utf-8")))

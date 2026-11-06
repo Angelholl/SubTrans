@@ -139,6 +139,7 @@ module = [
     "subtrans.refine.events",
     "subtrans.refine.hardsub",
     "subtrans.refine.cleaner_rules",
+    "subtrans.refine.secrets",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
