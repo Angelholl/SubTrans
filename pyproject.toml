@@ -153,6 +153,7 @@ module = [
     # 段14 strict 修债：10–18 条级自洽件（owner 限 3 件），修一件入名单一件，只增不减。
     "subtrans.refine.runlog",
     "subtrans.refine.glossary_conflict",
+    "subtrans.refine.asr_env",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

@@ -25,7 +25,9 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from subtrans import paths
 from subtrans.utils.subprocess_flags import CREATE_NO_WINDOW  # windowed 防黑框单一来源（批0）
@@ -64,7 +66,7 @@ def resolve_ffmpeg() -> str:
     return shutil.which("ffmpeg") or ""
 
 
-def _ct2_status() -> dict:
+def _ct2_status() -> dict[str, Any]:
     """ct2 运行时状态（退役批起唯一引擎状态单一来源，GUI 状态面数据源）。"""
     try:
         from . import asr_runtime
@@ -97,7 +99,7 @@ def _ct2_ready() -> bool:
         return False
 
 
-def _srt_file_to_contract(srt_path: str) -> dict:
+def _srt_file_to_contract(srt_path: str) -> dict[str, Any]:
     """ct2 产出的 SRT → 运行器 JSON 契约形态（text+segments；置信键缺省
     由消费方按存在性读取，C13 口径）。"""
     from .filters import parse_srt
@@ -125,7 +127,7 @@ _TIMING_SPAN_RE = re.compile(
 
 
 def _run_transcription_ct2(clip_path: str, language: str,
-                           timeout: int = 300) -> dict:
+                           timeout: int = 300) -> dict[str, Any]:
     """ct2 引擎单片段重转写（自管运行时子进程）。
 
     契约回读优先级（D2026-1029-01 批1 置信透传）：runner stdout segments
@@ -188,7 +190,7 @@ def _run_transcription_ct2(clip_path: str, language: str,
 
 def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
                             passes: int = 1, language: str = "ja",
-                            timeout: int = 0) -> dict:
+                            timeout: int = 0) -> dict[str, Any]:
     """媒体整片→源文 SRT（3.2.0 件A 产品入口，D2026-1029-02 拍板②）。
 
     最小形态、与双 pass 编排解耦：只做就绪判定＋runner 子进程直调＋
@@ -233,7 +235,7 @@ def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
         if not line.startswith("{"):
             continue
         try:
-            payload = json.loads(line)
+            payload: dict[str, Any] = json.loads(line)
         except ValueError:
             continue
         if payload.get("ok"):
@@ -246,7 +248,7 @@ def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
 
 def run_transcription(clip_path: str, asr_python: str = "",
                       model: str = "large-v2", language: str = "ja",
-                      timeout: int = 300) -> dict:
+                      timeout: int = 300) -> dict[str, Any]:
     """单片段重转写（ct2 唯一引擎分派；JSON 契约解析；失败降级 dict）。
 
     asr_python/model 参数保留（签名稳定/废弃壳口径）：legacy whisper
@@ -265,7 +267,8 @@ def batch_transcribe_clips(media_path: str, timings: list[str], *,
                            model: str | None = None,
                            model_dir: str | None = None,
                            max_clips: int = _MAX_CLIPS,
-                           progress=None) -> list[dict]:
+                           progress: Callable[[int, int], object] | None = None,
+                           ) -> list[dict[str, Any]]:
     """批量转写（ct2 唯一引擎，D2026-1029-01 退役批收敛单路）：
     slice_clips 切片→逐 clip ct2 转写（_run_transcription_ct2，每片独立
     子进程；stdout segments 含三维置信键）→按 timing 对齐返回。
@@ -279,11 +282,13 @@ def batch_transcribe_clips(media_path: str, timings: list[str], *,
 
     返回：与 timings 等长的 list[dict]，每项 {"timing", "ok", "text",
     "segments", "error"}（segments 为含置信字段的段级数组，C13）。"""
-    failed = lambda timing, err: {"timing": timing, "ok": False,  # noqa: E731
-                                  "text": "", "segments": [], "error": err}
+    def failed(timing: str, err: str) -> dict[str, Any]:
+        return {"timing": timing, "ok": False,
+                "text": "", "segments": [], "error": err}
+
     sliced = slice_clips(media_path, timings, max_clips=max_clips)
     clips = sliced.get("clips") or []
-    by_timing: dict[str, dict] = {}
+    by_timing: dict[str, dict[str, Any]] = {}
     for t in timings:
         by_timing[t] = failed(t, "")      # 占位，成功后被覆盖
     if not clips:
@@ -316,9 +321,9 @@ def batch_transcribe_clips(media_path: str, timings: list[str], *,
     return [by_timing[t] for t in timings]
 
 
-def build_crosscheck_block(clips: list[dict], asr_python: str = "",
+def build_crosscheck_block(clips: list[dict[str, Any]], asr_python: str = "",
                            model: str = "large-v2",
-                           char_limit: int = 2000) -> dict:
+                           char_limit: int = 2000) -> dict[str, Any]:
     """切片批量重转写并聚合对照块（C6：≤2000 截断+非真值声明）。
 
     clips 元素＝{path, timing, current}。返回 {"block": str, "segments": n,
@@ -331,7 +336,7 @@ def build_crosscheck_block(clips: list[dict], asr_python: str = "",
         "自带错误），仅作漏听/误听对照参考；不改变任何默认阈值。"]
     segments = 0
     failed = 0
-    detail: list[dict] = []
+    detail: list[dict[str, Any]] = []
     for clip in clips:
         r = run_transcription(clip.get("path") or "", asr_python, model)
         if not r["ok"] or not r["text"].strip():
@@ -358,7 +363,7 @@ def build_crosscheck_block(clips: list[dict], asr_python: str = "",
 
 
 def slice_clips(media_path: str, timings: list[str],
-                max_clips: int = _MAX_CLIPS) -> dict:
+                max_clips: int = _MAX_CLIPS) -> dict[str, Any]:
     """按 SRT timing 列表抽 16k 单声道 wav 片段（ffmpeg list-args，无 shell）。
 
     timings：["HH:MM:SS,mmm --> HH:MM:SS,mmm", ...]（疑似漏听段等），超
@@ -385,7 +390,7 @@ def slice_clips(media_path: str, timings: list[str],
         ss, ms = rest.split(",")
         return int(hh) * 3600 + int(mm) * 60 + int(ss) + int(ms) / 1000
 
-    clips: list[dict] = []
+    clips: list[dict[str, Any]] = []
     skipped = 0
     for timing in timings[:max_clips]:
         try:
