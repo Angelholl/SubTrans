@@ -24,6 +24,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
+from typing import Any
 
 __all__ = [
     "ACTIVATION_ENABLED",
@@ -78,13 +80,13 @@ def reverify_gate(passed: int, total: int, threshold_lb: float | None) -> bool:
     return _wilson_lb(passed, total) >= float(threshold_lb)
 
 
-def plan_autofix(suggestions: list[dict], cap: int = 20) -> list[dict]:
+def plan_autofix(suggestions: list[dict[str, Any]], cap: int = 20) -> list[dict[str, Any]]:
     """从 AI 建议中选自动修复目标（低置信优先、条目上限、台账必填）。
 
     术语冲突类不纳入自动重翻目标（b2 红线，D2026-1002-02）。建议项须携带
     ledger 上下文键（provider/old_text），缺任一即剔除并计数——无台账不得
     修复。"""
-    eligible: list[dict] = []
+    eligible: list[dict[str, Any]] = []
     for s in suggestions:
         if str(s.get("category") or "") == "term_conflict":
             continue
@@ -94,8 +96,13 @@ def plan_autofix(suggestions: list[dict], cap: int = 20) -> list[dict]:
     return eligible[:max(0, int(cap))]
 
 
-def run_autoloop_cycle(suggestions: list[dict], *, analyze_fn=None, fix_fn=None,
-                       reverify_fn=None, gate: dict[str, object] | None = None) -> dict:
+def run_autoloop_cycle(suggestions: list[dict[str, Any]], *,
+                       # analyze_fn＝分析件注入位（docstring：分析=quality_advisor 既有链），
+                       # 本编排当前不调用它，故只标最宽注入面，不猜具体签名
+                       analyze_fn: Callable[..., object] | None = None,
+                       fix_fn: Callable[[dict[str, Any]], bool] | None = None,
+                       reverify_fn: Callable[[list[dict[str, Any]]], tuple[int, int]] | None = None,
+                       gate: dict[str, object] | None = None) -> dict[str, Any]:
     """单轮闭环编排（纯函数：执行件经参数注入，本模块零生产接线）。
 
     流程=PROPOSE（plan_autofix）→ AUTO_FIX（fix_fn）→ REVERIFY（reverify_fn）
