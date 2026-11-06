@@ -282,7 +282,8 @@ def live(tmp_path):
     _write_state(pkg, [_record(pkg, i + 1, guide, media, t)
                        for i, t in enumerate([T_A, T_B, T_C])])
     httpd = mod.create_server(pkg)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread = threading.Thread(target=httpd.serve_forever,
+                          kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
     yield pkg, base
@@ -447,7 +448,8 @@ def test_pin5_agreement_route_over_http(tmp_path):
     data = _agreement_state(pkg, 28, 3)
     _write_state(pkg, data["records"], data["relabel_queue"])
     httpd = mod.create_server(pkg)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread = threading.Thread(target=httpd.serve_forever,
+                          kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         base = f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -540,7 +542,8 @@ def test_pin6_foreign_holder_forces_next_port(tmp_path):
             pass
 
     holder = mod.ThreadingHTTPServer(("127.0.0.1", port), _Foreign)
-    thread = threading.Thread(target=holder.serve_forever, daemon=True)
+    thread = threading.Thread(target=holder.serve_forever,
+                          kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         httpd = mod.create_server(pkg, first_port=port, last_port=port + 1)
@@ -637,7 +640,8 @@ def test_c3_pin2_legacy_record_compat_zero_migration(tmp_path):
     assert [r["id"] for r in mod._pending(state)] == ["run1-3"]
 
     httpd = mod.create_server(pkg)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread = threading.Thread(target=httpd.serve_forever,
+                          kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         base = f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -888,7 +892,8 @@ def test_c4_pin1_message_passthrough_prepare_and_serve(tmp_path, monkeypatch):
     assert state["records"][1]["message"] is None      # 缺省 null，不崩
 
     httpd = mod.create_server(pkg)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread = threading.Thread(target=httpd.serve_forever,
+                          kwargs={"poll_interval": 0.01}, daemon=True)
     thread.start()
     try:
         base = f"http://127.0.0.1:{httpd.server_address[1]}"
