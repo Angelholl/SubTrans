@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""guard_banned_paths — 敏感路径入库守卫（v1.3.1 D10，D2026-0925-02）。
+"""guard_banned_paths — 敏感路径入库守卫（v1.3.1 D10，D2026-0925-02；
+名单随公开仓收窄换代扩面，D2026-1028-01／D2026-1106-01／D2026-1106 自检轮）。
 
 三条纪律铁律：
 1. 只看 git tracked/indexed 文件（``git ls-files``），绝不扫描工作树
@@ -12,10 +13,16 @@
     python tools/guard_banned_paths.py            # 全量 tracked 文件
     python tools/guard_banned_paths.py --staged   # 只查 staged（git diff --cached --name-only）
 
-名单来源：.gitignore 敏感段现值（敏感数据段 + TM 备份段）+ docs/
-decision-log.md 条目 D2026-0916-01（1.2 收尾清单："internal_docs/、api_keys.bin、
-sexual_terms.csv、真实 glossary、敏感 Temp 脚本移至仓库树外"）。
-逐条对照见 BANNED_PATTERNS。
+名单来源：.gitignore 敏感/禁推段现值（敏感数据段 + TM 备份段 + 内部工作材料段
++ 公开仓收窄第二批 + 治理运行时段 + C22 门控运行态）+ docs/decision-log.md 条目
+D2026-0916-01（1.2 收尾清单："internal_docs/、api_keys.bin、sexual_terms.csv、
+真实 glossary、敏感 Temp 脚本移至仓库树外"）。逐条对照见 BANNED_PATTERNS。
+
+双向防漂移（tests/test_guard_banned_paths.py）：正向＝名单每条有 .gitignore 或
+decision-log 出处；反向＝.gitignore 每个禁推段每条规则都必须有名单对应——段内
+新增规则而守卫漏收即红。D2026-1106 合规轮后公开仓收窄清单（D2026-1028-01 三令
+＋D2026-1106-01 第二批）已扩到 30+ 条，本名单曾停在 2026-09 口径的 9 条，即该
+轮自检迭代补的缺口。
 """
 
 import argparse
@@ -32,6 +39,8 @@ BANNED_PATTERNS = [
     ("config/glossary.csv", ".gitignore: 敏感数据（严禁入库）"),
     ("config/glossary.csv.bak-*", ".gitignore: 敏感数据（严禁入库）"),
     ("config/glossary_learned.csv", ".gitignore: 敏感数据（严禁入库）"),
+    ("config/refine_stage_settings.json", ".gitignore: 敏感数据（严禁入库）"),
+    ("config/user_dirs.json", ".gitignore: 敏感数据（严禁入库）"),
     ("create_shortcut.py", ".gitignore: 敏感数据（严禁入库）"),
     ("Temp/*", ".gitignore: 运行数据 Temp/"),
     # ---- 来源 1b：.gitignore「TM 备份」敏感段（私有译文备份，存量达
@@ -41,6 +50,51 @@ BANNED_PATTERNS = [
     # ---- 来源 2：decision-log 条目 D2026-0916-01 收尾清单（树外同级目录契约）----
     ("internal_docs/*", "decision-log 条目 D2026-0916-01 internal_docs/ 移至树外"),
     ("sexual_terms.csv", "decision-log 条目 D2026-0916-01 sexual_terms.csv 移至树外"),
+    # ---- 来源 3：decision-log 条目 D2026-1028-01 公开仓 push 面收窄（owner 三令）
+    # 内部工作材料/评测产物只 commit 留本地，严禁出现在公开仓 ----
+    ("artifacts/*", "decision-log 条目 D2026-1028-01 禁推清单（artifacts/）"),
+    ("spike/*", "decision-log 条目 D2026-1028-01 禁推清单（spike/）"),
+    # ---- 来源 4：decision-log 条目 D2026-1106-01 公开仓收窄第二批（领域调校包/
+    # 过程文档/评测工具/内部入口脚本/判定材料工具移出公开仓）----
+    ("AGENTS.md", "decision-log 条目 D2026-1106-01 第二批（根级本地件）"),
+    ("docs/design/*", "decision-log 条目 D2026-1028-01 禁推清单（docs/design/**）"),
+    ("docs/archive/*", "decision-log 条目 D2026-1028-01 禁推清单（docs/archive/**）"),
+    ("docs/governance/*", "decision-log 条目 D2026-1028-01 禁推清单（docs/governance/**）"),
+    ("docs/decision-log.md", "decision-log 条目 D2026-1028-01 禁推清单（决策留档本地）"),
+    ("docs/decision-log-archive-*.md", "decision-log 条目 D2026-1028-01 禁推清单（决策留档本地）"),
+    ("docs/roadmap.md", "decision-log 条目 D2026-1028-01 禁推清单（roadmap 本地）"),
+    ("docs/模型与转写实测推荐.md", "decision-log 条目 D2026-1106-01 第二批（内部评测文档）"),
+    ("docs/examples/jav-domain/*", "decision-log 条目 D2026-1106-01 第二批（领域调校包）"),
+    ("docs/cps-batchE-20260929.json", "decision-log 条目 D2026-1106-01 第二批（判定材料）"),
+    ("docs/cps-batchE-20260929.txt", "decision-log 条目 D2026-1106-01 第二批（判定材料）"),
+    ("docs/cps-定标报告-20260930.md", "decision-log 条目 D2026-1106-01 第二批（判定材料）"),
+    ("docs/B2-门②语料基线-20260926.md", "decision-log 条目 D2026-1106-01 第二批（判定材料）"),
+    ("docs/真机走查清单-*.md", "decision-log 条目 D2026-1106-01 第二批（走查材料）"),
+    ("docs/模型测试两轮交接.md", "decision-log 条目 D2026-1106-01 第二批（过程文档）"),
+    ("docs/测试基线语言假设分类-*.md", "decision-log 条目 D2026-1106-01 第二批（过程文档）"),
+    ("docs/mimosa-findings-甄别表.md", "decision-log 条目 D2026-1106-01 第二批（深扫甄别材料）"),
+    ("docs/领域包-hardened-审计-*.md", "decision-log 条目 D2026-1106-01 第二批（审计材料）"),
+    ("docs/evidence-manifest.md", "decision-log 条目 D2026-1106-01 第二批（证据台账）"),
+    ("tools/ab_compare.py", "decision-log 条目 D2026-1028-01 禁推清单（评测工具）"),
+    ("tools/ab_compare_srt.py", "decision-log 条目 D2026-1028-01 禁推清单（评测工具）"),
+    ("tools/ruling_b6.py", "decision-log 条目 D2026-1106-01 第二批（判定工具）"),
+    ("tools/ruling_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定工具）"),
+    ("tools/sensitive_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定工具）"),
+    ("tools/model_matrix_run.py", "decision-log 条目 D2026-1028-01 禁推清单（评测工具）"),
+    ("tools/spike_review_report.json", "decision-log 条目 D2026-1106-01 第二批（评测产物）"),
+    ("tests/test_gen_sensitive_trans.py", "decision-log 条目 D2026-1106-01 第二批（判定材料测试）"),
+    ("tests/test_sensitive_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定材料测试）"),
+    ("tests/test_ruling_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定材料测试）"),
+    ("判批6.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本）"),
+    ("判批6网页.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本）"),
+    ("敏感句网页.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本）"),
+    # ---- 来源 5：.gitignore 治理运行时段（账本收口治理的脚本副本/安全源/
+    # 统计产物——含内部扫描关键词源，入库即等于把判定口径本身公开）----
+    ("governance/scan-min/*", ".gitignore: 账本收口治理运行时（误入公开仓库防御）"),
+    ("governance-secret-keywords.json", ".gitignore: 账本收口治理运行时（误入公开仓库防御）"),
+    # ---- 来源 6：C22 门控运行态（decision-log 条目 D2026-1031-04 ① 终裁后
+    # --enable 本地写，门控状态属本地运行态不随产品发布）----
+    ("config/fullchain_c22.json", "decision-log 条目 D2026-1031-04 ① C22 门控运行态本地写"),
 ]
 
 
@@ -101,7 +155,8 @@ def main(argv=None) -> int:
         for v in violations:
             print(f"  {v}", file=sys.stderr)
         print(f"共 {len(violations)} 项违规（名单契约见 tools/guard_banned_paths.py"
-              " 与 decision-log 条目 D2026-0916-01）", file=sys.stderr)
+              " 与 decision-log 条目 D2026-0916-01／D2026-1028-01／D2026-1106-01）",
+              file=sys.stderr)
         return 1
     scope = "staged" if args.staged else "tracked"
     print(f"[OK] {scope} 文件共 {len(files)} 个，均未命中敏感路径排除名单")
