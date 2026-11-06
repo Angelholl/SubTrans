@@ -8,7 +8,9 @@
 
 规则（机器可判定、替换后不再被自身命中=幂等）：
 1. 机器绝对路径（``X:/...`` / ``X:\\...``，含 Temp、venv 等一切盘符路径）
-   → 「内部路径」
+   → 「内部路径」。URL 不受影响：盘符后首个斜杠若再接斜杠即协议分隔符
+   （``scheme://``），非盘符路径——``https://`` 一类不得被误吞（回归钉在
+   tests/test_sanitize_commit_msg.py）；
 2. 教训号 ``L-YYYYMMDD-nn`` → 「教训（存内部记录）」
 3. ``.auto/`` 会话态路径 → 「内部会话态路径」
 4. ``%TEMP%`` 环境变量路径 → 「内部临时路径」
@@ -17,7 +19,9 @@
 - commit-msg hook：``python tools/sanitize_commit_msg.py <msgfile>``——
   原地重写、恒 exit 0（失败不阻塞提交）；
 - 检查模式：``--check <msgfile>``——将被改写时 exit 1（测试/巡检用）；
-- 库用：``sanitize(text) -> tuple[str, list[str]]``（清洗后文本＋命中规则名）。
+- 库用：``sanitize(text) -> tuple[str, list[str]]``（清洗后文本＋命中规则名）；
+- 安装：``--install``——写入 hook（解释器钉死为安装时的绝对路径，防
+  PATH 缺失静默失效；既有内容不同则先备份再覆写，见 install_hook）。
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from __future__ import annotations
 import contextlib
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # git 消息文件名白名单＋ .git 目录内约束（本工具只允许处理 git 消息文件，
@@ -34,7 +39,9 @@ _MSG_FILENAMES = {"COMMIT_EDITMSG", "MERGE_MSG", "TAG_EDITMSG", "SQUASH_MSG"}
 # (规则名, 编译好的模式, 替换文本)。顺序即执行序；替换文本不得含任何模式
 # 可再匹配的字面（内部路径/教训/会话态/临时 均无盘符、无 L- 前缀、无 .auto/）。
 _RULES: list[tuple[str, re.Pattern[str], str]] = [
-    ("abs_path", re.compile(r"[A-Za-z]:[/\\][^\s'\"()<>|]*"), "内部路径"),
+    # 盘符后首个斜杠再接斜杠＝协议分隔符（scheme://），不是盘符路径——
+    # 负向前瞻把 URL 整体排除在 abs_path 之外（对既有命中面零收窄）。
+    ("abs_path", re.compile(r"[A-Za-z]:[/\\](?![/\\])[^\s'\"()<>|]*"), "内部路径"),
     ("lesson_id", re.compile(r"\bL-\d{8}-\d{2}\b"), "教训（存内部记录）"),
     ("auto_state_path", re.compile(r"\.auto[/\\][^\s'\"()<>|]*"), "内部会话态路径"),
     ("temp_env_path", re.compile(r"%TEMP%[/\\][^\s'\"()<>|]*"), "内部临时路径"),
@@ -109,20 +116,39 @@ def main(argv: list[str]) -> int:
 
 
 HOOK_TEMPLATE = """#!/bin/sh
-# commit message 脱敏 hook（D2026-1105-06/07 防复发，由 tools/install_commit_msg_hook.py 安装）
-python "{tool}" "$1" || exit 0
+# commit message 脱敏 hook（D2026-1105-06/07 防复发，由 tools/sanitize_commit_msg.py --install 安装）
+"{interp}" "{tool}" "$1" || exit 0
 """
 
 
+def _backup_hook(hook: Path) -> Path:
+    """覆写前把既有 hook 原文备份为 ``commit-msg.bak-<时间戳>``（撞名则续 -N）。"""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    bak = hook.with_name(f"{hook.name}.bak-{stamp}")
+    n = 1
+    while bak.exists():
+        bak = hook.with_name(f"{hook.name}.bak-{stamp}-{n}")
+        n += 1
+    bak.write_text(hook.read_text(encoding="utf-8"), encoding="utf-8", newline="")
+    return bak
+
+
 def install_hook(git_dir: str) -> str:
-    """向指定 git dir 写入 commit-msg hook（幂等）。返回 hook 路径。"""
+    """向指定 git dir 写入 commit-msg hook（幂等）。返回 hook 路径。
+
+    既有 hook 存在且内容与模板不同时：先备份原文（``commit-msg.bak-<时间戳>``）
+    再覆写——绝不静默丢弃用户链条。解释器在安装时钉死为绝对路径，不依赖
+    运行时 PATH（PATH 缺失导致保护静默缺席的旧形态已移除）。"""
     tool = Path(__file__).resolve().as_posix()
+    interp = Path(sys.executable).as_posix() if sys.executable else "python"
     hooks = Path(git_dir) / "hooks"
     hooks.mkdir(exist_ok=True)
     hook = hooks / "commit-msg"
-    body = HOOK_TEMPLATE.format(tool=tool)
-    if hook.is_file() and hook.read_text(encoding="utf-8") == body:
-        return str(hook)
+    body = HOOK_TEMPLATE.format(interp=interp, tool=tool)
+    if hook.is_file():
+        if hook.read_text(encoding="utf-8") == body:
+            return str(hook)
+        _backup_hook(hook)
     hook.write_text(body, encoding="utf-8", newline="\n")
     with contextlib.suppress(OSError):
         hook.chmod(0o755)
