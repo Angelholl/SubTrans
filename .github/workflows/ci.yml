@@ -31,6 +31,12 @@ jobs:
       - name: Type check (baseline gate)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: python tools/mypy_baseline.py --check
+      # 禁推守卫独立步骤（D2026-1106-06 拍板 CI 化）：防泄漏面由「本地手动＋
+      # tracked 核对测试（随 pytest 进 CI）」再加一层脚本直跑；正向契约兼容
+      # CI 无 decision-log 的形态（D2026-1106-05 建守卫时已内置）
+      - name: Banned-paths guard
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: python tools/guard_banned_paths.py
       - name: Test
         shell: bash
         run: |
