@@ -94,3 +94,59 @@ def test_line_breaker_in_strict_scope():
     enabled = {key for key, value in section.items() if value is True}
     missing = sorted(_STRICT_FLAGS - enabled)
     assert not missing, f"{_LINE_BREAKER_MODULE} 的 strict 等价旗标被删减: {missing}"
+
+
+# ratchet 面（承 D2026-1030-07 第 5 类「只增不减」口径）：上面三件只钉个别模块，
+# 扩面轮（段4/10/11/12/13）入名单的其余模块此前无防回退钉——被静默移出不会红。
+# 本面对全部名单做快照断言：任一件缺席或旗标被删减即红。扩面时须同步追加快照
+# （缩小快照＝退回严格度，先评议再改）。名单内是否真过 strict 由 mypy 基线门
+# 把守（列进名单但过不了＝基线红），本钉只防名单与旗标本身的退化。
+_STRICT_SCOPE_SNAPSHOT = frozenset({
+    "subtrans.__init__", "subtrans.__version__", "subtrans.data_migration", "subtrans.paths",
+    "subtrans.refine.__init__", "subtrans.refine.__main__", "subtrans.refine.aggregate_stats",
+    "subtrans.refine.artifact_lock", "subtrans.refine.audio_detect", "subtrans.refine.batch",
+    "subtrans.refine.cleaner_rules", "subtrans.refine.dialogue_detect",
+    "subtrans.refine.eval_baseline", "subtrans.refine.events", "subtrans.refine.filters",
+    "subtrans.refine.fs_utils", "subtrans.refine.garble_detect", "subtrans.refine.glossary",
+    "subtrans.refine.glossary_learn", "subtrans.refine.grammar_hint", "subtrans.refine.hardsub",
+    "subtrans.refine.instructions", "subtrans.refine.kana_clean",
+    "subtrans.refine.language_validator", "subtrans.refine.line_breaker",
+    "subtrans.refine.output_formats", "subtrans.refine.pass_disagreement",
+    "subtrans.refine.pass_merge", "subtrans.refine.pipeline_support",
+    "subtrans.refine.post_validate", "subtrans.refine.quality_advisor",
+    "subtrans.refine.quality_autoloop", "subtrans.refine.risk", "subtrans.refine.rules_loader",
+    "subtrans.refine.secrets", "subtrans.refine.source_hallucination",
+    "subtrans.refine.srt_encoding", "subtrans.refine.subtitle_convert",
+    "subtrans.refine.synopsis", "subtrans.refine.template_seed", "subtrans.refine.token_hint",
+    "subtrans.refine.v2_context_blocks", "subtrans.refine.v2_learn", "subtrans.refine.v2_outputs",
+    "subtrans.refine.v2_rules", "subtrans.translate.__init__", "subtrans.translate.providers",
+    "subtrans.utils.__init__", "subtrans.utils.console", "subtrans.utils.lmstudio",
+    "subtrans.utils.model_cache", "subtrans.utils.process_manager",
+    "subtrans.utils.subprocess_flags", "subtrans.webview_gui.__init__",
+    "subtrans.webview_gui.encode_queue", "subtrans.webview_gui.event_stream",
+    "subtrans.webview_gui.security", "subtrans.webview_gui.strings",
+    "subtrans.webview_gui.user_dirs",
+})
+
+
+@pytest.mark.skipif(not _HAS_TOMLIB, reason="tomllib requires 3.11+")
+def test_strict_scope_snapshot_no_regression():
+    overrides = _module_overrides()
+    missing = sorted(_STRICT_SCOPE_SNAPSHOT - set(overrides))
+    assert not missing, (
+        f"[[tool.mypy.overrides]] 有 {len(missing)} 件被移出 strict 面: {missing}")
+
+
+@pytest.mark.skipif(not _HAS_TOMLIB, reason="tomllib requires 3.11+")
+def test_strict_scope_flags_complete_for_whole_snapshot():
+    overrides = _module_overrides()
+    offenders: list[str] = []
+    for module in sorted(_STRICT_SCOPE_SNAPSHOT):
+        section = overrides.get(module, {})
+        if section.get("strict") is True:
+            continue
+        enabled = {key for key, value in section.items() if value is True}
+        gap = sorted(_STRICT_FLAGS - enabled)
+        if gap:
+            offenders.append(f"{module}: {gap}")
+    assert not offenders, "strict 等价旗标在名单内被删减:\n" + "\n".join(offenders)
