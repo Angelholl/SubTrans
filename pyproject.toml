@@ -132,6 +132,7 @@ module = [
     "subtrans.data_migration",
     "subtrans.refine.__main__",
     "subtrans.refine.aggregate_stats",
+    "subtrans.refine.batch",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

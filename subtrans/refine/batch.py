@@ -136,7 +136,7 @@ def scan_summary(files: list[str]) -> dict[str, Any]:
     }
 
 
-def _compile_exclude_patterns(patterns: list[str]) -> list[re.Pattern]:
+def _compile_exclude_patterns(patterns: list[str]) -> list[re.Pattern[str]]:
     """将 glob 风格排除模式编译为正则。
 
     支持:
