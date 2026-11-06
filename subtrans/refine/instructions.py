@@ -12,6 +12,7 @@ legacy 管线（已删除）的模板加载函数不再保留。
 import functools
 import os
 import tempfile
+from typing import Any, cast
 
 from .rules_loader import load_rules
 
@@ -23,12 +24,14 @@ from .rules_loader import load_rules
 
 
 @functools.cache
-def _get_rules() -> dict:
+def _get_rules() -> dict[str, Any]:
     return load_rules()
 
 
-def _prompt_sections() -> dict:
-    return _get_rules()["prompt_sections"]
+def _prompt_sections() -> dict[str, str]:
+    # 段形状契约：rules_loader._REQUIRED_KEYS 已钉 prompt_sections 三键存在且
+    # 非空白，YAML 侧三值均为字符串段 → 按契约收窄，运行时行为不变。
+    return cast("dict[str, str]", _get_rules()["prompt_sections"])
 
 
 def retry_cleaning() -> str:
@@ -49,7 +52,7 @@ _LAZY_ATTRS = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> str:
     if name in _LAZY_ATTRS:
         value = _LAZY_ATTRS[name]()
         globals()[name] = value
