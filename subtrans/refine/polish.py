@@ -15,10 +15,11 @@ import copy
 import math
 import re
 import unicodedata
+from typing import Any
 
 #: 清洗策略默认值（D5 校准门）——全部默认值只在此表，严禁散落硬编码。
 #: 每条 PROVISIONAL 均为占位：owner 提供 SE 成品样例后单点改默认，不声称已定标。
-POLICY_DEFAULTS: dict = {
+POLICY_DEFAULTS: dict[str, Any] = {
     "strip_final_period": True,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
     "quote_style": "corner",  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
     "max_line_chars": 16,  # PROVISIONAL（D5 校准门，owner SE 成品样例到达后单点改默认）
@@ -71,16 +72,16 @@ _TIMING_RE = re.compile(
 )
 
 
-def _char_width(char):
+def _char_width(char: str) -> float:
     """全角当量宽度：CJK 汉字/CJK 标点=1.0，ASCII/半角=0.5。"""
     return 1.0 if unicodedata.east_asian_width(char) in ("W", "F") else 0.5
 
 
-def _text_width(text):
+def _text_width(text: str) -> float:
     return sum(_char_width(char) for char in text)
 
 
-def _repair_italic(text):
+def _repair_italic(text: str) -> tuple[str, int, int, bool]:
     """只修残缺 <i>：补缺失闭标签、删孤儿闭标签；成对完整标签原样不动。
 
     返回 ``(text, added, removed, had_pair)``。
@@ -112,7 +113,7 @@ def _repair_italic(text):
     return "".join(pieces), added, removed, had_pair
 
 
-def _normalize_quotes(line, style):
+def _normalize_quotes(line: str, style: str) -> tuple[str, int]:
     """把成对直引号/弯引号/直角引号引段统一为目标派系；不成对则整行不动。
 
     返回 ``(line, changed_marks)``，changed_marks 计入 stats.quotes_normalized。
@@ -147,7 +148,8 @@ def _normalize_quotes(line, style):
     return "".join(pieces), changed
 
 
-def _wrap_lines(lines, max_chars, max_lines):
+def _wrap_lines(lines: list[str], max_chars: int,
+                max_lines: int) -> tuple[list[str], bool]:
     """把逻辑行软折为 ≤max_lines 行，优先自然断点，放不下时取最优断点强拆。
 
     返回 ``(new_lines, forced)``；forced=True 表示仍存在超宽行（极端超长）。
@@ -170,7 +172,7 @@ def _wrap_lines(lines, max_chars, max_lines):
             natural.add(idx)
 
     # 不在 <i>/</i> 标签内部断行
-    forbidden: set = set()
+    forbidden: set[int] = set()
     for match in _ITALIC_TAG_RE.finditer(joined):
         forbidden.update(range(match.start() + 1, match.end()))
 
@@ -178,7 +180,7 @@ def _wrap_lines(lines, max_chars, max_lines):
     for char in joined:
         prefix.append(prefix[-1] + _char_width(char))
 
-    def range_width(start, end):
+    def range_width(start: int, end: int) -> float:
         while start < end and joined[start] == " ":
             start += 1
         while end > start and joined[end - 1] == " ":
@@ -190,7 +192,8 @@ def _wrap_lines(lines, max_chars, max_lines):
     fallback = None
     for parts in range(1, max_parts + 1):
         # dp[part][end] = (over, unnatural, max_width, start)
-        dp: list = [[None] * (total + 1) for _ in range(parts + 1)]
+        dp: list[list[tuple[int, int, float, int] | None]] = \
+            [[None] * (total + 1) for _ in range(parts + 1)]
         dp[0][0] = (0, 0, 0.0, -1)
         for part in range(1, parts + 1):
             for end in range(1, total + 1):
@@ -228,7 +231,8 @@ def _wrap_lines(lines, max_chars, max_lines):
     return fallback
 
 
-def _polish_text(text, policy, stats):
+def _polish_text(text: str | None, policy: dict[str, Any],
+                 stats: dict[str, int]) -> str:
     """文本层白名单规则：返回清洗后 text（可能为空串=应删除该条）。"""
     raw_lines = (text or "").split("\n")
     lines = []
@@ -307,7 +311,7 @@ def _polish_text(text, policy, stats):
     return "\n".join(lines)
 
 
-def _parse_timing(timing):
+def _parse_timing(timing: str | None) -> tuple[int, int] | None:
     match = _TIMING_RE.search(timing or "")
     if not match:
         return None
@@ -317,7 +321,7 @@ def _parse_timing(timing):
     return start, end
 
 
-def _format_ms(ms):
+def _format_ms(ms: int) -> str:
     ms = max(0, int(ms))
     hour, rem = divmod(ms, 3_600_000)
     minute, rem = divmod(rem, 60_000)
@@ -325,7 +329,8 @@ def _format_ms(ms):
     return f"{hour:02d}:{minute:02d}:{second:02d},{milli:03d}"
 
 
-def _shrink_before(prev, cur, gap):
+def _shrink_before(prev: tuple[int, int], cur: tuple[int, int],
+                   gap: float) -> tuple[tuple[int, int], tuple[int, int]]:
     """前条 end 回拉到后条 start − gap；会致零/负时长则改为后条 start 后推。
 
     后推分支仅在为避免零/负时长时把后条 end 撑到 +1ms 防御，不填充空闲间隙。
@@ -341,7 +346,8 @@ def _shrink_before(prev, cur, gap):
     return (prev_start, prev_end), (new_start, cur_end)
 
 
-def _polish_timings(entries, policy, stats):
+def _polish_timings(entries: list[dict[str, Any]], policy: dict[str, Any],
+                    stats: dict[str, int]) -> None:
     """时间轴层：顺序定死 ① 重叠消解 → ② 时长钳制 → ③ 最小间隔。"""
     gap = float(policy["min_gap_ms"])
     max_duration = int(policy["max_duration_ms"])
@@ -391,7 +397,8 @@ def _polish_timings(entries, policy, stats):
         entry["timing"] = f"{_format_ms(span[0])} --> {_format_ms(span[1])}"
 
 
-def _assert_invariants(entries, max_lines, *, check_line_limit=True):
+def _assert_invariants(entries: list[dict[str, Any]], max_lines: int, *,
+                       check_line_limit: bool = True) -> None:
     """出口不变量：无空条目、无零/负时长、无重叠、每条目 ≤max_lines 行。
 
     check_line_limit=False（rewrap 关，D2026-1024-01 批1）：行数超限断言豁免
@@ -410,7 +417,9 @@ def _assert_invariants(entries, max_lines, *, check_line_limit=True):
         )
 
 
-def polish_entries(entries, options=None):
+def polish_entries(entries: list[dict[str, Any]] | None,
+                   options: dict[str, Any] | None = None,
+                   ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """清洗条目列表：返回（新条目列表, stats），入参不被修改。
 
     options 为覆盖 POLICY_DEFAULTS 的扁平 dict（None=全默认）；未知键忽略。
