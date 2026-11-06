@@ -102,6 +102,54 @@ def test_rules_missing_key_raises(tmp_path):
         load_rules(str(tmp_path))
 
 
+_MINIMAL_TYPED_YAML = """\
+meta:
+  version: 1
+validator_rules:
+  dewei_mistranslation:
+    target_pattern: "作为"
+    source_must_contain: "で"
+    source_must_not_contain: "として"
+    replacement: "是"
+  subject_misjudge:
+    source_pattern: "僕たち"
+    target_pattern: "我是"
+prompt_sections:
+  sentence_final_particles: "句末助词"
+  retry_cleaning: "重试指令"
+  hardened_suffix: "豁免"
+"""
+
+
+def _write_rules(tmp_path, text):
+    d = tmp_path / "rules"
+    d.mkdir()
+    (d / "translation_rules.yaml").write_text(text, encoding="utf-8")
+
+
+def test_rules_typed_fixture_loads(tmp_path):
+    """最小类型合格 YAML 应加载成功（阳性对照：证明下面的红来自类型不符）。"""
+    _write_rules(tmp_path, _MINIMAL_TYPED_YAML)
+    rules, err = load_rules_safe(str(tmp_path))
+    assert err is None and rules is not None
+
+
+def test_rules_wrong_value_type_raises(tmp_path):
+    """值类型不符＝损坏：在加载点显式报错，不再静默通过后在下游远处爆。"""
+    _write_rules(tmp_path, _MINIMAL_TYPED_YAML.replace(
+        'target_pattern: "作为"', "target_pattern: [1, 2]"))
+    with pytest.raises(RulesLoadError, match="值类型不符"):
+        load_rules(str(tmp_path))
+
+
+def test_rules_wrong_meta_type_raises(tmp_path):
+    """映射型必需键（meta）给标量同样红。"""
+    _write_rules(tmp_path, _MINIMAL_TYPED_YAML.replace(
+        "meta:\n  version: 1", "meta: flat"))
+    with pytest.raises(RulesLoadError, match="值类型不符"):
+        load_rules(str(tmp_path))
+
+
 def test_user_rules_yaml_matches_package_default():
     """防漂移：用户目录副本与包内回退副本应逐字节一致。
 

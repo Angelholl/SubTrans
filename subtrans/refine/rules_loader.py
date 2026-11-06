@@ -17,18 +17,20 @@ from typing import Any
 
 import yaml
 
-# YAML 必须包含的键路径（点号表示层级），缺失即视为损坏
-_REQUIRED_KEYS = (
-    "meta",
-    "validator_rules.dewei_mistranslation.target_pattern",
-    "validator_rules.dewei_mistranslation.source_must_contain",
-    "validator_rules.dewei_mistranslation.source_must_not_contain",
-    "validator_rules.dewei_mistranslation.replacement",
-    "validator_rules.subject_misjudge.source_pattern",
-    "validator_rules.subject_misjudge.target_pattern",
-    "prompt_sections.sentence_final_particles",
-    "prompt_sections.retry_cleaning",
-    "prompt_sections.hardened_suffix",
+# YAML 必须包含的键路径（点号表示层级）与值类型契约：缺失键＝损坏；
+# 值类型不符＝损坏（同显式报错，防止类型错值静默通过后在下游远处爆）。
+# 类型基准＝包内 defaults 副本（用户与包内副本同步更新，类型必然一致）。
+_REQUIRED_KEYS: tuple[tuple[str, type], ...] = (
+    ("meta", dict),
+    ("validator_rules.dewei_mistranslation.target_pattern", str),
+    ("validator_rules.dewei_mistranslation.source_must_contain", str),
+    ("validator_rules.dewei_mistranslation.source_must_not_contain", str),
+    ("validator_rules.dewei_mistranslation.replacement", str),
+    ("validator_rules.subject_misjudge.source_pattern", str),
+    ("validator_rules.subject_misjudge.target_pattern", str),
+    ("prompt_sections.sentence_final_particles", str),
+    ("prompt_sections.retry_cleaning", str),
+    ("prompt_sections.hardened_suffix", str),
 )
 
 _PACKAGE_RULES_PATH = os.path.join(
@@ -74,11 +76,15 @@ def _nested_get(d: dict[str, Any], dotted: str) -> Any:
 
 
 def _validate(rules: dict[str, Any], path: str) -> None:
-    for key in _REQUIRED_KEYS:
+    for key, expected in _REQUIRED_KEYS:
         v = _nested_get(rules, key)
         if v is None or (isinstance(v, str) and not v.strip()):
             raise RulesLoadError(
                 f"{path}: 缺少必需键或值为空: {key}")
+        if not isinstance(v, expected):
+            raise RulesLoadError(
+                f"{path}: 必需键 {key} 值类型不符: 期望 {expected.__name__}, "
+                f"实得 {type(v).__name__}")
 
 
 @functools.cache
