@@ -18,16 +18,11 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-from subtrans.refine.events import parse_event_line as _parse_event_line_untyped
+from subtrans.refine.events import parse_event_line as _parse_event_line
 
 from .strings import msg
-
-# refine.events 尚未入 strict 面（parse_event_line 无注解），此处以 cast 声明
-# 调用契约：运行期恒等，不改任何逻辑。
-_parse_event_line = cast(
-    Callable[[str], dict[str, Any] | None], _parse_event_line_untyped)
 
 # 风险清单去重上限（超出后新的唯一风险仍计数，但明细列表只保留最近 100 条）
 RISKS_CAP = 100
