@@ -20,9 +20,15 @@ import contextlib
 import os
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .filters import parse_srt
 from .risk import SEVERITY_WARNING
+
+if TYPE_CHECKING:
+    from .config import RefineConfig
+    from .events import EventEmitter
+    from .risk import RiskCollector
 
 # 闸门0 删除样本上限（供质量报告【处置】章节与归档日志，防大文件撑爆）
 _GATE0_REPORT_SAMPLE_CAP = 50
@@ -31,7 +37,8 @@ _GATE0_REPORT_SAMPLE_CAP = 50
 _BATCH_PROGRESS_RE = re.compile(r"批次\s*(\d+)\s*/\s*(\d+)")
 
 
-def _emit_batch_progress(emitter, phase, message) -> None:
+def _emit_batch_progress(emitter: "EventEmitter | None", phase: str,
+                         message: str | None) -> None:
     """把 LLM 客户端的 ⏳ 进度文本映射为 phase_progress 事件（ndjson 模式）。
 
     无法解析的进度文本静默跳过（人类可读通道照常 print）。
@@ -53,14 +60,14 @@ def _remove_tmp_dir(tmp_dir: str) -> None:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def _atomic_write_text(path: str, text: str):
+def _atomic_write_text(path: str, text: str) -> None:
     """原子写文本文件（批 3 技术债 a：薄壳委托 refine.fs_utils，行为等价：
     mkstemp 同目录 + fsync + os.replace，失败 finally 清理临时文件）。"""
     from subtrans.refine.fs_utils import _atomic_write_text as _atomic
     _atomic(path, text, suffix=".srt.tmp")
 
 
-def _asr_meta_min_coverage_pct(cfg) -> float:
+def _asr_meta_min_coverage_pct(cfg: "RefineConfig") -> float:
     """上游语音覆盖率告警阈值；非法值静默回退默认 30（该链路一贯容错）。"""
     try:
         return float(getattr(cfg, "v2_asr_meta_min_coverage_pct", 30))
@@ -68,8 +75,9 @@ def _asr_meta_min_coverage_pct(cfg) -> float:
         return 30.0
 
 
-def _build_gate0_report(source_name: str, stats: dict, upstream: dict,
-                        samples: list, quarantine: dict = None) -> dict:
+def _build_gate0_report(source_name: str, stats: dict[str, Any],
+                        upstream: dict[str, Any], samples: list[dict[str, Any]],
+                        quarantine: dict[str, Any] | None = None) -> dict[str, Any]:
     """构造 gate0_summary NDJSON 事件 payload（schema 契约由
     tests/test_pipeline_v2.py 钉住；1.2.1 起 {stem}_幻觉处置报告.json
     不再落盘，本函数仅服务事件通道）。
@@ -110,7 +118,7 @@ def _build_gate0_report(source_name: str, stats: dict, upstream: dict,
     }
 
 
-def _gate0_summary_line(stats: dict) -> str:
+def _gate0_summary_line(stats: dict[str, Any]) -> str:
     """R8：每文件闸门0 计数行（经 collector.summary_lines 聚合输出）。"""
     valve_word = "触发降级只计数" if stats.get("valve_tripped") else "保险阀未触发"
     return (f"🚪 闸门0：删除 {stats.get('deleted', 0)}"
@@ -120,7 +128,7 @@ def _gate0_summary_line(stats: dict) -> str:
 
 
 def filter_stage_output_srt(srt_content: str, stage_index: int,
-                            target: str) -> tuple:
+                            target: str) -> tuple[list[dict[str, Any]], int]:
     """对条目列表（而非文件路径）执行语言白名单校验。"""
     import tempfile
 
@@ -137,7 +145,7 @@ def filter_stage_output_srt(srt_content: str, stage_index: int,
             os.unlink(tmp)
 
 
-def _remove_stale_risk_reports(out_dir: str, stem: str) -> list:
+def _remove_stale_risk_reports(out_dir: str, stem: str) -> list[str]:
     """写入新风险清单前移除上一轮遗留的 {stem}_风险清单.md/.json。
 
     W1a：清理表扩第三件 {stem}_质量报告导读.json——风险清单与导读
@@ -205,8 +213,9 @@ def final_stem(stem: str, target_lang: str = "zh") -> str:
     return f"{stem}_final_{final_suffix(target_lang)}"
 
 
-def _backup_existing_outputs(out_dir: str, stem: str, collector=None,
-                             file_name: str = None) -> None:
+def _backup_existing_outputs(out_dir: str, stem: str,
+                             collector: "RiskCollector | None" = None,
+                             file_name: str | None = None) -> None:
     """--force 重跑前的产物备份（仅精确匹配文件名，存在才备份）。
 
     对输出目录中确切名为 ``{stem}_final_cn.srt``、``{stem}_final_cn.ass``、
