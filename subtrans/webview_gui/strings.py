@@ -425,7 +425,7 @@ MSG = {
 }
 
 
-def msg(key: str, **kw) -> str:
+def msg(key: str, **kw: object) -> str:
     """按语义键取中文文案；支持 ``{name}`` 占位符格式化。
 
     - 未知键：回退返回键名本身（便于发现缺失，不抛异常）；

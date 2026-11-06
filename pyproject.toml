@@ -134,6 +134,7 @@ module = [
     "subtrans.refine.aggregate_stats",
     "subtrans.refine.batch",
     "subtrans.refine.fs_utils",
+    "subtrans.webview_gui.strings",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
