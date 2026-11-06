@@ -14,9 +14,14 @@
     python tools/guard_banned_paths.py --staged   # 只查 staged（git diff --cached --name-only）
 
 名单来源：.gitignore 敏感/禁推段现值（敏感数据段 + TM 备份段 + 内部工作材料段
-+ 公开仓收窄第二批 + 治理运行时段 + C22 门控运行态）+ docs/decision-log.md 条目
-D2026-0916-01（1.2 收尾清单："internal_docs/、api_keys.bin、sexual_terms.csv、
-真实 glossary、敏感 Temp 脚本移至仓库树外"）。逐条对照见 BANNED_PATTERNS。
++ 公开仓收窄第二批 + 治理运行时段 + C22 门控运行态 + 本地测试证据段 + 禁入库段）
++ docs/decision-log.md 条目 D2026-0916-01（1.2 收尾清单："internal_docs/、api_keys.bin、
+sexual_terms.csv、真实 glossary、敏感 Temp 脚本移至仓库树外"）。逐条对照见 BANNED_PATTERNS。
+
+口径两条：①**同族通配优先**——AGENTS.md 禁推清单原文即 `tools/ab_compare*`／
+`tools/ruling_b6*`／`判批6*.bat` 且带「等」字（开放族），逐件枚举防不住同族新文件；
+②`.auto/` 会话态目录**不可 gitignore**（插件工具链显式命名该路径会 pathspec 报错），
+故该面只有本守卫一道防线。
 
 双向防漂移（tests/test_guard_banned_paths.py）：正向＝名单每条有 .gitignore 或
 decision-log 出处；反向＝.gitignore 每个禁推段每条规则都必须有名单对应——段内
@@ -60,8 +65,7 @@ BANNED_PATTERNS = [
     ("docs/design/*", "decision-log 条目 D2026-1028-01 禁推清单（docs/design/**）"),
     ("docs/archive/*", "decision-log 条目 D2026-1028-01 禁推清单（docs/archive/**）"),
     ("docs/governance/*", "decision-log 条目 D2026-1028-01 禁推清单（docs/governance/**）"),
-    ("docs/decision-log.md", "decision-log 条目 D2026-1028-01 禁推清单（决策留档本地）"),
-    ("docs/decision-log-archive-*.md", "decision-log 条目 D2026-1028-01 禁推清单（决策留档本地）"),
+    ("docs/decision-log*", "decision-log 条目 D2026-1028-01 禁推清单（决策留档本地）"),
     ("docs/roadmap.md", "decision-log 条目 D2026-1028-01 禁推清单（roadmap 本地）"),
     ("docs/模型与转写实测推荐.md", "decision-log 条目 D2026-1106-01 第二批（内部评测文档）"),
     ("docs/examples/jav-domain/*", "decision-log 条目 D2026-1106-01 第二批（领域调校包）"),
@@ -75,19 +79,33 @@ BANNED_PATTERNS = [
     ("docs/mimosa-findings-甄别表.md", "decision-log 条目 D2026-1106-01 第二批（深扫甄别材料）"),
     ("docs/领域包-hardened-审计-*.md", "decision-log 条目 D2026-1106-01 第二批（审计材料）"),
     ("docs/evidence-manifest.md", "decision-log 条目 D2026-1106-01 第二批（证据台账）"),
-    ("tools/ab_compare.py", "decision-log 条目 D2026-1028-01 禁推清单（评测工具）"),
-    ("tools/ab_compare_srt.py", "decision-log 条目 D2026-1028-01 禁推清单（评测工具）"),
-    ("tools/ruling_b6.py", "decision-log 条目 D2026-1106-01 第二批（判定工具）"),
-    ("tools/ruling_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定工具）"),
-    ("tools/sensitive_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定工具）"),
+    # 评测/判定工具按**同族通配**收（AGENTS.md 原文即 `tools/ab_compare*`／
+    # `tools/ruling_b6*` 口径，且清单带「等」字＝开放族）：逐件枚举防不住同族新文件。
+    ("tools/ab_compare*", "decision-log 条目 D2026-1028-01 禁推清单（评测工具同族）"),
+    ("tools/ruling_b6*", "decision-log 条目 D2026-1106-01 第二批（判定工具同族）"),
+    ("tools/sensitive_b6*", "decision-log 条目 D2026-1106-01 第二批（判定工具同族）"),
     ("tools/model_matrix_run.py", "decision-log 条目 D2026-1028-01 禁推清单（评测工具）"),
     ("tools/spike_review_report.json", "decision-log 条目 D2026-1106-01 第二批（评测产物）"),
     ("tests/test_gen_sensitive_trans.py", "decision-log 条目 D2026-1106-01 第二批（判定材料测试）"),
-    ("tests/test_sensitive_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定材料测试）"),
-    ("tests/test_ruling_b6_web.py", "decision-log 条目 D2026-1106-01 第二批（判定材料测试）"),
-    ("判批6.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本）"),
-    ("判批6网页.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本）"),
+    ("tests/test_sensitive_b6*", "decision-log 条目 D2026-1106-01 第二批（判定材料测试同族）"),
+    ("tests/test_ruling_b6*", "decision-log 条目 D2026-1106-01 第二批（判定材料测试同族）"),
+    ("判批6*.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本同族）"),
     ("敏感句网页.bat", "decision-log 条目 D2026-1106-01 第二批（本地入口脚本）"),
+    # ---- 来源 7：.gitignore 本地测试证据段（注释自述「体积大且含片名/路径」——
+    # 正是公开面合规最直接的泄漏载体，仓库只留 manifest/README）----
+    (".abtest/*", ".gitignore: 本地测试证据（含片名/路径，仓库只留 manifest/README）"),
+    (".abtest2/*", ".gitignore: 本地测试证据（含片名/路径，仓库只留 manifest/README）"),
+    (".tmp374/*", ".gitignore: 本地测试证据（含片名/路径，仓库只留 manifest/README）"),
+    (".tmp/*", ".gitignore: 本地测试证据（含片名/路径，仓库只留 manifest/README）"),
+    # ---- 来源 8：.gitignore 两处「禁入库」段——CT2 引擎/模型下载残留兜底
+    # （106MB/1.21GB/2.9GB 量级）与会话态工具产物（实验 dashboard 静态页）----
+    ("runtime/*", ".gitignore: CT2 引擎/模型下载残留兜底（禁入库）"),
+    ("autoresearch-dashboard.html", ".gitignore: 会话态工具产物（禁入库）"),
+    # ---- 来源 9：autoresearch 会话态目录（decision-log 条目 D2026-1105-07 把
+    # `.auto` 列入 message 面违禁模式；D2026-1106-04 脱敏规则 3 同项。该目录
+    # 不可 gitignore——插件工具链显式命名该路径会 pathspec 报错——故只能由本
+    # 守卫把守：内含 prompt.md/ledger 等内部评测口径与机制记录，入库即公开）----
+    (".auto/*", "decision-log 条目 D2026-1105-07 违禁模式清单／D2026-1106-04 脱敏规则 3"),
     # ---- 来源 5：.gitignore 治理运行时段（账本收口治理的脚本副本/安全源/
     # 统计产物——含内部扫描关键词源，入库即等于把判定口径本身公开）----
     ("governance/scan-min/*", ".gitignore: 账本收口治理运行时（误入公开仓库防御）"),

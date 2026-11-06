@@ -15,6 +15,7 @@
    实际入库（force-add／历史遗留未清）即红，本项经 pytest 进 CI 即牙齿。
 """
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -109,8 +110,12 @@ def test_staged_mode_only_checks_staged(tmp_path):
 
 
 def _pattern_literal(pattern: str) -> str:
-    """取 pattern 的可 grep 字面：通配条目取首段目录名，字面条目取全名。"""
-    return pattern.split("/")[0] if "*" in pattern else pattern
+    """取 pattern 的可 grep 字面：通配条目取首个 `*` 之前的前缀（`判批6*.bat`→
+    `判批6`、`docs/design/*`→`docs/design/`），无通配取全名。
+
+    旧实现取首段目录名（`docs/design/*`→`docs`）在 .gitignore 里必然命中，
+    等于正向契约对所有通配条目不设防——本轮扩同族通配即被这点直接暴露。"""
+    return pattern.split("*")[0] if "*" in pattern else pattern
 
 
 def test_pattern_contract_gitignore_or_decisionlog():
@@ -126,12 +131,21 @@ def test_pattern_contract_gitignore_or_decisionlog():
     for pattern, source in BANNED_PATTERNS:
         assert source, f"{pattern} 缺出处标注"
         literal = _pattern_literal(pattern)
-        if literal in gitignore:
+        # 目录型 pattern 的字面带尾斜杠（`.auto/`），权威文本里常写作无斜杠形态，
+        # 两种形态任一命中即算有出处（判据仍是「该字面确在权威里」，不是放宽到前缀）。
+        literals = {literal, literal.rstrip("/")} - {""}
+        if any(lit in gitignore for lit in literals):
             continue
         if "decision-log" in source and dlog is None:
             continue  # 出处＝decision-log 且该文件不在此检出（CI 常态）
-        assert dlog is not None and literal in dlog, (
+        assert dlog is not None and any(lit in dlog for lit in literals), (
             f"{pattern} 未见于 .gitignore 现值或 decision-log 清单")
+        # 出处里引了决策号，就该号本身也须在 decision-log 里（防「字面命中了别的
+        # 条目、出处却写错号」——只核字面不核号＝编造出处也能过）。
+        cited = re.search(r"D\d{4}-\d{4}-\d{2}", source)
+        if cited and dlog is not None:
+            assert cited.group(0) in dlog, (
+                f"{pattern} 出处标注的决策号 {cited.group(0)} 不在 decision-log 里")
 
 
 def test_match_any_semantics():
@@ -165,6 +179,12 @@ BANNED_SECTION_ANCHORS = (
     "内部工作材料",           # D2026-1028-01 公开仓 push 面收窄（owner 三令）
     "公开仓收窄第二批",       # D2026-1106-01 领域包/过程文档/评测工具/入口脚本
     "C22 门控运行态",         # D2026-1031-04 ① 门控状态本地写
+    "本地测试证据",           # 段注释自述「含片名/路径」——公开面最直接的泄漏载体
+    "禁入库",                # 段头含该字面即禁推面（含「严禁入库」变体，覆盖 CT2
+                             # 下载残留与会话态 dashboard）
+    # 注：不用「不入库」当锚点——该措辞的段含带 `!` 例外的 models/（models/README.md
+    # 已入库），而本守卫是纯名单制不实现 gitignore 取反，收进去会把合法 tracked
+    # 件判成违规、真仓核对即误红。
 )
 
 
