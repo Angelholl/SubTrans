@@ -206,11 +206,11 @@ class DroppedEntryLog:
             return cls._DEFAULT_ROTATE_MB
         return mb if mb > 0 else cls._DEFAULT_ROTATE_MB
 
-    def _ensure_dir(self):
+    def _ensure_dir(self) -> None:
         if self.errors_dir and not os.path.isdir(self.errors_dir):
             os.makedirs(self.errors_dir, exist_ok=True)
 
-    def _maybe_rotate(self):
+    def _maybe_rotate(self) -> None:
         """主文件超过阈值时轮转为 dropped_entries-<n>.log（静默容错）。"""
         try:
             if not os.path.isfile(self.path) \
@@ -228,7 +228,7 @@ class DroppedEntryLog:
             pass
 
     def append(self, source: str, stage_index: int, number: int,
-               text: str, reason: str):
+               text: str, reason: str) -> None:
         self._maybe_rotate()
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = (f"[{ts}] 来源={source} 阶段={stage_index + 1} "
@@ -241,7 +241,8 @@ class DroppedEntryLog:
 
 
 def filter_stage_output(srt_path: str, stage_index: int,
-                        target_lang: str, log=None) -> tuple:
+                        target_lang: str,
+                        log: logging.Logger | None = None) -> tuple[int, int]:
     """对阶段产物执行语言白名单过滤（就地重写 .srt）。
 
     返回 (保留数, 剔除数)。剔除条目追加到 Errors/dropped_entries.log。

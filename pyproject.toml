@@ -142,6 +142,8 @@ module = [
     "subtrans.refine.secrets",
     "subtrans.refine.quality_autoloop",
     "subtrans.refine.instructions",
+    # 段13 strict 修债：7–9 条级模块（探测排序实测）修一件入名单一件，只增不减。
+    "subtrans.refine.language_validator",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
