@@ -135,6 +135,8 @@ module = [
     "subtrans.refine.batch",
     "subtrans.refine.fs_utils",
     "subtrans.webview_gui.strings",
+    # 段12 strict 修债：3–6 条级模块（探测排序实测）修一件入名单一件，只增不减。
+    "subtrans.refine.events",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

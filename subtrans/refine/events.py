@@ -13,7 +13,9 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any, Protocol
 
 # 协议版本：字段布局或语义发生不兼容变更时递增
 PROTOCOL_VERSION = 1
@@ -39,6 +41,15 @@ EVENT_TYPES = (
 _REQUIRED_KEYS = ("protocol_version", "task_id", "seq", "timestamp", "type")
 
 
+class _TextStream(Protocol):
+    """stream 参数要求的最小流面（只写不读）：sys.stdout / io.StringIO /
+    调用方自备的文本流均满足（写失败只需抛异常，emit 侧吞掉）。"""
+
+    def write(self, __s: str) -> object: ...
+
+    def flush(self) -> object: ...
+
+
 def _iso_now() -> str:
     """秒级 ISO 时间戳（与 manifest/risk 模块保持同款格式）。"""
     return datetime.now().isoformat(timespec="seconds")
@@ -53,22 +64,24 @@ class EventEmitter:
     - 写失败（如 stdout 已被关闭）静默吞掉，但 seq 仍递增，保证序号连续。
     """
 
-    def __init__(self, stream=None, task_id=None, enabled=True,
-                 heartbeat_interval=20.0, heartbeat_payload_fn=None):
-        self._stream = stream if stream is not None else sys.stdout
-        self._task_id = task_id if task_id else uuid.uuid4().hex[:8]
-        self._enabled = bool(enabled)
-        self._heartbeat_interval = float(heartbeat_interval)
-        self._heartbeat_payload_fn = heartbeat_payload_fn
-        self._seq = 0
+    def __init__(self, stream: _TextStream | None = None, task_id: str | None = None,
+                 enabled: bool = True, heartbeat_interval: float = 20.0,
+                 heartbeat_payload_fn: Callable[[], object] | None = None) -> None:
+        self._stream: _TextStream = stream if stream is not None else sys.stdout
+        self._task_id: str = task_id if task_id else uuid.uuid4().hex[:8]
+        self._enabled: bool = bool(enabled)
+        self._heartbeat_interval: float = float(heartbeat_interval)
+        self._heartbeat_payload_fn: Callable[[], object] | None = heartbeat_payload_fn
+        self._seq: int = 0
         self._lock = threading.Lock()
-        self._last_phase = None                      # 最近一次 emit 的 phase（供心跳上报）
+        self._last_phase: str | None = None          # 最近一次 emit 的 phase（供心跳上报）
         self._heartbeat_stop = threading.Event()
-        self._heartbeat_thread = None
-        self._heartbeat_start = None                 # time.monotonic() 起点
+        self._heartbeat_thread: threading.Thread | None = None
+        self._heartbeat_start: float | None = None   # time.monotonic() 起点
 
     # ------------------------------------------------------------------
-    def emit(self, event_type, phase=None, file=None, payload=None) -> None:
+    def emit(self, event_type: str, phase: str | None = None, file: str | None = None,
+             payload: object = None) -> None:
         """输出一条事件；event_type 非法时 raise ValueError（与 enabled 无关）。"""
         if event_type not in EVENT_TYPES:
             raise ValueError(
@@ -143,7 +156,7 @@ class EventEmitter:
         self.stop_heartbeat()
 
 
-def parse_event_line(line):
+def parse_event_line(line: str | None) -> dict[str, Any] | None:
     """解析单行 NDJSON 事件；非 JSON / 缺关键字段 / type 非法 -> None。
 
     GUI 兼容层据此决定把一行当作结构化事件还是普通日志文本。
