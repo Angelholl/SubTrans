@@ -13,8 +13,12 @@ legacy 管线（已删除）的编排器（run 流程与单文件执行及其阶
 import hashlib
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from subtrans import paths
+
+if TYPE_CHECKING:
+    from .tm import TranslationMemory
 
 # 本次进程创建过的临时目录（供退出时清理）
 CREATED_TMP_DIRS: list[str] = []
@@ -28,7 +32,7 @@ class RefineError(Exception):
     pass
 
 
-def _init_tm(cfg: RefineConfig):
+def _init_tm(cfg: RefineConfig) -> "TranslationMemory | None":
     """初始化翻译记忆库（如启用）。返回 TranslationMemory 或 None。"""
     if not cfg.tm_enabled:
         return None
@@ -96,7 +100,7 @@ def resolve_action_source_path(guide_path: str | Path,
     return cand if cand.is_file() else None
 
 
-def _resolve_stage_paths(cfg: RefineConfig, in_path: str):
+def _resolve_stage_paths(cfg: RefineConfig, in_path: str) -> tuple[str, str, str]:
     p = Path(in_path).resolve()
     out_dir = Path(cfg.output_dir).resolve() if cfg.output_dir else p.parent
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -121,7 +125,7 @@ def learned_glossary_path() -> str:
     return paths.data_subdir("config", "glossary_learned.csv")
 
 
-def load_glossary_override(cfg: RefineConfig) -> list:
+def load_glossary_override(cfg: RefineConfig) -> list[tuple[str, str, tuple[str, ...]]]:
     """加载最高优先覆盖词表（cfg.glossary_override_path）。
 
     v1.3.0 D2 终选（D2026-0925-01 补充裁决）：三级优先级链
@@ -132,7 +136,7 @@ def load_glossary_override(cfg: RefineConfig) -> list:
         if getattr(cfg, "glossary_override_path", "") else []
 
 
-def load_glossary_merged(cfg: RefineConfig) -> list:
+def load_glossary_merged(cfg: RefineConfig) -> list[tuple[str, str, tuple[str, ...]]]:
     """三级显式合并：override 全量在前 > 用户词库 > learned 追加。
 
     v1.3.0 D2 终选（D2026-0925-01 补充裁决）三级优先级链：
@@ -154,11 +158,11 @@ def load_glossary_merged(cfg: RefineConfig) -> list:
     _override_srcs = {s for s, _d, _a in glossary}
     _user = load_glossary_ex(cfg.glossary_path) if cfg.glossary_path else []
     # 压制点收集 (src, 保留层, 保留译法, 忽略层, 忽略译法)，末尾统一告警
-    _suppressed: list = []
+    _suppressed: list[tuple[str, str, str, str, str]] = []
     # 仅当 override 启用时才压制用户同 src 词（override 为空时用户层
     # 保持旧链逐字节语义，含用户文件内部重复词条原样保留）
     if _override_srcs:
-        _override_dst: dict = {}
+        _override_dst: dict[str, str] = {}
         for s, d, _a in glossary:
             _override_dst.setdefault(s, d)
         for s, d, a in _user:
@@ -187,7 +191,7 @@ def load_glossary_merged(cfg: RefineConfig) -> list:
     if glossary:
         print(f"📚 [refine] 词库已加载：{len(glossary)} 条")
     if _suppressed:
-        _by_src: dict = {}
+        _by_src: dict[str, dict[str, Any]] = {}   # 内层 {"keep": 元组, "drops": 列表} 异构
         for s, k_layer, k_val, d_layer, d_val in _suppressed:
             info = _by_src.setdefault(s, {"keep": (k_layer, k_val),
                                           "drops": []})
@@ -201,7 +205,7 @@ def load_glossary_merged(cfg: RefineConfig) -> list:
     return glossary
 
 
-def cleanup_created_tmp_dirs():
+def cleanup_created_tmp_dirs() -> list[str]:
     """删除本进程创建过的全部 .refine_tmp 临时目录（忽略错误）"""
     import shutil
     with _tmp_dirs_lock:
