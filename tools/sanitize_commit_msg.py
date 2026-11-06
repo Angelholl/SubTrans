@@ -6,20 +6,23 @@
 防复发。语义敏感词（内部机制措辞/裁决细节/片名码）不在此自动层——仍归
 提交五步人工纪律（tools/guard_banned_paths.py 管文件面，本件只管 message）。
 
-规则（机器可判定、替换后不再被自身命中=幂等）：
-1. 机器绝对路径（``X:/...`` / ``X:\\...``，含 Temp、venv 等一切盘符路径）
-   → 「内部路径」。URL 不受影响：盘符后首个斜杠若再接斜杠即协议分隔符
-   （``scheme://``），非盘符路径——``https://`` 一类不得被误吞（回归钉在
-   tests/test_sanitize_commit_msg.py）；
-2. 教训号 ``L-YYYYMMDD-nn`` → 「教训（存内部记录）」
-3. ``.auto/`` 会话态路径 → 「内部会话态路径」
-4. ``%TEMP%`` 环境变量路径 → 「内部临时路径」
+规则（机器可判定、替换后不再被自身命中=幂等），三族：
+1. R1 机器四规则：机器绝对路径（``X:/...`` / ``X:\\...``）→「内部路径」；
+   教训号 ``L-YYYYMMDD-nn``→「教训（存内部记录）」；``.auto/`` 会话态路径→
+   「内部会话态路径」；``%TEMP%`` 路径→「内部临时路径」。URL 不受影响：
+   盘符后首个斜杠若再接斜杠即协议分隔符（``scheme://``），负向前瞻整体排除
+   （``https://`` 不被误吞）；路径尾类排除全角标点（，；（）「」），防
+   「``X:/a；后半句``」把续句整段吞进替换区（与全链清洗重写器同款尾类）。
+2. R2 机制词族十条（工具源码行号引用／软重置／路径模式／旧 env 前缀族／
+   隔离检出／裸会话态字面等）→中性替换（D2026-1105-07 违禁模式清单全量）。
+3. R4 内部口径词族二十四条（内部批次／标注基准／独立判定／样本码等）
+   →保义中性替换；替换表＝全链 message 清洗轮已逐笔核过的同源表。
 
 用法：
 - commit-msg hook：``python tools/sanitize_commit_msg.py <msgfile>``——
   原地重写、恒 exit 0（失败不阻塞提交）；
 - 检查模式：``--check <msgfile>``——将被改写时 exit 1（测试/巡检用）；
-- 库用：``sanitize(text) -> tuple[str, list[str]]``（清洗后文本＋命中规则名）；
+- 库用：``sanitize(text) -> tuple[str, list[str]]``（清洗后文本＋命中规则族名）；
 - 安装：``--install``——写入 hook（解释器钉死为安装时的绝对路径，防
   PATH 缺失静默失效；既有内容不同则先备份再覆写，见 install_hook）。
 """
@@ -36,15 +39,58 @@ from pathlib import Path
 # 拒绝一切其他路径——路径校验是功能边界不是附加装饰）。
 _MSG_FILENAMES = {"COMMIT_EDITMSG", "MERGE_MSG", "TAG_EDITMSG", "SQUASH_MSG"}
 
-# (规则名, 编译好的模式, 替换文本)。顺序即执行序；替换文本不得含任何模式
-# 可再匹配的字面（内部路径/教训/会话态/临时 均无盘符、无 L- 前缀、无 .auto/）。
+# 替换尾类：与全链清洗重写器同款——在既有排除面外追加全角标点，
+# 防「X:/a；后半句」把中文分号起的续句整段吞进替换区（全清轮已核的坑）。
+_TAIL = r"[^\s'\"()<>|，；（）「」]*"
+
+# (规则族名, 编译好的模式, 替换文本)。顺序即执行序（长串先于短串）；替换
+# 文本不得含任何模式可再匹配的字面（幂等，族名命中去重后进 applied）。
 _RULES: list[tuple[str, re.Pattern[str], str]] = [
+    # ---- R1 机器四规则 ----
     # 盘符后首个斜杠再接斜杠＝协议分隔符（scheme://），不是盘符路径——
     # 负向前瞻把 URL 整体排除在 abs_path 之外（对既有命中面零收窄）。
-    ("abs_path", re.compile(r"[A-Za-z]:[/\\](?![/\\])[^\s'\"()<>|]*"), "内部路径"),
+    ("abs_path", re.compile(r"[A-Za-z]:[/\\](?![/\\])" + _TAIL), "内部路径"),
     ("lesson_id", re.compile(r"\bL-\d{8}-\d{2}\b"), "教训（存内部记录）"),
-    ("auto_state_path", re.compile(r"\.auto[/\\][^\s'\"()<>|]*"), "内部会话态路径"),
-    ("temp_env_path", re.compile(r"%TEMP%[/\\][^\s'\"()<>|]*"), "内部临时路径"),
+    ("auto_state_path", re.compile(r"\.auto[/\\]" + _TAIL), "内部会话态路径"),
+    ("temp_env_path", re.compile(r"%TEMP%[/\\]" + _TAIL), "内部临时路径"),
+    # ---- R2 机制词族十条（旧 env 前缀字面按规范大小写拼写＋re.I：运行期
+    # 照匹配全大写 env 串，文件面由品牌钉白名单明文追踪——见
+    # tests/test_brand_allowlist.py ALLOWLIST 同名条目）----
+    ("mech_word", re.compile(r"git\.ts:\d+"), "工具源码行号"),
+    ("mech_word", re.compile(r"git\.ts"), "工具源码"),
+    ("mech_word", re.compile(r"soft-?reset", re.I), "软重置"),
+    ("mech_word", re.compile(r"pathspec", re.I), "路径模式"),
+    ("mech_word", re.compile(r"SubTransJAV_DATA_ROOT", re.I), "旧数据根 env"),
+    ("mech_word", re.compile(r"SubTransJAV_[A-Z_]*", re.I), "旧 env 前缀"),
+    ("mech_word", re.compile(r"\bSubTransJAV-\*", re.I), "旧命令别名"),
+    ("mech_word", re.compile(r"worktree", re.I), "隔离检出"),
+    ("mech_word", re.compile(r"\bTemp/"), "临时目录"),
+    ("mech_word", re.compile(r"\.auto(?![A-Za-z])"), "内部会话态"),
+    # ---- R4 内部口径词族二十四条（全链清洗轮已逐笔核过的替换表，长串先于短串）----
+    ("internal_term", re.compile(r"判批6网页\.bat"), "内部判定网页入口"),
+    ("internal_term", re.compile(r"判批6网页"), "内部判定网页"),
+    ("internal_term", re.compile(r"判批6\.bat"), "内部判定入口脚本"),
+    ("internal_term", re.compile(r"判批6"), "内部判定入口"),
+    ("internal_term", re.compile(r"ruling_b6_web"), "内部判定网页工具"),
+    ("internal_term", re.compile(r"ruling_b6"), "内部判定工具"),
+    ("internal_term", re.compile(r"sensitive_b6_web"), "内部专项网页工具"),
+    ("internal_term", re.compile(r"sensitive_b6"), "内部专项工具"),
+    ("internal_term", re.compile(r"敏感句网页"), "专项测试网页"),
+    ("internal_term", re.compile(r"敏感句"), "专项测试句"),
+    ("internal_term", re.compile(r"退役批批6"), "退役内部批次"),
+    ("internal_term", re.compile(r"批6"), "内部批次"),
+    ("internal_term", re.compile(r"批 6"), "内部批次"),
+    ("internal_term", re.compile(r"批0"), "内部基线批"),
+    ("internal_term", re.compile(r"金标"), "标注基准"),
+    ("internal_term", re.compile(r"盲判"), "独立判定"),
+    ("internal_term", re.compile(r"盲标"), "独立标注"),
+    ("internal_term", re.compile(r"换人率"), "复核差异率"),
+    ("internal_term", re.compile(r"语料码"), "样本码"),
+    ("internal_term", re.compile(r"语料"), "样本"),
+    ("internal_term", re.compile(r"净语"), "旧品牌名"),
+    ("internal_term", re.compile(r"イク系"), "分级条款系"),
+    ("internal_term", re.compile(r"イク"), "分级条款"),
+    ("internal_term", re.compile(r"裁决"), "裁定"),
 ]
 
 
@@ -59,13 +105,14 @@ def _validated_msg_path(raw: str) -> Path:
 
 
 def sanitize(text: str) -> tuple[str, list[str]]:
-    """清洗 commit message 文本，返回 (清洗后文本, 命中规则名列表)。"""
+    """清洗 commit message 文本，返回 (清洗后文本, 命中规则族名列表)。"""
     applied: list[str] = []
     for name, pattern, repl in _RULES:
         new_text, n = pattern.subn(repl, text)
         if n:
             text = new_text
-            applied.append(name)
+            if name not in applied:   # 同族多条命中只记一次族名
+                applied.append(name)
     return text, applied
 
 

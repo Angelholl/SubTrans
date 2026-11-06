@@ -90,14 +90,71 @@ def test_rules_compose_and_idempotent():
 
 def test_legit_messages_untouched():
     legit = [
-        "refactor(env)!: 旧前缀 SUBTRANSJAV_* 别名移除，单前缀新地基",
+        # 链上现行形态（全清后）：旧前缀字面已不在合法 message 里
+        "refactor(env)!: 兼容层下线——env 旧前缀与旧命令别名移除，单前缀 SUBTRANS_* 新地基",
         "feat: 校对页行内编辑与保存（重编号不变式）",
         "fix(env): 旧根发现 env_get 空值兜底",  # L- 词面不同形（无 -nn 尾）不误伤
         "verify: 全量 3311+6 零失败；Refs: D2026-1106-01",
+        "ruff check 全过；重构 paths 数据根直读",  # 机制词族/口径词族近形词不误伤
     ]
     for msg in legit:
         cleaned, applied = sanitize(msg)
         assert cleaned == msg and applied == [], msg
+
+
+def test_rule_mech_words():
+    """R2 机制词族十条抽检：机制词→中性替换，族名去重。"""
+    cases = [
+        ("评审揪出 git.ts:49 的行号引用", "评审揪出 工具源码行号 的行号引用"),
+        ("先 soft-reset 再重建", "先 软重置 再重建"),
+        ("pathspec 冲突致误扫", "路径模式 冲突致误扫"),
+        ("SUBTRANSJAV_DATA_ROOT 已退役", "旧数据根 env 已退役"),
+        ("SUBTRANSJAV_* 别名已删", "旧 env 前缀* 别名已删"),  # 表原语义：[A-Z_]* 含尾下划线，星号保留
+        ("worktree 隔离检出法", "隔离检出 隔离检出法"),
+        ("过程记录在 Temp/_x.log", "过程记录在 临时目录_x.log"),
+        ("会话态 .auto 已收段", "会话态 内部会话态 已收段"),
+    ]
+    for raw, want in cases:
+        cleaned, applied = sanitize(raw)
+        assert cleaned == want and applied == ["mech_word"], raw
+
+
+def test_rule_internal_terms():
+    """R4 内部口径词族抽检：保义中性替换，长串先于短串。"""
+    cases = [
+        ("金标比对完成", "标注基准比对完成"),
+        ("盲判结果复核", "独立判定结果复核"),
+        ("语料码进 message 即红", "样本码进 message 即红"),
+        ("裁决门三态", "裁定门三态"),
+        ("经 判批6网页.bat 启动", "经 内部判定网页入口 启动"),
+        ("批次表 批6 摘要", "批次表 内部批次 摘要"),
+        ("敏感句网页已下线", "专项测试网页已下线"),
+        ("ruling_b6 工具归档", "内部判定工具 工具归档"),  # 表原语义：只替换词面，后文原样保留
+        ("换人率偏离期望", "复核差异率偏离期望"),
+        ("イク系条款下沉规则层", "分级条款系条款下沉规则层"),
+        ("退役批批6 材料归档", "退役内部批次 材料归档"),
+    ]
+    for raw, want in cases:
+        cleaned, applied = sanitize(raw)
+        assert cleaned == want and applied == ["internal_term"], raw
+
+
+def test_fullwidth_tail_not_swallowed():
+    """路径尾类排除全角标点：中文分号起的续句不被整段吞进替换区。"""
+    raw = "落 D:/a/b；随后正常续句照写"
+    cleaned, applied = sanitize(raw)
+    assert cleaned == "落 内部路径；随后正常续句照写"
+    assert applied == ["abs_path"]
+
+
+def test_expanded_rules_compose_and_idempotent():
+    raw = ("金标轮按 worktree 检出，路径 D:/x/a；语料码 R-1 于 Temp/_r.log；"
+           "会话态 .auto/log.jsonl 见附录 https://example.com/p")
+    once, a1 = sanitize(raw)
+    twice, a2 = sanitize(once)
+    assert twice == once and a2 == [], "扩面后二次清洗必须零命中（幂等）"
+    assert a1 == ["abs_path", "auto_state_path", "mech_word", "internal_term"]
+    assert "https://example.com/p" in once, "URL 仍须零误伤"
 
 
 def test_path_allowlist_rejects_traversal():

@@ -38,6 +38,8 @@ _BINARY_EXTS = {
 ALLOWLIST = frozenset({
     # ---- CI/打包链（清理锚；历史注释行已随 D2026-1106-01 中性化）----
     "packaging/setup.iss",                 # [InstallDelete] 旧开始菜单组 {commonprograms}\SubTransJAV 清理锚（对不存在路径无害空操作）；AppId GUID/env 名禁区不动
+    # ---- 合规工具（功能性匹配串；D2026-1106-06 hook 扩面拍板）----
+    "tools/sanitize_commit_msg.py",        # commit-msg 脱敏 hook 的 R2 机制词族匹配模式须含旧 env 前缀字面（re.I 拼写为规范大小写）；本件职能即清除该词，字面=被测对象非品牌残留，与 setup.iss 清理锚同性质
     # ---- 用户/历史文档（不改史）----
     "CHANGELOG.md",                        # 历史变更记录（历史 commit 链接 Angelholl/SubTransJAV；不改史）
     # ---- 测试（本机路径，allowlist 明文保护）----
