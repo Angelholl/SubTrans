@@ -512,6 +512,26 @@ def test_cli_where_prints_key_fields(capsys):
         assert key in out, f"--where 输出缺字段: {key}"
 
 
+def test_cli_where_legacy_env_hint(monkeypatch, capsys):
+    """--where 升级提示：设着旧前缀 env 时输出告示行（旧名→新名＋复核指引）。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", "E:/legacy-root")
+    from subtrans.refine.cli import main
+    rc = main(["--where"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "SUBTRANSJAV_DATA_ROOT" in out and "SUBTRANS_DATA_ROOT" in out
+    assert "已不再读取" in out
+
+
+def test_cli_where_legacy_env_hint_absent(monkeypatch, capsys):
+    """无旧前缀 env 时 --where 零告示行（正常机器零噪声）。"""
+    monkeypatch.delenv("SUBTRANSJAV_DATA_ROOT", raising=False)
+    from subtrans.refine.cli import main
+    rc = main(["--where"])
+    assert rc == 0
+    assert "已不再读取" not in capsys.readouterr().out
+
+
 def test_cli_where_migration_note_by_mode(monkeypatch, capsys):
     """--where 迁移状态行按运行形态分支：frozen 报自动迁移与当前状态，源码保留旧文案。"""
     from subtrans import paths

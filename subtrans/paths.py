@@ -154,6 +154,27 @@ def _frozen_default_resolution() -> tuple[Path, str]:
     return new_root, "frozen-default"
 
 
+# 旧品牌 env 前缀：兼容层下线（D2026-1106-02）后不再被任何读取点消费，
+# 保留探测仅用于升级提示面——旧名设过自定义数据根的用户升级后会静默
+# 切到新根（文件不丢但首启看起来"数据消失"），须如实告知新变量名。
+_LEGACY_ENV_PREFIX = "SUBTRANSJAV_"
+
+
+def legacy_env_hints() -> list[tuple[str, str]]:
+    """探测仍设着的旧品牌前缀 env 变量，返回 [(旧变量名, 对应新变量名), …]。
+
+    只读探测：不改任何读取逻辑（旧名依旧静默忽略）。覆盖面＝按环境实际
+    存在的旧名逐个回报（DATA_ROOT／NO_ICON／refine.config 动态键族通用），
+    新名＝同后缀换现役前缀；空值不报（与「非空才生效」口径一致）。
+    消费面＝CLI --where 告示行（GUI 转写/翻译任务经子进程日志面板同样可见）。
+    """
+    hints: list[tuple[str, str]] = []
+    for key in os.environ:
+        if key.startswith(_LEGACY_ENV_PREFIX) and os.environ.get(key, "").strip():
+            hints.append((key, "SUBTRANS_" + key[len(_LEGACY_ENV_PREFIX):]))
+    return sorted(hints)
+
+
 def data_root() -> Path:
     """数据根目录，四级优先级：
 

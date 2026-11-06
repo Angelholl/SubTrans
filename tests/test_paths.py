@@ -437,3 +437,26 @@ def test_resolve_action_source_path_none_when_unresolved(tmp_path):
     guide.write_text("{}", encoding="utf-8")
     assert ps.resolve_action_source_path(guide, "missing.srt") is None
     assert ps.resolve_action_source_path(guide, "") is None
+
+
+# ---------------------------------------------------------------------------
+# 旧品牌前缀 env 探测（D2026-1106-06 全拍件1：升级首启提示数据源）
+# ---------------------------------------------------------------------------
+def test_legacy_env_hints_detects_and_maps(monkeypatch):
+    """仍设着的旧前缀 env 逐个回报 (旧名, 同后缀新名)；空值不报；动态键族通用。"""
+    monkeypatch.setenv("SUBTRANSJAV_DATA_ROOT", "E:/legacy-root")
+    monkeypatch.setenv("SUBTRANSJAV_NO_ICON", "1")
+    monkeypatch.setenv("SUBTRANSJAV_EMPTY", "  ")
+    hints = dict(paths.legacy_env_hints())
+    assert hints == {
+        "SUBTRANSJAV_DATA_ROOT": "SUBTRANS_DATA_ROOT",
+        "SUBTRANSJAV_NO_ICON": "SUBTRANS_NO_ICON",
+    }
+
+
+def test_legacy_env_hints_absent(monkeypatch):
+    """无旧前缀 env 时返回空列表（正常机器零噪声）。"""
+    for k in list(os.environ):
+        if k.startswith("SUBTRANSJAV_"):
+            monkeypatch.delenv(k, raising=False)
+    assert paths.legacy_env_hints() == []
