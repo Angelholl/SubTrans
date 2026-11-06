@@ -113,6 +113,21 @@ module = [
     "subtrans.refine.v2_rules",
     "subtrans.refine.risk",
     "subtrans.refine.eval_baseline",
+    # D2026-1106 自检轮扩面：全包 81 模块 strict 口径探测下已零违规、却未受强制的
+    # 12 件一次性纳入（纯配置改动，无代码变更；探测法存内部记录）。
+    # 探测同时确认既有 29 件在 strict 等价旗标下全部零违规＝清单口径无漂移。
+    "subtrans.__init__",
+    "subtrans.__version__",
+    "subtrans.paths",
+    "subtrans.refine.__init__",
+    "subtrans.refine.template_seed",
+    "subtrans.translate.__init__",
+    "subtrans.translate.providers",
+    "subtrans.utils.__init__",
+    "subtrans.utils.console",
+    "subtrans.utils.model_cache",
+    "subtrans.utils.subprocess_flags",
+    "subtrans.webview_gui.__init__",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
