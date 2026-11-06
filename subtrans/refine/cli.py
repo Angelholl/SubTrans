@@ -6,6 +6,7 @@ import argparse
 import contextlib
 import os
 import sys
+from collections.abc import Sequence
 from typing import Any, cast
 
 
@@ -732,7 +733,7 @@ def _harden_stdio():
             continue
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int | None:
     # stdio 加固：argparse 在 parse 时才打印中文 help，stdout 为管道且 locale
     # 码页过窄（CI windows cp1252 实测回归）会 UnicodeEncodeError → 退出 1；
     # 管道场景还需显式挂 utf-8 修 frozen GBK 乱码（D2026-1006-01 件⑦）。
@@ -788,7 +789,7 @@ def main(argv=None):
 
     # TM 管理命令（独立于翻译流程）
     if _handle_tm_commands(args):
-        return
+        return None
 
     cfg = config_from_args(args)
 
