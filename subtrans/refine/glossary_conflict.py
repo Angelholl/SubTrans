@@ -30,6 +30,7 @@ import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .artifact_lock import (  # noqa: E402  # 复用产物级 lockfile 先例
     ArtifactLockConflict,
@@ -84,7 +85,9 @@ def _term_in_text(term: str, text: str) -> bool:
     return term_in_text(term, text or "")
 
 
-def _align_orig_by_timing(entries: list, orig_entries: list) -> list:
+def _align_orig_by_timing(entries: list[dict[str, Any]],
+                          orig_entries: list[dict[str, Any]],
+                          ) -> list[dict[str, Any] | None]:
     """按时间轴把 orig 条目顺序对齐到 entries（双指针，容忍同起点多条）。
 
     与 pipeline_v2._align_orig_by_timing 同款语义（起点相同多条按序消费；
@@ -109,8 +112,10 @@ def _align_orig_by_timing(entries: list, orig_entries: list) -> list:
     return aligned
 
 
-def scan_glossary_conflicts(final_entries: list, orig_entries: list,
-                            glossary: list) -> dict:
+def scan_glossary_conflicts(final_entries: list[dict[str, Any]],
+                            orig_entries: list[dict[str, Any]],
+                            glossary: list[tuple[str, str, tuple[str, ...]]],
+                            ) -> dict[str, Any]:
     """终稿 × 源文 × 词库 一次遍历：返回 {"conflicts", "term_stats"}。
 
     glossary 为 load_glossary_merged 的三元组列表（兼容两列——别名取
@@ -123,11 +128,11 @@ def scan_glossary_conflicts(final_entries: list, orig_entries: list,
       {"term", "target", "aliases", "hits", "with_main", "with_alias",
        "with_neither", "samples": [{"entry_id", "timing", "actual_text"}]}
     """
-    conflicts: list[dict] = []
-    term_stats: list[dict] = []
+    conflicts: list[dict[str, Any]] = []
+    term_stats: list[dict[str, Any]] = []
     if not glossary:
         return {"conflicts": conflicts, "term_stats": term_stats}
-    stats_by_term: dict = {}
+    stats_by_term: dict[str, dict[str, Any]] = {}
     for entry in glossary:
         term, target = entry[0], entry[1]
         aliases = tuple(entry[2]) if len(entry) >= 3 else ()
@@ -184,7 +189,7 @@ def scan_glossary_conflicts(final_entries: list, orig_entries: list,
     return {"conflicts": conflicts, "term_stats": term_stats}
 
 
-def write_conflict_csv(out_path: str, conflicts: list) -> str:
+def write_conflict_csv(out_path: str, conflicts: list[dict[str, Any]]) -> str:
     """冲突观察五元组落盘（utf-8-sig，Excel 直开不乱码）；created_at=落盘时间。"""
     now = datetime.now().isoformat(timespec="seconds")
     p = Path(out_path)
@@ -213,7 +218,7 @@ def default_watch_path() -> str:
     return os.path.join(TEMP_DIR, "translation_memory", WATCH_JSON_NAME)
 
 
-def load_watch_records(path: str) -> list:
+def load_watch_records(path: str) -> list[dict[str, Any]]:
     """读取观察闸记录（不存在/损坏 → 空列表，首次运行零门槛）。"""
     try:
         with open(path, encoding="utf-8") as f:
@@ -252,7 +257,8 @@ def _backup_watch_json(p: Path) -> None:
         print(f"⚠️ [watch] 上一版备份 .bak 失败（继续写入）: {p} ({e})")
 
 
-def append_watch_record(path: str, source: str, per_term: dict) -> dict:
+def append_watch_record(path: str, source: str,
+                        per_term: dict[str, dict[str, int]] | None) -> dict[str, Any]:
     """追加一次运行的观察记录并落盘；返回写入的记录。
 
     per_term: {源词: {"candidates": 命中行数, "conflicts": 冲突行数}}；
@@ -296,7 +302,7 @@ def append_watch_record(path: str, source: str, per_term: dict) -> dict:
     return record
 
 
-def evaluate_watch(records: list) -> str:
+def evaluate_watch(records: list[dict[str, Any]]) -> str:
     """转阻断评估（只评估不自动切换）：返回三态建议文案。
 
     - 连续 3 次运行且累计候选 <100 → 样本不足（最小样本护栏）；
