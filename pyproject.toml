@@ -133,6 +133,7 @@ module = [
     "subtrans.refine.__main__",
     "subtrans.refine.aggregate_stats",
     "subtrans.refine.batch",
+    "subtrans.refine.fs_utils",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

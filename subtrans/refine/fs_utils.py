@@ -21,7 +21,7 @@ def _is_file_lock_error(e: BaseException) -> bool:
     )
 
 
-def _atomic_write_text(path, text: str, suffix: str = ".tmp") -> None:
+def _atomic_write_text(path: str | Path, text: str, suffix: str = ".tmp") -> None:
     """原子写文本：同目录临时文件 + os.replace，防中断留下半截产物。
 
     - ``path`` 接受 str / Path；
