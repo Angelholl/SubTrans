@@ -10,9 +10,10 @@ import json
 import os
 import unicodedata
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 
-def load_glossary(path: str):
+def load_glossary(path: str) -> list[tuple[str, str]]:
     entries = []
     if path and os.path.isfile(path):
         try:
@@ -27,7 +28,7 @@ def load_glossary(path: str):
     return entries
 
 
-def load_glossary_ex(path: str):
+def load_glossary_ex(path: str) -> list[tuple[str, str, tuple[str, ...]]]:
     """加载词库（含可选别名列）：返回 [(src, dst, aliases), ...]。
 
     aliases 为第三列按 `|` 拆分后的非空译法元组；两列行/缺列/全空白
@@ -52,7 +53,7 @@ def load_glossary_ex(path: str):
     return entries
 
 
-def save_glossary(path: str, entries):
+def save_glossary(path: str, entries: Iterable[tuple[Any, ...]]) -> None:
     """保存词库（UTF-8 BOM CSV）。
 
     entries 兼容两列 (src, dst) 与三列 (src, dst, aliases) 词条：
@@ -151,8 +152,8 @@ def format_glossary_block(hits: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def append_glossary_entries(entries: list[dict],
-                            glossary_path: str = "") -> list[dict]:
+def append_glossary_entries(entries: list[dict[str, Any]],
+                            glossary_path: str = "") -> list[dict[str, str]]:
     """锁定追加词条到词库 CSV（D2026-0929 AI 质量建议落库）。
 
     entries 形如 [{"src", "target", "aliases"?(list/str)}]；流程：
@@ -172,7 +173,7 @@ def append_glossary_entries(entries: list[dict],
     def _norm(s: str) -> str:
         return s.lower() if s.isascii() else s
 
-    statuses: list[dict] = []
+    statuses: list[dict[str, str]] = []
     handle = None
     try:
         from .artifact_lock import ArtifactLockConflict, acquire_artifact_lock
@@ -196,7 +197,7 @@ def append_glossary_entries(entries: list[dict],
         existing = load_glossary_ex(glossary_path)
         existing_by_src = {_norm(src): (src, dst, aliases)
                            for src, dst, aliases in existing}
-        new_rows: list[tuple] = []
+        new_rows: list[tuple[str, str, tuple[str, ...]]] = []
         for e in entries:
             src, target = str(e.get("src", "")), str(e.get("target", ""))
             status: str
