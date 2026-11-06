@@ -54,10 +54,14 @@ import sqlite3
 import tempfile
 import time
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from subtrans import paths
+
+if TYPE_CHECKING:
+    from subtrans.refine.artifact_lock import ArtifactLockHandle
 
 __all__ = ["ensure_migrated", "import_legacy", "seed_c22_gate",
            "evaluate_c22_gate", "c22_gate_fingerprint", "C22_GATE_RELPATH"]
@@ -440,7 +444,7 @@ def _run_migration(root: Path, legacy_root: Path,
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
-def _acquire_lock(root: Path):
+def _acquire_lock(root: Path) -> tuple[ArtifactLockHandle | None, Callable[[], None]]:
     """迁移锁（artifact_lock 机制，锁键=migration）。
 
     返回 (handle, release)；冲突（另一实例在迁）抛 ArtifactLockConflict；

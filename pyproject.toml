@@ -128,6 +128,8 @@ module = [
     "subtrans.utils.model_cache",
     "subtrans.utils.subprocess_flags",
     "subtrans.webview_gui.__init__",
+    # 段11 strict 修债：1 条级模块修一条入名单一件（只增不减）。
+    "subtrans.data_migration",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
