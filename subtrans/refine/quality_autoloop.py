@@ -97,9 +97,6 @@ def plan_autofix(suggestions: list[dict[str, Any]], cap: int = 20) -> list[dict[
 
 
 def run_autoloop_cycle(suggestions: list[dict[str, Any]], *,
-                       # analyze_fn＝分析件注入位（docstring：分析=quality_advisor 既有链），
-                       # 本编排当前不调用它，故只标最宽注入面，不猜具体签名
-                       analyze_fn: Callable[..., object] | None = None,
                        fix_fn: Callable[[dict[str, Any]], bool] | None = None,
                        reverify_fn: Callable[[list[dict[str, Any]]], tuple[int, int]] | None = None,
                        gate: dict[str, object] | None = None) -> dict[str, Any]:
@@ -107,7 +104,9 @@ def run_autoloop_cycle(suggestions: list[dict[str, Any]], *,
 
     流程=PROPOSE（plan_autofix）→ AUTO_FIX（fix_fn）→ REVERIFY（reverify_fn）
     → RELEASE（门过）/ DEGRADE（门不过=缺省）。ACTIVATION_ENABLED=False 时
-    直接拒绝执行（返回 refused，不触任何 fn）。"""
+    直接拒绝执行（返回 refused，不触任何 fn）。
+    分析件无注入位：分析=quality_advisor 既有链属 PROPOSE 阶段设计，激活
+    复议时随流程一并定（原无契约死参已移除，D2026-1106-06 拍板）。"""
     if not ACTIVATION_ENABLED:
         return {"action": "refused",
                 "reason": "全自动闭环默认关：激活须 HRO-1 条件③复议+3.1.0 基线门数值"

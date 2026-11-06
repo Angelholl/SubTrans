@@ -1,4 +1,5 @@
 # 3.3.0 预置机制钉（D2026-1028-03）：默认关拒执行+门 fail-closed+编排数学。
+import inspect
 import json
 
 from subtrans.refine.quality_autoloop import (
@@ -8,6 +9,12 @@ from subtrans.refine.quality_autoloop import (
     reverify_gate,
     run_autoloop_cycle,
 )
+
+
+def test_no_dead_injection_param():
+    """analyze_fn 死注入位已删（全库零调用方实证，D2026-1106-06 拍板删）：
+    编排签名不得再出现无契约死参，防无声回潜。"""
+    assert "analyze_fn" not in inspect.signature(run_autoloop_cycle).parameters
 
 
 def _sug(i, cat="misread", provider="p", old="x"):
