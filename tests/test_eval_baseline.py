@@ -526,3 +526,117 @@ class TestProxyReturnShapeInvariant:
             "rate_a_wilson", "rate_b_wilson"}
         assert set(fill_subset_stats(entries, [0], WIN)) == {
             "full", "fill", "n_full", "n_fill"}
+
+
+# ------------------------------------------------ 3.2.0 冲刺 卡E（D2026-1107-01 拆卡）
+# evaluate() 双 pass sidecar 接线：engine_reports[*].layers＝fill_subset_stats 形。
+# 映射机制＝sidecar adopted[] 的 (start,end) 对 SRT entries 时间包含
+# （merge_passes 保证采纳段与主干不重叠、断行行 span⊆源段 span，包含无歧义；
+# pass_merge.adopted_pass2_indices 按对象同一性比对、JSON 回读不可重算——
+# 消费 runner 落盘态，卡面「adopted_pass2_indices(pass1,pass2)」以落盘态承载）。
+
+def _dualpass_sidecar(tmp_path, name, adopted_spans):
+    """假 dualpass sidecar（runner 落盘态形：adopted 带 pass2_index＋span）。"""
+    p = tmp_path / name
+    payload = {
+        "schema": "subtrans.ct2.dualpass/1",
+        "passes": 2,
+        "pass1": {"segments": []},
+        "pass2": {"segments": [{"start": s, "end": e, "text": ""}
+                               for s, e in adopted_spans]},
+        "adopted": [{"pass2_index": i, "start": s, "end": e}
+                    for i, (s, e) in enumerate(adopted_spans)],
+    }
+    p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return str(p)
+
+
+class TestEvaluateDualpassLayers:
+    def _entries(self):
+        return [_ent(1, 1.0, 3.0, "こんにちは"), _ent(2, 5.0, 6.0, "おはよう"),
+                _ent(3, 7.0, 9.0, "さようなら")]
+
+    def test_layers_shape_and_readings(self, tmp_path):
+        entries = self._entries()
+        pa = make_srt(tmp_path, "ct2.srt", entries)
+        sc = _dualpass_sidecar(tmp_path, "ct2.srt.dualpass.json", [(5.0, 6.0)])
+        rep = evaluate("x.mp4", {"ct2": pa}, windows=WIN,
+                       dualpass_by_engine={"ct2": sc})
+        layers = rep["engines"]["ct2"]["layers"]
+        # n_fill＝采纳段映射到的行数（无断行夹具 1 采纳段＝1 行）；n_full=全片
+        assert layers["n_fill"] == 1 and layers["n_full"] == 3
+        # fill 读数与对子集直算 hallucination_proxy 一致
+        assert layers["fill"] == hallucination_proxy([entries[1]], WIN)
+        assert layers["fill"]["ratio"] == 1.0   # 填充段 5-6 落静音带
+        assert layers["full"] == hallucination_proxy(entries, WIN)
+        assert layers["full"]["ratio"] == pytest.approx(1 / 3, abs=1e-4)
+
+    def test_windows_missing_full_fill_both_none(self, tmp_path):
+        pa = make_srt(tmp_path, "ct2.srt", self._entries())
+        sc = _dualpass_sidecar(tmp_path, "ct2.srt.dualpass.json", [(5.0, 6.0)])
+        rep = evaluate(str(tmp_path / "gone.mp4"), {"ct2": pa},
+                       dualpass_by_engine={"ct2": sc})
+        layers = rep["engines"]["ct2"]["layers"]
+        assert layers["full"] is None and layers["fill"] is None
+        assert layers["n_full"] == 3 and layers["n_fill"] == 1
+
+    def test_single_pass_engine_has_no_layers_key(self, tmp_path):
+        pa = make_srt(tmp_path, "a.srt", self._entries())
+        sc = _dualpass_sidecar(tmp_path, "ct2.srt.dualpass.json", [(5.0, 6.0)])
+        rep = evaluate("x.mp4", {"upstream": pa, "ct2": pa}, windows=WIN,
+                       dualpass_by_engine={"ct2": sc})
+        assert "layers" not in rep["engines"]["upstream"]
+        assert "layers" in rep["engines"]["ct2"]
+
+    def test_adopted_segment_split_into_two_lines(self, tmp_path):
+        # 断行形态：采纳段 5-6 被断成两行（span 均含于采纳段）→ n_fill=2
+        entries = [_ent(1, 1.0, 3.0, "こんにちは"), _ent(2, 5.0, 5.5, "あ"),
+                   _ent(3, 5.5, 6.0, "い"), _ent(4, 7.0, 9.0, "さようなら")]
+        pa = make_srt(tmp_path, "ct2.srt", entries)
+        sc = _dualpass_sidecar(tmp_path, "ct2.srt.dualpass.json", [(5.0, 6.0)])
+        rep = evaluate("x.mp4", {"ct2": pa}, windows=WIN,
+                       dualpass_by_engine={"ct2": sc})
+        layers = rep["engines"]["ct2"]["layers"]
+        assert layers["n_full"] == 4 and layers["n_fill"] == 2
+        assert layers["fill"]["lines"] == 2
+        assert layers["fill"]["ratio"] == 1.0   # 两行均在静音带
+        assert layers["full"]["ratio"] == pytest.approx(2 / 4, abs=1e-4)
+
+    def test_containment_tolerates_ms_rounding(self, tmp_path):
+        # 断行 round(3)／毫秒取整可使行端点比源段端点多 ≤1ms，容差内仍算包含
+        entries = [_ent(1, 5.0, 6.001, "あ")]
+        pa = make_srt(tmp_path, "ct2.srt", entries)
+        sc = _dualpass_sidecar(tmp_path, "ct2.srt.dualpass.json", [(5.0, 6.0)])
+        rep = evaluate("x.mp4", {"ct2": pa}, windows=WIN,
+                       dualpass_by_engine={"ct2": sc})
+        assert rep["engines"]["ct2"]["layers"]["n_fill"] == 1
+
+    def test_malformed_sidecar_reports_error_no_layers(self, tmp_path):
+        pa = make_srt(tmp_path, "a.srt", self._entries())
+        bad = tmp_path / "bad.json"
+        bad.write_text("{not json", encoding="utf-8")
+        missing = tmp_path / "gone.dualpass.json"
+        noadopt = tmp_path / "noadopt.json"
+        noadopt.write_text(json.dumps({"schema": "subtrans.ct2.dualpass/1"}),
+                           encoding="utf-8")
+        rep = evaluate(
+            "x.mp4", {"ct2": pa, "upstream": pa, "other": pa}, windows=WIN,
+            dualpass_by_engine={"ct2": str(bad), "upstream": str(missing),
+                                "other": str(noadopt)})
+        e = rep["engines"]
+        for eid in ("ct2", "upstream", "other"):
+            assert "layers" not in e[eid]
+            assert e[eid]["layers_error"]
+
+    def test_report_markdown_layer_lines(self, tmp_path):
+        pa = make_srt(tmp_path, "ct2.srt", self._entries())
+        sc = _dualpass_sidecar(tmp_path, "ct2.srt.dualpass.json", [(5.0, 6.0)])
+        rep = evaluate("x.mp4", {"upstream": pa, "ct2": pa}, windows=WIN,
+                       dualpass_by_engine={"ct2": sc})
+        md = report_markdown(rep)
+        # 有 layers 引擎＝两行分层读数（全片＋填充段）取代单行
+        assert "幻听代理分层·全片" in md
+        assert "幻听代理分层·填充段" in md
+        assert "100.00%" in md and "33.33%" in md
+        # 无 layers 引擎保持原单行读数
+        assert md.count("幻听代理（低重叠行占比，越低越好）") == 1

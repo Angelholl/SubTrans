@@ -304,9 +304,66 @@ def run_engine(engine_id: str, media_path: str, workdir: str,
     return runner(media_path=media_path, workdir=workdir, model=model, model_dir=model_dir)
 
 
+def _load_fill_spans(sidecar_path: str) -> tuple[list[tuple[float, float]] | None, str]:
+    """读双 pass sidecar 采纳段 span（诚实退化：失败带原因返回，不抛）。
+
+    采纳映射消费 runner 落盘态（``adopted[].pass2_index/start/end``）——
+    :func:`~subtrans.refine.pass_merge.adopted_pass2_indices` 按对象同一性
+    比对，JSON 回读后同一性必失不可重算；sidecar ``adopted`` 即该映射的
+    持久载体（写侧由 runner 进程内计算）。"""
+    try:
+        with open(sidecar_path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except OSError as e:
+        return None, "dualpass sidecar 读取失败: " + str(e)
+    except ValueError as e:
+        return None, "dualpass sidecar JSON 解析失败: " + str(e)
+    adopted = payload.get("adopted") if isinstance(payload, dict) else None
+    if not isinstance(adopted, list):
+        return None, "dualpass sidecar 缺 adopted 数组"
+    spans: list[tuple[float, float]] = []
+    for a in adopted:
+        if not isinstance(a, dict):
+            return None, "adopted 条目非对象"
+        try:
+            s0, e0 = float(a["start"]), float(a["end"])
+        except (KeyError, TypeError, ValueError):
+            return None, "adopted 条目缺 start/end 或非数值"
+        if e0 > s0:
+            spans.append((s0, e0))
+    return spans, ""
+
+
+def _fill_entry_indices(entries: list[dict[str, Any]],
+                        fill_spans: list[tuple[float, float]]) -> list[int]:
+    """SRT 行→采纳段时间包含映射（断行行 span⊆源段 span，包含无歧义）。
+
+    容差 2e-3s：断行 round(3) 与毫秒取整可使行端点比源段端点多 ≤1ms；
+    采纳段与主干间隙 ≥ pass_merge.GAP_THRESHOLD_S，容差不会把相邻主干行
+    误吸进填充子集。"""
+    out: list[int] = []
+    for i, e in enumerate(entries):
+        span = _timing_span(e.get("timing", ""))
+        if span is None:
+            continue
+        for s0, e0 in fill_spans:
+            if span[0] >= s0 - 2e-3 and span[1] <= e0 + 2e-3:
+                out.append(i)
+                break
+    return out
+
+
 def evaluate(media_path: str, srt_by_engine: dict[str, str],
-              windows: list[tuple[float, float]] | None = None) -> dict[str, Any]:
-    """组装单媒体评测报告（窗口可外注入供测试；缺省现算）。"""
+             windows: list[tuple[float, float]] | None = None,
+             dualpass_by_engine: dict[str, str] | None = None) -> dict[str, Any]:
+    """组装单媒体评测报告（窗口可外注入供测试；缺省现算）。
+
+    ``dualpass_by_engine``：引擎 id→双 pass sidecar 路径（asr_runner
+    ``<srt>.dualpass.json`` 产物面）。给出时该引擎报告增 ``layers`` 键
+    （:func:`fill_subset_stats` 返回形，fill 子集＝sidecar 采纳段经时间
+    包含映射到的 SRT 行）；sidecar 读取/解析失败该引擎带 ``layers_error``
+    且不产 ``layers``（诚实退化）；未给出的引擎＝单 pass 面，无 ``layers``
+    键。不接 CLI/GUI/prompt 注入面。"""
     entries_by_engine = {}
     for engine_id, path in srt_by_engine.items():
         with open(path, encoding="utf-8") as f:
@@ -321,12 +378,21 @@ def evaluate(media_path: str, srt_by_engine: dict[str, str],
             windows = win_info["windows"]
     engine_reports: dict[str, dict[str, Any]] = {}
     for engine_id, entries in entries_by_engine.items():
-        engine_reports[engine_id] = {
+        rep: dict[str, Any] = {
             "lines": len(entries),
             "hallucination_proxy": hallucination_proxy(entries, windows),
             "omission_proxy": omission_proxy(entries, windows),
             "cps": cps_stats(entries),
         }
+        sidecar = (dualpass_by_engine or {}).get(engine_id) or ""
+        if sidecar:
+            spans, layers_err = _load_fill_spans(sidecar)
+            if spans is None:
+                rep["layers_error"] = layers_err
+            else:
+                rep["layers"] = fill_subset_stats(
+                    entries, _fill_entry_indices(entries, spans), windows)
+        engine_reports[engine_id] = rep
     pair_reports: dict[str, dict[str, Any]] = {}
     ids = sorted(entries_by_engine)
     for i in range(len(ids)):
@@ -350,6 +416,34 @@ _MD_PROXY_NAMES = {
 }
 
 
+def _md_proxy_ratio(v: dict[str, Any] | None) -> str:
+    """分层行读数格式化（窗口缺失/空子集 → null 文案，同既有行口径）。"""
+    if v is None:
+        return "null（窗口缺失）"
+    ratio = v.get("ratio")
+    if ratio is None:
+        return "null"
+    return format(ratio * 100, ".2f") + "%"
+
+
+def _md_layer_lines(layers: dict[str, Any]) -> list[str]:
+    """分层统计 markdown 两行（全片＋填充段，件A 评测门分层口径）。"""
+    full = layers.get("full")
+    fill = layers.get("fill")
+
+    def detail(v: dict[str, Any] | None) -> str:
+        if v is None:
+            return ""
+        return "（" + str(v.get("suspect", "")) + "/" + str(v.get("lines", "")) + "）"
+
+    return [
+        "- 幻听代理分层·全片：" + _md_proxy_ratio(full) + detail(full)
+        + "；n_full=" + str(layers.get("n_full")),
+        "- 幻听代理分层·填充段（pass2 采纳）：" + _md_proxy_ratio(fill)
+        + detail(fill) + "；n_fill=" + str(layers.get("n_fill")),
+    ]
+
+
 def report_markdown(report: dict[str, Any]) -> str:
     lines = ["# 评测基线报告：" + report["media"], "",
              "生成：" + report["generated_at"] + "（schema " + report["schema"] + "）", ""]
@@ -360,7 +454,10 @@ def report_markdown(report: dict[str, Any]) -> str:
         lines.append("## 引擎 " + engine_id)
         lines.append("")
         lines.append("- 行数：" + str(r["lines"]))
+        layers = r.get("layers")
         for key, name in _MD_PROXY_NAMES.items():
+            if key == "hallucination_proxy" and layers is not None:
+                continue   # 分层两行取代单行（下方 _md_layer_lines）
             v = r.get(key)
             if v is None:
                 lines.append("- " + name + "：null（窗口缺失）")
@@ -374,6 +471,8 @@ def report_markdown(report: dict[str, Any]) -> str:
         lines.append("- CPS p50/p90/max：" + str(cps.get("cps_p50")) + " / "
                      + str(cps.get("cps_p90")) + " / " + str(cps.get("cps_max"))
                      + "；行均时长 " + str(cps.get("avg_dur_s")) + "s")
+        if layers is not None:
+            lines += _md_layer_lines(layers)
         lines.append("")
     for key, p in report["pairs"].items():
         lines.append("## 双引擎一致率 " + key)
