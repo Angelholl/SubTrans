@@ -28,9 +28,10 @@ import hashlib
 import json
 import math
 import os
+from typing import Any
 
 from ..paths import normalize_path_case
-from .config import DEFAULT_V2_ASR_META_STALE_MAX_HOURS
+from .config import DEFAULT_V2_ASR_META_STALE_MAX_HOURS, RefineConfig
 
 # 上游运行 manifest 的旁车文件名（SRT 同目录自动发现）
 RUN_META_NAME = "whisperjav_run.json"
@@ -80,13 +81,13 @@ _TRUST_MIN_MEAN_LOGPROB = -1.0       # 平均 logprob 软信号阈值（越负�
 # 内部工具
 # ---------------------------------------------------------------------------
 
-def _empty_meta() -> dict:
+def _empty_meta() -> dict[str, Any]:
     """无信号元数据（present=False 为常态：上游未产出旁车文件）。"""
     return {"present": False, "status": None, "mileage_pct": None,
             "stale": False, "file": None, "warnings": []}
 
 
-def _stale_max_hours(cfg) -> float:
+def _stale_max_hours(cfg: RefineConfig) -> float:
     """manifest 新鲜度上限（小时）；非法值静默回退默认 24（该链路一贯容错）。"""
     try:
         hours = float(getattr(cfg, "v2_asr_meta_stale_max_hours",
@@ -96,7 +97,7 @@ def _stale_max_hours(cfg) -> float:
     return hours if hours >= 0 else float(DEFAULT_V2_ASR_META_STALE_MAX_HOURS)
 
 
-def _is_fresh(meta_path: str, srt_path: str, cfg) -> bool:
+def _is_fresh(meta_path: str, srt_path: str, cfg: RefineConfig) -> bool:
     """新鲜度（R6）：manifest mtime 比 SRT mtime 旧不超过阈值小时数。
 
     manifest 比 SRT 新（age≤0）视为新鲜；SRT mtime 不可得时放行
@@ -114,7 +115,7 @@ def _is_fresh(meta_path: str, srt_path: str, cfg) -> bool:
     return (srt_mtime - meta_mtime) <= max_age_s
 
 
-def _parse_status(data: dict) -> str | None:
+def _parse_status(data: dict[str, Any]) -> str | None:
     """候选键匹配提取 run 状态（转小写字符串；非标量/空值跳过）。"""
     for key in _STATUS_KEYS:
         if key not in data:
@@ -129,7 +130,7 @@ def _parse_status(data: dict) -> str | None:
     return None
 
 
-def _parse_coverage(data: dict) -> float | None:
+def _parse_coverage(data: dict[str, Any]) -> float | None:
     """候选键匹配提取覆盖率（float；0-1 视为比例 ×100，>1 视为百分比）。
 
     负值/NaN/inf/不可转换的类型漂移值一律忽略（继续尝试下一候选键）；
@@ -158,7 +159,7 @@ def _parse_coverage(data: dict) -> float | None:
 # 主入口
 # ---------------------------------------------------------------------------
 
-def load_asr_meta(cfg, srt_path: str) -> dict:
+def load_asr_meta(cfg: RefineConfig, srt_path: str) -> dict[str, Any]:
     """加载上游 ASR 运行信号（全容错，绝不阻断管线）。
 
     参数
@@ -217,7 +218,7 @@ def load_asr_meta(cfg, srt_path: str) -> dict:
     return meta
 
 
-def fingerprint(meta) -> str | None:
+def fingerprint(meta: dict[str, Any]) -> str | None:
     """上游信号语义指纹：仅由识别出的语义字段（status/mileage_pct）组成
     规范化对象后 sha1——不是原始文件字节 sha1，路径不参与。
 
@@ -225,7 +226,7 @@ def fingerprint(meta) -> str | None:
     """
     if not isinstance(meta, dict) or not meta.get("present"):
         return None
-    payload: dict = {}
+    payload: dict[str, Any] = {}
     if meta.get("status") is not None:
         payload["status"] = str(meta["status"])
     if meta.get("mileage_pct") is not None:
@@ -240,7 +241,7 @@ def fingerprint(meta) -> str | None:
 # v1.5 音频链路（D2026-0929-04 P2）：媒体路径配对（转写侧 sidecar → refine）
 # ---------------------------------------------------------------------------
 
-def resolve_media_path(in_path: str, asr_meta_result: dict,
+def resolve_media_path(in_path: str, asr_meta_result: dict[str, Any],
                        explicit_media_path: str = "",
                        manifest_path: str = "") -> tuple[str, str]:
     """解析当前输入 SRT 对应的媒体文件路径（v1.5 音频链路，全容错）。
@@ -326,7 +327,7 @@ def resolve_media_path(in_path: str, asr_meta_result: dict,
     if not isinstance(files, list):
         return _fallback("媒体路径配对跳过（manifest 无 files 列表，忽略）")
     target = normalize_path_case(in_path)
-    hits: list = []
+    hits: list[dict[str, Any]] = []
     for entry in files:
         if not isinstance(entry, dict):
             continue
@@ -352,7 +353,7 @@ def resolve_media_path(in_path: str, asr_meta_result: dict,
 # H4b：场景级转写遥测（load_asr_telemetry / scene_low_trust）
 # ---------------------------------------------------------------------------
 
-def _num_signal(v) -> float | None:
+def _num_signal(v: Any) -> float | None:
     """宽容取数：bool/字符串/NaN/inf → None（信号不可用），其余 → float。"""
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
@@ -456,7 +457,8 @@ def _samedir_media_fallback(in_path: str) -> str:
     return ""
 
 
-def _discover_telemetry_path(cfg, srt_path: str, warnings: list) -> str | None:
+def _discover_telemetry_path(cfg: RefineConfig, srt_path: str,
+                             warnings: list[str]) -> str | None:
     """遥测路径解析（副作用仅写 warnings，绝不抛）。
 
     - 显式 cfg.asr_telemetry：直接用、不做新鲜度（沿 asr_meta 显式路径
@@ -476,7 +478,7 @@ def _discover_telemetry_path(cfg, srt_path: str, warnings: list) -> str | None:
     stem = strip_stem_suffixes(
         os.path.splitext(os.path.basename(srt_path))[0])
     raw_dir = os.path.join(srt_dir, "raw_subs")
-    hits: list = []
+    hits: list[str] = []
     if os.path.isdir(raw_dir):
         try:
             for name in os.listdir(raw_dir):
@@ -500,7 +502,7 @@ def _discover_telemetry_path(cfg, srt_path: str, warnings: list) -> str | None:
     return hits[0]
 
 
-def _parse_telemetry_line(line: str):
+def _parse_telemetry_line(line: str) -> tuple[int, dict[str, Any]] | None:
     """解析单行遥测：返回 (scene_no, 信号 dict)；坏行返回 None。
 
     - scene 非整数 / audio_duration_s 缺失或坏值 → 整行坏行；
@@ -522,7 +524,7 @@ def _parse_telemetry_line(line: str):
         return None
     if math.isnan(dur) or math.isinf(dur) or dur < 0:
         return None
-    scene_data: dict = {"audio_duration_s": dur}
+    scene_data: dict[str, Any] = {"audio_duration_s": dur}
     for key in _TELEMETRY_SIGNAL_FIELDS:
         v = obj.get(key)
         if v is None:
@@ -537,7 +539,7 @@ def _parse_telemetry_line(line: str):
     return scene, scene_data
 
 
-def load_asr_telemetry(cfg, srt_path: str) -> dict:
+def load_asr_telemetry(cfg: RefineConfig, srt_path: str) -> dict[str, Any]:
     """加载场景级 ASR 转写遥测（H4b；全容错，任何异常不抛、不阻断管线）。
 
     参数
@@ -558,7 +560,7 @@ def load_asr_telemetry(cfg, srt_path: str) -> dict:
     - 坏行（非 dict/缺 scene/scene 非整数/坏数值）跳过并计数；重复 scene
       行按坏行计（保留首行）；无场景文本/无时间码——遥测只含逐场景统计。
     """
-    result: dict = {"present": False, "stale": False, "file": None,
+    result: dict[str, Any] = {"present": False, "stale": False, "file": None,
                     "scenes": {}, "skipped_lines": 0, "warnings": []}
     try:
         path = _discover_telemetry_path(cfg, srt_path, result["warnings"])
@@ -573,7 +575,7 @@ def load_asr_telemetry(cfg, srt_path: str) -> dict:
                 f"asr_telemetry 已超龄（比 SRT 旧超过 "
                 f"{_stale_max_hours(cfg):g} 小时），信号弃用")
             return result
-        scenes: dict = {}
+        scenes: dict[int, dict[str, Any]] = {}
         skipped = 0
         with open(path, encoding="utf-8") as f:
             for raw_line in f:
@@ -599,7 +601,7 @@ def load_asr_telemetry(cfg, srt_path: str) -> dict:
     return result
 
 
-def scene_low_trust(scene: dict) -> bool:
+def scene_low_trust(scene: dict[str, Any]) -> bool:
     """场景低信任判定（H4b 信任派生，独立于解析的纯函数；输入非 dict/信号
     缺失一律不判低信任，防御性返回 False）。
 
