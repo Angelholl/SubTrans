@@ -608,8 +608,8 @@ class RefineConfig:
             b = min(b, LOCAL_BATCH_HARD_CAP)
         return max(1, int(b))
 
-    def validate(self):
-        errors = []
+    def validate(self) -> list[str]:
+        errors: list[str] = []
         enabled = [s for s in self.stages if s.enabled]
         if not enabled:
             errors.append("至少需要启用一个阶段")
@@ -716,7 +716,7 @@ def polish_policy_from_config(cfg) -> dict:
     return policy
 
 
-def ensure_language_support():
+def ensure_language_support() -> None:
     """放行同语言目标（阶段2 zh→zh 审核需要）。
     运行时补丁，不修改上游文件。"""
     from subtrans.translate.providers import SUPPORTED_TARGETS

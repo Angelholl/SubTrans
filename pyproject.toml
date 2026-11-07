@@ -163,6 +163,7 @@ module = [
     "subtrans.refine.asr_meta",
     # 段17 strict 修债：20+ 条级件（owner 点名降序三件），修一件入名单一件，只增不减。
     "subtrans.webview_gui.api",
+    "subtrans.refine.pipeline_v2",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

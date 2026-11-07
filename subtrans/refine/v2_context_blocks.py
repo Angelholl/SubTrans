@@ -61,8 +61,10 @@ def _synopsis_prompt_block(synopsis_text: str | None) -> str:
 MAX_GLOSSARY_INJECT = 100
 
 
-def _v2_glossary_block(cfg: RefineConfig, tag: str, src_text: str,
-                       glossary: Iterable[Sequence[str]]) -> str:
+def _v2_glossary_block(
+        cfg: RefineConfig, tag: str, src_text: str,
+        glossary: Iterable[Sequence[str] | tuple[str, str, tuple[str, ...]]]
+) -> str:
     """按阶段复用 legacy 词库生效开关：A→stage1 开关，B→stage2 开关。
 
     命中超过 MAX_GLOSSARY_INJECT 时按词库优先级序只注入前 N 条，

@@ -27,9 +27,11 @@ import re
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from .artifact_lock import (
     ArtifactLockConflict,
@@ -54,6 +56,15 @@ from .config import (
 from .dialogue_detect import build_injection_block, detect_dialogue_rows
 from .events import EventEmitter
 from .filters import build_srt, parse_srt
+
+if TYPE_CHECKING:
+    # 前向引用契约（运行时零导入，段15 manifest 同型）：仅注解位消费。
+    from subtrans.translate.llm_client import BatchResult, LLMClient
+
+    from .artifact_lock import ArtifactLockHandle
+    from .events import _TextStream
+    from .tm import TranslationMemory
+
 from .glossary_conflict import (
     append_watch_record,
     default_watch_path,
@@ -226,13 +237,13 @@ _KANJI_SRC_RE = re.compile(r"[\u4e00-\u9fff]")
 # D2026-0925-01 补充裁决——OrderedDict+move_to_end+popitem(last=False)，
 # 不再整表 clear()，热键跨淘汰轮保留；负缓存 None 同样入缓存）。
 # ---------------------------------------------------------------------------
-_GRAMMAR_CACHE: "OrderedDict" = OrderedDict()
+_GRAMMAR_CACHE: "OrderedDict[tuple[str, str, str, str], str | None]" = OrderedDict()
 _GRAMMAR_CACHE_MAX = 50000
 _GRAMMAR_CACHE_LOCK = threading.Lock()
 
 
 def _grammar_cache_key(text: str, tag: str, profile: str,
-                       direction: str = "ja→zh") -> tuple:
+                       direction: str = "ja→zh") -> tuple[str, str, str, str]:
     # 2.1 方向参数化（D2026-0930-04 清单外联动 4）：同进程跨方向运行时
     # 中日同文本（纯汉字串）会复用对方方向的文法提示——方向进键隔离
     return (hashlib.sha1((text or "").encode("utf-8")).hexdigest(),
@@ -244,9 +255,10 @@ def _grammar_cache_key(text: str, tag: str, profile: str,
 # ---------------------------------------------------------------------------
 
 
-def _ensure_auto_synopsis(cfg: RefineConfig, entries: list,
-                          sidecar: dict | None,
-                          collector=None, file_name: str = None) -> str | None:
+def _ensure_auto_synopsis(cfg: RefineConfig, entries: list[dict[str, Any]],
+                          sidecar: dict[str, Any] | None,
+                          collector: RiskCollector | None = None,
+                          file_name: str | None = None) -> str | None:
     """剧情自摘要（Beta）入口：返回摘要文本；关闭/失败一律返回 None。
 
     前置条件：cfg.auto_synopsis 为 True 且手写 sidecar【剧情摘要】小节
@@ -364,14 +376,14 @@ def _generic_stage_prompt(tag: str, source_lang: str, target_lang: str) -> str:
             f"- 除上述协议外禁止输出时间码块、Markdown 加粗、说明或注释")
 
 
-def _is_default_direction(cfg) -> bool:
+def _is_default_direction(cfg: RefineConfig) -> bool:
     """缺省方向判定：ja→zh（全链字节级现状路径）。"""
     src = getattr(cfg, "source_lang", None) or "ja"
     tgt = getattr(cfg, "target_lang", None) or "zh"
     return (src, tgt) == ("ja", "zh")
 
 
-def _direction_key(cfg) -> str:
+def _direction_key(cfg: RefineConfig) -> str:
     """方向键 "src→tgt"（manifest.py direction 同格式，U+2192）。
 
     缺省（字段缺席/空值）回退 ja→zh——与 _collect_grammar_hints 的
@@ -383,7 +395,7 @@ def _direction_key(cfg) -> str:
 
 def _load_v2_instruction(cfg: RefineConfig, tag: str, gl_block: str,
                          tmp_dir: str, sidecar_block: str = "",
-                         synopsis_block: str = "") -> tuple:
+                         synopsis_block: str = "") -> tuple[str, str]:
     """读取 v2 角色卡并组装指令。返回 (system_text, user_prompt)。"""
     from .config import default_templates_dir
 
@@ -432,7 +444,7 @@ def _read_v2_card(tag: str, explicit_path: str, templates_dir: str) -> str:
     raise RefineError(f"v2 角色卡缺失：{p}")
 
 
-def _split_instruction_file(path: str) -> tuple:
+def _split_instruction_file(path: str) -> tuple[str, str]:
     """把 '### prompt / ### instructions' 文件拆成 (system, user_prompt)。"""
     text = Path(path).read_text(encoding="utf-8")
     system_text = ""
@@ -447,7 +459,7 @@ def _split_instruction_file(path: str) -> tuple:
 
 
 def _ensure_lmstudio_engine(cfg: RefineConfig, model: str, base_url: str,
-                            label: str = ""):
+                            label: str = "") -> None:
     """lmstudio 阶段建客户端前对齐引擎状态。
 
     未加载 / 已载但 ctx 与 v2_ctx_local 不符时：卸载在载模型 → `lms load`
@@ -466,7 +478,7 @@ def _ensure_lmstudio_engine(cfg: RefineConfig, model: str, base_url: str,
     print(f"   ⚙️ LM Studio 引擎就绪: {model}（{msg}）")
 
 
-def _make_client(cfg: RefineConfig, tag: str):
+def _make_client(cfg: RefineConfig, tag: str) -> "LLMClient":
     """按阶段槽位的服务商配置构建 LLMClient。"""
     from subtrans.translate.llm_client import ClientConfig, LLMClient
 
@@ -510,7 +522,7 @@ def _make_client(cfg: RefineConfig, tag: str):
             cfg, model, base_url,
             label=V2_STAGE_NAMES[tag])
 
-        def recovery():
+        def recovery() -> None:
             # D2026-0924-02：运行期 "Model unloaded" 自动恢复——用与首载
             # 完全相同的参数重对齐引擎，保证指纹一致；回调异常由
             # llm_client 批循环捕获并转化为「现状路径」，不会炸批循环
@@ -538,20 +550,20 @@ def _provider_default_model(cfg: RefineConfig, provider: str) -> str:
 
 @dataclass
 class StageAResult:
-    entries: list           # 阶段A产物条目 [{index,timing,text}]
-    deleted: set            # 删除标记（D1 后恒空集：删除权收归闸门0，字段兼容保留）
-    failed: set             # 重试后仍失败的 index（交阶段B补译）
-    exact_hits: dict        # TM 精确命中 {index: zh}
+    entries: list[dict[str, Any]]   # 阶段A产物条目 [{index,timing,text}]
+    deleted: set[int]       # 删除标记（D1 后恒空集：删除权收归闸门0，字段兼容保留）
+    failed: set[int]        # 重试后仍失败的 index（交阶段B补译）
+    exact_hits: dict[int, str]   # TM 精确命中 {index: zh}
 
 
-def _make_fallback_client(cfg: RefineConfig):
+def _make_fallback_client(cfg: RefineConfig) -> "LLMClient":
     """本地接管客户端（LM Studio + fallback_model，低温串行）。"""
     from subtrans.translate.llm_client import ClientConfig, LLMClient
     base_url = cfg.resolve_endpoint("lmstudio") or "http://localhost:1234/v1"
     _ensure_lmstudio_engine(cfg, cfg.fallback_model.strip(), base_url,
                             label="本地接管")
 
-    def recovery():
+    def recovery() -> None:
         # D2026-0924-02：同 _make_client，运行期卸载自动恢复（同参重对齐）
         _ensure_lmstudio_engine(cfg, cfg.fallback_model.strip(), base_url,
                                 label="本地接管")
@@ -575,14 +587,16 @@ def _fallback_enabled(cfg: RefineConfig, tag: str) -> bool:
             and cfg.stages[V2_STAGE_SLOT[tag]].provider not in ("lmstudio", "ollama"))
 
 
-def _translate_single_batch(client, batch: list, *, system_text: str,
-                            user_prompt: str, allow_empty_deletions: bool):
+def _translate_single_batch(client: "LLMClient", batch: list[dict[str, Any]],
+                            *, system_text: str,
+                            user_prompt: str,
+                            allow_empty_deletions: bool) -> dict[int, str]:
     """单批单次调用（D2026-1025-01 行数守卫的调用原语）。
 
     镜像 llm_client.translate_entries 内部对 translate_batch 的调用
     形态（含 max_output_tokens 估算），异常由调用方消化。
     """
-    mot = None
+    mot: int | None = None
     cc = getattr(client, "config", None)
     n_ctx = getattr(cc, "n_ctx", None)
     if n_ctx:
@@ -594,10 +608,11 @@ def _translate_single_batch(client, batch: list, *, system_text: str,
         max_output_tokens=mot)
 
 
-def _run_flagged_batches(client, todo: list, *, system_text: str,
+def _run_flagged_batches(client: "LLMClient", todo: list[dict[str, Any]],
+                         *, system_text: str,
                          user_prompt: str, max_batch_size: int,
-                         allow_empty_deletions: bool, flagged: set,
-                         progress_cb):
+                         allow_empty_deletions: bool, flagged: set[int],
+                         progress_cb: Callable[[str], None]) -> "BatchResult":
     """D2026-1025-01 批6 b 项：批级条件注入＋行数契约守卫。
 
     - 仅 flagged 批在 user_prompt 尾部追加注入块；未 flagged 批整量
@@ -616,9 +631,9 @@ def _run_flagged_batches(client, todo: list, *, system_text: str,
                      if not any(e["index"] in flagged for e in b)
                      for e in b]
 
-    translations: dict = {}
-    deleted: set = set()
-    failed: list = []
+    translations: dict[int, str] = {}
+    deleted: set[int] = set()
+    failed: list[int] = []
     if plain_entries:
         result = client.translate_entries(
             plain_entries, system_text=system_text, user_prompt=user_prompt,
@@ -686,10 +701,12 @@ def _run_flagged_batches(client, todo: list, *, system_text: str,
                        failed=failed)
 
 
-def _run_with_fallback(cfg: RefineConfig, tag: str, client,
-                       todo: list, *, system_text: str, user_prompt: str,
+def _run_with_fallback(cfg: RefineConfig, tag: str, client: "LLMClient",
+                       todo: list[dict[str, Any]], *, system_text: str,
+                       user_prompt: str,
                        max_batch_size: int, allow_empty_deletions: bool,
-                       emitter=None, flagged: set | None = None):
+                       emitter: EventEmitter | None = None,
+                       flagged: set[int] | None = None) -> "BatchResult":
     """云端阶段执行 + 故障接管：失败行（批失败/缺行）切换本地模型重跑一次。
 
     result.failed 中被本地接管修复的行移回 translations。
@@ -698,7 +715,7 @@ def _run_with_fallback(cfg: RefineConfig, tag: str, client,
     ＋行数守卫；flagged 为空/None 时无注入路径零变化。
     """
 
-    def _progress(m):
+    def _progress(m: str) -> None:
         print(f"   ⏳ {m}")
         _emit_batch_progress(emitter, tag, m)
 
@@ -738,18 +755,20 @@ def _run_with_fallback(cfg: RefineConfig, tag: str, client,
         result.deleted |= fb_result.deleted
         result.failed = [i for i in result.failed if i not in fb_result.deleted]
         # 观测件同步（d1028-37）：被本地接管挽回的行不再计占位串形态
-        ph: frozenset = getattr(result, "untranslated", frozenset())
+        ph: frozenset[int] = getattr(result, "untranslated", frozenset())
         if ph:
             result.untranslated = frozenset(
                 i for i in ph if i in result.failed)
     return result
 
 
-def _collect_grammar_hints(context_entries: list, targets: list,
+def _collect_grammar_hints(context_entries: list[dict[str, Any]],
+                           targets: list[dict[str, Any]],
                            verbose: bool = True,
-                           collector=None, file_name: str = None,
+                           collector: RiskCollector | None = None,
+                           file_name: str | None = None,
                            tag: str = "A", profile: str = "",
-                           direction: str = "ja→zh") -> dict:
+                           direction: str = "ja→zh") -> dict[int, str]:
     """对 targets 逐条生成语法提示（SudachiPy 句法分析，legacy 同款）。
 
     context_entries 提供条目上下文（前后条参与分析），targets 为需要
@@ -762,8 +781,8 @@ def _collect_grammar_hints(context_entries: list, targets: list,
     2.1 方向参数化（D2026-0930-05）：direction 为 "src→tgt" 方向键，
     进缓存键并按源语言分派提示后端（ja=sudachi / zh=jieba / en=规则）。
     """
-    hints = {}
-    misses = []
+    hints: dict[int, str] = {}
+    misses: list[tuple[dict[str, Any], tuple[str, str, str, str]]] = []
     with _GRAMMAR_CACHE_LOCK:
         # LRU 淘汰（D3 终选）：触顶不再整表清空，逐条弹出最旧键，
         # 直到低于容量——循环以应对一次批量可能跨多条淘汰
@@ -834,8 +853,11 @@ def _collect_grammar_hints(context_entries: list, targets: list,
     return hints
 
 
-def _inject_stage_a_assists(cfg: RefineConfig, entries: list, todo: list,
-                            tm, collector=None, file_name: str = None) -> list:
+def _inject_stage_a_assists(cfg: RefineConfig, entries: list[dict[str, Any]],
+                            todo: list[dict[str, Any]],
+                            tm: "TranslationMemory | None",
+                            collector: RiskCollector | None = None,
+                            file_name: str | None = None) -> list[dict[str, Any]]:
     """阶段A 输入辅助注入（只改发给 LLM 的文本，不影响 TM 键与产物）：
       1) 语法提示（SudachiPy 句法分析，legacy 同款；词典未就绪则自动跳过）；
       2) TM 模糊命中参考（高阈值旧译文，标注仅供参考防照抄；不写库）。
@@ -894,9 +916,13 @@ def _inject_stage_a_assists(cfg: RefineConfig, entries: list, todo: list,
     return todo
 
 
-def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
-                 glossary: list, collector=None, file_name: str = None,
-                 emitter=None, sidecar: dict | None = None,
+def _run_stage_a(cfg: RefineConfig, entries: list[dict[str, Any]],
+                 tm: "TranslationMemory | None", tmp_dir: str,
+                 glossary: list[tuple[str, str, tuple[str, ...]]],
+                 collector: RiskCollector | None = None,
+                 file_name: str | None = None,
+                 emitter: EventEmitter | None = None,
+                 sidecar: dict[str, Any] | None = None,
                  synopsis: str | None = None) -> StageAResult:
     # 协议标记：供 webview_gui 检测阶段切换，更新进度显示（勿删）
     print(f"[STAGE] {V2_STAGE_NAMES['A']}", flush=True)
@@ -905,7 +931,7 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
     # TM 精确命中替代：命中行零 LLM 调用（查阶段1 日→中 翻译对）。
     # P1-6：优先批量 exact_map（一次参数化 SQL）；无该接口的对象
     # （如测试 FakeTM）回退逐条 lookup_exact，语义不变。
-    exact = {}
+    exact: dict[int, str] = {}
     if tm:
         batch_fn = getattr(tm, "exact_map", None)
         raw = None
@@ -1001,7 +1027,7 @@ def _run_stage_a(cfg: RefineConfig, entries: list, tm, tmp_dir: str,
                         failed=failed, exact_hits=exact)
 
 
-def _stage_b_banner(cfg) -> str:
+def _stage_b_banner(cfg: RefineConfig) -> str:
     """阶段B横幅文案（2.1 批内缺陷修复 D2026-0930-05：按方向措辞，
     源语言名走 _LANG_NAMES；缺省 ja→zh 逐字不变）。"""
     src = getattr(cfg, "source_lang", None) or "ja"
@@ -1009,11 +1035,14 @@ def _stage_b_banner(cfg) -> str:
             f"对照{_LANG_NAMES.get(src, src)}原文审核/补译/润色")
 
 
-def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
-                 tmp_dir: str, glossary: list, collector=None,
-                 file_name: str = None, emitter=None,
-                 sidecar: dict | None = None,
-                 synopsis: str | None = None) -> list:
+def _run_stage_b(cfg: RefineConfig, a_result: StageAResult,
+                 orig_entries: list[dict[str, Any]],
+                 tmp_dir: str, glossary: list[tuple[str, str, tuple[str, ...]]],
+                 collector: RiskCollector | None = None,
+                 file_name: str | None = None,
+                 emitter: EventEmitter | None = None,
+                 sidecar: dict[str, Any] | None = None,
+                 synopsis: str | None = None) -> list[dict[str, Any]]:
     """阶段B：对照日文原文审校+抛光。返回最终条目列表。"""
     # 协议标记：供 webview_gui 检测阶段切换，更新进度显示（勿删）
     print(f"[STAGE] {V2_STAGE_NAMES['B']}", flush=True)
@@ -1027,7 +1056,7 @@ def _run_stage_b(cfg: RefineConfig, a_result: StageAResult, orig_entries: list,
     # 组装 B 输入：`日文原文 ||| 中文译文`
     # 日文参照按时间轴双指针对齐（同起点多条不会错配）
     aligned_orig = _align_orig_by_timing(a_result.entries, orig_entries)
-    b_entries = []
+    b_entries: list[dict[str, Any]] = []
     for ae, orig in zip(a_result.entries, aligned_orig, strict=False):
         ja = (orig["text"] or "").strip() if orig else ""
         zh = ae["text"]
@@ -1171,7 +1200,8 @@ def _file_parallel_enabled(cfg: RefineConfig) -> bool:
     return True
 
 
-def _finish_learn_threads(threads: list, collector) -> None:
+def _finish_learn_threads(threads: list[threading.Thread],
+                          collector: RiskCollector) -> None:
     """收尾词库学习后台线程：总预算内逐个 join；超时未完成的记 warning
     后放行退出（daemon 线程随进程终止，不影响主流程产物）。"""
     if not threads:
@@ -1188,8 +1218,9 @@ def _finish_learn_threads(threads: list, collector) -> None:
                       severity=SEVERITY_WARNING)
 
 
-def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
-           event_stream=None):
+def run_v2(cfg: RefineConfig, *,
+           summary_sink: dict[str, Any] | None = None,
+           event_stream: "_TextStream | None" = None) -> str | None:
     """执行 v2 两阶段流水线。返回最后一个成功输出。
 
     summary_sink 非 None 时（CLI 传入），结束时填入任务汇总：
@@ -1220,9 +1251,10 @@ def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
     collector.attach_emitter(emitter)
 
     files_ok = files_degraded = files_failed = 0
-    results, failures = [], []
+    results: list[str | None] = []
+    failures: list[tuple[str, Exception]] = []
     total = len(cfg.inputs)
-    learn_threads: list = []    # P1-6：逐文件词库学习后台线程（run 级注册）
+    learn_threads: list[threading.Thread] = []    # P1-6：逐文件词库学习后台线程（run 级注册）
 
     # P1-5 生效配置摘要：text 模式直接打印；ndjson 模式随 task_started 上报
     config_summary = cfg.effective_summary()
@@ -1255,7 +1287,7 @@ def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
                           "config_summary": config_summary})
     emitter.start_heartbeat()
 
-    def _process_file(path):
+    def _process_file(path: str) -> "tuple[str, str | None, Exception | None, int]":
         """单文件处理；异常隔离进记录，不拖垮其他文件。"""
         before = len(collector.events)
         try:
@@ -1265,7 +1297,8 @@ def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
         except Exception as e:      # noqa: BLE001 单文件隔离
             return (path, None, e, before)
 
-    def _absorb(record, idx: int) -> None:
+    def _absorb(record: "tuple[str, str | None, Exception | None, int]",
+                idx: int) -> None:
         """聚合单文件记录到任务计数（主线程串行执行，无竞态）。"""
         nonlocal files_ok, files_degraded, files_failed
         path, out, err, before = record
@@ -1331,7 +1364,8 @@ def run_v2(cfg: RefineConfig, *, summary_sink: dict | None = None,
         emitter.close()
 
 
-def map_entries_to_scenes(entries: list, scenes: dict) -> dict:
+def map_entries_to_scenes(entries: list[dict[str, Any]],
+                          scenes: dict[int, dict[str, Any]]) -> dict[int, int]:
     """H4b：条目 → 场景归属映射（dict[条目编号 index → 场景号 scene_no]）。
 
     场景按 scene_no 升序累计 audio_duration_s 得时间边界（秒）；条目按
@@ -1344,7 +1378,7 @@ def map_entries_to_scenes(entries: list, scenes: dict) -> dict:
     """
     if not scenes:
         return {}
-    boundaries: list = []
+    boundaries: list[tuple[int, float]] = []
     acc = 0.0
     for scene_no in sorted(scenes):
         scene = scenes[scene_no] or {}
@@ -1355,7 +1389,7 @@ def map_entries_to_scenes(entries: list, scenes: dict) -> dict:
         acc += max(0.0, dur)
         boundaries.append((scene_no, acc))
     total = boundaries[-1][1]
-    mapping: dict = {}
+    mapping: dict[int, int] = {}
     for e in entries:
         idx = e.get("index")
         if idx is None:
@@ -1374,7 +1408,9 @@ def map_entries_to_scenes(entries: list, scenes: dict) -> dict:
     return mapping
 
 
-def _kana_clean_stage(entries: list, cfg: RefineConfig) -> tuple:
+def _kana_clean_stage(entries: list[dict[str, Any]],
+                      cfg: RefineConfig,
+                      ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """源文假名清洗阶段（D2026-1025-01 批3a）：预合并后、阶段A 前的
     确定性源文侧清洗（kana_clean 纯函数层的管线接线门）。
 
@@ -1397,8 +1433,10 @@ def _kana_clean_stage(entries: list, cfg: RefineConfig) -> tuple:
                          delete_enabled=delete_on)
 
 
-def _run_single_v2(cfg: RefineConfig, in_path: str, collector=None,
-                   emitter=None, learn_threads: list | None = None) -> str:
+def _run_single_v2(cfg: RefineConfig, in_path: str,
+                   collector: RiskCollector | None = None,
+                   emitter: EventEmitter | None = None,
+                   learn_threads: list[threading.Thread] | None = None) -> str:
     """产物锁挂点（v1.3.0 D4，D2026-0925-01 终选）：锁键=输入 sha1+output_dir。
 
     锁在 _resolve_stage_paths 之后、写任何产物之前获取。三态：持锁成功→
@@ -1407,7 +1445,7 @@ def _run_single_v2(cfg: RefineConfig, in_path: str, collector=None,
     None）→ 降级无锁继续，不拒绝文件。finally 释放，进程死 OS 自动释放。
     """
     resolved_in, resolved_out, _stem = _resolve_stage_paths(cfg, in_path)
-    lock = None
+    lock: ArtifactLockHandle | None = None
     try:
         lock = acquire_artifact_lock(resolved_in, resolved_out)
     except ArtifactLockConflict as e:
@@ -1424,8 +1462,10 @@ def _run_single_v2(cfg: RefineConfig, in_path: str, collector=None,
             release_artifact_lock(lock)
 
 
-def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
-                        emitter=None, learn_threads: list | None = None) -> str:
+def _run_single_v2_impl(cfg: RefineConfig, in_path: str,
+                        collector: RiskCollector | None = None,
+                        emitter: EventEmitter | None = None,
+                        learn_threads: list[threading.Thread] | None = None) -> str:
     if collector is None:
         collector = RiskCollector()
     if emitter is None:
@@ -1544,7 +1584,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                 and not bool(telemetry.get("stale")))
     low_trust_scene_nos = {no for no, sc in telemetry_scenes.items()
                            if scene_low_trust(sc)}
-    scene_of_entry: dict = {}
+    scene_of_entry: dict[int, int] = {}
     adaptive_entries = 0
     if adaptive:
         scene_of_entry = map_entries_to_scenes(orig_entries, telemetry_scenes)
@@ -1584,9 +1624,11 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
     # H5：候选 position 指向本次检测输入，先留快照供条目编号对齐。
     # H4b：自适应开启时按"场景低信任 → 条目"谓词逐条收紧删五类参数。
     gate0_input = orig_entries
-    tight_pred = None
+    tight_pred: Callable[[dict[str, Any]], bool] | None = None
     if adaptive:
-        def _tight_pred(e, _m=scene_of_entry, _lt=low_trust_scene_nos):
+        def _tight_pred(e: dict[str, Any],
+                        _m: dict[int, int] = scene_of_entry,
+                        _lt: set[int] = low_trust_scene_nos) -> bool:
             return _m.get(e.get("index")) in _lt
         tight_pred = _tight_pred
     orig_entries, gate0_stats = apply_source_filter(
@@ -1767,7 +1809,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
         # ---- H5 翻译后回捞：源文高置信幻觉 × 译文流畅中文 → 隔离区 ----
         # 只移动不删除（候选条目落盘 {stem}_隔离区.srt 供人工复核）；
         # 无候选（default 正常删除 / off 档）时零开销跳过
-        quarantine_entries: list = []
+        quarantine_entries: list[dict[str, Any]] = []
         if gate0_stats.get("quarantine_candidates"):
             final_entries, quarantine_entries = quarantine_review(
                 final_entries, gate0_stats["quarantine_candidates"],
@@ -1915,7 +1957,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                     from .pass_disagreement import collect_disagreement, probe_disagreement_mode
                     pass_mode = probe_disagreement_mode(in_path)
                     disag = collect_disagreement(in_path)
-                merge_stats: dict = {"premerge_merged": premerge_merged}
+                merge_stats: dict[str, Any] = {"premerge_merged": premerge_merged}
                 # 源文假名清洗 stats（D2026-1025-01 批3a）：kana_stats 为
                 # None（非 ja→zh / 两开关全关）时不挂数据链路，报告该行缺席
                 if kana_stats is not None:
@@ -2090,7 +2132,7 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
                             "available": False,
                             "reason": f"音频检测失败，本次跳过: {e}",
                             "candidates": [], "metrics": {}}
-                guide: dict = {}
+                guide: dict[str, Any] = {}
                 # 2.0.1 CPS 行动化（定标 docs/cps-定标报告-20260930.md）：
                 # 开关开时传行动层参数；关闭/旧配置缺席时 None=行为不变。
                 cps_action = None
@@ -2177,7 +2219,8 @@ def _run_single_v2_impl(cfg: RefineConfig, in_path: str, collector=None,
     return out_final_path
 
 
-def _wrap_as_result(entries: list, a_result: StageAResult) -> StageAResult:
+def _wrap_as_result(entries: list[dict[str, Any]],
+                    a_result: StageAResult) -> StageAResult:
     """兜底规则可能增删条目，重建 StageAResult 供阶段B消费。"""
     return StageAResult(
         entries=entries,

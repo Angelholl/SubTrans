@@ -111,8 +111,10 @@ def term_in_text(term: str, text: str) -> bool:
     return False
 
 
-def match_glossary(text: str,
-                   glossary: Iterable[Sequence[str]]) -> list[tuple[str, str]]:
+def match_glossary(
+        text: str,
+        glossary: Iterable[Sequence[str] | tuple[str, str, tuple[str, ...]]]
+) -> list[tuple[str, str]]:
     """命中匹配：term_in_text 单一口径（NFKC 归一 + 拉丁词边界）。
 
     兼容两列 (src, dst) 与三列 (src, dst, aliases) 词条（v1.2.2 D：
