@@ -33,6 +33,8 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
+from typing import Any
 
 from .. import paths
 from ..utils.subprocess_flags import CREATE_NO_WINDOW
@@ -79,7 +81,7 @@ RUNTIME_ZIP_BYTES = 109673863
 # 核验后翻转——上架门沿词典链先例。2026-10-29 三门已过：install 真下载
 # 110MB→download_model 真下载 2946MB→84s 日语音频安装态真转写，见
 # d1028-35 runbook 执行记录与 D2026-1028-04 ④）
-CT2_MODELS: list[dict] = [
+CT2_MODELS: list[dict[str, Any]] = [
     {
         "model": "large-v2",
         "backend": "ct2",
@@ -178,7 +180,8 @@ def _default_runtime_root() -> tuple[str, str]:
     return paths.data_subdir("runtime", "ct2"), "default"
 
 
-def _resolve_dir_setting(env_name: str, key: str, default_fn) -> dict:
+def _resolve_dir_setting(env_name: str, key: str,
+                         default_fn: Callable[[], tuple[str, str]]) -> dict[str, str]:
     """落位解析序共用面（D2026-1103-04 评审补漏：运行时/模型两键的解析体
     逐字同构，抽此一处）：环境变量 > settings 键 > 现形默认。
 
@@ -198,7 +201,7 @@ def _resolve_dir_setting(env_name: str, key: str, default_fn) -> dict:
     return {"dir": path, "source": source}
 
 
-def runtime_dir_info() -> dict:
+def runtime_dir_info() -> dict[str, str]:
     """运行时落位与来源（source ∈ env/settings/default/legacy）。
 
     解析序：环境变量 ``SUBTRANS_CT2_RUNTIME_DIR``（测试隔离/CI 用，
@@ -244,7 +247,7 @@ def _download_tmp_path(name: str, base: str = "") -> str:
         return paths.data_subdir("runtime", name)
 
 
-def read_runtime_manifest(root: str = "") -> dict | None:
+def read_runtime_manifest(root: str = "") -> dict[str, Any] | None:
     """读+校验运行时 manifest；缺失/非法一律返回 None（不抛，诊断面用）。
 
     认证语义（D2026-1028-04）：layout_version 匹配 + python_exe/site_packages
@@ -375,7 +378,7 @@ def _default_model_root() -> tuple[str, str]:
     return paths.data_subdir("models", "ct2"), "default"
 
 
-def ct2_model_dir_info() -> dict:
+def ct2_model_dir_info() -> dict[str, str]:
     """模型落位与来源（source ∈ env/settings/default/legacy）。
 
     解析序与运行时同构（共用 _resolve_dir_setting）：环境变量
@@ -453,7 +456,7 @@ def link_target(target: str, which: str) -> str:
     return str(grand / "ct2")
 
 
-def migrate_ct2_tree(kind: str, dst: str) -> dict:
+def migrate_ct2_tree(kind: str, dst: str) -> dict[str, Any]:
     """落位搬迁（B1，D2026-1104-01）：现形落位 → dst 的文件搬迁。
 
     kind="runtime"：runtime_root() 整树迁；kind="model"：ct2_model_dir()
@@ -466,7 +469,7 @@ def migrate_ct2_tree(kind: str, dst: str) -> dict:
     no-op（改落位即配置切换场景，返回 moved=False）；dst 已存在且非空＝
     拒绝；失败一律保留源原样（跨卷副本清掉）。"""
     src = runtime_root() if kind == "runtime" else ct2_model_dir()
-    out: dict = {"moved": False, "same_volume": False, "warning": "",
+    out: dict[str, Any] = {"moved": False, "same_volume": False, "warning": "",
                  "error": ""}
     if not src or not os.path.isdir(src):
         return out                                    # 现位无货＝no-op
@@ -591,7 +594,7 @@ def selfcheck() -> tuple[bool, str]:
     return True, proc.stdout.strip().splitlines()[-1]
 
 
-def provider_status() -> dict:
+def provider_status() -> dict[str, Any]:
     """状态快照（GUI/CLI 双消费）。
 
     installed＝manifest 认证布局（D2026-1028-04）；probe＝fallback 探测
@@ -630,7 +633,7 @@ def provider_status() -> dict:
     }
 
 
-def _pip_env() -> dict:
+def _pip_env() -> dict[str, str]:
     env = dict(os.environ)
     env.setdefault("PYTHONUTF8", "1")
     # 镜像下载子进程代理中和（D2026-1028-04）：仅注入子进程环境不污染
@@ -703,7 +706,7 @@ def _sha256_of(path: str) -> str:
     return h.hexdigest()
 
 
-def _verified_stamp(zip_path: str) -> dict:
+def _verified_stamp(zip_path: str) -> dict[str, str]:
     """验证时刻＋本次 zip 实算 sha256（D1 加固，D2026-1031-04 ⑧）。
 
     两键同语义：安装/下载成功回写 runtime.json 的 gpu_patch 字段，供
@@ -715,7 +718,8 @@ def _verified_stamp(zip_path: str) -> dict:
 
 
 def _guarded_download(url: str, dest: str, expected_sha256: str,
-                      expected_bytes: int = 0, progress=None) -> None:
+                      expected_bytes: int = 0,
+                      progress: Callable[[int, int], None] | None = None) -> None:
     """守卫下载（复用 dict_manager 下载原语）+sha256 逐字节核验。
 
     _http_get 自带：https+域白名单（hf-mirror.com/cas-bridge 在案）、重定向
@@ -781,7 +785,7 @@ def _verify_zip_layout(zip_path: str) -> None:
             "布局（D2026-1028-04）")
 
 
-def _write_manifest_after_extract(root: str, zip_sha256: str) -> dict:
+def _write_manifest_after_extract(root: str, zip_sha256: str) -> dict[str, Any]:
     """解包后 manifest 落位核验+回写 zip_sha256（安装器为 manifest 写入方）。
 
     zip 内自带 runtime.json（构建期定 python_exe/site_packages/layout_version），
@@ -886,7 +890,8 @@ def _normalize_model_layout(dest_model_dir: str) -> None:
         return
 
 
-def download_model(model: str = "large-v2", progress=None) -> int:
+def download_model(model: str = "large-v2",
+                   progress: Callable[[int, int], None] | None = None) -> int:
     """CT2 模型 zip 守卫下载+核验+解包到现形模型落位/<model>（verified 门）。
 
     rc 语义：0＝新装成功；1＝已落位（幂等）；2＝未知型号；3＝verified 门
@@ -952,10 +957,10 @@ def install(provider: str = "auto") -> int:
 # ---------------------------------------------------------------------------
 
 _OP_LOCK = threading.Lock()
-_OP_STATE: dict = {"phase": "idle", "kind": "", "detail": "", "rc": None}
+_OP_STATE: dict[str, Any] = {"phase": "idle", "kind": "", "detail": "", "rc": None}
 
 
-def operation_progress() -> dict:
+def operation_progress() -> dict[str, Any]:
     """当前异步操作快照（phase ∈ idle/running/done/failed；只读零副作用）。"""
     with _OP_LOCK:
         return dict(_OP_STATE)
@@ -966,7 +971,7 @@ def _set_op(phase: str, kind: str = "", detail: str = "", rc: object = None) -> 
         _OP_STATE.update(phase=phase, kind=kind, detail=detail, rc=rc)
 
 
-def start_install(provider: str = "auto") -> dict:
+def start_install(provider: str = "auto") -> dict[str, Any]:
     """后台线程执行运行时安装（api 桥入口；重复启动拒绝）。"""
     with _OP_LOCK:
         if _OP_STATE["phase"] == "running":
@@ -984,7 +989,7 @@ def start_install(provider: str = "auto") -> dict:
     return {"started": True, "provider": provider}
 
 
-def start_model_download(model: str = "large-v2") -> dict:
+def start_model_download(model: str = "large-v2") -> dict[str, Any]:
     """后台线程执行模型下载（verified 门在 download_model 内）。"""
     with _OP_LOCK:
         if _OP_STATE["phase"] == "running":
@@ -1014,7 +1019,7 @@ def gpu_patch_dir() -> str:
     return os.path.join(runtime_root(), GPU_PATCH_DIRNAME)
 
 
-def read_gpu_patch_manifest(gpd: str = "") -> dict | None:
+def read_gpu_patch_manifest(gpd: str = "") -> dict[str, Any] | None:
     """读补丁包 manifest（构建产物 gpu_patch_manifest.json；缺失/非法=None）。"""
     try:
         data = json.loads(pathlib.Path(
@@ -1077,7 +1082,7 @@ def cuda_device_count() -> int:
     return count
 
 
-def gpu_patch_status() -> dict:
+def gpu_patch_status() -> dict[str, Any]:
     """补丁包状态快照（CLI status / GUI 桥消费；无 GPU 零打扰=GUI 据此
     只在 installed/complete=False 且 cuda_visible=True 时提示 opt-in）。"""
     cuda_visible = cuda_device_count() > 0
@@ -1155,7 +1160,8 @@ def install_gpu_patch(zip_path: str) -> int:
     return 0
 
 
-def download_gpu_patch(progress=None) -> int:
+def download_gpu_patch(
+        progress: Callable[[int, int], None] | None = None) -> int:
     """在线下载 GPU 补丁包（守卫下载+布局门+解包+manifest 回写）。
 
     在线 pin 未点亮（owner 上传镜像回填前）＝人话报错 rc=3，本地 zip 通道
@@ -1197,7 +1203,7 @@ def download_gpu_patch(progress=None) -> int:
     return 0
 
 
-def start_gpu_patch_install() -> dict:
+def start_gpu_patch_install() -> dict[str, Any]:
     """后台线程执行 GPU 补丁包下载安装（GUI 桥消费；单槽操作面同款）。"""
     with _OP_LOCK:
         if _OP_STATE["phase"] == "running":

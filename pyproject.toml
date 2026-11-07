@@ -158,6 +158,8 @@ module = [
     "subtrans.translate.llm_client",
     "subtrans.refine.polish",
     "subtrans.refine.manifest",
+    # 段16 strict 修债：20+ 条级件（owner 令开工），修一件入名单一件，只增不减。
+    "subtrans.refine.asr_runtime",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
