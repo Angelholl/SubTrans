@@ -119,6 +119,11 @@ def test_build_crosscheck_block_detail_keys_and_failed_excluded(
 # ---------------------------------------------------------------------------
 
 def test_slice_clips_caps_and_cleans(monkeypatch, tmp_path):
+    # 数据根隔离（候卡②，D2026-1108 owner 拍板）：本测试真调 cleanup_clips，
+    # 不隔离会删真实数据根 Temp/media_clips 的在飞切片（d1106 140 回放 27 条
+    # asr_error 根因＋d1107 现场复现；沿 test_asr_ct2.py 既有 SUBTRANS_DATA_ROOT
+    # monkeypatch 模式）。
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     monkeypatch.setattr(asr_env.shutil, "which",
                         lambda n: str(tmp_path / "ffmpeg.exe"))
     media = tmp_path / "m.mp4"
