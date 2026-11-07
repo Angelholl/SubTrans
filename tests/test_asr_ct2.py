@@ -577,3 +577,65 @@ class TestRunnerParserExactMatch:
                                              model_dir=str(tmp_path))
         assert cmd[cmd.index("--model") + 1] == "large-v2"
         assert cmd[cmd.index("--model-dir") + 1] == str(tmp_path)
+
+
+class TestWordTimestampsFlag:
+    """--no-word-timestamps（D2026-1108 owner 拍板，卡D word-ts-off 臂承载）：
+    词级恒开是词级 sidecar 与断行前提（既有钉 word_timestamps is True 保持）；
+    旗标显式关闭时词级缺失→断行自动降级留痕，SRT/sidecar 契约照常。"""
+
+    class _FakeNoWordModel:
+        def __init__(self, model_dir=None, device=None, compute_type=None):
+            self.seen_word_ts = None
+
+        def transcribe(self, media, language=None, beam_size=None,
+                       vad_filter=None, condition_on_previous_text=None,
+                       word_timestamps=None):
+            self.seen_word_ts = word_timestamps
+            ws = [_FakeWord(0.5, 1.2, "こんにちは", 0.9)] if word_timestamps else []
+            segs = [_FakeSeg(0.5, 2.5, " こんにちは ", ws)]
+            return iter(segs), _FakeInfo()
+
+    def test_flag_off_plumbs_false_and_degrades(self, tmp_path, capsys,
+                                                monkeypatch):
+        # 旗标关→transcribe(word_timestamps=False)→词级缺失→断行降级
+        # （SRT 保持原生长行）＋sidecar words 空数组，stdout 契约照常
+        fake = types.ModuleType("faster_whisper")
+        model = self._FakeNoWordModel(str(tmp_path))
+        fake.WhisperModel = lambda *a, **k: model
+        monkeypatch.setitem(sys.modules, "faster_whisper", fake)
+        media = tmp_path / "a.wav"
+        media.write_bytes(b"RIFF")
+        mdir = tmp_path / "m"
+        mdir.mkdir()
+        srt_out = tmp_path / "out" / "a.srt"
+        rc = asr_runner.main(["--engine", "ct2", "--media", str(media),
+                              "--srt-out", str(srt_out),
+                              "--model-dir", str(mdir),
+                              "--no-word-timestamps"])
+        assert rc == 0
+        assert model.seen_word_ts is False
+        out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert out["ok"] is True
+        assert out["segments"][0]["words"] == []
+        sidecar = json.loads(
+            pathlib.Path(str(srt_out) + ".words.json").read_text(
+                encoding="utf-8"))
+        assert sidecar["segments"][0]["words"] == []
+        text = srt_out.read_text(encoding="utf-8")
+        assert "こんにちは" in text
+
+    def test_flag_absent_keeps_true(self, tmp_path, capsys, monkeypatch):
+        # 缺省（无旗标）恒开不变：既有钉 word_timestamps is True 口径保持
+        fake = types.ModuleType("faster_whisper")
+        fake.WhisperModel = _FakeModel   # 内部断言 word_timestamps is True
+        monkeypatch.setitem(sys.modules, "faster_whisper", fake)
+        media = tmp_path / "a.wav"
+        media.write_bytes(b"RIFF")
+        mdir = tmp_path / "m"
+        mdir.mkdir()
+        rc = asr_runner.main(["--engine", "ct2", "--media", str(media),
+                              "--srt-out", str(tmp_path / "out" / "b.srt"),
+                              "--model-dir", str(mdir)])
+        assert rc == 0
+        capsys.readouterr()

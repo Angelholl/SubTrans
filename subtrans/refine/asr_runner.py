@@ -166,16 +166,20 @@ def _load_model(model_dir: str, device: str, compute_type: str,
 
 def _transcribe_segments(model_obj, media: str, language: str, *,
                          beam_size: int, vad_filter: bool,
-                         condition_previous: bool):
+                         condition_previous: bool,
+                         word_timestamps: bool = True):
     """单 pass 转写→(段数组, info)；段含词级＋置信三键（D2026-1029-01）。
 
     stdout 契约（D2026-1029-01 批1 置信透传）：segments=完整段数组（含
     faster_whisper 原生置信三键 no_speech_prob/avg_logprob/compression_
-    ratio，None 安全；此前仅回计数导致消费侧三维置信门静默失效）。"""
+    ratio，None 安全；此前仅回计数导致消费侧三维置信门静默失效）。
+    word_timestamps 缺省恒开（词级 sidecar 与断行前提）；--no-word-
+    timestamps 显式关闭（A/B 臂承载，D2026-1108）：词级缺失→断行自动
+    降级留痕（_apply_line_break 既有分支）。"""
     segments_iter, info = model_obj.transcribe(
         media, language=language, beam_size=beam_size,
         vad_filter=vad_filter, condition_on_previous_text=condition_previous,
-        word_timestamps=True)
+        word_timestamps=word_timestamps)
     segs = []
     for s in segments_iter:
         words = []
@@ -246,7 +250,8 @@ def _pass_artifact_paths(out_path):
 def _write_dualpass_output(out_path, srt_out: str, segs: list, info,
                            pass2_segs: list, model_dir: str, pm, *,
                            beam_size: int, vad_filter: bool,
-                           condition_previous: bool, line_break: bool) -> int:
+                           condition_previous: bool, line_break: bool,
+                           word_timestamps: bool = True) -> int:
     """双 pass 产物面（D2026-1029-02 拍板①）。
 
     主输出=覆盖合并结果（断行器链照常生效）；同目录留痕 pass1/pass2 原生
@@ -287,14 +292,14 @@ def _write_dualpass_output(out_path, srt_out: str, segs: list, info,
                                  "vad_filter": vad_filter,
                                  "condition_on_previous_text":
                                      condition_previous,
-                                 "word_timestamps": True},
+                                 "word_timestamps": word_timestamps},
                       "segments": segs},
             "pass2": {"srt": str(p2_path), "words_sidecar": p2_side,
                       "params": {"beam_size": PASS2_BEAM_SIZE,
                                  "vad_filter": PASS2_VAD_FILTER,
                                  "condition_on_previous_text":
                                      condition_previous,
-                                 "word_timestamps": True},
+                                 "word_timestamps": word_timestamps},
                       "segments": pass2_segs},
             "adopted": adopted}
     dual_path = pathlib.Path(str(out_path) + ".dualpass.json")
@@ -313,6 +318,7 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
                               vad_filter: bool, condition_previous: bool,
                               compute_type: str = "int8",
                               line_break: bool = True,
+                              no_word_timestamps: bool = False,
                               device: str = "auto",
                               gpu_dll_dir: str = "",
                               passes: int = 1) -> int:
@@ -365,9 +371,11 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
             print("[asr_runner] " + note, file=sys.stderr)
         model_obj, dev, eff_ct = _load_model(model_dir, dev, eff_ct,
                                              gpu_dll_dir)
+        word_ts = not no_word_timestamps
         segs, info = _transcribe_segments(
             model_obj, media, language, beam_size=beam_size,
-            vad_filter=vad_filter, condition_previous=condition_previous)
+            vad_filter=vad_filter, condition_previous=condition_previous,
+            word_timestamps=word_ts)
         pass2_segs: list | None = None
         if passes == 2:
             # 双 pass（D2026-1029-02 拍板①）：pass2=召回档预注册常量，其余
@@ -375,7 +383,8 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
             pass2_segs, _pass2_info = _transcribe_segments(
                 model_obj, media, language, beam_size=PASS2_BEAM_SIZE,
                 vad_filter=PASS2_VAD_FILTER,
-                condition_previous=condition_previous)
+                condition_previous=condition_previous,
+                word_timestamps=word_ts)
     except Exception as e:   # noqa: BLE001 转写失败按契约返回
         print(json.dumps({"ok": False,
                           "error": "ct2 转写失败: " + str(e)},
@@ -399,7 +408,8 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
         return _write_dualpass_output(
             out_path, srt_out, segs, info, pass2_segs, model_dir, pm,
             beam_size=beam_size, vad_filter=vad_filter,
-            condition_previous=condition_previous, line_break=line_break)
+            condition_previous=condition_previous, line_break=line_break,
+            word_timestamps=word_ts)
     # 断行器接入（3.2.1，D2026-1028-03）：词级时间戳+CPS+停顿确定性切分，
     # 缺省开（社区实证 CT2 长行问题）；--no-line-break 关闭走原生段。
     # sidecar 始终保留原始词级数据（断行器输入可回放）。
@@ -510,6 +520,10 @@ def main(argv=None) -> int:
                              "→cpu）")
     parser.add_argument("--no-line-break", action="store_true",
                         help="ct2 关闭确定性断行（缺省开=长行自动切分）")
+    parser.add_argument("--no-word-timestamps", action="store_true",
+                        help="ct2 关闭词级时间戳（PROVISIONAL；缺省开=词级"
+                             " sidecar 与断行前提；关闭时词级缺失→断行自动"
+                             "降级留痕；A/B 臂承载，D2026-1108）")
     parser.add_argument("--passes", type=int, choices=[1, 2], default=1,
                         help="转写遍数（3.2.0 件A：1=单 pass 现状缺省；"
                              "2=pass1 精准档＋pass2 召回档覆盖合并，另留"
@@ -531,6 +545,7 @@ def main(argv=None) -> int:
         condition_previous=args.condition_previous,
         compute_type=args.compute_type,
         line_break=not args.no_line_break,
+        no_word_timestamps=args.no_word_timestamps,
         device=args.device, gpu_dll_dir=args.gpu_dll_dir,
         passes=args.passes)
 
