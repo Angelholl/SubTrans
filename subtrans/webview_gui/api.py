@@ -21,9 +21,10 @@ import threading
 import time
 import uuid
 from collections import Counter
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import webview
 from webview import FileDialog
@@ -50,6 +51,12 @@ from .event_stream import (  # noqa: E402  webview-free 可测模块
 )
 from .strings import msg  # noqa: E402  用户可见文案唯一中文来源
 
+if TYPE_CHECKING:
+    # 前向引用契约（运行时零导入，段15 manifest 同型）：仅注解位消费。
+    from subtrans.refine.ffmpeg_supply import SupplyResult
+    from subtrans.refine.hardsub import EncodeParams
+    from subtrans.webview_gui.encode_queue import EncodeQueue
+
 # Project root (subtrans/webview_gui/api.py -> project root)
 # 数据路径统一收口到 subtrans.paths：源码=仓库根；frozen=用户数据根
 REPO_ROOT = paths.app_root()
@@ -61,7 +68,7 @@ REPO_ROOT = paths.app_root()
 SESSION_SELECTED_PATHS: set[str] = set()
 
 
-def register_session_paths(paths) -> None:
+def register_session_paths(paths: Iterable[str] | None) -> None:
     """登记用户通过受信入口选择的路径（拖放入口由 main.py 调用）。"""
     for p in paths or []:
         if isinstance(p, str) and p:
@@ -128,7 +135,7 @@ def _review_save_allowed(path: str) -> str:
         raise
 
 
-def _ensure_template_dir(templates_dir) -> str:
+def _ensure_template_dir(templates_dir: str | None) -> str:
     """角色卡目录守卫（反路径穿越加固；批1a 件3 持久化收口）。
 
     缺省目录解析（不传目录时）：持久登记 templates_dir（user_dirs.json）
@@ -169,7 +176,7 @@ def _ensure_template_dir(templates_dir) -> str:
     return resolved
 
 
-def _safe_template_basename(filename) -> str | None:
+def _safe_template_basename(filename: str) -> str | None:
     """角色卡**文件名参数位**守卫（D2026-0930-07-追加1 必改②/⑤）。
 
     仅接受"纯文件名"：无目录成分、无路径分隔符、非空且 .txt 后缀。
@@ -596,7 +603,9 @@ _REVIEW_TRANSCRIBE_INFLIGHT: set[str] = set()
 
 
 def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
-                    timeout_s: float, progress_cb=None) -> tuple[bool, str]:
+                    timeout_s: float,
+                    progress_cb: Callable[[float], None] | None = None
+                    ) -> tuple[bool, str]:
     """同步转码主体（后台线程包壳调用；list-args 禁 shell）。
 
     - ``-progress pipe:1`` 逐行解析 out_time_ms（ffmpeg 语义实为微秒）；
@@ -645,7 +654,9 @@ def _transcode_sync(ffmpeg_path: str, media_path: str, out_path: str,
                 os.unlink(out_path)
 
 
-def _codec_direct(ext: str, codecs: dict, exts, vids, auds) -> bool:
+def _codec_direct(ext: str, codecs: dict[str, Any],
+                  exts: Iterable[str], vids: Iterable[str],
+                  auds: Iterable[str]) -> bool:
     """播放矩阵参数化判定（批 3 技术债 e）。
 
     direct = 容器后缀 ∈ exts ∧ 视频 codec ∈ vids ∧ 音频 codec ∈ auds；
@@ -859,9 +870,9 @@ class TranslateAPI:
     # 为纯 basename 时链导读解析按会话目录定位，与翻译主流程同源）
     _session_paths: dict[str, Any]
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize API state."""
-        self.process: subprocess.Popen | None = None
+        self.process: subprocess.Popen[str] | None = None
 
         # 退出时清理 refine 临时目录并终止残留子进程
         import atexit
@@ -963,8 +974,10 @@ class TranslateAPI:
         return self.select_folder()
 
     @staticmethod
-    def _open_file_dialog(type_keys, save=False, default_name=None,
-                          allow_multiple=False):
+    def _open_file_dialog(type_keys: Iterable[str], save: bool = False,
+                          default_name: str | None = None,
+                          allow_multiple: bool = False,
+                          ) -> "list[str] | str | None":
         """文件对话框收敛（批 3 技术债 g）：统一 OPEN/SAVE 分支。
 
         返回用户选择结果（OPEN=list / SAVE=str），取消或无窗口返回 None；
@@ -977,10 +990,12 @@ class TranslateAPI:
             kwargs: dict[str, Any] = {"file_types": list(type_keys)}
             if default_name:
                 kwargs["save_filename"] = default_name
-            return windows[0].create_file_dialog(webview.SAVE_DIALOG, **kwargs)
-        return windows[0].create_file_dialog(
+            return cast("list[str] | str | None",
+                        windows[0].create_file_dialog(webview.SAVE_DIALOG,
+                                                      **kwargs))
+        return cast("list[str] | str | None", windows[0].create_file_dialog(
             webview.OPEN_DIALOG, allow_multiple=allow_multiple,
-            file_types=list(type_keys))
+            file_types=list(type_keys)))
 
     def select_srt_files(self) -> dict[str, Any]:
         """Open file dialog to select SRT files for translation."""
@@ -1129,19 +1144,21 @@ class TranslateAPI:
     # Translation process management
     # ========================================================================
 
-    def _init_translation_state(self):
+    def _init_translation_state(self) -> None:
         """Initialize translation-specific state if not already done."""
         if not hasattr(self, '_translate_process'):
-            self._translate_process: subprocess.Popen | None = None
-            self._translate_status = "idle"
+            # 哨兵态诚实注解：True＝start_translation 启动中占位（消费侧先判 is True）
+            self._translate_process: (subprocess.Popen[str] |
+                                      Literal[True] | None) = None
+            self._translate_status: str = "idle"
             self._translate_error: str | None = None
-            self._translate_log_queue: queue.Queue = queue.Queue()
+            self._translate_log_queue: queue.Queue[str] = queue.Queue()
             self._translate_thread: threading.Thread | None = None
-            self._translate_files_total = 0
-            self._translate_current_file = None
-            self._translate_lines_total = 0
-            self._translate_lines_done = 0
-            self._translate_current_stage = ""
+            self._translate_files_total: int = 0
+            self._translate_current_file: str | None = None
+            self._translate_lines_total: int = 0
+            self._translate_lines_done: int = 0
+            self._translate_current_stage: str = ""
             # NDJSON 事件流解析器（start_translation 时重建）
             self._translate_parser: EventStreamParser | None = None
 
@@ -1218,8 +1235,8 @@ class TranslateAPI:
                 return {"success": False, "fullchain_running": True,
                         "error": msg("fullchain_running")}
             # Sentinel: mark "starting" to block double-start while Popen runs
-            #（True 哨兵仅作占位，消费侧均先判 `is True`；cast 仅为类型清零）
-            self._translate_process = cast(subprocess.Popen, True)
+            #（True 哨兵仅作占位，消费侧均先判 `is True`；属性注解含 Literal[True] 哨兵态）
+            self._translate_process = True
 
         while True:
             try:
@@ -1275,7 +1292,7 @@ class TranslateAPI:
 
             # stdout/stderr 分离：stdout 逐行喂 NDJSON 事件解析器，
             # stderr 原样入日志队列；各自独立线程排空管道防死锁（#190）
-            proc = cast(subprocess.Popen, spawn_refine_cli(
+            proc = cast("subprocess.Popen[str]", spawn_refine_cli(
                 args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -1319,15 +1336,17 @@ class TranslateAPI:
             from subtrans.webview_gui.encode_queue import release_translate_slot
             release_translate_slot()
             with self._translate_lock:
-                proc = self._translate_process
+                # 残留进程快照独立局部名（True 哨兵态可现；语义同旧 proc 复用）
+                stale_proc = self._translate_process
                 self._translate_process = None
-            if proc is not None and proc is not True and hasattr(proc, 'kill'):
+            if (stale_proc is not None and stale_proc is not True
+                    and hasattr(stale_proc, 'kill')):
                 with contextlib.suppress(Exception):
-                    proc.kill()
+                    stale_proc.kill()
             self._translate_status = "error"
             return {"success": False, "error": str(e)}
 
-    def _pump_stdout(self, proc: subprocess.Popen):
+    def _pump_stdout(self, proc: subprocess.Popen[str]) -> None:
         """stdout 守护线程：NDJSON 事件解析 + 人类可读行入日志队列。
 
         - 事件行格式化成 "[事件] 阶段B 批次 3/10" 风格；format 结果为 None
@@ -1359,7 +1378,7 @@ class TranslateAPI:
             with contextlib.suppress(Exception):
                 proc.wait()
 
-    def _pump_stderr(self, proc: subprocess.Popen):
+    def _pump_stderr(self, proc: subprocess.Popen[str]) -> None:
         """stderr 守护线程：原样入日志队列。"""
         try:
             for line in proc.stderr:
@@ -2353,7 +2372,7 @@ class TranslateAPI:
             from subtrans.refine.glossary import load_glossary_ex, save_glossary
             p = path or default_glossary_path()
             p = str(_resolve_safe_path(p))
-            old_aliases: dict[str, tuple] = {}
+            old_aliases: dict[str, tuple[str, ...]] = {}
             for src, _dst, aliases in load_glossary_ex(p):
                 old_aliases.setdefault(src, aliases)
             clean = []
@@ -2451,7 +2470,8 @@ class TranslateAPI:
             _log_exc("refine_list_templates")
             return {"success": False, "error": str(e)}
 
-    def refine_get_template(self, stage_index, templates_dir: str = None,
+    def refine_get_template(self, stage_index: str,
+                            templates_dir: str = None,
                             filename: str = None) -> dict[str, Any]:
         """读取角色卡原文。
 
@@ -2663,7 +2683,7 @@ class TranslateAPI:
             _log_exc("output_artifact_mtime")
             return {"success": False, "error": str(e)}
 
-    def refine_save_template(self, stage_index, text: str,
+    def refine_save_template(self, stage_index: str, text: str,
                              templates_dir: str = None,
                              filename: str = None) -> dict[str, Any]:
         """保存角色卡文本。
@@ -2793,7 +2813,7 @@ class TranslateAPI:
     # kind/marker/cancelled），_ai_lock 保护；台账=槽快照覆盖式原子写。
     # ----------------------------------------------------------------
 
-    def _init_ai_state(self):
+    def _init_ai_state(self) -> None:
         """分析/修复/预热登记槽惰性初始化（对齐 _init_translation_state 先例；
         测试以 object.__new__ 构造实例不经 __init__，故取槽前必须先调）。"""
         if not hasattr(self, "_ai_analyze_proc"):
@@ -2815,7 +2835,7 @@ class TranslateAPI:
             self._session_stage_a = {}
             self._ai_lock = threading.Lock()
 
-    def _register_child(self, proc: subprocess.Popen,
+    def _register_child(self, proc: subprocess.Popen[str],
                         kind: str) -> dict[str, Any]:
         """登记子进程槽 + 台账同步（覆盖式原子写）。
 
@@ -3157,7 +3177,7 @@ class TranslateAPI:
             self._ai_analyze_running = True
         try:
             try:
-                proc = cast(subprocess.Popen, spawn_refine_cli(
+                proc = cast("subprocess.Popen[str]", spawn_refine_cli(
                     args, cwd=str(REPO_ROOT),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, encoding="utf-8", errors="replace",
@@ -3427,7 +3447,7 @@ class TranslateAPI:
                     out.add(str(rec["timing"]))
         return out
 
-    def _read_ledger(self, guide_dir: str, stem: str) -> list:
+    def _read_ledger(self, guide_dir: str, stem: str) -> list[Any]:
         try:
             with open(os.path.join(guide_dir, stem + self._LEDGER_SUFFIX),
                       encoding="utf-8") as f:
@@ -3474,7 +3494,10 @@ class TranslateAPI:
                 counts[k] = len(v) if isinstance(v, list) else 0
         return counts
 
-    def _load_validated_guide(self, guide_path: str):
+    def _load_validated_guide(self, guide_path: str,
+                              ) -> tuple[str | None, str | None,
+                                         dict[str, Any] | None,
+                                         dict[str, Any] | None]:
         """守卫链（批修复/条目读取共用）：路径校验+后缀白名单+导读加载。
 
         返回 (p, stem, guide, error)：error 非 None 时前三者无意义。"""
@@ -3772,7 +3795,7 @@ class TranslateAPI:
         prog.update({"running": True, "phase": "run", "done": 0,
                      "total": len(want), "last_line": ""})
         try:
-            proc = cast(subprocess.Popen, spawn_refine_cli(
+            proc = cast("subprocess.Popen[str]", spawn_refine_cli(
                 args, cwd=str(REPO_ROOT), env_extra=env_extra,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, encoding="utf-8", errors="replace", bufsize=1))
@@ -4225,7 +4248,7 @@ class TranslateAPI:
                   "provider=%s endpoint=%s），已在 gui.log 留痕", m, prov,
                   endpoint)
         try:
-            proc = cast(subprocess.Popen, spawn_refine_cli(
+            proc = cast("subprocess.Popen[str]", spawn_refine_cli(
                 args, cwd=str(REPO_ROOT),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace",
@@ -4397,7 +4420,7 @@ class TranslateAPI:
                 conflicted = set()
 
             db = tm_mod.TranslationMemory()
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             # 件4 埋点（2.7.4 批 D2026-1007-01）：疑似整段/长句入库特征
             # 聚合观测——每次调用至多一条 debug（防刷屏）；只记长度与句末
             # 标点计数（。！？），绝不记 TM 原文、不阻断不改落库行为。
@@ -4682,7 +4705,7 @@ class TranslateAPI:
             return {"ok": False, "error_key": "verify_failed",
                     "error": str(e), "candidates": []}
 
-    def _ffprobe_stream_codecs(self, media_path: str) -> dict | None:
+    def _ffprobe_stream_codecs(self, media_path: str) -> dict[str, Any] | None:
         """ffprobe 取首路 video/audio 真实 codec（list-args 禁 shell）。
 
         ffprobe 缺失/失败一律返回 None（调用方按"不可判"分支处理）。"""
@@ -4994,9 +5017,10 @@ class TranslateAPI:
     _REVIEW_SWEEP_MAX_AGE_HOURS = 24
     _REVIEW_FFPROBE_TIMEOUT_S = 15
 
-    def _review_state(self) -> dict:
+    def _review_state(self) -> dict[str, Any]:
         """转码状态 dict + 锁的惰性初始化（object.__new__ 测试实例兼容）。"""
-        state = getattr(self, "_review_transcode_state", None)
+        state: dict[str, Any] | None = getattr(self,
+                                               "_review_transcode_state", None)
         if state is None:
             state = {"running": False, "percent": None, "error": None,
                      "path": None, "cached": False}
@@ -5201,9 +5225,10 @@ class TranslateAPI:
     # 不静默覆盖用户字幕），实际路径经 status.path 如实返回。
     # ------------------------------------------------------------------
 
-    def _transcribe_state(self) -> dict:
+    def _transcribe_state(self) -> dict[str, Any]:
         """转录状态 dict + 锁的惰性初始化（object.__new__ 测试实例兼容）。"""
-        state = getattr(self, "_review_transcribe_state", None)
+        state: dict[str, Any] | None = getattr(self,
+                                               "_review_transcribe_state", None)
         if state is None:
             state = {"running": False, "percent": None, "error": None,
                      "error_key": None, "path": None, "media_path": None,
@@ -5511,7 +5536,7 @@ class TranslateAPI:
                 (msg("file_type_srt"), msg("file_type_all")), save=True,
                 default_name=str(default_name or "校对.srt"))
             if result:
-                register_session_paths([result])
+                register_session_paths([cast(str, result)])
                 return {"success": True, "path": result}
             return {"success": False, "cancelled": True,
                     "error": msg("dialog_cancelled")}
@@ -5655,7 +5680,7 @@ class TranslateAPI:
             self._refine_tmp_dirs.clear()
         return {"success": True, "cleaned": cleaned}
 
-    def _on_exit_cleanup(self):
+    def _on_exit_cleanup(self) -> None:
         """GUI 进程退出：终止残留子进程 + 清理 refine 临时目录"""
         proc = getattr(self, "_translate_process", None)
         # Ignore sentinel (True) — means start_translation never completed
@@ -5711,7 +5736,7 @@ class TranslateAPI:
     # ========================================================================
 
     @staticmethod
-    def _encode_queue():
+    def _encode_queue() -> "EncodeQueue":
         from subtrans.webview_gui.encode_queue import (
             get_encode_queue,
             release_encode_slot,
@@ -5722,7 +5747,7 @@ class TranslateAPI:
         return q
 
     @staticmethod
-    def _parse_encode_params(raw: dict[str, Any]):
+    def _parse_encode_params(raw: dict[str, Any]) -> "EncodeParams":
         """前端参数 dict → EncodeParams（缺省项补齐；非法值抛 ValueError）。"""
         from subtrans.refine.hardsub import EncodeParams, parse_custom_params, validate_params
         raw = dict(raw or {})
@@ -5868,7 +5893,8 @@ class TranslateAPI:
         }
 
     @staticmethod
-    def _resolve_gpu_for_preflight(supply, parsed) -> dict[str, Any]:
+    def _resolve_gpu_for_preflight(supply: "SupplyResult",
+                                   parsed: "EncodeParams") -> dict[str, Any]:
         """所选格式的 GPU 编码器解析（ffmpeg 就绪时；双检懒缓存）。"""
         if supply.missing or not supply.ffmpeg_path:
             return {"encoder": "", "reasons": ["ffmpeg 未就绪"]}
@@ -6140,7 +6166,7 @@ class TranslateAPI:
         state = self._ensure_supply_state()
         state.update(phase="downloading", received=0, total=0, error="")
 
-        def worker():
+        def worker() -> None:
             try:
                 from subtrans import paths
                 from subtrans.refine.ffmpeg_supply import download_full_variant
@@ -6352,7 +6378,7 @@ class TranslateAPI:
         文件缺失/损坏/enabled 非 True/指纹缺失或不匹配一律 False（宁可全
         放弃，不无证放行），指纹问题另记 warning 提示重新校准
         （D2026-1101-01 §三④：旧测量依据不得静默复用）。"""
-        return self._fullchain_c22_gate_state()["enabled"]
+        return cast(bool, self._fullchain_c22_gate_state()["enabled"])
 
     def _resolve_guide_for_done_key(self, done_key: str,
                                     session_paths: (dict[str, Any] |

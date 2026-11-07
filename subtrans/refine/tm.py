@@ -270,7 +270,7 @@ class TranslationMemory:
             "norm_source, norm_target) VALUES (?, ?, ?, ?, ?)",
             [(rid, s, t, _fts_norm(s), _fts_norm(t)) for rid, s, t in rows])
 
-    def close(self):
+    def close(self) -> None:
         if self._conn:
             self._conn.close()
             self._conn = None
@@ -512,7 +512,7 @@ class TranslationMemory:
             "db_path": self.db_path,
         }
 
-    def clear(self, stage: int | None = None):
+    def clear(self, stage: int | None = None) -> None:
         """清空记忆库。stage=None 清空全部。
 
         FTS 面（2.6.4 批1 策略 B）同事务连带清理：先于 tm_entries 删面
@@ -568,7 +568,7 @@ class TranslationMemory:
              "stage": r[3], "hit_count": r[4], "created_at": r[5]}
             for r in rows]
 
-    def export_csv(self, path: str, stage: int | None = None):
+    def export_csv(self, path: str, stage: int | None = None) -> None:
         """导出为 CSV（2.1 起末尾追加 source_lang/target_lang 两列）"""
         import csv
         import io
