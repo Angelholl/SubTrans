@@ -114,6 +114,31 @@ def break_segment(seg: dict[str, Any], params: dict[str, float] | None = None) -
             cur_chars = sum(wlens[cut_idx + 1: i + 1])
     if cur:
         parts.append(cur)
+    # 尾段/中段达标复切（候卡①，D2026-1108 owner 拍板两件都修）：切点回溯
+    # 停顿边界或短片并入被 cap 拒绝后，产出片可超 max_chars（真数据 4 例
+    # 17–19 字），且超限片重喂即被再切＝幂等反例。沿同规则（停顿优先、
+    # 同级靠后）对超上限片继续切到达标；单词超限原样保留（与主循环无合法
+    # 切点口径一致），复切不改词分区＝文本/时间轴守恒保持，幂等恢复。
+    recut: list[list[dict[str, Any]]] = []
+    for chunk in parts:
+        while len(chunk) >= 2 and _text_len(_join_words(chunk)) > max_chars:
+            best = None
+            for j in range(len(chunk) - 1):
+                end_j = chunk[j].get("end")
+                start_next = chunk[j + 1].get("start")
+                if end_j is None or start_next is None:
+                    continue
+                pri = (1.0 if float(start_next) - float(end_j) >= pause_s
+                       else 0.0)
+                if best is None or pri >= best[0]:
+                    best = (pri, j)
+            if best is None:
+                break                 # 无合法切点：单词超限原样保留
+            j = best[1]
+            recut.append(chunk[:j + 1])
+            chunk = chunk[j + 1:]
+        recut.append(chunk)
+    parts = recut
     if len(parts) <= 1:
         return [seg]
 

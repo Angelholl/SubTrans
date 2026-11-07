@@ -106,3 +106,62 @@ class TestParams:
     def test_policy_defaults_shape(self):
         assert set(POLICY_DEFAULTS) == {"max_chars", "max_lines", "pause_ms",
                                         "min_dur_s"}
+
+
+# ------------------------------------------------ 候卡①（D2026-1108 owner 拍板）
+# 尾段/中段达标复切回归钉：d1107 卡B 真数据缺口——切点回溯停顿边界或窗口结转
+# 后，产出片可超 max_chars（真数据 4 例 17–19 字），且该超限片重喂即被再切
+# ＝幂等反例。修复后：一切输出片 ≤ 上限（单词超限原样保留＝无合法切点口径），
+# 幂等恢复。
+
+
+class TestTailRecut:
+    def _real_shape(self):
+        # 真数据同型（W-2026-015 seg#272）：段首单词＋大停顿＋尾段 18 字
+        # （前缀和只在末词越限 → 主循环停顿回溯后整段尾段未再检；短片
+        # 并入被 cap 拒绝 1+18>16 → 超限尾段落盘）
+        spec = [("宅", 0.0, 0.3)]
+        tail_words = ["あああ", "いいい", "ううう", "えええ", "かきくけこさ"]
+        for i, w in enumerate(tail_words):
+            spec.append((w, 4.68 + i * 0.2, 4.68 + i * 0.2 + 0.15))
+        return _seg(_words(spec))
+
+    def test_no_part_over_cap(self):
+        parts = break_segment(self._real_shape())
+        assert len(parts) >= 2
+        assert all(_chars(p) <= POLICY_DEFAULTS["max_chars"] for p in parts)
+
+    def test_idempotent_on_real_shape(self):
+        parts = break_segment(self._real_shape())
+        again = break_segments(parts)
+        assert [p["text"] for p in again] == [p["text"] for p in parts]
+        assert [p["start"] for p in again] == [p["start"] for p in parts]
+
+    def test_invariants_hold_on_recut(self):
+        seg = self._real_shape()
+        parts = break_segment(seg)
+        # 文本守恒＋时间轴覆盖守恒（复切不改词分区）
+        assert "".join(p["text"] for p in parts).replace(" ", "") \
+            == seg["text"].replace(" ", "")
+        assert parts[0]["start"] == round(
+            min(w["start"] for w in seg["words"]), 3)
+        assert parts[-1]["end"] == round(
+            max(w["end"] for w in seg["words"]), 3)
+
+    def test_tail_exactly_cap_untouched(self):
+        # 尾段恰在上限＝达标，不触发复切
+        spec = [("あ", 0.0, 0.3)]
+        chars = "い" * 16
+        for i, c in enumerate(chars):
+            spec.append((c, 4.68 + i * 0.2, 4.68 + i * 0.2 + 0.15))
+        parts = break_segment(_seg(_words(spec)))
+        assert all(_chars(p) <= POLICY_DEFAULTS["max_chars"] for p in parts)
+        assert len(parts) == 2 and _chars(parts[1]) == 16
+
+    def test_single_over_cap_word_kept(self):
+        # 单词超上限＝无合法切点口径一致，原样保留（不破幂等）
+        w = _words([("あ" * 20, 0.0, 1.0), ("い", 1.5, 1.8)])
+        parts = break_segment(_seg(w))
+        assert any(_chars(p) == 20 for p in parts)
+        again = break_segments(parts)
+        assert [p["text"] for p in again] == [p["text"] for p in parts]
