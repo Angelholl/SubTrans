@@ -7,7 +7,8 @@
 指向不存在的旧入口 exe 与已消失的旧仓库根路径）。
 
 本钉改为**按目录枚举**（不看 git 索引），且只匹配「可执行形态」的旧引用：
-import 语句 / 入口 exe·命令名 / 绝对根路径 / venv 入口 exe 实体。可执行形态判定含「注释面剔除」：.py 行注释经 tokenize 精确剔除（行号列宽不变），
+import 语句 / 入口 exe·命令名 / 绝对根路径 / venv 入口 exe 实体。
+可执行形态判定含「注释面剔除」：.py 行注释经 tokenize 精确剔除（行号列宽不变），
 .iss/.bat/.ps1 剔行首注释；故注释级旧名引用（品牌钉白名单理由、清理锚说明）
 不算可执行形态、不必入本钉白名单。docstring **不剔**——里面写着旧包名用法
 示例本身就是真陈旧。CHANGELOG 等历史散文不在判定目录内。
@@ -160,10 +161,14 @@ def test_scan_face_includes_gitignored_tools() -> None:
     若退化为「只扫 tracked 文件」，本钉即与品牌钉重叠而失去补盲价值——
     正是本次断链潜伏的结构性成因，故直接钉死。
     """
-    tracked = subprocess.run(
-        ["git", "ls-files"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
-    ).stdout.splitlines()
-    tracked_set = {t.replace("\\", "/") for t in tracked}
+    # -z：NUL 分隔，绕开 core.quotepath 对非 ASCII 路径的八进制转义（否则中文文件名
+    # 会被误判为未追踪，令本钉在 CI 上假「已覆盖」而实际不成立）
+    tracked = (
+        subprocess.run(
+            ["git", "ls-files", "-z"], cwd=REPO_ROOT, capture_output=True, check=True
+        ).stdout.decode("utf-8", errors="surrogateescape")
+    ).split("\0")
+    tracked_set = {t.replace("\\", "/") for t in tracked if t}
     untracked = [f for f in _iter_scan_files() if _rel(f) not in tracked_set]
     if not untracked:
         # 公开仓检出面无 gitignored 本地工具（禁推件只存本地），无从核对——如实跳过，

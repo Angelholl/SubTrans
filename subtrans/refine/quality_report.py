@@ -28,6 +28,7 @@ import re
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .garble_detect import scan_garble_suspects
 from .pass_disagreement import (
@@ -129,7 +130,7 @@ _GUIDE_ITEM_CODES: dict[str, str] = {
 }
 
 
-def _guide_item_id(source_key: str, index) -> str | None:
+def _guide_item_id(source_key: str, index: int | None) -> str | None:
     """guide item 身份串 `类別码-index`（撞号消歧）。
 
     index 缺失（None）返回 None——不产 "PW-None" 假串；txt 渲染侧的
@@ -175,7 +176,10 @@ _DISAGREE_OPTIONAL_LIMIT = 50
 _DISAGREE_CSV_OPTIONAL_LIMIT = 100
 
 
-def _split_disagreement_rows(rows: list) -> tuple[list, list, list]:
+def _split_disagreement_rows(
+        rows: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]],
+           list[dict[str, Any]]]:
     """把分歧行分为 (必看, 可选, 伪影) 三组。
 
     阈值取自 pass_disagreement 模块常量（不得在此硬编码）：
@@ -185,7 +189,9 @@ def _split_disagreement_rows(rows: list) -> tuple[list, list, list]:
     - artifact=True → 已过滤伪影；
     - similarity ≥ REVIEW_OPTIONAL_THRESHOLD 且非伪影 → 正常行，不属于任何复核区。
     """
-    must_see, optional, artifacts = [], [], []
+    must_see: list[dict[str, Any]] = []
+    optional: list[dict[str, Any]] = []
+    artifacts: list[dict[str, Any]] = []
     for r in rows:
         sim = r.get("similarity", 0.0)
         if r.get("artifact"):
@@ -197,7 +203,8 @@ def _split_disagreement_rows(rows: list) -> tuple[list, list, list]:
     return must_see, optional, artifacts
 
 
-def _final_text_for_span(timing: str, final_entries: list | None) -> str:
+def _final_text_for_span(timing: str,
+                         final_entries: list[dict[str, Any]] | None) -> str:
     """按时间轴最大重叠在 final_entries 中匹配终稿译文；找不到返回空串。"""
     if not final_entries:
         return ""
@@ -216,7 +223,7 @@ def _final_text_for_span(timing: str, final_entries: list | None) -> str:
     return best
 
 
-def render_disagreement_section(pass_disagreement: dict | None,
+def render_disagreement_section(pass_disagreement: dict[str, Any] | None,
                                 pass_mode: str = "dual") -> str:
     """渲染「双引擎分歧」章节为文本（纯函数，供报告与离线重算脚本复用）。
 
@@ -285,7 +292,7 @@ def render_disagreement_section(pass_disagreement: dict | None,
     return "\n".join(lines)
 
 
-def render_disposal_section(gate0_deletions: dict | None) -> str:
+def render_disposal_section(gate0_deletions: dict[str, Any] | None) -> str:
     """渲染「处置」章节（闸门0 送翻前删除台账）为文本（纯函数）。
 
     gate0_deletions 结构（由管线从闸门0 结果组装，None 表示未采集，
@@ -318,7 +325,7 @@ def render_disposal_section(gate0_deletions: dict | None) -> str:
     return "\n".join(lines)
 
 
-def render_garble_review_section(garble_review: list | None) -> str:
+def render_garble_review_section(garble_review: list[dict[str, Any]] | None) -> str:
     """渲染「乱码强译复核」章节（D5 语义反转防护）为文本（纯函数）。
 
     garble_review 结构（由管线在终稿生成后组装，None 表示未采集，
@@ -348,7 +355,8 @@ def render_garble_review_section(garble_review: list | None) -> str:
     return "\n".join(lines)
 
 
-def render_mishear_review_section(sidecar_review: list | None) -> str:
+def render_mishear_review_section(
+        sidecar_review: list[dict[str, Any]] | None) -> str:
     """渲染「误听疑似改写」小节（v1.2.2 C1 改写留痕）为文本（纯函数）。
 
     sidecar_review 结构（由管线在终稿生成后组装；None 表示本片无误听
@@ -376,7 +384,7 @@ def render_mishear_review_section(sidecar_review: list | None) -> str:
     return "\n".join(lines)
 
 
-def render_garble_hear_section(result: dict | None) -> str:
+def render_garble_hear_section(result: dict[str, Any] | None) -> str:
     """渲染「疑似听错」章节（D2026-1025-01 批4 ASR 错音打标）为文本（纯函数）。
 
     result 为 garble_detect.scan_garble_suspects 返回值
@@ -404,7 +412,7 @@ def render_garble_hear_section(result: dict | None) -> str:
     return "\n".join(lines)
 
 
-def render_conflict_section(glossary_conflicts: list | None,
+def render_conflict_section(glossary_conflicts: list[dict[str, Any]] | None,
                             watch_advice: str | None = None) -> str:
     """渲染「术语冲突观察」小节（v1.2.2 D1 观察闸）为文本（纯函数）。
 
@@ -449,7 +457,8 @@ def render_conflict_section(glossary_conflicts: list | None,
     return "\n".join(lines)
 
 
-def render_term_consistency_section(term_stats: list | None) -> str:
+def render_term_consistency_section(
+        term_stats: list[dict[str, Any]] | None) -> str:
     """渲染「术语一致性」章节（v1.2.2 D2）为文本（纯函数）。
 
     term_stats 结构（与冲突扫描同一次遍历产出；None 表示无词库/未采集，
@@ -500,7 +509,7 @@ def _cjk_dominant(compact_text: str) -> bool:
     return n / len(compact_text) >= 0.5
 
 
-def _load_single_line_whitelist() -> list:
+def _load_single_line_whitelist() -> list[re.Pattern[str]]:
     """单行超长白名单加载（先摘除后计量）。
 
     数据根 config/single_line_whitelist.txt，每行一条正则（re.search），
@@ -512,7 +521,7 @@ def _load_single_line_whitelist() -> list:
         raw = Path(single_line_whitelist_path()).read_text(encoding="utf-8")
     except OSError:
         return []
-    patterns: list = []
+    patterns: list[re.Pattern[str]] = []
     for lineno, line in enumerate(raw.splitlines(), 1):
         s = line.strip()
         if not s or s.startswith("#"):
@@ -524,8 +533,9 @@ def _load_single_line_whitelist() -> list:
     return patterns
 
 
-def _scan_single_line_violations(final_entries: list,
-                                 whitelist: Sequence = ()) -> tuple[list[dict], int]:
+def _scan_single_line_violations(final_entries: list[dict[str, Any]],
+                                 whitelist: Sequence[re.Pattern[str]] = (),
+                                 ) -> tuple[list[dict[str, Any]], int]:
     """C2：终稿单行超长扫描（每行去除全部空白后 > _SINGLE_LINE_MAX_CHARS）。
 
     whitelist 非空时"先摘除后计量"：条目任一行命中任一 pattern → 整条
@@ -535,7 +545,7 @@ def _scan_single_line_violations(final_entries: list,
     恒含最长违规行行长与阈值；excerpt 取最长违规行（并列取首行）截断
     60 字符内。纯函数。
     """
-    violations: list[dict] = []
+    violations: list[dict[str, Any]] = []
     exempted = 0
     for e in final_entries:
         lines = (e.get("text") or "").split("\n")
@@ -562,7 +572,7 @@ def _scan_single_line_violations(final_entries: list,
     return violations, exempted
 
 
-def _scan_cps_observations(final_entries: list) -> list[dict]:
+def _scan_cps_observations(final_entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """C3①：超 CPS 观测扫描（只观测，绝不进 items/重翻）。
 
     CPS=条目去空白字符数/时长秒（时长经叶子模块 v2_premerge._timing_span，
@@ -571,7 +581,7 @@ def _scan_cps_observations(final_entries: list) -> list[dict]:
     CJK 为主基准 8 / 其他 20，容差 ×1.15，严格大于。
     """
     from .v2_premerge import _timing_span
-    obs: list[dict] = []
+    obs: list[dict[str, Any]] = []
     for e in final_entries:
         compact = "".join((e.get("text") or "").split())
         if not compact:
@@ -590,8 +600,8 @@ def _scan_cps_observations(final_entries: list) -> list[dict]:
     return obs
 
 
-def _scan_cps_action(final_entries: list, threshold: float,
-                     max_items: int) -> tuple[list[dict], bool]:
+def _scan_cps_action(final_entries: list[dict[str, Any]], threshold: float,
+                     max_items: int) -> tuple[list[dict[str, Any]], bool]:
     """CPS 行动层扫描（2.0.1，定标 docs/cps-定标报告-20260930.md）。
 
     仅 CJK 为主条目参与（非 CJK 词典未定标，沿观测层口径不入行动层，
@@ -601,7 +611,7 @@ def _scan_cps_action(final_entries: list, threshold: float,
     先例），截断发生时第二返回值为 True。纯函数。
     """
     from .v2_premerge import _timing_span
-    cands: list[dict] = []
+    cands: list[dict[str, Any]] = []
     for e in final_entries:
         compact = "".join((e.get("text") or "").split())
         if not compact or not _cjk_dominant(compact):
@@ -620,8 +630,8 @@ def _scan_cps_action(final_entries: list, threshold: float,
     return cands[:max_items], truncated
 
 
-def _scan_gap_observations(final_entries: list) -> tuple[list[dict],
-                                                         float | None]:
+def _scan_gap_observations(final_entries: list[dict[str, Any]],
+                           ) -> tuple[list[dict[str, Any]], float | None]:
     """C3②③：相邻条目时间轴间隙观测（按起点排序后逐对检查）。
 
     gap = 后条起点 - 前条终点，严格大于 _GAP_MAX_SECONDS 记观测行；同时
@@ -637,7 +647,7 @@ def _scan_gap_observations(final_entries: list) -> tuple[list[dict],
             continue
         spans.append((s0, e0, e.get("index"), e.get("timing") or ""))
     spans.sort(key=lambda x: (x[0], x[1]))
-    obs: list[dict] = []
+    obs: list[dict[str, Any]] = []
     max_gap: float | None = None
     # 相邻对配对：n 与 n-1 截断 zip（strict=False 为语义所需，非疏漏）
     for prev, cur in zip(spans, spans[1:], strict=False):
@@ -650,9 +660,9 @@ def _scan_gap_observations(final_entries: list) -> tuple[list[dict],
     return obs, max_gap
 
 
-def render_observation_section(single_line: list | None,
-                               cps_obs: list | None,
-                               gap_obs: list | None,
+def render_observation_section(single_line: list[dict[str, Any]] | None,
+                               cps_obs: list[dict[str, Any]] | None,
+                               gap_obs: list[dict[str, Any]] | None,
                                max_gap: float | None = None,
                                whitelist_exempt: int = 0,
                                cps_action_note: str | None = None) -> str:
@@ -710,7 +720,7 @@ def render_observation_section(single_line: list | None,
     return "\n".join(lines)
 
 
-def render_audio_insight_section(audio_insights: dict | None) -> str:
+def render_audio_insight_section(audio_insights: dict[str, Any] | None) -> str:
     """渲染「疑似漏听观测（音频能量粗筛）」章节为文本（纯函数）。
 
     audio_insights 为 None（无媒体/开关关/旧调用方）时整节省略；
@@ -755,8 +765,10 @@ def render_audio_insight_section(audio_insights: dict | None) -> str:
     return "\n".join(lines)
 
 
-def write_divergence_review_csv(out_path: str, rows: list, file_label: str,
-                                final_entries: list | None = None) -> None:
+def write_divergence_review_csv(out_path: str, rows: list[dict[str, Any]],
+                                file_label: str,
+                                final_entries: list[dict[str, Any]] | None = None,
+                                ) -> None:
     """分歧复核 CSV 落盘（独立可调用，输出路径由调用方指定）。
 
     行范围：必看区全部 + 可选区前 _DISAGREE_CSV_OPTIONAL_LIMIT 行
@@ -876,7 +888,8 @@ def _render_plain_guide(items_count: int,
     return lines
 
 
-def resolve_final_block(final_entries: list[dict], index: int) -> dict | None:
+def resolve_final_block(final_entries: list[dict[str, Any]],
+                        index: int) -> dict[str, Any] | None:
     """报告 index → 终稿块的官方映射（首次精确 index 匹配）。
 
     契约（D11）：
@@ -893,30 +906,31 @@ def resolve_final_block(final_entries: list[dict], index: int) -> dict | None:
     return None
 
 
-def build_quality_report(orig_entries: list, final_entries: list,
+def build_quality_report(orig_entries: list[dict[str, Any]],
+                         final_entries: list[dict[str, Any]],
                          source_name: str = "",
-                         expected_entries: list | None = None,
-                         merge_stats: dict | None = None,
-                         validator_warnings: list | None = None,
-                         pass_disagreement: dict | None = None,
+                         expected_entries: list[dict[str, Any]] | None = None,
+                         merge_stats: dict[str, Any] | None = None,
+                         validator_warnings: list[str] | None = None,
+                         pass_disagreement: dict[str, Any] | None = None,
                          pass_mode: str = "dual",
-                         gate0_deletions: dict | None = None,
-                         garble_review: list | None = None,
-                         sidecar_review: list | None = None,
+                         gate0_deletions: dict[str, Any] | None = None,
+                         garble_review: list[dict[str, Any]] | None = None,
+                         sidecar_review: list[dict[str, Any]] | None = None,
                          orig_total: int | None = None,
                          profile: str = "",
-                         glossary_conflicts: list | None = None,
-                         term_consistency: list | None = None,
+                         glossary_conflicts: list[dict[str, Any]] | None = None,
+                         term_consistency: list[dict[str, Any]] | None = None,
                          conflict_watch_advice: str | None = None,
                          tm_exact_hits: int | None = None,
                          tm_learned_count: int | None = None,
-                         guide_sink: dict | None = None,
-                         structured_warnings: list[dict] | None = None,
+                         guide_sink: dict[str, Any] | None = None,
+                         structured_warnings: list[dict[str, Any]] | None = None,
                          media_path: str = "",
                          media_path_source: str = "",
-                         audio_insights: dict | None = None,
-                         cps_action: dict | None = None,
-                         garble_hear: dict | None = None) -> str:
+                         audio_insights: dict[str, Any] | None = None,
+                         cps_action: dict[str, Any] | None = None,
+                         garble_hear: dict[str, Any] | None = None) -> str:
     """对比 期望条目（预合并后） 与 终稿条目，返回复核工单式报告文本。
 
     cps_action：2.0.1 CPS 行动层参数 {"threshold": float,
@@ -1041,8 +1055,9 @@ def build_quality_report(orig_entries: list, final_entries: list,
     clean_merged = merge_stats.get("clean_merged")
 
     # span → 条目列表 映射（同一时间轴可能多条，不能用单值 dict）
-    def _index_by_span(entries: list) -> dict:
-        d: dict[tuple, list] = {}
+    def _index_by_span(entries: list[dict[str, Any]],
+                       ) -> dict[tuple[float, float], list[dict[str, Any]]]:
+        d: dict[tuple[float, float], list[dict[str, Any]]] = {}
         for e in entries:
             span = _timing_span(e["timing"])
             if span[0] >= 0:
@@ -1055,7 +1070,12 @@ def build_quality_report(orig_entries: list, final_entries: list,
     expected_pairs = [(_timing_span(e["timing"]), e) for e in expected]
     final_pairs = [(_timing_span(e["timing"]), e) for e in final_entries]
 
-    def _tolerance_hits(span, by_span, pairs, overlap_fallback) -> list:
+    def _tolerance_hits(span: tuple[float, float],
+                        by_span: dict[tuple[float, float],
+                                      list[dict[str, Any]]],
+                        pairs: list[tuple[tuple[float, float],
+                                          dict[str, Any]]],
+                        overlap_fallback: bool) -> list[dict[str, Any]]:
         """span 的容差匹配条目列表（D2026-1025-01 批1）。
 
         匹配序：精确 span 命中 → start 距离 ≤ _ALIGN_TOLERANCE_MS 候选 →
@@ -1076,7 +1096,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
             return near
         if not overlap_fallback:
             return []
-        covered = []
+        covered: list[dict[str, Any]] = []
         for s, e in pairs:
             if s[0] < 0 or s[0] > span[0] + tol:
                 continue
@@ -1085,19 +1105,19 @@ def build_quality_report(orig_entries: list, final_entries: list,
                 covered.append(e)
         return covered
 
-    def _final_hits(span) -> list:
+    def _final_hits(span: tuple[float, float]) -> list[dict[str, Any]]:
         """期望 span → 终稿条目（期望侧为查询方，开重叠兜底）。"""
         return _tolerance_hits(span, final_by_span, final_pairs, True)
 
-    def _expected_hits(span) -> list:
+    def _expected_hits(span: tuple[float, float]) -> list[dict[str, Any]]:
         """终稿 span → 期望条目（期望侧为候选方，不开重叠兜底）。"""
         return _tolerance_hits(span, expected_by_span, expected_pairs, False)
 
-    def _span_text(span) -> str:
+    def _span_text(span: tuple[float, float]) -> str:
         return "".join((e["text"] or "").strip()
                        for e in _final_hits(span))
 
-    def _expected_src(span) -> str:
+    def _expected_src(span: tuple[float, float]) -> str:
         """终稿条目对应期望条目的源文（找不到返回空串）。"""
         return "".join((e["text"] or "").strip()
                        for e in _expected_hits(span))
@@ -1202,7 +1222,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
     subject_warns = [w for w in validator_warnings if "主语误判" in w]
     other_warns = [w for w in validator_warnings if "主语误判" not in w]
     # 告警定位与 resolve_final_block 同契约：index 重号取列表顺序首个
-    final_idx: dict = {}
+    final_idx: dict[int, dict[str, Any]] = {}
     for e in final_entries:
         final_idx.setdefault(e["index"], e)
     for w in validator_warnings:
@@ -1489,7 +1509,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
     # 改写】之后。garble_hear 入参 None 时对源文条目就地扫描（纯报告
     # 面，只标不删不改正文）；不可用或 0 条时整节省略（扫描降级绝不
     # 抛错阻断报告生成）。渲染逻辑提为纯函数 render_garble_hear_section
-    garble_hear_res: dict = garble_hear if isinstance(garble_hear, dict) \
+    garble_hear_res: dict[str, Any] = garble_hear if isinstance(garble_hear, dict) \
         else scan_garble_suspects(orig_entries)
     garble_hear_text = render_garble_hear_section(garble_hear_res)
     if garble_hear_text:
@@ -1521,7 +1541,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
     cps_obs = _scan_cps_observations(final_entries)
     gap_obs, max_gap = _scan_gap_observations(final_entries)
     # CPS 行动层（2.0.1 定标 5.0；cps_action=None=旧调用方/关闭，行为不变）
-    cps_action_cands: list = []
+    cps_action_cands: list[dict[str, Any]] = []
     cps_action_truncated = False
     if cps_action:
         cps_action_cands, cps_action_truncated = _scan_cps_action(
@@ -1621,7 +1641,7 @@ def build_quality_report(orig_entries: list, final_entries: list,
         conclusions.append("阅读顺序：先看白话导读 → 再逐条看复核清单 → "
                            "最后用统计区核对总数")
         known_titles = {prefix for prefix, _ in _SECTION_NOTES}
-        sections: list = []
+        sections: list[dict[str, str]] = []
         for ln in lines:
             if not ln.startswith("【"):
                 continue
@@ -1636,10 +1656,10 @@ def build_quality_report(orig_entries: list, final_entries: list,
         # 卡5（D2026-1012-01 A5）：每条目新增 item_id=类別码-index（additive
         # 纯新增，index/category/message 既有键值零改动）——同 index 多类别
         # 撞号时身份可区分（真机 11 对撞号全部 cps_too_fast×其他）。
-        src_by_idx: dict = {}
+        src_by_idx: dict[int, dict[str, Any]] = {}
         for e in expected:
             src_by_idx.setdefault(e.get("index"), e)   # 同 index 取列表首个
-        guide_items: list[dict] = []
+        guide_items: list[dict[str, Any]] = []
         # 来源 A：post_validate 结构化告警（None 则空，additive）
         for sw in (structured_warnings or []):
             sw_idx = sw.get("index")
@@ -1754,7 +1774,7 @@ def write_quality_report(out_dir: str, stem: str, report: str) -> str:
     return str(p)
 
 
-def write_guide_json(out_dir: str, stem: str, guide: dict) -> str:
+def write_guide_json(out_dir: str, stem: str, guide: dict[str, Any]) -> str:
     """白话导读 json（{stem}_质量报告导读.json）落盘，返回路径。
 
     guide 为空 dict（报告构建时未采集到快照/旧调用方）时不落盘，
