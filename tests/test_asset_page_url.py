@@ -14,6 +14,11 @@ pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过",
                     exc_type=ImportError)
+if os.name != "nt":
+    # 0a31512 补装 pywebview 后 linux CI 首跑暴露：本文件钉面用 Windows 盘符
+    # 字面量（D:/… 在 POSIX 语义下为相对路径 → as_uri 走回退分支）。
+    # 恢复实效覆盖契约＝Windows 运行面。
+    pytest.skip("asset_page_url 钉面＝Windows 盘符语义，非 Windows 平台跳过", allow_module_level=True)
 
 from subtrans.webview_gui.main import (  # noqa: E402  须在 importorskip 之后
     asset_page_url,

@@ -16,6 +16,7 @@
 """
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -347,8 +348,16 @@ def test_evaluate_gate_missing_corrupt_disabled(tmp_path):
     assert dm.evaluate_c22_gate(gate) == (False, "disabled")
 
 
+# 0a31512 补装 pywebview 后 linux CI 首跑暴露：_fullchain_c22_path 经
+# _resolve_safe_path 校验 CONFIG_DIR（打桩=tmp_path，POSIX 不在白名单）
+# → 异常 fail-closed False。恢复实效覆盖契约＝Windows 运行面。
+_GUI_WIN_REASON = ("GUI 门读取前提＝Windows 安全锚白名单语义"
+                   "（tmp_path 打桩 POSIX 不在白名单），非 Windows 平台跳过")
+
+
+@pytest.mark.skipif(os.name != "nt", reason=_GUI_WIN_REASON)
 def test_gui_gate_reader_closes_on_stale_fingerprint(tmp_path, monkeypatch):
-    pytest.importorskip("webview")  # api.py 顶层 import webview；无 gui extra 恒 skip（CI 口径）
+    pytest.importorskip("webview")  # api.py 顶层 import webview；无 pywebview 环境跳过（CI 已装 gui extra，0a31512 起）
     from subtrans.refine import config as cfg_mod
     from subtrans.webview_gui.api import TranslateAPI
 
@@ -358,8 +367,9 @@ def test_gui_gate_reader_closes_on_stale_fingerprint(tmp_path, monkeypatch):
     assert gui._fullchain_c22_enabled() is False
 
 
+@pytest.mark.skipif(os.name != "nt", reason=_GUI_WIN_REASON)
 def test_gui_gate_reader_opens_with_matching_fingerprint(tmp_path, monkeypatch):
-    pytest.importorskip("webview")  # api.py 顶层 import webview；无 gui extra 恒 skip（CI 口径）
+    pytest.importorskip("webview")  # api.py 顶层 import webview；无 pywebview 环境跳过（CI 已装 gui extra，0a31512 起）
     from subtrans.refine import config as cfg_mod
     from subtrans.webview_gui.api import TranslateAPI
 

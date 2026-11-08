@@ -26,6 +26,12 @@ import pytest
 pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试", exc_type=ImportError)
+if os.name != "nt":
+    # 0a31512 补装 pywebview 后「可导入」不再等价「可运行」：本模块测试前提
+    # （安全锚白名单含 TEMP、盘符绝对路径语义）仅 Windows 成立——linux CI
+    # tmp_path 落 /tmp 不在 _resolve_safe_path 白名单，首跑即红。恢复实效
+    # 覆盖契约＝Windows 运行面（pywebview 安装保持，mypy 门腿仍需）。
+    pytest.skip("GUI API 测试前提＝Windows 运行面，非 Windows 平台跳过", allow_module_level=True)
 
 from subtrans.refine.events import EventEmitter  # noqa: E402
 from subtrans.webview_gui.api import (  # noqa: E402  须在 importorskip 之后
@@ -4652,7 +4658,7 @@ def test_file_type_subtitle_filter_parse_pin():
     旧串描述段含 `/`（"ASS/SSA/VTT"）被 parse_file_type 正则拒绝抛
     ValueError → create_file_dialog 整体失败（「添加文件」按钮挂死）。
     断言返回值元组内容，不只断言不抛。
-    实跑面=gui-probe/本地（daily CI 两腿无 pywebview，importorskip 跳过）。
+    实跑面=gui-probe/本地/windows CI 腿（非 Windows 平台随模块级 skip，0a31512 补装 pywebview 后口径）。
     """
     from webview.util import parse_file_type
 
