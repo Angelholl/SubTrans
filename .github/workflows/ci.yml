@@ -24,7 +24,10 @@ jobs:
       # [dev,zh]：额外拉入 jieba（zh extra），否则 tests/test_token_hint.py 的
       # jieba 正向用例在 CI 恒 skip（D2026-1004-01）
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && pip install -e ".[dev,zh]" && pip install "mypy==2.3.1"
+        # gui extra 必装：基线门腿须解析 pywebview 类型面——缺装时 webview 经
+        # ignore_missing_imports 落 Any，webview_gui 靶向 type: ignore 被判
+        # unused-ignore（be07258 CI 红实证）；tests/test_ci_gate_gui_extra.py 钉死。
+        run: python -m pip install --upgrade pip && pip install -e ".[dev,zh,gui]" && pip install "mypy==2.3.1"
       - name: Lint
         run: ruff check subtrans tests
       # mypy 基线门禁（D9，1.3.1 收口：去 || true，基线外错误即阻断）
