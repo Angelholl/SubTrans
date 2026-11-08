@@ -194,7 +194,10 @@ def test_asr_runner_import_chain_stdlib_only():
                      if isinstance(node, ast.Import)
                      else [node.module or ""])
             top_imports.extend(names)
-    assert top_imports == ["argparse", "contextlib", "json", "os", "sys"], \
+    # 段19 注解化扩入 typing/types/pathlib/collections.abc 四件（均标准库）：
+    # C3 不变量＝零第三方导入、faster_whisper 懒加载，运行时导入链不变。
+    assert top_imports == ["argparse", "contextlib", "json", "os", "sys",
+                           "collections.abc", "pathlib", "types", "typing"], \
         f"运行器顶部导入面漂移（C3 导入图钉）: {top_imports}"
 
 

@@ -6,8 +6,9 @@
       --srt-out <srt> --model-dir <模型目录> [--language ja] [旋钮...]
 
 - 本模块在 CT2 运行时解释器下以脚本直调执行：**顶部仅标准库导入**
-  （D2026-1002-04-批3 C3 导入图钉，测试静态钉），faster_whisper 在转写
-  函数内懒加载——导入链全部标准库；
+  （D2026-1002-04-批3 C3 导入图钉，测试静态钉；段19 注解化扩入
+  typing/types/pathlib/collections.abc 四件，均标准库，零第三方不变量
+  不变），faster_whisper 在转写函数内懒加载——导入链全部标准库；
 - stdout 输出单行 JSON（唯一机器契约）：
   {"ok": true, "srt": ..., "segments": [{start, end, text, words,
   no_speech_prob, avg_logprob, compression_ratio}...], "duration": ...,
@@ -29,6 +30,10 @@ import contextlib
 import json
 import os
 import sys
+from collections.abc import Callable
+from pathlib import Path
+from types import ModuleType
+from typing import Any, cast
 
 # 2.7.1 热修（本机实测复现）：脚本直调形态下 sys.path[0]=脚本所在目录
 # （refine/），目录内 secrets.py 与标准库 secrets 同名——第三方导入链的
@@ -51,7 +56,7 @@ for _stream_name in ("stdout", "stderr"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
-def _opt_float(v) -> float | None:
+def _opt_float(v: Any) -> float | None:
     """可选浮点规整（None 安全；非数值保守取 None，消费方按存在性读取）。"""
     if v is None:
         return None
@@ -61,7 +66,7 @@ def _opt_float(v) -> float | None:
         return None
 
 
-def _segments_to_srt(segments: list) -> str:
+def _segments_to_srt(segments: list[dict[str, Any]]) -> str:
     """ct2 segment list → SRT 文本（纯函数；时间戳钳非负）。"""
 
     def fmt(t: float) -> str:
@@ -137,7 +142,7 @@ def resolve_device(device: str, gpu_dll_dir: str, cuda_count: int,
 
 
 def _load_model(model_dir: str, device: str, compute_type: str,
-                gpu_dll_dir: str = ""):
+                gpu_dll_dir: str = "") -> tuple[Any, str, str]:
     """装载 WhisperModel：gpu 装载失败→cpu 回退（拍板③，双检③真用检）。
 
     回退时 stderr 明示（诊断不进 stdout 机器契约）。返回 (model, device,
@@ -164,10 +169,11 @@ def _load_model(model_dir: str, device: str, compute_type: str,
                 "cpu", CPU_COMPUTE_TYPE)
 
 
-def _transcribe_segments(model_obj, media: str, language: str, *,
+def _transcribe_segments(model_obj: Any, media: str, language: str, *,
                          beam_size: int, vad_filter: bool,
                          condition_previous: bool,
-                         word_timestamps: bool = True):
+                         word_timestamps: bool = True,
+                         ) -> tuple[list[dict[str, Any]], Any]:
     """单 pass 转写→(段数组, info)；段含词级＋置信三键（D2026-1029-01）。
 
     stdout 契约（D2026-1029-01 批1 置信透传）：segments=完整段数组（含
@@ -202,7 +208,7 @@ def _transcribe_segments(model_obj, media: str, language: str, *,
     return segs, info
 
 
-def _load_pass_merge():
+def _load_pass_merge() -> ModuleType:
     """双 pass 合并纯函数装载（D2026-1029-02 拍板①；卡C §七 勘误裁决 a）。
 
     包上下文（-m/GUI/测试形态）走相对导入；脚本直调形态无包上下文必
@@ -226,7 +232,8 @@ def _load_pass_merge():
         return mod
 
 
-def _write_words_sidecar(path, segs: list, info, model_dir: str, *,
+def _write_words_sidecar(path: Path, segs: list[dict[str, Any]], info: Any,
+                         model_dir: str, *,
                          beam_size: int, vad_filter: bool,
                          condition_previous: bool) -> str:
     """词级 sidecar（schema subtrans.ct2.words/1）写盘，返回路径。"""
@@ -240,15 +247,17 @@ def _write_words_sidecar(path, segs: list, info, model_dir: str, *,
     return str(path)
 
 
-def _pass_artifact_paths(out_path):
+def _pass_artifact_paths(out_path: Path) -> tuple[Path, Path]:
     """双 pass 中间件命名（.pass1.srt/.pass2.srt 族，与分歧采集同源）。"""
     p1 = out_path.with_name(out_path.stem + ".pass1" + out_path.suffix)
     p2 = out_path.with_name(out_path.stem + ".pass2" + out_path.suffix)
     return p1, p2
 
 
-def _write_dualpass_output(out_path, srt_out: str, segs: list, info,
-                           pass2_segs: list, model_dir: str, pm, *,
+def _write_dualpass_output(out_path: Path, srt_out: str,
+                           segs: list[dict[str, Any]], info: Any,
+                           pass2_segs: list[dict[str, Any]],
+                           model_dir: str, pm: ModuleType, *,
                            beam_size: int, vad_filter: bool,
                            condition_previous: bool, line_break: bool,
                            word_timestamps: bool = True) -> int:
@@ -376,7 +385,7 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
             model_obj, media, language, beam_size=beam_size,
             vad_filter=vad_filter, condition_previous=condition_previous,
             word_timestamps=word_ts)
-        pass2_segs: list | None = None
+        pass2_segs: list[dict[str, Any]] | None = None
         if passes == 2:
             # 双 pass（D2026-1029-02 拍板①）：pass2=召回档预注册常量，其余
             # 同 pass1；缺省单 pass 不触本分支（零行为变化）。
@@ -431,7 +440,8 @@ def _run_transcribe_media_ct2(media: str, model_dir: str, language: str,
     return 0
 
 
-def _apply_line_break(segs: list, line_break: bool) -> list:
+def _apply_line_break(segs: list[dict[str, Any]],
+                      line_break: bool) -> list[dict[str, Any]]:
     """断行应用＋故障留痕回退（stderr 人话登记，不进机器契约）。"""
     if not line_break:
         return segs
@@ -453,7 +463,8 @@ def _apply_line_break(segs: list, line_break: bool) -> list:
         return segs
 
 
-def _load_break_segments():
+def _load_break_segments() -> Callable[[list[dict[str, Any]]],
+                                       list[dict[str, Any]]]:
     """断行器装载（3.2.1 前置件①，D2026-1029-01 发现登记修复）。
 
     包上下文（-m/测试形态）走相对导入；脚本直调形态无包上下文必
@@ -472,10 +483,12 @@ def _load_break_segments():
             raise
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        return mod.break_segments
+        # 路径回退装载的 line_breaker.py 与包内同件同源同契约，cast 为真值断言
+        return cast("Callable[[list[dict[str, Any]]], list[dict[str, Any]]]",
+                    mod.break_segments)
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     # D2026-1031-04 ⑦②：allow_abbrev=False——cmd 契约元素精确匹配。旧行为
     # 依赖 "--model large-v2" 被 argparse 前缀缩写收进 --model-dir、再由显式
     # --model-dir 后值覆盖冲正的巧合；关掉缩写后 runner 增 "--model…" 族选项
