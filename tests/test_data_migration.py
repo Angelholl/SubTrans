@@ -355,7 +355,7 @@ def test_cli_stub_normal_path_counted_once(monkeypatch, tmp_path):
 def test_gui_stub_present_source_level():
     src = (Path(paths.__file__).parent / "webview_gui" / "main.py").read_text(
         encoding="utf-8")
-    main_body = src[src.index("def main():"):]
+    main_body = src[src.index("def main()"):]  # 不含右括号：兼容签名注解化（def main() -> None:）
     i_freeze = main_body.index("freeze_support()")
     i_stub = main_body.index("ensure_migrated(")
     i_setup = main_body.index("_auto_setup()")

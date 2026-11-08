@@ -14,7 +14,12 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    import argparse
+
+    import webview
 
 from subtrans.utils.console import (
     print_missing_extra_error,
@@ -34,7 +39,7 @@ from subtrans.webview_gui.strings import msg  # noqa: E402  文案表零依赖
 AUMID = "Angelholl.SubTrans.GUI"
 
 
-def _deps_ok():
+def _deps_ok() -> bool:
     """检查 GUI 核心依赖是否可导入"""
     try:
         import webview  # noqa: F401
@@ -45,7 +50,7 @@ def _deps_ok():
         return False
 
 
-def _auto_setup():
+def _auto_setup() -> None:
     """首次运行自动创建 venv 并安装依赖，然后重启到 venv 环境"""
     # PyInstaller 打包版不应走自动安装流程
     if paths.is_frozen():
@@ -120,7 +125,7 @@ def _auto_setup():
         sys.exit(1)
 
 
-def _check_gui_dependencies():
+def _check_gui_dependencies() -> None:
     """Check if GUI dependencies are installed."""
     missing = []
 
@@ -155,7 +160,7 @@ def _check_gui_dependencies():
 import json  # noqa: E402
 
 
-def _parse_args(argv=None):
+def _parse_args(argv: list[str] | None = None) -> "argparse.Namespace":
     """解析 GUI 命令行参数（中文 help）。
 
     必须在 _auto_setup() / _check_gui_dependencies() 之前调用，
@@ -192,7 +197,7 @@ MEDIA_ORIGIN_BANNER_TEXT = (
 )
 
 
-def on_drop_event(e):
+def on_drop_event(e: dict[str, Any]) -> None:
     """
     Handle file drops from OS into WebView.
 
@@ -245,13 +250,13 @@ def on_drop_event(e):
         print(msg("drop_event_error", e=ex))
 
 
-def bind_dom_events(window):
+def bind_dom_events(window: "webview.Window") -> None:
     """Bind drag-drop events to window DOM after creation."""
     from webview.dom import DOMEventHandler  # noqa: E402  延迟导入 GUI 依赖
     try:
-        window.dom.document.events.dragenter += DOMEventHandler(lambda e: None, True, True)
-        window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
-        window.dom.document.events.drop += DOMEventHandler(on_drop_event, True, True)
+        window.dom.document.events.dragenter += DOMEventHandler(lambda e: None, True, True)  # type: ignore[arg-type]  # pywebview Event.__iadd__ 标 Callable 实收 DOMEventHandler
+        window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)  # type: ignore[arg-type]  # 同上
+        window.dom.document.events.drop += DOMEventHandler(on_drop_event, True, True)  # type: ignore[arg-type]  # 同上
         print(msg("dom_events_bound"))
         # d1021-卡1 诊断：num_listeners 仅在 JS 侧 drop 监听真正注入成功时 +1；
         # 若为 0，pywebview 会直接丢弃 FilesDropped → pywebviewFullPath 必然缺失
@@ -307,7 +312,7 @@ def asset_page_url(path: str | Path) -> str:
         return str(path)
 
 
-def bind_media_origin_check(window) -> None:
+def bind_media_origin_check(window: "webview.Window") -> None:
     """2.7.5 件A（D2026-1007-02）启动自检：loaded 后校验页面 origin。
 
     非 ``file:`` → ①经既有 gui.log 通道记 error；②往页面 body 前插一个
@@ -315,7 +320,7 @@ def bind_media_origin_check(window) -> None:
     包裹：evaluate 失败不影响启动。
     """
 
-    def _on_loaded():
+    def _on_loaded() -> None:
         try:
             protocol = window.evaluate_js("location.protocol")
             if protocol == "file:":
@@ -347,7 +352,7 @@ def bind_media_origin_check(window) -> None:
     window.events.loaded += _on_loaded
 
 
-def check_webview2_windows():
+def check_webview2_windows() -> bool:
     """Check if WebView2 runtime is installed on Windows."""
     if platform.system() != 'Windows':
         return True
@@ -370,7 +375,7 @@ def check_webview2_windows():
         return True
 
 
-def show_webview2_error():
+def show_webview2_error() -> None:
     """Show user-friendly error dialog if WebView2 is missing."""
     try:
         import tkinter as tk
@@ -391,7 +396,7 @@ def show_webview2_error():
         print("Download: https://go.microsoft.com/fwlink/p/?LinkId=2124703")
 
 
-def create_window():
+def create_window() -> "webview.Window":
     """Create and configure the PyWebView window."""
     import webview
 
@@ -436,7 +441,7 @@ def create_window():
     return window
 
 
-def main():
+def main() -> None:
     """Entry point for subtrans-gui."""
     # PyInstaller frozen 多进程（multiprocessing）安全：必须在任何
     # multiprocessing 子进程被拉起之前调用；非 frozen 下为 no-op。
