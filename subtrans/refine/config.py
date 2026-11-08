@@ -5,6 +5,7 @@ Refine 配置：阶段定义 / 服务商预设 / 默认参数
 import json
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 from subtrans import paths
 
@@ -151,7 +152,7 @@ LOGS_DIR = paths.data_subdir("Logs")
 TEMP_DIR = paths.data_subdir("Temp")
 
 
-def read_ui_settings() -> dict:
+def read_ui_settings() -> dict[str, Any]:
     """读 GUI 持久化设置 KV（config/refine_stage_settings.json 顶层
     ``settings`` 字典）。
 
@@ -207,7 +208,9 @@ def single_line_whitelist_path() -> str:
     return os.path.join(CONFIG_DIR, "single_line_whitelist.txt")
 
 
-def _coerce_tunable(raw, typ):
+def _coerce_tunable(raw: Any,
+                    typ: type[bool] | type[int] | type[float]
+                    | type[str]) -> bool | int | float | str | None:
     """按字段类型收敛配置值；类型非法返回 None（调用方警告后忽略）。"""
     if typ is bool:
         # bool 不走 bool(raw)（bool("false")/bool("0") 均为 True，会误开
@@ -227,7 +230,7 @@ def _coerce_tunable(raw, typ):
         return None
 
 
-def load_user_settings() -> dict:
+def load_user_settings() -> dict[str, Any]:
     """读取用户配置文件（不存在则返回 {}，零开销常态）。
 
     - 非法 JSON / 顶层非对象 -> print 警告并忽略（不 crash）；
@@ -248,7 +251,7 @@ def load_user_settings() -> dict:
     return {k: v for k, v in data.items() if k in TUNABLE_FIELD_TYPES}
 
 
-def resolve_tunable(name: str):
+def resolve_tunable(name: str) -> Any:
     """解析单个可调字段的生效值：默认 < 用户配置文件 < 环境变量。
 
     供无 cfg 上下文的调用点（如 GUI 并发钳制）使用；CLI/GUI 层在
@@ -292,10 +295,10 @@ class StageConfig:
 
 @dataclass
 class RefineConfig:
-    inputs: list = field(default_factory=list)   # 输入 SRT 路径列表
+    inputs: list[str] = field(default_factory=list)   # 输入 SRT 路径列表
     output_dir: str = ""            # 空 = 与各输入同目录
     # 附加成品件格式（D2026-1023-02）：空=只写 SRT（默认行为零变化）
-    extra_output_formats: list = field(default_factory=list)
+    extra_output_formats: list[str] = field(default_factory=list)
     # 确定性字幕清洗层（D2026-1023-03 D3）：总开关默认关，存量行为零变化。
     # 数值/字符串字段的 0/空串 = 未覆盖，回落到 polish.POLICY_DEFAULTS。
     polish_enabled: bool = False          # 总开关，默认关（D3）
@@ -317,7 +320,7 @@ class RefineConfig:
     # 槽位结构永久保留 4 槽（D2026-0922-02 裁决三）；enabled 仅影响
     # manifest/GUI 展示，对 v2 按 tag→槽位取数无行为影响。槽1/3 为
     # v2 未用槽，默认停用，避免 validate() 对空模型/key 误报。
-    stages: list = field(default_factory=lambda: [
+    stages: list[StageConfig] = field(default_factory=lambda: [
         # 生产默认搭配（D2026-0921-01 用户拍板）：A=joyfox27b > B=heretic35b
         StageConfig(0, True, "lmstudio", "qwen3.8-27b-uncensored-joyfox-aggressive"),   # v2 生产槽（A）
         StageConfig(1, False, "deepseek", ""),   # v2 未用槽，默认停用（D2026-0922-02 裁决三对齐）
@@ -336,7 +339,7 @@ class RefineConfig:
     api_key_zen: str = ""
     api_key_siliconflow: str = ""
     api_key_custom: str = ""
-    endpoints: dict = field(default_factory=dict)   # provider -> endpoint 覆盖
+    endpoints: dict[str, str] = field(default_factory=dict)   # provider -> endpoint 覆盖
     verbose: bool = False
     # 云端故障本地接管（仅作用于云端阶段；本地→云端方向默认关闭）
     fallback_local: bool = False
@@ -480,7 +483,7 @@ class RefineConfig:
     # 预留 2.0，当前恒为关闭（O10）。
     v2_file_parallel: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # 不变式：force_resume 隐含 resume——强制复用必须以"允许复用"为前提，
         # 否则复用分支（cfg.resume and manifest_trusted）会静默失效（O4）。
         if self.force_resume:
@@ -509,7 +512,7 @@ class RefineConfig:
                       f"请重新配置；本次运行将使用自动推荐模型")
                 _s.model = ""
 
-    def _apply_layered_overrides(self):
+    def _apply_layered_overrides(self) -> None:
         """分层配置：仅当字段仍为 dataclass 默认值时允许用户文件/环境变量覆盖。
 
         CLI/GUI 在构造时显式传入的非默认值保持最高优先级，不被覆盖。
@@ -695,7 +698,7 @@ _POLISH_BOOL_FIELDS = (
 )
 
 
-def polish_policy_from_config(cfg) -> dict:
+def polish_policy_from_config(cfg: RefineConfig) -> dict[str, Any]:
     """把 RefineConfig 的 polish_* 字段折算成 polish.POLICY_DEFAULTS 全量策略。
 
     0 / 空串 / None = 未覆盖，保留 polish.py 默认（默认值单一真值源）；
