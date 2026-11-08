@@ -8,10 +8,16 @@ origin，非 ``file:`` 时记 error 并插固定红色横幅。本文件三钉�
 """
 import json
 import logging
+import os
 
 import pytest
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI 测试")
+if os.name != "nt":
+    # 0a31512 补装 pywebview 后「可导入」不再等价「可运行」：webview 门控测试
+    # 前提仅 Windows 成立（详见 tests/test_gui_api.py 头注／D2026-1108-05 追记）。
+    pytest.skip("webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过",
+                allow_module_level=True)
 
 from subtrans.webview_gui import main as gui_main  # noqa: E402
 

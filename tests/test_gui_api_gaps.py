@@ -5,6 +5,7 @@
 现状薄弱点只钉契约，不修产品代码。
 """
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,11 @@ pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试",
                     exc_type=ImportError)
+if os.name != "nt":
+    # 0a31512 补装 pywebview 后「可导入」不再等价「可运行」：webview 门控测试
+    # 前提仅 Windows 成立（详见 tests/test_gui_api.py 头注／D2026-1108-05 追记）。
+    pytest.skip("webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过",
+                allow_module_level=True)
 
 import subtrans.webview_gui.api as api_mod  # noqa: E402  须在 importorskip 之后
 from subtrans.webview_gui.api import (  # noqa: E402

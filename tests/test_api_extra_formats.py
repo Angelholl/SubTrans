@@ -8,6 +8,7 @@
 浅层测试：不启动窗口，TranslateAPI 用 ``object.__new__`` 构造。
 """
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,11 @@ import pytest
 pytestmark = [pytest.mark.gui]
 
 pytest.importorskip("webview", reason="pywebview 为可选 gui extra，未安装时跳过 GUI API 测试", exc_type=ImportError)
+if os.name != "nt":
+    # 0a31512 补装 pywebview 后「可导入」不再等价「可运行」：webview 门控测试
+    # 前提仅 Windows 成立（详见 tests/test_gui_api.py 头注／D2026-1108-05 追记）。
+    pytest.skip("webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过",
+                allow_module_level=True)
 
 from subtrans.refine.filters import build_srt, parse_srt  # noqa: E402
 from subtrans.refine.v2_outputs import final_stem  # noqa: E402

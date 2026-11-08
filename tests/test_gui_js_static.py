@@ -12,6 +12,7 @@ app.js 依赖浏览器 DOM/pywebview，项目内无 JS 自动化测试基建，
 """
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -616,6 +617,9 @@ def test_direction_hint_value_parity_pinned():
     _direction_key_value_parity_pinned("direction_hint")
 
 
+# 0a31512 补装 pywebview 后可导入≠可运行，webview 门控测试前提仅 Windows 成立。
+@pytest.mark.skipif(os.name != "nt",
+                    reason="webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过")
 def test_build_refine_args_polish_flag_whitelist():
     """api 白名单转发：polish_enabled=True → 恰一个 --polish；
     False/None/缺席 → 零旗标（默认零变化）。"""

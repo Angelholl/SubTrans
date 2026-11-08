@@ -529,6 +529,9 @@ def test_migrate_skips_temp_leftovers(_isolated_dict_state):
 def _api_cls():
     pytest.importorskip("webview", reason="pywebview 未安装时跳过 API 面用例",
                         exc_type=ImportError)
+    if os.name != "nt":
+        # 0a31512 补装 pywebview 后「可导入」不再等价「可运行」（见 test_gui_api.py 头注）。
+        pytest.skip("webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过")
     from subtrans.webview_gui.api import TranslateAPI
     return TranslateAPI
 
@@ -635,13 +638,16 @@ def test_api_pick_folder_purpose_dict_persists(
     assert ud.get_dict_dir() == ud.normalize_key(str(picked))
 
 
+@pytest.mark.skipif(os.name != "nt",
+                    reason="webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过")
 def test_api_init_loads_persisted_dict_dir(
         monkeypatch, _isolated_dict_state):
     """启动注入（_load_dict_dir_override）：持久值 → 进程内生效。
 
     CI 热修：本用例直接 import webview_gui.api 但不经 gui_api 夹具，
-    须自带 importorskip 闸（与 _api_cls 口径对齐），否则 Ubuntu 腿
-    （不装 pywebview）collection 后 ModuleNotFoundError 致红。
+    须自带 importorskip 闸（与 _api_cls 口径对齐），否则非 pywebview 环境
+    collection 后 ModuleNotFoundError 致红；0a31512 补装 pywebview 后
+    非 Windows 平台改由 skipif 平台门承接（可导入≠可运行）。
     """
     pytest.importorskip("webview", reason="pywebview 未安装时跳过 API 面用例",
                         exc_type=ImportError)

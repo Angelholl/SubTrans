@@ -499,6 +499,9 @@ def test_cli_flags_wired_to_config():
     assert cfg2.asr_telemetry == ""
 
 
+# 0a31512 补装 pywebview 后可导入≠可运行，webview 门控测试前提仅 Windows 成立。
+@pytest.mark.skipif(os.name != "nt",
+                    reason="webview 门控测试前提＝Windows 运行面，非 Windows 平台跳过")
 def test_gui_args_adaptive_thresholds_flag():
     _webview = pytest.importorskip("webview", exc_type=ImportError)
     assert _webview is not None
