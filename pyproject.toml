@@ -168,6 +168,7 @@ module = [
     # 段19 strict 修债：20+ 条级件（owner 2026-11-08 排队令放行五件），修一件入名单一件，只增不减。
     "subtrans.webview_gui.main",
     "subtrans.refine.asr_runner",
+    "subtrans.refine.action_retranslate",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

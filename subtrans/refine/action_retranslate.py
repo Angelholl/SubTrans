@@ -17,7 +17,7 @@ import json
 import math
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .filters import build_srt, parse_srt
 from .output_formats import existing_extra_formats, sync_extra_outputs
@@ -34,7 +34,11 @@ from .v2_outputs import (
 from .v2_premerge import _timing_span
 
 if TYPE_CHECKING:
+    import argparse
+
     from subtrans.translate.llm_client import LLMClient
+
+    from .config import RefineConfig
 
 # 导读快照刷新时重算存在性的伴生成品后缀（与 write_guide_json 六件同源，
 # 台账 {stem}_重翻记录.json 不入 companions：它是执行器自己的审计件）。
@@ -187,7 +191,8 @@ def _residual_cps(new_text: str, timing: str,
     return cps if cps > threshold else None
 
 
-def _make_action_client(cfg, model_override: str = ""):
+def _make_action_client(cfg: "RefineConfig",
+                        model_override: str = "") -> "LLMClient":
     """行动层 LLM 客户端注入点（模块级函数，便于测试 monkeypatch）。
 
     复用管线槽 A 客户端工厂——与 AI 分析客户端（quality_advisor
@@ -208,7 +213,7 @@ def _make_action_client(cfg, model_override: str = ""):
     return _make_client(cfg, "A")
 
 
-def _resolve_action_model(cfg, model_override: str) -> str:
+def _resolve_action_model(cfg: "RefineConfig", model_override: str) -> str:
     """台账 model_used 取值：显式覆盖优先，否则槽 A 模型（含服务商默认，
     兜底链与 quality_advisor._resolve_ai_model 同构）。"""
     from .config import PROVIDER_MODEL_DEFAULTS
@@ -218,7 +223,7 @@ def _resolve_action_model(cfg, model_override: str) -> str:
     return stage.model or PROVIDER_MODEL_DEFAULTS.get(stage.provider, "")
 
 
-def _load_guide(path: str) -> tuple[dict, Path, str]:
+def _load_guide(path: str) -> tuple[dict[str, Any], Path, str]:
     """读导读清单并校验 v2 快照契约，返回 (guide, 所在目录, stem)。"""
     p = Path(path)
     if not p.is_file():
@@ -237,7 +242,8 @@ def _load_guide(path: str) -> tuple[dict, Path, str]:
     return guide, p.parent, str(stem)
 
 
-def _load_source_map(source_path: str, selected: list) -> dict[str, str]:
+def _load_source_map(source_path: str,
+                     selected: list[dict[str, Any]]) -> dict[str, str]:
     """--action-source 的 timing→源文映射（精确匹配首个，后到不覆盖）；
     未提供或文件不存在时打印退化提示（N=退化条数，映射不可得即全部选中
     条目退化，故 N=len(selected)，0 条不打印）。"""
@@ -258,7 +264,8 @@ def _load_source_map(source_path: str, selected: list) -> dict[str, str]:
     return mapping
 
 
-def _select_items(items: list, wanted: set) -> list:
+def _select_items(items: list[dict[str, Any]],
+                  wanted: set[int]) -> list[dict[str, Any]]:
     """条目选择：--entries 按导读 index 精确选取；缺省=全部 open 且
     current_text 非 None 的 items。"""
     if wanted:
@@ -271,8 +278,9 @@ def _select_items(items: list, wanted: set) -> list:
             if it.get("status") == "open" and it.get("current_text") is not None]
 
 
-def _print_plan(selected: list, source_map: dict, guide_path: Path,
-                final_path: Path, apply_mode: bool) -> None:
+def _print_plan(selected: list[dict[str, Any]], source_map: dict[str, str],
+                guide_path: Path, final_path: Path,
+                apply_mode: bool) -> None:
     """dry-run 计划打印（零写入）：身份码/类别/timing/现译前 50 字/源文可得性。
 
     卡5（D2026-1012-01 A5）撞号消歧：条目号优先用 item_id（=类別码-index，
@@ -291,8 +299,9 @@ def _print_plan(selected: list, source_map: dict, guide_path: Path,
               f" | 现译: {preview} | 源文: {src_avail}")
 
 
-def _assert_apply_invariants(old_entries: list, new_entries: list,
-                             applied_positions: set) -> None:
+def _assert_apply_invariants(old_entries: list[dict[str, Any]],
+                             new_entries: list[dict[str, Any]],
+                             applied_positions: set[int]) -> None:
     """apply 恒等式硬断言（D11 契约④）：条目数一致 / 逐块 timing 全等 /
     仅选中块 text 变化。失败=程序 bug，抛 AssertionError 且不得落盘。"""
     if len(old_entries) != len(new_entries):
@@ -306,7 +315,8 @@ def _assert_apply_invariants(old_entries: list, new_entries: list,
                 f"恒等式断言失败：非选中块 {i + 1} 文本被改动")
 
 
-def _append_ledger(ledger_path: Path, records: list) -> int:
+def _append_ledger(ledger_path: Path,
+                   records: list[dict[str, Any]]) -> int:
     """台账累积写入：已存在则追加（JSON 数组）；损坏件不阻断、重新起账。
     写入走 _atomic_write_text 原子替换（2.6.0 批1 D2026-1002-02-批1 C2：
     write_text 非原子——杀树落在写中途会留半截 JSON，下次读取损坏即
@@ -325,10 +335,10 @@ def _append_ledger(ledger_path: Path, records: list) -> int:
     return len(existing)
 
 
-def _refresh_guide(guide: dict, out_dir: str, stem: str,
-                   new_entries: list,
-                   applied_indexes: set | None = None,
-                   nochange_indexes: set | None = None) -> None:
+def _refresh_guide(guide: dict[str, Any], out_dir: str, stem: str,
+                   new_entries: list[dict[str, Any]],
+                   applied_indexes: set[int] | None = None,
+                   nochange_indexes: set[int] | None = None) -> None:
     """导读 json 快照刷新：generated_at 换当前同源时间串、items 的
     current_text 按新 final 重定位（resolve_final_block 精确 index 匹配，
     未命中保持原值不猜）、顶层加 retranslated_at；status 终态落盘（批6
@@ -362,7 +372,8 @@ def _refresh_guide(guide: dict, out_dir: str, stem: str,
     write_guide_json(out_dir, stem, guide)
 
 
-def run_action_retranslate(cfg, args) -> int:
+def run_action_retranslate(cfg: "RefineConfig",
+                           args: "argparse.Namespace") -> int:
     """行动层重翻执行器主入口。返回退出码：0=成功 / 1=全败或执行失败 /
     2=--entries 非法 / 3=部分降级（沿用 cli 口径）。"""
     try:
@@ -408,9 +419,9 @@ def run_action_retranslate(cfg, args) -> int:
     # ---- apply：串行逐条重翻（并发 1，永不写 TM）----
     new_entries = [dict(e) for e in old_entries]
     applied_positions: set[int] = set()
-    applied_indexes: set = set()
-    nochange_indexes: set = set()
-    records: list[dict] = []
+    applied_indexes: set[int] = set()
+    nochange_indexes: set[int] = set()
+    records: list[dict[str, Any]] = []
     client: LLMClient | None = None
     client_err: BaseException | None = None
     model_used = _resolve_action_model(cfg, getattr(args, "action_model", "") or "")
