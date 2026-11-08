@@ -32,8 +32,10 @@ import time
 import urllib.error
 import urllib.request
 import zipfile
+from collections.abc import Callable
+from http.client import HTTPMessage
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from subtrans import paths
 
@@ -76,7 +78,7 @@ class DictDownloadError(RuntimeError):
     可解析秒数；不可解析为 None 走指数）。不进 diag（七键契约钉死）。
     """
 
-    diag: dict | None = None
+    diag: dict[str, Any] | None = None
     http_status: int | None = None
     retry_after: float | None = None
 
@@ -112,10 +114,10 @@ class DictDownloadStopped(RuntimeError):
 # 用户主动停止的终态，由 download_dict 顶层 DictDownloadStopped 收口
 # 写入，note 带重下指引、不写 error/diag）。写侧整体赋值换引用（读侧
 # 拿到一致性视图），无需复杂锁；GUI 经 api 层 1s 轮询消费。
-_DOWNLOAD_PROGRESS: dict = {}
+_DOWNLOAD_PROGRESS: dict[str, dict[str, Any]] = {}
 
 
-def download_progress(kind: str) -> dict:
+def download_progress(kind: str) -> dict[str, Any]:
     """某词典的下载进度快照副本（无记录返回 {}；只读零副作用）。
 
     D2026-1004-01 C3：diag 诊断字段亦做一层浅拷贝返回（读侧持有独立
@@ -133,7 +135,7 @@ def _set_download_progress(kind: str, phase: str, downloaded: int = 0,
                            total: int | None = None,
                            error: str | None = None,
                            note: str | None = None,
-                           diag: dict | None = None) -> None:
+                           diag: dict[str, Any] | None = None) -> None:
     """整体赋值换引用写进度快照（2.6.3 批B 增可选 note：源回退可见提示；
     D2026-1004-01 C3 增可选 diag：失败诊断字段）。
 
@@ -197,7 +199,7 @@ _CUSTOM_DICT_DIR: str | None = None
 # key 含完整路径，测试换数据根（env）天然失效不串值。
 # 口径：ns 级（非秒级 st_mtime）——Windows NTFS mtime 粒度 ~10-16ms，
 # 同秒两次写盘秒级 mtime 等值致缓存不失效（CI 竞速 flake 根因，D2026-1012-01）。
-_USER_DIRS_CACHE: dict = {"key": None, "value": None}
+_USER_DIRS_CACHE: dict[str, Any] = {"key": None, "value": None}
 
 
 def set_custom_dir(path: str | None) -> None:
@@ -283,7 +285,8 @@ def _user_dirs_json_dict_dir() -> str | None:
         return None
     key = (str(p), mtime_ns)
     if _USER_DIRS_CACHE["key"] == key:
-        return _USER_DIRS_CACHE["value"]
+        cached: str | None = _USER_DIRS_CACHE["value"]
+        return cached
     value: str | None = None
     try:
         import json
@@ -339,11 +342,12 @@ def count_dict_files(root: str) -> int:
     return n
 
 
-def load_source_manifest() -> dict:
+def load_source_manifest() -> dict[str, Any]:
     """读包内源清单（schemaVersion 校验宽松：缺字段由调用方按缺省处理）。"""
     import json
     with open(_DICT_SOURCES_JSON, encoding="utf-8") as f:
-        return json.load(f)
+        data: dict[str, Any] = json.load(f)
+    return data
 
 
 def _safe_component(name: str) -> str:
@@ -437,7 +441,9 @@ class _DictGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
 
     max_redirections = 5
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(self, req: urllib.request.Request, fp: IO[bytes],
+                         code: int, msg: str, headers: HTTPMessage,
+                         newurl: str) -> urllib.request.Request | None:
         try:
             _validate_url(str(newurl))
         except DictDownloadError:
@@ -454,7 +460,8 @@ def _check_stop(stop_event: threading.Event | None) -> None:
         raise DictDownloadStopped("词典下载已被用户停止")
 
 
-def _http_get_once(url: str, dest: str, progress=None,
+def _http_get_once(url: str, dest: str,
+                   progress: Callable[[int, int | None], None] | None = None,
                    stop_event: threading.Event | None = None) -> None:
     """单轮下载到 dest（流式分块落盘，.part 先写再原子改名；dest 由调用方
     约束在数据根词典目录内且父目录已建）。429/5xx 退避重试层见 _http_get。
@@ -488,7 +495,7 @@ def _http_get_once(url: str, dest: str, progress=None,
     tmp = dest + ".part"
 
     def _collect_diag(expected: int | None, actual: int, enc: str,
-                      proxy: str, attempts: int) -> dict:
+                      proxy: str, attempts: int) -> dict[str, Any]:
         """失败诊断字段采集（C3 七键；.part 删除前调用，读不到为 ""）。"""
         part_hex = ""
         try:
@@ -608,7 +615,8 @@ _HTTP_RETRY_CAP_S = 60.0
 _HTTP_RETRY_MAX = 3
 
 
-def _http_get(url: str, dest: str, progress=None,
+def _http_get(url: str, dest: str,
+              progress: Callable[[int, int | None], None] | None = None,
               stop_event: threading.Event | None = None) -> None:
     """下载到 dest＝单轮两跳语义（_http_get_once）+ 429/5xx 指数退避层。
 
@@ -914,7 +922,7 @@ def _sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
-def migrate_dicts(source_dir: str) -> dict:
+def migrate_dicts(source_dir: str) -> dict[str, Any]:
     """把旧词典目录下各 kind 文件迁移到现生效目录（批1b 件2）。
 
     规则（与拍板点5 一致）：
@@ -934,7 +942,7 @@ def migrate_dicts(source_dir: str) -> dict:
         raise
 
 
-def _migrate_dicts_impl(source_dir: str) -> dict:
+def _migrate_dicts_impl(source_dir: str) -> dict[str, Any]:
     src_root = _validated_path(str(source_dir or ""))
     if not src_root.is_dir():
         raise ValueError(f"旧词典目录不存在: {src_root}")
@@ -1046,7 +1054,7 @@ def sudachi_custom_dict_path() -> str:
     return ""
 
 
-def dict_status() -> dict:
+def dict_status() -> dict[str, Any]:
     """三词典状态（只读、零网络）：可用性/自定义路径/已落位文件。"""
     from importlib.util import find_spec
 
@@ -1054,7 +1062,7 @@ def dict_status() -> dict:
 
     root = Path(dict_dir())
     manifest = load_source_manifest()
-    dicts: dict = {}
+    dicts: dict[str, dict[str, Any]] = {}
     for kind, entry in manifest["dicts"].items():
         install = entry.get("install_dir") or kind
         kdir = root / install
@@ -1090,7 +1098,7 @@ def dict_status() -> dict:
     # 2.7.3 件② HRO-2：has_mirror 按 role 旗标 + sha256_verified 点亮门推导
     # （未点亮镜像不虚亮 GUI）；has_official 排除 role=mirror（镜像即使
     # verified 也不入官方语义）
-    sources_summary: dict = {}
+    sources_summary: dict[str, dict[str, Any]] = {}
     for kind, entry in manifest["dicts"].items():
         if not (entry.get("target_name") or ""):
             continue

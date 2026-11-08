@@ -170,6 +170,7 @@ module = [
     "subtrans.refine.asr_runner",
     "subtrans.refine.action_retranslate",
     "subtrans.refine.config",
+    "subtrans.refine.dict_manager",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

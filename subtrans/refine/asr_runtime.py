@@ -719,7 +719,7 @@ def _verified_stamp(zip_path: str) -> dict[str, str]:
 
 def _guarded_download(url: str, dest: str, expected_sha256: str,
                       expected_bytes: int = 0,
-                      progress: Callable[[int, int], None] | None = None) -> None:
+                      progress: Callable[[int, int | None], None] | None = None) -> None:
     """守卫下载（复用 dict_manager 下载原语）+sha256 逐字节核验。
 
     _http_get 自带：https+域白名单（hf-mirror.com/cas-bridge 在案）、重定向
@@ -891,7 +891,7 @@ def _normalize_model_layout(dest_model_dir: str) -> None:
 
 
 def download_model(model: str = "large-v2",
-                   progress: Callable[[int, int], None] | None = None) -> int:
+                   progress: Callable[[int, int | None], None] | None = None) -> int:
     """CT2 模型 zip 守卫下载+核验+解包到现形模型落位/<model>（verified 门）。
 
     rc 语义：0＝新装成功；1＝已落位（幂等）；2＝未知型号；3＝verified 门
@@ -1161,7 +1161,7 @@ def install_gpu_patch(zip_path: str) -> int:
 
 
 def download_gpu_patch(
-        progress: Callable[[int, int], None] | None = None) -> int:
+        progress: Callable[[int, int | None], None] | None = None) -> int:
     """在线下载 GPU 补丁包（守卫下载+布局门+解包+manifest 回写）。
 
     在线 pin 未点亮（owner 上传镜像回填前）＝人话报错 rc=3，本地 zip 通道
