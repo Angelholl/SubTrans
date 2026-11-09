@@ -26,6 +26,7 @@ import sqlite3
 import time
 import unicodedata
 from pathlib import Path
+from typing import Any
 
 from subtrans import paths
 
@@ -175,7 +176,7 @@ class TranslationMemory:
         self._init_db()
 
     def _langs(self, source_lang: str | None,
-               target_lang: str | None) -> tuple:
+               target_lang: str | None) -> tuple[str, str]:
         """语言参数解析：None 回落实例缺省（显式传参原样透传，优先级最高）。"""
         return (source_lang if source_lang is not None else self.source_lang,
                 target_lang if target_lang is not None else self.target_lang)
@@ -187,7 +188,7 @@ class TranslationMemory:
             self._conn.execute("PRAGMA synchronous=NORMAL")
         return self._conn
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         conn = self._get_conn()
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS tm_entries (
@@ -218,7 +219,7 @@ class TranslationMemory:
         # （表重建迁移之后），旧库打开即自动建面/重建（C2 义务闭环）
         self._ensure_fts()
 
-    def _ensure_fts(self):
+    def _ensure_fts(self) -> None:
         """FTS 面保障（2.6.4 批1 策略 B）：幂等建表 + 陈旧全量重建。
 
         - 陈旧判定 = COUNT(tm_entries) != COUNT(tm_fts)：策略 B 无触发器，
@@ -256,7 +257,7 @@ class TranslationMemory:
         conn.commit()
 
     def _fts_double_write(self, conn: sqlite3.Connection,
-                          rows: list) -> None:
+                          rows: list[Any]) -> None:
         """策略 B 显式双写：与 tm_entries 写入同连接同事务（调用方 commit 前）。
 
         rows = [(id, source_text, target_text), ...]；INSERT OR REPLACE
@@ -379,12 +380,13 @@ class TranslationMemory:
                 "WHERE content_hash=? AND stage=? AND source_lang=? "
                 "AND target_lang=?", (h, stage, source_lang, target_lang))
             conn.commit()
-            return row[0]
+            target: str = row[0]
+            return target
         return None
 
     def exact_map(self, sources: list[str], stage: int = 0,
                   source_lang: str | None = None,
-                  target_lang: str | None = None) -> dict:
+                  target_lang: str | None = None) -> dict[str, str]:
         """批量精确查找（P1-6）：一次参数化 SQL 取回 {原输入串: 译文}。
 
         - sqlite 变量上限（默认 999）→ 按 _EXACT_MAP_CHUNK 分批 IN 查询；
@@ -394,8 +396,8 @@ class TranslationMemory:
           但从 N 次 commit 收敛为每批 1 次）。
         """
         source_lang, target_lang = self._langs(source_lang, target_lang)
-        mapping: dict = {}
-        hash_to_sources: dict = {}
+        mapping: dict[str, str] = {}
+        hash_to_sources: dict[str, list[str]] = {}
         for src in sources:
             norm = _normalize(src)
             if not norm:
@@ -442,7 +444,7 @@ class TranslationMemory:
 
     def lookup_exact_all_stages(self, source: str,
                                 source_lang: str | None = None,
-                                target_lang: str | None = None) -> dict:
+                                target_lang: str | None = None) -> dict[int, str]:
         """精确查找所有阶段：返回 {stage: target_text}"""
         source_lang, target_lang = self._langs(source_lang, target_lang)
         h = _simhash(_normalize(source))
@@ -496,7 +498,7 @@ class TranslationMemory:
     # 统计
     # ------------------------------------------------------------------
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         conn = self._get_conn()
         total = conn.execute("SELECT COUNT(*) FROM tm_entries").fetchone()[0]
         by_stage = {}
@@ -533,7 +535,7 @@ class TranslationMemory:
             conn.execute("DELETE FROM tm_entries")
         conn.commit()
 
-    def search(self, query: str, limit: int = 50) -> list[dict]:
+    def search(self, query: str, limit: int = 50) -> list[dict[str, Any]]:
         """FTS5 BM25 只读搜索（2.6.4 批1，策略 B 双口径）。返回
         [{id, source_text, target_text, stage, hit_count, created_at}]，
         按 BM25 rank 升序（相关度降序）。

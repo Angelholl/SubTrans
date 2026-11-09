@@ -173,6 +173,7 @@ module = [
     "subtrans.refine.dict_manager",
     # 段24 strict 修债（owner 2026-11-10 排队余量六件全放行），修一件入名单一件，只增不减。
     "subtrans.refine.cli",
+    "subtrans.refine.tm",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
