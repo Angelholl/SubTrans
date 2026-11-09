@@ -7,10 +7,13 @@ import contextlib
 import os
 import sys
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from .config import RefineConfig
 
 
-def build_parser():
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="subtrans-refine",
         description="v2 两阶段字幕净语翻译流水线（阶段A 净语+翻译 → 阶段B 审校+抛光）")
@@ -314,7 +317,7 @@ def build_parser():
     return p
 
 
-def _collect_input_files(args) -> list:
+def _collect_input_files(args: argparse.Namespace) -> list[str]:
     """收集输入文件：来自 -i 和 --input-dir（含递归/过滤）。"""
     from .batch import find_srt_files
     files = list(args.input)
@@ -349,7 +352,7 @@ def _collect_input_files(args) -> list:
     return deduped
 
 
-def _convert_inputs_or_exit(files: list) -> list:
+def _convert_inputs_or_exit(files: list[str]) -> list[str]:
     """批2 多格式导入接线（D2026-1003-05）：ASS/SSA/VTT → SRT 转换步。
 
     输入清单最终确定后、进管线前调用；无可转换文件时零打印零开销直接透传。
@@ -374,7 +377,7 @@ def _convert_inputs_or_exit(files: list) -> list:
     return converted
 
 
-def config_from_args(args):
+def config_from_args(args: argparse.Namespace) -> "RefineConfig":
     from .config import RefineConfig, StageConfig
 
     # v2 固定 4 槽：槽0（--s1-*）=阶段A 启用、槽2（--s3-*）=阶段B 启用；
@@ -474,7 +477,7 @@ def config_from_args(args):
     return cfg
 
 
-def print_plan(cfg):
+def print_plan(cfg: "RefineConfig") -> bool:
     from .batch import scan_summary
     from .config import PROVIDER_TEXT
     print("📋 执行计划：")
@@ -509,7 +512,7 @@ def print_plan(cfg):
     return not errs
 
 
-def _handle_tm_commands(args):
+def _handle_tm_commands(args: argparse.Namespace) -> bool:
     """处理翻译记忆库管理命令（执行后退出）。返回 True 表示已处理。"""
     import sys as _sys
 
@@ -693,7 +696,7 @@ def _cmd_dict_download(kind: str, from_file: str = "",
     return 0
 
 
-def _cmd_transcribe_media(args) -> int:
+def _cmd_transcribe_media(args: argparse.Namespace) -> int:
     """--transcribe-media：媒体→源文 SRT（3.2.0 件A，D2026-1029-02 拍板②）。
 
     引擎未就绪由 asr_env 薄封装明示报错（提示安装链路），此处转退出码
@@ -710,7 +713,7 @@ def _cmd_transcribe_media(args) -> int:
     return 0
 
 
-def _harden_stdio():
+def _harden_stdio() -> None:
     """stdio 加固（同 tools/guard_banned_paths.py），按管道/tty 区分策略。
 
     背景（D2026-1006-01 件⑦）：frozen（PyInstaller）下子进程无视
