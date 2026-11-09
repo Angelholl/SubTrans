@@ -35,14 +35,17 @@ FIXTURES = REPO_ROOT / "tests" / "fixtures" / "hallucination_golden"
 ACTIONS = ("delete", "count", "keep")
 DEBT_SCOPES = ("d0926", "3.3.0")
 
-# tracked 常量：封存哈希＋可读计数快照（计数进 diff，漂移肉眼可辨）。
-# labels_sha256=None／n=0 系「专用账未清偿」态：载体一旦落盘即 fail-closed 红，
-# 须同批补常量（decision-log hash＋提交正文 Refs 回链）。
+# tracked 常量：封存哈希＋可读计数快照＋签署人集合（计数与名单进 diff，漂移肉眼可辨）。
+# labels_sha256=None／n=0／signers=None 系「专用账未清偿」态：载体一旦落盘即 fail-closed
+# 红，须同批补常量（decision-log hash＋提交正文 Refs 回链）。
+# signers 钉常量而非仅取载体自述：载体可自改自配过「annotator ∈ signers」对账，
+# 只有把名单钉进受 review 的 tracked 面，签署人溯源才不依赖被校验对象自身。
 REAL_POOL = {
     "version": "1.0",
     "pool_id": "greal_v1",
     "labels_sha256": None,
     "n": 0,
+    "signers": None,
     "debt_scope": {"d0926": 0, "3.3.0": 0},
 }
 
@@ -91,6 +94,7 @@ def _synthetic_carrier(cases=None):
         "pool_id": "greal_v1",
         "labels_sha256": digest,
         "n": len(cases),
+        "signers": ["demo-annotator-01"],
         "debt_scope": debt,
     }
     return pool, digest + "\n", expected
@@ -148,6 +152,13 @@ def validate_real_pool(pool, labels_text, *, expected=None,
     if not isinstance(signers, list) or not signers:
         violations.append("real 池缺 signers 签署人集合（annotator 对账无依据）")
         signers = []
+    exp_signers = expected.get("signers")
+    if exp_signers is None:
+        violations.append(
+            "tracked REAL_POOL.signers 未登记（签署人集合未入常量，fail-closed）")
+    elif signers != list(exp_signers):
+        violations.append(
+            f"签署人集合失配：载体 {signers!r} ≠ tracked 常量 {list(exp_signers)!r}")
 
     seal = pool.get("judgment_package_sha256")
     if labels_hash and seal != labels_hash:
@@ -287,6 +298,23 @@ def test_negative_annotator_not_in_signers_red():
     pool["cases"][0]["annotator"] = "demo-annotator-99"
     violations = validate_real_pool(pool, labels, expected=expected)
     assert any("annotator" in v for v in violations), violations
+
+
+def test_negative_signers_unpinned_in_constant_red():
+    """签署人集合未钉进 tracked 常量即红——载体自述不足以自证溯源。"""
+    pool, labels, expected = _synthetic_carrier()
+    expected.pop("signers")
+    violations = validate_real_pool(pool, labels, expected=expected)
+    assert any("REAL_POOL.signers" in v for v in violations), violations
+
+
+def test_negative_signers_drift_from_constant_red():
+    """载体侧签署人名单漂移出常量＝红（堵「自加签署人再让 annotator 命中」）。"""
+    pool, labels, expected = _synthetic_carrier()
+    pool["signers"] = ["demo-annotator-01", "demo-annotator-02"]
+    pool["cases"][0]["annotator"] = "demo-annotator-02"
+    violations = validate_real_pool(pool, labels, expected=expected)
+    assert any("签署人集合失配" in v for v in violations), violations
 
 
 def test_negative_carrier_without_labels_red(tmp_path):

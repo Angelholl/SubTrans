@@ -411,7 +411,10 @@ def main() -> int:
                   f"行为一致 {n_real_pass}/{len(real_cases)}")
             print(f"real 池载体：source={real['source']}；路径={real['root']}")
             print(f"real 池 debt_scope 分列：d0926={debt['d0926']}；"
-                  f"3.3.0={debt['3.3.0']}")
+                  f"3.3.0={debt['3.3.0']}（两债分别记账、分别验收，"
+                  "本账不替代、不折抵 D2026-0926-01）")
+            print("real 池口径：用于债计量读数，不自动充当门值标定件"
+                  "（门值标定须另取独立于债的标注件；单管线偏置防同源循环）")
             if len(real_cases) < 30:
                 print(f"real 池计数门：{len(real_cases)} < 30，"
                       "专用账未清偿（保持挂账，不以备材充数）")
