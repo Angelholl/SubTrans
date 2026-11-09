@@ -113,6 +113,13 @@ BANNED_PATTERNS = [
     # ---- 来源 6：C22 门控运行态（decision-log 条目 D2026-1031-04 ① 终裁后
     # --enable 本地写，门控状态属本地运行态不随产品发布）----
     ("config/fullchain_c22.json", "decision-log 条目 D2026-1031-04 ① C22 门控运行态本地写"),
+    # ---- 来源 10：.gitignore real 语料载体段（D2026-1109-01 案D′ 兜底联动）：
+    # real 池载体（greal_v1.json/labels.sha256）与 golden root 指针树外保存，
+    # 永不入库。`golden/*` 只锚仓根 golden/ 段，不命中 tests/fixtures/
+    # hallucination_golden/（tracked 构造池夹具，合法入库）——fnmatch 整路径
+    # 匹配，非子串匹配，出处靠段锚定而非字面巧合。----
+    ("golden/*", "decision-log 条目 D2026-1109-01 兜底联动（real 语料载体树外）"),
+    (".golden-root", "decision-log 条目 D2026-1109-01 兜底联动（golden root 指针树外）"),
 ]
 
 

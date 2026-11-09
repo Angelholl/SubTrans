@@ -157,6 +157,16 @@ def test_match_any_semantics():
     assert not match_any("tools/guard_banned_paths.py")
 
 
+def test_real_pool_carrier_paths_banned():
+    """正向契约补条（D2026-1109-01 兜底联动）：树外 real 载体与指针入库即红；
+    对照面＝tracked 构造池夹具 hallucination_golden/ 不得被误收。"""
+    assert match_any("golden/greal_v1.json")
+    assert match_any("golden/labels.sha256")
+    assert match_any(".golden-root")
+    assert not match_any("tests/fixtures/hallucination_golden/golden_v1.json")
+    assert not match_any("tests/fixtures/hallucination_golden/README.md")
+
+
 def test_real_repo_tracked_files_not_in_banned_list():
     """真仓 tracked 核对（CI 牙齿）：本仓库全部 tracked 文件均不得命中禁推名单。
 
@@ -179,6 +189,7 @@ BANNED_SECTION_ANCHORS = (
     "内部工作材料",           # D2026-1028-01 公开仓 push 面收窄（owner 三令）
     "公开仓收窄第二批",       # D2026-1106-01 领域包/过程文档/评测工具/入口脚本
     "C22 门控运行态",         # D2026-1031-04 ① 门控状态本地写
+    "real 语料载体",          # D2026-1109-01 案D′：树外 real 池载体与 .golden-root 指针
     "本地测试证据",           # 段注释自述「含片名/路径」——公开面最直接的泄漏载体
     "禁入库",                # 段头含该字面即禁推面（含「严禁入库」变体，覆盖 CT2
                              # 下载残留与会话态 dashboard）
