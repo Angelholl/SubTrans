@@ -15,6 +15,7 @@ _normalize_untranslated_marker）。
 """
 
 import re
+from typing import Any
 
 from .config import DEFAULT_PREMERGE_MAX_ITEMS, RefineConfig
 
@@ -69,12 +70,15 @@ _PREMERGE_MAX_CHARS = 80              # 无 cfg 直调时的回退合并文本�
 _PREMERGE_MIN_FRAGMENT_CHARS = 6      # 无 cfg 直调时的回退语义断裂档短碎片阈值（字符）
 
 
-def _strip_trailing_pause(text):
+def _strip_trailing_pause(text: str) -> str:
     """剥离尾部连续省略号/波浪线（戏剧停顿标记），使句末判定作用于真实句尾。"""
     return _PREMERGE_PAUSE_TAIL.sub("", text)
 
 
-def _premerge_entries(entries: list, cfg: RefineConfig = None) -> list:
+def _premerge_entries(
+    entries: list[dict[str, Any]],
+    cfg: RefineConfig | None = None,
+) -> list[dict[str, Any]]:
     """断句修复：按角色卡预处理标准合并被 ASR 错误切割的相邻碎片。
 
     cfg 提供时使用 cfg.premerge_max_span_ms / cfg.premerge_max_items /
@@ -95,7 +99,7 @@ def _premerge_entries(entries: list, cfg: RefineConfig = None) -> list:
         max_count = int(getattr(cfg, "premerge_max_items", _PREMERGE_MAX_COUNT))
     if not entries:
         return entries
-    merged: list[dict] = []
+    merged: list[dict[str, Any]] = []
     for e in entries:
         prev = merged[-1] if merged else None
         if prev is None:
@@ -186,7 +190,10 @@ def _timing_span(timing: str) -> tuple[float, float]:
     return (round(start, 3), round(end, 3))
 
 
-def _align_orig_by_timing(entries: list, orig_entries: list) -> list:
+def _align_orig_by_timing(
+    entries: list[dict[str, Any]],
+    orig_entries: list[dict[str, Any]],
+) -> list[dict[str, Any] | None]:
     """按时间轴把 orig 条目顺序对齐到 entries（双指针，容忍同起点多条）。
 
     两个列表都必须按时间轴升序（cleaner/流水线产物天然如此）。
@@ -195,7 +202,7 @@ def _align_orig_by_timing(entries: list, orig_entries: list) -> list:
     - 合并行（span 被延长）：对齐到其首行 orig，且不消费指针，
       使被合并的后续 orig 行自然落到 None（不参与对齐/学习）。
     """
-    aligned = []
+    aligned: list[dict[str, Any] | None] = []
     p = 0
     n = len(orig_entries)
     eps = 1e-6
@@ -213,7 +220,10 @@ def _align_orig_by_timing(entries: list, orig_entries: list) -> list:
     return aligned
 
 
-def _reindex_entries_by_timing(entries: list, orig_entries: list) -> list:
+def _reindex_entries_by_timing(
+    entries: list[dict[str, Any]],
+    orig_entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """按时间轴把 entries 的 index 重建为 orig_entries 的条目编号空间。
 
     落盘产物（build_srt）的序号是重排后的 1..N，与源侧条目编号（闸门0

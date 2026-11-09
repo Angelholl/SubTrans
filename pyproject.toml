@@ -175,6 +175,7 @@ module = [
     "subtrans.refine.cli",
     "subtrans.refine.tm",
     "subtrans.refine.ffmpeg_supply",
+    "subtrans.refine.v2_premerge",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true
