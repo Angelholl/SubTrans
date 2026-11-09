@@ -177,6 +177,7 @@ module = [
     "subtrans.refine.ffmpeg_supply",
     "subtrans.refine.v2_premerge",
     "subtrans.refine.missed_insert",
+    "subtrans.refine.v2_manifest_fp",
 ]
 disallow_any_generics = true
 disallow_subclassing_any = true

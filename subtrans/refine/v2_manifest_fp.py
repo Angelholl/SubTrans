@@ -21,6 +21,7 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .config import RefineConfig
 from .manifest import (
@@ -36,8 +37,11 @@ from .manifest import (
 )
 from .pipeline_support import learned_glossary_path
 
+if TYPE_CHECKING:
+    from .tm import TranslationMemory
 
-def _glossary_fingerprint(cfg) -> str | None:
+
+def _glossary_fingerprint(cfg: RefineConfig) -> str | None:
     """词库指纹：覆盖词表/人工词库/自动学习词库三者联合 sha1。
 
     v1.3.0 D2 终选（D2026-0925-01 补充裁决）：override 覆盖词表
@@ -67,7 +71,8 @@ def _glossary_fingerprint(cfg) -> str | None:
 _TM_FINGERPRINT_COLUMNS = ("content_hash", "stage", "source_text", "target_text")
 
 
-def _tm_fingerprint(cfg, tm) -> str | None:
+def _tm_fingerprint(cfg: RefineConfig,
+                    tm: "TranslationMemory | None") -> str | None:
     """翻译记忆库指纹：tm_entries 内容列按稳定排序的流式 sha1（D5）。
 
     - 只取内容列（_TM_FINGERPRINT_COLUMNS），排除 hit_count/created_at
@@ -108,7 +113,7 @@ V2_STAGE_TAGS = ("A", "B")
 V2_STAGE_SLOT = {"A": 0, "B": 2}
 
 
-def _v2_models_payload(cfg: RefineConfig) -> dict:
+def _v2_models_payload(cfg: RefineConfig) -> dict[str, dict[str, str]]:
     """清单用模型信息：{"A": {provider,model,endpoint}, "B": {...}}。"""
     models = {}
     for tag in V2_STAGE_TAGS:
@@ -122,7 +127,8 @@ def _v2_models_payload(cfg: RefineConfig) -> dict:
 
 
 def _prepare_manifest(cfg: RefineConfig, in_path: str, out_dir: str,
-                      stem: str, tm) -> tuple:
+                      stem: str, tm: "TranslationMemory | None",
+                      ) -> tuple[TaskManifest, bool]:
     """创建/加载任务清单并做指纹校验。返回 (manifest, trusted)。
 
     trusted=True 表示清单指纹校验通过（或 force_resume 强制采信），
