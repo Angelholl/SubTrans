@@ -26,6 +26,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .asr_meta import (
     _TRUST_MAX_COMPRESSION_RATIO,
     _TRUST_MIN_MEAN_LOGPROB,
@@ -89,11 +91,12 @@ def _absurd_signal(text: str) -> bool:
     return len(compact) >= 6 and len(set(compact)) == 1
 
 
-def classify_transcript(timing: str, segments: list, text_all: str,
-                        speech_windows: dict,
+def classify_transcript(timing: str, segments: list[dict[str, Any]],
+                        text_all: str,
+                        speech_windows: dict[str, Any],
                         *, overlap_s: float | None = None,
                         language: str = "ja",
-                        speech_min_s: float | None = SPEECH_MIN_SECONDS) -> dict:
+                        speech_min_s: float | None = SPEECH_MIN_SECONDS) -> dict[str, Any]:
     """三维置信门（纯函数）：{"grade": "high"|"low"|"empty", "reasons": [...]}。
 
     判定序（D2026-1009-02 批3 拍板10/11）＝判空 → ≤1s 放弃 → 三维置信
@@ -172,7 +175,8 @@ def classify_transcript(timing: str, segments: list, text_all: str,
     return {"grade": "high", "reasons": []}
 
 
-def insert_candidates(entries: list, picks: list) -> list:
+def insert_candidates(entries: list[dict[str, Any]],
+                      picks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """插入通道（纯函数）：把 picks（{"timing": 间隙窗口, "text": 文本}）
     按时序插入 entries 副本，返回新条目列表（不改动入参）。
 
@@ -216,8 +220,9 @@ def insert_candidates(entries: list, picks: list) -> list:
     return new_entries
 
 
-def assert_insert_invariants(original_entries: list, new_entries: list,
-                             picks: list) -> None:
+def assert_insert_invariants(original_entries: list[dict[str, Any]],
+                             new_entries: list[dict[str, Any]],
+                             picks: list[dict[str, Any]]) -> None:
     """插入通道独立恒等式（C15，不复用 action_retranslate._assert_apply_
     invariants 的条目数不变断言——补行必增行）。失败=程序 bug，抛
     AssertionError 且不得落盘。
