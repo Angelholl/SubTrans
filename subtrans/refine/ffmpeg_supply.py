@@ -23,10 +23,14 @@ import hashlib
 import json
 import os
 import shutil
+import threading
 import urllib.parse
 import urllib.request
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from http.client import HTTPMessage
+from typing import IO, Any
 
 from subtrans import paths
 from subtrans.refine import asr_env
@@ -95,7 +99,7 @@ class SupplyResult:
 
     ffmpeg_path: str
     ffprobe_path: str
-    capability: dict = field(default_factory=dict)
+    capability: dict[str, Any] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
 
 
@@ -143,7 +147,10 @@ def _parse_tool_names(text: str, skip_prefixes: tuple[str, ...]) -> set[str]:
     return names
 
 
-def _probe_capability(exe: str, runner=None) -> dict:
+def _probe_capability(
+    exe: str,
+    runner: Callable[[list[str]], tuple[int, str, str]] | None = None,
+) -> dict[str, Any]:
     """能力探测：-version（libass）+ -encoders + -filters（滤镜齐套）。
 
     ``runner`` 可注入（测试用 fake runner 返回文本）；签名
@@ -163,14 +170,17 @@ def _probe_capability(exe: str, runner=None) -> dict:
 
 # 探测结果缓存：按 (normcase 绝对路径, mtime)——二进制被下载覆盖后 mtime
 # 变化自动失效；进程内 dict 即可，无持久化需求
-_CAPABILITY_CACHE: dict[tuple[str, float], dict] = {}
+_CAPABILITY_CACHE: dict[tuple[str, float], dict[str, Any]] = {}
 
 # GPU 编码器解析缓存（批2）：(识别前缀, normcase 路径, mtime, 格式) →
 # (编码器名, 逐候选显因链)
 _GPU_CACHE: dict[tuple[str, str, float, str], tuple[str, list[str]]] = {}
 
 
-def _probe_capability_cached(exe: str, runner=None) -> dict:
+def _probe_capability_cached(
+    exe: str,
+    runner: Callable[[list[str]], tuple[int, str, str]] | None = None,
+) -> dict[str, Any]:
     try:
         mtime = os.path.getmtime(exe)
     except OSError:
@@ -196,7 +206,7 @@ def _resolve_ffprobe(ffmpeg_path: str) -> str:
 def resolve_hardsub_ffmpeg(
     required_encoders: tuple[str, ...] = ("libx264",),
     need_subtitles: bool = True,
-    runner=None,
+    runner: Callable[[list[str]], tuple[int, str, str]] | None = None,
 ) -> SupplyResult:
     """按候选序解析满足硬字幕能力的 ffmpeg；无候选满足返回 missing 清单（不抛）。
 
@@ -243,7 +253,11 @@ def resolve_hardsub_ffmpeg(
 # ---------------------------------------------------------------------------
 
 
-def probe_media(ffprobe_path: str, media_path: str, runner=None) -> MediaInfo:
+def probe_media(
+    ffprobe_path: str,
+    media_path: str,
+    runner: Callable[[list[str]], tuple[int, str, str]] | None = None,
+) -> MediaInfo:
     """ffprobe JSON 探测：时长/宽高/码率/音轨；异常一律 FfprobeError。
 
     bit_rate 口径：format.bit_rate 缺失时回落视频流 bit_rate（仍缺则 0，
@@ -310,7 +324,9 @@ class _SupplyGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
 
     max_redirections = 5
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: N802
+    def redirect_request(self, req: urllib.request.Request, fp: IO[bytes],
+                         code: int, msg: str, headers: HTTPMessage,
+                         newurl: str) -> urllib.request.Request | None:  # noqa: N802
         try:
             _validate_url(str(newurl))
         except SupplyDownloadError:
@@ -332,9 +348,9 @@ def _fetch(
     url: str,
     dest: str,
     *,
-    progress_cb=None,
-    stop_event=None,
-    opener_factory=None,
+    progress_cb: Callable[[int, int | None], None] | None = None,
+    stop_event: threading.Event | None = None,
+    opener_factory: Callable[[], urllib.request.OpenerDirector] | None = None,
 ) -> int:
     """流式下载到 dest（1MB 分块；返回实收字节数）。
 
@@ -400,7 +416,8 @@ _GPU_PROBE_TIMEOUT_S = 15.0    # 1s 试编码的进程上限（慢机裕度）
 
 
 def _gpu_run_check(ffmpeg_path: str, encoder: str,
-                   runner=None) -> tuple[bool, str]:
+                   runner: Callable[[list[str]], tuple[int, str, str]] | None = None,
+                   ) -> tuple[bool, str]:
     """1s 试编码双检第二级：真实起一帧编码到 null，非零退出=不可用。
 
     构建级（-encoders 列表命中）只证明「编译进去了」；驱动不支持/显卡
@@ -418,7 +435,8 @@ def _gpu_run_check(ffmpeg_path: str, encoder: str,
 
 
 def resolve_gpu_encoder(ffmpeg_path: str, video_format: str,
-                        runner=None) -> tuple[str, list[str]]:
+                        runner: Callable[[list[str]], tuple[int, str, str]] | None = None,
+                        ) -> tuple[str, list[str]]:
     """按候选链（nvenc→qsv→amf，amf 无 av1）解析首个可用 GPU 编码器。
 
     双检：构建级（-encoders 命中）+ 1s 试编码真跑；任一失败即该候选
@@ -458,9 +476,9 @@ def resolve_gpu_encoder(ffmpeg_path: str, video_format: str,
 
 def download_full_variant(
     dest_dir: str,
-    progress_cb=None,
-    stop_event=None,
-    fetch=None,
+    progress_cb: Callable[[int, int | None], None] | None = None,
+    stop_event: threading.Event | None = None,
+    fetch: Callable[..., int] | None = None,
 ) -> str:
     """下载 pinned BtbN full 变体并解压落位 ``dest_dir/ffmpeg/bin/``。
 
