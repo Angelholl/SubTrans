@@ -562,196 +562,35 @@ begin
      DirExists(trimmed + '\subtrans'));
 end;
 
-// 默认安装目录选盘三级优先（D2026-1105-02，owner 令，取代 D2026-1104-01
-// 项 B4 的「最大空间」单层口径）：
-//   层1：盘标含 software/软件 的非系统固定盘（多盘并列取可用空间最大者）；
-//   层2：D 盘（非系统盘、可访问、D:\SubTrans 非开发仓库时）；
-//   层3：无合格候选 → 回落编译默认 Param（{autopf}\SubTrans，系统盘 C 兜底）。
-// 用户仍可在目录页改选。{autopf} 弃为默认，仅作层3回落（Param）。
-// 定义须先于使用（Pascal Script 无前置声明），且 BestInstallDrive 依赖上方
-// IsDevRepoDir。
-//
-// 取固定盘盘符串（如 C:D:）。输出受系统显示语言影响，故不用本地化文本
-// 匹配；此处以 CIM 的 DriveType=3（本地固定盘）为准。失败返回空串＝固定盘
-// 集合未知，调用方走回落，不得凭猜选盘。
-function FixedDriveLetters(): String;
-var
-  i, rc: Integer;
-  probe: String;
-  s: AnsiString;
-begin
-  Result := '';
-  probe := GetTempDir + 'subtrans-drivetypes.txt';
-  if FileExists(probe) then
-    DeleteFile(probe);
-  // 探针文件在四条路径（启动失败／退出码非零／读取失败／成功）一律清理，
-  // 不留残留（cmd 重定向即使命令失败也会创建文件，故三个失败分支同样要删）。
-  if not Exec(ExpandConstant('{cmd}'),
-    '/c powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | Select-Object -ExpandProperty DeviceID" > "' + probe + '" 2>nul',
-    '', SW_HIDE, ewWaitUntilTerminated, rc) then
-  begin
-    DeleteFile(probe);
-    Log('默认安装盘：无法启动固定盘探测，固定盘集合未知');
-    Exit;
-  end;
-  if rc <> 0 then
-  begin
-    DeleteFile(probe);
-    Log('默认安装盘：固定盘探测退出码 ' + IntToStr(rc) + '，集合未知');
-    Exit;
-  end;
-  if not LoadStringFromFile(probe, s) then
-  begin
-    DeleteFile(probe);
-    Log('默认安装盘：固定盘探测结果读取失败，集合未知');
-    Exit;
-  end;
-  DeleteFile(probe);
-  // 逐盘比对 Pos（AnyString 形参可直接吃 AnsiString），只保留字母序形态
-  for i := 1 to 26 do
-    if Pos(Chr(64 + i) + ':', s) > 0 then
-      Result := Result + Chr(64 + i) + ':';
-  if Result = '' then
-    Log('默认安装盘：固定盘探测结果为空，集合未知');
-end;
-
-// 取盘标含 software/软件 的固定盘盘符串（如 E:J:，D2026-1105-02 层1候选集）。
-// 盘标匹配在 PowerShell 侧完成（-match 本身大小写不敏感，'software|软件'
-// 一并覆盖英文/中文盘标），输出只含盘符 ASCII——规避读回侧 OEM 码页对中文
-// 盘标的乱码风险。探针文件四路径一致清理，与 FixedDriveLetters 同规格。
-// 失败返回空串＝层1候选集未知，调用方跳过层1，不走猜盘。
-function SoftwareLabeledDrives(): String;
-var
-  i, rc: Integer;
-  probe: String;
-  s: AnsiString;
-begin
-  Result := '';
-  probe := GetTempDir + 'subtrans-swlabels.txt';
-  if FileExists(probe) then
-    DeleteFile(probe);
-  if not Exec(ExpandConstant('{cmd}'),
-    '/c powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 -and ($_.VolumeName -match ''software|软件'') } | Select-Object -ExpandProperty DeviceID" > "' + probe + '" 2>nul',
-    '', SW_HIDE, ewWaitUntilTerminated, rc) then
-  begin
-    DeleteFile(probe);
-    Log('默认安装盘：无法启动盘标探测，层1候选集未知');
-    Exit;
-  end;
-  if rc <> 0 then
-  begin
-    DeleteFile(probe);
-    Log('默认安装盘：盘标探测退出码 ' + IntToStr(rc) + '，层1候选集未知');
-    Exit;
-  end;
-  if not LoadStringFromFile(probe, s) then
-  begin
-    DeleteFile(probe);
-    Log('默认安装盘：盘标探测结果读取失败，层1候选集未知');
-    Exit;
-  end;
-  DeleteFile(probe);
-  for i := 1 to 26 do
-    if Pos(Chr(64 + i) + ':', s) > 0 then
-      Result := Result + Chr(64 + i) + ':';
-end;
-
-// 在给定候选盘池内选可用空间最大者（返回形如 'D:\'，无合格候选返回空串）。
-// 共用排除：系统盘（GetEnv('SystemDrive')，与 InstallDirOnSystemDrive 同口径）、
-// 不可访问盘、候选目录 <盘>:\SubTrans 疑似开发仓库（否则默认目录正好命中
-// 开发工作树，会被 NextButtonClick/PrepareToInstall 的开发仓守卫拦死）。
-// 并列取字母序小者。
-function _PickLargestFrom(const pool, fixed: String): String;
-var
-  i: Integer;
-  bestFree, freeBytes, totalBytes: Int64;
-  drv, sysDrive, cand: String;
-begin
-  Result := '';
-  bestFree := -1;
-  sysDrive := Lowercase(GetEnv('SystemDrive'));
-  if sysDrive = '' then
-    sysDrive := 'c:';
-  for i := 1 to 26 do
-  begin
-    drv := Chr(64 + i) + ':\';
-    if (Pos(Chr(64 + i) + ':', pool) > 0) and
-       (Pos(Chr(64 + i) + ':', fixed) > 0) then
-    begin
-      if Lowercase(Copy(drv, 1, 2)) = sysDrive then
-        Log('默认安装盘候选排除 ' + drv + '：系统盘')
-      else if not GetSpaceOnDisk64(drv, freeBytes, totalBytes) then
-        Log('默认安装盘候选跳过 ' + drv + '：不可访问')
-      else
-      begin
-        cand := Copy(drv, 1, 2) + '\SubTrans';
-        if IsDevRepoDir(cand) then
-          Log('默认安装盘候选排除 ' + drv + '：' + cand + ' 疑似开发仓库')
-        else
-        begin
-          Log('默认安装盘候选 ' + drv + '：Free=' + IntToStr(freeBytes) +
-              ' Total=' + IntToStr(totalBytes));
-          if freeBytes > bestFree then
-          begin
-            bestFree := freeBytes;
-            Result := drv;
-          end;
-        end;
-      end;
-    end;
-  end;
-end;
-
-// 三级优先选盘（D2026-1105-02）：层1=盘标含 software/软件 的固定盘中取
-// 可用空间最大者；层2=D 盘（非系统盘、可访问、D:\SubTrans 非开发仓库）；
-// 层3=返回空串，由 PickInstallDir 回落编译默认 Param（系统盘 C 兜底）。
+// 默认安装目录选盘（D2026-1112-04 owner 令，取代 D2026-1105-02 三级优先）：
+// 初次安装默认推荐 D 盘，完整路径 D:\SubTrans（目录不存在时安装环节自动
+// 创建）；D 为系统盘／不可访问／D:\SubTrans 疑似开发仓库时，回落编译默认
+// Param（{autopf}\SubTrans，系统盘 C 兜底）。用户仍可在目录页改选。
+// 已安装用户由 Inno 默认 UsePreviousAppDir 沿用注册表原安装目录原位替换
+// 升级；F1 陈旧记录回落与 F2 开发仓库拒装（上方）语义不变。
+// 无盘符扫描、无 PowerShell 探针、无临时文件——D 可达性直接以
+// GetSpaceOnDisk64 探测为准。定义须先于使用（Pascal Script 无前置声明），
+// 且依赖上方 IsDevRepoDir。
 function BestInstallDrive(): String;
 var
-  sw, fixed: String;
   freeBytes, totalBytes: Int64;
 begin
   Result := '';
-  fixed := FixedDriveLetters();
-  if fixed = '' then
-  begin
-    Log('默认安装盘：固定盘集合未知，不猜盘，走回落');
-    Exit;
-  end;
-  // 层1：software/软件 盘标优先
-  sw := SoftwareLabeledDrives();
-  if sw <> '' then
-  begin
-    Result := _PickLargestFrom(sw, fixed);
-    if Result <> '' then
-    begin
-      Log('默认安装盘：层1命中（盘标含 software/软件）→ ' + Result);
-      Exit;
-    end;
-    Log('默认安装盘：层1候选均不合格（系统盘/不可访问/开发仓库），降层2');
-  end
-  else
-    Log('默认安装盘：无盘标含 software/软件 的固定盘，降层2');
-  // 层2：D 盘
-  if Pos('D:', fixed) = 0 then
-    Log('默认安装盘：D 盘不在固定盘集合，降层3')
-  else if Lowercase(GetEnv('SystemDrive')) = 'd:' then
-    Log('默认安装盘候选排除 D:\：系统盘，降层3')
+  if Lowercase(GetEnv('SystemDrive')) = 'd:' then
+    Log('默认安装盘候选排除 D:\：系统盘，回落编译默认目录')
   else if not GetSpaceOnDisk64('D:\', freeBytes, totalBytes) then
-    Log('默认安装盘候选跳过 D:\：不可访问，降层3')
-  else if not IsDevRepoDir('D:\SubTrans') then
+    Log('默认安装盘候选跳过 D:\：不可访问，回落编译默认目录')
+  else if IsDevRepoDir('D:\SubTrans') then
+    Log('默认安装盘候选排除 D:\：D:\SubTrans 疑似开发仓库，回落编译默认目录')
+  else
   begin
     Result := 'D:\';
-    Log('默认安装盘：层2命中（D 盘）→ ' + Result);
-    Exit;
-  end
-  else
-    Log('默认安装盘候选排除 D:\：D:\SubTrans 疑似开发仓库，降层3');
-  // 层3：无合格候选，返回空串 → 调用方回落编译默认 Param（C 盘兜底）
-  Log('默认安装盘：层1/层2均无合格候选，回落编译默认目录（C 盘兜底）');
+    Log('默认安装盘：默认推荐 D 盘命中 → ' + Result);
+  end;
 end;
 
 // Scripted constant：DefaultDirName 与 CurPageChanged 回落同源。
-// 层1/层2 有候选 → <盘>:\SubTrans；否则 Param（{autopf}\SubTrans，C 盘兜底），
+// D 盘合格 → D:\SubTrans；否则 Param（{autopf}\SubTrans，C 盘兜底），
 // 交互侧由既有系统盘告警＋改选入口兜住，静默侧由 PrepareToInstall 记日志。
 // 两条路均记日志。
 function PickInstallDir(Param: String): String;
@@ -762,12 +601,12 @@ begin
   if drv <> '' then
   begin
     Result := drv + 'SubTrans';
-    reason := '三级优先选盘命中（软件盘标/D 盘）';
+    reason := '默认推荐 D 盘（初次安装；已装用户由 UsePreviousAppDir 原位升级）';
   end
   else
   begin
     Result := Param;
-    reason := '无合格候选盘，回落编译默认目录（C 盘兜底）';
+    reason := 'D 盘不可用（系统盘/不可访问/开发仓库），回落编译默认目录（C 盘兜底）';
   end;
   Log('默认安装目录选择：' + Result + '（' + reason + '）');
 end;
