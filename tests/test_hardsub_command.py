@@ -369,11 +369,28 @@ def test_fixed_injection_and_faststart():
 
 def test_subtitle_force_style_and_escape():
     vf = _vf(_build(font_size=30)[0])
-    assert "subtitles='D\\:/sub/a.srt':" in vf
+    # 去包裹双级逃逸形态（2026-11-14 真机 7.1.1 实测定版）：值无单引号包裹
+    assert "subtitles=D\\\\:/sub/a.srt:force_style='" in vf
     assert "Fontname=Microsoft YaHei,Bold=1,Fontsize=30" in vf
     assert "Outline=2.5,Shadow=2.5,Alignment=2" in vf
     assert "MarginL=10,MarginR=10,MarginV=20,Encoding=1" in vf
-    assert escape_subtitles_path(r"D:\v\a b.srt") == "D\\:/v/a b.srt"
+    assert escape_subtitles_path(r"D:\v\a b.srt") == "D\\\\:/v/a b.srt"
+
+
+def test_subtitle_path_quote_and_reserved_escape():
+    """卡C（2026-11-13 全量审计清单）：含 ' / : / , ; [ ] 混合名的去包裹
+    双级转义——' 三层、: 两层、图级保留字一层。
+
+    旧单引号包裹形态下 ' 为 7.x 图解析器纯删除语义，任何转义写法都放不
+    进去（'\\''、'' 双写、\\' 真机实测均交付错名）；去包裹后 , ; [ ]
+    失去引号层顺带保护，须显式转义，防滤镜链截断。
+    """
+    assert escape_subtitles_path(r"D:\v\Kimi's.srt") == "D\\\\:/v/Kimi\\\\\\'s.srt"
+    assert escape_subtitles_path("D:/v/终稿's v2, part;3 [x].srt") == \
+        "D\\\\:/v/终稿\\\\\\'s v2\\, part\\;3 \\[x\\].srt"
+    # argv 整体形态：subtitles 值无包裹；force_style 维持应用自控样式引号保护
+    vf = _vf(_build()[0])
+    assert "subtitles=D\\\\:/sub/a.srt:force_style='" in vf
 
 
 # ---------------------------------------------------------------------------

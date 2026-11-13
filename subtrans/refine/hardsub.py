@@ -257,11 +257,26 @@ def gpu_family(encoder_name: str) -> str:
 
 
 def escape_subtitles_path(path: str) -> str:
-    """subtitles 滤镜的 Windows 路径转义：``\\``→``/``、``:``→``\\:``。
+    """subtitles 滤镜的路径转义（去包裹双级逃逸形态，2026-11-14 真机 7.1.1 实测定版）。
 
-    spike 实测可用（批清单执行记录 2）；配单引号包裹喂 ffmpeg 滤镜解析器。
+    滤镜参数串走两级 av_get_token：图解析级把引号当纯定界符消费（引号
+    包裹值内的 ``'`` 为删除语义，任何转义写法都放不进去——``'\\''``、
+    ``''`` 双写、``\\'`` 实测全部交付错名），引号外单反斜杠被吃一层；
+    av_opt 级再吃一层反斜杠并按 ``:`` 切分。故旧形态（单引号包裹＋
+    ``\\:``）对含 ``'`` 文件名不可修复，唯一稳态＝去包裹＋按级数叠加
+    反斜杠：``\\``→``/``、``'``→三层、``:``→两层、图级保留字
+    ``,``/``;``/``[``/``]``→一层（旧形态由引号层顺带保护，去包裹后须
+    显式转义）。真机判据：drawtext textfile 与 subtitles 同走 av_opt
+    管线且 init 真开文件，含 ``' , ; [ ]`` 空格混合名全绿。
     """
-    return path.replace("\\", "/").replace(":", "\\:")
+    out = path.replace("\\", "/")
+    for ch, rep in (
+        ("'", "\\\\\\'"),   # 两级反斜杠（图级＋av_opt 级）＋定界引号本体
+        (":", "\\\\:"),     # 两级反斜杠
+        (",", "\\,"), (";", "\\;"), ("[", "\\["), ("]", "\\]"),  # 仅图级保留字
+    ):
+        out = out.replace(ch, rep)
+    return out
 
 
 def _build_filter_chain(params: EncodeParams, subtitle_path: str) -> str:
@@ -283,7 +298,10 @@ def _build_filter_chain(params: EncodeParams, subtitle_path: str) -> str:
         parts.append(f"deblock={ep['deblock']}")
         parts.append(f"unsharp={ep['unsharp']}")
     style = _FORCE_STYLE_TEMPLATE.format(font_size=int(params.font_size))
-    parts.append(f"subtitles='{escape_subtitles_path(subtitle_path)}':force_style='{style}'")
+    # 值不包裹（7.x 图解析器引号为纯定界符，包裹值内 ' 不可转义），
+    # 保留字转义全在 escape_subtitles_path 内收口；force_style 值为应用
+    # 自控样式串，维持引号保护。
+    parts.append(f"subtitles={escape_subtitles_path(subtitle_path)}:force_style='{style}'")
     parts.append("format=yuv420p")  # 8bit 链尾收口（决策八-1，常量+钉）
     return ",".join(parts)
 
