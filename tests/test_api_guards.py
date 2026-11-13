@@ -185,3 +185,35 @@ def test_validate_user_directory_still_allows_user_dirs(tmp_path):
     # 尚未创建的目录路径（对话框常见：用户手输路径）也放行
     pending = d / "new-season"
     assert _validate_user_directory(str(pending)) == str(pending.resolve())
+
+
+def test_api_text_mode_open_calls_pin_explicit_encoding():
+    """卡B（2026-11-13 全量审计清单）防复发钉：api.py 全部 open() 调用节点
+    文本模式必须显式 encoding=（或二进制模式）。
+
+    缺省 encoding 随进程 locale 漂移（中文 Windows=cp936），而写侧
+    _atomic_write_text 恒 UTF-8——读侧不显式声明即乱码/解码失败被
+    fail-soft 吞掉；最重路径 fullchain_rollback 经 _read_ledger 取
+    old_text 回写终稿＝乱码落盘。卡面点名的行 3437/3452/3484/6298
+    四处经复核均已在续行带 encoding="utf-8"（多行调用 grep 误报），
+    故本卡实际交付＝本静态钉防新增违规。
+    """
+    import ast
+
+    api_src = (REPO_ROOT / "subtrans" / "webview_gui" / "api.py").read_text(
+        encoding="utf-8")
+    bad: list[str] = []
+    for node in ast.walk(ast.parse(api_src)):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "open"):
+            has_encoding = any(kw.arg == "encoding" for kw in node.keywords)
+            mode = ""
+            for arg in node.args[1:2]:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    mode = arg.value
+            for kw in node.keywords:
+                if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                    mode = kw.value.value
+            if "b" not in mode and not has_encoding:
+                bad.append(f"line {node.lineno}")
+    assert not bad, f"api.py 文本模式 open() 缺显式 encoding（防复发钉）: {bad}"
