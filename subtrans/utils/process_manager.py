@@ -35,7 +35,8 @@ except (ImportError, ValueError):  # 探测失败按不可用降级，与旧行�
 
 
 def _ensure_psutil() -> Any:
-    """惰性装载 psutil；不可导入时把 PSUTIL_AVAILABLE 归零并返回 None。
+    """惰性装载 psutil；导入/装载失败（ImportError 及 DLL 加载失败
+    OSError 等异常面）时把 PSUTIL_AVAILABLE 归零并返回 None。
 
     返回模块对象（或测试注入的假体）。调用方须在返回值非 None 后使用
     ``psutil.Process`` 等 API，保证损坏安装也能走降级链而非 AttributeError。
@@ -47,7 +48,7 @@ def _ensure_psutil() -> Any:
         return None
     try:
         import psutil as _psutil
-    except ImportError:
+    except Exception:  # noqa: BLE001 - 损坏安装（DLL 加载失败抛 OSError 而非 ImportError）同样走降级链，不冒裸异常
         PSUTIL_AVAILABLE = False
         return None
     psutil = _psutil

@@ -6,7 +6,10 @@
     <!-- 壳层加固（零构建约束不变）：经典脚本 + 外部文件，禁内联脚本/内联事件。
          说明：pywebview 桥经 WebView2 ExecuteScriptAsync 宿主注入，不受本策略
          约束（真机探针已验证 api 往返可用）；style-src 保留 'unsafe-inline'
-         仅因既有静态 style 属性面，script-src 不含 'unsafe-inline'/'unsafe-eval'。 -->
+         仅因既有静态 style 属性面，script-src 不含 'unsafe-inline'/'unsafe-eval'。
+         勘注（2026-11-13）：file:// 页面为 opaque origin，'self' 恒不匹配——
+         script-src/style-src 实际生效靠 file: scheme source（本仓资产经
+         get_asset_path 落 _internal 以 file: 装载），勿删 file:。 -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; media-src 'self' file: data: blob:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
     <title data-i18n="doc_title">净语翻译 · SubTrans Translate</title>
     <!-- Theme stylesheet (swappable at runtime) -->
