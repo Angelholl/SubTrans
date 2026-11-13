@@ -103,6 +103,17 @@ def test_spec_no_jieba_hiddenimport_pin():
     反转 D2026-1004-01 段1①：安装包默认不含 jieba（可选组件，−30MB），
     缺失态由 token_hint/pipeline_v2/cli 三层降级链承接；重钉即回归
     「静默装载 30MB 词典」。打包链不装 [zh] extra（release.yml 同步）。
+
+    2026-11-14 断言收窄（venv 全量基线首轮实证暴露的既有红）：结构性
+    卸离落地后 spec 合法含 ``excludes=["jieba"]``（modulegraph 追函数级
+    import，仅卸 hiddenimports 钉不足，339a70b），原「全文禁 "jieba"
+    字面量」与卸离本体自相矛盾。收窄口径：去注释代码面每个 ``"jieba"``
+    出现必须是 excludes 形态＋两侧 Analysis 的 excludes 封死必须在场
+    ——hiddenimports 重钉仍红，合法卸离形态绿。
     """
     src = SPEC_PATH.read_text(encoding="utf-8")
-    assert '"jieba"' not in src, "spec 重新钉入 jieba（违反安装包卸离口径）"
+    code = "\n".join(ln.split("#", 1)[0] for ln in src.splitlines())
+    excludes_n = code.count('excludes=["jieba"]')
+    assert excludes_n >= 2, "spec 两侧 Analysis 的 excludes jieba 封死缺失（卸离回归）"
+    assert code.count('"jieba"') == excludes_n, (
+        "spec 代码面出现 excludes 之外的 \"jieba\" 字面量（hiddenimports 重钉即回归）")
