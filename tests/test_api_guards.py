@@ -217,3 +217,33 @@ def test_api_text_mode_open_calls_pin_explicit_encoding():
             if "b" not in mode and not has_encoding:
                 bad.append(f"line {node.lineno}")
     assert not bad, f"api.py 文本模式 open() 缺显式 encoding（防复发钉）: {bad}"
+
+
+def test_gui_log_handler_rotates():
+    """卡E（2026-11-13 全量审计清单）防复发钉：gui.log 走 RotatingFileHandler。
+
+    长驻 GUI 进程单文件无限增长改 5MB×4 滚动（量纲对齐
+    config.DEFAULT_DROPPED_LOG_ROTATE_MB）；子进程导入后断言 handler 类型
+    与轮转参数，并冒烟一行日志落盘（兼卡面「启动冒烟一行日志落盘」验收）。
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import logging\n"
+        "import subtrans.webview_gui.api as m\n"
+        "from logging.handlers import RotatingFileHandler\n"
+        "h = m._log.handlers[0]\n"
+        "assert isinstance(h, RotatingFileHandler), type(h).__name__\n"
+        "assert h.maxBytes == 5 * 1024 * 1024, h.maxBytes\n"
+        "assert h.backupCount == 3, h.backupCount\n"
+        "logging.getLogger('subtrans.gui').info('rotate-smoke-line')\n"
+        "import pathlib\n"
+        "p = pathlib.Path(str(m.REPO_ROOT)) / 'Logs' / 'gui.log'\n"
+        "print('SMOKE_OK', 'rotate-smoke-line' in p.read_text(encoding='utf-8'))\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], cwd=str(REPO_ROOT),
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    assert "SMOKE_OK True" in proc.stdout, proc.stdout

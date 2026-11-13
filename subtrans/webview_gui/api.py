@@ -23,6 +23,7 @@ import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -224,8 +225,12 @@ _log = logging.getLogger("subtrans.gui")
 if not _log.handlers:
     _log_dir = REPO_ROOT / "Logs"
     _log_dir.mkdir(parents=True, exist_ok=True)
-    _fh = logging.FileHandler(
-        _log_dir / "gui.log", encoding="utf-8",
+    # 卡E（2026-11-13 全量审计清单）：gui.log 轮转——长驻进程单文件无限
+    # 增长改 5MB×4 文件滚动（量纲对齐 config.DEFAULT_DROPPED_LOG_ROTATE_MB）。
+    # 既有 gui.log 不迁移，轮转自然接管；备份名 gui.log.1/.2/.3。
+    _fh = RotatingFileHandler(
+        _log_dir / "gui.log", maxBytes=5 * 1024 * 1024, backupCount=3,
+        encoding="utf-8",
     )
     _fh.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
