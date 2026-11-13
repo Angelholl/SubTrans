@@ -11,6 +11,7 @@ v1.3.2 task4: 项目级进程治理两原语——run_with_timeout_tree（带超
 （用户取消/退出场景的跨环境树杀）。
 """
 
+import importlib.util
 import logging
 import os
 import signal
@@ -22,12 +23,36 @@ from typing import Any, cast
 from subtrans import paths
 from subtrans.utils.subprocess_flags import CREATE_NO_WINDOW as _CREATE_NO_WINDOW  # 窗口标志单一来源
 
+# psutil 惰性化（壳层启动优化，2026-11-13）：psutil 仅在进程树治理时真正
+# 需要，GUI 启动链上只读 PSUTIL_AVAILABLE 标志。用 find_spec 免导入探测
+# 可用性（不执行模块体），首次调用再装载；模块属性 psutil 保留（测试
+# monkeypatch pm.psutil 的既有范式不变）。
+psutil: Any = None
 try:
-    import psutil
-    PSUTIL_AVAILABLE = True
-except ImportError:
-    psutil = None
+    PSUTIL_AVAILABLE = importlib.util.find_spec("psutil") is not None
+except (ImportError, ValueError):  # 探测失败按不可用降级，与旧行为一致
     PSUTIL_AVAILABLE = False
+
+
+def _ensure_psutil() -> Any:
+    """惰性装载 psutil；不可导入时把 PSUTIL_AVAILABLE 归零并返回 None。
+
+    返回模块对象（或测试注入的假体）。调用方须在返回值非 None 后使用
+    ``psutil.Process`` 等 API，保证损坏安装也能走降级链而非 AttributeError。
+    """
+    global psutil, PSUTIL_AVAILABLE
+    if psutil is not None:
+        return psutil
+    if not PSUTIL_AVAILABLE:
+        return None
+    try:
+        import psutil as _psutil
+    except ImportError:
+        PSUTIL_AVAILABLE = False
+        return None
+    psutil = _psutil
+    return psutil
+
 
 logger = logging.getLogger("subtrans")
 
@@ -77,6 +102,10 @@ def get_process_tree(pid: int) -> list[int]:
         List of descendant PIDs (does NOT include the parent itself)
     """
     if not PSUTIL_AVAILABLE:
+        logger.warning("psutil not available, cannot enumerate process tree")
+        return []
+    psutil = _ensure_psutil()
+    if psutil is None:
         logger.warning("psutil not available, cannot enumerate process tree")
         return []
 
@@ -131,6 +160,11 @@ def terminate_process_tree(
     }
 
     if not PSUTIL_AVAILABLE:
+        result["success"] = False
+        result["errors"].append("psutil not available - falling back to basic termination")
+        return result
+    psutil = _ensure_psutil()
+    if psutil is None:
         result["success"] = False
         result["errors"].append("psutil not available - falling back to basic termination")
         return result
@@ -248,6 +282,11 @@ def kill_process_tree(pid: int, include_parent: bool = True) -> dict[str, Any]:
     }
 
     if not PSUTIL_AVAILABLE:
+        result["success"] = False
+        result["errors"].append("psutil not available")
+        return result
+    psutil = _ensure_psutil()
+    if psutil is None:
         result["success"] = False
         result["errors"].append("psutil not available")
         return result
@@ -388,7 +427,7 @@ def run_with_timeout_tree(
     except subprocess.TimeoutExpired:
         timed_out = True
         logger.warning(f"命令超时（>{timeout:g}s），整树击杀: {list(cmd)[:3]}")
-        if PSUTIL_AVAILABLE:
+        if PSUTIL_AVAILABLE and _ensure_psutil() is not None:
             result = terminate_process_tree(proc.pid)
             if not result["success"]:
                 logger.warning(
@@ -420,7 +459,7 @@ def terminate_process_tree_robust(pid: int) -> bool:
     POSIX → 仅当目标自成进程组（getpgid(pid)==pid）才 killpg 整组杀，
     否则降级单杀并告警（防止误杀同组内 GUI 自身等无辜进程）。
     """
-    if PSUTIL_AVAILABLE:
+    if PSUTIL_AVAILABLE and _ensure_psutil() is not None:
         return bool(terminate_process_tree(pid)["success"])
 
     if os.name == "nt":
@@ -566,6 +605,9 @@ def is_process_alive(pid: int) -> bool:
     """
     if not PSUTIL_AVAILABLE:
         return _pid_alive(pid)
+    psutil = _ensure_psutil()
+    if psutil is None:
+        return _pid_alive(pid)
 
     try:
         proc = psutil.Process(pid)
@@ -591,6 +633,9 @@ def get_process_info(pid: int) -> dict[str, Any]:
         dict with process information
     """
     if not PSUTIL_AVAILABLE:
+        return {"error": "psutil not available"}
+    psutil = _ensure_psutil()
+    if psutil is None:
         return {"error": "psutil not available"}
 
     try:

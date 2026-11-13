@@ -65,6 +65,15 @@ hiddenimports = [
     "webview.platforms.winforms",
     "clr",
     "jieba",  # 显式钉防重构漂移（token_hint 函数内惰性 import 静态不可见）；数据文件由 pyinstaller-hooks-contrib 官方 hook-jieba.py 自动收集，勿重复 collect_data_files（D2026-1004-01）
+    # 壳层启动惰性化（2026-11-13）：refine/__init__ 的包级导出改 PEP 562
+    # __getattr__ 动态 import（静态分析不可见），这四个子模块显式钉死；
+    # asr_meta / fs_utils 是 GUI api.py 内函数级惰性导入，同样补钉。
+    "subtrans.refine.batch",
+    "subtrans.refine.config",
+    "subtrans.refine.glossary",
+    "subtrans.refine.tm",
+    "subtrans.refine.asr_meta",
+    "subtrans.refine.fs_utils",
 ]
 
 a = Analysis(
