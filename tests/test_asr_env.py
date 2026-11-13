@@ -324,3 +324,53 @@ def test_runner_direct_call_secrets_resolves_stdlib(tmp_path):
     assert Path(ver).name == "secrets.py"
     assert dir_a not in Path(ver).resolve().parents, \
         f"secrets 仍被脚本目录影子劫持: {ver}"
+
+
+# ---------------------------------------------------------------------------
+# 看门狗派生（卡D：2026-11-13 全量审计清单）——timeout<=0 按媒体时长派生防挂死
+# ---------------------------------------------------------------------------
+def test_derive_transcribe_timeout_formula(monkeypatch):
+    """派生公式钉：max(600, duration*4)；时长不可得按 7200 兜底。"""
+    monkeypatch.setattr(asr_env, "_probe_duration_s", lambda p: 100.0)
+    assert asr_env._derive_transcribe_timeout("m.mp4") == 600    # 下限
+    monkeypatch.setattr(asr_env, "_probe_duration_s", lambda p: 3000.0)
+    assert asr_env._derive_transcribe_timeout("m.mp4") == 12000  # 系数 4
+    monkeypatch.setattr(asr_env, "_probe_duration_s", lambda p: 0.0)
+    assert asr_env._derive_transcribe_timeout("m.mp4") == 7200   # 兜底
+
+
+def _sleepy_runner_setup(monkeypatch, tmp_path) -> None:
+    """ct2 就绪态＋runner 命令注入为长睡子进程（看门狗真超时用）。"""
+    import sys as _sys
+
+    from subtrans.refine import asr_runtime
+    monkeypatch.setattr(asr_env, "_ct2_ready", lambda: True)
+    monkeypatch.setattr(asr_runtime, "resolve_ct2_model_dir",
+                        lambda *a, **k: str(tmp_path))
+    monkeypatch.setattr(asr_runtime, "ct2_runner_command",
+                        lambda media, out, model_dir="", model="":
+                        [_sys.executable, "-c", "import time; time.sleep(30)"])
+
+
+def test_transcribe_media_watchdog_derived_timeout_human_error(monkeypatch, tmp_path):
+    """timeout<=0 缺省派生路径：真超时 → ok=False＋人话 error（看门狗秒数在场）。"""
+    _sleepy_runner_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(asr_env, "_probe_duration_s", lambda p: 0.0)
+    # 压缩派生值：fallback→1s（duration<=0 直接走兜底），子进程 1s 超时
+    monkeypatch.setattr(asr_env, "_TRANSCRIBE_TIMEOUT_FALLBACK_S", 1)
+    media = tmp_path / "m.mp4"
+    media.write_bytes(b"fake")
+    r = asr_env.transcribe_media_to_srt(str(media))
+    assert r["ok"] is False
+    assert "看门狗超时" in r["error"] and "1s" in r["error"]
+    assert r["srt"] == ""
+
+
+def test_transcribe_media_explicit_timeout_passthrough(monkeypatch, tmp_path):
+    """timeout>0 显式透传：不走派生，真超时同人话收口。"""
+    _sleepy_runner_setup(monkeypatch, tmp_path)
+    media = tmp_path / "m.mp4"
+    media.write_bytes(b"fake")
+    r = asr_env.transcribe_media_to_srt(str(media), timeout=1)
+    assert r["ok"] is False
+    assert "看门狗超时" in r["error"] and "1s" in r["error"]

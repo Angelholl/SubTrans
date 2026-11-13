@@ -38,6 +38,15 @@ _CT2_DEFAULT_MODEL = "large-v2"
 _CLIPS_SUBDIR = "media_clips"
 _MAX_CLIPS = 20
 
+# 看门狗派生（卡D 2026-11-13 全量审计清单）：timeout<=0 时按媒体时长派生，
+# 防坏媒体挂死 GUI 校对页转录 worker（_REVIEW_TRANSCRIBE_INFLIGHT 永不
+# 释放、该媒体重启前不可再转录）。超时 = max(MIN, duration * FACTOR) 秒，
+# 时长不可得按 FALLBACK 兜底；系数保守（慢机/大模型余量），如需调整改
+# 此三常量。
+_TRANSCRIBE_TIMEOUT_MIN_S = 600
+_TRANSCRIBE_TIMEOUT_FACTOR = 4.0
+_TRANSCRIBE_TIMEOUT_FALLBACK_S = 7200
+
 
 def _runner_script_path() -> str:
     """asr_runner.py 随包定位（2.7.1 件1：脚本直调形态单一来源）。
@@ -188,6 +197,55 @@ def _run_transcription_ct2(clip_path: str, language: str,
             os.unlink(tmp_srt)
 
 
+def _resolve_ffprobe_path() -> str:
+    """ffprobe 定位（转写看门狗专用，不依赖硬字幕能力面）：数据根下载位
+    优先，其次 PATH ffmpeg 同目录（版本配对），缺则 PATH which。
+    不可得返回 ""（调用方按 FALLBACK 兜底派生）。"""
+    cands: list[Path] = [paths.data_root() / "ffmpeg" / "bin" / "ffprobe.exe"]
+    ff = resolve_ffmpeg()
+    if ff:
+        cands.append(Path(ff).parent / "ffprobe.exe")
+    for c in cands:
+        try:
+            if c.is_file():
+                return str(c)
+        except OSError:
+            continue
+    return shutil.which("ffprobe") or ""
+
+
+def _probe_duration_s(media_path: str) -> float:
+    """ffprobe 取媒体时长秒；ffprobe 不可得/探测失败/输出不可解析一律
+    返回 0.0（调用方按 FALLBACK 兜底），绝不因派生探测抛异常拖垮转写。"""
+    ffprobe = _resolve_ffprobe_path()
+    if not ffprobe:
+        return 0.0
+    try:
+        proc = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", media_path],
+            capture_output=True, encoding="utf-8", errors="replace",
+            timeout=15, cwd=str(paths.app_root()),
+            creationflags=CREATE_NO_WINDOW)
+    except (OSError, subprocess.TimeoutExpired):
+        return 0.0
+    if proc.returncode != 0:
+        return 0.0
+    try:
+        return float((proc.stdout or "").strip())
+    except ValueError:
+        return 0.0
+
+
+def _derive_transcribe_timeout(media_path: str) -> int:
+    """看门狗派生：max(MIN, duration*FACTOR)；时长不可得按 FALLBACK 兜底。"""
+    duration = _probe_duration_s(media_path)
+    if duration <= 0:
+        return _TRANSCRIBE_TIMEOUT_FALLBACK_S
+    return max(_TRANSCRIBE_TIMEOUT_MIN_S,
+               int(duration * _TRANSCRIBE_TIMEOUT_FACTOR))
+
+
 def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
                             passes: int = 1, language: str = "ja",
                             timeout: int = 0) -> dict[str, Any]:
@@ -197,6 +255,10 @@ def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
     stdout JSON 契约回读（复用同一条 runner 链，不新起执行链）。
     ``passes=1`` 缺省与现状单 pass 同参（零行为变化）；``passes=2`` 透传
     ``--passes 2``（中间件与 dualpass sidecar 由 runner 落盘）。
+
+    看门狗：``timeout<=0``（缺省）按媒体时长派生
+    ``max(600, duration*4)`` 秒（时长不可得按 7200s 兜底）；``>0`` 显式
+    透传。防坏媒体挂死 GUI 校对页转录 worker（在飞标记永不释放）。
 
     返回 runner JSON 契约（ok/srt/segments/...）；失败带 error（不抛）。
     """
@@ -224,11 +286,21 @@ def transcribe_media_to_srt(media_path: str, srt_out: str = "", *,
     if not asr_runtime.gpu_patch_missing_dlls():
         env["PATH"] = gpd + os.pathsep + env.get("PATH", "")
     try:
+        watchdog = int(timeout)
+    except (TypeError, ValueError):
+        watchdog = 0
+    if watchdog <= 0:
+        watchdog = _derive_transcribe_timeout(media_path)
+    try:
         proc = subprocess.run(
             cmd, capture_output=True, encoding="utf-8", errors="replace",
-            timeout=timeout or None, cwd=str(paths.app_root()), env=env,
+            timeout=watchdog or None, cwd=str(paths.app_root()), env=env,
             creationflags=CREATE_NO_WINDOW)
-    except (OSError, subprocess.TimeoutExpired) as e:
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "srt": "",
+                "error": (f"转写看门狗超时（{watchdog}s，按媒体时长派生或兜底）"
+                          "——媒体可能损坏或过慢，可重试或先校验媒体")}
+    except (OSError, subprocess.SubprocessError) as e:
         return {"ok": False, "srt": "", "error": f"ct2 子进程失败: {e}"}
     for line in (proc.stdout or "").splitlines():
         line = line.strip()
