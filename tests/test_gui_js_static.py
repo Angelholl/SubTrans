@@ -3398,6 +3398,11 @@ def test_guide_page_escape_order_and_narrow_pinned():
     assert esc_body.index("replace(/&/g, '&amp;')") \
         < esc_body.index('replace(/"/g'), \
         "esc 转义序错误：& 必须最先替换（二次转义回退）"
+    # 卡I（2026-11-13 全量审计清单）：单引号转义在场，且仍居 & 之后（& 先行
+    # 不变式对新增映射同样成立——&#39; 内含 &，倒序即二次转义回归）
+    assert "replace(/'/g, '&#39;')" in esc_body, "esc 缺单引号转义（卡I 统一加固）"
+    assert esc_body.index("replace(/&/g, '&amp;')") < esc_body.index("replace(/'/g"), \
+        "esc 转义序错误：& 必须先于单引号替换（&#39; 二次转义回退）"
     # 模板单层 esc（卡B：模板构造移入 guideItemCardHtml，断言随载体）
     builder = _extract_function(src, "guideItemCardHtml")
     assert "esc(o.message)" in builder, "message 须经单层 esc 渲染"
@@ -7986,11 +7991,12 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-            "442bc137ef2757c4575974cb0b668974c037bd0f2b90ffd4c46437c58ec13645"), \
+            "dffd5a78431f16dc3a047ac92cd37b7f1dcb364640a88741f04bdef0cf46025a"), \
             "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
-    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 223,732B＝jieba 缺失态提示换代
-    # D2026-1113-01；前值 223,321B＝壳层加固 CSP/转义化换代；
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 223,941B＝esc() 单引号加固卡I；
+    # 前值 223,732B＝jieba 缺失态提示换代 D2026-1113-01；
+    # 前值 223,321B＝壳层加固 CSP/转义化换代；
     # 前值 217,004B＝d1103 模型落位行；前值 213,752B＝d1103 引擎落位行），
     # 15 次切块恒真；切点外任何字节改动必红。
     refine_family = [n for n in js_sources.JS_FILES
@@ -7998,7 +8004,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "4d7b9bb1ac614875d3abe1afcb75c855f58a8472c81970b4817ccb26aeb6b54a"), \
+        "2de433400b8715e3cc849f06421e8405845108b9fbfa60974ce2223fda9290f2"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -8050,8 +8056,8 @@ def test_js_split_integrity_pinned():
                    "bc92de327c7effff8b9f73ece7b5f9edaaaed20629472c60bd7d3c1b719a44f4"),
         "app-eval-reports.js": (8815,
                    "ef4fa78f461ec54e69744ed0ac8dbcfd507b0010d6bcd2a7dd81c1d417272b75"),
-        "app-refine-core.js": (16571,
-                   "2788adf6dfa2c2c5a415e6cb4fb3044fb118ff8d2342d497eae79df386e24c60"),
+        "app-refine-core.js": (16780,
+                   "5a85488e220d5f0d08698020efbc55bcde868f2b3342c95b128b1247dace1ede"),
         "app-refine-models.js": (13832,
                    "f0b2b67be13af4f0b85e6585406325be3ee6318d94a07c490581c44359d1d13c"),
         "app-refine-glossary.js": (7869,
