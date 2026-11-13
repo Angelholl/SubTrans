@@ -89,6 +89,10 @@ def register_session_paths(paths: Iterable[str] | None) -> None:
 # ---------------------------------------------------------------------------
 _DICT_DL_REGISTRY: dict[str, dict[str, Any]] = {}
 _DICT_DL_LOCK = threading.Lock()
+# ffmpeg 供给下载单飞锁（卡F 2026-11-13 全量审计清单）：check-置位-起线程
+# 收进同一锁临界区，防双 worker（原 _supply_busy 为 check-then-set 竞态）。
+# 读侧（stop/progress）不改：GIL 原子读可容忍，与 _DICT_DL_LOCK 范式一致。
+_SUPPLY_DL_LOCK = threading.Lock()
 
 
 def _dict_download_worker(kind: str, source: str, session: str,
@@ -6163,36 +6167,44 @@ class TranslateAPI:
 
     def ffmpeg_supply_download(self) -> dict[str, Any]:
         """后台下载 pinned BtbN full 变体落位数据根（单飞；进度走
-        ffmpeg_supply_progress 轮询）。"""
-        if getattr(self, "_supply_busy", False):
-            return {"success": False, "error": "ffmpeg 下载已在进行中"}
-        self._supply_busy = True
-        self._supply_stop = threading.Event()
-        state = self._ensure_supply_state()
-        state.update(phase="downloading", received=0, total=0, error="")
+        ffmpeg_supply_progress 轮询）。
 
-        def worker() -> None:
-            try:
-                from subtrans import paths
-                from subtrans.refine.ffmpeg_supply import download_full_variant
+        单飞＝check-置位-起线程收进同一锁临界区（_SUPPLY_DL_LOCK，照
+        _DICT_DL_LOCK 修复① 范式；卡F 2026-11-13 全量审计清单）：原
+        _supply_busy check-then-set 在双线程窗口内可起双 worker。
+        """
+        with _SUPPLY_DL_LOCK:
+            if getattr(self, "_supply_busy", False):
+                return {"success": False, "error": "ffmpeg 下载已在进行中"}
+            self._supply_busy = True
+            self._supply_stop = threading.Event()
+            state = self._ensure_supply_state()
+            state.update(phase="downloading", received=0, total=0, error="")
 
-                def cb(received: int, total: int) -> None:
-                    state["received"] = received
-                    state["total"] = total
+            def worker() -> None:
+                try:
+                    from subtrans import paths
+                    from subtrans.refine.ffmpeg_supply import download_full_variant
 
-                download_full_variant(str(paths.data_root()), progress_cb=cb,
-                                      stop_event=self._supply_stop)
-                state["phase"] = "done"
-                self._encode_queue().reset_supply()
-            except Exception as e:  # noqa: BLE001  供给异常统一落状态（含 SupplyStopped）
-                from subtrans.refine.ffmpeg_supply import SupplyStopped
-                state["phase"] = "stopped" if isinstance(e, SupplyStopped) else "failed"
-                state["error"] = str(e)
-            finally:
-                self._supply_busy = False
+                    def cb(received: int, total: int) -> None:
+                        state["received"] = received
+                        state["total"] = total
 
-        threading.Thread(target=worker, name="ffmpeg-supply-download",
-                         daemon=True).start()
+                    download_full_variant(str(paths.data_root()), progress_cb=cb,
+                                          stop_event=self._supply_stop)
+                    state["phase"] = "done"
+                    self._encode_queue().reset_supply()
+                except Exception as e:  # noqa: BLE001  供给异常统一落状态（含 SupplyStopped）
+                    from subtrans.refine.ffmpeg_supply import SupplyStopped
+                    state["phase"] = "stopped" if isinstance(e, SupplyStopped) else "failed"
+                    state["error"] = str(e)
+                finally:
+                    self._supply_busy = False
+
+            # 同锁内启动（修复① 范式）：start() 返回时线程必已 alive，
+            # 锁外观察者只会看到活跃 worker
+            threading.Thread(target=worker, name="ffmpeg-supply-download",
+                             daemon=True).start()
         return {"success": True}
 
     def ffmpeg_supply_stop(self) -> dict[str, Any]:

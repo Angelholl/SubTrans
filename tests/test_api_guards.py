@@ -247,3 +247,51 @@ def test_gui_log_handler_rotates():
                           errors="replace", timeout=120)
     assert proc.returncode == 0, proc.stderr
     assert "SMOKE_OK True" in proc.stdout, proc.stdout
+
+
+def test_ffmpeg_supply_download_single_flight(monkeypatch):
+    """卡F（2026-11-13 全量审计清单）回归钉：并发双调用只起一个 worker。
+
+    原 _supply_busy check-then-set 在双线程窗口可起双 worker；修复后
+    check-置位-起线程收进 _SUPPLY_DL_LOCK 同一临界区（_DICT_DL_LOCK
+    修复① 范式）。api 导入链需 pywebview（webview 顶层导入），与
+    test_gui_api 同口径 importorskip，无 gui extra 环境跳过该钉。
+    """
+    if os.name != "nt":
+        pytest.skip("GUI API 测试前提＝Windows 运行面")
+    pytest.importorskip("webview", reason="pywebview 为可选 gui extra")
+    import threading as _t
+
+    import subtrans.webview_gui.api as api_mod
+
+    api = object.__new__(api_mod.TranslateAPI)
+    started: list[str] = []
+
+    class CountingThread:
+        def __init__(self, target=None, daemon=None, name=None):
+            self._target = target
+
+        def start(self):
+            started.append("1")   # 只登记，不真跑 worker（模拟下载中窗口）
+
+    real_thread = _t.Thread   # monkeypatch 污染 threading 模块前先留真类
+    monkeypatch.setattr(api_mod.threading, "Thread", CountingThread)
+
+    barrier = _t.Barrier(2)
+    results: list[dict] = []
+
+    def caller() -> None:
+        barrier.wait()
+        results.append(api.ffmpeg_supply_download())
+
+    t1 = real_thread(target=caller)
+    t2 = real_thread(target=caller)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    ok = [r for r in results if r.get("success")]
+    busy = [r for r in results if not r.get("success")]
+    assert len(ok) == 1 and len(busy) == 1, results
+    assert len(started) == 1, f"并发双调用起了 {len(started)} 个 worker"
