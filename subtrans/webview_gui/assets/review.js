@@ -1306,34 +1306,46 @@ const ReviewUI = {
             summary.textContent = REVIEW_MSG.review_det_summary(dets.length, stale);
             summary.title = REVIEW_MSG.review_det_no_save;
         }
-        const esc = (s) => String(s == null ? '' : s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        // CSP（壳层加固）：检测项含用户/字幕文本，一律 createElement+textContent
+        // 组装（逐格零 innerHTML）；行骨架 class 与 data-act 委托锚原样保留。
+        const mkSpan = (cls, text) => {
+            const el = document.createElement('span');
+            el.className = cls;
+            if (text != null) { el.textContent = String(text); }
+            return el;
+        };
         list.textContent = '';
         dets.forEach((d, i) => {
             const row = document.createElement('div');
             row.className = 'review-det-row' + (d.stale ? ' review-det-stale' : '');
             row.dataset.idx = String(i);
-            const noSrt = d.pending;
             const noSeek = d.pending || d.stale;   // 位置失效态：不崩不跳（D2026-1002-11 §一.2）
             const acts = [['seek', REVIEW_MSG.review_det_seek_btn],
                           ['listen', REVIEW_MSG.review_det_listen_btn],
                           ['confirm', REVIEW_MSG.review_det_confirm_btn],
                           ['skip', REVIEW_MSG.review_det_skip_btn]];
-            row.innerHTML =
-                '<span class="review-det-cat">' + esc(d.category) + '</span>' +
-                '<span class="review-det-timing">' + esc(d.timing) + '</span>' +
-                '<span class="review-det-msg">' + esc(d.message) + '</span>' +
-                ((d.source_excerpt || d.current_text) ?
-                    '<span class="review-det-excerpt">' +
-                    esc([d.current_text, d.source_excerpt].filter(Boolean).join(' / ')) +
-                    '</span>' : '') +
-                '<span class="review-det-acts">' +
-                acts.map((a) => '<button type="button" class="btn btn-ghost btn-sm review-det-act"' +
-                    ' data-act="' + a[0] + '"' +
-                    ((a[0] === 'seek' || a[0] === 'listen') && noSeek ?
-                        ' disabled title="' + REVIEW_MSG.review_det_no_srt + '"' : '') +
-                    '>' + a[1] + '</button>').join('') +
-                '</span>';
+            row.appendChild(mkSpan('review-det-cat', d.category));
+            row.appendChild(mkSpan('review-det-timing', d.timing));
+            row.appendChild(mkSpan('review-det-msg', d.message));
+            const excerptText = [d.current_text, d.source_excerpt]
+                .filter(Boolean).join(' / ');
+            if (excerptText) {
+                row.appendChild(mkSpan('review-det-excerpt', excerptText));
+            }
+            const actsWrap = mkSpan('review-det-acts');
+            acts.forEach((a) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-ghost btn-sm review-det-act';
+                btn.dataset.act = a[0];
+                btn.textContent = a[1];
+                if ((a[0] === 'seek' || a[0] === 'listen') && noSeek) {
+                    btn.disabled = true;
+                    btn.title = REVIEW_MSG.review_det_no_srt;
+                }
+                actsWrap.appendChild(btn);
+            });
+            row.appendChild(actsWrap);
             list.appendChild(row);
         });
     },

@@ -130,7 +130,11 @@ const ConsoleManager = {
 
     clear() {
         const output = document.getElementById('consoleOutput');
-        output.innerHTML = `<div class="console-line">${MSG.ready}</div>`;
+        // CSP（壳层加固）：清屏占位行用 DOM 组装（MSG.ready 为文案键）
+        const line = document.createElement('div');
+        line.className = 'console-line';
+        line.textContent = MSG.ready;
+        output.replaceChildren(line);
         this._lines = [];
     },
 

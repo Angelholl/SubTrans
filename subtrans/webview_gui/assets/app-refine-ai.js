@@ -92,6 +92,7 @@
     const sug = (r && r.suggestions) || {};
     // parse_ok=False → 整体降级为纯文本观察，不渲染任何可执行按钮
     if (!r.parse_ok) {
+      // CSP 判定（转义安全）：观察文本逐条 esc()，无未转义通道
       box.innerHTML = '<h4>' + esc(MSG.aiParseFailed) + '</h4><ul>'
         + (sug.observations || []).map(o => '<li>' + esc(o) + '</li>').join('')
         + '</ul>';
@@ -184,6 +185,8 @@
       });
       parts.push('</tbody></table>');
     }
+    // CSP 判定（转义安全）：三段表格全部行内插值经 esc()（src/target/
+    // reason/观察/对照段文本），data-* 数值经 Number() 归一，无未转义通道。
     box.innerHTML = parts.join('');
     box.querySelectorAll('button[data-ai-kind]').forEach(btn => {
       btn.addEventListener('click', () => {

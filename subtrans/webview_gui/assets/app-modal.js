@@ -1530,6 +1530,8 @@ const AppModal = {
         this._bindSkeletonOnce(root);
         const list = document.createElement('div');
         list.className = 'guide-item-list';
+        // CSP 判定（转义安全）：listHtml 唯一来源为 guideItemCardHtml，
+        // 其全部插值经 esc() 转义（批6 静态钉守门），无未转义通道。
         list.innerHTML = o.listHtml || '';
         list.addEventListener('click', (e) => {
             const btn = e.target.closest('.btn-audio-preview');

@@ -169,18 +169,31 @@
     const dlS = $('guideSections');
     const ulP = $('guideCompanions');
     if (ulC) {
-      ulC.innerHTML = (data.conclusions || [])
-        .map(c => '<li>' + esc(c) + '</li>').join('')
-        || '<li>' + MSG.no_conclusions + '</li>';
+      // CSP（壳层加固）：结论来自导读文件（模型产出），createElement+textContent
+      const conclusions = data.conclusions || [];
+      ulC.replaceChildren();
+      if (!conclusions.length) {
+        const li = document.createElement('li');
+        li.textContent = MSG.no_conclusions;
+        ulC.appendChild(li);
+      } else {
+        conclusions.forEach((c) => {
+          const li = document.createElement('li');
+          li.textContent = String(c == null ? '' : c);
+          ulC.appendChild(li);
+        });
+      }
     }
     if (dlS) {
       // 章节导读分节卡（2.7.4 件1）：dt/dd 平铺改 .section-card——标题行
       // （chevron+title 600 字重）点击展开/收起，note 正文 muted 默认折叠。
       // 容器 dl#guideSections 与 id 零改动；dl 内分组 div 为 HTML5 合法子元素
       const sections = Array.isArray(data.sections) ? data.sections : [];
-      dlS.innerHTML = '';
+      dlS.replaceChildren();
       if (!sections.length) {
-        dlS.innerHTML = '<dt>' + MSG.no_sections + '</dt>';
+        const dt = document.createElement('dt');
+        dt.textContent = MSG.no_sections;
+        dlS.appendChild(dt);
       }
       sections.forEach((s) => {
         const o = s || {};
@@ -273,13 +286,15 @@
         chip.textContent = segs.join(' · ');
       }
       if (!items.length) {
-        divI.innerHTML = '<div>' + MSG.guide_items_none + '</div>';
+        const none = document.createElement('div');
+        none.textContent = MSG.guide_items_none;
+        divI.replaceChildren(none);
       } else {
         // 卡B（D2026-1010-01 三轮）：主页只留计数 chip + 明细入口——
         // 全量条目移入弹窗（owner：主页浏览太多、不便阅读）；卡片
         // markup 由 guideItemCardHtml 共享构造（批6 全量渲染契约由
         // 弹窗承接，批6 钉随决策更新载体；试听委托锚在弹窗列表容器）
-        divI.innerHTML = '';
+        divI.replaceChildren();
         const openBtn = document.createElement('button');
         openBtn.type = 'button';
         openBtn.className = 'btn btn-secondary btn-compact guide-items-open-btn';
@@ -289,11 +304,21 @@
       }
     }
     if (ulP) {
+      // CSP（壳层加固）：伴生文件名为外部数据，createElement+textContent
       const comp = data.companions || {};
       const keys = Object.keys(comp);
-      ulP.innerHTML = keys.length
-        ? keys.map(k => '<li>' + esc(k) + ' ' + (comp[k] ? '✓' : '✗') + '</li>').join('')
-        : '<li>' + MSG.no_companions + '</li>';
+      ulP.replaceChildren();
+      if (!keys.length) {
+        const li = document.createElement('li');
+        li.textContent = MSG.no_companions;
+        ulP.appendChild(li);
+      } else {
+        keys.forEach((k) => {
+          const li = document.createElement('li');
+          li.textContent = String(k) + ' ' + (comp[k] ? '✓' : '✗');
+          ulP.appendChild(li);
+        });
+      }
     }
     const meta = $('guideMeta');
     if (meta) {
@@ -336,7 +361,7 @@
         lastAiSuggestions = null;
         tmOriginalTargets = new Map();   // C19：原始建议随内存同批重置
         const air = $('refineAiResult');
-        if (air) air.innerHTML = '';
+        if (air) air.replaceChildren();
         const dv = $('refineGuideViewer');
         if (dv) dv.open = true;
         const geh = $('guideEmptyHint');

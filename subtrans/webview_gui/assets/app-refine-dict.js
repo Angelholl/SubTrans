@@ -237,6 +237,7 @@
       // change→详情刷新（静态骨架只填充不建行）
       const sel = $('dictSelect');
       if (sel) {
+        // CSP 静态安全：纯清空（选项逐条 createElement 注入）
         sel.innerHTML = '';
         DICT_KINDS.forEach(item => {
           const opt = document.createElement('option');

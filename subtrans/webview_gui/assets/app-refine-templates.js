@@ -29,6 +29,7 @@
       items.push({ value: 'B', label: MSG.tpl_stage_b });
     }
     const prev = sel.value;
+    // CSP 判定（转义安全）：option value/label 全量 esc()（列目录结果为外部输入）
     sel.innerHTML = items.map(it =>
       '<option value="' + esc(it.value) + '">' + esc(it.label) + '</option>'
     ).join('');
@@ -44,10 +45,12 @@
     const files = (r && r.success && Array.isArray(r.files)) ? r.files : [];
     const dir = (r && r.success && r.dir) || '';
     if (!files.length) {
+      // CSP 判定（转义安全）：提示文案 esc()
       dl.innerHTML = '<option value="" disabled>' + esc(MSG.tpl_dir_empty_datalist) + '</option>';
       return;
     }
     const sep = dir.indexOf('\\') !== -1 ? '\\' : '/';
+    // CSP 判定（转义安全）：值=目录+文件名，esc() 转义；无 label 文本节点
     dl.innerHTML = files.map(f =>
       '<option value="' + esc(dir ? dir + sep + f.name : f.name) + '">'
     ).join('');

@@ -370,6 +370,7 @@
       // 缺省地址（批2 D2026-1002-12 拍板点2：不自动拉取模型列表）
       const sel = $('refineS' + n + 'Model');
       if (sel) {
+        // CSP 静态安全：空态占位 option 由 modelEmptyOptionHTML() 常量构造
         sel.innerHTML = modelEmptyOptionHTML();
       }
       applyProviderEndpoint(n);

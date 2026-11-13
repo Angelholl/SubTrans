@@ -166,6 +166,7 @@ const FileListManager = {
 
         const icon = document.createElement('span');
         icon.className = 'file-ico';
+        // CSP 静态安全：字面量 SVG 常量（无插值、无外部数据）
         icon.innerHTML =
             '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>';
 
@@ -189,6 +190,7 @@ const FileListManager = {
         removeBtn.className = 'file-remove-btn';
         removeBtn.title = MSG.remove_selected;
         removeBtn.setAttribute('aria-label', MSG.remove_selected);
+        // CSP 静态安全：字面量 SVG 常量（无插值、无外部数据）
         removeBtn.innerHTML =
             '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M10 14 21 3"/><path d="M15 3h6v6"/></svg>';
 

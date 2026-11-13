@@ -148,7 +148,7 @@
     if (!lastLoadedGuidePath || lastLoadedIsTxt) {
       lastActionItems = null;
       btn.disabled = true;
-      if (scope) { scope.style.display = 'none'; scope.innerHTML = ''; }
+      if (scope) { scope.style.display = 'none'; /* CSP 静态安全：纯清空 */ scope.innerHTML = ''; }
       return;
     }
     return window.pywebview.api.refine_guide_action_items(lastLoadedGuidePath)
@@ -162,6 +162,7 @@
         const fixable = (r.open_items || []).filter(it => !it.applied_in_ledger);
         btn.disabled = fixable.length === 0;
         if (scope) {
+          // CSP 静态安全：纯清空（后续 option 由 createElement 注入）
           scope.innerHTML = '';
           scope.title = MSG.batchFixScopeLabel;
           const optAll = document.createElement('option');

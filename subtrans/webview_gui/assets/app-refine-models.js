@@ -26,6 +26,8 @@
     if (!btn || !sel) return;
     if (!prov) { stageStatus(n, MSG.select_provider_first, 'err'); return; }
     btn.disabled = true;
+    // CSP 判定（静态安全/转义安全）：按钮 innerHTML 存还为自身静态模板
+    // （D2026-1001 批2 钉，无用户输入）；下拉插值全量 esc()。
     const old = btn.innerHTML; btn.textContent = '…';   // innerHTML 保存：按钮含内联 SVG，textContent 会丢图标（D2026-1001 批2）
     // 保留 HTML 空态占位 option，失败/异常时恢复，避免下拉被清空
     const originalHTML = sel.innerHTML;
@@ -79,6 +81,7 @@
       const endpoint = stageEndpointFor('lmstudio') || 'http://localhost:1234/v1';
 
     btn.disabled = true;
+    // CSP 判定（静态安全/转义安全）：按钮存还为自身静态模板；模型名全量 esc()
     const old = btn.innerHTML; btn.textContent = '…';   // innerHTML 保存：按钮含内联 SVG，textContent 会丢图标（D2026-1001 批2）
     try {
       const r = await pywebview.api.list_local_models(endpoint);
@@ -178,6 +181,7 @@
       return;
     }
     btn.disabled = true;
+    // CSP 判定（静态安全/转义安全）：按钮存还为自身静态模板；option 全量 esc()
     const old = btn.innerHTML; btn.textContent = '…';
     const originalHTML = sel.innerHTML;
     sel.innerHTML = '<option value="">' + MSG.loading_models + '</option>';
@@ -249,6 +253,7 @@
     const sel = $('aiModelInput');
     if (!sel) return;
     const follow = (($('aiProviderSel') || {}).value || 'follow') === 'follow';
+    // CSP 静态安全：占位 option 只插入两条 MSG 常量文案（无外部输入）
     sel.innerHTML = '<option value="" disabled selected>'
       + (follow ? MSG.ai_model_follow_hint : MSG.model_list_empty_hint)
       + '</option>';

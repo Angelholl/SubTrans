@@ -21,15 +21,40 @@
 
   function glRender(rows) {
     const tb = document.querySelector('#refineGlossTable tbody');
-    tb.innerHTML = rows.map(r =>
-      '<tr>' +
-      '<td><input class="form-input compact gl-src" value="' + esc(r[0]) + '"></td>' +
-      '<td><input class="form-input compact gl-dst" value="' + esc(r[1]) + '">' +
+    // CSP（壳层加固）：词库原词/译词/别名均为用户可控输入，一律
+    // createElement + .value/textContent 组装，不走 innerHTML 拼接。
+    const frag = document.createDocumentFragment();
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      const tdSrc = document.createElement('td');
+      const inSrc = document.createElement('input');
+      inSrc.className = 'form-input compact gl-src';
+      inSrc.value = r[0] == null ? '' : String(r[0]);
+      tdSrc.appendChild(inSrc);
+      const tdDst = document.createElement('td');
+      const inDst = document.createElement('input');
+      inDst.className = 'form-input compact gl-dst';
+      inDst.value = r[1] == null ? '' : String(r[1]);
+      tdDst.appendChild(inDst);
       // 别名第三列只读展示（不由前端编辑；无别名不渲染，保存时后端保留）
-      (r[2] ? '<div class="gl-alias">' + MSG.alias_label +
-        esc(r[2]) + '</div>' : '') + '</td>' +
-      '<td class="gl-sel-cell"><input type="checkbox" class="gl-sel"></td>' +
-      '</tr>').join('');
+      if (r[2]) {
+        const alias = document.createElement('div');
+        alias.className = 'gl-alias';
+        alias.textContent = MSG.alias_label + r[2];
+        tdDst.appendChild(alias);
+      }
+      const tdSel = document.createElement('td');
+      tdSel.className = 'gl-sel-cell';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'gl-sel';
+      tdSel.appendChild(cb);
+      tr.appendChild(tdSrc);
+      tr.appendChild(tdDst);
+      tr.appendChild(tdSel);
+      frag.appendChild(tr);
+    });
+    tb.replaceChildren(frag);
     const cnt = $('refineGlCount');
     if (cnt) cnt.textContent = rows.length;
     const eh = $('glEmptyHint');
@@ -79,7 +104,7 @@
       }
       if (st) st.textContent = '';
       if (!r.exists) {
-        tb.innerHTML = '';
+        tb.replaceChildren();
         if (stats) stats.textContent = '';
         if (more) more.style.display = 'none';
         if (empty) empty.style.display = '';
@@ -87,12 +112,19 @@
       }
       if (empty) empty.style.display = 'none';
       const rows = r.rows || [];
-      tb.innerHTML = rows.map(row =>
-        '<tr>' +
-        '<td>' + esc(row.source || '') + '</td>' +
-        '<td>' + esc(row.target || '') + '</td>' +
-        '<td>' + esc(row.aliases || '') + '</td>' +
-        '</tr>').join('');
+      // CSP（壳层加固）：学习词库行列均为自学习产物（外部数据），
+      // 逐格 createElement+textContent，零 innerHTML 拼接。
+      const frag = document.createDocumentFragment();
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        [row.source, row.target, row.aliases].forEach((v) => {
+          const td = document.createElement('td');
+          td.textContent = v == null ? '' : String(v);
+          tr.appendChild(td);
+        });
+        frag.appendChild(tr);
+      });
+      tb.replaceChildren(frag);
       if (stats) {
         stats.textContent = MSG.gl_learned_stats(
           r.count != null ? r.count : rows.length,

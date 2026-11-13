@@ -7940,6 +7940,9 @@ def test_js_sources_layer_pinned():
         库内 LF blob 真值（旧值部分条目取自 CRLF 工作树，干净检出必红，
         app-file-list.js 16669→16234 与 app-console.js 13490→13165 为首红点）；
         36 项全量重锁；read_all/refine 家族两钉文本模式行尾不敏感零换代；
+        壳层零风险优化（2026-11-13）：15 个分文件随 CSP 加固/innerHTML
+        转义化重锁（app-about 705→1789、app-refine-glossary 6588→7869 等），
+        read_all/refine 家族两钉同步换代；index.html 未改加载序；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7956,18 +7959,18 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-            "9d7f3c957eee50f8b6d09d4f143afe5876bc428adfa6de70c4a1b15caa61b22d"), \
+            "cc94f78ba6df9b3b647a2ec0e46a86876d8f654be85d2e72946f76733dedadab"), \
             "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
-    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 217,004B＝d1103 模型落位行
-    # 换代；前值 213,752B＝d1103 引擎落位行；前值 204,408B＝d1023-批3），
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 223,321B＝壳层加固 CSP/转义化换代；
+    # 前值 217,004B＝d1103 模型落位行；前值 213,752B＝d1103 引擎落位行），
     # 15 次切块恒真；切点外任何字节改动必红。
     refine_family = [n for n in js_sources.JS_FILES
                      if n.startswith("app-refine-") or n == "app-main.js"]
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "344bf9c569c20b5225c58dbdbff0fa9ff9882f6508c066b8d2f0840cb0a2b8a7"), \
+        "5ff50170f381135ca4e7116534a26caaab4c9edbb37ee834ac3bbe1c35860c1f"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7989,20 +7992,20 @@ def test_js_split_integrity_pinned():
                    "eac696f41c292854d926af11862e9c20433885f7e443a3340bb98cdd0e52f50c"),
         "app-msg.js": (69634,
                    "67fcb894f23f992da7ad43eca8da03446122fe416e56ab8456ff7e14b6a17486"),
-        "app-modal.js": (92946,
-                   "11f9209b25b3229f18626624eccf703b2bf772bb30595aee55357f5b8deaac28"),
+        "app-modal.js": (93127,
+                   "b9c09d4b402cb1f3cb64c0b7114474da30c5afe288a2a1dc7ec3367ebb6a8d52"),
         "app-error-handler.js": (745,
                    "f0cf710570b468c793f5f5bd19ffdc51fc91a8822611da8946b90d793577724a"),
-        "app-file-list.js": (16234,
-                   "041a47bc9d8be81579cbe505b56f538d7fd273de4340f2a9386091ee41e8a410"),
-        "app-console.js": (13165,
-                   "fc2fecf005258c253f821ae4a6efb2f54694f55cf96b90bb0c125a68cfd9eb24"),
-        "app-activity.js": (6167,
-                   "bc9f860ca0399083c038faa2db9561449d1c9e48408b1dbc1d318b95db12665d"),
+        "app-file-list.js": (16402,
+                   "dac61524e30896042999c4707e227b0c3e5bc91971f1c8ba0b8defb7b5a1b485"),
+        "app-console.js": (13352,
+                   "dc6934e49832f22bad3df53fc7dd822825b95b22853b1fcb704e2c65d322aee1"),
+        "app-activity.js": (6222,
+                   "5af8e15e0df595131c6daf9f72a7e62b131d544000c648360cf97d4b5953a866"),
         "app-progress.js": (3070,
                    "e19571ec0a38d3e517501efb735771b31a0ac5a7ea39b371e29de596e19f2763"),
-        "app-system-summary.js": (7226,
-                   "473f93109c558675ac87cf17833b25e1f603b833b0921d113fe1b050113b5b64"),
+        "app-system-summary.js": (7327,
+                   "589e0eb5eb3b3d91523c59f68af6d0b7ec7879e9181fcb9f861957493cbe5417"),
         "app-tm-query.js": (4893,
                    "c923272db15462c77875acdb27a32cc202860bd07fdf3245220bf1c4f70a4a2e"),
         "app-directory.js": (3149,
@@ -8013,40 +8016,40 @@ def test_js_split_integrity_pinned():
                    "9e8b7a72b6979ef1edbbc02a12a8234e631be6d5b6810c07998254a5ab11e893"),
         "app-shortcuts.js": (2326,
                    "e355cf1d8dd6036a58dbd5f61110cc51031307d715ea7ddb3d682821bac42e0a"),
-        "app-about.js": (705,
-                   "52fa026c7895df7140f14c12d6a2da65331bb3c73d1c0e447be40990fc55a4d4"),
+        "app-about.js": (1789,
+                   "e9dc19a2e32dee62c824d1b15fdc48c61096a92af6dead43155d46eecf792f76"),
         "app-tabs.js": (5600,
                    "bc92de327c7effff8b9f73ece7b5f9edaaaed20629472c60bd7d3c1b719a44f4"),
         "app-eval-reports.js": (8815,
                    "ef4fa78f461ec54e69744ed0ac8dbcfd507b0010d6bcd2a7dd81c1d417272b75"),
         "app-refine-core.js": (16571,
                    "2788adf6dfa2c2c5a415e6cb4fb3044fb118ff8d2342d497eae79df386e24c60"),
-        "app-refine-models.js": (13345,
-                   "1cfcd67bd02664ce6dde64d87d9b4c3ee023b42d6d81bbc13c2417b73f7321c2"),
-        "app-refine-glossary.js": (6588,
-                   "5836d3481b3b20b6d49933559c9893b719621e003cd46890c34b99f708a24516"),
-        "app-refine-templates.js": (9297,
-                   "10f95ce8f11589d91e394029d82f21e312206e1293fdfd205f1658a97813150c"),
-        "app-refine-settings.js": (19255,
-                   "20907b96509e55835dcae5f1790519c880069d2f4f4dad0d705a2524941e1c55"),
-        "app-refine-guide.js": (26042,
-                   "60debeb42e15fd1fc8f98f6707472597aca2f7fe45130dc62a5b7cf29f30d4c9"),
+        "app-refine-models.js": (13832,
+                   "f0b2b67be13af4f0b85e6585406325be3ee6318d94a07c490581c44359d1d13c"),
+        "app-refine-glossary.js": (7869,
+                   "fafab86253cd488f1450be161cba8e554999a31aa9ead6a3a9edcaff3bb8f0dd"),
+        "app-refine-templates.js": (9561,
+                   "5b29ccc07b820b7e661966c63885905f63cea3595da3e47b94c937252a7dca6a"),
+        "app-refine-settings.js": (19345,
+                   "b3c04bc1921cc47190d90f38b748a330450918fdd557417c397c73e33c1ebc59"),
+        "app-refine-guide.js": (26889,
+                   "619b162429f779ab889f18b9d9f638be9ab9731799708276c170c3c0073e4f5e"),
         "app-refine-preview.js": (14524,
                    "26b188817d6c5a3ee6d088cabfdc8a41ed197c0ed0322925d51e7fce23eb6bec"),
-        "app-refine-ai.js": (14310,
-                   "4867ea696c5d41a8608ec31146fccb64c0bb7ff3ae8e08027a3b71a86e211fe1"),
-        "app-refine-batchfix.js": (25983,
-                   "26d2e4ef4acbe187740419bb28157a31b46dcca56f8a297252fdd5dc13451407"),
+        "app-refine-ai.js": (14587,
+                   "12b9ab00c49edcc880cceb06c925d36925905baa03dcf6fcc46a777dd0b9f740"),
+        "app-refine-batchfix.js": (26104,
+                   "a9aeac8c90977484d8c43a7321bb9a802fe6bbb49a8b10054db25286b2f57670"),
         "app-refine-asr.js": (14242,
                    "e950e6eb7688489f2314d3a6595256207604f16f9602d1a3d5e3c16d51351b98"),
         "app-refine-ai-actions.js": (5166,
                    "5ef94c67fa6d630a863f4e35bbc9719c264e23b84fbc20f47f659d5cccca30fb"),
-        "app-refine-bind.js": (14663,
-                   "df9d8889685d44789fbe7894769172b28ece737dbe8b234f1acbfaeb743db91f"),
+        "app-refine-bind.js": (14840,
+                   "67d123778f279d1ea159704dc96d1e6c37ab45fcceb993b7530c7954799b0a17"),
         "app-refine-dataroot.js": (2310,
                    "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
-        "app-refine-dict.js": (34748,
-                   "5d1051662e0a97863e54ba187faa960e0ce2d966ccb6d7a5e855d77d18d98609"),
+        "app-refine-dict.js": (34827,
+                   "8a1daac20cdf4f169776e58fbc7d942a8b0bb8f3f4cacbde7ebcdbe6af5ae6ff"),
         "app-refine-boot.js": (2654,
                    "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
         "app-init.js": (21063,
@@ -8595,3 +8598,39 @@ def test_ct2_model_dir_ui_pinned():
     assert "SUBTRANS_CT2_MODEL_DIR" in runtime, "模型落位 env 覆盖口缺失"
     assert "def has_model_at(" in runtime, \
         "落位行「该位置有无模型」读取面缺失（误切空位须可见）"
+
+# ---------------------------------------------------------------------------
+# 壳层加固（2026-11-13）：CSP meta + 零内联事件 + 关于弹窗事件绑定
+# ---------------------------------------------------------------------------
+
+def test_shell_csp_and_no_inline_handlers_pinned():
+    """壳层加固钉：index.html 携带严格 CSP meta（script-src 无
+    unsafe-inline/unsafe-eval）、零内联事件属性、零内联 <script>；关于弹窗
+    四入口改由 app-about.js addEventListener 绑定（CSP 下仍可用）。
+
+    与 D2026-1018-01 零构建经典脚本约束兼容：仍全经典脚本、零 import/
+    type=module；pywebview 桥经 WebView2 ExecuteScriptAsync 宿主注入，
+    不占页面 script-src（真机探针已验证 api 往返与媒体 data:/file: 放行）。
+    """
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    m = re.search(
+        r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
+    assert m, "index.html 缺少 CSP meta"
+    csp = m.group(1)
+    assert "default-src 'none'" in csp, "CSP 缺 default-src 'none' 兜底"
+    script_src = re.search(r"script-src ([^;]+);", csp)
+    assert script_src, "CSP 缺 script-src 指令"
+    assert "'unsafe-inline'" not in script_src.group(1), \
+        "script-src 不得放行内联脚本"
+    assert "'unsafe-eval'" not in script_src.group(1), \
+        "script-src 不得放行 eval（宿主桥注入豁免，无需放开）"
+    assert "'self'" in script_src.group(1), "script-src 须放行本地脚本"
+    assert not re.search(r"\son[a-z]+\s*=", html), \
+        "index.html 不得残留内联事件属性（CSP 下不执行）"
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html), \
+        "index.html 不得含内联 <script> 块"
+    about = _app_js_source()
+    about_body = _extract_function(about, "bindAboutDialog")
+    for frag in ('[data-i18n="about_link"]', "aboutModal", "modal-close",
+                 '[data-i18n="close_btn"]', "addEventListener"):
+        assert frag in about_body, f"关于弹窗事件绑定缺 {frag}"

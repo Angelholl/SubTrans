@@ -40,6 +40,7 @@ const ActivityStream = {
         this._summaryShown = false;
         this._stage = null;
         const el = document.getElementById('consoleActivity');
+        // CSP 静态安全：纯清空（无插值）
         if (el) el.innerHTML = '';
     },
 

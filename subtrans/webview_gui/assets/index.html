@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 壳层加固（零构建约束不变）：经典脚本 + 外部文件，禁内联脚本/内联事件。
+         说明：pywebview 桥经 WebView2 ExecuteScriptAsync 宿主注入，不受本策略
+         约束（真机探针已验证 api 往返可用）；style-src 保留 'unsafe-inline'
+         仅因既有静态 style 属性面，script-src 不含 'unsafe-inline'/'unsafe-eval'。 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; media-src 'self' file: data: blob:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
     <title data-i18n="doc_title">净语翻译 · SubTrans Translate</title>
     <!-- Theme stylesheet (swappable at runtime) -->
     <link id="themeStylesheet" rel="stylesheet" href="style.css">
@@ -90,7 +95,7 @@
                     <button class="theme-option" data-theme="dark" role="menuitem" data-i18n="theme_dark">暗色主题</button>
                 </div>
                 <p class="rail-foot-note"><span data-i18n="footer_brand">净语翻译 · SubTrans Translate |</span>
-                   <a href="#" onclick="showAbout(); return false;" style="color: var(--primary-color); text-decoration: none;" data-i18n="about_link">关于</a>
+                   <a href="#" style="color: var(--primary-color); text-decoration: none;" data-i18n="about_link">关于</a>
                 </p>
             </div>
         </aside>
@@ -749,11 +754,11 @@
 
     <!-- About Dialog Modal -->
 
-    <div class="modal-overlay" id="aboutModal" onclick="if(event.target===this)closeAbout()">
+    <div class="modal-overlay" id="aboutModal">
         <div class="modal-dialog">
             <div class="modal-header">
                 <h2 data-i18n="about_title">关于</h2>
-                <button class="modal-close" onclick="closeAbout()" aria-label="Close">&times;</button>
+                <button class="modal-close" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="about-logo"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
@@ -795,7 +800,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeAbout()" data-i18n="close_btn">关闭</button>
+                <button class="btn btn-primary" data-i18n="close_btn">关闭</button>
             </div>
         </div>
     </div>

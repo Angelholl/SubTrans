@@ -28,6 +28,7 @@
       const pv = $('refineS' + n + 'Provider');
       if (pv) pv.addEventListener('change', () => {
         const sel = $('refineS' + n + 'Model');
+        // CSP 静态安全：空态占位 option 由 modelEmptyOptionHTML() 常量构造
         if (sel) sel.innerHTML = modelEmptyOptionHTML();
         applyProviderEndpoint(n);
         syncServiceQuickFromStages();
@@ -175,6 +176,7 @@
       const aiTestBtn = aiRow.querySelector('.ai-model-test');
       if (aiRefreshBtn) {
         aiRefreshBtn.title = MSG.refresh_model_title;
+        // CSP 静态安全：MODEL_REFRESH_SVG 为字面量 SVG 常量（无插值）
         aiRefreshBtn.innerHTML = MODEL_REFRESH_SVG;
         aiRefreshBtn.addEventListener('click', () => refreshAnalysisModels());
       }

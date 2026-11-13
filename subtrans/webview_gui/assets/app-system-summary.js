@@ -112,6 +112,7 @@ const SystemSummary = {
         const roles = document.createElement('div');
         roles.className = 'sys-summary-row';
         roles.dataset.sysRow = 'roles';
+        // CSP 静态安全：属性字面量骨架（无插值），文本随后以 textContent 填
         roles.innerHTML = '<div class="sys-summary-keyrow">'
             + '<span class="sys-summary-key"></span>'
             + '<span class="sys-summary-stat"></span></div>'
