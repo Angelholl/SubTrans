@@ -83,6 +83,17 @@ python -m subtrans.refine.cli --dict-download sudachi_full     :: 完整版（�
 
 > **进阶与开发**：想修改代码或自定义构建的进阶用户，请 fork 本仓库（[Angelholl/SubTrans](https://github.com/Angelholl/SubTrans)）后按上文 ②③ 自行构建；EXE 安装包用户无需使用源码与 pip 方式。
 
+**开发与测试（venv）**：改代码后跑测试请一律走项目内虚拟环境，勿用系统解释器直跑 pytest——系统解释器缺 `pysubs2`/`opencc`/`pywebview` 等依赖或版本漂移时，会得到收集失败/假结果。创建与使用：
+
+```bat
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev,zh,gui]"
+.venv\Scripts\python -m pytest -q                        :: 全量基线
+.venv\Scripts\python -m ruff check subtrans tests        :: 静态检查
+```
+
+> 国内网络对 pypi.org 直连超时时，可加 `-i https://pypi.tuna.tsinghua.edu.cn/simple` 走镜像安装。
+
 ## LM Studio 配置指引（本地模型需自备）
 
 安装包只含**程序本体**；翻译所用模型需自备。以 LM Studio 为例，三步即用：
