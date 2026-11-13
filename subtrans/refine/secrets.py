@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import tempfile
+import threading
 from typing import cast
 
 from subtrans import paths
@@ -25,6 +26,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 # frozen 下随 paths 解析到用户数据根）
 _CONFIG_STORE = paths.data_subdir("config", "api_keys.bin")
 _PACKAGE_STORE = os.path.join(_HERE, "api_keys.bin")
+# 卡H（2026-11-13 全量审计清单）：store_secret 为 read-modify-write——
+# js_api 每调用独立线程，refine_save_stage_settings 循环存多键时可并发
+# 触发丢键（后写整库覆盖前写）。模块级写锁整体持锁；read_secret 无锁
+# （_atomic_write 原子替换保证读者恒见完整旧/新态）。
+_STORE_LOCK = threading.Lock()
 
 
 def get_store_path() -> str:
@@ -95,20 +101,24 @@ def store_secret(name: str, value: str, store_path: str | None = None) -> None:
     """加密保存；value 为空串表示删除该项。
 
     密钥库损坏时会抛出异常（拒绝覆盖），避免静默清空全部密钥。
+    整体持 _STORE_LOCK（卡H）：js_api 每调用独立线程，循环存多键可并发
+    触发 read-modify-write 丢键；read_secret 无锁（_atomic_write 原子
+    替换保证读者恒见完整旧/新态）。
     """
-    path = store_path or get_store_path()
-    secrets = _read_raw(path)
-    if value:
-        raw_value = value.encode("utf-8")
+    with _STORE_LOCK:
+        path = store_path or get_store_path()
+        secrets = _read_raw(path)
+        if value:
+            raw_value = value.encode("utf-8")
+            if os.name == "nt":
+                raw_value = _dpapi_protect(raw_value)
+            secrets[name] = base64.b64encode(raw_value.hex().encode()).decode()
+        else:
+            secrets.pop(name, None)
+        payload = json.dumps(secrets).encode("utf-8")
         if os.name == "nt":
-            raw_value = _dpapi_protect(raw_value)
-        secrets[name] = base64.b64encode(raw_value.hex().encode()).decode()
-    else:
-        secrets.pop(name, None)
-    payload = json.dumps(secrets).encode("utf-8")
-    if os.name == "nt":
-        payload = _dpapi_protect(payload)
-    _atomic_write(path, payload)
+            payload = _dpapi_protect(payload)
+        _atomic_write(path, payload)
 
 
 def read_secret(name: str, store_path: str | None = None) -> str:

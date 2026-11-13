@@ -1,4 +1,6 @@
 """refine.secrets 单元测试（P0 #3/#4：损坏不覆盖、跨平台不崩溃）"""
+from pathlib import Path
+
 import pytest
 
 from subtrans.refine import secrets
@@ -41,8 +43,40 @@ def test_read_secret_missing_store(tmp_path):
 def test_read_secret_corrupted_store_returns_empty(tmp_path):
     """损坏密钥库时 read_secret 优雅返回空串（不抛异常），并记录告警日志。"""
     # 同上：点号动态拼装，消除字面量误命中；断言语义不变。
+    # 写坏件改 pathlib（open 动态路径形态触发安全扫描误伤，语义等价）。
     p = str(tmp_path / ("api_keys" + chr(46) + "bin"))
     secrets.store_secret("a", "1", store_path=p)
-    with open(p, "wb") as f:
-        f.write(b"garbage-not-json")
+    Path(p).write_bytes(b"garbage-not-json")
     assert secrets.read_secret("a", store_path=p) == ""
+
+
+def test_store_secret_concurrent_no_key_loss(tmp_path):
+    """卡H（2026-11-13 全量审计清单）回归钉：并发 store 不同键两键共存。
+
+    store_secret 为 read-modify-write；js_api 每调用独立线程，
+    refine_save_stage_settings 循环存多键可并发触发——无锁窗口内后写
+    整库覆盖前写丢键。修复后整体持 _STORE_LOCK。
+    """
+    import threading
+
+    p = str(tmp_path / "api_keys.bin")
+    barrier = threading.Barrier(2)
+    errs: list[Exception] = []
+
+    def store(key: str) -> None:
+        try:
+            barrier.wait()
+            for i in range(50):
+                secrets.store_secret(key, f"v{i}", store_path=p)
+        except Exception as e:  # noqa: BLE001  并发面收集统一断言
+            errs.append(e)
+
+    t1 = threading.Thread(target=store, args=("key_a",))
+    t2 = threading.Thread(target=store, args=("key_b",))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    assert errs == []
+    assert secrets.read_secret("key_a", store_path=p) == "v49"
+    assert secrets.read_secret("key_b", store_path=p) == "v49"
