@@ -938,3 +938,39 @@ def test_get_encode_queue_is_singleton(monkeypatch):
     second = eq.get_encode_queue()
     assert first is second
     assert isinstance(first, eq.EncodeQueue)
+
+
+# ---------------------------------------------------------------------------
+# 卡G：入队参数副本化（调用方 params 不被就地改写，契约加固）
+# ---------------------------------------------------------------------------
+def test_enqueue_params_copied_not_mutated(tmp_path, fake_env, monkeypatch):
+    """卡G（2026-11-13 全量审计清单）契约钉：入队后调用方原 params 对象
+    out_path 未被改写。
+
+    原 job.params.out_path = ... 就地改写——调用方复用 params 对象连续
+    入队时被串写；改 replace() 副本（同文件 retry() 先例）。api 层当前
+    逐 job 新建未触发，属契约加固。
+    """
+    monkeypatch.setattr(eq, "_spawn_ffmpeg",
+                        FakeSpawner([dict(lines=[b"out_time_ms=30000000"])]))
+    q = fresh_queue()
+    shared = hardsub.EncodeParams(out_path=str(tmp_path / "a_hardsub.mp4"))
+    video = tmp_path / "a.mp4"
+    video.write_bytes(b"v")
+    sub = tmp_path / "a.srt"
+    sub.write_text("1\n00:00:00,000 --> 00:00:01,000\nx\n", encoding="utf-8")
+    out = str(tmp_path / "a_hardsub.mp4")
+    j1 = eq.EncodeJob(video_path=str(video), subtitle_path=str(sub),
+                      params=shared, out_path=out)
+    j2 = eq.EncodeJob(video_path=str(video), subtitle_path=str(sub),
+                      params=shared, out_path=out)
+    accepted, rejected = q.enqueue_batch([j1, j2])
+    assert not rejected
+    # 调用方原 params 对象未被就地改写（卡面点名断言）
+    assert shared.out_path == str(tmp_path / "a_hardsub.mp4")
+    # 队列侧以副本承载 .part 改写，成片链不受影响
+    assert accepted[0].params is not shared
+    assert accepted[0].params.out_path == out + ".part"
+    assert wait_until(lambda: all(j.state == "done" for j in accepted))
+    assert Path(out).read_bytes() == b"MP4DATA"
+    assert not os.path.exists(out + ".part")

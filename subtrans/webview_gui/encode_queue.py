@@ -132,7 +132,8 @@ def release_translate_slot() -> None:
 
 @dataclass
 class EncodeJob:
-    """单个压制任务；params.out_path 由队列改写为 .part 后用于构建 argv。"""
+    """单个压制任务；入队时 params 以 replace() 副本承载 .part 改写
+    （调用方原 params 对象不被改写，防复用串写；卡G 契约加固）。"""
 
     video_path: str
     subtitle_path: str
@@ -313,8 +314,11 @@ class EncodeQueue:
                 self._seq += 1
                 stem = os.path.splitext(os.path.basename(job.video_path))[0]
                 job.id = f"{stem}-{self._seq}"
-                # 原子成片：ffmpeg 直写 .part（同卷 os.replace）
-                job.params.out_path = job.out_path + ".part"
+                # 原子成片：ffmpeg 直写 .part（同卷 os.replace）；
+                # replace() 生成 params 副本承载改写（卡G 2026-11-13 全量
+                # 审计清单）：调用方复用 params 对象连续入队时不再被就地
+                # 串写（api 层当前逐 job 新建未触发，契约加固）
+                job.params = replace(job.params, out_path=job.out_path + ".part")
                 job.state = "queued"
                 self._pending.append(job)
                 self._history.append(job)
