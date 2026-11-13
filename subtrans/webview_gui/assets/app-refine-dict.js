@@ -98,7 +98,9 @@
     if (kindRow) box.insertBefore(hint, kindRow.nextSibling);
     else box.insertBefore(hint, box.firstChild);
   }
-  // hint 条显隐：仅当前选中 kind downloadable&&!available 时显示
+  // hint 条显隐：可下载 kind 未装→下载引导；jieba 缺失态→卸离口径引导
+  // （D2026-1113-01：安装包默认不含，可选组件无下载件，只给状态指引）。
+  // 文案统一由本函数按 kind 刷新（textContent 渲染，遵 CSP 禁 innerHTML）
   function _dictRefreshHint() {
     const box = $('dictRows');
     const hint = box ? box.querySelector('.dict-install-hint') : null;
@@ -107,6 +109,12 @@
     const kind = sel.value;
     const item = DICT_KINDS.find(k => k.kind === kind) || {};
     const info = _dictStatusCache[kind] || {};
+    if (kind === 'jieba' && !info.available) {
+      hint.textContent = MSG.dict_jieba_missing_hint;
+      hint.style.display = '';
+      return;
+    }
+    hint.textContent = MSG.dict_install_hint;
     hint.style.display = (item.downloadable && !info.available) ? '' : 'none';
   }
   // 2.6.5 段2（D2026-1004-01 #6）：失败一行人话映射——校验失败/网络失败

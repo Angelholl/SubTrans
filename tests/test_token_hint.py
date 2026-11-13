@@ -119,6 +119,15 @@ def test_zh_hints_via_srt_parsing(monkeypatch):
     assert "今天 | 天气 | 不错" in out
 
 
+def test_zh_hints_jieba_missing_returns_empty(monkeypatch):
+    """⑨b jieba 缺失态（D2026-1113-01 安装包卸离口径）：_get_jieba None→
+    generate_zh_hints 返回空串不炸（降级链末环单测）。"""
+    monkeypatch.setattr(token_hint, "_get_jieba", lambda: None)
+    out = token_hint.generate_zh_hints("", 1,
+                                       entries=_entries("这个句子足够长可以分词"))
+    assert out == ""
+
+
 # ---------------------------------------------------------------------------
 # generate_en_hints（⑥⑦，纯规则零依赖）
 # ---------------------------------------------------------------------------

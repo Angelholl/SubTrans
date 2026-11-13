@@ -64,10 +64,17 @@ hiddenimports = [
     "subtrans.translate.providers",
     "webview.platforms.winforms",
     "clr",
-    "jieba",  # 显式钉防重构漂移（token_hint 函数内惰性 import 静态不可见）；数据文件由 pyinstaller-hooks-contrib 官方 hook-jieba.py 自动收集，勿重复 collect_data_files（D2026-1004-01）
+    # jieba 不进包（D2026-1113-01 反转 D2026-1004-01 段1① 的 hiddenimports 钉）：
+    # 安装包默认卸离（可选组件，−30MB）；缺失态三层降级链已就位
+    # （token_hint try-import / pipeline_v2 is_zh_hint_available / cli
+    # --dict-status FAIL 行）。原「函数内惰性 import 静态不可见」注释与
+    # 实际不符——modulegraph 会追踪函数级 import，故卸钉还须打包环境
+    # 不装 [zh] extra（release.yml 已同步），产物核对见 release smoke。
     # 壳层启动惰性化（2026-11-13）：refine/__init__ 的包级导出改 PEP 562
-    # __getattr__ 动态 import（静态分析不可见），这四个子模块显式钉死；
-    # asr_meta / fs_utils 是 GUI api.py 内函数级惰性导入，同样补钉。
+    # __getattr__ 动态 import（静态分析不可见），batch/config/glossary/tm
+    # 四子模块动态化钉；asr_meta / fs_utils 实为 GUI api.py:33-34 顶层
+    # eager 导入（modulegraph 本可收集），属防御性冗余钉——合计
+    # 「四子模块动态化钉＋两子模块防御性冗余钉」。
     "subtrans.refine.batch",
     "subtrans.refine.config",
     "subtrans.refine.glossary",
@@ -85,7 +92,12 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # jieba 结构性卸离（D2026-1113-01）：仅卸 hiddenimports 钉不够——
+    # modulegraph 会追踪 token_hint/cli 的函数级 import，构建环境装有
+    # [zh] extra 时（本地/开发机构建）仍会连词库 30MB 收进包；excludes
+    # 面向两个 Analysis 双侧钉死，产物无 jieba 不再依赖打包环境偶然态
+    # （CI 打包链同时已卸 [zh] extra，release smoke 双保险断言）。
+    excludes=["jieba"],
     noarchive=False,
     module_collection_mode={},
 )
@@ -110,7 +122,7 @@ a_cli = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["jieba"],  # 与 GUI 分析同口径（结构性卸离 D2026-1113-01）
     noarchive=False,
     module_collection_mode={},
 )

@@ -44,7 +44,10 @@ jobs:
       - name: Install project + build tools
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[gui,zh]"
+          # jieba 打包链卸离（D2026-1113-01）：安装包默认不含 jieba（可选组件，
+          # token_hint/cli 函数级 import 静态可见，环境装了就会进包）——故
+          # 打包环境不装 [zh] extra；CI 单测环境（ci.yml）仍装 [dev,zh] 保正向用例
+          pip install -e ".[gui]"
           pip install pyinstaller
 
       - name: Build with PyInstaller (单产物，词典不进包)
@@ -80,10 +83,12 @@ jobs:
           if (Test-Path "$root/_internal/sudachidict_core/resources/system.dic") {
             Write-Error "dist must NOT contain system.dic (词典去捆绑口径)"; exit 1
           }
-          # jieba 打包渠道双层正向断言（D2026-1004-01 C4）：
-          # a) 产物内 jieba 词典数据文件存在（官方 hook-jieba.py 自动收集目标）
-          if (-not (Test-Path "$root/_internal/jieba/dict.txt")) {
-            Write-Error "MISSING artifact: $root/_internal/jieba/dict.txt（jieba 打包渠道失效?）"; exit 1
+          # jieba 打包卸离断言（D2026-1113-01 反转 D2026-1004-01 C4 双层正向断言）：
+          # a) 产物内不得出现 jieba 模块目录——安装包默认卸离（可选组件），
+          #    zh 缺失走既有降级链（token_hint/pipeline_v2/cli 三层），GUI
+          #    词典面板对缺失态给引导提示；此断言防钉/收集面回潮
+          if (Test-Path "$root/_internal/jieba") {
+            Write-Error "FORBIDDEN artifact: $root/_internal/jieba（安装包卸离 jieba 口径 D2026-1113-01）"; exit 1
           }
           # asr_runner 随包存在断言（2.7.1 件1 D2026-1005-01，评议 R6 与
           # jieba 同款防打包漂移）：frozen 探测/转写走脚本路径直调，
@@ -91,8 +96,9 @@ jobs:
           if (-not (Test-Path "$root/_internal/subtrans/refine/asr_runner.py")) {
             Write-Error "MISSING artifact: $root/_internal/subtrans/refine/asr_runner.py（asr_runner 随包失效?）"; exit 1
           }
-          # b) 冻结 CLI --dict-status 的 jieba 自检行必须是成功语义——
-          #    仅"行存在"不算，FAIL/不可用必须让本 stage 红。
+          # b) 冻结 CLI --dict-status 的 jieba 自检行必须是缺失态语义——
+          #    jieba 已卸离 → 自检 FAIL 行存在且整体退出码 0（探测命令
+          #    rc=0 语义不变：缺词典不冒红，GUI 面给引导）。
           #    中文断言先钉 UTF-8 输出解码（PYTHONUTF8=1 下子进程写 UTF-8，
           #    PS 默认按控制台 OEM 码页解码会把中文比对变乱码——run 37149808709 实证）
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -100,10 +106,13 @@ jobs:
           $dsOut = (& "$root/subtrans-cli.exe" --dict-status 2>&1) -join "`n"
           if ($LASTEXITCODE -ne 0) { Write-Error "subtrans-cli --dict-status rc=$LASTEXITCODE"; exit 1 }
           Write-Host "$dsOut"
-          # 断言用 ASCII 骨架正则（jieba…: OK）——对残留码页漂移免疫；
-          # FAIL 行不含 ": OK"，成功语义仍然唯一
-          if ($dsOut -notmatch 'jieba[^\r\n]*: OK') {
-            Write-Error "--dict-status output missing success line 'jieba 分词自检: OK'（jieba 自检失败/不可用）"; exit 1
+          # 断言用 ASCII 骨架正则（jieba…: FAIL）——对残留码页漂移免疫；
+          # OK 行（环境装有 jieba）不得出现在卸离产物
+          if ($dsOut -notmatch 'jieba[^\r\n]*: FAIL') {
+            Write-Error "--dict-status output missing missing-state line 'jieba 分词自检: FAIL'（安装包应已卸离 jieba，D2026-1113-01）"; exit 1
+          }
+          if ($dsOut -match 'jieba[^\r\n]*: OK') {
+            Write-Error "--dict-status contains jieba OK line（卸离产物不应装载 jieba）"; exit 1
           }
           # 安装器断言：Inno 产物必须在位且非空壳——防 [Files] 缺 Source 行
           # 装出空壳而 CI smoke 只断言 dist 目录发现不了的事故复发（D4 发版批）

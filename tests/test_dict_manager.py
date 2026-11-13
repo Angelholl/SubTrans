@@ -662,6 +662,41 @@ def test_cli_dict_status_smoke(monkeypatch, tmp_path, capsys):
     assert "sudachi" in out and "jieba" in out and "english_rules" in out
 
 
+def test_cli_dict_status_jieba_missing_state_rc0(monkeypatch, tmp_path, capsys):
+    """D2026-1113-01：jieba 缺失态（安装包卸离口径）——自检 FAIL 行＋整体 rc=0。
+
+    frozen smoke 缺失态断言的单测等价物：__import__ 拦 jieba（cli 自检/
+    token_hint 懒加载走 ImportError 降级链）＋ find_spec 返 None
+    （dict_status available=False），与卸离产物运行态一致。
+    """
+    monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
+    import builtins
+    import importlib.util
+
+    real_import = builtins.__import__
+    real_find_spec = importlib.util.find_spec
+
+    def _no_jieba_import(name, *args, **kwargs):
+        if name.split(".")[0] == "jieba":
+            raise ImportError("No module named 'jieba'（缺失态模拟）")
+        return real_import(name, *args, **kwargs)
+
+    def _no_jieba_find(name, *args, **kwargs):
+        if name.split(".")[0] == "jieba":
+            return None
+        return real_find_spec(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_jieba_import)
+    monkeypatch.setattr(importlib.util, "find_spec", _no_jieba_find)
+
+    from subtrans.refine import cli
+
+    assert cli.main(["--dict-status"]) == 0
+    out = capsys.readouterr().out
+    assert "jieba 分词自检: FAIL" in out, "缺失态应走 FAIL 降级行"
+    assert "jieba 分词自检: OK" not in out, "卸离口径不得出现成功语义行"
+
+
 def test_cli_dict_download_local_missing_file(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("SUBTRANS_DATA_ROOT", str(tmp_path))
     from subtrans.refine import cli

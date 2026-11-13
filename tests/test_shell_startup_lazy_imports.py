@@ -95,3 +95,14 @@ def test_spec_pins_lazy_refine_submodules():
         "subtrans.refine.fs_utils",
     ):
         assert f'"{module}"' in src, f"spec hiddenimports 缺惰性子模块钉: {module}"
+
+
+def test_spec_no_jieba_hiddenimport_pin():
+    """D2026-1113-01：jieba 改安装包可选——spec 不得再钉 jieba（卸离防复发钉）。
+
+    反转 D2026-1004-01 段1①：安装包默认不含 jieba（可选组件，−30MB），
+    缺失态由 token_hint/pipeline_v2/cli 三层降级链承接；重钉即回归
+    「静默装载 30MB 词典」。打包链不装 [zh] extra（release.yml 同步）。
+    """
+    src = SPEC_PATH.read_text(encoding="utf-8")
+    assert '"jieba"' not in src, "spec 重新钉入 jieba（违反安装包卸离口径）"

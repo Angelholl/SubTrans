@@ -741,7 +741,8 @@ const MSG = {
     dict_sudachi_label: '日语（sudachi）',
     dict_sudachi_desc: '日语形态素分析词典（语法提示分词用；默认不随安装包附带，点下方按钮下载，SHA256 校验三源）',
     dict_jieba_label: '中文（jieba）',
-    dict_jieba_desc: '中文分词（安装包已内置并自动启用；仅源码方式运行需自备 [zh] 组件，缺失时自动降级）',
+    // 安装包卸离口径勘正（D2026-1113-01）：jieba 改可选组件，不再「内置」
+    dict_jieba_desc: '中文分词（[zh] 可选组件；安装包默认不含，缺失时中文语法提示自动降级）',
     dict_english_label: '英文（规则级）',
     dict_english_desc: '英文分词规则级（内置，无需下载）',
     dict_status_available: '可用',
@@ -772,6 +773,9 @@ const MSG = {
     // （全 JS 态填充，禁 index.html 静态中文）
     dict_status_not_installed: '未安装',
     dict_install_hint: '该词典未安装——下载后语法提示可用。直连下载慢属正常：系统会先走系统代理、失败自动切直连（两跳）；也可切换镜像或用 --dict-from-file 离线导入。',
+    // jieba 缺失态引导（D2026-1113-01）：安装包默认卸离（可选组件），
+    // 与可下载 kind 的 dict_install_hint 分开（无下载件，只给状态指引）
+    dict_jieba_missing_hint: '检测到 jieba 未安装，中文语法提示不可用（可选组件）',
     dict_sudachi_full_chip_title: '与日语二选一',
     dict_download_source: '下载源',
     dict_fail_checksum: '文件校验不符，下载不完整或源文件异常',

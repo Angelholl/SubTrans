@@ -2870,6 +2870,27 @@ def test_asr_status_three_view_alignment_pinned():
         "dict_install_hint 缺下载缓解引导（两跳自动/镜像切换/离线导入）"
 
 
+def test_dict_jieba_missing_hint_pinned():
+    """D2026-1113-01：jieba 缺失态引导提示钉（安装包卸离口径）。
+
+    - MSG 新增 JS 态键 dict_jieba_missing_hint（零 data-i18n 消耗，
+      零静态 id——FROZEN 双钉不受影响）；
+    - 决策钉死文案「检测到 jieba 未安装，中文语法提示不可用（可选组件）」；
+    - _dictRefreshHint 含 jieba 缺失态分支，textContent 渲染（遵 CSP
+      禁 innerHTML 插数据）。
+    """
+    assert "dict_jieba_missing_hint" in _js_msg_keys(), \
+        "MSG 缺 dict_jieba_missing_hint 键"
+    src = _app_js_source()
+    assert "检测到 jieba 未安装，中文语法提示不可用（可选组件）" in src, \
+        "jieba 缺失态文案漂移（决策钉死措辞）"
+    fn = _extract_function(src, "_dictRefreshHint")
+    assert "'jieba'" in fn, "_dictRefreshHint 缺 jieba kind 分派分支"
+    assert "dict_jieba_missing_hint" in fn, \
+        "_dictRefreshHint 缺 jieba 缺失态引导"
+    assert "innerHTML" not in fn, "hint 渲染不得走 innerHTML（CSP 红线）"
+
+
 # ---------------------------------------------------------------------------
 # 2.7.3 件⑥（D2026-1006-01）：P1 启动缺陷修复——顶层 refreshPipelineMirror
 # 引用 Refine UI IIFE 私有 $ 导致两条启动链整体中断
@@ -7943,6 +7964,12 @@ def test_js_sources_layer_pinned():
         壳层零风险优化（2026-11-13）：15 个分文件随 CSP 加固/innerHTML
         转义化重锁（app-about 705→1789、app-refine-glossary 6588→7869 等），
         read_all/refine 家族两钉同步换代；index.html 未改加载序；
+        jieba 缺失态提示换代（D2026-1113-01，2026-11-13）：全库拼接
+        442bc137…/544,159B、refine 家族 4d7b9bb1…/223,732B、
+        app-msg.js 70,006B/6ce18a29…（dict_jieba_desc 勘正卸离口径＋
+        dict_jieba_missing_hint 新键）、app-refine-dict.js 35,238B/
+        b9adc944…（_dictRefreshHint jieba 缺失态分支）；
+        旧钉 cc94f78b… / 5ff50170… / 67fcb894… / 8a1daac2… 退役；
     ③ 三个静态测试文件均已接线 js_sources（读取点防回潮）。
     """
     assert js_sources.JS_FILES == [
@@ -7959,10 +7986,11 @@ def test_js_sources_layer_pinned():
         f"JS_FILES 现值漂移（拆分批须随批同步本钉）: {js_sources.JS_FILES}"
     assert hashlib.sha256(
         js_sources.read_all().encode("utf-8")).hexdigest() == (
-            "cc94f78ba6df9b3b647a2ec0e46a86876d8f654be85d2e72946f76733dedadab"), \
+            "442bc137ef2757c4575974cb0b668974c037bd0f2b90ffd4c46437c58ec13645"), \
             "read_all() 拼接视图 sha256 漂移（C0/C1 守恒不变量破）"
     # 批4 去壳载荷钉（D2026-1019-01）：refine 家族（app-refine-* + 过渡期 app-main.js）
-    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 223,321B＝壳层加固 CSP/转义化换代；
+    # 按 JS_FILES 顺序拼接恒等于去壳载荷（现值 223,732B＝jieba 缺失态提示换代
+    # D2026-1113-01；前值 223,321B＝壳层加固 CSP/转义化换代；
     # 前值 217,004B＝d1103 模型落位行；前值 213,752B＝d1103 引擎落位行），
     # 15 次切块恒真；切点外任何字节改动必红。
     refine_family = [n for n in js_sources.JS_FILES
@@ -7970,7 +7998,7 @@ def test_js_sources_layer_pinned():
     assert hashlib.sha256("".join(
         (js_sources.ASSETS / n).read_text(encoding="utf-8") for n in refine_family
     ).encode("utf-8")).hexdigest() == (
-        "5ff50170f381135ca4e7116534a26caaab4c9edbb37ee834ac3bbe1c35860c1f"), \
+        "4d7b9bb1ac614875d3abe1afcb75c855f58a8472c81970b4817ccb26aeb6b54a"), \
         "refine 家族载荷 sha256 漂移（批4 去壳载荷钉破：切点外字节改动）"
     tests_dir = Path(__file__).resolve().parent
     for name in ("test_gui_js_static.py", "test_strings_and_shortcut.py",
@@ -7990,8 +8018,8 @@ def test_js_split_integrity_pinned():
     frozen = {
         "app.js": (245,
                    "eac696f41c292854d926af11862e9c20433885f7e443a3340bb98cdd0e52f50c"),
-        "app-msg.js": (69634,
-                   "67fcb894f23f992da7ad43eca8da03446122fe416e56ab8456ff7e14b6a17486"),
+        "app-msg.js": (70006,
+                   "6ce18a297c9776218d9d381780af45a81bc373cceb9d9ccb1004ef74bb6701fb"),
         "app-modal.js": (93127,
                    "b9c09d4b402cb1f3cb64c0b7114474da30c5afe288a2a1dc7ec3367ebb6a8d52"),
         "app-error-handler.js": (745,
@@ -8048,8 +8076,8 @@ def test_js_split_integrity_pinned():
                    "67d123778f279d1ea159704dc96d1e6c37ab45fcceb993b7530c7954799b0a17"),
         "app-refine-dataroot.js": (2310,
                    "45f55c77c352b1dbada53060a312d75211319dab09c117574051603e50eaff85"),
-        "app-refine-dict.js": (34827,
-                   "8a1daac20cdf4f169776e58fbc7d942a8b0bb8f3f4cacbde7ebcdbe6af5ae6ff"),
+        "app-refine-dict.js": (35238,
+                   "b9adc9440b7afebce0b04a461a29700432fa5f77a2f01123d9382dfea9727529"),
         "app-refine-boot.js": (2654,
                    "53c979ce29549a397f52b7507ecb9b2bcac88df997e06dc641138544f3243c77"),
         "app-init.js": (21063,
