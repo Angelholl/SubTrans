@@ -23,9 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from subtrans.refine import ffmpeg_supply as fs  # noqa: E402
 
-PINNED_URL = ("https://github.com/BtbN/FFmpeg-Builds/releases/download/"
-              "autobuild-2026-10-06-13-06/ffmpeg-N-127222-g151814650f-win64-gpl.zip")
-PINNED_SHA256 = "8428c7e0d3c5faf21714a8fa7c9663b78a74fc1ee166777771daee03753f4929"
+PINNED_URL = ("https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/"
+              "latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip")
+PINNED_SHA256 = "8fb4b24675ab0fc53b8799e892ef93a2eb64529f9dbe3c4a074c8171b3dfb9df"
 HOST_ALLOW = {"github.com", "release-assets.githubusercontent.com"}
 
 
@@ -35,7 +35,7 @@ HOST_ALLOW = {"github.com", "release-assets.githubusercontent.com"}
 def test_pinned_supply_constants():
     assert fs._PINNED_URL == PINNED_URL
     assert fs._PINNED_SHA256 == PINNED_SHA256
-    assert fs._PINNED_BYTES == 200217553
+    assert fs._PINNED_BYTES == 194053248
     assert fs._URL_HOST_ALLOW == HOST_ALLOW
 
 
@@ -337,6 +337,54 @@ def test_download_zip_without_ffmpeg_exe(tmp_path, monkeypatch):
     monkeypatch.setattr(fs, "_PINNED_BYTES", len(payload))
     with pytest.raises(fs.SupplyDownloadError):
         fs.download_full_variant(str(tmp_path), fetch=_fake_fetch(payload))
+
+
+def _corrupt_member_data(payload: bytes, member_name: str) -> bytes:
+    """翻转 member 压缩数据区首字节（local header 后一位）——中央目录
+    CRC 随即与数据不符，模拟传输层单区段损伤（D2026-1114-01 实测形态）。"""
+    marker = b"PK\x03\x04"
+    idx = 0
+    while True:
+        idx = payload.find(marker, idx)
+        if idx < 0:
+            raise AssertionError("local header not found")
+        nlen = int.from_bytes(payload[idx + 26:idx + 28], "little")
+        elen = int.from_bytes(payload[idx + 28:idx + 30], "little")
+        name = payload[idx + 30:idx + 30 + nlen]
+        if name.decode("utf-8") == member_name:
+            data_at = idx + 30 + nlen + elen
+            return payload[:data_at] + bytes([payload[data_at] ^ 0xFF]) \
+                + payload[data_at + 1:]
+        idx += 4
+
+
+def test_download_corrupt_non_target_entry_still_lands(tmp_path, monkeypatch):
+    """D2026-1114-01 完整性面收窄：非消费条目（ffplay.exe）区段损伤不拒件
+    ——抽取目标 CRC 全过即落位（全条目 testzip 形态会被拖红）。"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+        zf.writestr("ffmpeg-x/bin/ffmpeg.exe", b"FFMPEG-BIN")
+        zf.writestr("ffmpeg-x/bin/ffprobe.exe", b"FFPROBE-BIN")
+        zf.writestr("ffmpeg-x/bin/ffplay.exe", b"FFPLAY-BIN")
+    payload = _corrupt_member_data(buf.getvalue(),
+                                   "ffmpeg-x/bin/ffplay.exe")
+    monkeypatch.setattr(fs, "_PINNED_SHA256", hashlib.sha256(payload).hexdigest())
+    monkeypatch.setattr(fs, "_PINNED_BYTES", len(payload))
+    out = fs.download_full_variant(str(tmp_path), fetch=_fake_fetch(payload))
+    assert out == str(tmp_path / "ffmpeg" / "bin" / "ffmpeg.exe")
+    assert (tmp_path / "ffmpeg" / "bin" / "ffmpeg.exe").read_bytes() == b"FFMPEG-BIN"
+    assert (tmp_path / "ffmpeg" / "bin" / "ffprobe.exe").read_bytes() == b"FFPROBE-BIN"
+
+
+def test_download_target_crc_mismatch_rejects(tmp_path, monkeypatch):
+    """消费面反转钉：ffmpeg.exe 本体 CRC 不符必须拒（落位前拦，零落盘）。"""
+    payload = _corrupt_member_data(_make_zip(),
+                                   "ffmpeg-N-127222/bin/ffmpeg.exe")
+    monkeypatch.setattr(fs, "_PINNED_SHA256", hashlib.sha256(payload).hexdigest())
+    monkeypatch.setattr(fs, "_PINNED_BYTES", len(payload))
+    with pytest.raises(fs.SupplyDownloadError):
+        fs.download_full_variant(str(tmp_path), fetch=_fake_fetch(payload))
+    assert not (tmp_path / "ffmpeg" / "bin" / "ffmpeg.exe").exists()
 
 
 def test_download_disk_preflight_fail_closed(tmp_path, monkeypatch):

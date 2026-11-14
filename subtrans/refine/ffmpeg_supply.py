@@ -27,6 +27,7 @@ import threading
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from http.client import HTTPMessage
@@ -51,13 +52,17 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
-# 供给 pin（TOFU，spike 2026-10-07 实测冻结；换 tag 须重新实测并回写批清单）
+# 供给 pin（TOFU）。2026-11-15 换钉（D2026-1114-01）：旧 autobuild dated
+# 资产随 BtbN→FFmpeg-Builds org 迁移＋autobuild 滚动清理 404；owner 三问
+# 拍板「新 org 固定资产」——latest 标签资产 URL 永续（资产替换不删 URL，
+# 8.1 稳定分支构建变化慢，sha 钉寿命远长于 dated 制品）。sha256 为现实测
+# 值（TOFU 首下即钉）。换钉须重新实测并回写 decision-log。
 # ---------------------------------------------------------------------------
 
-_PINNED_URL = ("https://github.com/BtbN/FFmpeg-Builds/releases/download/"
-               "autobuild-2026-10-06-13-06/ffmpeg-N-127222-g151814650f-win64-gpl.zip")
-_PINNED_SHA256 = "8428c7e0d3c5faf21714a8fa7c9663b78a74fc1ee166777771daee03753f4929"
-_PINNED_BYTES = 200217553
+_PINNED_URL = ("https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/"
+               "latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip")
+_PINNED_SHA256 = "8fb4b24675ab0fc53b8799e892ef93a2eb64529f9dbe3c4a074c8171b3dfb9df"
+_PINNED_BYTES = 194053248
 
 # 白名单实测跳转链定集（spike：302 落 release-assets，非 objects.githubusercontent.com）；
 # 扩面须回评议（风险跟踪）
@@ -408,6 +413,24 @@ def _sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
+def _verify_target_crc(zf: zipfile.ZipFile, targets: dict[str, str]) -> None:
+    """抽取目标（ffmpeg.exe/ffprobe.exe）逐条目 CRC 校验，与中央目录比对。
+
+    D2026-1114-01 完整性面收窄：不做全条目 testzip——供给层不消费
+    ffplay.exe 等伴生条目，其区段传输层损伤（现 pinned 资产实测 43/44
+    全净）不应拒件；全对象 sha256 pin 仍防整体调包。"""
+    for base, member in targets.items():
+        h = 0
+        with zf.open(member) as src:
+            while True:
+                block = src.read(_DOWNLOAD_CHUNK)
+                if not block:
+                    break
+                h = zlib.crc32(block, h)
+        if (h & 0xFFFFFFFF) != zf.getinfo(member).CRC:
+            raise zipfile.BadZipFile(f"抽取目标 CRC 校验失败: {base}")
+
+
 # ---------------------------------------------------------------------------
 # GPU 后端解析（批2，决策 MVP：nvenc→qsv→amf 构建级+1s 运行双检）
 # ---------------------------------------------------------------------------
@@ -484,9 +507,13 @@ def download_full_variant(
 
     返回 ffmpeg.exe 落位绝对路径。流程：磁盘预检（fail-closed，need=2×
     包体积）→ 分块下载（.downloading 暂存）→ sha256 比对 pin（TOFU，B3）
-    → zipfile 试读（EOCD/条目校验——上游曾出过缺 EOCD 的截断坏件，spike
-    执行记录 1）→ 按 basename 提取 ffmpeg.exe/ffprobe.exe（不限 zip 内顶层
-    目录名）→ .part 落位后 os.replace → 清 zip。``fetch`` 参数仅供测试注入。
+    → zipfile 试读＋按 basename 提取 ffmpeg.exe/ffprobe.exe（不限 zip 内
+    顶层目录名）：完整性面＝EOCD（ZipFile 构建即验）＋**抽取目标逐条目
+    CRC**（提取时边拷边算，落位前比对中央目录 CRC）。不做全条目 testzip
+    （D2026-1114-01 换钉收窄：供给层不消费 ffplay.exe 等伴生条目——现
+    pinned 资产 44 条目中仅 ffplay.exe 区段传输层损伤，43/44 全净、两
+    目标件 CRC 全过；全对象 sha256 pin 仍防整体调包）→ .part 落位后
+    os.replace → 清 zip。``fetch`` 参数仅供测试注入。
     """
     need = _PINNED_BYTES * 2  # zip + 解压产物并存的最坏情况
     try:
@@ -512,12 +539,11 @@ def download_full_variant(
         raise SupplyChecksumError(
             f"sha256 与 pin 不符（TOFU）：期望 {_PINNED_SHA256}，实得 {sha}")
 
-    # zipfile 试读：EOCD 缺失/条目 CRC 损坏一律视为坏件（换 tag 重试为标准动作）
+    # zipfile 试读：EOCD 缺失一律视为坏件（换钉重试为标准动作）；条目
+    # CRC 面收窄至抽取目标（_verify_target_crc，D2026-1114-01）
     try:
         zf = zipfile.ZipFile(tmp)
         with zf:
-            if zf.testzip() is not None:
-                raise zipfile.BadZipFile("存在 CRC 校验失败的条目")
             targets: dict[str, str] = {}
             for name in zf.namelist():
                 base = name.rsplit("/", 1)[-1]
@@ -525,6 +551,7 @@ def download_full_variant(
                     targets[base] = name
             if "ffmpeg.exe" not in targets:
                 raise zipfile.BadZipFile("zip 内未找到 ffmpeg.exe")
+            _verify_target_crc(zf, targets)
             out_bin = os.path.join(dest_dir, "ffmpeg", "bin")
             os.makedirs(out_bin, exist_ok=True)
             for base, member in targets.items():
