@@ -135,3 +135,6 @@ config/fullchain_c22.json
 # 会话态工具产物：dashboard 静态页禁入库。会话目录本体不 ignore——
 # 被 ignore 时本仓工具链显式命名该路径会报错，由工具自排除
 autoresearch-dashboard.html
+
+# ffmpeg 供给落位（数据根在本机即仓库根形态）：供给下载二进制禁入库
+/ffmpeg/

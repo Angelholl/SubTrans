@@ -101,6 +101,9 @@ BANNED_PATTERNS = [
     # （106MB/1.21GB/2.9GB 量级）与会话态工具产物（实验 dashboard 静态页）----
     ("runtime/*", ".gitignore: CT2 引擎/模型下载残留兜底（禁入库）"),
     ("autoresearch-dashboard.html", ".gitignore: 会话态工具产物（禁入库）"),
+    # ---- 来源 11：.gitignore ffmpeg 供给落位段（D2026-1114-01 换钉后供给
+    # 二进制落数据根；本机数据根形态即仓库根，禁入库）----
+    ("ffmpeg/*", ".gitignore: ffmpeg 供给落位（禁入库）"),
     # ---- 来源 9：autoresearch 会话态目录（decision-log 条目 D2026-1105-07 把
     # `.auto` 列入 message 面违禁模式；D2026-1106-04 脱敏规则 3 同项。该目录
     # 不可 gitignore——插件工具链显式命名该路径会 pathspec 报错——故只能由本
